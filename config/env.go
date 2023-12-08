@@ -1,6 +1,6 @@
 // utils/env_loader.go
 
-package utils
+package config
 
 import (
 	"fmt"

@@ -1,9 +1,5 @@
 package config
 
-import (
-	"fmt"
-)
-
 type ValidationError struct {
 	Error  string      `json:"error"`
 	Detail interface{} `json:"detail,omitempty"`
@@ -19,11 +15,17 @@ const (
 	UserGetByIdEmailFound = "user.get-by-email.not-found"
 )
 
+type ErrorTag map[string]string
+
+var ErrorTagCatalog = ErrorTag{
+	"email-valid":  "user.email.invalid",
+	"email-exists": "user.email.exists",
+}
+
 func BuildErrorSingle(Error string) *ValidationError {
 	return &ValidationError{Error: Error}
 }
 
 func BuildErrorDetail(Error string, Detail interface{}) *ValidationError {
-	fmt.Println("Detail", Detail)
 	return &ValidationError{Error: Error, Detail: Detail}
 }

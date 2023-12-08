@@ -12,11 +12,11 @@ func SetupRoutes(r *gin.Engine) {
 	{
 		userRoutes := mainRoutes.Group("/users")
 		{
-			userRoutes.GET("/", controllers.Index)
-			userRoutes.POST("/", controllers.Create)
-			userRoutes.POST("/:id", controllers.Update)
-			userRoutes.GET("/:id", controllers.Show)
-			userRoutes.DELETE("/:id", controllers.Delete)
+			userRoutes.GET("", controllers.Index)
+			userRoutes.POST("", controllers.Create)
+			userRoutes.POST(":id", controllers.Update)
+			userRoutes.GET(":id", controllers.Show)
+			userRoutes.DELETE(":id", controllers.Delete)
 		}
 	}
 }

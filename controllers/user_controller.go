@@ -1,7 +1,6 @@
 package controllers
 
 import (
-	"fmt"
 	"josex/web/config"
 	"josex/web/services"
 	"josex/web/utils"
@@ -10,8 +9,6 @@ import (
 	"strconv"
 
 	"github.com/gin-gonic/gin"
-	"github.com/gin-gonic/gin/binding"
-	"github.com/go-playground/validator/v10"
 )
 
 func Index(c *gin.Context) {
@@ -31,16 +28,8 @@ func Index(c *gin.Context) {
 }
 
 func Create(c *gin.Context) {
-	var email = c.PostForm("email")
 	var newUser user.CreateUserDto
 	var userService = services.NewUserService(services.DB)
-
-	fmt.Println("email", email)
-
-	binding.Validator.Engine().(*validator.Validate).RegisterValidation("emailexist", func(fl validator.FieldLevel) bool {
-		user, _ := userService.GetUserByEmail(email, nil)
-		return email != "" && user == nil
-	})
 
 	if err := c.ShouldBind(&newUser); err != nil {
 		c.JSON(http.StatusBadRequest, config.BuildErrorDetail(config.UserValidationFailed, utils.FormatValidationErrors(err)))

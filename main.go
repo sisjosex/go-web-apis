@@ -9,6 +9,11 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
+// Init custom validations
+func InitValidations() {
+	validators.RegisterValidations()
+}
+
 // Init database connection
 func InitDatabaseConnection() {
 	services.InitDatabase()
@@ -30,8 +35,7 @@ func StartWebServer() {
 
 // Main function
 func main() {
-
-	validators.InitValidator()
+	InitValidations()
 
 	InitDatabaseConnection()
 
