@@ -1,7 +1,7 @@
 version: "3"
 services:
   web-app:
-    image: golang:1.17-alpine
+    image: golang:1.23.0-alpine3.20
     build:
       context: .
       dockerfile: Dockerfile
@@ -11,7 +11,8 @@ services:
       - APP_PORT=8080
     depends_on:
       - db
-    # Agrega una etiqueta de red para comunicarse con Nginx
+    ports:
+      - "8080:8080"  # Exponemos el puerto en el contenedor y en el host
     networks:
       - app-network
 
@@ -22,17 +23,8 @@ services:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: postgres
       POSTGRES_DB: web
-
-  nginx:
-    image: nginx:alpine
-    ports:
-      - "80:80"
-    # Configura Nginx para actuar como proxy inverso hacia el contenedor de la aplicación Go
     volumes:
-      - ./nginx/nginx.conf:/etc/nginx/nginx.conf
-    depends_on:
-      - web-app
-    # Agrega una etiqueta de red para comunicarse con la aplicación Go
+      - ./postgres/init.sql:/docker-entrypoint-initdb.d/init.sql
     networks:
       - app-network
 

@@ -1,7 +1,7 @@
 package controllers
 
 import (
-	"josex/web/config"
+	"josex/web/common"
 	"josex/web/services"
 	"josex/web/utils"
 	"josex/web/validators/user"
@@ -20,7 +20,7 @@ func Index(c *gin.Context) {
 	users, err := userService.FindUsers(searchTerm, page, pageSize)
 
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, config.BuildErrorSingle(err.Error))
+		c.JSON(http.StatusInternalServerError, common.BuildErrorSingle(err.Error))
 		return
 	}
 
@@ -32,14 +32,14 @@ func Create(c *gin.Context) {
 	var userService = services.NewUserService(services.DB)
 
 	if err := c.ShouldBind(&newUser); err != nil {
-		c.JSON(http.StatusBadRequest, config.BuildErrorDetail(config.UserValidationFailed, utils.FormatValidationErrors(err)))
+		c.JSON(http.StatusBadRequest, common.BuildErrorDetail(common.UserValidationFailed, utils.FormatValidationErrors(err)))
 		return
 	}
 
 	userID, err := userService.CreateUser(&newUser)
 
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, config.BuildErrorDetail(config.UserCreateFailed, err.Error))
+		c.JSON(http.StatusInternalServerError, common.BuildErrorDetail(common.UserCreateFailed, err.Error))
 		return
 	}
 

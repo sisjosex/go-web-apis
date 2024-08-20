@@ -1,5 +1,5 @@
 CREATE TABLE users (
-    id serial PRIMARY KEY,
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     first_name VARCHAR(255) NOT NULL DEFAULT '',
     last_name VARCHAR(255) NOT NULL DEFAULT '',
     phone VARCHAR(30) NOT NULL DEFAULT '',

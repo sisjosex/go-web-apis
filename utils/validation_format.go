@@ -1,7 +1,7 @@
 package utils
 
 import (
-	"josex/web/config"
+	"josex/web/common"
 
 	"github.com/buxizhizhoum/inflection"
 	"github.com/go-playground/validator/v10"
@@ -22,7 +22,7 @@ func FormatValidationErrors(err error) map[string]string {
 	for _, fieldErr := range validationErrors {
 		field := fieldErr.Field()
 		tag := fieldErr.Tag()
-		customTag, exists := config.ErrorTagCatalog[tag]
+		customTag, exists := common.ErrorTagCatalog[tag]
 		if exists {
 			tag = customTag
 		}

@@ -1,6 +1,6 @@
-// utils/env_loader.go
+// utils/env.go
 
-package config
+package utils
 
 import (
 	"fmt"
@@ -16,7 +16,7 @@ func LoadEnv() {
 	if !envLoaded {
 		err := godotenv.Load()
 		if err != nil {
-			fmt.Println("No se pudo cargar el archivo .env")
+			fmt.Println(".env not found")
 		}
 		envLoaded = true
 	}

@@ -3,10 +3,11 @@ package services
 import (
 	"josex/web/config"
 	"log"
-	"os"
-	"os/exec"
 	"time"
 
+	"github.com/golang-migrate/migrate/v4"
+	_ "github.com/golang-migrate/migrate/v4/database/postgres"
+	_ "github.com/golang-migrate/migrate/v4/source/file"
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
 )
@@ -19,18 +20,25 @@ func InitDatabase() {
 	var err error
 	for {
 		DB, err = gorm.Open(postgres.Open(config.DatabaseUrl), &gorm.Config{})
+		sqlDB, _ := DB.DB()
+		sqlDB.SetMaxOpenConns(100)
+		sqlDB.SetMaxIdleConns(10)
+		sqlDB.SetConnMaxLifetime(time.Hour)
 		if err == nil {
 			if err := runMigrations(config.DatabaseUrl); err != nil {
-				log.Println("End running migrations...")
+				log.Println("Error running migrations:", err)
+			} else {
+				log.Println("Running migrations completed successfully")
 			}
-			log.Println("running migrations completed")
+
 			break
+
+		} else {
+			log.Println("Error connecting to database:", err)
 		}
 
 		time.Sleep(retryInterval)
 	}
-
-	// Realizar migraciones aquí si las estás utilizando
 }
 
 func CloseDatabase() {
@@ -44,9 +52,20 @@ func CloseDatabase() {
 
 func runMigrations(databaseURL string) error {
 	log.Println("Running migrations...")
-	cmd := exec.Command("migrate", "-path", "migrations", "-database", databaseURL, "up")
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
 
-	return cmd.Run()
+	// Crear una nueva instancia de migración
+	m, err := migrate.New(
+		"file://migrations",
+		databaseURL)
+	if err != nil {
+		return err
+	}
+
+	// Ejecutar las migraciones
+	if err := m.Up(); err != nil && err != migrate.ErrNoChange {
+		return err
+	}
+
+	log.Println("Migrations applied successfully.")
+	return nil
 }
