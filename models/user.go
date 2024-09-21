@@ -1,17 +1,14 @@
 package models
 
-import (
-	"time"
-
-	"github.com/google/uuid"
-)
+import "josex/web/utils"
 
 type User struct {
-	ID        uuid.UUID  `gorm:"type:uuid;default:uuid_generate_v4();primary_key" json:"id"`
-	FirstName string     `gorm:"column:first_name" json:"first_name"`
-	LastName  string     `gorm:"column:last_name" json:"last_name"`
-	Email     string     `gorm:"column:email;unique" json:"email" conform:"trim,lowercase"`
-	Password  string     `gorm:"column:password" json:"-"`
-	Phone     string     `gorm:"column:phone" json:"phone"`
-	Birthday  *time.Time `gorm:"column:birthday" json:"birthday"`
+	ID                string          `json:"id" binding:"required"`
+	FirstName         string          `json:"first_name" binding:"required"`
+	LastName          string          `json:"last_name" binding:"required"`
+	Email             string          `form:"email" binding:"required,email-valid" conform:"trim,lowercase"`
+	Password          string          `json:"password" binding:"required"`
+	Phone             string          `json:"phone"`
+	Birthday          *utils.DateOnly `json:"birthday"`
+	ProfilePictureUrl string          `json:"profile_picture_url"`
 }

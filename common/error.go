@@ -18,8 +18,8 @@ const (
 type ErrorTag map[string]string
 
 var ErrorTagCatalog = ErrorTag{
-	"email-valid":  "user.email.invalid",
-	"email-exists": "user.email.exists",
+	"email-valid": "user.email.invalid",
+	//"email-exists": "user.email.exists",
 }
 
 func BuildErrorSingle(Error string) *ValidationError {

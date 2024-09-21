@@ -1,0 +1,1 @@
+DROP FUNCTION IF EXISTS sp_update_user_profile;

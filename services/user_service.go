@@ -1,24 +1,23 @@
 package services
 
 import (
-	"josex/web/common"
+	"josex/web/interfaces"
 	"josex/web/models"
-	"josex/web/validators/user"
-	"strings"
-
-	"github.com/google/uuid"
-	"gorm.io/gorm"
 )
 
-type UserService struct {
-	db *gorm.DB
+type userService struct {
+	userRepository interfaces.UserRepository
 }
 
-func NewUserService(db *gorm.DB) *UserService {
-	return &UserService{db}
+func NewUserService(userRepository interfaces.UserRepository) interfaces.UserService {
+	return &userService{userRepository: userRepository}
 }
 
-func (us *UserService) FindUsers(searchTerm string, page int, pageSize int) ([]models.User, *common.ValidationError) {
+func (s *userService) InsertUser(userDTO models.CreateUserDto) (*models.User, error) {
+	return s.userRepository.InsertUser(userDTO)
+}
+
+/*func (us *UserService) FindUsers(searchTerm string, page int, pageSize int) ([]models.User, *common.ValidationError) {
 	var users []models.User
 
 	query := us.db.Model(&models.User{})
@@ -88,4 +87,4 @@ func (us *UserService) GetUserByEmail(email string, id *string) (*models.User, *
 	}
 
 	return nil, nil
-}
+}*/

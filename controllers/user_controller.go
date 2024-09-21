@@ -2,20 +2,30 @@ package controllers
 
 import (
 	"josex/web/common"
-	"josex/web/services"
+	"josex/web/interfaces"
+	"josex/web/models"
 	"josex/web/utils"
-	"josex/web/validators/user"
 	"net/http"
-	"strconv"
 
 	"github.com/gin-gonic/gin"
 )
 
-func Index(c *gin.Context) {
+type UserController struct {
+	userService interfaces.UserService
+}
+
+func NewUserController(userService interfaces.UserService) *UserController {
+	return &UserController{
+		userService: userService,
+	}
+}
+
+/*func Index(c *gin.Context) {
 	searchTerm := c.DefaultQuery("search", "")
 	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
 	pageSize, _ := strconv.Atoi(c.DefaultQuery("pageSize", "10"))
-	userService := services.NewUserService(services.DB)
+	userRepository := repositories.NewUserRepository(services.DB)
+	userService := services.NewUserService(services.DB, userRepository)
 
 	users, err := userService.FindUsers(searchTerm, page, pageSize)
 
@@ -25,37 +35,33 @@ func Index(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, users)
-}
+}*/
 
-func Create(c *gin.Context) {
-	var newUser user.CreateUserDto
-	var userService = services.NewUserService(services.DB)
+func (uc *UserController) Create(ctx *gin.Context) {
+	var newUser models.CreateUserDto
 
-	if err := c.ShouldBind(&newUser); err != nil {
-		c.JSON(http.StatusBadRequest, common.BuildErrorDetail(common.UserValidationFailed, utils.FormatValidationErrors(err)))
+	if err := ctx.ShouldBindJSON(&newUser); err != nil {
+		ctx.JSON(http.StatusBadRequest, common.BuildErrorDetail(common.UserValidationFailed, utils.ExtractValidationError(err)))
 		return
 	}
 
-	userID, err := userService.CreateUser(&newUser)
-
+	user, err := uc.userService.InsertUser(newUser)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, common.BuildErrorDetail(common.UserCreateFailed, err.Error))
+		ctx.JSON(http.StatusBadRequest, common.BuildErrorDetail(common.UserCreateFailed, err.Error()))
 		return
 	}
 
-	user, _ := userService.GetUserByID(userID)
-
-	c.JSON(http.StatusCreated, user)
+	ctx.JSON(http.StatusCreated, user)
 }
 
-func Update(c *gin.Context) {
-
-}
-
-func Show(c *gin.Context) {
+func (uc *UserController) Update(c *gin.Context) {
 
 }
 
-func Delete(c *gin.Context) {
+func (uc *UserController) Show(c *gin.Context) {
+
+}
+
+func (uc *UserController) Delete(c *gin.Context) {
 
 }

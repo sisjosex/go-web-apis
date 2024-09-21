@@ -1,7 +1,6 @@
 package validators
 
 import (
-	"josex/web/services"
 	"regexp"
 
 	"github.com/gin-gonic/gin/binding"
@@ -14,17 +13,17 @@ func EmailValidation(fl validator.FieldLevel) bool {
 	return emailRegex.MatchString(email)
 }
 
-func EmailExistValidator(fl validator.FieldLevel) bool {
-	var userService = services.NewUserService(services.DB)
+/*func EmailExistValidator(fl validator.FieldLevel) bool {
+	var userRepository = repositories.NewUserRepository(services.DB)
 	email := fl.Field().String()
 
-	user, _ := userService.GetUserByEmail(email, nil)
+	user, _ := userRepository.GetUserByEmail(email, nil)
 	return user == nil
-}
+}*/
 
 func RegisterValidations() *validator.Validate {
 	validate := binding.Validator.Engine().(*validator.Validate)
 	validate.RegisterValidation("email-valid", EmailValidation)
-	validate.RegisterValidation("email-exists", EmailExistValidator)
+	//validate.RegisterValidation("email-exists", EmailExistValidator)
 	return validate
 }

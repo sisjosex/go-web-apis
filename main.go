@@ -1,43 +1,31 @@
 package main
 
 import (
-	"josex/web/config"
+	"josex/web/interfaces"
 	"josex/web/routes"
 	"josex/web/services"
-	"josex/web/validators"
-
-	"github.com/gin-gonic/gin"
 )
 
-// Init custom validations
-func InitValidations() {
-	validators.RegisterValidations()
-}
-
 // Init database connection
-func InitDatabaseConnection() {
-	services.InitDatabase()
-	//defer services.CloseDatabase()
+func InitDatabaseConnection() interfaces.DatabaseService {
+	dbService := services.NewDatabaseService()
+	dbService.InitDatabase()
+	return dbService
 }
 
 // Start web server
-func StartWebServer() {
-	gin.SetMode(config.AppMode)
+func StartWebServer(dbService interfaces.DatabaseService) {
 
-	r := gin.New()
-
-	routes.SetupRoutes(r)
-
-	r.SetTrustedProxies(nil)
-
-	r.Run(config.ApplicationHost + ":" + config.ApplicationPort)
+	webServerService := services.NewWebServerService()
+	webServerService.Initialize(&dbService)
+	routes.SetupRoutes(webServerService.Server, dbService)
+	webServerService.Start()
 }
 
 // Main function
 func main() {
-	InitValidations()
+	dbService := InitDatabaseConnection()
+	StartWebServer(dbService)
 
-	InitDatabaseConnection()
-
-	StartWebServer()
+	dbService.CloseDatabase()
 }
