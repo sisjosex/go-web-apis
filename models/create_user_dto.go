@@ -12,4 +12,6 @@ type CreateUserDto struct {
 	Phone             string         `json:"phone"`
 	Birthday          utils.DateOnly `json:"birthday" time_format:"2006-01-02"`
 	ProfilePictureUrl string         `json:"profile_picture_url"`
+	Bio               string         `json:"bio"`
+	WebsiteUrl        string         `json:"website_url"`
 }

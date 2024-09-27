@@ -11,4 +11,6 @@ type User struct {
 	Phone             string          `json:"phone"`
 	Birthday          *utils.DateOnly `json:"birthday"`
 	ProfilePictureUrl string          `json:"profile_picture_url"`
+	Bio               string          `json:"bio"`
+	WebsiteUrl        string          `json:"website_url"`
 }

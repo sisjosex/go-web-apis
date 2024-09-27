@@ -15,7 +15,6 @@ func InitDatabaseConnection() interfaces.DatabaseService {
 
 // Start web server
 func StartWebServer(dbService interfaces.DatabaseService) {
-
 	webServerService := services.NewWebServerService()
 	webServerService.Initialize(&dbService)
 	routes.SetupRoutes(webServerService.Server, dbService)

@@ -1,1 +1,0 @@
-DROP FUNCTION IF EXISTS sp_create_user_profile;

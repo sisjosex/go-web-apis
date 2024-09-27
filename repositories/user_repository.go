@@ -28,9 +28,9 @@ func (r *userRepository) InsertUser(userDTO models.CreateUserDto) (*models.User,
 			p_birthday := $4,
 			p_email := $5,  -- No se requiere email en este caso
 			p_password := $6,  -- No se requiere password en este caso
-			p_auth_provider_name := $7,  -- Nombre del proveedor de autenticación
-			p_auth_provider_id := $8,  -- ID único del usuario en Facebook
-			p_profile_picture_url := $9
+			p_profile_picture_url := $7,
+			p_bio := $8,
+			p_website_url := $9
 		)
     `
 
@@ -42,9 +42,9 @@ func (r *userRepository) InsertUser(userDTO models.CreateUserDto) (*models.User,
 		userDTO.Birthday,
 		userDTO.Email,
 		userDTO.Password,
-		"email",
-		nil,
 		userDTO.ProfilePictureUrl,
+		userDTO.Bio,
+		userDTO.WebsiteUrl,
 	}
 
 	row := r.dbService.QueryRow(context.Background(), query, params...)
@@ -57,6 +57,8 @@ func (r *userRepository) InsertUser(userDTO models.CreateUserDto) (*models.User,
 		&user.Birthday,
 		&user.Email,
 		&user.ProfilePictureUrl,
+		&user.Bio,
+		&user.WebsiteUrl,
 	)
 
 	if err != nil {

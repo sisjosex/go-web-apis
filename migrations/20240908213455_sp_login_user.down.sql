@@ -1,1 +1,0 @@
-DROP FUNCTION IF EXISTS sp_login_user;
