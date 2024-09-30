@@ -11,8 +11,10 @@ CREATE TABLE IF NOT EXISTS
         login_time TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,  -- Tiempo de login
         logout_time TIMESTAMP WITH TIME ZONE DEFAULT NULL,  -- Tiempo de logout
         last_activity_time TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,  -- Última actividad
-        ip_address INET,  -- Dirección IP del dispositivo
-        device_os JSONB,  -- Información del dispositivo como sistema operativo, modelo, etc.
+        ip_address VARCHAR(255),  -- Dirección IP del dispositivo
+        device_info VARCHAR(255), -- Dispositivo (ej. iPhone 12)
+        browser VARCHAR(255),  -- Navegador del dispositivo
+        device_os VARCHAR(255),  -- Información del dispositivo como sistema operativo, modelo, etc.
         user_agent VARCHAR(255),  -- User agent del dispositivo
         multifactor_enabled BOOLEAN,  -- Si MFA está activado
         multifactor_verified BOOLEAN,  -- Si MFA ha sido verificado

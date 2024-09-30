@@ -8,22 +8,20 @@ import (
 )
 
 func EmailValidation(fl validator.FieldLevel) bool {
-	email := fl.Field().String()
+	emailStr := fl.Field().String()
+
+	// Si es nil, se considera como válido
+	if emailStr == "" {
+		return false
+	}
+
+	// Obtener el valor desreferenciado y validar si es una cadena válida
 	emailRegex := regexp.MustCompile(`^[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}$`)
-	return emailRegex.MatchString(email)
+	return emailRegex.MatchString(emailStr)
 }
-
-/*func EmailExistValidator(fl validator.FieldLevel) bool {
-	var userRepository = repositories.NewUserRepository(services.DB)
-	email := fl.Field().String()
-
-	user, _ := userRepository.GetUserByEmail(email, nil)
-	return user == nil
-}*/
 
 func RegisterValidations() *validator.Validate {
 	validate := binding.Validator.Engine().(*validator.Validate)
 	validate.RegisterValidation("email-valid", EmailValidation)
-	//validate.RegisterValidation("email-exists", EmailExistValidator)
 	return validate
 }

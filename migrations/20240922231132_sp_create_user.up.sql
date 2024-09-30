@@ -30,18 +30,20 @@ $$;
 /*
 SELECT private_validate_email(p_email := 'asd@asd.com');
 */
-CREATE OR REPLACE FUNCTION private_validate_email(p_email VARCHAR)
+CREATE OR REPLACE FUNCTION private_validate_email(p_email VARCHAR, p_required BOOLEAN DEFAULT TRUE)
 RETURNS VARCHAR AS $$
 DECLARE
     lower_email VARCHAR;
 BEGIN
     lower_email := LOWER(TRIM(p_email));
 
-    IF lower_email = '' THEN
+    IF p_required AND lower_email = '' THEN
         RAISE EXCEPTION 'Correo electrónico es requerido.' USING ERRCODE = 'E0001';
     END IF;
 
-    IF NOT lower_email ~* '^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$' THEN
+    IF lower_email IS NOT NULL
+        AND LENGTH(lower_email) > 0
+        AND NOT lower_email ~* '^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$' THEN
         RAISE EXCEPTION 'El correo electrónico % tiene un formato inválido.', lower_email USING ERRCODE = 'E0002';
     END IF;
 
@@ -101,7 +103,7 @@ BEGIN
     -- Buscar usuario por correo
     SELECT id INTO v_user_id
     FROM public.users
-    WHERE email = p_email;
+    WHERE LOWER(email) = p_email;
 
     -- Si el usuario no existe, crearlo
     IF v_user_id IS NULL THEN
@@ -124,13 +126,13 @@ $$ LANGUAGE plpgsql;
 
 /*
 SELECT * FROM sp_create_user(
-  p_email := 'asd5@asd.com',
+  p_email := 'asd26@asd.com',
   p_first_name := 'Juan',
   p_last_name:= 'Perez',
-  p_phone := NULL,
-  p_birthday := NULL,
-  p_password := 'asd123',
-  p_profile_picture_url := NULL,
+  p_phone := '76442884',
+  p_birthday := '1984-01-01',
+  p_password := 'Asd123123%',
+  p_profile_picture_url := 'http:/google3.com',
   p_bio := NULL,
   p_website_url := NULL
 );
@@ -166,7 +168,7 @@ BEGIN
     -- Iniciar una transacción
     BEGIN
         -- Validar y formatear el correo
-        lower_email := private_validate_email(p_email);
+        lower_email := private_validate_email(p_email, TRUE);
 
         -- Encriptar la contraseña si aplica
         p_password := private_encrypt_password(p_password);

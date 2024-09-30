@@ -1,7 +1,7 @@
 -- Función para gestionar las sesiones
 CREATE OR REPLACE FUNCTION private_manage_user_session(
     p_user_id UUID,
-    p_auth_provider VARCHAR,
+    p_provider_name VARCHAR,
     p_auth_provider_id VARCHAR,
     p_device_info VARCHAR,
     p_device_os VARCHAR,
@@ -17,15 +17,15 @@ BEGIN
         SELECT 1
         FROM public.user_sessions
         WHERE user_id = p_user_id
-        AND auth_provider = p_auth_provider
+        AND provider_name = p_provider_name
         AND auth_provider_id = p_auth_provider_id
     ) THEN
         -- Crear una nueva sesión
         INSERT INTO public.user_sessions (
-            user_id, auth_provider, auth_provider_id, login_time, device_info, device_os, browser, ip_address, user_agent, is_active
+            user_id, provider_name, auth_provider_id, login_time, device_info, device_os, browser, ip_address, user_agent, is_active
         )
         VALUES (
-            p_user_id, p_auth_provider, p_auth_provider_id, CURRENT_TIMESTAMP, p_device_info, p_device_os, p_browser, p_ip_address, p_user_agent, true
+            p_user_id, p_provider_name, p_auth_provider_id, CURRENT_TIMESTAMP, p_device_info, p_device_os, p_browser, p_ip_address, p_user_agent, true
         )
         RETURNING session_id INTO v_session_id;
     ELSE
@@ -39,7 +39,7 @@ BEGIN
             user_agent = p_user_agent,
             is_active = true
         WHERE user_id = p_user_id
-        AND auth_provider = p_auth_provider
+        AND provider_name = p_provider_name
         AND auth_provider_id = p_auth_provider_id
         RETURNING session_id INTO v_session_id;
     END IF;
@@ -139,6 +139,7 @@ CREATE OR REPLACE FUNCTION sp_login_email(
     user_id UUID
 ) LANGUAGE plpgsql AS $$
 DECLARE
+		lower_email VARCHAR(255);
     v_user_id UUID;
     v_session_id UUID;
     v_password_hash VARCHAR(255);
@@ -146,11 +147,13 @@ DECLARE
     v_is_verified BOOLEAN;
     v_expiration_date DATE;
 BEGIN
+		lower_email := LOWER(TRIM(p_email));
+
     -- Verificar si el usuario existe por correo y obtener datos relevantes
     SELECT u.id, u.password, u.is_active, u.expiration_date, u.is_verified
     INTO v_user_id, v_password_hash, v_is_active, v_expiration_date, v_is_verified
     FROM users u
-    WHERE u.email = LOWER(TRIM(p_email))
+    WHERE LOWER(u.email) = lower_email
     LIMIT 1;
 
     IF NOT FOUND THEN
@@ -169,11 +172,11 @@ BEGIN
 
     -- Validar la contraseña
     IF p_password IS NULL OR v_password_hash <> crypt(p_password, v_password_hash) THEN
-        RAISE EXCEPTION 'Contraseña incorrecta.' USING ERRCODE = 'U0004';
+        RAISE EXCEPTION 'Credenciales incorrectas.' USING ERRCODE = 'U0004';
     END IF;
 
     -- Crear una nueva sesión de usuario
-    v_session_id := private_manage_user_session(v_user_id, 'email', NULL, p_device_info, p_device_os, p_browser, p_ip_address, p_user_agent);
+    v_session_id := private_manage_user_session(v_user_id, 'email', lower_email, p_device_info, p_device_os, p_browser, p_ip_address, p_user_agent);
 
     -- Devolver la información del usuario y la sesión
     RETURN QUERY

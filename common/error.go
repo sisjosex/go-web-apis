@@ -7,6 +7,8 @@ type ValidationError struct {
 
 const (
 	UserCreateFailed      = "user.create.failed"
+	UserUpdateFailed      = "user.update.failed"
+	UserLoginFailed       = "user.login.failed"
 	UserValidationFailed  = "user.create.validation-failed"
 	UserEmailAlreadyInUse = "user.create.email-in-use"
 	UserSearchFailed      = "user.search.failed"

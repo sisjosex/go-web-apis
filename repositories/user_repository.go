@@ -51,6 +51,72 @@ func (r *userRepository) InsertUser(userDTO models.CreateUserDto) (*models.User,
 
 	err := row.Scan(
 		&user.ID,
+		&user.Email,
+		&user.FirstName,
+		&user.LastName,
+		&user.Phone,
+		&user.Birthday,
+		&user.ProfilePictureUrl,
+		&user.Bio,
+		&user.WebsiteUrl,
+	)
+
+	if err != nil {
+
+		var pgErr *pgconn.PgError
+		if errors.As(err, &pgErr) {
+			return nil, fmt.Errorf(pgErr.Message)
+		}
+
+		return nil, err
+	}
+
+	return user, nil
+}
+
+func (r *userRepository) UpdateUser(userDTO models.UpdateUserDto) (*models.User, error) {
+	user := &models.User{}
+	query := `
+        SELECT * FROM sp_update_user(
+			p_id := $1,
+			p_first_name := $2,
+			p_last_name := $3,
+			p_phone := $4,
+			p_birthday := $5,
+			p_email := $6,
+			p_current_password := $7, -- Contraseña actual
+			p_new_password := $8, -- Nueva contraseña
+			p_is_active := $9,
+			p_is_verified := $10,
+			p_expiration_date := $11,
+			p_profile_picture_url := $12,
+			p_bio := $13,
+			p_website_url := $14
+		)
+    `
+
+	// Construir la lista de parámetros en el mismo orden que la consulta
+	params := []interface{}{
+		userDTO.ID,
+		userDTO.FirstName,
+		userDTO.LastName,
+		userDTO.Phone,
+		userDTO.Birthday,
+		userDTO.Email,
+		userDTO.PasswordCurrent,
+		userDTO.PasswordNew,
+		userDTO.IsActive,
+		userDTO.IsVerified,
+		userDTO.ExpirationDate,
+		userDTO.ProfilePictureUrl,
+		userDTO.Bio,
+		userDTO.WebsiteUrl,
+	}
+
+	row := r.dbService.QueryRow(context.Background(), query, params...)
+
+	err := row.Scan(
+		&user.ID,
 		&user.FirstName,
 		&user.LastName,
 		&user.Phone,
@@ -74,20 +140,47 @@ func (r *userRepository) InsertUser(userDTO models.CreateUserDto) (*models.User,
 	return user, nil
 }
 
-/*func (r *userRepository) GetUserByEmail(email string, id *string) (*models.User, *common.ValidationError) {
-	var user models.User
+func (r *userRepository) LoginUser(userDTO models.LoginUserDto) (*models.SessionUser, error) {
+	token := &models.SessionUser{}
+	query := `
+        SELECT * FROM sp_login_email(
+			p_email := $1,
+			p_password := $2,
+			p_ip_address := $3,
+			p_device_info := $4,
+			p_device_os := $5,
+			p_browser := $6,
+			p_user_agent := $7
+		)
+    `
 
-	query := r.db.Where("email = ?", strings.TrimSpace(strings.ToLower(email))).Limit(1)
-
-	if id != nil {
-		query = query.Where("id = ?", id)
+	// Construir la lista de parámetros en el mismo orden que la consulta
+	params := []interface{}{
+		userDTO.Email,
+		userDTO.Password,
+		userDTO.IpAddress,
+		userDTO.DeviceInfo,
+		userDTO.DeviceOs,
+		userDTO.Browser,
+		userDTO.UserAgent,
 	}
 
-	query.Find(&user)
+	row := r.dbService.QueryRow(context.Background(), query, params...)
 
-	if user.ID != uuid.Nil {
-		return &user, common.BuildErrorSingle(common.UserGetByIdNotFound)
+	err := row.Scan(
+		&token.UserId,
+		&token.SessionId,
+	)
+
+	if err != nil {
+
+		var pgErr *pgconn.PgError
+		if errors.As(err, &pgErr) {
+			return nil, fmt.Errorf(pgErr.Message)
+		}
+
+		return nil, err
 	}
 
-	return nil, nil
-}*/
+	return token, nil
+}
