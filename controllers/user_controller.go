@@ -8,36 +8,16 @@ import (
 	"net/http"
 
 	"github.com/gin-gonic/gin"
-	"github.com/ua-parser/uap-go/uaparser"
 )
 
 type UserController struct {
 	userService interfaces.UserService
-	parser      *uaparser.Parser
 }
 
-func NewUserController(userService interfaces.UserService, parser *uaparser.Parser) *UserController {
+func NewUserController(userService interfaces.UserService) *UserController {
 	return &UserController{
 		userService: userService,
-		parser:      parser,
 	}
-}
-
-func (uc *UserController) Register(ctx *gin.Context) {
-	var newUser models.CreateUserDto
-
-	if err := ctx.ShouldBindJSON(&newUser); err != nil {
-		ctx.JSON(http.StatusBadRequest, common.BuildErrorDetail(common.UserValidationFailed, utils.ExtractValidationError(err)))
-		return
-	}
-
-	user, err := uc.userService.InsertUser(newUser)
-	if err != nil {
-		ctx.JSON(http.StatusBadRequest, common.BuildErrorDetail(common.UserCreateFailed, err.Error()))
-		return
-	}
-
-	ctx.JSON(http.StatusOK, user)
 }
 
 func (uc *UserController) Create(ctx *gin.Context) {
@@ -55,7 +35,7 @@ func (uc *UserController) Create(ctx *gin.Context) {
 
 	user, err := uc.userService.InsertUser(newUser)
 	if err != nil {
-		ctx.JSON(http.StatusBadRequest, common.BuildErrorDetail(common.UserCreateFailed, err.Error()))
+		ctx.JSON(http.StatusBadRequest, common.BuildError(err))
 		return
 	}
 
@@ -78,35 +58,4 @@ func (uc *UserController) Update(ctx *gin.Context) {
 	}
 
 	ctx.JSON(http.StatusOK, user)
-}
-
-func (uc *UserController) Login(c *gin.Context) {
-	var loginUser models.LoginUserDto
-
-	if err := c.ShouldBindJSON(&loginUser); err != nil {
-		c.JSON(http.StatusBadRequest, common.BuildErrorDetail(common.UserValidationFailed, utils.ExtractValidationError(err)))
-		return
-	}
-
-	userAgent := c.GetHeader("User-Agent")
-	userAgentParsed := uc.parser.Parse(userAgent)
-
-	// Add the IP address, device info, device OS, browser, and user agent to the loginUser struct
-	loginUser.IpAddress = c.ClientIP()
-	loginUser.DeviceInfo = userAgentParsed.Device.Family
-	loginUser.DeviceOs = userAgentParsed.Os.Family
-	loginUser.Browser = userAgentParsed.UserAgent.Family
-	loginUser.UserAgent = userAgent
-
-	token, err := uc.userService.LoginUser(loginUser)
-	if err != nil {
-		c.JSON(http.StatusBadRequest, common.BuildErrorDetail(common.UserCreateFailed, err.Error()))
-		return
-	}
-
-	c.JSON(http.StatusOK, token)
-}
-
-func (uc *UserController) Delete(c *gin.Context) {
-
 }

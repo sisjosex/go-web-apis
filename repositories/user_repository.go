@@ -3,7 +3,6 @@ package repositories
 import (
 	"context"
 	"errors"
-	"fmt"
 	"josex/web/interfaces"
 	"josex/web/models"
 
@@ -65,7 +64,7 @@ func (r *userRepository) InsertUser(userDTO models.CreateUserDto) (*models.User,
 
 		var pgErr *pgconn.PgError
 		if errors.As(err, &pgErr) {
-			return nil, fmt.Errorf(pgErr.Message)
+			return nil, pgErr
 		}
 
 		return nil, err
@@ -131,7 +130,7 @@ func (r *userRepository) UpdateUser(userDTO models.UpdateUserDto) (*models.User,
 
 		var pgErr *pgconn.PgError
 		if errors.As(err, &pgErr) {
-			return nil, fmt.Errorf(pgErr.Message)
+			return nil, pgErr
 		}
 
 		return nil, err
@@ -147,10 +146,11 @@ func (r *userRepository) LoginUser(userDTO models.LoginUserDto) (*models.Session
 			p_email := $1,
 			p_password := $2,
 			p_ip_address := $3,
-			p_device_info := $4,
-			p_device_os := $5,
-			p_browser := $6,
-			p_user_agent := $7
+			p_device_id := $4,
+			p_device_info := $5,
+			p_device_os := $6,
+			p_browser := $7,
+			p_user_agent := $8
 		)
     `
 
@@ -159,6 +159,7 @@ func (r *userRepository) LoginUser(userDTO models.LoginUserDto) (*models.Session
 		userDTO.Email,
 		userDTO.Password,
 		userDTO.IpAddress,
+		userDTO.DeviceId,
 		userDTO.DeviceInfo,
 		userDTO.DeviceOs,
 		userDTO.Browser,
@@ -176,11 +177,48 @@ func (r *userRepository) LoginUser(userDTO models.LoginUserDto) (*models.Session
 
 		var pgErr *pgconn.PgError
 		if errors.As(err, &pgErr) {
-			return nil, fmt.Errorf(pgErr.Message)
+			return nil, pgErr
 		}
 
 		return nil, err
 	}
 
 	return token, nil
+}
+
+func (r *userRepository) LogoutUser(userDTO models.SessionUser) (*models.SessionUser, error) {
+	userSession := &models.SessionUser{}
+
+	query := `
+        SELECT * FROM sp_logout(
+			p_user_id := $1,
+			p_session_id := $2
+		)
+    `
+
+	// Construir la lista de parámetros en el mismo orden que la consulta
+	params := []interface{}{
+		userDTO.UserId,
+		userDTO.SessionId,
+	}
+
+	row := r.dbService.QueryRow(context.Background(), query, params...)
+
+	err := row.Scan(
+		&userSession.UserId,
+		&userSession.SessionId,
+		&userSession.IsActive,
+	)
+
+	if err != nil {
+
+		var pgErr *pgconn.PgError
+		if errors.As(err, &pgErr) {
+			return nil, pgErr
+		}
+
+		return nil, err
+	}
+
+	return userSession, nil
 }

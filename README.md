@@ -26,3 +26,7 @@ go build .
 ```
 docker-compose up
 ```
+
+## Error codes
+
+L0001 user.login.not-found

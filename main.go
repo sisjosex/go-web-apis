@@ -1,30 +1,57 @@
 package main
 
 import (
-	"josex/web/interfaces"
+	"context"
+	"fmt"
 	"josex/web/routes"
 	"josex/web/services"
+	"os"
+	"os/signal"
+	"syscall"
+	"time"
 )
 
-// Init database connection
-func InitDatabaseConnection() interfaces.DatabaseService {
-	dbService := services.NewDatabaseService()
-	dbService.InitDatabase()
-	return dbService
-}
+// main is the entry point of the application
+// It initializes the database connection and starts the web server
+// It also closes the database connection when the application is done
+// @return void
 
-// Start web server
-func StartWebServer(dbService interfaces.DatabaseService) {
-	webServerService := services.NewWebServerService()
-	webServerService.Initialize(&dbService)
-	routes.SetupRoutes(webServerService.Server, dbService)
-	webServerService.Start()
-}
-
-// Main function
 func main() {
-	dbService := InitDatabaseConnection()
-	StartWebServer(dbService)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel() // Cancelar al final
 
-	dbService.CloseDatabase()
+	signalChan := make(chan os.Signal, 1)
+	signal.Notify(signalChan, os.Interrupt, syscall.SIGTERM)
+
+	// Servicio de base de datos
+	dbService := services.NewDatabaseService()
+	go dbService.InitDatabase(ctx) // Iniciar la conexión de la base de datos en una goroutine
+
+	// Servicio web
+	server := services.NewWebServerService()
+	server.Initialize(&dbService)
+	routes.SetupRoutes(server.Server, dbService)
+
+	// Manejar señales de terminación
+	go func() {
+		<-signalChan
+		cancel() // Cancela el contexto cuando se recibe la señal de terminación
+
+		// Cerrar la base de datos con un timeout
+		shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer shutdownCancel()
+
+		dbService.CloseDatabase(shutdownCtx) // Cerrar la conexión de la base de datos
+	}()
+
+	// Iniciar el servidor
+	if err := server.Start(ctx); err != nil {
+		fmt.Println("Server error:", err)
+	}
+
+	// Al finalizar, cerrar la base de datos con un timeout
+	shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer shutdownCancel()
+
+	dbService.CloseDatabase(shutdownCtx) // Cerrar la conexión de la base de datos de forma ordenada
 }

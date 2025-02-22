@@ -32,12 +32,12 @@ func (s *userService) LoginUser(loginDTO models.LoginUserDto) (*models.SessionTo
 		return nil, err
 	}
 
-	tokenExpiration := time.Now().Add(time.Millisecond * time.Duration(config.JwtExpiration))
+	tokenExpiration := time.Now().Add(time.Second * time.Duration(config.AppConfig.JwtExpirationSeconds))
 
 	tokenSigned, err := utils.GenerateAccessToken(
 		sessionUser.UserId,
 		sessionUser.SessionId,
-		config.JwtSecret,
+		config.AppConfig.JwtSecretKey,
 		tokenExpiration,
 	)
 
@@ -48,4 +48,14 @@ func (s *userService) LoginUser(loginDTO models.LoginUserDto) (*models.SessionTo
 	return &models.SessionToken{
 		AccessToken: *tokenSigned,
 	}, nil
+}
+
+func (s *userService) LogoutUser(sessionUser models.SessionUser) (*models.SessionUser, error) {
+	logoutResponse, err := s.userRepository.LogoutUser(sessionUser)
+
+	if err != nil {
+		return nil, err
+	}
+
+	return logoutResponse, nil
 }

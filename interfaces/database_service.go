@@ -7,9 +7,9 @@ import (
 )
 
 type DatabaseService interface {
-	InitDatabase()
+	InitDatabase(ctx context.Context)
 	Query(ctx context.Context, query string, args ...interface{}) (pgx.Rows, error)
 	QueryRow(ctx context.Context, query string, args ...interface{}) pgx.Row
 	Execute(ctx context.Context, query string, args ...interface{}) (int64, error)
-	CloseDatabase()
+	CloseDatabase(ctx context.Context)
 }

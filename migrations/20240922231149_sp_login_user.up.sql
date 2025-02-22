@@ -1,8 +1,10 @@
 -- Función para gestionar las sesiones
-CREATE OR REPLACE FUNCTION private_manage_user_session(
+CREATE
+OR REPLACE FUNCTION private_manage_user_session (
     p_user_id UUID,
     p_provider_name VARCHAR,
     p_auth_provider_id VARCHAR,
+    p_device_id UUID,
     p_device_info VARCHAR,
     p_device_os VARCHAR,
     p_browser VARCHAR,
@@ -12,36 +14,60 @@ CREATE OR REPLACE FUNCTION private_manage_user_session(
 DECLARE
     v_session_id UUID;
 BEGIN
+
+    -- Search active session
+    SELECT session_id INTO v_session_id
+    FROM public.user_sessions
+    WHERE user_id = p_user_id
+      AND provider_name = p_provider_name
+      AND auth_provider_id = p_auth_provider_id
+      AND device_id = p_device_id
+      AND is_active = true
+    LIMIT 1;
+
     -- Verificar si ya existe una sesión para el usuario y el proveedor
-    IF NOT EXISTS (
-        SELECT 1
-        FROM public.user_sessions
-        WHERE user_id = p_user_id
-        AND provider_name = p_provider_name
-        AND auth_provider_id = p_auth_provider_id
-    ) THEN
+    IF v_session_id IS NULL THEN
         -- Crear una nueva sesión
         INSERT INTO public.user_sessions (
-            user_id, provider_name, auth_provider_id, login_time, device_info, device_os, browser, ip_address, user_agent, is_active
+            user_id, 
+            provider_name, 
+            auth_provider_id, 
+            login_time, 
+            device_id, 
+            device_info, 
+            device_os, 
+            browser, 
+            ip_address, 
+            user_agent, 
+            is_active
         )
         VALUES (
-            p_user_id, p_provider_name, p_auth_provider_id, CURRENT_TIMESTAMP, p_device_info, p_device_os, p_browser, p_ip_address, p_user_agent, true
+            p_user_id,
+            p_provider_name,
+            p_auth_provider_id,
+            CURRENT_TIMESTAMP,
+            p_device_id,
+            p_device_info,
+            p_device_os,
+            p_browser,
+            p_ip_address,
+            p_user_agent,
+            true
         )
         RETURNING session_id INTO v_session_id;
     ELSE
         -- Actualizar la sesión existente
         UPDATE public.user_sessions
         SET login_time = CURRENT_TIMESTAMP,
+            ip_address = p_ip_address,
             device_info = p_device_info,
             device_os = p_device_os,
             browser = p_browser,
-            ip_address = p_ip_address,
             user_agent = p_user_agent,
-            is_active = true
-        WHERE user_id = p_user_id
-        AND provider_name = p_provider_name
-        AND auth_provider_id = p_auth_provider_id
-        RETURNING session_id INTO v_session_id;
+            is_active = true,
+            updated_at = CURRENT_TIMESTAMP
+
+        WHERE session_id = v_session_id;
     END IF;
 
     RETURN v_session_id;
@@ -51,29 +77,27 @@ $$ LANGUAGE plpgsql;
 /*
 
 SELECT * FROM sp_login_external(
-    p_auth_provider_name := 'facebook',  -- Nombre del proveedor de autenticación
-    p_auth_provider_id := 'facebook_user_id_12345', -- ID del usuario en Facebook
-    p_ip_address := '192.168.1.1',       -- Dirección IP del usuario
-    p_device_info := 'iPhone 12',        -- Información del dispositivo
-    p_device_os := 'iOS 15',             -- Sistema operativo del dispositivo
-    p_browser := 'Mobile Safari',        -- Navegador del usuario
-    p_user_agent := 'Mozilla/5.0 (iPhone; CPU iPhone OS 15_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/15.0 Mobile/15E148 Safari/604.1' -- User-Agent
+p_auth_provider_name := 'facebook',  -- Nombre del proveedor de autenticación
+p_auth_provider_id := 'facebook_user_id_12345', -- ID del usuario en Facebook
+p_ip_address := '192.168.1.1',       -- Dirección IP del usuario
+p_device_info := 'iPhone 12',        -- Información del dispositivo
+p_device_os := 'iOS 15',             -- Sistema operativo del dispositivo
+p_browser := 'Mobile Safari',        -- Navegador del usuario
+p_user_agent := 'Mozilla/5.0 (iPhone; CPU iPhone OS 15_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/15.0 Mobile/15E148 Safari/604.1' -- User-Agent
 );
 
 */
-
-CREATE OR REPLACE FUNCTION sp_login_external(
-    p_auth_provider_name VARCHAR,  -- facebook, google, etc.
-    p_auth_provider_id VARCHAR,  -- ID del usuario en el proveedor externo
+CREATE
+OR REPLACE FUNCTION sp_login_external (
+    p_auth_provider_name VARCHAR, -- facebook, google, etc.
+    p_auth_provider_id VARCHAR, -- ID del usuario en el proveedor externo
+    p_device_id UUID,
     p_ip_address VARCHAR DEFAULT NULL,
     p_device_info VARCHAR DEFAULT NULL,
     p_device_os VARCHAR DEFAULT NULL,
     p_browser VARCHAR DEFAULT NULL,
     p_user_agent TEXT DEFAULT NULL
-) RETURNS TABLE (
-    session_id UUID,
-    user_id UUID
-) LANGUAGE plpgsql AS $$
+) RETURNS TABLE (session_id UUID, user_id UUID) LANGUAGE plpgsql AS $$
 DECLARE
     v_user_id UUID;
     v_session_id UUID;
@@ -89,17 +113,38 @@ BEGIN
     AND ua.auth_provider_id = p_auth_provider_id
     LIMIT 1;
 
-    IF NOT FOUND THEN
-        RAISE EXCEPTION 'Usuario no encontrado para el proveedor % con ID %.', p_auth_provider_name, p_auth_provider_id USING ERRCODE = 'P0002';
+    IF p_device_id IS NULL OR TRIM(p_device_id::text) = '' THEN
+        RAISE EXCEPTION 'user.login.device-id-required'
+        USING ERRCODE = 'L0007', DETAIL = 'Device ID is required for external login';
     END IF;
 
-    -- Verificar si el usuario está activo y no ha expirado
-    IF NOT v_is_active OR (v_expiration_date IS NOT NULL AND v_expiration_date < CURRENT_DATE) THEN
-        RAISE EXCEPTION 'El usuario está deshabilitado o su cuenta ha expirado.' USING ERRCODE = 'P0007';
+    IF NOT FOUND THEN
+        RAISE EXCEPTION 'user.login.external.not-found' 
+        USING ERRCODE = 'L0006', DETAIL = ('User not found for provider %', p_auth_provider_name);
+    END IF;
+
+    IF NOT v_is_active THEN
+        RAISE EXCEPTION 'user.login.account-not-active'
+        USING ERRCODE = 'L0003', DETAIL = 'User account is not active';
+    END IF;
+
+    IF (v_expiration_date IS NOT NULL AND v_expiration_date < CURRENT_DATE) THEN
+        RAISE EXCEPTION 'user.login.account-expired' 
+        USING ERRCODE = 'L0004', DETAIL = 'User account is expired';
     END IF;
 
     -- Crear una nueva sesión de usuario
-    v_session_id := private_manage_user_session(v_user_id, p_auth_provider_name, p_auth_provider_id, p_device_info, p_device_os, p_browser, p_ip_address, p_user_agent);
+    v_session_id := private_manage_user_session(
+        p_user_id           := v_user_id,
+        p_provider_name     := p_auth_provider_name,
+        p_auth_provider_id  := p_auth_provider_id,
+        p_device_id         := p_device_id,
+        p_device_info       := p_device_info,
+        p_device_os         := p_device_os,
+        p_browser           := p_browser,
+        p_ip_address        := p_ip_address,
+        p_user_agent        := p_user_agent
+    );
 
     -- Devolver la información del usuario y la sesión
     RETURN QUERY
@@ -115,31 +160,29 @@ $$;
 -- Llamada a la función sp_login_user con proveedor de email
 
 SELECT * FROM sp_login_email(
-    p_email := 'user@example.com',       -- Correo electrónico del usuario
-    p_password := 'user_password123',    -- Contraseña del usuario
-    p_ip_address := '192.168.1.1',       -- Dirección IP del usuario
-    p_device_info := 'Windows 10 Laptop',-- Información del dispositivo
-    p_device_os := 'Windows 10',         -- Sistema operativo del dispositivo
-    p_browser := 'Chrome',               -- Navegador del usuario
-    p_user_agent := 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36' -- User-Agent
+p_email := 'asD30@Asd.com',       -- Correo electrónico del usuario
+p_password := '%123457A8',    -- Contraseña del usuario
+p_ip_address := '192.168.1.1',       -- Dirección IP del usuario
+p_device_info := 'Windows 10 Laptop',-- Información del dispositivo
+p_device_os := 'Windows 10',         -- Sistema operativo del dispositivo
+p_browser := 'Chrome',               -- Navegador del usuario
+p_user_agent := 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36' -- User-Agent
 );
 
 */
-
-CREATE OR REPLACE FUNCTION sp_login_email(
+CREATE
+OR REPLACE FUNCTION sp_login_email (
     p_email VARCHAR,
     p_password VARCHAR,
+    p_device_id UUID,
     p_ip_address VARCHAR DEFAULT NULL,
     p_device_info VARCHAR DEFAULT NULL,
     p_device_os VARCHAR DEFAULT NULL,
     p_browser VARCHAR DEFAULT NULL,
     p_user_agent TEXT DEFAULT NULL
-) RETURNS TABLE (
-    session_id UUID,
-    user_id UUID
-) LANGUAGE plpgsql AS $$
+) RETURNS TABLE (user_id UUID, session_id UUID) LANGUAGE plpgsql AS $$
 DECLARE
-		lower_email VARCHAR(255);
+	lower_email VARCHAR(255);
     v_user_id UUID;
     v_session_id UUID;
     v_password_hash VARCHAR(255);
@@ -156,33 +199,110 @@ BEGIN
     WHERE LOWER(u.email) = lower_email
     LIMIT 1;
 
+    IF p_device_id IS NULL OR TRIM(p_device_id::text) = '' THEN
+        RAISE EXCEPTION 'user.login.device-id-required'
+        USING ERRCODE = 'L0008', DETAIL = 'Device ID is required';
+    END IF;
+
     IF NOT FOUND THEN
-        RAISE EXCEPTION 'Usuario no encontrado.' USING ERRCODE = 'U0001';
+        RAISE EXCEPTION 'user.login.not-found' USING ERRCODE = 'L0001', DETAIL = 'User account not found';
     END IF;
 
     -- Verificar si el usuario está activo y no ha expirado
     IF NOT v_is_verified THEN
-        RAISE EXCEPTION 'Verificación por email no completada.' USING ERRCODE = 'U0006';
+        RAISE EXCEPTION 'user.login.email-not-verified' USING ERRCODE = 'L0002', DETAIL = 'User email is not verified';
     END IF;
 
-    -- Verificar si el usuario está activo y no ha expirado
-    IF NOT v_is_active OR (v_expiration_date IS NOT NULL AND v_expiration_date < CURRENT_DATE) THEN
-        RAISE EXCEPTION 'El usuario está deshabilitado o su cuenta ha expirado.' USING ERRCODE = 'U0007';
+    IF NOT v_is_active THEN
+        RAISE EXCEPTION 'user.login.account-not-active' USING ERRCODE = 'L0003', DETAIL = 'User account is not active';
     END IF;
 
-    -- Validar la contraseña
+    IF (v_expiration_date IS NOT NULL AND v_expiration_date < CURRENT_DATE) THEN
+        RAISE EXCEPTION 'user.login.account-expired' USING ERRCODE = 'L0004', DETAIL = 'User account is expired';
+    END IF;
+
     IF p_password IS NULL OR v_password_hash <> crypt(p_password, v_password_hash) THEN
-        RAISE EXCEPTION 'Credenciales incorrectas.' USING ERRCODE = 'U0004';
+        RAISE EXCEPTION 'user.login.invalid-credentials' USING ERRCODE = 'L0005', DETAIL = 'Invalid credentials';
     END IF;
 
     -- Crear una nueva sesión de usuario
-    v_session_id := private_manage_user_session(v_user_id, 'email', lower_email, p_device_info, p_device_os, p_browser, p_ip_address, p_user_agent);
+    v_session_id := private_manage_user_session(
+        p_user_id := v_user_id,
+        p_provider_name := 'email',
+        p_auth_provider_id := lower_email,
+        p_device_id := p_device_id,
+        p_device_info := p_device_info,
+        p_device_os := p_device_os,
+        p_browser := p_browser,
+        p_ip_address := p_ip_address,
+        p_user_agent := p_user_agent
+    );
 
     -- Devolver la información del usuario y la sesión
     RETURN QUERY
-    SELECT v_session_id, v_user_id
+    SELECT v_user_id, v_session_id
     FROM users u
     WHERE u.id = v_user_id
     LIMIT 1;
+END;
+$$;
+
+CREATE
+OR REPLACE FUNCTION sp_logout (
+    p_user_id UUID DEFAULT NULL,
+    p_session_id UUID DEFAULT NULL
+) RETURNS TABLE (user_id UUID, session_id UUID, is_active BOOL) LANGUAGE plpgsql AS $$
+DECLARE
+    v_session_count INT;
+BEGIN
+    -- Si se proporciona p_session_id, cerrar esa sesión en particular
+    IF p_session_id IS NOT NULL THEN
+        -- Verificar si la sesión existe para el usuario dado
+        SELECT COUNT(*)
+        INTO v_session_count
+        FROM user_sessions
+        WHERE user_sessions.session_id = p_session_id
+        AND user_sessions.user_id = p_user_id
+        AND user_sessions.is_active = true;
+
+        IF v_session_count = 0 THEN
+            RAISE EXCEPTION 'user.session.not-found' USING ERRCODE = 'S0001', DETAIL = 'user session does not found';
+        END IF;
+
+        -- Desactivar la sesión en lugar de eliminarla:
+        UPDATE user_sessions
+        SET is_active = FALSE, logout_time = NOW()
+        WHERE user_sessions.session_id = p_session_id 
+        AND user_sessions.user_id = p_user_id;
+
+        RETURN QUERY
+        SELECT
+            user_sessions.user_id,
+            user_sessions.session_id,
+            user_sessions.is_active
+        FROM user_sessions
+        WHERE user_sessions.session_id = p_session_id
+        AND user_sessions.user_id = p_user_id
+        LIMIT 1;
+
+    ELSE
+        -- Closing all sessions
+        SELECT COUNT(*)
+        INTO v_session_count
+        FROM user_sessions
+        WHERE user_sessions.user_id = p_user_id
+        AND user_sessions.is_active = TRUE;
+
+        IF v_session_count = 0 THEN
+            RAISE EXCEPTION 'user.session.no-active-sessions' USING ERRCODE = 'S0002', DETAIL = 'User does not have active sessions';
+        END IF;
+
+        -- Desactivar todas las sesiones:
+        UPDATE user_sessions
+        SET user_sessions.is_active = FALSE, logout_time = NOW()
+        WHERE user_sessions.user_id = p_user_id
+        AND user_sessions.is_active = TRUE;
+    END IF;
+
 END;
 $$;
