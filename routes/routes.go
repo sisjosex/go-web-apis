@@ -21,6 +21,7 @@ func SetupRoutes(r *gin.Engine, dbService interfaces.DatabaseService) {
 	mainRoutes := r.Group("/api/v1")
 	{
 		mainRoutes.POST("/login", authController.Login)
+		mainRoutes.POST("/login_facebook", authController.LoginFacebook)
 		mainRoutes.POST("/register", authController.Register)
 
 		mainRoutes.Use(middleware.AuthMiddleware())

@@ -38,13 +38,13 @@ BEGIN
     lower_email := LOWER(TRIM(p_email));
 
     IF p_required AND lower_email = '' THEN
-        RAISE EXCEPTION 'Correo electrónico es requerido.' USING ERRCODE = 'E0001';
+        RAISE EXCEPTION 'user.create.email.required' USING ERRCODE = 'C0001', Detail = 'Email address is required.';
     END IF;
 
     IF lower_email IS NOT NULL
         AND LENGTH(lower_email) > 0
         AND NOT lower_email ~* '^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$' THEN
-        RAISE EXCEPTION 'El correo electrónico % tiene un formato inválido.', lower_email USING ERRCODE = 'E0002';
+        RAISE EXCEPTION 'user.create.email.invalid' USING ERRCODE = 'C0002', DETAIL = 'Envalid email format.';
     END IF;
 
     RETURN lower_email;
@@ -57,22 +57,22 @@ RETURNS VARCHAR(255) AS $$
 BEGIN
     -- Verificar longitud mínima
     IF LENGTH(p_password) < 8 THEN
-        RAISE EXCEPTION 'La contraseña debe tener al menos 8 caracteres.' USING ERRCODE = 'P0010';
+        RAISE EXCEPTION 'user.create.password.min-length' USING ERRCODE = 'P0010', DETAIL = 'Password must be at least 8 characters long.';
     END IF;
 
     -- Verificar si tiene al menos una letra mayúscula
     IF p_password !~ '[A-Z]' THEN
-        RAISE EXCEPTION 'La contraseña debe contener al menos una letra mayúscula.' USING ERRCODE = 'P0011';
+        RAISE EXCEPTION 'user.create.password.uppper-case-letter' USING ERRCODE = 'P0011', Detail = 'Password must contain at least one uppercase letter.';
     END IF;
 
     -- Verificar si tiene al menos un número
     IF p_password !~ '[0-9]' THEN
-        RAISE EXCEPTION 'La contraseña debe contener al menos un número.' USING ERRCODE = 'P0012';
+        RAISE EXCEPTION 'user.create.password.no-password-number' USING ERRCODE = 'P0012', Detail = 'Password must contain at least one number.';
     END IF;
 
     -- Verificar si tiene al menos uno de los símbolos especiales permitidos
     IF p_password !~ '[!@#$%^&*(),.?":{}|<>]' THEN
-        RAISE EXCEPTION E'La contraseña debe contener al menos uno de los siguientes símbolos: !, @, #, $, %, ^, &, *, (, ), ., ?, ", :, {, }, |, <, >.', '%%' USING ERRCODE = 'P0013';
+        RAISE EXCEPTION 'user.create.password.missing-special-chars' USING ERRCODE = 'P0013', Detail = E'Password must contain at least one of the following special characters: !, @, #, $, %, ^, &, *, (, ), ., ?, ", :, {, }, |, <, >.';
     END IF;
 
     -- Encriptar la contraseña usando bcrypt
@@ -85,7 +85,7 @@ END;
 $$ LANGUAGE plpgsql;
 
 
--- Función para verificar si existe un usuario con el correo
+-- Función para buscar o crear un usuario
 CREATE OR REPLACE FUNCTION private_find_or_create_user(
     p_email VARCHAR,
     p_first_name VARCHAR,
@@ -107,16 +107,13 @@ BEGIN
 
     -- Si el usuario no existe, crearlo
     IF v_user_id IS NULL THEN
-        INSERT INTO public.users (email, first_name, last_name, phone, birthday, password, is_active, is_verified)
+        INSERT INTO users (email, first_name, last_name, phone, birthday, password, is_active, is_verified)
         VALUES (p_email, p_first_name, p_last_name, p_phone, p_birthday, p_password, true, false)
         RETURNING id INTO v_user_id;
 
         PERFORM private_create_user_profile(v_user_id, p_profile_picture_url, p_bio, p_website_url);
     ELSE
-        -- Si el usuario ya existe y es autenticación por email, lanzar un error
-        IF p_password IS NOT NULL THEN
-            RAISE EXCEPTION 'El correo % ya está registrado.', p_email USING ERRCODE = 'E0003';
-        END IF;
+        RAISE EXCEPTION 'user.create.email.already-exists' USING ERRCODE = 'C0003', Detail = 'Email already exists.';
     END IF;
 
     RETURN v_user_id;
@@ -165,50 +162,77 @@ DECLARE
     v_session_id UUID;
     lower_email VARCHAR;
 BEGIN
-    -- Iniciar una transacción
-    BEGIN
-        -- Validar y formatear el correo
-        lower_email := private_validate_email(p_email, TRUE);
+    -- Validar y formatear el correo
+    lower_email := private_validate_email(p_email, TRUE);
 
-        -- Encriptar la contraseña si aplica
-        p_password := private_encrypt_password(p_password);
+    -- Encriptar la contraseña si aplica
+    p_password := private_encrypt_password(p_password);
 
-        -- Verificar si el usuario existe o crearlo
-        v_user_id := private_find_or_create_user(
-          p_email := lower_email,
-          p_first_name := p_first_name,
-          p_last_name:= p_last_name,
-          p_phone := p_phone,
-          p_birthday := p_birthday,
-          p_password := p_password,
-          p_profile_picture_url := p_profile_picture_url,
-          p_bio := p_bio,
-          p_website_url := p_website_url
-        );
+    -- Verificar si el usuario existe o crearlo
+    v_user_id := private_find_or_create_user(
+        p_email := lower_email,
+        p_first_name := p_first_name,
+        p_last_name:= p_last_name,
+        p_phone := p_phone,
+        p_birthday := p_birthday,
+        p_password := p_password,
+        p_profile_picture_url := p_profile_picture_url,
+        p_bio := p_bio,
+        p_website_url := p_website_url
+    );
 
-        -- Commit si todo salió bien
-        -- Retornar el usuario actualizado
-        RETURN QUERY
-        SELECT
-            u.id,
-            u.email,
-            u.first_name,
-            u.last_name,
-            u.phone,
-            u.birthday,
-            p.profile_picture_url,
-            p.bio,
-            p.website_url
-        FROM users u
-        LEFT JOIN user_profile p ON u.id = p.user_id
-        WHERE u.id = v_user_id
-        LIMIT 1;
+    -- Commit si todo salió bien
+    -- Retornar el usuario actualizado
+    RETURN QUERY
+    SELECT
+        u.id,
+        u.email,
+        u.first_name,
+        u.last_name,
+        u.phone,
+        u.birthday,
+        p.profile_picture_url,
+        p.bio,
+        p.website_url
+    FROM users u
+    LEFT JOIN user_profile p ON u.id = p.user_id
+    WHERE u.id = v_user_id
+    LIMIT 1;
+END;
+$$ LANGUAGE plpgsql;
 
-    EXCEPTION
-        WHEN OTHERS THEN
-            -- Si hay un error, hacer rollback de todos los cambios
-            RAISE EXCEPTION 'Error en la creación del usuario: %', SQLERRM;
-            -- Aquí PostgreSQL hará rollback automáticamente si hay un error
-    END;
+-- Función para buscar o crear un usuario
+CREATE OR REPLACE FUNCTION sp_create_user_external(
+    p_email VARCHAR,
+    p_first_name VARCHAR,
+    p_last_name VARCHAR,
+    p_phone VARCHAR,
+    p_birthday DATE,
+    p_profile_picture_url TEXT DEFAULT NULL,
+    p_bio TEXT DEFAULT NULL,
+    p_website_url VARCHAR DEFAULT NULL
+) RETURNS TABLE (user_id UUID, is_active BOOLEAN, expiration_date TIMESTAMP) AS $$ 
+DECLARE
+    v_user_id UUID;
+    v_is_active BOOLEAN;
+    v_expiration_date TIMESTAMP;
+BEGIN
+    -- Buscar usuario por correo
+    SELECT u.id, u.is_active as user_is_active, u.expiration_date as user_expiration_date
+    INTO v_user_id, v_is_active, v_expiration_date
+    FROM public.users u
+    WHERE u.email = p_email;
+
+    -- Si el usuario no existe, crearlo
+    IF v_user_id IS NULL THEN
+        INSERT INTO users (email, first_name, last_name, phone, birthday, is_active, is_verified)
+        VALUES (p_email, p_first_name, p_last_name, p_phone, p_birthday, true, true)
+        RETURNING id, true, NULL INTO v_user_id, v_is_active, v_expiration_date;
+        
+        PERFORM private_create_user_profile(v_user_id, p_profile_picture_url, p_bio, p_website_url);
+    END IF;
+
+    -- Retornar la información del usuario
+    RETURN QUERY SELECT v_user_id, v_is_active, v_expiration_date;
 END;
 $$ LANGUAGE plpgsql;

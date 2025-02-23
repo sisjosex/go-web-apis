@@ -17,12 +17,12 @@ BEGIN
 
     -- Search active session
     SELECT session_id INTO v_session_id
-    FROM public.user_sessions
-    WHERE user_id = p_user_id
-      AND provider_name = p_provider_name
-      AND auth_provider_id = p_auth_provider_id
-      AND device_id = p_device_id
-      AND is_active = true
+    FROM public.user_sessions us
+    WHERE us.user_id = p_user_id
+      AND us.provider_name = p_provider_name
+      AND us.auth_provider_id = p_auth_provider_id
+      AND (p_device_id IS NULL OR us.device_id = p_device_id)
+      AND us.is_active = true
     LIMIT 1;
 
     -- Verificar si ya existe una sesión para el usuario y el proveedor
@@ -87,11 +87,17 @@ p_user_agent := 'Mozilla/5.0 (iPhone; CPU iPhone OS 15_0 like Mac OS X) AppleWeb
 );
 
 */
+
 CREATE
 OR REPLACE FUNCTION sp_login_external (
-    p_auth_provider_name VARCHAR, -- facebook, google, etc.
-    p_auth_provider_id VARCHAR, -- ID del usuario en el proveedor externo
+    p_auth_provider_name VARCHAR,
+    p_auth_provider_id VARCHAR,
     p_device_id UUID,
+    p_first_name VARCHAR DEFAULT NULL,
+    p_last_name VARCHAR DEFAULT NULL,
+    p_email VARCHAR DEFAULT NULL,
+    p_phone VARCHAR DEFAULT NULL,
+    p_birthday DATE DEFAULT NULL,
     p_ip_address VARCHAR DEFAULT NULL,
     p_device_info VARCHAR DEFAULT NULL,
     p_device_os VARCHAR DEFAULT NULL,
@@ -103,24 +109,59 @@ DECLARE
     v_session_id UUID;
     v_is_active BOOLEAN;
     v_expiration_date DATE;
+    v_exists_device_id UUID;
+    lower_email VARCHAR;
 BEGIN
-    -- Verificar si el usuario existe por proveedor externo
-    SELECT u.id, u.is_active, u.expiration_date
-    INTO v_user_id, v_is_active, v_expiration_date
-    FROM users u
-    JOIN user_auth ua ON ua.user_id = u.id
-    WHERE ua.auth_provider = p_auth_provider_name
-    AND ua.auth_provider_id = p_auth_provider_id
-    LIMIT 1;
+
+    lower_email := LOWER(TRIM(p_email));
+
+    IF lower_email IS NOT NULL THEN
+        SELECT u.id, u.is_active, u.expiration_date
+        INTO v_user_id, v_is_active, v_expiration_date
+        FROM users u
+        WHERE LOWER(u.email) = lower_email
+        LIMIT 1;
+    ELSE
+        -- Buscar usuario por proveedor externo o, si no existe, por `device_id`
+        SELECT u.id, u.is_active, u.expiration_date
+        INTO v_user_id, v_is_active, v_expiration_date
+        FROM users u
+        WHERE
+        EXISTS (
+            SELECT 1 
+            FROM user_sessions us
+            WHERE us.user_id = u.id
+            AND us.provider_name = p_auth_provider_name
+            AND us.auth_provider_id = p_auth_provider_id
+            LIMIT 1
+        )
+        OR EXISTS (
+            SELECT 1 
+            FROM user_sessions us
+            WHERE us.user_id = u.id
+            AND us.device_id = p_device_id
+            LIMIT 1
+        )
+        LIMIT 1;
+    END IF;
+
+    IF v_user_id IS NULL THEN
+         -- Asignamos los tres valores retornados por la función sp_create_user_external
+        SELECT new_user.user_id, new_user.is_active, new_user.expiration_date
+        INTO v_user_id, v_is_active, v_expiration_date
+        FROM sp_create_user_external(
+            p_email := lower_email,
+            p_first_name := p_first_name,
+            p_last_name := p_last_name,
+            p_phone := p_phone,
+            p_birthday := p_birthday
+        ) new_user;
+
+    END IF;
 
     IF p_device_id IS NULL OR TRIM(p_device_id::text) = '' THEN
         RAISE EXCEPTION 'user.login.device-id-required'
         USING ERRCODE = 'L0007', DETAIL = 'Device ID is required for external login';
-    END IF;
-
-    IF NOT FOUND THEN
-        RAISE EXCEPTION 'user.login.external.not-found' 
-        USING ERRCODE = 'L0006', DETAIL = ('User not found for provider %', p_auth_provider_name);
     END IF;
 
     IF NOT v_is_active THEN
@@ -148,7 +189,7 @@ BEGIN
 
     -- Devolver la información del usuario y la sesión
     RETURN QUERY
-    SELECT v_session_id, v_user_id
+    SELECT v_user_id, v_session_id
     FROM users u
     WHERE u.id = v_user_id
     LIMIT 1;
@@ -182,21 +223,21 @@ OR REPLACE FUNCTION sp_login_email (
     p_user_agent TEXT DEFAULT NULL
 ) RETURNS TABLE (user_id UUID, session_id UUID) LANGUAGE plpgsql AS $$
 DECLARE
-	lower_email VARCHAR(255);
     v_user_id UUID;
     v_session_id UUID;
     v_password_hash VARCHAR(255);
     v_is_active BOOLEAN;
     v_is_verified BOOLEAN;
     v_expiration_date DATE;
+	lower_email VARCHAR;
 BEGIN
-		lower_email := LOWER(TRIM(p_email));
+    lower_email := LOWER(TRIM(p_email));
 
     -- Verificar si el usuario existe por correo y obtener datos relevantes
     SELECT u.id, u.password, u.is_active, u.expiration_date, u.is_verified
     INTO v_user_id, v_password_hash, v_is_active, v_expiration_date, v_is_verified
     FROM users u
-    WHERE LOWER(u.email) = lower_email
+    WHERE u.email = lower_email
     LIMIT 1;
 
     IF p_device_id IS NULL OR TRIM(p_device_id::text) = '' THEN
@@ -221,7 +262,7 @@ BEGIN
         RAISE EXCEPTION 'user.login.account-expired' USING ERRCODE = 'L0004', DETAIL = 'User account is expired';
     END IF;
 
-    IF p_password IS NULL OR v_password_hash <> crypt(p_password, v_password_hash) THEN
+    IF p_password IS NULL OR v_password_hash IS NULL OR (v_password_hash <> crypt(p_password, v_password_hash)) THEN
         RAISE EXCEPTION 'user.login.invalid-credentials' USING ERRCODE = 'L0005', DETAIL = 'Invalid credentials';
     END IF;
 
@@ -271,7 +312,7 @@ BEGIN
 
         -- Desactivar la sesión en lugar de eliminarla:
         UPDATE user_sessions
-        SET is_active = FALSE, logout_time = NOW()
+        SET user_sessions.is_active = FALSE, logout_time = NOW()
         WHERE user_sessions.session_id = p_session_id 
         AND user_sessions.user_id = p_user_id;
 

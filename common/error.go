@@ -29,7 +29,7 @@ const (
 type ErrorTag map[string]string
 
 var ErrorTagCatalog = ErrorTag{
-	"email-valid": "user.email.invalid",
+	"email-valid": "email-invalid",
 	//"email-exists": "user.email.exists",
 }
 

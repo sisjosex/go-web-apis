@@ -50,6 +50,35 @@ func (s *userService) LoginUser(loginDTO models.LoginUserDto) (*models.SessionTo
 	}, nil
 }
 
+func (s *userService) LoginExternal(loginDTO models.LoginExternalDto) (*models.SessionToken, error) {
+	sessionUser, err := s.userRepository.LoginExternal(loginDTO)
+
+	if err != nil {
+		return nil, err
+	}
+
+	tokenExpiration := time.Now().Add(time.Second * time.Duration(config.AppConfig.JwtExpirationSeconds))
+
+	tokenSigned, err := utils.GenerateAccessToken(
+		sessionUser.UserId,
+		sessionUser.SessionId,
+		config.AppConfig.JwtSecretKey,
+		tokenExpiration,
+	)
+
+	if err != nil {
+		return nil, err
+	}
+
+	return &models.SessionToken{
+		AccessToken: *tokenSigned,
+	}, nil
+}
+
+func (s *userService) UpdateProfile(userDTO models.UpdateProfileDto) (*models.User, error) {
+	return s.userRepository.UpdateProfile(userDTO)
+}
+
 func (s *userService) LogoutUser(sessionUser models.SessionUser) (*models.SessionUser, error) {
 	logoutResponse, err := s.userRepository.LogoutUser(sessionUser)
 

@@ -55,6 +55,40 @@ func (uc *AuthController) Login(c *gin.Context) {
 	c.JSON(http.StatusOK, token)
 }
 
+func (uc *AuthController) LoginFacebook(c *gin.Context) {
+	var loginExternal models.LoginExternalDto
+
+	if err := c.ShouldBindJSON(&loginExternal); err != nil {
+		c.JSON(http.StatusBadRequest, common.BuildErrorDetail(common.UserLoginValidationFailed, utils.ExtractValidationError(err)))
+		return
+	}
+
+	parser, err := uaparser.New("./config/regexes.yaml")
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	userAgent := c.GetHeader("User-Agent")
+
+	client := parser.Parse(userAgent)
+
+	loginExternal.IpAddress = utils.GetClientIp(c)
+	loginExternal.DeviceInfo = strings.TrimSpace(client.Device.Family)
+	loginExternal.DeviceOs = strings.TrimSpace(client.Os.Family)
+	loginExternal.Browser = strings.TrimSpace(client.UserAgent.Family)
+	loginExternal.UserAgent = userAgent
+	// Facabeook Login
+	loginExternal.AuthProviderName = "facebook"
+
+	token, err := uc.userService.LoginExternal(loginExternal)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, common.BuildError(err))
+		return
+	}
+
+	c.JSON(http.StatusOK, token)
+}
+
 func (uc *AuthController) Logout(c *gin.Context) {
 	userId := c.GetString("user_id")
 	sessionId := c.GetString("session_id")

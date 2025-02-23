@@ -186,6 +186,63 @@ func (r *userRepository) LoginUser(userDTO models.LoginUserDto) (*models.Session
 	return token, nil
 }
 
+func (r *userRepository) LoginExternal(userDTO models.LoginExternalDto) (*models.SessionUser, error) {
+	token := &models.SessionUser{}
+	query := `
+        SELECT * FROM sp_login_external(
+			p_auth_provider_name := $1,
+			p_auth_provider_id := $2,
+			p_device_id := $3,
+			p_first_name := $4,
+			p_last_name := $5,
+			p_email := $6,
+			p_phone := $7,
+			p_birthday := $8,
+			p_ip_address := $9,
+			p_device_info := $10,
+			p_device_os := $11,
+			p_browser := $12,
+			p_user_agent := $13
+		)
+    `
+
+	// Construir la lista de parámetros en el mismo orden que la consulta
+	params := []interface{}{
+		userDTO.AuthProviderName,
+		userDTO.AuthProviderId,
+		userDTO.DeviceId,
+		userDTO.FirstName,
+		userDTO.LastName,
+		userDTO.Email,
+		userDTO.Phone,
+		userDTO.Birthday,
+		userDTO.IpAddress,
+		userDTO.DeviceInfo,
+		userDTO.DeviceOs,
+		userDTO.Browser,
+		userDTO.UserAgent,
+	}
+
+	row := r.dbService.QueryRow(context.Background(), query, params...)
+
+	err := row.Scan(
+		&token.UserId,
+		&token.SessionId,
+	)
+
+	if err != nil {
+
+		var pgErr *pgconn.PgError
+		if errors.As(err, &pgErr) {
+			return nil, pgErr
+		}
+
+		return nil, err
+	}
+
+	return token, nil
+}
+
 func (r *userRepository) LogoutUser(userDTO models.SessionUser) (*models.SessionUser, error) {
 	userSession := &models.SessionUser{}
 
