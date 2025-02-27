@@ -3,11 +3,11 @@ module josex/web
 go 1.21.3
 
 require (
-	github.com/avct/uasurfer v0.0.0-20240501094946-ca0c4d1e541b
 	github.com/buxizhizhoum/inflection v1.0.4
 	github.com/gin-gonic/gin v1.9.1
 	github.com/go-playground/validator/v10 v10.14.0
 	github.com/golang-jwt/jwt v3.2.2+incompatible
+	github.com/golang-jwt/jwt/v5 v5.2.1
 	github.com/golang-migrate/migrate/v4 v4.17.1
 	github.com/google/uuid v1.4.0
 	github.com/jackc/pgx/v5 v5.6.0

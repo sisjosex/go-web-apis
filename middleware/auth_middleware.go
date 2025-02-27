@@ -2,32 +2,31 @@ package middleware
 
 import (
 	"fmt"
-	"josex/web/config"
-	"josex/web/utils"
+	"josex/web/common"
+	"josex/web/services"
 	"net/http"
 	"strings"
 
 	"github.com/gin-gonic/gin"
 )
 
-// AuthMiddleware es el middleware que verifica el AccessToken
-func AuthMiddleware() gin.HandlerFunc {
+func AuthMiddleware(jwtService services.JWTService) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		tokenString, err := extractToken(c)
 		if err != nil {
-			c.JSON(http.StatusUnauthorized, gin.H{"error": err.Error()})
+			c.JSON(http.StatusUnauthorized, common.BuildError(err))
 			c.Abort()
 			return
 		}
 
-		claims, err := utils.ParseAccessToken(tokenString, config.AppConfig.JwtSecretKey)
+		claims, err := jwtService.ValidateToken(tokenString)
 		if err != nil {
-			c.JSON(http.StatusUnauthorized, gin.H{"error": err.Error()})
+			c.JSON(http.StatusUnauthorized, common.BuildError(err))
 			c.Abort()
 			return
 		}
 
-		// Guardar claims en el contexto
+		// Guardar datos en el contexto de la request
 		c.Set("user_id", claims["user_id"])
 		c.Set("session_id", claims["session_id"])
 

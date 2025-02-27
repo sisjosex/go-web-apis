@@ -9,13 +9,15 @@ import (
 )
 
 type Config struct {
-	AppMode              string
-	AppHost              string
-	AppPort              string
-	DatabaseUrl          string
-	DatabasePoolSize     int32
-	JwtSecretKey         string
-	JwtExpirationSeconds int32
+	AppMode                     string
+	AppHost                     string
+	AppPort                     string
+	DatabaseUrl                 string
+	DatabasePoolSize            int32
+	JwtSecretKey                string
+	JwtRefreshKey               string
+	JwtExpirationSeconds        int32
+	JwtRefreshExpirationSeconds int32
 }
 
 var AppConfig *Config
@@ -32,13 +34,15 @@ func loadConfig() {
 
 	// Asignar valores con fallback si no están definidos
 	AppConfig = &Config{
-		AppMode:              getEnv("APP_MODE", "debug"),
-		AppHost:              getEnv("APP_HOST", "127.0.0.1"),
-		AppPort:              getEnv("APP_PORT", "8080"),
-		DatabaseUrl:          getEnv("DATABASE_URL", ""),
-		DatabasePoolSize:     getEnvAsInt("DATABASE_POOL_SIZE", 10),
-		JwtSecretKey:         getEnv("JWT_SECRET_KEY", "debug"),
-		JwtExpirationSeconds: getEnvAsInt("JWT_EXPIRATION_SECONDS", 300),
+		AppMode:                     getEnv("APP_MODE", "debug"),
+		AppHost:                     getEnv("APP_HOST", "127.0.0.1"),
+		AppPort:                     getEnv("APP_PORT", "8080"),
+		DatabaseUrl:                 getEnv("DATABASE_URL", ""),
+		DatabasePoolSize:            getEnvAsInt("DATABASE_POOL_SIZE", 10),
+		JwtSecretKey:                getEnv("JWT_SECRET_KEY", ""),
+		JwtRefreshKey:               getEnv("JWT_REFRESH_KEY", ""),
+		JwtExpirationSeconds:        getEnvAsInt("JWT_EXPIRATION_SECONDS", 300),   // 5 minutes by default
+		JwtRefreshExpirationSeconds: getEnvAsInt("JWT_EXPIRATION_SECONDS", 10080), // 7 days by default
 	}
 }
 

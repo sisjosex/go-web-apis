@@ -1,11 +1,8 @@
 package services
 
 import (
-	"josex/web/config"
 	"josex/web/interfaces"
 	"josex/web/models"
-	"josex/web/utils"
-	"time"
 	//"josex/web/utils"
 )
 
@@ -25,54 +22,24 @@ func (s *userService) UpdateUser(userDTO models.UpdateUserDto) (*models.User, er
 	return s.userRepository.UpdateUser(userDTO)
 }
 
-func (s *userService) LoginUser(loginDTO models.LoginUserDto) (*models.SessionToken, error) {
+func (s *userService) LoginUser(loginDTO models.LoginUserDto) (*models.SessionUser, error) {
 	sessionUser, err := s.userRepository.LoginUser(loginDTO)
 
 	if err != nil {
 		return nil, err
 	}
 
-	tokenExpiration := time.Now().Add(time.Second * time.Duration(config.AppConfig.JwtExpirationSeconds))
-
-	tokenSigned, err := utils.GenerateAccessToken(
-		sessionUser.UserId,
-		sessionUser.SessionId,
-		config.AppConfig.JwtSecretKey,
-		tokenExpiration,
-	)
-
-	if err != nil {
-		return nil, err
-	}
-
-	return &models.SessionToken{
-		AccessToken: *tokenSigned,
-	}, nil
+	return sessionUser, nil
 }
 
-func (s *userService) LoginExternal(loginDTO models.LoginExternalDto) (*models.SessionToken, error) {
+func (s *userService) LoginExternal(loginDTO models.LoginExternalDto) (*models.SessionUser, error) {
 	sessionUser, err := s.userRepository.LoginExternal(loginDTO)
 
 	if err != nil {
 		return nil, err
 	}
 
-	tokenExpiration := time.Now().Add(time.Second * time.Duration(config.AppConfig.JwtExpirationSeconds))
-
-	tokenSigned, err := utils.GenerateAccessToken(
-		sessionUser.UserId,
-		sessionUser.SessionId,
-		config.AppConfig.JwtSecretKey,
-		tokenExpiration,
-	)
-
-	if err != nil {
-		return nil, err
-	}
-
-	return &models.SessionToken{
-		AccessToken: *tokenSigned,
-	}, nil
+	return sessionUser, nil
 }
 
 func (s *userService) UpdateProfile(userDTO models.UpdateProfileDto) (*models.User, error) {

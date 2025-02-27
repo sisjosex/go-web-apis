@@ -4,6 +4,7 @@ import (
 	"josex/web/common"
 	"josex/web/interfaces"
 	"josex/web/models"
+	"josex/web/services"
 	"josex/web/utils"
 	"log"
 	"net/http"
@@ -15,11 +16,13 @@ import (
 
 type AuthController struct {
 	userService interfaces.UserService
+	jwtService  services.JWTService
 }
 
-func NewAuthController(userService interfaces.UserService) *AuthController {
+func NewAuthController(userService interfaces.UserService, jwtService services.JWTService) *AuthController {
 	return &AuthController{
 		userService: userService,
+		jwtService:  jwtService,
 	}
 }
 
@@ -46,13 +49,28 @@ func (uc *AuthController) Login(c *gin.Context) {
 	loginUser.Browser = strings.TrimSpace(client.UserAgent.Family + " " + client.UserAgent.Major)
 	loginUser.UserAgent = userAgent
 
-	token, err := uc.userService.LoginUser(loginUser)
+	sessionUser, err := uc.userService.LoginUser(loginUser)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, common.BuildError(err))
 		return
 	}
 
-	c.JSON(http.StatusOK, token)
+	accessToken, err := uc.jwtService.GenerateAccessToken(sessionUser.UserId, sessionUser.SessionId)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, common.BuildError(err))
+		return
+	}
+
+	refreshtoken, err := uc.jwtService.GenerateRefreshToken(sessionUser.UserId, sessionUser.SessionId)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, common.BuildError(err))
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"access_token":  accessToken,
+		"refresh_token": refreshtoken,
+	})
 }
 
 func (uc *AuthController) LoginFacebook(c *gin.Context) {
@@ -80,13 +98,47 @@ func (uc *AuthController) LoginFacebook(c *gin.Context) {
 	// Facabeook Login
 	loginExternal.AuthProviderName = "facebook"
 
-	token, err := uc.userService.LoginExternal(loginExternal)
+	sessionUser, err := uc.userService.LoginExternal(loginExternal)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, common.BuildError(err))
 		return
 	}
 
-	c.JSON(http.StatusOK, token)
+	accessToken, err := uc.jwtService.GenerateAccessToken(sessionUser.UserId, sessionUser.SessionId)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, common.BuildError(err))
+		return
+	}
+
+	refreshtoken, err := uc.jwtService.GenerateRefreshToken(sessionUser.UserId, sessionUser.SessionId)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, common.BuildError(err))
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"access_token":  accessToken,
+		"refresh_token": refreshtoken,
+	})
+}
+
+func (uc *AuthController) RefreshToken(c *gin.Context) {
+	var req struct {
+		RefreshToken string `json:"refresh_token"`
+	}
+
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid request"})
+		return
+	}
+
+	newAccessToken, err := uc.jwtService.RefreshAccessToken(req.RefreshToken)
+	if err != nil {
+		c.JSON(http.StatusUnauthorized, common.BuildError(err))
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"access_token": newAccessToken})
 }
 
 func (uc *AuthController) Logout(c *gin.Context) {
@@ -116,7 +168,25 @@ func (uc *AuthController) Register(ctx *gin.Context) {
 
 	user, err := uc.userService.InsertUser(newUser)
 	if err != nil {
-		ctx.JSON(http.StatusBadRequest, common.BuildErrorDetail(common.UserCreateFailed, err.Error()))
+		ctx.JSON(http.StatusBadRequest, common.BuildError(err))
+		return
+	}
+
+	ctx.JSON(http.StatusOK, user)
+}
+
+func (uc *AuthController) UpdateProfile(ctx *gin.Context) {
+	var updateUser models.UpdateProfileDto
+	updateUser.ID = ctx.GetString("user_id")
+
+	if err := ctx.ShouldBindJSON(&updateUser); err != nil {
+		ctx.JSON(http.StatusBadRequest, common.BuildErrorDetail(common.UserValidationFailed, utils.ExtractValidationError(err)))
+		return
+	}
+
+	user, err := uc.userService.UpdateProfile(updateUser)
+	if err != nil {
+		ctx.JSON(http.StatusBadRequest, common.BuildErrorDetail(common.UserUpdateFailed, err.Error()))
 		return
 	}
 

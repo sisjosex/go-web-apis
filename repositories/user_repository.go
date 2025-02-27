@@ -139,6 +139,66 @@ func (r *userRepository) UpdateUser(userDTO models.UpdateUserDto) (*models.User,
 	return user, nil
 }
 
+func (r *userRepository) UpdateProfile(userDTO models.UpdateProfileDto) (*models.User, error) {
+	user := &models.User{}
+	query := `
+        SELECT * FROM sp_update_profile(
+			p_id := $1,
+			p_first_name := $2,
+			p_last_name := $3,
+			p_phone := $4,
+			p_birthday := $5,
+			p_email := $6,
+			p_current_password := $7, -- Contraseña actual
+			p_new_password := $8, -- Nueva contraseña
+			p_profile_picture_url := $9,
+			p_bio := $10,
+			p_website_url := $11
+		)
+    `
+
+	// Construir la lista de parámetros en el mismo orden que la consulta
+	params := []interface{}{
+		userDTO.ID,
+		userDTO.FirstName,
+		userDTO.LastName,
+		userDTO.Phone,
+		userDTO.Birthday,
+		userDTO.Email,
+		userDTO.PasswordCurrent,
+		userDTO.PasswordNew,
+		userDTO.ProfilePictureUrl,
+		userDTO.Bio,
+		userDTO.WebsiteUrl,
+	}
+
+	row := r.dbService.QueryRow(context.Background(), query, params...)
+
+	err := row.Scan(
+		&user.ID,
+		&user.FirstName,
+		&user.LastName,
+		&user.Phone,
+		&user.Birthday,
+		&user.Email,
+		&user.ProfilePictureUrl,
+		&user.Bio,
+		&user.WebsiteUrl,
+	)
+
+	if err != nil {
+
+		var pgErr *pgconn.PgError
+		if errors.As(err, &pgErr) {
+			return nil, pgErr
+		}
+
+		return nil, err
+	}
+
+	return user, nil
+}
+
 func (r *userRepository) LoginUser(userDTO models.LoginUserDto) (*models.SessionUser, error) {
 	token := &models.SessionUser{}
 	query := `
