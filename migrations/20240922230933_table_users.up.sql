@@ -42,10 +42,10 @@ CREATE TABLE IF NOT EXISTS auth.email_verification_tokens (
     created_at TIMESTAMP DEFAULT NOW()
 );
 
-CREATE INDEX idx_new_email ON auth.email_verification_tokens (user_id);
-CREATE INDEX idx_token ON auth.email_verification_tokens (token);
-CREATE INDEX idx_new_email ON auth.email_verification_tokens (new_email);
-CREATE INDEX idx_new_email ON auth.email_verification_tokens (expires_at);
+CREATE INDEX idx_email_verify_user_id ON auth.email_verification_tokens (user_id);
+CREATE INDEX idx_email_verify_token ON auth.email_verification_tokens (token);
+CREATE INDEX idx_email_verify_new_email ON auth.email_verification_tokens (new_email);
+CREATE INDEX idx_email_verify_expires_at ON auth.email_verification_tokens (expires_at);
 
 
 CREATE TABLE IF NOT EXISTS auth.password_reset_tokens (

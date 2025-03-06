@@ -27,7 +27,7 @@ func (ds *databaseService) InitDatabase(ctx context.Context) {
 
 	pool, err := connectDatabase(ctx, dataBaseUrl, databasePoolSize)
 	if err != nil {
-		log.Fatalf("Failed to connect to database: %v", err)
+		log.Fatalf("Failed to connect to database: %v", err, dataBaseUrl)
 	}
 
 	ds.pool = pool
