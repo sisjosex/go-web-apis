@@ -20,7 +20,7 @@ func NewUserRepository(dbService interfaces.DatabaseService) *userRepository {
 func (r *userRepository) InsertUser(userDTO models.CreateUserDto) (*models.User, error) {
 	user := &models.User{}
 	query := `
-        SELECT * FROM sp_create_user(
+        SELECT * FROM auth.sp_create_user(
 			p_first_name := $1,
 			p_last_name := $2,
 			p_phone := $3,
@@ -76,7 +76,7 @@ func (r *userRepository) InsertUser(userDTO models.CreateUserDto) (*models.User,
 func (r *userRepository) UpdateUser(userDTO models.UpdateUserDto) (*models.User, error) {
 	user := &models.User{}
 	query := `
-        SELECT * FROM sp_update_user(
+        SELECT * FROM auth.sp_update_user(
 			p_id := $1,
 			p_first_name := $2,
 			p_last_name := $3,
@@ -142,7 +142,7 @@ func (r *userRepository) UpdateUser(userDTO models.UpdateUserDto) (*models.User,
 func (r *userRepository) UpdateProfile(userDTO models.UpdateProfileDto) (*models.User, error) {
 	user := &models.User{}
 	query := `
-        SELECT * FROM sp_update_profile(
+        SELECT * FROM auth.sp_update_profile(
 			p_id := $1,
 			p_first_name := $2,
 			p_last_name := $3,
@@ -202,7 +202,7 @@ func (r *userRepository) UpdateProfile(userDTO models.UpdateProfileDto) (*models
 func (r *userRepository) LoginUser(userDTO models.LoginUserDto) (*models.SessionUser, error) {
 	token := &models.SessionUser{}
 	query := `
-        SELECT * FROM sp_login_email(
+        SELECT * FROM auth.sp_login_email(
 			p_email := $1,
 			p_password := $2,
 			p_ip_address := $3,
@@ -249,7 +249,7 @@ func (r *userRepository) LoginUser(userDTO models.LoginUserDto) (*models.Session
 func (r *userRepository) LoginExternal(userDTO models.LoginExternalDto) (*models.SessionUser, error) {
 	token := &models.SessionUser{}
 	query := `
-        SELECT * FROM sp_login_external(
+        SELECT * FROM auth.sp_login_external(
 			p_auth_provider_name := $1,
 			p_auth_provider_id := $2,
 			p_device_id := $3,
@@ -307,7 +307,7 @@ func (r *userRepository) LogoutUser(userDTO models.SessionUser) (*models.Session
 	userSession := &models.SessionUser{}
 
 	query := `
-        SELECT * FROM sp_logout(
+        SELECT * FROM auth.sp_logout(
 			p_user_id := $1,
 			p_session_id := $2
 		)
@@ -338,4 +338,218 @@ func (r *userRepository) LogoutUser(userDTO models.SessionUser) (*models.Session
 	}
 
 	return userSession, nil
+}
+
+func (r *userRepository) GetProfile(getProfileDto models.GetProfileDto) (*models.User, error) {
+	user := &models.User{}
+
+	query := `
+        SELECT * FROM auth.sp_get_profile(
+			p_id := $1
+		)
+    `
+
+	// Construir la lista de parámetros en el mismo orden que la consulta
+	params := []interface{}{
+		getProfileDto.ID,
+	}
+
+	row := r.dbService.QueryRow(context.Background(), query, params...)
+
+	err := row.Scan(
+		&user.ID,
+		&user.FirstName,
+		&user.LastName,
+		&user.Phone,
+		&user.Birthday,
+		&user.Email,
+		&user.ProfilePictureUrl,
+		&user.Bio,
+		&user.WebsiteUrl,
+	)
+
+	if err != nil {
+
+		var pgErr *pgconn.PgError
+		if errors.As(err, &pgErr) {
+			return nil, pgErr
+		}
+
+		return nil, err
+	}
+
+	return user, nil
+}
+
+func (r *userRepository) GenerateEmailVerificationToken(verifyEmailRequest models.VerifyEmailRequest) (*models.VerifyEmailToken, error) {
+	VerifyEmailToken := &models.VerifyEmailToken{}
+
+	query := `
+        SELECT * FROM auth.sp_generate_email_verification_token(
+			p_user_id := $1,
+			p_email := $2
+		)
+    `
+
+	// Construir la lista de parámetros en el mismo orden que la consulta
+	params := []interface{}{
+		verifyEmailRequest.UserId,
+		verifyEmailRequest.Email,
+	}
+
+	row := r.dbService.QueryRow(context.Background(), query, params...)
+
+	err := row.Scan(
+		&VerifyEmailToken.Token,
+	)
+
+	if err != nil {
+
+		var pgErr *pgconn.PgError
+		if errors.As(err, &pgErr) {
+			return nil, pgErr
+		}
+
+		return nil, err
+	}
+
+	return VerifyEmailToken, nil
+}
+
+func (r *userRepository) ConfirmEmailAddress(verifyEmailRequest models.VerifyEmailToken) (*bool, error) {
+	VerifyEmailToken := false
+
+	query := `
+        SELECT * FROM auth.sp_verify_email(
+			p_token := $1
+		)
+    `
+
+	// Construir la lista de parámetros en el mismo orden que la consulta
+	params := []interface{}{
+		verifyEmailRequest.Token,
+	}
+
+	row := r.dbService.QueryRow(context.Background(), query, params...)
+
+	err := row.Scan(
+		&VerifyEmailToken,
+	)
+
+	if err != nil {
+
+		var pgErr *pgconn.PgError
+		if errors.As(err, &pgErr) {
+			return nil, pgErr
+		}
+
+		return nil, err
+	}
+
+	return &VerifyEmailToken, nil
+}
+
+func (r *userRepository) ChangePassword(changePasswordDto models.ChangePasswordDto) (*bool, error) {
+	ChangePassword := false
+
+	query := `
+		SELECT * FROM auth.sp_change_password(
+			p_user_id := $1,
+			p_password_current := $2,
+			p_password_new := $3
+		)
+	`
+
+	// Construir la lista de parámetros en el mismo orden que la consulta
+	params := []interface{}{
+		changePasswordDto.UserId,
+		changePasswordDto.PasswordCurrent,
+		changePasswordDto.PasswordNew,
+	}
+
+	row := r.dbService.QueryRow(context.Background(), query, params...)
+
+	err := row.Scan(
+		&ChangePassword,
+	)
+
+	if err != nil {
+
+		var pgErr *pgconn.PgError
+		if errors.As(err, &pgErr) {
+			return nil, pgErr
+		}
+
+		return nil, err
+	}
+
+	return &ChangePassword, nil
+}
+
+func (r *userRepository) GeneratePasswordResetToken(passwordResetRequestDto models.PasswordResetRequestDto) (*models.PasswordResetTokenRequestDto, error) {
+	PasswordResetWithToken := &models.PasswordResetTokenRequestDto{}
+
+	query := `
+		SELECT * FROM auth.sp_generate_password_reset_token(
+			p_email := $1
+		)
+	`
+
+	// Construir la lista de parámetros en el mismo orden que la consulta
+	params := []interface{}{
+		passwordResetRequestDto.Email,
+	}
+
+	row := r.dbService.QueryRow(context.Background(), query, params...)
+
+	err := row.Scan(
+		&PasswordResetWithToken.Token,
+	)
+
+	if err != nil {
+
+		var pgErr *pgconn.PgError
+		if errors.As(err, &pgErr) {
+			return nil, pgErr
+		}
+
+		return nil, err
+	}
+
+	return PasswordResetWithToken, nil
+}
+
+func (r *userRepository) ResetPasswordWithToken(passwordResetWithTokenDto models.PasswordResetWithTokenDto) (*bool, error) {
+	ResetPassword := false
+
+	query := `
+		SELECT * FROM auth.sp_reset_password_with_token(
+			p_token := $1,
+			p_new_password := $2
+		)
+	`
+
+	// Construir la lista de parámetros en el mismo orden que la consulta
+	params := []interface{}{
+		passwordResetWithTokenDto.Token,
+		passwordResetWithTokenDto.PasswordNew,
+	}
+
+	row := r.dbService.QueryRow(context.Background(), query, params...)
+
+	err := row.Scan(
+		&ResetPassword,
+	)
+
+	if err != nil {
+
+		var pgErr *pgconn.PgError
+		if errors.As(err, &pgErr) {
+			return nil, pgErr
+		}
+
+		return nil, err
+	}
+
+	return &ResetPassword, nil
 }

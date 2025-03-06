@@ -1,7 +1,9 @@
 package models
 
+import "github.com/google/uuid"
+
 type UpdateUserDto struct {
-	ID                string    `json:"id"`
+	ID                uuid.UUID `json:"id" binding:"uuidv4"`
 	FirstName         *string   `json:"first_name"`
 	LastName          *string   `json:"last_name"`
 	Phone             *string   `json:"phone"`

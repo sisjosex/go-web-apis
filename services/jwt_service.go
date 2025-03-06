@@ -6,11 +6,12 @@ import (
 	"time"
 
 	"github.com/golang-jwt/jwt/v5"
+	"github.com/google/uuid"
 )
 
 type JWTService interface {
-	GenerateAccessToken(userID string, sessionID string) (*string, error)
-	GenerateRefreshToken(userID string, sessionID string) (*string, error)
+	GenerateAccessToken(userID uuid.UUID, sessionID uuid.UUID) (*string, error)
+	GenerateRefreshToken(userID uuid.UUID, sessionID uuid.UUID) (*string, error)
 	ValidateToken(token string) (jwt.MapClaims, error)
 	RefreshAccessToken(refreshToken string) (*string, error)
 }
@@ -32,7 +33,7 @@ func NewJWTService(accessSecret, refreshSecret string, accessTTL, refreshTTL tim
 }
 
 // 📌 Genera un Access Token con duración corta (15-60 min)
-func (j *jwtService) GenerateAccessToken(userID string, sessionID string) (*string, error) {
+func (j *jwtService) GenerateAccessToken(userID uuid.UUID, sessionID uuid.UUID) (*string, error) {
 	claims := jwt.MapClaims{
 		"user_id":    userID,
 		"session_id": sessionID,
@@ -51,7 +52,7 @@ func (j *jwtService) GenerateAccessToken(userID string, sessionID string) (*stri
 }
 
 // 📌 Genera un Refresh Token con duración más larga (7-30 días)
-func (j *jwtService) GenerateRefreshToken(userID string, sessionID string) (*string, error) {
+func (j *jwtService) GenerateRefreshToken(userID uuid.UUID, sessionID uuid.UUID) (*string, error) {
 	claims := jwt.MapClaims{
 		"user_id":    userID,
 		"session_id": sessionID,
@@ -128,10 +129,10 @@ func (j *jwtService) RefreshAccessToken(refreshToken string) (*string, error) {
 		return nil, err
 	}
 
-	userID, userOk := claims["user_id"].(string)
-	sessionID, sessionOk := claims["session_id"].(string)
+	userID, userOk := uuid.Parse(claims["user_id"].(string))
+	sessionID, sessionOk := uuid.Parse(claims["session_id"].(string))
 
-	if !userOk || !sessionOk {
+	if userOk != nil || sessionOk != nil {
 		return nil, errors.New("invalid token data")
 	}
 
@@ -144,14 +145,14 @@ func validateTokenClaims(claims jwt.MapClaims) error {
 
 	// Verificar el tiempo de emisión (iat) con un margen de 60 segundos
 	if iat, ok := claims["iat"].(float64); ok {
-		if now < int64(iat)-60 {
+		if now < int64(iat)-60 { // No es necesario usar iatTime.Unix()
 			return fmt.Errorf("token used before issued (iat)")
 		}
 	}
 
 	// Verificar la expiración (exp)
 	if exp, ok := claims["exp"].(float64); ok {
-		if now > int64(exp) {
+		if now > int64(exp) { // No es necesario usar expTime.Unix()
 			return fmt.Errorf("token has expired")
 		}
 	}

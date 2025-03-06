@@ -12,14 +12,14 @@ SELECT * FROM private_find_or_create_user(
 );
 */
 
-CREATE OR REPLACE FUNCTION private_create_user_profile(
+CREATE OR REPLACE FUNCTION auth.private_create_user_profile(
     p_user_id UUID,
     p_profile_picture_url TEXT DEFAULT NULL,
     p_bio TEXT DEFAULT NULL,
     p_website_url VARCHAR DEFAULT NULL
 ) RETURNS VOID LANGUAGE plpgsql AS $$
 BEGIN
-    INSERT INTO user_profile (user_id, profile_picture_url, bio, website_url)
+    INSERT INTO auth.user_profile (user_id, profile_picture_url, bio, website_url)
     VALUES (p_user_id, p_profile_picture_url, p_bio, p_website_url)
     ON CONFLICT (user_id) DO NOTHING; -- Si ya existe un perfil, no hacer nada.
 END;
@@ -30,7 +30,10 @@ $$;
 /*
 SELECT private_validate_email(p_email := 'asd@asd.com');
 */
-CREATE OR REPLACE FUNCTION private_validate_email(p_email VARCHAR, p_required BOOLEAN DEFAULT TRUE)
+CREATE OR REPLACE FUNCTION auth.private_validate_email(
+    p_email VARCHAR,
+    p_required BOOLEAN DEFAULT TRUE
+)
 RETURNS VARCHAR AS $$
 DECLARE
     lower_email VARCHAR;
@@ -52,7 +55,7 @@ END;
 $$ LANGUAGE plpgsql;
 
 -- Función para encriptar la contraseña si es necesario
-CREATE OR REPLACE FUNCTION private_encrypt_password(p_password VARCHAR(255))
+CREATE OR REPLACE FUNCTION auth.private_encrypt_password(p_password VARCHAR(255))
 RETURNS VARCHAR(255) AS $$
 BEGIN
     -- Verificar longitud mínima
@@ -86,7 +89,7 @@ $$ LANGUAGE plpgsql;
 
 
 -- Función para buscar o crear un usuario
-CREATE OR REPLACE FUNCTION private_find_or_create_user(
+CREATE OR REPLACE FUNCTION auth.private_find_or_create_user(
     p_email VARCHAR,
     p_first_name VARCHAR,
     p_last_name VARCHAR,
@@ -102,16 +105,16 @@ DECLARE
 BEGIN
     -- Buscar usuario por correo
     SELECT id INTO v_user_id
-    FROM public.users
+    FROM auth.users
     WHERE LOWER(email) = p_email;
 
     -- Si el usuario no existe, crearlo
     IF v_user_id IS NULL THEN
-        INSERT INTO users (email, first_name, last_name, phone, birthday, password, is_active, is_verified)
+        INSERT INTO auth.users (email, first_name, last_name, phone, birthday, password, is_active, email_verified)
         VALUES (p_email, p_first_name, p_last_name, p_phone, p_birthday, p_password, true, false)
         RETURNING id INTO v_user_id;
 
-        PERFORM private_create_user_profile(v_user_id, p_profile_picture_url, p_bio, p_website_url);
+        PERFORM auth.private_create_user_profile(v_user_id, p_profile_picture_url, p_bio, p_website_url);
     ELSE
         RAISE EXCEPTION 'user.create.email.already-exists' USING ERRCODE = 'C0003', Detail = 'Email already exists.';
     END IF;
@@ -135,7 +138,7 @@ SELECT * FROM sp_create_user(
 );
 */
 
-CREATE OR REPLACE FUNCTION sp_create_user(
+CREATE OR REPLACE FUNCTION auth.sp_create_user(
     p_email VARCHAR,
     p_first_name VARCHAR,
     p_last_name VARCHAR,
@@ -163,13 +166,13 @@ DECLARE
     lower_email VARCHAR;
 BEGIN
     -- Validar y formatear el correo
-    lower_email := private_validate_email(p_email, TRUE);
+    lower_email := auth.private_validate_email(p_email, TRUE);
 
     -- Encriptar la contraseña si aplica
-    p_password := private_encrypt_password(p_password);
+    p_password := auth.private_encrypt_password(p_password);
 
     -- Verificar si el usuario existe o crearlo
-    v_user_id := private_find_or_create_user(
+    v_user_id := auth.private_find_or_create_user(
         p_email := lower_email,
         p_first_name := p_first_name,
         p_last_name:= p_last_name,
@@ -194,15 +197,15 @@ BEGIN
         p.profile_picture_url,
         p.bio,
         p.website_url
-    FROM users u
-    LEFT JOIN user_profile p ON u.id = p.user_id
+    FROM auth.users u
+    LEFT JOIN auth.user_profile p ON u.id = p.user_id
     WHERE u.id = v_user_id
     LIMIT 1;
 END;
 $$ LANGUAGE plpgsql;
 
 -- Función para buscar o crear un usuario
-CREATE OR REPLACE FUNCTION sp_create_user_external(
+CREATE OR REPLACE FUNCTION auth.sp_create_user_external(
     p_email VARCHAR,
     p_first_name VARCHAR,
     p_last_name VARCHAR,
@@ -220,16 +223,16 @@ BEGIN
     -- Buscar usuario por correo
     SELECT u.id, u.is_active as user_is_active, u.expiration_date as user_expiration_date
     INTO v_user_id, v_is_active, v_expiration_date
-    FROM public.users u
+    FROM auth.users u
     WHERE u.email = p_email;
 
     -- Si el usuario no existe, crearlo
     IF v_user_id IS NULL THEN
-        INSERT INTO users (email, first_name, last_name, phone, birthday, is_active, is_verified)
-        VALUES (p_email, p_first_name, p_last_name, p_phone, p_birthday, true, true)
+        INSERT INTO auth.users (email, first_name, last_name, phone, birthday, is_active, email_verified)
+        VALUES (p_email, p_first_name, p_last_name, p_phone, p_birthday, true, CASE WHEN p_email IS NOT NULL THEN true ELSE false END)
         RETURNING id, true, NULL INTO v_user_id, v_is_active, v_expiration_date;
         
-        PERFORM private_create_user_profile(v_user_id, p_profile_picture_url, p_bio, p_website_url);
+        PERFORM auth.private_create_user_profile(v_user_id, p_profile_picture_url, p_bio, p_website_url);
     END IF;
 
     -- Retornar la información del usuario

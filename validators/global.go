@@ -23,6 +23,9 @@ func EmailValidation(fl validator.FieldLevel) bool {
 
 func validateUUIDv4(fl validator.FieldLevel) bool {
 	id := fl.Field().String()
+	if id == "" {
+		return false
+	}
 	_, err := uuid.Parse(id)
 	return err != nil
 }

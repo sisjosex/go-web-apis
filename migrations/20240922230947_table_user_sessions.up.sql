@@ -1,8 +1,8 @@
-DROP TABLE IF EXISTS public.user_sessions;
+DROP TABLE IF EXISTS auth.user_sessions;
 
 CREATE TABLE IF NOT EXISTS
-    public.user_sessions (
-        session_id UUID PRIMARY KEY DEFAULT uuid_generate_v4 (),
+    auth.user_sessions (
+        session_id UUID PRIMARY KEY DEFAULT public.uuid_generate_v4 (),
         user_id UUID NOT NULL,
         provider_name VARCHAR(50) NOT NULL,  -- Nombre del proveedor (ej. 'email', 'facebook', 'google')
         auth_provider_id VARCHAR(255) NOT NULL,  -- ID específico del proveedor (como el ID de Facebook o Google)
@@ -20,12 +20,12 @@ CREATE TABLE IF NOT EXISTS
         created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
         updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
         -- Relaciones
-        CONSTRAINT fk_user_session_user FOREIGN KEY (user_id) REFERENCES public.users (id) ON DELETE CASCADE
+        CONSTRAINT fk_user_session_user FOREIGN KEY (user_id) REFERENCES auth.users (id) ON DELETE CASCADE
     );
 
-CREATE INDEX idx_user_sessions_created_at ON public.user_sessions (created_at);
-CREATE INDEX idx_user_sessions_updated_at ON public.user_sessions (updated_at);
+CREATE INDEX idx_user_sessions_created_at ON auth.user_sessions (created_at);
+CREATE INDEX idx_user_sessions_updated_at ON auth.user_sessions (updated_at);
 
-CREATE INDEX idx_user_sessions_verify ON public.user_sessions (
+CREATE INDEX idx_user_sessions_verify ON auth.user_sessions (
     user_id, provider_name, auth_provider_id, device_id, is_active
 );

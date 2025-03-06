@@ -7,9 +7,11 @@ import (
 	"josex/web/middleware"
 	"josex/web/repositories"
 	"josex/web/services"
+	"log"
 	"time"
 
 	"github.com/gin-gonic/gin"
+	"github.com/ua-parser/uap-go/uaparser"
 )
 
 func SetupRoutes(r *gin.Engine, dbService interfaces.DatabaseService) {
@@ -21,10 +23,15 @@ func SetupRoutes(r *gin.Engine, dbService interfaces.DatabaseService) {
 		time.Duration(config.AppConfig.JwtRefreshExpirationSeconds),
 	)
 
+	parser, err := uaparser.New("./config/regexes.yaml")
+	if err != nil {
+		log.Fatal(err)
+	}
+
 	userRepository := repositories.NewUserRepository(dbService)
 	userService := services.NewUserService(userRepository)
 
-	authController := controllers.NewAuthController(userService, jwtService)
+	authController := controllers.NewAuthController(userService, jwtService, parser)
 	userController := controllers.NewUserController(userService)
 
 	mainRoutes := r.Group("/api/v1")
@@ -35,9 +42,15 @@ func SetupRoutes(r *gin.Engine, dbService interfaces.DatabaseService) {
 			authRoutes.POST("/login_facebook", authController.LoginFacebook)
 			authRoutes.POST("/register", authController.Register)
 			authRoutes.POST("/refresh_token", authController.RefreshToken)
+			authRoutes.POST("/confirm_email", authController.ConfirmEmailAddress)
+			authRoutes.POST("/request_password_reset", authController.GeneratePasswordResetToken)
+			authRoutes.POST("/password_reset", authController.ResetPasswordWithToken)
 			protectedRoutes := authRoutes.Use(middleware.AuthMiddleware(jwtService))
 			{
+				protectedRoutes.POST("/get_profile", authController.GetProfile)
 				protectedRoutes.POST("/update_profile", authController.UpdateProfile)
+				protectedRoutes.POST("/change_password", authController.ChangePassword)
+				protectedRoutes.POST("/request_verify_email", authController.GenerateEmailVerificationToken)
 			}
 		}
 

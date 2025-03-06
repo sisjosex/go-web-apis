@@ -24,6 +24,10 @@ const (
 	UserRegisterFailed        = "user.register.failed"
 	UserGetByIdNotFound       = "user.get-by-id.not-found"
 	UserGetByIdEmailFound     = "user.get-by-email.not-found"
+	UserRequestEmailError     = "user.email.request.failed"
+	UserEmailVerification     = "user.email.verification.failed"
+	UserChangePasswordError   = "user.change-password.failed"
+	UserPasswordResetError    = "user.password-reset.failed"
 )
 
 type ErrorTag map[string]string

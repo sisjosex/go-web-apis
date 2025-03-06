@@ -8,6 +8,7 @@ import (
 	"net/http"
 
 	"github.com/gin-gonic/gin"
+	"github.com/google/uuid"
 )
 
 type UserController struct {
@@ -44,7 +45,13 @@ func (uc *UserController) Create(ctx *gin.Context) {
 
 func (uc *UserController) Update(ctx *gin.Context) {
 	var updateUser models.UpdateUserDto
-	updateUser.ID = ctx.Param("id")
+	id, err := uuid.Parse(ctx.Param("id"))
+	if err != nil {
+		ctx.JSON(http.StatusBadRequest, common.BuildError(err))
+		return
+	}
+
+	updateUser.ID = id
 
 	if err := ctx.ShouldBindJSON(&updateUser); err != nil {
 		ctx.JSON(http.StatusBadRequest, common.BuildErrorDetail(common.UserValidationFailed, utils.ExtractValidationError(err)))
