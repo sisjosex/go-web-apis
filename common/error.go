@@ -6,9 +6,15 @@ import (
 	"github.com/jackc/pgx/v5/pgconn"
 )
 
-type ValidationError struct {
-	Code   string      `json:"code,omitempty"`
-	Error  interface{} `json:"error,omitempty"`
+type ErrorResponse struct {
+	// Error code
+	// example: 400
+	Code string `json:"code,omitempty"`
+	// Error message
+	// example: Bad Request
+	Error interface{} `json:"error,omitempty"`
+	// Error details
+	// example: {"email": "Invalid email format"}
 	Detail interface{} `json:"detail,omitempty"`
 }
 
@@ -37,15 +43,15 @@ var ErrorTagCatalog = ErrorTag{
 	//"email-exists": "user.email.exists",
 }
 
-func BuildErrorSingle(Error string) *ValidationError {
-	return &ValidationError{Error: Error}
+func BuildErrorSingle(Error string) *ErrorResponse {
+	return &ErrorResponse{Error: Error}
 }
 
-func BuildErrorDetail(Error string, Detail interface{}) *ValidationError {
-	return &ValidationError{Error: Error, Detail: Detail}
+func BuildErrorDetail(Error string, Detail interface{}) *ErrorResponse {
+	return &ErrorResponse{Error: Error, Detail: Detail}
 }
 
-func BuildError(err error) *ValidationError {
+func BuildError(err error) *ErrorResponse {
 
 	if err == nil {
 		return nil
@@ -53,13 +59,13 @@ func BuildError(err error) *ValidationError {
 
 	var pgErr *pgconn.PgError
 	if errors.As(err, &pgErr) {
-		return &ValidationError{
+		return &ErrorResponse{
 			Error: pgErr.Message,
 			Code:  pgErr.Code,
 		}
 	}
 
-	return &ValidationError{
+	return &ErrorResponse{
 		Error: err.Error(),
 	}
 }

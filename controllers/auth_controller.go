@@ -29,10 +29,21 @@ func NewAuthController(userService interfaces.UserService, jwtService services.J
 	}
 }
 
+// Login godoc
+// @Summary Allow login based on email authentication, email can be confirmed after login
+// @Description Allow login based on email authentication, email can be confirmed after login
+// @Tags Auth
+// @Accept  json
+// @Produce  json
+// @Param request body models.LoginUserRequestDto true "Datos de usuario"
+// @Success 200 {object} models.LoginSuccessResponse
+// @Failure 400 {object} common.ErrorResponse
+// @Router /auth/login [post]
+// @Security ApiKeyAuth
 func (uc *AuthController) Login(c *gin.Context) {
-	var loginUser models.LoginUserDto
+	var loginUserRequest models.LoginUserRequestDto
 
-	if err := c.ShouldBindJSON(&loginUser); err != nil {
+	if err := c.ShouldBindJSON(&loginUserRequest); err != nil {
 		c.JSON(http.StatusBadRequest, common.BuildErrorDetail(common.UserLoginValidationFailed, utils.ExtractValidationError(err)))
 		return
 	}
@@ -40,6 +51,12 @@ func (uc *AuthController) Login(c *gin.Context) {
 	userAgent := c.GetHeader("User-Agent")
 
 	client := uc.parser.Parse(userAgent)
+
+	loginUser := models.LoginUserDto{
+		Email:    loginUserRequest.Email,
+		Password: loginUserRequest.Password,
+		DeviceId: loginUserRequest.DeviceId,
+	}
 
 	loginUser.IpAddress = utils.GetClientIp(c)
 	loginUser.DeviceInfo = strings.TrimSpace(client.Device.Family)
@@ -65,16 +82,27 @@ func (uc *AuthController) Login(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{
-		"access_token":  accessToken,
-		"refresh_token": refreshtoken,
+	c.JSON(http.StatusOK, &models.LoginSuccessResponse{
+		AccessToken:  accessToken,
+		RefreshToken: refreshtoken,
 	})
 }
 
+// LoginFacebook godoc
+// @Summary Allow login based on Facebook authentication
+// @Description Allow login based on Facebook authentication
+// @Tags Auth
+// @Accept  json
+// @Produce  json
+// @Param request body models.LoginExternalRequestDto true "Datos de usuario"
+// @Success 200 {object} models.LoginSuccessResponse
+// @Failure 400 {object} common.ErrorResponse
+// @Router /auth/login/facebook [post]
+// @Security ApiKeyAuth
 func (uc *AuthController) LoginFacebook(c *gin.Context) {
-	var loginExternal models.LoginExternalDto
+	var loginExternalRequestDto models.LoginExternalRequestDto
 
-	if err := c.ShouldBindJSON(&loginExternal); err != nil {
+	if err := c.ShouldBindJSON(&loginExternalRequestDto); err != nil {
 		c.JSON(http.StatusBadRequest, common.BuildErrorDetail(common.UserLoginValidationFailed, utils.ExtractValidationError(err)))
 		return
 	}
@@ -82,6 +110,16 @@ func (uc *AuthController) LoginFacebook(c *gin.Context) {
 	userAgent := c.GetHeader("User-Agent")
 
 	client := uc.parser.Parse(userAgent)
+
+	loginExternal := models.LoginExternalDto{
+		AuthProviderId: loginExternalRequestDto.AuthProviderId,
+		DeviceId:       loginExternalRequestDto.DeviceId,
+		FirstName:      loginExternalRequestDto.FirstName,
+		LastName:       loginExternalRequestDto.LastName,
+		Email:          loginExternalRequestDto.Email,
+		Phone:          loginExternalRequestDto.Phone,
+		Birthday:       loginExternalRequestDto.Birthday,
+	}
 
 	loginExternal.IpAddress = utils.GetClientIp(c)
 	loginExternal.DeviceInfo = strings.TrimSpace(client.Device.Family)
@@ -109,16 +147,25 @@ func (uc *AuthController) LoginFacebook(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{
-		"access_token":  accessToken,
-		"refresh_token": refreshtoken,
+	c.JSON(http.StatusOK, &models.LoginSuccessResponse{
+		AccessToken:  accessToken,
+		RefreshToken: refreshtoken,
 	})
 }
 
+// RefreshToken godoc
+// @Summary Refresh token
+// @Description Refresh token
+// @Tags Auth
+// @Accept  json
+// @Produce  json
+// @Param request body models.RefreshTokenRequestDto true "Refresh token"
+// @Success 200 {object} models.RefreshTokenResponse
+// @Failure 400 {object} common.ErrorResponse
+// @Router /auth/refresh_token [post]
+// @Security ApiKeyAuth
 func (uc *AuthController) RefreshToken(c *gin.Context) {
-	var req struct {
-		RefreshToken string `json:"refresh_token"`
-	}
+	var req models.RefreshTokenRequestDto
 
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid request"})
@@ -131,7 +178,37 @@ func (uc *AuthController) RefreshToken(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"access_token": newAccessToken})
+	c.JSON(http.StatusOK, &models.LoginSuccessResponse{
+		AccessToken: newAccessToken,
+	})
+}
+
+// Register godoc
+// @Summary Register
+// @Description Register
+// @Tags Auth
+// @Accept  json
+// @Produce  json
+// @Param request body models.CreateUserDto true "User"
+// @Success 200 {object} models.User
+// @Failure 400 {object} common.ErrorResponse
+// @Router /auth/register [post]
+// @Security ApiKeyAuth
+func (uc *AuthController) Register(ctx *gin.Context) {
+	var newUser models.CreateUserDto
+
+	if err := ctx.ShouldBindJSON(&newUser); err != nil {
+		ctx.JSON(http.StatusBadRequest, common.BuildErrorDetail(common.UserValidationFailed, utils.ExtractValidationError(err)))
+		return
+	}
+
+	user, err := uc.userService.InsertUser(newUser)
+	if err != nil {
+		ctx.JSON(http.StatusBadRequest, common.BuildError(err))
+		return
+	}
+
+	ctx.JSON(http.StatusOK, user)
 }
 
 func (uc *AuthController) Logout(c *gin.Context) {
@@ -158,23 +235,6 @@ func (uc *AuthController) Logout(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, unregisteredSession)
-}
-
-func (uc *AuthController) Register(ctx *gin.Context) {
-	var newUser models.CreateUserDto
-
-	if err := ctx.ShouldBindJSON(&newUser); err != nil {
-		ctx.JSON(http.StatusBadRequest, common.BuildErrorDetail(common.UserValidationFailed, utils.ExtractValidationError(err)))
-		return
-	}
-
-	user, err := uc.userService.InsertUser(newUser)
-	if err != nil {
-		ctx.JSON(http.StatusBadRequest, common.BuildError(err))
-		return
-	}
-
-	ctx.JSON(http.StatusOK, user)
 }
 
 func (uc *AuthController) GetProfile(ctx *gin.Context) {

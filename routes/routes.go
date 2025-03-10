@@ -10,7 +10,13 @@ import (
 	"log"
 	"time"
 
+	_ "josex/web/docs"
+
+	"github.com/didip/tollbooth/v7"
+	"github.com/didip/tollbooth_gin"
 	"github.com/gin-gonic/gin"
+	swaggerFiles "github.com/swaggo/files"
+	ginSwagger "github.com/swaggo/gin-swagger"
 	"github.com/ua-parser/uap-go/uaparser"
 )
 
@@ -33,6 +39,12 @@ func SetupRoutes(r *gin.Engine, dbService interfaces.DatabaseService) {
 
 	authController := controllers.NewAuthController(userService, jwtService, parser)
 	userController := controllers.NewUserController(userService)
+
+	// Limitador de solicitudes
+	limiter := tollbooth.NewLimiter(10, nil)         // 5 req/segundo
+	limiter.SetTokenBucketExpirationTTL(time.Second) // Define la ventana de tiempo en 1 segundo
+	limiter.SetIPLookups([]string{"RemoteAddr", "X-Forwarded-For", "X-Real-IP"})
+	r.Use(tollbooth_gin.LimitHandler(limiter))
 
 	mainRoutes := r.Group("/api/v1")
 	{
@@ -68,4 +80,6 @@ func SetupRoutes(r *gin.Engine, dbService interfaces.DatabaseService) {
 			}
 		}
 	}
+
+	r.GET("/swagger/*any", ginSwagger.WrapHandler(swaggerFiles.Handler))
 }

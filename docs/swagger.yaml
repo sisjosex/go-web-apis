@@ -1,0 +1,244 @@
+basePath: /api/v1
+definitions:
+  common.ErrorResponse:
+    properties:
+      code:
+        description: |-
+          Error code
+          example: 400
+        type: string
+      detail:
+        description: |-
+          Error details
+          example: {"email": "Invalid email format"}
+      error:
+        description: |-
+          Error message
+          example: Bad Request
+    type: object
+  models.CreateUserDto:
+    properties:
+      bio:
+        type: string
+      birthday:
+        type: string
+      email:
+        type: string
+      first_name:
+        type: string
+      last_name:
+        type: string
+      password:
+        type: string
+      phone:
+        type: string
+      profile_picture_url:
+        type: string
+      website_url:
+        type: string
+    required:
+    - email
+    - first_name
+    - last_name
+    - password
+    type: object
+  models.LoginExternalRequestDto:
+    properties:
+      auth_provider_id:
+        type: string
+      birthday:
+        type: string
+      device_id:
+        type: string
+      email:
+        type: string
+      first_name:
+        type: string
+      last_name:
+        type: string
+      phone:
+        type: string
+    required:
+    - auth_provider_id
+    type: object
+  models.LoginSuccessResponse:
+    properties:
+      access_token:
+        description: JWT token
+        type: string
+      refresh_token:
+        description: JWT token
+        type: string
+    type: object
+  models.LoginUserRequestDto:
+    properties:
+      device_id:
+        type: string
+      email:
+        type: string
+      password:
+        type: string
+    required:
+    - email
+    - password
+    type: object
+  models.RefreshTokenRequestDto:
+    properties:
+      refresh_token:
+        description: JWT token
+        type: string
+    type: object
+  models.RefreshTokenResponse:
+    properties:
+      access_token:
+        description: JWT token
+        type: string
+    type: object
+  models.User:
+    properties:
+      bio:
+        type: string
+      birthday:
+        type: string
+      email:
+        type: string
+      first_name:
+        type: string
+      id:
+        type: string
+      last_name:
+        type: string
+      phone:
+        type: string
+      profile_picture_url:
+        type: string
+      website_url:
+        type: string
+    required:
+    - email
+    - first_name
+    - id
+    - last_name
+    type: object
+host: localhost:8080
+info:
+  contact: {}
+  description: Swagger Documentation for API REST
+  title: API REST
+  version: "1.0"
+paths:
+  /auth/login:
+    post:
+      consumes:
+      - application/json
+      description: Allow login based on email authentication, email can be confirmed
+        after login
+      parameters:
+      - description: Datos de usuario
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/models.LoginUserRequestDto'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/models.LoginSuccessResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/common.ErrorResponse'
+      security:
+      - ApiKeyAuth: []
+      summary: Allow login based on email authentication, email can be confirmed after
+        login
+      tags:
+      - Auth
+  /auth/login/facebook:
+    post:
+      consumes:
+      - application/json
+      description: Allow login based on Facebook authentication
+      parameters:
+      - description: Datos de usuario
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/models.LoginExternalRequestDto'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/models.LoginSuccessResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/common.ErrorResponse'
+      security:
+      - ApiKeyAuth: []
+      summary: Allow login based on Facebook authentication
+      tags:
+      - Auth
+  /auth/refresh_token:
+    post:
+      consumes:
+      - application/json
+      description: Refresh token
+      parameters:
+      - description: Refresh token
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/models.RefreshTokenRequestDto'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/models.RefreshTokenResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/common.ErrorResponse'
+      security:
+      - ApiKeyAuth: []
+      summary: Refresh token
+      tags:
+      - Auth
+  /auth/register:
+    post:
+      consumes:
+      - application/json
+      description: Register
+      parameters:
+      - description: User
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/models.CreateUserDto'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/models.User'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/common.ErrorResponse'
+      security:
+      - ApiKeyAuth: []
+      summary: Register
+      tags:
+      - Auth
+swagger: "2.0"
