@@ -24,7 +24,7 @@ go run .
 ## Building
 
 ```
-go build -t go-web:1 .
+docker build -t go-web:1 .
 
 docker run -p 8080:8080 -e DATABASE_URL=postgres://postgres:dbpassword@<server-ip>:5432/web?sslmode=disable go-web:1
 ```

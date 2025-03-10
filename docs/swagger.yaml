@@ -42,6 +42,11 @@ definitions:
     - last_name
     - password
     type: object
+  models.GetProfileDto:
+    properties:
+      id:
+        type: string
+    type: object
   models.LoginExternalRequestDto:
     properties:
       auth_provider_id:
@@ -127,6 +132,33 @@ info:
   title: API REST
   version: "1.0"
 paths:
+  /auth/get_profile:
+    post:
+      consumes:
+      - application/json
+      description: GetProfile
+      parameters:
+      - description: Bearer Token
+        in: header
+        name: Authorization
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/models.GetProfileDto'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/common.ErrorResponse'
+      security:
+      - ApiKeyAuth: []
+      summary: GetProfile
+      tags:
+      - Auth
   /auth/login:
     post:
       consumes:
@@ -183,6 +215,33 @@ paths:
       security:
       - ApiKeyAuth: []
       summary: Allow login based on Facebook authentication
+      tags:
+      - Auth
+  /auth/logout:
+    post:
+      consumes:
+      - application/json
+      description: Logout
+      parameters:
+      - description: Bearer Token
+        in: header
+        name: Authorization
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            type: boolean
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/common.ErrorResponse'
+      security:
+      - ApiKeyAuth: []
+      summary: Logout
       tags:
       - Auth
   /auth/refresh_token:

@@ -8,6 +8,11 @@ type SessionUser struct {
 	IsActive  bool      `json:"is_active"`
 }
 
+type LogoutSessionDto struct {
+	UserId    uuid.UUID `json:"user_id" binding:"required,uuidv4"`
+	SessionId uuid.UUID `json:"session_id" binding:"required,uuidv4"`
+}
+
 type VerifyEmailRequest struct {
 	UserId *uuid.UUID `json:"user_id,omitempty" binding:"omitempty,uuidv4"`
 	Email  *string    `json:"email,omitempty" binding:"omitempty,email-valid"`

@@ -34,7 +34,7 @@ func (s *userService) UpdateProfile(userDTO models.UpdateProfileDto) (*models.Us
 	return s.userRepository.UpdateProfile(userDTO)
 }
 
-func (s *userService) LogoutUser(sessionUser models.SessionUser) (*models.SessionUser, error) {
+func (s *userService) LogoutUser(sessionUser models.LogoutSessionDto) (*bool, error) {
 	return s.userRepository.LogoutUser(sessionUser)
 }
 

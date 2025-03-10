@@ -178,7 +178,7 @@ func (uc *AuthController) RefreshToken(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, &models.LoginSuccessResponse{
+	c.JSON(http.StatusOK, &models.RefreshTokenResponse{
 		AccessToken: newAccessToken,
 	})
 }
@@ -211,6 +211,17 @@ func (uc *AuthController) Register(ctx *gin.Context) {
 	ctx.JSON(http.StatusOK, user)
 }
 
+// Logout godoc
+// @Summary Logout
+// @Description Logout
+// @Tags Auth
+// @Accept  json
+// @Produce  json
+// @Param Authorization header string true "Bearer Token"
+// @Success 200 {object} bool
+// @Failure 400 {object} common.ErrorResponse
+// @Router /auth/logout [post]
+// @Security ApiKeyAuth
 func (uc *AuthController) Logout(c *gin.Context) {
 	userId, err := uuid.Parse(c.GetString("user_id"))
 	if err != nil {
@@ -224,11 +235,12 @@ func (uc *AuthController) Logout(c *gin.Context) {
 		return
 	}
 
-	sessionUser := &models.SessionUser{
+	logoutSessionDto := models.LogoutSessionDto{
 		UserId:    userId,
 		SessionId: sessionId,
 	}
-	unregisteredSession, err := uc.userService.LogoutUser(*sessionUser)
+
+	unregisteredSession, err := uc.userService.LogoutUser(logoutSessionDto)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, common.BuildError(err))
 		return
@@ -237,6 +249,17 @@ func (uc *AuthController) Logout(c *gin.Context) {
 	c.JSON(http.StatusOK, unregisteredSession)
 }
 
+// GetProfile godoc
+// @Summary GetProfile
+// @Description GetProfile
+// @Tags Auth
+// @Accept  json
+// @Produce  json
+// @Param Authorization header string true "Bearer Token"
+// @Success 200 {object} models.GetProfileDto
+// @Failure 400 {object} common.ErrorResponse
+// @Router /auth/get_profile [post]
+// @Security ApiKeyAuth
 func (uc *AuthController) GetProfile(ctx *gin.Context) {
 	var getProfileDto models.GetProfileDto
 	userID, err := uuid.Parse(ctx.GetString("user_id"))

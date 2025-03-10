@@ -19,21 +19,22 @@ type ErrorResponse struct {
 }
 
 const (
-	UserCreateFailed          = "user.create.failed"
-	UserUpdateFailed          = "user.update.failed"
-	UserLoginFailed           = "user.login.invalid-credentials2"
-	UserLoginValidationFailed = "user.login.validation-failed"
-	UserLoginNotFound         = "user.login.not-found"
-	UserValidationFailed      = "user.create.validation-failed"
-	UserEmailAlreadyInUse     = "user.create.email-in-use"
-	UserSearchFailed          = "user.search.failed"
-	UserRegisterFailed        = "user.register.failed"
-	UserGetByIdNotFound       = "user.get-by-id.not-found"
-	UserGetByIdEmailFound     = "user.get-by-email.not-found"
-	UserRequestEmailError     = "user.email.request.failed"
-	UserEmailVerification     = "user.email.verification.failed"
-	UserChangePasswordError   = "user.change-password.failed"
-	UserPasswordResetError    = "user.password-reset.failed"
+	UserCreateFailed           = "user.create.failed"
+	UserUpdateFailed           = "user.update.failed"
+	UserLoginFailed            = "user.login.invalid-credentials2"
+	UserLoginValidationFailed  = "user.login.validation-failed"
+	UserLoginNotFound          = "user.login.not-found"
+	UserLogoutValidationFailed = "user.logout.validation-failed"
+	UserValidationFailed       = "user.create.validation-failed"
+	UserEmailAlreadyInUse      = "user.create.email-in-use"
+	UserSearchFailed           = "user.search.failed"
+	UserRegisterFailed         = "user.register.failed"
+	UserGetByIdNotFound        = "user.get-by-id.not-found"
+	UserGetByIdEmailFound      = "user.get-by-email.not-found"
+	UserRequestEmailError      = "user.email.request.failed"
+	UserEmailVerification      = "user.email.verification.failed"
+	UserChangePasswordError    = "user.change-password.failed"
+	UserPasswordResetError     = "user.password-reset.failed"
 )
 
 type ErrorTag map[string]string

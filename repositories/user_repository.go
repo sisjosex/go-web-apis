@@ -303,8 +303,8 @@ func (r *userRepository) LoginExternal(userDTO models.LoginExternalDto) (*models
 	return token, nil
 }
 
-func (r *userRepository) LogoutUser(userDTO models.SessionUser) (*models.SessionUser, error) {
-	userSession := &models.SessionUser{}
+func (r *userRepository) LogoutUser(userDTO models.LogoutSessionDto) (*bool, error) {
+	userSessionSuccess := false
 
 	query := `
         SELECT * FROM auth.sp_logout(
@@ -322,9 +322,7 @@ func (r *userRepository) LogoutUser(userDTO models.SessionUser) (*models.Session
 	row := r.dbService.QueryRow(context.Background(), query, params...)
 
 	err := row.Scan(
-		&userSession.UserId,
-		&userSession.SessionId,
-		&userSession.IsActive,
+		&userSessionSuccess,
 	)
 
 	if err != nil {
@@ -337,7 +335,7 @@ func (r *userRepository) LogoutUser(userDTO models.SessionUser) (*models.Session
 		return nil, err
 	}
 
-	return userSession, nil
+	return &userSessionSuccess, nil
 }
 
 func (r *userRepository) GetProfile(getProfileDto models.GetProfileDto) (*models.User, error) {

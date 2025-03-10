@@ -293,59 +293,60 @@ $$;
 CREATE
 OR REPLACE FUNCTION auth.sp_logout (
     p_user_id UUID DEFAULT NULL,
-    p_session_id UUID DEFAULT NULL
-) RETURNS TABLE (user_id UUID, session_id UUID, is_active BOOL) LANGUAGE plpgsql AS $$
+    p_session_id UUID DEFAULT NULL,
+    p_device_id UUID DEFAULT NULL
+) RETURNS BOOL LANGUAGE plpgsql AS $$
 DECLARE
     v_session_count INT;
+    v_session_id UUID;
 BEGIN
     -- Si se proporciona p_session_id, cerrar esa sesión en particular
     IF p_session_id IS NOT NULL THEN
         -- Verificar si la sesión existe para el usuario dado
-        SELECT COUNT(*)
-        INTO v_session_count
-        FROM auth.user_sessions
-        WHERE user_sessions.session_id = p_session_id
-        AND user_sessions.user_id = p_user_id
-        AND user_sessions.is_active = true;
+        SELECT us.session_id
+        INTO v_session_id
+        FROM auth.user_sessions us
+        WHERE us.session_id = p_session_id
+        AND us.user_id = p_user_id
+        AND us.is_active = true;
 
-        IF v_session_count = 0 THEN
+        IF v_session_id IS NULL THEN
             RAISE EXCEPTION 'user.session.not-found' USING ERRCODE = 'S0001', DETAIL = 'user session does not found';
         END IF;
 
         -- Desactivar la sesión en lugar de eliminarla:
         UPDATE auth.user_sessions
-        SET user_sessions.is_active = FALSE, logout_time = NOW()
-        WHERE user_sessions.session_id = p_session_id 
-        AND user_sessions.user_id = p_user_id;
+        SET is_active = FALSE, logout_time = NOW()
+        WHERE session_id = v_session_id;
 
-        RETURN QUERY
-        SELECT
-            user_sessions.user_id,
-            user_sessions.session_id,
-            user_sessions.is_active
-        FROM auth.user_sessions
-        WHERE user_sessions.session_id = p_session_id
-        AND user_sessions.user_id = p_user_id
-        LIMIT 1;
+    ELSIF p_device_id IS NOT NULL THEN
+        -- Verificar si la sesión existe para el usuario dado
+        SELECT us.session_id
+        INTO v_session_id
+        FROM auth.user_sessions us
+        WHERE us.device_id = p_device_id
+        AND us.user_id = p_user_id
+        AND us.is_active = true;
 
-    ELSE
-        -- Closing all sessions
-        SELECT COUNT(*)
-        INTO v_session_count
-        FROM auth.user_sessions
-        WHERE user_sessions.user_id = p_user_id
-        AND user_sessions.is_active = TRUE;
-
-        IF v_session_count = 0 THEN
-            RAISE EXCEPTION 'user.session.no-active-sessions' USING ERRCODE = 'S0002', DETAIL = 'User does not have active sessions';
+        IF v_session_id IS NULL THEN
+            RAISE EXCEPTION 'user.session.not-found' USING ERRCODE = 'S0001', DETAIL = 'user session does not found';
         END IF;
 
+        -- Desactivar la sesión en lugar de eliminarla:
+        UPDATE auth.user_sessions
+        SET is_active = FALSE, logout_time = NOW()
+        WHERE session_id = v_session_id;
+
+
+    ELSE
         -- Desactivar todas las sesiones:
         UPDATE auth.user_sessions
-        SET user_sessions.is_active = FALSE, logout_time = NOW()
-        WHERE user_sessions.user_id = p_user_id
-        AND user_sessions.is_active = TRUE;
+        SET is_active = FALSE, logout_time = NOW()
+        WHERE user_id = p_user_id
+        AND is_active = TRUE;
     END IF;
+
+    RETURN TRUE;
 
 END;
 $$;

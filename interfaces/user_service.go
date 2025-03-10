@@ -10,7 +10,7 @@ type UserService interface {
 	UpdateProfile(userDTO models.UpdateProfileDto) (*models.User, error)
 	LoginUser(userDTO models.LoginUserDto) (*models.SessionUser, error)
 	LoginExternal(userDTO models.LoginExternalDto) (*models.SessionUser, error)
-	LogoutUser(userDTO models.SessionUser) (*models.SessionUser, error)
+	LogoutUser(userDTO models.LogoutSessionDto) (*bool, error)
 	GetProfile(userDTO models.GetProfileDto) (*models.User, error)
 	GenerateEmailVerificationToken(verifyEmailRequest models.VerifyEmailRequest) (*models.VerifyEmailToken, error)
 	ConfirmEmailAddress(verifyEmailRequest models.VerifyEmailToken) (*bool, error)

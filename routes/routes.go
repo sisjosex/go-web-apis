@@ -63,13 +63,12 @@ func SetupRoutes(r *gin.Engine, dbService interfaces.DatabaseService) {
 				protectedRoutes.POST("/update_profile", authController.UpdateProfile)
 				protectedRoutes.POST("/change_password", authController.ChangePassword)
 				protectedRoutes.POST("/request_verify_email", authController.GenerateEmailVerificationToken)
+				protectedRoutes.POST("/logout", authController.Logout)
 			}
 		}
 
 		mainRoutes.Use(middleware.AuthMiddleware(jwtService))
 		{
-			mainRoutes.POST("/logout", authController.Logout)
-
 			userRoutes := mainRoutes.Group("/users")
 			{
 				//userRoutes.GET("", controllers.Index)
