@@ -205,7 +205,6 @@ OR REPLACE FUNCTION auth.sp_update_profile (
     p_last_name VARCHAR DEFAULT NULL,
     p_phone VARCHAR DEFAULT NULL,
     p_birthday DATE DEFAULT NULL,
-    p_email VARCHAR DEFAULT NULL,
     p_current_password VARCHAR DEFAULT NULL, -- Contraseña actual para verificar antes de cambiarla
     p_new_password VARCHAR DEFAULT NULL, -- Nueva contraseña
     p_profile_picture_url TEXT DEFAULT NULL,

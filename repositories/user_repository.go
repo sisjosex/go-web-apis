@@ -148,12 +148,11 @@ func (r *userRepository) UpdateProfile(userDTO models.UpdateProfileDto) (*models
 			p_last_name := $3,
 			p_phone := $4,
 			p_birthday := $5,
-			p_email := $6,
-			p_current_password := $7, -- Contraseña actual
-			p_new_password := $8, -- Nueva contraseña
-			p_profile_picture_url := $9,
-			p_bio := $10,
-			p_website_url := $11
+			p_current_password := $6, -- Contraseña actual
+			p_new_password := $7, -- Nueva contraseña
+			p_profile_picture_url := $8,
+			p_bio := $9,
+			p_website_url := $10
 		)
     `
 
@@ -164,7 +163,6 @@ func (r *userRepository) UpdateProfile(userDTO models.UpdateProfileDto) (*models
 		userDTO.LastName,
 		userDTO.Phone,
 		userDTO.Birthday,
-		userDTO.Email,
 		userDTO.PasswordCurrent,
 		userDTO.PasswordNew,
 		userDTO.ProfilePictureUrl,

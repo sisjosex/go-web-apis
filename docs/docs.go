@@ -769,9 +769,6 @@ const docTemplate = `{
                 "birthday": {
                     "type": "string"
                 },
-                "email": {
-                    "type": "string"
-                },
                 "first_name": {
                     "type": "string"
                 },

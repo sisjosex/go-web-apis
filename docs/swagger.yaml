@@ -139,8 +139,6 @@ definitions:
         type: string
       birthday:
         type: string
-      email:
-        type: string
       first_name:
         type: string
       id:
