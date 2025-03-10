@@ -16,6 +16,16 @@ definitions:
           Error message
           example: Bad Request
     type: object
+  models.ChangePasswordRequestDto:
+    properties:
+      password_current:
+        type: string
+      password_new:
+        type: string
+    required:
+    - password_current
+    - password_new
+    type: object
   models.CreateUserDto:
     properties:
       bio:
@@ -41,11 +51,6 @@ definitions:
     - first_name
     - last_name
     - password
-    type: object
-  models.GetProfileDto:
-    properties:
-      id:
-        type: string
     type: object
   models.LoginExternalRequestDto:
     properties:
@@ -78,14 +83,43 @@ definitions:
   models.LoginUserRequestDto:
     properties:
       device_id:
+        description: DeviceId of the user
         type: string
       email:
+        description: Email of the user
         type: string
       password:
+        description: Password of the user
         type: string
     required:
     - email
     - password
+    type: object
+  models.PasswordResetRequestDto:
+    properties:
+      email:
+        type: string
+    required:
+    - email
+    type: object
+  models.PasswordResetTokenRequestDto:
+    properties:
+      token:
+        type: string
+    required:
+    - token
+    type: object
+  models.PasswordResetWithTokenDto:
+    properties:
+      password_new:
+        description: New password
+        type: string
+      token:
+        description: Password reset token, see /auth/request_password_reset
+        type: string
+    required:
+    - password_new
+    - token
     type: object
   models.RefreshTokenRequestDto:
     properties:
@@ -97,6 +131,31 @@ definitions:
     properties:
       access_token:
         description: JWT token
+        type: string
+    type: object
+  models.UpdateProfileDto:
+    properties:
+      bio:
+        type: string
+      birthday:
+        type: string
+      email:
+        type: string
+      first_name:
+        type: string
+      id:
+        type: string
+      last_name:
+        type: string
+      password_current:
+        type: string
+      password_new:
+        type: string
+      phone:
+        type: string
+      profile_picture_url:
+        type: string
+      website_url:
         type: string
     type: object
   models.User:
@@ -125,6 +184,19 @@ definitions:
     - id
     - last_name
     type: object
+  models.VerifyEmailRequestDto:
+    properties:
+      email:
+        description: Send only for request edit primary email address
+        type: string
+    type: object
+  models.VerifyEmailToken:
+    properties:
+      token:
+        type: string
+    required:
+    - token
+    type: object
 host: localhost:8080
 info:
   contact: {}
@@ -132,6 +204,67 @@ info:
   title: API REST
   version: "1.0"
 paths:
+  /auth/change_password:
+    post:
+      consumes:
+      - application/json
+      description: ChangePassword
+      parameters:
+      - description: Bearer Token
+        in: header
+        name: Authorization
+        required: true
+        type: string
+      - description: User
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/models.ChangePasswordRequestDto'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            type: boolean
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/common.ErrorResponse'
+      security:
+      - ApiKeyAuth: []
+      summary: ChangePassword
+      tags:
+      - Auth
+  /auth/confirm_email:
+    post:
+      consumes:
+      - application/json
+      description: ConfirmEmailAddress
+      parameters:
+      - description: Verify Email Token
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/models.VerifyEmailToken'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            type: boolean
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/common.ErrorResponse'
+      security:
+      - ApiKeyAuth: []
+      summary: ConfirmEmailAddress
+      tags:
+      - Auth
   /auth/get_profile:
     post:
       consumes:
@@ -149,7 +282,7 @@ paths:
         "200":
           description: OK
           schema:
-            $ref: '#/definitions/models.GetProfileDto'
+            $ref: '#/definitions/models.User'
         "400":
           description: Bad Request
           schema:
@@ -244,6 +377,33 @@ paths:
       summary: Logout
       tags:
       - Auth
+  /auth/password_reset:
+    post:
+      consumes:
+      - application/json
+      description: ResetPasswordWithToken
+      parameters:
+      - description: User
+        in: body
+        name: request
+        schema:
+          $ref: '#/definitions/models.PasswordResetWithTokenDto'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            type: boolean
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/common.ErrorResponse'
+      security:
+      - ApiKeyAuth: []
+      summary: ResetPasswordWithToken
+      tags:
+      - Auth
   /auth/refresh_token:
     post:
       consumes:
@@ -298,6 +458,99 @@ paths:
       security:
       - ApiKeyAuth: []
       summary: Register
+      tags:
+      - Auth
+  /auth/request_password_reset:
+    post:
+      consumes:
+      - application/json
+      description: GeneratePasswordResetToken
+      parameters:
+      - description: User Account
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/models.PasswordResetRequestDto'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/models.PasswordResetTokenRequestDto'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/common.ErrorResponse'
+      security:
+      - ApiKeyAuth: []
+      summary: GeneratePasswordResetToken
+      tags:
+      - Auth
+  /auth/request_verify_email:
+    post:
+      consumes:
+      - application/json
+      description: GenerateEmailVerificationToken
+      parameters:
+      - description: Bearer Token
+        in: header
+        name: Authorization
+        required: true
+        type: string
+      - description: User
+        in: body
+        name: request
+        schema:
+          $ref: '#/definitions/models.VerifyEmailRequestDto'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/models.VerifyEmailToken'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/common.ErrorResponse'
+      security:
+      - ApiKeyAuth: []
+      summary: GenerateEmailVerificationToken
+      tags:
+      - Auth
+  /auth/update_profile:
+    post:
+      consumes:
+      - application/json
+      description: UpdateProfile
+      parameters:
+      - description: Bearer Token
+        in: header
+        name: Authorization
+        required: true
+        type: string
+      - description: User
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/models.UpdateProfileDto'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/models.UpdateProfileDto'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/common.ErrorResponse'
+      security:
+      - ApiKeyAuth: []
+      summary: UpdateProfile
       tags:
       - Auth
 swagger: "2.0"

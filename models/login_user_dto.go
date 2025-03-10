@@ -5,8 +5,11 @@ import "github.com/google/uuid"
 // LoginUserRequestDto is a model for login user request
 // swagger:model
 type LoginUserRequestDto struct {
-	Email    string    `json:"email" binding:"required,email-valid" conform:"trim,lowercase"`
-	Password string    `json:"password" binding:"required"`
+	// Email of the user
+	Email string `json:"email" binding:"required,email-valid" conform:"trim,lowercase"`
+	// Password of the user
+	Password string `json:"password" binding:"required"`
+	// DeviceId of the user
 	DeviceId uuid.UUID `json:"device_id,omitempty" binding:"omitempty,uuidv4"`
 }
 

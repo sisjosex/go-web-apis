@@ -256,7 +256,7 @@ func (uc *AuthController) Logout(c *gin.Context) {
 // @Accept  json
 // @Produce  json
 // @Param Authorization header string true "Bearer Token"
-// @Success 200 {object} models.GetProfileDto
+// @Success 200 {object} models.User
 // @Failure 400 {object} common.ErrorResponse
 // @Router /auth/get_profile [post]
 // @Security ApiKeyAuth
@@ -278,6 +278,18 @@ func (uc *AuthController) GetProfile(ctx *gin.Context) {
 	ctx.JSON(http.StatusOK, user)
 }
 
+// UpdateProfile godoc
+// @Summary UpdateProfile
+// @Description UpdateProfile
+// @Tags Auth
+// @Accept  json
+// @Produce  json
+// @Param Authorization header string true "Bearer Token"
+// @Param request body models.UpdateProfileDto true "User"
+// @Success 200 {object} models.UpdateProfileDto
+// @Failure 400 {object} common.ErrorResponse
+// @Router /auth/update_profile [post]
+// @Security ApiKeyAuth
 func (uc *AuthController) UpdateProfile(ctx *gin.Context) {
 	var updateUser models.UpdateProfileDto
 	userID, err := uuid.Parse(ctx.GetString("user_id"))
@@ -301,11 +313,23 @@ func (uc *AuthController) UpdateProfile(ctx *gin.Context) {
 	ctx.JSON(http.StatusOK, user)
 }
 
+// GenerateEmailVerificationToken godoc
+// @Summary GenerateEmailVerificationToken
+// @Description GenerateEmailVerificationToken
+// @Tags Auth
+// @Accept  json
+// @Produce  json
+// @Param Authorization header string true "Bearer Token"
+// @Param request body models.VerifyEmailRequestDto false "User"
+// @Success 200 {object} models.VerifyEmailToken
+// @Failure 400 {object} common.ErrorResponse
+// @Router /auth/request_verify_email [post]
+// @Security ApiKeyAuth
 func (uc *AuthController) GenerateEmailVerificationToken(ctx *gin.Context) {
-	var verifyEmailRequest models.VerifyEmailRequest
+	var verifyEmailRequestDto models.VerifyEmailRequestDto
 
 	if ctx.Request.ContentLength > 0 {
-		if err := ctx.ShouldBindJSON(&verifyEmailRequest); err != nil {
+		if err := ctx.ShouldBindJSON(&verifyEmailRequestDto); err != nil {
 			ctx.JSON(http.StatusBadRequest, common.BuildErrorDetail(common.UserRequestEmailError, utils.ExtractValidationError(err)))
 			return
 		}
@@ -317,9 +341,12 @@ func (uc *AuthController) GenerateEmailVerificationToken(ctx *gin.Context) {
 		return
 	}
 
-	verifyEmailRequest.UserId = &userID
+	verifyEmailRequest := &models.VerifyEmailRequest{
+		Email:  verifyEmailRequestDto.Email,
+		UserId: &userID,
+	}
 
-	token, err := uc.userService.GenerateEmailVerificationToken(verifyEmailRequest)
+	token, err := uc.userService.GenerateEmailVerificationToken(*verifyEmailRequest)
 	if err != nil {
 		ctx.JSON(http.StatusBadRequest, common.BuildError(err))
 		return
@@ -339,6 +366,17 @@ func (uc *AuthController) GenerateEmailVerificationToken(ctx *gin.Context) {
 	ctx.JSON(http.StatusOK, token)
 }
 
+// ConfirmEmailAddress godoc
+// @Summary ConfirmEmailAddress
+// @Description ConfirmEmailAddress
+// @Tags Auth
+// @Accept  json
+// @Produce  json
+// @Param request body models.VerifyEmailToken true "Verify Email Token"
+// @Success 200 {object} bool
+// @Failure 400 {object} common.ErrorResponse
+// @Router /auth/confirm_email [post]
+// @Security ApiKeyAuth
 func (uc *AuthController) ConfirmEmailAddress(ctx *gin.Context) {
 	var verifyEmailRequest models.VerifyEmailToken
 
@@ -356,10 +394,22 @@ func (uc *AuthController) ConfirmEmailAddress(ctx *gin.Context) {
 	ctx.JSON(http.StatusOK, confirmed)
 }
 
+// ChangePassword godoc
+// @Summary ChangePassword
+// @Description ChangePassword
+// @Tags Auth
+// @Accept  json
+// @Produce  json
+// @Param Authorization header string true "Bearer Token"
+// @Param request body models.ChangePasswordRequestDto true "User"
+// @Success 200 {object} bool
+// @Failure 400 {object} common.ErrorResponse
+// @Router /auth/change_password [post]
+// @Security ApiKeyAuth
 func (uc *AuthController) ChangePassword(ctx *gin.Context) {
-	var changePasswordDto models.ChangePasswordDto
+	var changePasswordEequestDto models.ChangePasswordRequestDto
 
-	if err := ctx.ShouldBindJSON(&changePasswordDto); err != nil {
+	if err := ctx.ShouldBindJSON(&changePasswordEequestDto); err != nil {
 		ctx.JSON(http.StatusBadRequest, common.BuildErrorDetail(common.UserChangePasswordError, utils.ExtractValidationError(err)))
 		return
 	}
@@ -370,7 +420,11 @@ func (uc *AuthController) ChangePassword(ctx *gin.Context) {
 		return
 	}
 
-	changePasswordDto.UserId = &userID
+	changePasswordDto := models.ChangePasswordDto{
+		UserId:          &userID,
+		PasswordCurrent: changePasswordEequestDto.PasswordCurrent,
+		PasswordNew:     changePasswordEequestDto.PasswordNew,
+	}
 
 	changed, err := uc.userService.ChangePassword(changePasswordDto)
 	if err != nil {
@@ -381,6 +435,17 @@ func (uc *AuthController) ChangePassword(ctx *gin.Context) {
 	ctx.JSON(http.StatusOK, changed)
 }
 
+// GeneratePasswordResetToken godoc
+// @Summary GeneratePasswordResetToken
+// @Description GeneratePasswordResetToken
+// @Tags Auth
+// @Accept  json
+// @Produce  json
+// @Param request body models.PasswordResetRequestDto true "User Account"
+// @Success 200 {object} models.PasswordResetTokenRequestDto
+// @Failure 400 {object} common.ErrorResponse
+// @Router /auth/request_password_reset [post]
+// @Security ApiKeyAuth
 func (uc *AuthController) GeneratePasswordResetToken(ctx *gin.Context) {
 	var passwordResetRequestDto models.PasswordResetRequestDto
 
@@ -409,6 +474,17 @@ func (uc *AuthController) GeneratePasswordResetToken(ctx *gin.Context) {
 	ctx.JSON(http.StatusOK, token)
 }
 
+// ResetPasswordWithToken godoc
+// @Summary ResetPasswordWithToken
+// @Description ResetPasswordWithToken
+// @Tags Auth
+// @Accept  json
+// @Produce  json
+// @Param request body models.PasswordResetWithTokenDto false "User"
+// @Success 200 {object} bool
+// @Failure 400 {object} common.ErrorResponse
+// @Router /auth/password_reset [post]
+// @Security ApiKeyAuth
 func (uc *AuthController) ResetPasswordWithToken(ctx *gin.Context) {
 	var passwordResetWithTokenDto models.PasswordResetWithTokenDto
 

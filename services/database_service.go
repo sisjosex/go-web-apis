@@ -5,6 +5,7 @@ import (
 	"josex/web/config"
 	"josex/web/interfaces"
 	"log"
+	"time"
 
 	"github.com/golang-migrate/migrate/v4"
 	_ "github.com/golang-migrate/migrate/v4/database/postgres"
@@ -22,21 +23,24 @@ func NewDatabaseService() interfaces.DatabaseService {
 }
 
 func (ds *databaseService) InitDatabase(ctx context.Context) {
+	retryInterval := 5 * time.Second
+
 	dataBaseUrl := config.AppConfig.DatabaseUrl
-	databasePoolSize := config.AppConfig.DatabasePoolSize
 
-	pool, err := connectDatabase(ctx, dataBaseUrl, databasePoolSize)
-	if err != nil {
-		log.Fatalf("Failed to connect to database: %v", err, dataBaseUrl)
-	}
+	for {
+		pool, err := connectDatabase(ctx, dataBaseUrl, config.AppConfig.DatabasePoolSize)
+		if err != nil {
+			log.Printf("Failed to connect to database: %v", err)
+		}
 
-	ds.pool = pool
-	log.Println("Database connected")
+		ds.pool = pool
 
-	if err := runMigrations(dataBaseUrl); err != nil {
-		log.Println("Error running migrations:", err)
-	} else {
-		log.Println("Running migrations completed")
+		if err := runMigrations(dataBaseUrl); err == nil {
+			log.Println("Running migrations completed successfully")
+			return
+		}
+
+		time.Sleep(retryInterval)
 	}
 }
 

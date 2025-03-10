@@ -13,6 +13,11 @@ type LogoutSessionDto struct {
 	SessionId uuid.UUID `json:"session_id" binding:"required,uuidv4"`
 }
 
+type VerifyEmailRequestDto struct {
+	// Send only for request edit primary email address
+	Email *string `json:"email,omitempty" binding:"omitempty,email-valid"`
+}
+
 type VerifyEmailRequest struct {
 	UserId *uuid.UUID `json:"user_id,omitempty" binding:"omitempty,uuidv4"`
 	Email  *string    `json:"email,omitempty" binding:"omitempty,email-valid"`
@@ -20,6 +25,11 @@ type VerifyEmailRequest struct {
 
 type VerifyEmailToken struct {
 	Token uuid.UUID `json:"token" binding:"required,uuidv4"`
+}
+
+type ChangePasswordRequestDto struct {
+	PasswordCurrent string `json:"password_current" binding:"required"`
+	PasswordNew     string `json:"password_new" binding:"required"`
 }
 
 type ChangePasswordDto struct {
@@ -37,6 +47,8 @@ type PasswordResetTokenRequestDto struct {
 }
 
 type PasswordResetWithTokenDto struct {
-	Token       uuid.UUID `json:"token" binding:"required,uuidv4"`
-	PasswordNew string    `json:"password_new" binding:"required"`
+	// Password reset token, see /auth/request_password_reset
+	Token uuid.UUID `json:"token" binding:"required,uuidv4"`
+	// New password
+	PasswordNew string `json:"password_new" binding:"required"`
 }
