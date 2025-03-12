@@ -1,53 +1,113 @@
-# Go lang optimized backend
+# Optimized Backend with Go, Gin, and PostgreSQL
 
-Optimized backend using Gin with Go, and postgresql database pool based for multiple connections
+Este backend está optimizado para manejar múltiples conexiones a PostgreSQL utilizando un pool de conexiones. Se basa en Gin, un framework web rápido y ligero para Go.
 
-## Requirements
+## Requisitos
 
-* Golang installed
-* Postgres (for local environment)
+Antes de ejecutar el proyecto, asegúrate de tener instaladas las siguientes dependencias:
 
-## Libraries/Db
+- **Golang**: Instala la última versión desde [golang.org](https://golang.org/dl/).
+- **PostgreSQL**: Base de datos relacional utilizada en el backend.
+- **Docker & Docker Compose** (Opcional): Para ejecutar el entorno en contenedores.
 
-* Go
-* Gin
-* PostgreSQL
-* Docker compose
+## Tecnologías y Librerías
 
-## How to run locally
+Este proyecto utiliza las siguientes tecnologías y librerías:
 
-```
-go mod tidy
-go run .
-```
+- **Go**: Lenguaje de programación principal.
+- **Gin**: Framework web en Go para manejar solicitudes HTTP.
+- **PostgreSQL**: Base de datos utilizada para almacenar información.
+- **Docker Compose**: Herramienta para definir y gestionar entornos en contenedores.
 
-## Building
+---
 
-```
+## Cómo ejecutar el proyecto localmente
+
+Sigue estos pasos para ejecutar el backend en tu máquina local:
+
+1. Asegúrate de que todas las dependencias estén instaladas.
+2. Descarga las dependencias del proyecto ejecutando:
+
+   ```sh
+   go mod tidy
+   ```
+
+3. Inicia el servidor ejecutando:
+
+   ```sh
+   go run .
+   ```
+
+   Esto ejecutará el servidor en el puerto configurado en el código.
+
+---
+
+## Construcción y ejecución con Docker
+
+Para construir y ejecutar el backend con Docker, sigue estos pasos:
+
+### 1. Construir la imagen Docker
+
+```sh
 docker build -t go-web:1 .
+```
 
+Esto crea una imagen Docker con el backend en Go.
+
+### 2. Ejecutar el contenedor
+
+```sh
 docker run -p 8080:8080 -e DATABASE_URL=postgres://postgres:dbpassword@<server-ip>:5432/web?sslmode=disable go-web:1
 ```
 
+Reemplaza `<server-ip>` con la IP del servidor donde se ejecuta PostgreSQL. Este comando:
+- Asigna el puerto `8080` en el host al puerto `8080` del contenedor.
+- Define la variable de entorno `DATABASE_URL` para la conexión a PostgreSQL.
+- Ejecuta el backend dentro del contenedor Docker.
 
-## Build images
-```
+---
+
+## Uso de Docker Compose
+
+Si deseas construir y ejecutar el backend junto con PostgreSQL utilizando Docker Compose, sigue estos pasos:
+
+### 1. Construcción de la imagen con Docker Compose
+
+```sh
 docker compose --env-file .env.docker build
+```
 
+Esto crea las imágenes necesarias utilizando la configuración definida en `docker-compose.yml` y las variables de `.env.docker`.
+
+### 2. Iniciar los contenedores
+
+```sh
 docker compose --env-file .env.docker up
+```
 
-// or
+Este comando inicia todos los servicios definidos en `docker-compose.yml`, como el backend y la base de datos.
 
+Si necesitas construir la imagen y ejecutarla en un solo paso, usa:
+
+```sh
 docker compose --env-file .env.docker up --build
 ```
 
-## Error codes
+---
 
+## Códigos de error
 
-## Sample apis
+*(Aquí puedes agregar una lista de códigos de error que pueda devolver el backend y su significado.)*
 
-```
-// Register
+---
+
+## Ejemplos de APIs
+
+Aquí tienes ejemplos de cómo consumir las APIs de autenticación utilizando `curl`.
+
+### Registro de usuario
+
+```sh
 curl --location 'http://localhost:8080/api/v1/auth/register' \
 --header 'Content-Type: application/json' \
 --data-raw '{
@@ -57,14 +117,15 @@ curl --location 'http://localhost:8080/api/v1/auth/register' \
     "password": "$Password2025",
     "phone": "11111111",
     "birthday": "1985-01-01",
-    "profile_picture_url": "http:/fotos.com/profile.png",
+    "profile_picture_url": "http://fotos.com/profile.png",
     "bio": "some bio",
-    "website_url": "http:/page.com"
+    "website_url": "http://page.com"
 }'
 ```
 
-```
-// Login
+### Inicio de sesión
+
+```sh
 curl --location 'http://localhost:8080/api/v1/auth/login' \
 --header 'User-Agent: Mozilla/5.0 (X11; Ubuntu; Linux x86_64; rv:89.0; Device=Laptop) Gecko/20100101 Firefox/89.0' \
 --header 'Content-Type: application/json' \
@@ -72,4 +133,9 @@ curl --location 'http://localhost:8080/api/v1/auth/login' \
     "email": "jhon-smith@mail.com",
     "password": "$Password2025"
 }'
+
 ```
+
+Estos ejemplos pueden ejecutarse en una terminal o Postman para interactuar con el backend.
+
+---
