@@ -1,0 +1,8 @@
+# Editor config
+.vscode
+
+# Binary generated
+web*
+
+# project files
+go.sum

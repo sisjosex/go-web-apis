@@ -1,0 +1,41 @@
+services:
+  web-app:
+    image: claisa/gowebapi:latest
+    ports:
+      - "${APP_PORT}:8080"
+#    depends_on:
+#      - db
+    env_file:
+      - .env.docker
+    environment:
+      - DATABASE_URL=${DATABASE_URL}
+      - DATABASE_POOL_SIZE=${DATABASE_POOL_SIZE}
+      - APP_MODE=${APP_MODE}
+      - FRONTEND_URL=${FRONTEND_URL}
+      - APP_HOST=0.0.0.0  # Para que escuche en todas las interfaces dentro del contenedor
+      - APP_PORT=${APP_PORT}
+      - JWT_SECRET_KEY=${JWT_SECRET_KEY}
+      - JWT_REFRESH_KEY=${JWT_REFRESH_KEY}
+      - JWT_EXPIRATION_SECONDS=${JWT_EXPIRATION_SECONDS}
+      - JWT_REFRESH_SECONDS=${JWT_REFRESH_SECONDS}
+      - SMTP_HOST=${SMTP_HOST}
+      - SMTP_PORT=${SMTP_PORT}
+      - SMTP_USER=${SMTP_USER}
+      - SMTP_PASSWORD=${SMTP_PASSWORD}
+      - SMTP_FROM=${SMTP_FROM}
+    command: ["./main"]
+
+  db:
+    image: postgres:alpine
+    restart: always
+    container_name: db
+    env_file:
+      - .env.docker
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+    ports:
+      - "${POSTGRES_PORT}:5432"
+    volumes:
+      - ./docker/postgres/init.sql:/docker-entrypoint-initdb.d/init.sql

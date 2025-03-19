@@ -93,6 +93,18 @@ Si necesitas construir la imagen y ejecutarla en un solo paso, usa:
 docker compose --env-file .env.docker up --build
 ```
 
+Para usar una imagen ya existente subida a dockerhub:
+
+```sh
+docker compose --env-file .env.docker -f docker-compose.prod.yml up
+```
+
+Para dar de baja los contenedores
+
+```sh
+docker compose --env-file .env.docker down
+```
+
 ---
 
 ## Códigos de error
