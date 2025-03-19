@@ -106,7 +106,13 @@ BEGIN
     -- Buscar usuario por correo
     SELECT id INTO v_user_id
     FROM auth.users
-    WHERE LOWER(email) = p_email;
+    WHERE email = p_email;
+
+    IF v_user_id IS NULL THEN
+        SELECT id INTO v_user_id
+        FROM auth.email_verification_tokens
+        WHERE new_email = p_email;
+    END IF;
 
     -- Si el usuario no existe, crearlo
     IF v_user_id IS NULL THEN

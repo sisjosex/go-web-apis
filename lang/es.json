@@ -1,1 +1,19 @@
-{}
+{
+  "user.create.failed": "Error al crear el usuario",
+  "user.update.failed": "Error al actualizar el usuario",
+  "user.login.invalid-credentials2": "Credenciales de inicio de sesión inválidas",
+  "user.login.validation-failed": "Error de validación en el inicio de sesión",
+  "user.login.not-found": "Usuario no encontrado",
+  "user.logout.validation-failed": "Error de validación en el cierre de sesión",
+  "user.create.validation-failed": "Error de validación en la creación del usuario",
+  "user.create.email-in-use": "El correo electrónico ya está en uso",
+  "user.search.failed": "Error al buscar usuario",
+  "user.register.failed": "Error al registrar el usuario",
+  "user.get-by-id.not-found": "Usuario no encontrado por ID",
+  "user.get-by-email.not-found": "Usuario no encontrado por correo electrónico",
+  "user.email.request.failed": "Error al solicitar correo electrónico",
+  "user.email.verification.failed": "Error en la verificación del correo electrónico",
+  "user.change-password.failed": "Error al cambiar la contraseña",
+  "user.password-reset.failed": "Error al restablecer la contraseña",
+  "user.change-email.sending-email-failed": "Error al enviar el correo para cambio de email"
+}

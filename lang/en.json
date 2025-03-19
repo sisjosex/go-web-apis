@@ -1,1 +1,19 @@
-{}
+{
+  "user.create.failed": "Failed to create user",
+  "user.update.failed": "Failed to update user",
+  "user.login.invalid-credentials2": "Invalid login credentials",
+  "user.login.validation-failed": "Login validation failed",
+  "user.login.not-found": "User not found",
+  "user.logout.validation-failed": "Logout validation failed",
+  "user.create.validation-failed": "User validation failed",
+  "user.create.email-in-use": "Email is already in use",
+  "user.search.failed": "User search failed",
+  "user.register.failed": "User registration failed",
+  "user.get-by-id.not-found": "User not found by ID",
+  "user.get-by-email.not-found": "User not found by email",
+  "user.email.request.failed": "Failed to request email",
+  "user.email.verification.failed": "Email verification failed",
+  "user.change-password.failed": "Failed to change password",
+  "user.password-reset.failed": "Failed to reset password",
+  "user.change-email.sending-email-failed": "Failed to send email for email change"
+}

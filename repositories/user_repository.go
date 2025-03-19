@@ -6,6 +6,7 @@ import (
 	"josex/web/interfaces"
 	"josex/web/models"
 
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
 )
 
@@ -15,128 +16,6 @@ type userRepository struct {
 
 func NewUserRepository(dbService interfaces.DatabaseService) *userRepository {
 	return &userRepository{dbService: dbService}
-}
-
-func (r *userRepository) InsertUser(userDTO models.CreateUserDto) (*models.User, error) {
-	user := &models.User{}
-	query := `
-        SELECT * FROM auth.sp_create_user(
-			p_first_name := $1,
-			p_last_name := $2,
-			p_phone := $3,
-			p_birthday := $4,
-			p_email := $5,  -- No se requiere email en este caso
-			p_password := $6,  -- No se requiere password en este caso
-			p_profile_picture_url := $7,
-			p_bio := $8,
-			p_website_url := $9
-		)
-    `
-
-	// Construir la lista de parámetros en el mismo orden que la consulta
-	params := []interface{}{
-		userDTO.FirstName,
-		userDTO.LastName,
-		userDTO.Phone,
-		userDTO.Birthday,
-		userDTO.Email,
-		userDTO.Password,
-		userDTO.ProfilePictureUrl,
-		userDTO.Bio,
-		userDTO.WebsiteUrl,
-	}
-
-	row := r.dbService.QueryRow(context.Background(), query, params...)
-
-	err := row.Scan(
-		&user.ID,
-		&user.Email,
-		&user.FirstName,
-		&user.LastName,
-		&user.Phone,
-		&user.Birthday,
-		&user.ProfilePictureUrl,
-		&user.Bio,
-		&user.WebsiteUrl,
-	)
-
-	if err != nil {
-
-		var pgErr *pgconn.PgError
-		if errors.As(err, &pgErr) {
-			return nil, pgErr
-		}
-
-		return nil, err
-	}
-
-	return user, nil
-}
-
-func (r *userRepository) UpdateUser(userDTO models.UpdateUserDto) (*models.User, error) {
-	user := &models.User{}
-	query := `
-        SELECT * FROM auth.sp_update_user(
-			p_id := $1,
-			p_first_name := $2,
-			p_last_name := $3,
-			p_phone := $4,
-			p_birthday := $5,
-			p_email := $6,
-			p_current_password := $7, -- Contraseña actual
-			p_new_password := $8, -- Nueva contraseña
-			p_is_active := $9,
-			p_is_verified := $10,
-			p_expiration_date := $11,
-			p_profile_picture_url := $12,
-			p_bio := $13,
-			p_website_url := $14
-		)
-    `
-
-	// Construir la lista de parámetros en el mismo orden que la consulta
-	params := []interface{}{
-		userDTO.ID,
-		userDTO.FirstName,
-		userDTO.LastName,
-		userDTO.Phone,
-		userDTO.Birthday,
-		userDTO.Email,
-		userDTO.PasswordCurrent,
-		userDTO.PasswordNew,
-		userDTO.IsActive,
-		userDTO.IsVerified,
-		userDTO.ExpirationDate,
-		userDTO.ProfilePictureUrl,
-		userDTO.Bio,
-		userDTO.WebsiteUrl,
-	}
-
-	row := r.dbService.QueryRow(context.Background(), query, params...)
-
-	err := row.Scan(
-		&user.ID,
-		&user.FirstName,
-		&user.LastName,
-		&user.Phone,
-		&user.Birthday,
-		&user.Email,
-		&user.ProfilePictureUrl,
-		&user.Bio,
-		&user.WebsiteUrl,
-	)
-
-	if err != nil {
-
-		var pgErr *pgconn.PgError
-		if errors.As(err, &pgErr) {
-			return nil, pgErr
-		}
-
-		return nil, err
-	}
-
-	return user, nil
 }
 
 func (r *userRepository) UpdateProfile(userDTO models.UpdateProfileDto) (*models.User, error) {
@@ -377,7 +256,7 @@ func (r *userRepository) GetProfile(getProfileDto models.GetProfileDto) (*models
 	return user, nil
 }
 
-func (r *userRepository) GenerateEmailVerificationToken(verifyEmailRequest models.VerifyEmailRequest) (*models.VerifyEmailToken, error) {
+func (r *userRepository) GenerateEmailVerificationToken(verifyEmailRequest models.VerifyEmailRequest, tx pgx.Tx) (*models.VerifyEmailToken, error) {
 	VerifyEmailToken := &models.VerifyEmailToken{}
 
 	query := `
@@ -393,7 +272,7 @@ func (r *userRepository) GenerateEmailVerificationToken(verifyEmailRequest model
 		verifyEmailRequest.Email,
 	}
 
-	row := r.dbService.QueryRow(context.Background(), query, params...)
+	row := tx.QueryRow(context.Background(), query, params...)
 
 	err := row.Scan(
 		&VerifyEmailToken.Token,
@@ -482,7 +361,7 @@ func (r *userRepository) ChangePassword(changePasswordDto models.ChangePasswordD
 	return &ChangePassword, nil
 }
 
-func (r *userRepository) GeneratePasswordResetToken(passwordResetRequestDto models.PasswordResetRequestDto) (*models.PasswordResetTokenRequestDto, error) {
+func (r *userRepository) GeneratePasswordResetToken(passwordResetRequestDto models.PasswordResetRequestDto, tx pgx.Tx) (*models.PasswordResetTokenRequestDto, error) {
 	PasswordResetWithToken := &models.PasswordResetTokenRequestDto{}
 
 	query := `
@@ -496,7 +375,7 @@ func (r *userRepository) GeneratePasswordResetToken(passwordResetRequestDto mode
 		passwordResetRequestDto.Email,
 	}
 
-	row := r.dbService.QueryRow(context.Background(), query, params...)
+	row := tx.QueryRow(context.Background(), query, params...)
 
 	err := row.Scan(
 		&PasswordResetWithToken.Token,
@@ -548,4 +427,126 @@ func (r *userRepository) ResetPasswordWithToken(passwordResetWithTokenDto models
 	}
 
 	return &ResetPassword, nil
+}
+
+func (r *userRepository) InsertUser(userDTO models.CreateUserDto) (*models.User, error) {
+	user := &models.User{}
+	query := `
+        SELECT * FROM auth.sp_create_user(
+			p_first_name := $1,
+			p_last_name := $2,
+			p_phone := $3,
+			p_birthday := $4,
+			p_email := $5,  -- No se requiere email en este caso
+			p_password := $6,  -- No se requiere password en este caso
+			p_profile_picture_url := $7,
+			p_bio := $8,
+			p_website_url := $9
+		)
+    `
+
+	// Construir la lista de parámetros en el mismo orden que la consulta
+	params := []interface{}{
+		userDTO.FirstName,
+		userDTO.LastName,
+		userDTO.Phone,
+		userDTO.Birthday,
+		userDTO.Email,
+		userDTO.Password,
+		userDTO.ProfilePictureUrl,
+		userDTO.Bio,
+		userDTO.WebsiteUrl,
+	}
+
+	row := r.dbService.QueryRow(context.Background(), query, params...)
+
+	err := row.Scan(
+		&user.ID,
+		&user.Email,
+		&user.FirstName,
+		&user.LastName,
+		&user.Phone,
+		&user.Birthday,
+		&user.ProfilePictureUrl,
+		&user.Bio,
+		&user.WebsiteUrl,
+	)
+
+	if err != nil {
+
+		var pgErr *pgconn.PgError
+		if errors.As(err, &pgErr) {
+			return nil, pgErr
+		}
+
+		return nil, err
+	}
+
+	return user, nil
+}
+
+func (r *userRepository) UpdateUser(userDTO models.UpdateUserDto) (*models.User, error) {
+	user := &models.User{}
+	query := `
+        SELECT * FROM auth.sp_update_user(
+			p_id := $1,
+			p_first_name := $2,
+			p_last_name := $3,
+			p_phone := $4,
+			p_birthday := $5,
+			p_email := $6,
+			p_current_password := $7, -- Contraseña actual
+			p_new_password := $8, -- Nueva contraseña
+			p_is_active := $9,
+			p_is_verified := $10,
+			p_expiration_date := $11,
+			p_profile_picture_url := $12,
+			p_bio := $13,
+			p_website_url := $14
+		)
+    `
+
+	// Construir la lista de parámetros en el mismo orden que la consulta
+	params := []interface{}{
+		userDTO.ID,
+		userDTO.FirstName,
+		userDTO.LastName,
+		userDTO.Phone,
+		userDTO.Birthday,
+		userDTO.Email,
+		userDTO.PasswordCurrent,
+		userDTO.PasswordNew,
+		userDTO.IsActive,
+		userDTO.IsVerified,
+		userDTO.ExpirationDate,
+		userDTO.ProfilePictureUrl,
+		userDTO.Bio,
+		userDTO.WebsiteUrl,
+	}
+
+	row := r.dbService.QueryRow(context.Background(), query, params...)
+
+	err := row.Scan(
+		&user.ID,
+		&user.FirstName,
+		&user.LastName,
+		&user.Phone,
+		&user.Birthday,
+		&user.Email,
+		&user.ProfilePictureUrl,
+		&user.Bio,
+		&user.WebsiteUrl,
+	)
+
+	if err != nil {
+
+		var pgErr *pgconn.PgError
+		if errors.As(err, &pgErr) {
+			return nil, pgErr
+		}
+
+		return nil, err
+	}
+
+	return user, nil
 }

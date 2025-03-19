@@ -19,13 +19,15 @@ type AuthController struct {
 	userService interfaces.UserService
 	jwtService  services.JWTService
 	parser      *uaparser.Parser
+	dbService   interfaces.DatabaseService
 }
 
-func NewAuthController(userService interfaces.UserService, jwtService services.JWTService, agentParser *uaparser.Parser) *AuthController {
+func NewAuthController(userService interfaces.UserService, jwtService services.JWTService, agentParser *uaparser.Parser, db interfaces.DatabaseService) *AuthController {
 	return &AuthController{
 		userService: userService,
 		jwtService:  jwtService,
 		parser:      agentParser,
+		dbService:   db,
 	}
 }
 
@@ -346,7 +348,13 @@ func (uc *AuthController) GenerateEmailVerificationToken(ctx *gin.Context) {
 		UserId: &userID,
 	}
 
-	token, err := uc.userService.GenerateEmailVerificationToken(*verifyEmailRequest)
+	tx, err := uc.dbService.BeginTransaction(ctx)
+	if err != nil {
+		ctx.JSON(http.StatusBadRequest, common.BuildError(err))
+		return
+	}
+
+	token, err := uc.userService.GenerateEmailVerificationToken(*verifyEmailRequest, tx)
 	if err != nil {
 		ctx.JSON(http.StatusBadRequest, common.BuildError(err))
 		return
@@ -358,6 +366,13 @@ func (uc *AuthController) GenerateEmailVerificationToken(ctx *gin.Context) {
 
 	err = services.SendEmailVerificationToken(*verifyEmailRequest.Email, "Verifica tu cuenta", emailData)
 
+	if err != nil {
+		ctx.JSON(http.StatusBadRequest, common.BuildErrorDetail(common.UserChangeEmailSendingError, err.Error()))
+		tx.Rollback(ctx)
+		return
+	}
+
+	err = tx.Commit(ctx)
 	if err != nil {
 		ctx.JSON(http.StatusBadRequest, common.BuildError(err))
 		return
@@ -454,7 +469,13 @@ func (uc *AuthController) GeneratePasswordResetToken(ctx *gin.Context) {
 		return
 	}
 
-	token, err := uc.userService.GeneratePasswordResetToken(passwordResetRequestDto)
+	tx, err := uc.dbService.BeginTransaction(ctx)
+	if err != nil {
+		ctx.JSON(http.StatusBadRequest, common.BuildError(err))
+		return
+	}
+
+	token, err := uc.userService.GeneratePasswordResetToken(passwordResetRequestDto, tx)
 	if err != nil {
 		ctx.JSON(http.StatusBadRequest, common.BuildError(err))
 		return
@@ -466,6 +487,13 @@ func (uc *AuthController) GeneratePasswordResetToken(ctx *gin.Context) {
 
 	err = services.SendPasswordResetToken(*passwordResetRequestDto.Email, "Restablece tu contraseña", emailData)
 
+	if err != nil {
+		ctx.JSON(http.StatusBadRequest, common.BuildErrorDetail(common.UserForgorPasswordEmailSendingError, err.Error()))
+		tx.Rollback(ctx)
+		return
+	}
+
+	err = tx.Commit(ctx)
 	if err != nil {
 		ctx.JSON(http.StatusBadRequest, common.BuildError(err))
 		return

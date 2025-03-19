@@ -3,6 +3,8 @@ package services
 import (
 	"josex/web/interfaces"
 	"josex/web/models"
+
+	"github.com/jackc/pgx/v5"
 	//"josex/web/utils"
 )
 
@@ -42,8 +44,8 @@ func (s *userService) GetProfile(userDTO models.GetProfileDto) (*models.User, er
 	return s.userRepository.GetProfile(userDTO)
 }
 
-func (s *userService) GenerateEmailVerificationToken(verifyEmailRequest models.VerifyEmailRequest) (*models.VerifyEmailToken, error) {
-	return s.userRepository.GenerateEmailVerificationToken(verifyEmailRequest)
+func (s *userService) GenerateEmailVerificationToken(verifyEmailRequest models.VerifyEmailRequest, tx pgx.Tx) (*models.VerifyEmailToken, error) {
+	return s.userRepository.GenerateEmailVerificationToken(verifyEmailRequest, tx)
 }
 
 func (s *userService) ConfirmEmailAddress(verifyEmailRequest models.VerifyEmailToken) (*bool, error) {
@@ -54,8 +56,8 @@ func (s *userService) ChangePassword(changePasswordDto models.ChangePasswordDto)
 	return s.userRepository.ChangePassword(changePasswordDto)
 }
 
-func (s *userService) GeneratePasswordResetToken(passwordResetDto models.PasswordResetRequestDto) (*models.PasswordResetTokenRequestDto, error) {
-	return s.userRepository.GeneratePasswordResetToken(passwordResetDto)
+func (s *userService) GeneratePasswordResetToken(passwordResetDto models.PasswordResetRequestDto, tx pgx.Tx) (*models.PasswordResetTokenRequestDto, error) {
+	return s.userRepository.GeneratePasswordResetToken(passwordResetDto, tx)
 }
 
 func (s *userService) ResetPasswordWithToken(passwordResetWithTokenDto models.PasswordResetWithTokenDto) (*bool, error) {

@@ -12,4 +12,5 @@ type DatabaseService interface {
 	QueryRow(ctx context.Context, query string, args ...interface{}) pgx.Row
 	Execute(ctx context.Context, query string, args ...interface{}) (int64, error)
 	CloseDatabase(ctx context.Context)
+	BeginTransaction(ctx context.Context) (pgx.Tx, error)
 }

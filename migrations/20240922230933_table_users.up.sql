@@ -37,7 +37,7 @@ CREATE TABLE IF NOT EXISTS auth.email_verification_tokens (
     id UUID PRIMARY KEY DEFAULT public.uuid_generate_v4 (),
     user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
     token UUID UNIQUE NOT NULL DEFAULT public.uuid_generate_v4 (),
-    new_email VARCHAR UNIQUE,
+    new_email VARCHAR NOT NULL,
     expires_at TIMESTAMP NOT NULL,
     created_at TIMESTAMP DEFAULT NOW()
 );

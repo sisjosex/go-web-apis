@@ -37,7 +37,7 @@ func SetupRoutes(r *gin.Engine, dbService interfaces.DatabaseService) {
 	userRepository := repositories.NewUserRepository(dbService)
 	userService := services.NewUserService(userRepository)
 
-	authController := controllers.NewAuthController(userService, jwtService, parser)
+	authController := controllers.NewAuthController(userService, jwtService, parser, dbService)
 	userController := controllers.NewUserController(userService)
 
 	// Limitador de solicitudes

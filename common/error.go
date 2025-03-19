@@ -13,28 +13,32 @@ type ErrorResponse struct {
 	// Error message
 	// example: Bad Request
 	Error interface{} `json:"error,omitempty"`
+	// Translated error message
+	Message interface{} `json:"message,omitempty"`
 	// Error details
 	// example: {"email": "Invalid email format"}
 	Detail interface{} `json:"detail,omitempty"`
 }
 
 const (
-	UserCreateFailed           = "user.create.failed"
-	UserUpdateFailed           = "user.update.failed"
-	UserLoginFailed            = "user.login.invalid-credentials2"
-	UserLoginValidationFailed  = "user.login.validation-failed"
-	UserLoginNotFound          = "user.login.not-found"
-	UserLogoutValidationFailed = "user.logout.validation-failed"
-	UserValidationFailed       = "user.create.validation-failed"
-	UserEmailAlreadyInUse      = "user.create.email-in-use"
-	UserSearchFailed           = "user.search.failed"
-	UserRegisterFailed         = "user.register.failed"
-	UserGetByIdNotFound        = "user.get-by-id.not-found"
-	UserGetByIdEmailFound      = "user.get-by-email.not-found"
-	UserRequestEmailError      = "user.email.request.failed"
-	UserEmailVerification      = "user.email.verification.failed"
-	UserChangePasswordError    = "user.change-password.failed"
-	UserPasswordResetError     = "user.password-reset.failed"
+	UserCreateFailed                    = "user.create.failed"
+	UserUpdateFailed                    = "user.update.failed"
+	UserLoginFailed                     = "user.login.invalid-credentials2"
+	UserLoginValidationFailed           = "user.login.validation-failed"
+	UserLoginNotFound                   = "user.login.not-found"
+	UserLogoutValidationFailed          = "user.logout.validation-failed"
+	UserValidationFailed                = "user.create.validation-failed"
+	UserEmailAlreadyInUse               = "user.create.email-in-use"
+	UserSearchFailed                    = "user.search.failed"
+	UserRegisterFailed                  = "user.register.failed"
+	UserGetByIdNotFound                 = "user.get-by-id.not-found"
+	UserGetByIdEmailFound               = "user.get-by-email.not-found"
+	UserRequestEmailError               = "user.email.request.failed"
+	UserEmailVerification               = "user.email.verification.failed"
+	UserChangePasswordError             = "user.change-password.failed"
+	UserPasswordResetError              = "user.password-reset.failed"
+	UserChangeEmailSendingError         = "user.change-email.sending-email-failed"
+	UserForgorPasswordEmailSendingError = "user.forgot-password.sending-email-failed"
 )
 
 type ErrorTag map[string]string

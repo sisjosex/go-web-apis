@@ -22,6 +22,10 @@ import (
 // @return void
 
 func main() {
+
+	languages := []string{"en", "es"} // Idiomas soportados
+	services.LoadAllTranslations(languages)
+
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel() // Cancelar al final
 

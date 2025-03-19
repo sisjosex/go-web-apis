@@ -63,7 +63,7 @@ func connectDatabase(ctx context.Context, dbURL string, poolSize int32) (*pgxpoo
 		pool.Close()
 		return nil, err
 	}
-	conn.Release()
+	defer conn.Release()
 
 	return pool, nil
 }
@@ -106,4 +106,13 @@ func runMigrations(databaseURL string) error {
 		return err
 	}
 	return nil
+}
+
+func (ds *databaseService) BeginTransaction(ctx context.Context) (pgx.Tx, error) {
+	tx, err := ds.pool.Begin(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	return tx, nil
 }
