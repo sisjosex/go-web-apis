@@ -25,7 +25,12 @@ Este proyecto utiliza las siguientes tecnologías y librerías:
 
 Sigue estos pasos para ejecutar el backend en tu máquina local:
 
-1. Asegúrate de que todas las dependencias estén instaladas.
+1. Renombra el archivo de entorno de desarrollo:
+
+   ```sh
+   mv .env.sample-dev .env
+   ```
+
 2. Descarga las dependencias del proyecto ejecutando:
 
    ```sh
@@ -61,6 +66,7 @@ docker run -p 8080:8080 -e DATABASE_URL=postgres://postgres:dbpassword@<server-i
 ```
 
 Reemplaza `<server-ip>` con la IP del servidor donde se ejecuta PostgreSQL. Este comando:
+
 - Asigna el puerto `8080` en el host al puerto `8080` del contenedor.
 - Define la variable de entorno `DATABASE_URL` para la conexión a PostgreSQL.
 - Ejecuta el backend dentro del contenedor Docker.
@@ -71,7 +77,13 @@ Reemplaza `<server-ip>` con la IP del servidor donde se ejecuta PostgreSQL. Este
 
 Si deseas construir y ejecutar el backend junto con PostgreSQL utilizando Docker Compose, sigue estos pasos:
 
-### 1. Construcción de la imagen con Docker Compose
+### 1. Renombra el archivo de entorno para Docker:
+
+```sh
+mv .env.sample-docker .env.docker
+```
+
+### 2. Construcción de la imagen con Docker Compose
 
 ```sh
 docker compose --env-file .env.docker build
@@ -79,7 +91,7 @@ docker compose --env-file .env.docker build
 
 Esto crea las imágenes necesarias utilizando la configuración definida en `docker-compose.yml` y las variables de `.env.docker`.
 
-### 2. Iniciar los contenedores
+### 3. Iniciar los contenedores
 
 ```sh
 docker compose --env-file .env.docker up
@@ -93,7 +105,7 @@ Si necesitas construir la imagen y ejecutarla en un solo paso, usa:
 docker compose --env-file .env.docker up --build
 ```
 
-Para usar una imagen ya existente subida a dockerhub:
+### 4. Para usar una imagen ya existente subida a dockerhub:
 
 ```sh
 docker compose --env-file .env.docker -f docker-compose.prod.yml up
@@ -105,13 +117,16 @@ Para dar de baja los contenedores
 docker compose --env-file .env.docker down
 ```
 
+### 5. Como probar la aplicacion
+
+Abrir swagger en el navegador `http://localhost:8080/swagger/index.html` o el puerto y host que se tenga configurado.
+
+```
+http://<HOST>:<PORT>/swagger/index.html
+```
+
 ---
 
-## Códigos de error
-
-*(Aquí puedes agregar una lista de códigos de error que pueda devolver el backend y su significado.)*
-
----
 
 ## Ejemplos de APIs
 
@@ -149,5 +164,11 @@ curl --location 'http://localhost:8080/api/v1/auth/login' \
 ```
 
 Estos ejemplos pueden ejecutarse en una terminal o Postman para interactuar con el backend.
+
+---
+
+## Códigos de error
+
+_(Aquí puedes agregar una lista de códigos de error que pueda devolver el backend y su significado.)_
 
 ---
