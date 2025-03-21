@@ -55,6 +55,13 @@ Para construir y ejecutar el backend con Docker, sigue estos pasos:
 
 ```sh
 docker build -t go-web:1 .
+
+# Multiplataforma (buildx)
+docker buildx create --use
+docker buildx build --platform linux/amd64,linux/arm64 -t tu_usuario/tu_imagen:latest .
+
+#subir a dockerhub
+docker buildx build --platform linux/amd64,linux/arm64 -t tu_usuario/tu_imagen:latest --push .
 ```
 
 Esto crea una imagen Docker con el backend en Go.

@@ -1,6 +1,6 @@
 services:
   web-app:
-    image: sisjosex/internal:5
+    image: sisjosex/internal:7
     ports:
       - "${APP_PORT}:8080"
 #    depends_on:
