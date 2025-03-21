@@ -1,6 +1,6 @@
 services:
   web-app:
-    image: claisa/gowebapi:latest
+    image: sisjosex/internal:5
     ports:
       - "${APP_PORT}:8080"
 #    depends_on:

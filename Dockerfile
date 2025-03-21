@@ -10,6 +10,7 @@ FROM alpine:3.20
 WORKDIR /app
 COPY --from=builder /app/main ./main
 COPY --from=builder /app/migrations ./migrations
+COPY --from=builder /app/lang ./lang
 COPY config/regexes.yaml ./config/regexes.yaml
 COPY .env .
 
