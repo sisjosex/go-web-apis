@@ -6,6 +6,7 @@ import (
 	"josex/web/interfaces"
 	"josex/web/models"
 
+	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
 )
@@ -220,7 +221,7 @@ func (r *userRepository) GetProfile(getProfileDto models.GetProfileDto) (*models
 
 	query := `
         SELECT * FROM auth.sp_get_profile(
-			p_id := $1
+			p_user_id := $1
 		)
     `
 
@@ -254,6 +255,256 @@ func (r *userRepository) GetProfile(getProfileDto models.GetProfileDto) (*models
 	}
 
 	return user, nil
+}
+
+func (r *userRepository) ValidateSession(userID uuid.UUID, sessionID uuid.UUID) error {
+	query := `
+        SELECT auth.sp_validate_session(
+			p_user_id := $1,
+			p_session_id := $2
+		)
+    `
+
+	row := r.dbService.QueryRow(context.Background(), query, userID, sessionID)
+
+	var isValid bool
+	err := row.Scan(&isValid)
+
+	if err != nil {
+		var pgErr *pgconn.PgError
+		if errors.As(err, &pgErr) {
+			return pgErr
+		}
+		return err
+	}
+
+	return nil
+}
+
+// GetUserSessions retrieves all sessions for a user
+func (r *userRepository) GetUserSessions(userID uuid.UUID) ([]models.UserSession, error) {
+	ctx := context.Background()
+	query := `SELECT * FROM auth.sp_get_user_sessions(p_user_id := $1)`
+
+	rows, err := r.dbService.Query(ctx, query, userID)
+	if err != nil {
+		var pgErr *pgconn.PgError
+		if errors.As(err, &pgErr) {
+			return nil, pgErr
+		}
+		return nil, err
+	}
+	defer rows.Close()
+
+	var sessions []models.UserSession
+	for rows.Next() {
+		var session models.UserSession
+		err := rows.Scan(
+			&session.SessionID,
+			&session.UserID,
+			&session.DeviceID,
+			&session.DeviceOS,
+			&session.Browser,
+			&session.IpAddress,
+			&session.LoginTime,
+			&session.LastActive,
+			&session.LogoutTime,
+			&session.IsActive,
+		)
+		if err != nil {
+			return nil, err
+		}
+		sessions = append(sessions, session)
+	}
+
+	if err = rows.Err(); err != nil {
+		return nil, err
+	}
+
+	return sessions, nil
+}
+
+// LogoutSession logs out a specific session
+func (r *userRepository) LogoutSession(userID uuid.UUID, sessionID uuid.UUID) error {
+	ctx := context.Background()
+	query := `SELECT auth.sp_logout_session(p_user_id := $1, p_session_id := $2)`
+
+	var result bool
+	err := r.dbService.QueryRow(ctx, query, userID, sessionID).Scan(&result)
+	if err != nil {
+		var pgErr *pgconn.PgError
+		if errors.As(err, &pgErr) {
+			return pgErr
+		}
+		return err
+	}
+
+	return nil
+}
+
+// LogoutAllSessions logs out all sessions except optionally the current one
+func (r *userRepository) LogoutAllSessions(userID uuid.UUID, currentSessionID *uuid.UUID) (int, error) {
+	ctx := context.Background()
+	query := `SELECT auth.sp_logout_all_sessions(p_user_id := $1, p_current_session_id := $2)`
+
+	var count int
+	err := r.dbService.QueryRow(ctx, query, userID, currentSessionID).Scan(&count)
+	if err != nil {
+		var pgErr *pgconn.PgError
+		if errors.As(err, &pgErr) {
+			return 0, pgErr
+		}
+		return 0, err
+	}
+
+	return count, nil
+}
+
+// ListUsers retrieves paginated list of users with filters
+func (r *userRepository) ListUsers(query models.UserListQuery) (*models.UserListResponse, error) {
+	ctx := context.Background()
+
+	// Set defaults
+	if query.Page < 1 {
+		query.Page = 1
+	}
+	if query.Limit < 1 || query.Limit > 100 {
+		query.Limit = 10
+	}
+	if query.Sort == "" {
+		query.Sort = "created_at"
+	}
+	if query.Order == "" {
+		query.Order = "desc"
+	}
+
+	sqlQuery := `
+		SELECT * FROM auth.sp_list_users(
+			p_page := $1,
+			p_limit := $2,
+			p_search := $3,
+			p_status := $4,
+			p_sort := $5,
+			p_order := $6
+		)
+	`
+
+	rows, err := r.dbService.Query(ctx, sqlQuery,
+		query.Page,
+		query.Limit,
+		nullableString(query.Search),
+		nullableString(query.Status),
+		query.Sort,
+		query.Order,
+	)
+	if err != nil {
+		var pgErr *pgconn.PgError
+		if errors.As(err, &pgErr) {
+			return nil, pgErr
+		}
+		return nil, err
+	}
+	defer rows.Close()
+
+	var users []models.User
+	var totalCount int64
+
+	for rows.Next() {
+		var user models.User
+		var count int64
+
+		err := rows.Scan(
+			&user.ID,
+			&user.FirstName,
+			&user.LastName,
+			&user.Phone,
+			&user.Birthday,
+			&user.Email,
+			&user.ProfilePictureUrl,
+			&user.Bio,
+			&user.WebsiteUrl,
+			&count,
+		)
+		if err != nil {
+			return nil, err
+		}
+
+		users = append(users, user)
+		totalCount = count
+	}
+
+	if err = rows.Err(); err != nil {
+		return nil, err
+	}
+
+	// Calculate total pages
+	totalPages := int(totalCount) / query.Limit
+	if int(totalCount)%query.Limit > 0 {
+		totalPages++
+	}
+
+	return &models.UserListResponse{
+		Users:      users,
+		Total:      totalCount,
+		Page:       query.Page,
+		Limit:      query.Limit,
+		TotalPages: totalPages,
+	}, nil
+}
+
+// GetUserById retrieves a single user by ID
+func (r *userRepository) GetUserById(userID uuid.UUID) (*models.User, error) {
+	ctx := context.Background()
+	query := `SELECT * FROM auth.sp_get_user_by_id(p_user_id := $1)`
+
+	var user models.User
+	err := r.dbService.QueryRow(ctx, query, userID).Scan(
+		&user.ID,
+		&user.FirstName,
+		&user.LastName,
+		&user.Phone,
+		&user.Birthday,
+		&user.Email,
+		&user.ProfilePictureUrl,
+		&user.Bio,
+		&user.WebsiteUrl,
+	)
+
+	if err != nil {
+		var pgErr *pgconn.PgError
+		if errors.As(err, &pgErr) {
+			return nil, pgErr
+		}
+		return nil, err
+	}
+
+	return &user, nil
+}
+
+// SoftDeleteUser soft deletes a user
+func (r *userRepository) SoftDeleteUser(userID uuid.UUID, reason string) error {
+	ctx := context.Background()
+	query := `SELECT auth.sp_soft_delete_user(p_user_id := $1, p_reason := $2)`
+
+	var result bool
+	err := r.dbService.QueryRow(ctx, query, userID, nullableString(reason)).Scan(&result)
+	if err != nil {
+		var pgErr *pgconn.PgError
+		if errors.As(err, &pgErr) {
+			return pgErr
+		}
+		return err
+	}
+
+	return nil
+}
+
+// Helper function to convert empty string to NULL
+func nullableString(s string) interface{} {
+	if s == "" {
+		return nil
+	}
+	return s
 }
 
 func (r *userRepository) GenerateEmailVerificationToken(verifyEmailRequest models.VerifyEmailRequest, tx pgx.Tx) (*models.VerifyEmailToken, error) {
@@ -495,14 +746,13 @@ func (r *userRepository) UpdateUser(userDTO models.UpdateUserDto) (*models.User,
 			p_phone := $4,
 			p_birthday := $5,
 			p_email := $6,
-			p_current_password := $7, -- Contraseña actual
-			p_new_password := $8, -- Nueva contraseña
+			p_current_password := $7,
+			p_new_password := $8,
 			p_is_active := $9,
-			p_is_verified := $10,
-			p_expiration_date := $11,
-			p_profile_picture_url := $12,
-			p_bio := $13,
-			p_website_url := $14
+			p_expiration_date := $10,
+			p_profile_picture_url := $11,
+			p_bio := $12,
+			p_website_url := $13
 		)
     `
 
@@ -517,7 +767,6 @@ func (r *userRepository) UpdateUser(userDTO models.UpdateUserDto) (*models.User,
 		userDTO.PasswordCurrent,
 		userDTO.PasswordNew,
 		userDTO.IsActive,
-		userDTO.IsVerified,
 		userDTO.ExpirationDate,
 		userDTO.ProfilePictureUrl,
 		userDTO.Bio,

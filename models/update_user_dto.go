@@ -12,7 +12,6 @@ type UpdateUserDto struct {
 	PasswordCurrent   *string   `json:"password_current"`
 	PasswordNew       *string   `json:"password_new"`
 	IsActive          *bool     `json:"is_active"`
-	IsVerified        *bool     `json:"is_verified"`
 	ExpirationDate    *DateOnly `json:"expiration_date" time_format:"2006-01-02"`
 	ProfilePictureUrl *string   `json:"profile_picture_url"`
 	Bio               *string   `json:"bio"`

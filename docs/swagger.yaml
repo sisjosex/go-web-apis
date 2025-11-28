@@ -15,6 +15,8 @@ definitions:
         description: |-
           Error message
           example: Bad Request
+      message:
+        description: Translated error message
     type: object
   models.ChangePasswordRequestDto:
     properties:
@@ -133,6 +135,17 @@ definitions:
         description: JWT token
         type: string
     type: object
+  models.SoftDeleteUserDto:
+    properties:
+      id:
+        type: string
+      reason:
+        description: Optional deletion reason
+        maxLength: 500
+        type: string
+    required:
+    - id
+    type: object
   models.UpdateProfileDto:
     properties:
       bio:
@@ -182,6 +195,48 @@ definitions:
     - id
     - last_name
     type: object
+  models.UserListResponse:
+    properties:
+      limit:
+        description: Items per page
+        type: integer
+      page:
+        description: Current page
+        type: integer
+      total:
+        description: Total count of users
+        type: integer
+      total_pages:
+        description: Total pages
+        type: integer
+      users:
+        items:
+          $ref: '#/definitions/models.User'
+        type: array
+    type: object
+  models.UserSession:
+    properties:
+      browser:
+        type: string
+      device_id:
+        type: string
+      device_os:
+        type: string
+      ip_address:
+        type: string
+      is_active:
+        type: boolean
+      last_active:
+        type: string
+      login_time:
+        type: string
+      logout_time:
+        type: string
+      session_id:
+        type: string
+      user_id:
+        type: string
+    type: object
   models.VerifyEmailRequestDto:
     properties:
       email:
@@ -202,46 +257,44 @@ info:
   title: API REST
   version: "1.0"
 paths:
-  /auth/change_password:
+  /auth/email/verification:
     post:
       consumes:
       - application/json
-      description: ChangePassword
+      description: Generate and send email verification token
       parameters:
       - description: Bearer Token
         in: header
         name: Authorization
         required: true
         type: string
-      - description: User
+      - description: Email data
         in: body
         name: request
-        required: true
         schema:
-          $ref: '#/definitions/models.ChangePasswordRequestDto'
+          $ref: '#/definitions/models.VerifyEmailRequestDto'
       produces:
       - application/json
       responses:
         "200":
           description: OK
           schema:
-            type: boolean
+            $ref: '#/definitions/models.VerifyEmailToken'
         "400":
           description: Bad Request
           schema:
             $ref: '#/definitions/common.ErrorResponse'
       security:
       - ApiKeyAuth: []
-      summary: ChangePassword
+      summary: Request email verification
       tags:
       - Auth
-  /auth/confirm_email:
-    post:
+    put:
       consumes:
       - application/json
-      description: ConfirmEmailAddress
+      description: Confirm email address with verification token
       parameters:
-      - description: Verify Email Token
+      - description: Verification token
         in: body
         name: request
         required: true
@@ -260,34 +313,7 @@ paths:
             $ref: '#/definitions/common.ErrorResponse'
       security:
       - ApiKeyAuth: []
-      summary: ConfirmEmailAddress
-      tags:
-      - Auth
-  /auth/get_profile:
-    post:
-      consumes:
-      - application/json
-      description: GetProfile
-      parameters:
-      - description: Bearer Token
-        in: header
-        name: Authorization
-        required: true
-        type: string
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: OK
-          schema:
-            $ref: '#/definitions/models.User'
-        "400":
-          description: Bad Request
-          schema:
-            $ref: '#/definitions/common.ErrorResponse'
-      security:
-      - ApiKeyAuth: []
-      summary: GetProfile
+      summary: Confirm email address
       tags:
       - Auth
   /auth/login:
@@ -375,15 +401,76 @@ paths:
       summary: Logout
       tags:
       - Auth
-  /auth/password_reset:
+  /auth/password:
+    put:
+      consumes:
+      - application/json
+      description: Change password for authenticated user
+      parameters:
+      - description: Bearer Token
+        in: header
+        name: Authorization
+        required: true
+        type: string
+      - description: Password data
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/models.ChangePasswordRequestDto'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            type: boolean
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/common.ErrorResponse'
+      security:
+      - ApiKeyAuth: []
+      summary: Change user password
+      tags:
+      - Auth
+  /auth/password/reset:
     post:
       consumes:
       - application/json
-      description: ResetPasswordWithToken
+      description: Generate and send password reset token
       parameters:
-      - description: User
+      - description: Account data
         in: body
         name: request
+        required: true
+        schema:
+          $ref: '#/definitions/models.PasswordResetRequestDto'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/models.PasswordResetTokenRequestDto'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/common.ErrorResponse'
+      security:
+      - ApiKeyAuth: []
+      summary: Request password reset
+      tags:
+      - Auth
+    put:
+      consumes:
+      - application/json
+      description: Reset password using reset token
+      parameters:
+      - description: Reset data
+        in: body
+        name: request
+        required: true
         schema:
           $ref: '#/definitions/models.PasswordResetWithTokenDto'
       produces:
@@ -399,35 +486,67 @@ paths:
             $ref: '#/definitions/common.ErrorResponse'
       security:
       - ApiKeyAuth: []
-      summary: ResetPasswordWithToken
+      summary: Reset password with token
       tags:
       - Auth
-  /auth/refresh_token:
-    post:
+  /auth/profile:
+    get:
       consumes:
       - application/json
-      description: Refresh token
+      description: Get authenticated user profile information
       parameters:
-      - description: Refresh token
-        in: body
-        name: request
+      - description: Bearer Token
+        in: header
+        name: Authorization
         required: true
-        schema:
-          $ref: '#/definitions/models.RefreshTokenRequestDto'
+        type: string
       produces:
       - application/json
       responses:
         "200":
           description: OK
           schema:
-            $ref: '#/definitions/models.RefreshTokenResponse'
+            $ref: '#/definitions/models.User'
         "400":
           description: Bad Request
           schema:
             $ref: '#/definitions/common.ErrorResponse'
       security:
       - ApiKeyAuth: []
-      summary: Refresh token
+      summary: Get user profile
+      tags:
+      - Auth
+    patch:
+      consumes:
+      - application/json
+      description: Update authenticated user profile information (partial updates
+        allowed)
+      parameters:
+      - description: Bearer Token
+        in: header
+        name: Authorization
+        required: true
+        type: string
+      - description: Profile data
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/models.UpdateProfileDto'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/models.User'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/common.ErrorResponse'
+      security:
+      - ApiKeyAuth: []
+      summary: Update user profile
       tags:
       - Auth
   /auth/register:
@@ -458,97 +577,295 @@ paths:
       summary: Register
       tags:
       - Auth
-  /auth/request_password_reset:
-    post:
+  /auth/sessions:
+    delete:
       consumes:
       - application/json
-      description: GeneratePasswordResetToken
-      parameters:
-      - description: User Account
-        in: body
-        name: request
-        required: true
-        schema:
-          $ref: '#/definitions/models.PasswordResetRequestDto'
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: OK
-          schema:
-            $ref: '#/definitions/models.PasswordResetTokenRequestDto'
-        "400":
-          description: Bad Request
-          schema:
-            $ref: '#/definitions/common.ErrorResponse'
-      security:
-      - ApiKeyAuth: []
-      summary: GeneratePasswordResetToken
-      tags:
-      - Auth
-  /auth/request_verify_email:
-    post:
-      consumes:
-      - application/json
-      description: GenerateEmailVerificationToken
+      description: Logout all sessions for authenticated user except current one
       parameters:
       - description: Bearer Token
         in: header
         name: Authorization
         required: true
         type: string
-      - description: User
-        in: body
-        name: request
-        schema:
-          $ref: '#/definitions/models.VerifyEmailRequestDto'
       produces:
       - application/json
       responses:
         "200":
           description: OK
           schema:
-            $ref: '#/definitions/models.VerifyEmailToken'
+            additionalProperties:
+              type: integer
+            type: object
         "400":
           description: Bad Request
           schema:
             $ref: '#/definitions/common.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/common.ErrorResponse'
       security:
       - ApiKeyAuth: []
-      summary: GenerateEmailVerificationToken
+      summary: Logout all sessions
       tags:
-      - Auth
-  /auth/update_profile:
-    post:
+      - Sessions
+    get:
       consumes:
       - application/json
-      description: UpdateProfile
+      description: Get all sessions (active and inactive) for authenticated user
       parameters:
       - description: Bearer Token
         in: header
         name: Authorization
         required: true
         type: string
-      - description: User
-        in: body
-        name: request
-        required: true
-        schema:
-          $ref: '#/definitions/models.UpdateProfileDto'
       produces:
       - application/json
       responses:
         "200":
           description: OK
           schema:
-            $ref: '#/definitions/models.UpdateProfileDto'
+            items:
+              $ref: '#/definitions/models.UserSession'
+            type: array
         "400":
           description: Bad Request
           schema:
             $ref: '#/definitions/common.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/common.ErrorResponse'
       security:
       - ApiKeyAuth: []
-      summary: UpdateProfile
+      summary: Get active sessions
+      tags:
+      - Sessions
+  /auth/sessions/{id}:
+    delete:
+      consumes:
+      - application/json
+      description: Logout a specific session by ID (must belong to authenticated user)
+      parameters:
+      - description: Bearer Token
+        in: header
+        name: Authorization
+        required: true
+        type: string
+      - description: Session ID (UUID)
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties:
+              type: boolean
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/common.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/common.ErrorResponse'
+      security:
+      - ApiKeyAuth: []
+      summary: Logout specific session
+      tags:
+      - Sessions
+  /auth/token/refresh:
+    post:
+      consumes:
+      - application/json
+      description: Refresh access token using refresh token and validate active session
+      parameters:
+      - description: Refresh token
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/models.RefreshTokenRequestDto'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/models.RefreshTokenResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/common.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/common.ErrorResponse'
+      security:
+      - ApiKeyAuth: []
+      summary: Refresh access token
       tags:
       - Auth
+  /users:
+    get:
+      consumes:
+      - application/json
+      description: Get paginated list of users with optional search and filters
+      parameters:
+      - description: Bearer Token
+        in: header
+        name: Authorization
+        required: true
+        type: string
+      - description: 'Page number (default: 1)'
+        in: query
+        minimum: 1
+        name: page
+        type: integer
+      - description: 'Items per page (default: 10, max: 100)'
+        in: query
+        maximum: 100
+        minimum: 1
+        name: limit
+        type: integer
+      - description: Search in email, first name, last name
+        in: query
+        name: search
+        type: string
+      - description: Filter by status
+        enum:
+        - active
+        - inactive
+        - expired
+        in: query
+        name: status
+        type: string
+      - description: 'Sort field (default: created_at)'
+        enum:
+        - created_at
+        - email
+        - first_name
+        - last_name
+        in: query
+        name: sort
+        type: string
+      - description: 'Sort order (default: desc)'
+        enum:
+        - asc
+        - desc
+        in: query
+        name: order
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/models.UserListResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/common.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/common.ErrorResponse'
+      security:
+      - ApiKeyAuth: []
+      summary: List users with pagination and filters
+      tags:
+      - Users
+  /users/{id}:
+    delete:
+      consumes:
+      - application/json
+      description: Soft delete a user (sets deleted_at timestamp and invalidates sessions)
+      parameters:
+      - description: Bearer Token
+        in: header
+        name: Authorization
+        required: true
+        type: string
+      - description: User ID (UUID)
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Deletion details
+        in: body
+        name: request
+        schema:
+          $ref: '#/definitions/models.SoftDeleteUserDto'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties:
+              type: boolean
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/common.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/common.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/common.ErrorResponse'
+      security:
+      - ApiKeyAuth: []
+      summary: Soft delete user
+      tags:
+      - Users
+    get:
+      consumes:
+      - application/json
+      description: Get a single user by their ID
+      parameters:
+      - description: Bearer Token
+        in: header
+        name: Authorization
+        required: true
+        type: string
+      - description: User ID (UUID)
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/models.User'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/common.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/common.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/common.ErrorResponse'
+      security:
+      - ApiKeyAuth: []
+      summary: Get user by ID
+      tags:
+      - Users
 swagger: "2.0"

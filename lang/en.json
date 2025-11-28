@@ -15,5 +15,21 @@
   "user.email.verification.failed": "Email verification failed",
   "user.change-password.failed": "Failed to change password",
   "user.password-reset.failed": "Failed to reset password",
-  "user.change-email.sending-email-failed": "Failed to send email for email change"
+  "user.change-email.sending-email-failed": "Failed to send email for email change",
+  "user.forgot-password.sending-email-failed": "Failed to send password reset email",
+  "token.refresh.invalid": "Invalid refresh token",
+  "token.refresh.expired": "Refresh token has expired",
+  "token.refresh.claims-invalid": "Invalid token claims",
+  "session.inactive": "Session is not active or has been logged out",
+  "session.not-found": "Session not found",
+  "session.list-failed": "Failed to retrieve sessions",
+  "session.logout-failed": "Failed to logout session",
+  "session.already-logged-out": "Session has already been logged out",
+  "session.unauthorized": "Unauthorized to access this session",
+  "user.not-found": "User not found",
+  "user.list.failed": "Failed to retrieve users",
+  "user.get.failed": "Failed to get user",
+  "user.delete.failed": "Failed to delete user",
+  "user.already-deleted": "User has already been deleted",
+  "validation.invalid-uuid": "Invalid UUID format"
 }

@@ -38,6 +38,7 @@ func SetupRoutes(r *gin.Engine, dbService interfaces.DatabaseService) {
 	userService := services.NewUserService(userRepository)
 
 	authController := controllers.NewAuthController(userService, jwtService, parser, dbService)
+	sessionController := controllers.NewSessionController(userService)
 	userController := controllers.NewUserController(userService)
 
 	// Limitador de solicitudes
@@ -50,19 +51,36 @@ func SetupRoutes(r *gin.Engine, dbService interfaces.DatabaseService) {
 	{
 		authRoutes := mainRoutes.Group("/auth")
 		{
+			// Authentication endpoints (public)
 			authRoutes.POST("/login", authController.Login)
-			authRoutes.POST("/login_facebook", authController.LoginFacebook)
+			authRoutes.POST("/login/facebook", authController.LoginFacebook)
 			authRoutes.POST("/register", authController.Register)
-			authRoutes.POST("/refresh_token", authController.RefreshToken)
-			authRoutes.POST("/confirm_email", authController.ConfirmEmailAddress)
-			authRoutes.POST("/request_password_reset", authController.GeneratePasswordResetToken)
-			authRoutes.POST("/password_reset", authController.ResetPasswordWithToken)
+			authRoutes.POST("/token/refresh", authController.RefreshToken)
+
+			// Email verification (public - requires token in body)
+			authRoutes.PUT("/email/verification", authController.ConfirmEmailAddress)
+
+			// Password reset (public - requires token in body)
+			authRoutes.POST("/password/reset", authController.GeneratePasswordResetToken)
+			authRoutes.PUT("/password/reset", authController.ResetPasswordWithToken)
+
+			// Protected routes (require authentication)
 			protectedRoutes := authRoutes.Use(middleware.AuthMiddleware(jwtService))
 			{
-				protectedRoutes.POST("/get_profile", authController.GetProfile)
-				protectedRoutes.POST("/update_profile", authController.UpdateProfile)
-				protectedRoutes.POST("/change_password", authController.ChangePassword)
-				protectedRoutes.POST("/request_verify_email", authController.GenerateEmailVerificationToken)
+				// Profile management
+				protectedRoutes.GET("/profile", authController.GetProfile)
+				protectedRoutes.PATCH("/profile", authController.UpdateProfile)
+
+				// Password management
+				protectedRoutes.PUT("/password", authController.ChangePassword)
+
+				// Email verification request
+				protectedRoutes.POST("/email/verification", authController.GenerateEmailVerificationToken)
+
+				// Session management
+				protectedRoutes.GET("/sessions", sessionController.GetActiveSessions)
+				protectedRoutes.DELETE("/sessions/:id", sessionController.LogoutSession)
+				protectedRoutes.DELETE("/sessions", sessionController.LogoutAllSessions)
 				protectedRoutes.POST("/logout", authController.Logout)
 			}
 		}
@@ -71,11 +89,11 @@ func SetupRoutes(r *gin.Engine, dbService interfaces.DatabaseService) {
 		{
 			userRoutes := mainRoutes.Group("/users")
 			{
-				//userRoutes.GET("", controllers.Index)
+				userRoutes.GET("", userController.ListUsers)
 				userRoutes.POST("", userController.Create)
-				userRoutes.PUT(":id", userController.Update)
-				//userRoutes.GET(":id", controllers.Show)
-				//userRoutes.DELETE(":id", controllers.Delete)
+				userRoutes.GET("/:id", userController.GetUserById)
+				userRoutes.PUT("/:id", userController.Update)
+				userRoutes.DELETE("/:id", userController.SoftDeleteUser)
 			}
 		}
 	}

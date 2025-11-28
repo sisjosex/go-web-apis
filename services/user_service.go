@@ -4,6 +4,7 @@ import (
 	"josex/web/interfaces"
 	"josex/web/models"
 
+	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 	//"josex/web/utils"
 )
@@ -42,6 +43,40 @@ func (s *userService) LogoutUser(sessionUser models.LogoutSessionDto) (*bool, er
 
 func (s *userService) GetProfile(userDTO models.GetProfileDto) (*models.User, error) {
 	return s.userRepository.GetProfile(userDTO)
+}
+
+func (s *userService) ValidateSession(userID uuid.UUID, sessionID uuid.UUID) error {
+	return s.userRepository.ValidateSession(userID, sessionID)
+}
+
+// GetUserSessions retrieves all sessions for a user
+func (s *userService) GetUserSessions(userID uuid.UUID) ([]models.UserSession, error) {
+	return s.userRepository.GetUserSessions(userID)
+}
+
+// LogoutSession logs out a specific session
+func (s *userService) LogoutSession(userID uuid.UUID, sessionID uuid.UUID) error {
+	return s.userRepository.LogoutSession(userID, sessionID)
+}
+
+// LogoutAllSessions logs out all sessions except optionally the current one
+func (s *userService) LogoutAllSessions(userID uuid.UUID, currentSessionID *uuid.UUID) (int, error) {
+	return s.userRepository.LogoutAllSessions(userID, currentSessionID)
+}
+
+// ListUsers retrieves paginated list of users with filters
+func (s *userService) ListUsers(query models.UserListQuery) (*models.UserListResponse, error) {
+	return s.userRepository.ListUsers(query)
+}
+
+// GetUserById retrieves a single user by ID
+func (s *userService) GetUserById(userID uuid.UUID) (*models.User, error) {
+	return s.userRepository.GetUserById(userID)
+}
+
+// SoftDeleteUser soft deletes a user
+func (s *userService) SoftDeleteUser(userID uuid.UUID, reason string) error {
+	return s.userRepository.SoftDeleteUser(userID, reason)
 }
 
 func (s *userService) GenerateEmailVerificationToken(verifyEmailRequest models.VerifyEmailRequest, tx pgx.Tx) (*models.VerifyEmailToken, error) {

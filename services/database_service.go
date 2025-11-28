@@ -38,6 +38,8 @@ func (ds *databaseService) InitDatabase(ctx context.Context) {
 		if err := runMigrations(dataBaseUrl); err == nil {
 			log.Println("Running migrations completed successfully")
 			return
+		} else {
+			log.Printf("Failed to run migrations: %v", err)
 		}
 
 		time.Sleep(retryInterval)

@@ -11,6 +11,7 @@ import (
 	"strings"
 
 	"github.com/gin-gonic/gin"
+	"github.com/golang-jwt/jwt/v5"
 	"github.com/google/uuid"
 	"github.com/ua-parser/uap-go/uaparser"
 )
@@ -156,25 +157,65 @@ func (uc *AuthController) LoginFacebook(c *gin.Context) {
 }
 
 // RefreshToken godoc
-// @Summary Refresh token
-// @Description Refresh token
+// @Summary Refresh access token
+// @Description Refresh access token using refresh token and validate active session
 // @Tags Auth
 // @Accept  json
 // @Produce  json
 // @Param request body models.RefreshTokenRequestDto true "Refresh token"
 // @Success 200 {object} models.RefreshTokenResponse
 // @Failure 400 {object} common.ErrorResponse
-// @Router /auth/refresh_token [post]
+// @Failure 401 {object} common.ErrorResponse
+// @Router /auth/token/refresh [post]
 // @Security ApiKeyAuth
 func (uc *AuthController) RefreshToken(c *gin.Context) {
 	var req models.RefreshTokenRequestDto
 
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid request"})
+		c.JSON(http.StatusBadRequest, common.BuildErrorDetail(common.UserLoginValidationFailed, utils.ExtractValidationError(err)))
 		return
 	}
 
+	// Use RefreshAccessToken which internally validates the refresh token with the correct secret
+	// and returns a new access token
 	newAccessToken, err := uc.jwtService.RefreshAccessToken(req.RefreshToken)
+	if err != nil {
+		c.JSON(http.StatusUnauthorized, common.BuildError(err))
+		return
+	}
+
+	// Now we need to extract claims from refresh token to validate session
+	// We'll parse the token manually to get the claims
+	token, err := jwt.Parse(req.RefreshToken, func(token *jwt.Token) (interface{}, error) {
+		return []byte(config.AppConfig.JwtRefreshKey), nil
+	})
+
+	if err != nil {
+		c.JSON(http.StatusUnauthorized, common.BuildErrorSingle(common.TokenRefreshInvalid))
+		return
+	}
+
+	claims, ok := token.Claims.(jwt.MapClaims)
+	if !ok {
+		c.JSON(http.StatusUnauthorized, common.BuildErrorSingle(common.TokenRefreshClaimsInvalid))
+		return
+	}
+
+	// Parse user_id and session_id from claims
+	userID, err := uuid.Parse(claims["user_id"].(string))
+	if err != nil {
+		c.JSON(http.StatusUnauthorized, common.BuildErrorSingle(common.TokenRefreshClaimsInvalid))
+		return
+	}
+
+	sessionID, err := uuid.Parse(claims["session_id"].(string))
+	if err != nil {
+		c.JSON(http.StatusUnauthorized, common.BuildErrorSingle(common.TokenRefreshClaimsInvalid))
+		return
+	}
+
+	// Validate that the session is still active in database
+	err = uc.userService.ValidateSession(userID, sessionID)
 	if err != nil {
 		c.JSON(http.StatusUnauthorized, common.BuildError(err))
 		return
@@ -252,15 +293,15 @@ func (uc *AuthController) Logout(c *gin.Context) {
 }
 
 // GetProfile godoc
-// @Summary GetProfile
-// @Description GetProfile
+// @Summary Get user profile
+// @Description Get authenticated user profile information
 // @Tags Auth
 // @Accept  json
 // @Produce  json
 // @Param Authorization header string true "Bearer Token"
 // @Success 200 {object} models.User
 // @Failure 400 {object} common.ErrorResponse
-// @Router /auth/get_profile [post]
+// @Router /auth/profile [get]
 // @Security ApiKeyAuth
 func (uc *AuthController) GetProfile(ctx *gin.Context) {
 	var getProfileDto models.GetProfileDto
@@ -281,16 +322,16 @@ func (uc *AuthController) GetProfile(ctx *gin.Context) {
 }
 
 // UpdateProfile godoc
-// @Summary UpdateProfile
-// @Description UpdateProfile
+// @Summary Update user profile
+// @Description Update authenticated user profile information (partial updates allowed)
 // @Tags Auth
 // @Accept  json
 // @Produce  json
 // @Param Authorization header string true "Bearer Token"
-// @Param request body models.UpdateProfileDto true "User"
-// @Success 200 {object} models.UpdateProfileDto
+// @Param request body models.UpdateProfileDto true "Profile data"
+// @Success 200 {object} models.User
 // @Failure 400 {object} common.ErrorResponse
-// @Router /auth/update_profile [post]
+// @Router /auth/profile [patch]
 // @Security ApiKeyAuth
 func (uc *AuthController) UpdateProfile(ctx *gin.Context) {
 	var updateUser models.UpdateProfileDto
@@ -316,16 +357,16 @@ func (uc *AuthController) UpdateProfile(ctx *gin.Context) {
 }
 
 // GenerateEmailVerificationToken godoc
-// @Summary GenerateEmailVerificationToken
-// @Description GenerateEmailVerificationToken
+// @Summary Request email verification
+// @Description Generate and send email verification token
 // @Tags Auth
 // @Accept  json
 // @Produce  json
 // @Param Authorization header string true "Bearer Token"
-// @Param request body models.VerifyEmailRequestDto false "User"
+// @Param request body models.VerifyEmailRequestDto false "Email data"
 // @Success 200 {object} models.VerifyEmailToken
 // @Failure 400 {object} common.ErrorResponse
-// @Router /auth/request_verify_email [post]
+// @Router /auth/email/verification [post]
 // @Security ApiKeyAuth
 func (uc *AuthController) GenerateEmailVerificationToken(ctx *gin.Context) {
 	var verifyEmailRequestDto models.VerifyEmailRequestDto
@@ -382,15 +423,15 @@ func (uc *AuthController) GenerateEmailVerificationToken(ctx *gin.Context) {
 }
 
 // ConfirmEmailAddress godoc
-// @Summary ConfirmEmailAddress
-// @Description ConfirmEmailAddress
+// @Summary Confirm email address
+// @Description Confirm email address with verification token
 // @Tags Auth
 // @Accept  json
 // @Produce  json
-// @Param request body models.VerifyEmailToken true "Verify Email Token"
+// @Param request body models.VerifyEmailToken true "Verification token"
 // @Success 200 {object} bool
 // @Failure 400 {object} common.ErrorResponse
-// @Router /auth/confirm_email [post]
+// @Router /auth/email/verification [put]
 // @Security ApiKeyAuth
 func (uc *AuthController) ConfirmEmailAddress(ctx *gin.Context) {
 	var verifyEmailRequest models.VerifyEmailToken
@@ -410,16 +451,16 @@ func (uc *AuthController) ConfirmEmailAddress(ctx *gin.Context) {
 }
 
 // ChangePassword godoc
-// @Summary ChangePassword
-// @Description ChangePassword
+// @Summary Change user password
+// @Description Change password for authenticated user
 // @Tags Auth
 // @Accept  json
 // @Produce  json
 // @Param Authorization header string true "Bearer Token"
-// @Param request body models.ChangePasswordRequestDto true "User"
+// @Param request body models.ChangePasswordRequestDto true "Password data"
 // @Success 200 {object} bool
 // @Failure 400 {object} common.ErrorResponse
-// @Router /auth/change_password [post]
+// @Router /auth/password [put]
 // @Security ApiKeyAuth
 func (uc *AuthController) ChangePassword(ctx *gin.Context) {
 	var changePasswordEequestDto models.ChangePasswordRequestDto
@@ -451,15 +492,15 @@ func (uc *AuthController) ChangePassword(ctx *gin.Context) {
 }
 
 // GeneratePasswordResetToken godoc
-// @Summary GeneratePasswordResetToken
-// @Description GeneratePasswordResetToken
+// @Summary Request password reset
+// @Description Generate and send password reset token
 // @Tags Auth
 // @Accept  json
 // @Produce  json
-// @Param request body models.PasswordResetRequestDto true "User Account"
+// @Param request body models.PasswordResetRequestDto true "Account data"
 // @Success 200 {object} models.PasswordResetTokenRequestDto
 // @Failure 400 {object} common.ErrorResponse
-// @Router /auth/request_password_reset [post]
+// @Router /auth/password/reset [post]
 // @Security ApiKeyAuth
 func (uc *AuthController) GeneratePasswordResetToken(ctx *gin.Context) {
 	var passwordResetRequestDto models.PasswordResetRequestDto
@@ -503,15 +544,15 @@ func (uc *AuthController) GeneratePasswordResetToken(ctx *gin.Context) {
 }
 
 // ResetPasswordWithToken godoc
-// @Summary ResetPasswordWithToken
-// @Description ResetPasswordWithToken
+// @Summary Reset password with token
+// @Description Reset password using reset token
 // @Tags Auth
 // @Accept  json
 // @Produce  json
-// @Param request body models.PasswordResetWithTokenDto false "User"
+// @Param request body models.PasswordResetWithTokenDto true "Reset data"
 // @Success 200 {object} bool
 // @Failure 400 {object} common.ErrorResponse
-// @Router /auth/password_reset [post]
+// @Router /auth/password/reset [put]
 // @Security ApiKeyAuth
 func (uc *AuthController) ResetPasswordWithToken(ctx *gin.Context) {
 	var passwordResetWithTokenDto models.PasswordResetWithTokenDto

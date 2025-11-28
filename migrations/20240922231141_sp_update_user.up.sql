@@ -85,7 +85,6 @@ p_email := 'ak10@a.com',
 p_current_password := NULL,
 p_new_password := NULL,
 p_is_active := NULL,
-p_email_verified := NULL,
 p_expiration_date := '2025-01-01',
 p_profile_picture_url := 'http:/google3.com',
 p_bio := '',
@@ -104,7 +103,6 @@ OR REPLACE FUNCTION auth.sp_update_user (
     p_current_password VARCHAR DEFAULT NULL, -- Contraseña actual para verificar antes de cambiarla
     p_new_password VARCHAR DEFAULT NULL, -- Nueva contraseña
     p_is_active BOOLEAN DEFAULT NULL,
-    p_email_verified BOOLEAN DEFAULT NULL,
     p_expiration_date TIMESTAMP WITH TIME ZONE DEFAULT NULL,
     p_profile_picture_url TEXT DEFAULT NULL,
     p_bio TEXT DEFAULT NULL,
@@ -169,7 +167,6 @@ BEGIN
         birthday            = COALESCE(p_birthday, users.birthday),
         email               = COALESCE(lower_email, users.email),
         is_active           = COALESCE(p_is_active, users.is_active),
-        email_verified      = COALESCE(p_email_verified, users.email_verified),
         expiration_date     = COALESCE(expiration_date, users.expiration_date),
         password			= COALESCE(p_new_password, users.password),
         updated_at          = CURRENT_TIMESTAMP

@@ -15,5 +15,21 @@
   "user.email.verification.failed": "Error en la verificación del correo electrónico",
   "user.change-password.failed": "Error al cambiar la contraseña",
   "user.password-reset.failed": "Error al restablecer la contraseña",
-  "user.change-email.sending-email-failed": "Error al enviar el correo para cambio de email"
+  "user.change-email.sending-email-failed": "Error al enviar el correo para cambio de email",
+  "user.forgot-password.sending-email-failed": "Error al enviar el correo de restablecimiento de contraseña",
+  "token.refresh.invalid": "Token de actualización inválido",
+  "token.refresh.expired": "El token de actualización ha expirado",
+  "token.refresh.claims-invalid": "Reclamaciones de token inválidas",
+  "session.inactive": "La sesión no está activa o ha sido cerrada",
+  "session.not-found": "Sesión no encontrada",
+  "session.list-failed": "Error al obtener las sesiones",
+  "session.logout-failed": "Error al cerrar la sesión",
+  "session.already-logged-out": "La sesión ya ha sido cerrada",
+  "session.unauthorized": "No autorizado para acceder a esta sesión",
+  "user.not-found": "Usuario no encontrado",
+  "user.list.failed": "Error al obtener la lista de usuarios",
+  "user.get.failed": "Error al obtener el usuario",
+  "user.delete.failed": "Error al eliminar el usuario",
+  "user.already-deleted": "El usuario ya ha sido eliminado",
+  "validation.invalid-uuid": "Formato de UUID inválido"
 }

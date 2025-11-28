@@ -15,14 +15,14 @@ const docTemplate = `{
     "host": "{{.Host}}",
     "basePath": "{{.BasePath}}",
     "paths": {
-        "/auth/change_password": {
-            "post": {
+        "/auth/email/verification": {
+            "put": {
                 "security": [
                     {
                         "ApiKeyAuth": []
                     }
                 ],
-                "description": "ChangePassword",
+                "description": "Confirm email address with verification token",
                 "consumes": [
                     "application/json"
                 ],
@@ -32,62 +32,10 @@ const docTemplate = `{
                 "tags": [
                     "Auth"
                 ],
-                "summary": "ChangePassword",
+                "summary": "Confirm email address",
                 "parameters": [
                     {
-                        "type": "string",
-                        "description": "Bearer Token",
-                        "name": "Authorization",
-                        "in": "header",
-                        "required": true
-                    },
-                    {
-                        "description": "User",
-                        "name": "request",
-                        "in": "body",
-                        "required": true,
-                        "schema": {
-                            "$ref": "#/definitions/models.ChangePasswordRequestDto"
-                        }
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "type": "boolean"
-                        }
-                    },
-                    "400": {
-                        "description": "Bad Request",
-                        "schema": {
-                            "$ref": "#/definitions/common.ErrorResponse"
-                        }
-                    }
-                }
-            }
-        },
-        "/auth/confirm_email": {
-            "post": {
-                "security": [
-                    {
-                        "ApiKeyAuth": []
-                    }
-                ],
-                "description": "ConfirmEmailAddress",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "Auth"
-                ],
-                "summary": "ConfirmEmailAddress",
-                "parameters": [
-                    {
-                        "description": "Verify Email Token",
+                        "description": "Verification token",
                         "name": "request",
                         "in": "body",
                         "required": true,
@@ -110,16 +58,14 @@ const docTemplate = `{
                         }
                     }
                 }
-            }
-        },
-        "/auth/get_profile": {
+            },
             "post": {
                 "security": [
                     {
                         "ApiKeyAuth": []
                     }
                 ],
-                "description": "GetProfile",
+                "description": "Generate and send email verification token",
                 "consumes": [
                     "application/json"
                 ],
@@ -129,7 +75,7 @@ const docTemplate = `{
                 "tags": [
                     "Auth"
                 ],
-                "summary": "GetProfile",
+                "summary": "Request email verification",
                 "parameters": [
                     {
                         "type": "string",
@@ -137,13 +83,21 @@ const docTemplate = `{
                         "name": "Authorization",
                         "in": "header",
                         "required": true
+                    },
+                    {
+                        "description": "Email data",
+                        "name": "request",
+                        "in": "body",
+                        "schema": {
+                            "$ref": "#/definitions/models.VerifyEmailRequestDto"
+                        }
                     }
                 ],
                 "responses": {
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/models.User"
+                            "$ref": "#/definitions/models.VerifyEmailToken"
                         }
                     },
                     "400": {
@@ -288,14 +242,14 @@ const docTemplate = `{
                 }
             }
         },
-        "/auth/password_reset": {
-            "post": {
+        "/auth/password": {
+            "put": {
                 "security": [
                     {
                         "ApiKeyAuth": []
                     }
                 ],
-                "description": "ResetPasswordWithToken",
+                "description": "Change password for authenticated user",
                 "consumes": [
                     "application/json"
                 ],
@@ -305,14 +259,22 @@ const docTemplate = `{
                 "tags": [
                     "Auth"
                 ],
-                "summary": "ResetPasswordWithToken",
+                "summary": "Change user password",
                 "parameters": [
                     {
-                        "description": "User",
+                        "type": "string",
+                        "description": "Bearer Token",
+                        "name": "Authorization",
+                        "in": "header",
+                        "required": true
+                    },
+                    {
+                        "description": "Password data",
                         "name": "request",
                         "in": "body",
+                        "required": true,
                         "schema": {
-                            "$ref": "#/definitions/models.PasswordResetWithTokenDto"
+                            "$ref": "#/definitions/models.ChangePasswordRequestDto"
                         }
                     }
                 ],
@@ -332,14 +294,14 @@ const docTemplate = `{
                 }
             }
         },
-        "/auth/refresh_token": {
-            "post": {
+        "/auth/password/reset": {
+            "put": {
                 "security": [
                     {
                         "ApiKeyAuth": []
                     }
                 ],
-                "description": "Refresh token",
+                "description": "Reset password using reset token",
                 "consumes": [
                     "application/json"
                 ],
@@ -349,15 +311,15 @@ const docTemplate = `{
                 "tags": [
                     "Auth"
                 ],
-                "summary": "Refresh token",
+                "summary": "Reset password with token",
                 "parameters": [
                     {
-                        "description": "Refresh token",
+                        "description": "Reset data",
                         "name": "request",
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/models.RefreshTokenRequestDto"
+                            "$ref": "#/definitions/models.PasswordResetWithTokenDto"
                         }
                     }
                 ],
@@ -365,7 +327,143 @@ const docTemplate = `{
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/models.RefreshTokenResponse"
+                            "type": "boolean"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/common.ErrorResponse"
+                        }
+                    }
+                }
+            },
+            "post": {
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Generate and send password reset token",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Auth"
+                ],
+                "summary": "Request password reset",
+                "parameters": [
+                    {
+                        "description": "Account data",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/models.PasswordResetRequestDto"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/models.PasswordResetTokenRequestDto"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/common.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/auth/profile": {
+            "get": {
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Get authenticated user profile information",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Auth"
+                ],
+                "summary": "Get user profile",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Bearer Token",
+                        "name": "Authorization",
+                        "in": "header",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/models.User"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/common.ErrorResponse"
+                        }
+                    }
+                }
+            },
+            "patch": {
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Update authenticated user profile information (partial updates allowed)",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Auth"
+                ],
+                "summary": "Update user profile",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Bearer Token",
+                        "name": "Authorization",
+                        "in": "header",
+                        "required": true
+                    },
+                    {
+                        "description": "Profile data",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/models.UpdateProfileDto"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/models.User"
                         }
                     },
                     "400": {
@@ -422,14 +520,14 @@ const docTemplate = `{
                 }
             }
         },
-        "/auth/request_password_reset": {
-            "post": {
+        "/auth/sessions": {
+            "get": {
                 "security": [
                     {
                         "ApiKeyAuth": []
                     }
                 ],
-                "description": "GeneratePasswordResetToken",
+                "description": "Get all sessions (active and inactive) for authenticated user",
                 "consumes": [
                     "application/json"
                 ],
@@ -437,25 +535,26 @@ const docTemplate = `{
                     "application/json"
                 ],
                 "tags": [
-                    "Auth"
+                    "Sessions"
                 ],
-                "summary": "GeneratePasswordResetToken",
+                "summary": "Get active sessions",
                 "parameters": [
                     {
-                        "description": "User Account",
-                        "name": "request",
-                        "in": "body",
-                        "required": true,
-                        "schema": {
-                            "$ref": "#/definitions/models.PasswordResetRequestDto"
-                        }
+                        "type": "string",
+                        "description": "Bearer Token",
+                        "name": "Authorization",
+                        "in": "header",
+                        "required": true
                     }
                 ],
                 "responses": {
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/models.PasswordResetTokenRequestDto"
+                            "type": "array",
+                            "items": {
+                                "$ref": "#/definitions/models.UserSession"
+                            }
                         }
                     },
                     "400": {
@@ -463,18 +562,22 @@ const docTemplate = `{
                         "schema": {
                             "$ref": "#/definitions/common.ErrorResponse"
                         }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/common.ErrorResponse"
+                        }
                     }
                 }
-            }
-        },
-        "/auth/request_verify_email": {
-            "post": {
+            },
+            "delete": {
                 "security": [
                     {
                         "ApiKeyAuth": []
                     }
                 ],
-                "description": "GenerateEmailVerificationToken",
+                "description": "Logout all sessions for authenticated user except current one",
                 "consumes": [
                     "application/json"
                 ],
@@ -482,9 +585,61 @@ const docTemplate = `{
                     "application/json"
                 ],
                 "tags": [
-                    "Auth"
+                    "Sessions"
                 ],
-                "summary": "GenerateEmailVerificationToken",
+                "summary": "Logout all sessions",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Bearer Token",
+                        "name": "Authorization",
+                        "in": "header",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "integer"
+                            }
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/common.ErrorResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/common.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/auth/sessions/{id}": {
+            "delete": {
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Logout a specific session by ID (must belong to authenticated user)",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Sessions"
+                ],
+                "summary": "Logout specific session",
                 "parameters": [
                     {
                         "type": "string",
@@ -494,19 +649,21 @@ const docTemplate = `{
                         "required": true
                     },
                     {
-                        "description": "User",
-                        "name": "request",
-                        "in": "body",
-                        "schema": {
-                            "$ref": "#/definitions/models.VerifyEmailRequestDto"
-                        }
+                        "type": "string",
+                        "description": "Session ID (UUID)",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
                     }
                 ],
                 "responses": {
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/models.VerifyEmailToken"
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "boolean"
+                            }
                         }
                     },
                     "400": {
@@ -514,18 +671,24 @@ const docTemplate = `{
                         "schema": {
                             "$ref": "#/definitions/common.ErrorResponse"
                         }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/common.ErrorResponse"
+                        }
                     }
                 }
             }
         },
-        "/auth/update_profile": {
+        "/auth/token/refresh": {
             "post": {
                 "security": [
                     {
                         "ApiKeyAuth": []
                     }
                 ],
-                "description": "UpdateProfile",
+                "description": "Refresh access token using refresh token and validate active session",
                 "consumes": [
                     "application/json"
                 ],
@@ -535,7 +698,58 @@ const docTemplate = `{
                 "tags": [
                     "Auth"
                 ],
-                "summary": "UpdateProfile",
+                "summary": "Refresh access token",
+                "parameters": [
+                    {
+                        "description": "Refresh token",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/models.RefreshTokenRequestDto"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/models.RefreshTokenResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/common.ErrorResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/common.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/users": {
+            "get": {
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Get paginated list of users with optional search and filters",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Users"
+                ],
+                "summary": "List users with pagination and filters",
                 "parameters": [
                     {
                         "type": "string",
@@ -545,12 +759,181 @@ const docTemplate = `{
                         "required": true
                     },
                     {
-                        "description": "User",
+                        "minimum": 1,
+                        "type": "integer",
+                        "description": "Page number (default: 1)",
+                        "name": "page",
+                        "in": "query"
+                    },
+                    {
+                        "maximum": 100,
+                        "minimum": 1,
+                        "type": "integer",
+                        "description": "Items per page (default: 10, max: 100)",
+                        "name": "limit",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Search in email, first name, last name",
+                        "name": "search",
+                        "in": "query"
+                    },
+                    {
+                        "enum": [
+                            "active",
+                            "inactive",
+                            "expired"
+                        ],
+                        "type": "string",
+                        "description": "Filter by status",
+                        "name": "status",
+                        "in": "query"
+                    },
+                    {
+                        "enum": [
+                            "created_at",
+                            "email",
+                            "first_name",
+                            "last_name"
+                        ],
+                        "type": "string",
+                        "description": "Sort field (default: created_at)",
+                        "name": "sort",
+                        "in": "query"
+                    },
+                    {
+                        "enum": [
+                            "asc",
+                            "desc"
+                        ],
+                        "type": "string",
+                        "description": "Sort order (default: desc)",
+                        "name": "order",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/models.UserListResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/common.ErrorResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/common.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/users/{id}": {
+            "get": {
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Get a single user by their ID",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Users"
+                ],
+                "summary": "Get user by ID",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Bearer Token",
+                        "name": "Authorization",
+                        "in": "header",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "User ID (UUID)",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/models.User"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/common.ErrorResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/common.ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/common.ErrorResponse"
+                        }
+                    }
+                }
+            },
+            "delete": {
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Soft delete a user (sets deleted_at timestamp and invalidates sessions)",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Users"
+                ],
+                "summary": "Soft delete user",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Bearer Token",
+                        "name": "Authorization",
+                        "in": "header",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "User ID (UUID)",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Deletion details",
                         "name": "request",
                         "in": "body",
-                        "required": true,
                         "schema": {
-                            "$ref": "#/definitions/models.UpdateProfileDto"
+                            "$ref": "#/definitions/models.SoftDeleteUserDto"
                         }
                     }
                 ],
@@ -558,11 +941,26 @@ const docTemplate = `{
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/models.UpdateProfileDto"
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "boolean"
+                            }
                         }
                     },
                     "400": {
                         "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/common.ErrorResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/common.ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
                         "schema": {
                             "$ref": "#/definitions/common.ErrorResponse"
                         }
@@ -584,6 +982,9 @@ const docTemplate = `{
                 },
                 "error": {
                     "description": "Error message\nexample: Bad Request"
+                },
+                "message": {
+                    "description": "Translated error message"
                 }
             }
         },
@@ -760,6 +1161,22 @@ const docTemplate = `{
                 }
             }
         },
+        "models.SoftDeleteUserDto": {
+            "type": "object",
+            "required": [
+                "id"
+            ],
+            "properties": {
+                "id": {
+                    "type": "string"
+                },
+                "reason": {
+                    "description": "Optional deletion reason",
+                    "type": "string",
+                    "maxLength": 500
+                }
+            }
+        },
         "models.UpdateProfileDto": {
             "type": "object",
             "properties": {
@@ -829,6 +1246,68 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "website_url": {
+                    "type": "string"
+                }
+            }
+        },
+        "models.UserListResponse": {
+            "type": "object",
+            "properties": {
+                "limit": {
+                    "description": "Items per page",
+                    "type": "integer"
+                },
+                "page": {
+                    "description": "Current page",
+                    "type": "integer"
+                },
+                "total": {
+                    "description": "Total count of users",
+                    "type": "integer"
+                },
+                "total_pages": {
+                    "description": "Total pages",
+                    "type": "integer"
+                },
+                "users": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/models.User"
+                    }
+                }
+            }
+        },
+        "models.UserSession": {
+            "type": "object",
+            "properties": {
+                "browser": {
+                    "type": "string"
+                },
+                "device_id": {
+                    "type": "string"
+                },
+                "device_os": {
+                    "type": "string"
+                },
+                "ip_address": {
+                    "type": "string"
+                },
+                "is_active": {
+                    "type": "boolean"
+                },
+                "last_active": {
+                    "type": "string"
+                },
+                "login_time": {
+                    "type": "string"
+                },
+                "logout_time": {
+                    "type": "string"
+                },
+                "session_id": {
+                    "type": "string"
+                },
+                "user_id": {
                     "type": "string"
                 }
             }

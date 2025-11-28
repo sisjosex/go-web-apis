@@ -39,6 +39,29 @@ const (
 	UserPasswordResetError              = "user.password-reset.failed"
 	UserChangeEmailSendingError         = "user.change-email.sending-email-failed"
 	UserForgorPasswordEmailSendingError = "user.forgot-password.sending-email-failed"
+
+	// Token refresh errors
+	TokenRefreshInvalid       = "token.refresh.invalid"
+	TokenRefreshExpired       = "token.refresh.expired"
+	TokenRefreshClaimsInvalid = "token.refresh.claims-invalid"
+
+	// Session errors
+	SessionInactive         = "session.inactive"
+	SessionNotFound         = "session.not-found"
+	SessionListFailed       = "session.list-failed"
+	SessionLogoutFailed     = "session.logout-failed"
+	SessionAlreadyLoggedOut = "session.already-logged-out"
+	SessionUnauthorized     = "session.unauthorized"
+
+	// User management errors
+	UserNotFound       = "user.not-found"
+	UserListFailed     = "user.list.failed"
+	UserGetFailed      = "user.get.failed"
+	UserDeleteFailed   = "user.delete.failed"
+	UserAlreadyDeleted = "user.already-deleted"
+
+	// Validation errors
+	InvalidUUID = "validation.invalid-uuid"
 )
 
 type ErrorTag map[string]string
@@ -65,8 +88,9 @@ func BuildError(err error) *ErrorResponse {
 	var pgErr *pgconn.PgError
 	if errors.As(err, &pgErr) {
 		return &ErrorResponse{
-			Error: pgErr.Message,
-			Code:  pgErr.Code,
+			Error:  pgErr.Message,
+			Code:   pgErr.Code,
+			Detail: pgErr.Detail,
 		}
 	}
 
