@@ -2,16 +2,23 @@
 
 ## Architecture Overview
 
-This is a **Go + Gin + PostgreSQL** REST API using a **stored procedure-centric architecture**. Business logic lives primarily in PostgreSQL stored procedures (`migrations/*sp_*.up.sql`), not in Go code. The Go layer handles HTTP, validation, auth middleware, and orchestration.
+This is a **Go + Gin + PostgreSQL** REST API using a **stored procedure-centric architecture** with **modular organization**. Business logic lives primarily in PostgreSQL stored procedures (`migrations/*sp_*.up.sql`), not in Go code. The Go layer handles HTTP, validation, auth middleware, and orchestration.
 
-**Key Layers:**
+**Modular Structure:**
+- `modules/auth/` - Authentication & session management (login, logout, JWT, password reset)
+- `modules/users/` - User CRUD operations (admin)
+- `modules/core/` - Shared infrastructure (database, validators, errors, utils)
+
+**Key Layers (per module):**
 - `controllers/` - HTTP handlers (thin, validation + error handling)
 - `services/` - Business orchestration (calls repositories, composes operations)
 - `repositories/` - Direct database calls via stored procedures
 - `interfaces/` - Go interface contracts for dependency injection
-- `migrations/` - PostgreSQL schema + stored procedures (golang-migrate)
+- `models/` - DTOs and domain entities
+- `middleware/` - HTTP middleware (auth, language)
+- `routes/` - Route registration functions
 
-**Example Flow:** `AuthController.Login` → `UserService.LoginUser` → `UserRepository.LoginUser` → `CALL auth.sp_login_user(...)` → Returns `SessionUser`
+**Example Flow:** `AuthController.Login` → `AuthService.LoginUser` → `AuthRepository.LoginUser` → `CALL auth.sp_login_user(...)` → Returns `SessionUser`
 
 ## Database Patterns
 
@@ -97,10 +104,17 @@ PUT    /auth/password/reset   // Reset with token
 
 **Protected Routes Pattern:**
 ```go
+// In modules/auth/routes/auth_routes.go
+import "josex/web/modules/auth/middleware"
+
 protectedRoutes := authGroup.Use(middleware.AuthMiddleware(jwtService))
 protectedRoutes.GET("/profile", controller.GetProfile)
 protectedRoutes.PUT("/profile", controller.UpdateProfile)
 ```
+
+### Middleware Organization
+- **Auth Middleware**: `modules/auth/middleware/auth_middleware.go` - JWT validation
+- **Language Middleware**: `modules/core/middleware/language_middleware.go` - i18n support
 
 ### Session Management
 - User-Agent parsing via `uaparser` stores device/browser/OS in sessions

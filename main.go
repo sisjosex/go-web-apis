@@ -7,9 +7,8 @@ package main
 
 import (
 	"context"
-	"fmt"
+	"josex/web/modules/core/services"
 	"josex/web/routes"
-	"josex/web/services"
 	"os"
 	"os/signal"
 	"syscall"
@@ -37,9 +36,9 @@ func main() {
 	go dbService.InitDatabase(ctx) // Iniciar la conexión de la base de datos en una goroutine
 
 	// Servicio web
-	server := services.NewWebServerService()
-	server.Initialize(&dbService)
-	routes.SetupRoutes(server.Server, dbService)
+	webServer := services.NewWebServerService()
+	webServer.Initialize()
+	routes.SetupRoutes(webServer.Server, dbService)
 
 	// Manejar señales de terminación
 	go func() {
@@ -53,14 +52,6 @@ func main() {
 		dbService.CloseDatabase(shutdownCtx) // Cerrar la conexión de la base de datos
 	}()
 
-	// Iniciar el servidor
-	if err := server.Start(ctx); err != nil {
-		fmt.Println("Server error:", err)
-	}
-
-	// Al finalizar, cerrar la base de datos con un timeout
-	shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer shutdownCancel()
-
-	dbService.CloseDatabase(shutdownCtx) // Cerrar la conexión de la base de datos de forma ordenada
+	// Iniciar el servidor (bloqueante hasta recibir señal)
+	webServer.Start(signalChan)
 }
