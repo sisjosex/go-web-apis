@@ -2,15 +2,16 @@ package services
 
 import (
 	"context"
+	"database/sql"
 	"josex/web/config"
 	"log"
 	"time"
 
-	"github.com/golang-migrate/migrate/v4"
 	_ "github.com/golang-migrate/migrate/v4/database/postgres"
 	_ "github.com/golang-migrate/migrate/v4/source/file"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
+	_ "github.com/jackc/pgx/v5/stdlib"
 )
 
 type DatabaseService interface {
@@ -43,8 +44,9 @@ func (ds *databaseService) InitDatabase(ctx context.Context) {
 
 		ds.pool = pool
 
-		if err := runMigrations(dataBaseUrl); err == nil {
-			log.Println("Running migrations completed successfully")
+		// Run modular migrations
+		if err := ds.runModularMigrations(dataBaseUrl); err == nil {
+			log.Println("✅ All modular migrations completed successfully")
 			return
 		} else {
 			log.Printf("Failed to run migrations: %v", err)
@@ -105,17 +107,34 @@ func (ds *databaseService) CloseDatabase(ctx context.Context) {
 	log.Println("Database closed")
 }
 
-// Ejecuta migraciones en la base de datos
-func runMigrations(databaseURL string) error {
-	m, err := migrate.New("file://migrations", databaseURL)
+// runModularMigrations executes migrations for all enabled modules
+func (ds *databaseService) runModularMigrations(databaseURL string) error {
+	// Open standard SQL connection for migration library
+	sqlDB, err := sql.Open("pgx", databaseURL)
 	if err != nil {
 		return err
 	}
+	// Don't defer close here - close after all migrations
 
-	if err := m.Up(); err != nil && err != migrate.ErrNoChange {
+	// Test connection
+	if err := sqlDB.Ping(); err != nil {
+		sqlDB.Close()
 		return err
 	}
-	return nil
+
+	// Create migration service
+	migrationService := NewMigrationService(sqlDB)
+
+	// Print module status
+	migrationService.PrintModuleStatus()
+
+	// Run migrations
+	migrateErr := migrationService.RunMigrations()
+
+	// Close SQL connection after all migrations
+	sqlDB.Close()
+
+	return migrateErr
 }
 
 func (ds *databaseService) BeginTransaction(ctx context.Context) (pgx.Tx, error) {

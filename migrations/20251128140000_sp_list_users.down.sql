@@ -1,1 +1,0 @@
-DROP FUNCTION IF EXISTS auth.sp_list_users(INT, INT, TEXT, TEXT, TEXT, TEXT);
