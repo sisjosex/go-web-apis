@@ -2,7 +2,9 @@ package errors
 
 import (
 	"errors"
+	"josex/web/modules/core/utils"
 
+	"github.com/gin-gonic/gin"
 	"github.com/jackc/pgx/v5/pgconn"
 )
 
@@ -26,39 +28,54 @@ const (
 	InvalidUUID = "validation.invalid-uuid"
 )
 
-type ErrorTag map[string]string
-
-var ErrorTagCatalog = ErrorTag{
-	"email-valid": "email-invalid",
+// BuildErrorSingle creates an error response with just an error code and translates it
+func BuildErrorSingle(c *gin.Context, errorCode string) *ErrorResponse {
+	lang := getLangFromContext(c)
+	return &ErrorResponse{
+		Error:   errorCode,
+		Message: utils.GetTranslation(lang, errorCode),
+	}
 }
 
-// BuildErrorSingle creates an error response with just an error code
-func BuildErrorSingle(Error string) *ErrorResponse {
-	return &ErrorResponse{Error: Error}
-}
-
-// BuildErrorDetail creates an error response with error code and detail
-func BuildErrorDetail(Error string, Detail interface{}) *ErrorResponse {
-	return &ErrorResponse{Error: Error, Detail: Detail}
+// BuildErrorDetail creates an error response with error code, translation, and detail
+func BuildErrorDetail(c *gin.Context, errorCode string, detail interface{}) *ErrorResponse {
+	lang := getLangFromContext(c)
+	return &ErrorResponse{
+		Error:   errorCode,
+		Message: utils.GetTranslation(lang, errorCode),
+		Detail:  detail,
+	}
 }
 
 // BuildError creates an error response from a Go error
 // Handles PostgreSQL errors with special formatting
-func BuildError(err error) *ErrorResponse {
+func BuildError(c *gin.Context, err error) *ErrorResponse {
 	if err == nil {
 		return nil
 	}
 
+	lang := getLangFromContext(c)
 	var pgErr *pgconn.PgError
 	if errors.As(err, &pgErr) {
 		return &ErrorResponse{
-			Error:  pgErr.Message,
-			Code:   pgErr.Code,
-			Detail: pgErr.Detail,
+			Error:   pgErr.Message,
+			Message: utils.GetTranslation(lang, pgErr.Message),
+			Code:    pgErr.Code,
+			Detail:  pgErr.Detail,
 		}
 	}
 
 	return &ErrorResponse{
 		Error: err.Error(),
 	}
+}
+
+// getLangFromContext extracts language from Gin context, defaults to "en"
+func getLangFromContext(c *gin.Context) string {
+	if lang, exists := c.Get("lang"); exists {
+		if langStr, ok := lang.(string); ok {
+			return langStr
+		}
+	}
+	return "en"
 }

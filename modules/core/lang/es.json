@@ -1,0 +1,15 @@
+{
+  "validation.invalid-uuid": "Formato de UUID inválido",
+  "validation.required": "Este campo es obligatorio",
+  "validation.email": "Formato de correo electrónico inválido",
+  "validation.email-invalid": "Formato de correo electrónico inválido",
+  "validation.min": "El valor está por debajo del mínimo",
+  "validation.max": "El valor excede el máximo",
+  "validation.gte": "El valor debe ser mayor o igual",
+  "validation.lte": "El valor debe ser menor o igual",
+  "validation.len": "Longitud inválida",
+  "validation.oneof": "El valor debe ser una de las opciones permitidas",
+  "validation.url": "Formato de URL inválido",
+  "validation.datetime": "Formato de fecha/hora inválido",
+  "validation.uuid": "Formato de UUID inválido"
+}

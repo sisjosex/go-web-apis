@@ -3,44 +3,52 @@ package services
 import (
 	"encoding/json"
 	"fmt"
+	"josex/web/modules/core/utils"
 	"log"
 	"os"
 )
 
-// Translations stores all loaded translations
-var Translations = make(map[string]map[string]string)
-
-// LoadAllTranslations loads translation files for the given languages
-func LoadAllTranslations(languages []string) {
+// LoadAllTranslations loads translation files for the given languages from all enabled modules
+// It merges translations from modules/core/lang, modules/auth/lang, modules/users/lang, etc.
+func LoadAllTranslations(languages []string, enabledModules []string) error {
 	for _, lang := range languages {
-		filePath := fmt.Sprintf("./lang/%s.json", lang)
-		data, err := os.ReadFile(filePath)
-		if err != nil {
-			log.Fatalf("Error loading translation file %s: %v", filePath, err)
+		merged := make(map[string]string)
+		translationCount := 0
+
+		// Load translations from each enabled module
+		for _, module := range enabledModules {
+			filePath := fmt.Sprintf("modules/%s/lang/%s.json", module, lang)
+
+			// Check if file exists
+			if _, err := os.Stat(filePath); os.IsNotExist(err) {
+				// Module might not have translations, skip silently
+				continue
+			}
+
+			data, err := os.ReadFile(filePath)
+			if err != nil {
+				log.Printf("Warning: Could not read translation file %s: %v", filePath, err)
+				continue
+			}
+
+			var translations map[string]string
+			if err := json.Unmarshal(data, &translations); err != nil {
+				log.Printf("Warning: Could not parse translation file %s: %v", filePath, err)
+				continue
+			}
+
+			// Merge into main translations map
+			for key, value := range translations {
+				merged[key] = value
+				translationCount++
+			}
+
+			log.Printf("✅ Loaded %d translations from %s", len(translations), filePath)
 		}
 
-		var translations map[string]string
-		if err := json.Unmarshal(data, &translations); err != nil {
-			log.Fatalf("Error parsing translation file %s: %v", filePath, err)
-		}
+		utils.Translations[lang] = merged
+		log.Printf("✅ Loaded %d translations for language: %s", translationCount, lang)
+	}
 
-		Translations[lang] = translations
-		log.Printf("Loaded lang %s", lang)
-	}
-}
-
-// GetTranslation returns the translation for a key in the given language
-func GetTranslation(lang, key string) string {
-	if translations, exists := Translations[lang]; exists {
-		if translation, found := translations[key]; found {
-			return translation
-		}
-	}
-	// Fallback to English
-	if translations, exists := Translations["en"]; exists {
-		if translation, found := translations[key]; found {
-			return translation
-		}
-	}
-	return key
+	return nil
 }

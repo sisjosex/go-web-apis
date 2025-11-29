@@ -1,0 +1,15 @@
+{
+  "validation.invalid-uuid": "Invalid UUID format",
+  "validation.required": "This field is required",
+  "validation.email": "Invalid email format",
+  "validation.email-invalid": "Invalid email format",
+  "validation.min": "Value is below minimum",
+  "validation.max": "Value exceeds maximum",
+  "validation.gte": "Value must be greater than or equal",
+  "validation.lte": "Value must be less than or equal",
+  "validation.len": "Invalid length",
+  "validation.oneof": "Value must be one of the allowed options",
+  "validation.url": "Invalid URL format",
+  "validation.datetime": "Invalid date/time format",
+  "validation.uuid": "Invalid UUID format"
+}

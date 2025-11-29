@@ -7,6 +7,7 @@ package main
 
 import (
 	"context"
+	"josex/web/config"
 	"josex/web/modules/core/services"
 	"josex/web/routes"
 	"os"
@@ -22,8 +23,10 @@ import (
 
 func main() {
 
-	languages := []string{"en", "es"} // Idiomas soportados
-	services.LoadAllTranslations(languages)
+	// Load translations from all enabled modules
+	languages := []string{"en", "es"}
+	enabledModules := config.ModularAppConfig.Core.EnabledModules
+	services.LoadAllTranslations(languages, enabledModules)
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel() // Cancelar al final

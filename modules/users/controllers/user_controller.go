@@ -28,7 +28,7 @@ func (uc *UserController) Create(ctx *gin.Context) {
 	var newUser userModels.CreateUserDto
 
 	if err := ctx.ShouldBindJSON(&newUser); err != nil {
-		ctx.JSON(http.StatusBadRequest, coreErrors.BuildErrorDetail(usersErrors.UserValidationFailed, utils.ExtractValidationError(err)))
+		ctx.JSON(http.StatusBadRequest, coreErrors.BuildErrorDetail(ctx, usersErrors.UserValidationFailed, utils.ExtractValidationError(ctx, err)))
 		return
 	}
 
@@ -39,31 +39,31 @@ func (uc *UserController) Create(ctx *gin.Context) {
 
 	user, err := uc.userService.InsertUser(newUser)
 	if err != nil {
-		ctx.JSON(http.StatusBadRequest, coreErrors.BuildError(err))
+		ctx.JSON(http.StatusBadRequest, coreErrors.BuildError(ctx, err))
 		return
 	}
 
-	ctx.JSON(http.StatusCreated, user)
+	ctx.JSON(http.StatusOK, user)
 }
 
 func (uc *UserController) Update(ctx *gin.Context) {
 	var updateUser userModels.UpdateUserDto
 	id, err := uuid.Parse(ctx.Param("id"))
 	if err != nil {
-		ctx.JSON(http.StatusBadRequest, coreErrors.BuildError(err))
+		ctx.JSON(http.StatusBadRequest, coreErrors.BuildError(ctx, err))
 		return
 	}
 
 	updateUser.ID = id
 
 	if err := ctx.ShouldBindJSON(&updateUser); err != nil {
-		ctx.JSON(http.StatusBadRequest, coreErrors.BuildErrorDetail(usersErrors.UserValidationFailed, utils.ExtractValidationError(err)))
+		ctx.JSON(http.StatusBadRequest, coreErrors.BuildErrorDetail(ctx, usersErrors.UserValidationFailed, utils.ExtractValidationError(ctx, err)))
 		return
 	}
 
 	user, err := uc.userService.UpdateUser(updateUser)
 	if err != nil {
-		ctx.JSON(http.StatusBadRequest, coreErrors.BuildErrorDetail(usersErrors.UserUpdateFailed, err.Error()))
+		ctx.JSON(http.StatusBadRequest, coreErrors.BuildErrorDetail(ctx, usersErrors.UserUpdateFailed, err.Error()))
 		return
 	}
 
@@ -110,7 +110,7 @@ func (uc *UserController) ListUsers(c *gin.Context) {
 
 	users, err := uc.userService.ListUsers()
 	if err != nil {
-		c.JSON(http.StatusBadRequest, coreErrors.BuildError(err))
+		c.JSON(http.StatusBadRequest, coreErrors.BuildError(c, err))
 		return
 	}
 
@@ -135,13 +135,13 @@ func (uc *UserController) GetUserById(c *gin.Context) {
 	userIDStr := c.Param("id")
 	userID, err := uuid.Parse(userIDStr)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, coreErrors.BuildErrorSingle(coreErrors.InvalidUUID))
+		c.JSON(http.StatusBadRequest, coreErrors.BuildErrorSingle(c, coreErrors.InvalidUUID))
 		return
 	}
 
 	user, err := uc.userService.GetUserById(userID)
 	if err != nil {
-		c.JSON(http.StatusNotFound, coreErrors.BuildError(err))
+		c.JSON(http.StatusNotFound, coreErrors.BuildError(c, err))
 		return
 	}
 
@@ -169,14 +169,14 @@ func (uc *UserController) SoftDeleteUser(c *gin.Context) {
 
 	// Check if user deletion is allowed
 	if !usersConfig.AllowUserDeletion {
-		c.JSON(http.StatusForbidden, coreErrors.BuildErrorSingle(usersErrors.UserDeleteNotAllowed))
+		c.JSON(http.StatusForbidden, coreErrors.BuildErrorSingle(c, usersErrors.UserDeleteNotAllowed))
 		return
 	}
 
 	userIDStr := c.Param("id")
 	userID, err := uuid.Parse(userIDStr)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, coreErrors.BuildErrorSingle(coreErrors.InvalidUUID))
+		c.JSON(http.StatusBadRequest, coreErrors.BuildErrorSingle(c, coreErrors.InvalidUUID))
 		return
 	}
 
@@ -189,7 +189,7 @@ func (uc *UserController) SoftDeleteUser(c *gin.Context) {
 	}
 
 	if err != nil {
-		c.JSON(http.StatusBadRequest, coreErrors.BuildError(err))
+		c.JSON(http.StatusBadRequest, coreErrors.BuildError(c, err))
 		return
 	}
 

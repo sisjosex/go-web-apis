@@ -14,14 +14,14 @@ func AuthMiddleware(jwtService services.JWTService) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		tokenString, err := extractToken(c)
 		if err != nil {
-			c.JSON(http.StatusUnauthorized, errors.BuildError(err))
+			c.JSON(http.StatusUnauthorized, errors.BuildError(c, err))
 			c.Abort()
 			return
 		}
 
 		claims, err := jwtService.ValidateToken(tokenString)
 		if err != nil {
-			c.JSON(http.StatusUnauthorized, errors.BuildError(err))
+			c.JSON(http.StatusUnauthorized, errors.BuildError(c, err))
 			c.Abort()
 			return
 		}

@@ -1,7 +1,7 @@
 package middleware
 
 import (
-	"josex/web/modules/core/services"
+	"josex/web/modules/core/utils"
 
 	"github.com/gin-gonic/gin"
 )
@@ -21,7 +21,7 @@ func LanguageMiddleware() gin.HandlerFunc {
 		}
 
 		// Si el idioma no está soportado, usa inglés por defecto
-		if _, exists := services.Translations[lang]; !exists {
+		if _, exists := utils.Translations[lang]; !exists {
 			lang = "en"
 		}
 

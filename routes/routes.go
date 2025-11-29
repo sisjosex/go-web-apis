@@ -6,6 +6,7 @@ import (
 	authRepos "josex/web/modules/auth/repositories"
 	authRoutes "josex/web/modules/auth/routes"
 	authServices "josex/web/modules/auth/services"
+	coreMiddleware "josex/web/modules/core/middleware"
 	coreServices "josex/web/modules/core/services"
 	userControllers "josex/web/modules/users/controllers"
 	userRepos "josex/web/modules/users/repositories"
@@ -60,6 +61,9 @@ func SetupRoutes(r *gin.Engine, dbService coreServices.DatabaseService) {
 	limiter.SetTokenBucketExpirationTTL(time.Second) // Define la ventana de tiempo en 1 segundo
 	limiter.SetIPLookups([]string{"RemoteAddr", "X-Forwarded-For", "X-Real-IP"})
 	r.Use(tollbooth_gin.LimitHandler(limiter))
+
+	// Language middleware - detects lang from ?lang=es or Accept-Language header
+	r.Use(coreMiddleware.LanguageMiddleware())
 
 	// API v1 routes
 	apiV1 := r.Group("/api/v1")

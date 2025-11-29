@@ -139,7 +139,6 @@ func (ms *MigrationService) RunMigrations() error {
 		log.Printf("✅ Module %s migrations applied successfully", module.Name)
 	}
 
-	log.Println("✅ All modular migrations completed successfully")
 	return nil
 }
 

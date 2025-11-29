@@ -1,7 +1,4 @@
 {
-  "invalid.uuid": "Invalid UUID format",
-  "user.create.failed": "Failed to create user",
-  "user.update.failed": "Failed to update user",
   "user.login.invalid-credentials2": "Invalid login credentials",
   "user.login.validation-failed": "Login validation failed",
   "user.login.not-found": "User not found",
@@ -11,11 +8,6 @@
   "user.profile.get.failed": "Failed to retrieve user profile",
   "user.profile.update.failed": "Failed to update user profile",
   "user.profile.validation-failed": "Profile validation failed",
-  "user.create.validation-failed": "User validation failed",
-  "user.create.email-in-use": "Email is already in use",
-  "user.search.failed": "User search failed",
-  "user.get-by-id.not-found": "User not found by ID",
-  "user.get-by-email.not-found": "User not found by email",
   "user.email.request.failed": "Failed to request email",
   "user.email.verification.failed": "Email verification failed",
   "user.change-password.failed": "Failed to change password",
@@ -30,12 +22,5 @@
   "session.list-failed": "Failed to retrieve sessions",
   "session.logout-failed": "Failed to logout session",
   "session.already-logged-out": "Session has already been logged out",
-  "session.unauthorized": "Unauthorized to access this session",
-  "user.not-found": "User not found",
-  "user.list.failed": "Failed to retrieve users",
-  "user.get.failed": "Failed to get user",
-  "user.delete.failed": "Failed to delete user",
-  "user.already-deleted": "User has already been deleted",
-  "user.delete.not-allowed": "User deletion is disabled by system configuration",
-  "validation.invalid-uuid": "Invalid UUID format"
+  "session.unauthorized": "Unauthorized to access this session"
 }

@@ -1,7 +1,4 @@
 {
-  "invalid.uuid": "Formato de UUID inválido",
-  "user.create.failed": "Error al crear el usuario",
-  "user.update.failed": "Error al actualizar el usuario",
   "user.login.invalid-credentials2": "Credenciales de inicio de sesión inválidas",
   "user.login.validation-failed": "Error de validación en el inicio de sesión",
   "user.login.not-found": "Usuario no encontrado",
@@ -11,11 +8,6 @@
   "user.profile.get.failed": "Error al obtener el perfil de usuario",
   "user.profile.update.failed": "Error al actualizar el perfil de usuario",
   "user.profile.validation-failed": "Error de validación en el perfil",
-  "user.create.validation-failed": "Error de validación en la creación del usuario",
-  "user.create.email-in-use": "El correo electrónico ya está en uso",
-  "user.search.failed": "Error al buscar usuario",
-  "user.get-by-id.not-found": "Usuario no encontrado por ID",
-  "user.get-by-email.not-found": "Usuario no encontrado por correo electrónico",
   "user.email.request.failed": "Error al solicitar correo electrónico",
   "user.email.verification.failed": "Error en la verificación del correo electrónico",
   "user.change-password.failed": "Error al cambiar la contraseña",
@@ -30,12 +22,5 @@
   "session.list-failed": "Error al obtener las sesiones",
   "session.logout-failed": "Error al cerrar la sesión",
   "session.already-logged-out": "La sesión ya ha sido cerrada",
-  "session.unauthorized": "No autorizado para acceder a esta sesión",
-  "user.not-found": "Usuario no encontrado",
-  "user.list.failed": "Error al obtener la lista de usuarios",
-  "user.get.failed": "Error al obtener el usuario",
-  "user.delete.failed": "Error al eliminar el usuario",
-  "user.already-deleted": "El usuario ya ha sido eliminado",
-  "user.delete.not-allowed": "La eliminación de usuarios está deshabilitada en la configuración del sistema",
-  "validation.invalid-uuid": "Formato de UUID inválido"
+  "session.unauthorized": "No autorizado para acceder a esta sesión"
 }

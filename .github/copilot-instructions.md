@@ -2,12 +2,12 @@
 
 ## Architecture Overview
 
-This is a **Go + Gin + PostgreSQL** REST API using a **stored procedure-centric architecture** with **modular organization**. Business logic lives primarily in PostgreSQL stored procedures (`migrations/*sp_*.up.sql`), not in Go code. The Go layer handles HTTP, validation, auth middleware, and orchestration.
+This is a **Go + Gin + PostgreSQL** REST API using a **stored procedure-centric architecture** with **modular organization**. Business logic lives primarily in PostgreSQL stored procedures (`modules/*/migrations/*sp_*.up.sql`), not in Go code. The Go layer handles HTTP, validation, auth middleware, and orchestration.
 
 **Modular Structure:**
 - `modules/auth/` - Authentication & session management (login, logout, JWT, password reset)
 - `modules/users/` - User CRUD operations (admin)
-- `modules/core/` - Shared infrastructure (database, validators, errors, utils)
+- `modules/core/` - Shared infrastructure (database, validators, errors, utils, migrations, translations)
 
 **Key Layers (per module):**
 - `controllers/` - HTTP handlers (thin, validation + error handling)
@@ -17,44 +17,220 @@ This is a **Go + Gin + PostgreSQL** REST API using a **stored procedure-centric 
 - `models/` - DTOs and domain entities
 - `middleware/` - HTTP middleware (auth, language)
 - `routes/` - Route registration functions
+- `config/` - Module-specific configuration (env var loading)
+- `migrations/` - Database schema and stored procedures
+- `lang/` - Translations (en.json, es.json)
+- `errors/` - Module-specific error constants
 
 **Example Flow:** `AuthController.Login` → `AuthService.LoginUser` → `AuthRepository.LoginUser` → `CALL auth.sp_login_user(...)` → Returns `SessionUser`
 
-## Database Patterns
+## Module System
+
+### Enabling/Disabling Modules
+
+Modules can be enabled/disabled via the `.env` file:
+
+```env
+# Core module (always required)
+ENABLED_MODULES=core,auth,users
+```
+
+**Core module is ALWAYS required** - it provides shared infrastructure (database, utils, errors, translations).
+
+### Module Configuration
+
+Each module has its own `config/config.go` file that uses shared utilities from `modules/core/utils/env.go`:
+
+```go
+// modules/auth/config/config.go
+package config
+
+import (
+    "josex/web/modules/core/utils"
+    "time"
+)
+
+type AuthConfig struct {
+    JWTSecretKey      string
+    JWTExpiration     time.Duration
+    EnableFacebookAuth bool
+}
+
+func LoadAuthConfig() *AuthConfig {
+    return &AuthConfig{
+        JWTSecretKey:      utils.MustGetEnv("JWT_SECRET_KEY"), // Required!
+        JWTExpiration:     utils.GetEnvAsDuration("JWT_EXPIRATION_MINUTES", 15*time.Minute),
+        EnableFacebookAuth: utils.GetEnvAsBool("ENABLE_FACEBOOK_AUTH", false),
+    }
+}
+```
+
+**Environment Utilities Available:**
+- `GetEnv(key, default)` - strings
+- `GetEnvAsInt(key, default)` - integers  
+- `GetEnvAsInt32(key, default)` - int32
+- `GetEnvAsBool(key, default)` - booleans (supports true/false, 1/0, yes/no, on/off)
+- `GetEnvAsDuration(key, default)` - time.Duration (supports "15m", "1h", "24h")
+- `GetEnvAsStringSlice(key, default)` - arrays (comma-separated)
+- `MustGetEnv(key)` - required variables (panics if missing)
+
+**Accessing Config:**
+```go
+import "josex/web/config"
+
+// In controllers, services, etc.
+authConfig := config.ModularAppConfig.Auth
+if authConfig.EnableFacebookAuth {
+    // Facebook login logic
+}
+```
+
+### Adding a New Module
+
+1. **Create module structure:**
+```bash
+mkdir -p modules/notifications/{controllers,services,repositories,interfaces,models,routes,config,migrations,lang,errors}
+```
+
+2. **Create config** (`modules/notifications/config/config.go`)
+3. **Register in global config** (`config/config.go`)
+4. **Create migrations** in `modules/notifications/migrations/`
+5. **Create translations** (`modules/notifications/lang/{en,es}.json`)
+6. **Create error constants** (`modules/notifications/errors/errors.go`)
+7. **Create routes** (`modules/notifications/routes/notifications_routes.go`)
+8. **Wire up in main routes** (`routes/routes.go`) with `coreConfig.IsModuleEnabled("notifications")`
+9. **Enable in `.env`:** `ENABLED_MODULES=core,auth,users,notifications`
+
+## Database & Migrations
+
+### Modular Migrations System
+
+Each module has its own `migrations/` directory with independent migration tracking:
+
+```
+modules/
+├── core/migrations/
+│   └── 20240922000001_init_extensions.up.sql
+├── auth/migrations/
+│   ├── 20240922230933_table_users.up.sql
+│   └── 20241128115959_sp_login_user.up.sql
+└── users/migrations/
+    └── 20240922231132_sp_create_user.up.sql
+```
+
+**Key Points:**
+- Each module has its own `schema_migrations_<module>` tracking table
+- Migrations run in order: core → auth → users → ...
+- Use timestamp format: `YYYYMMDDHHMMSS_description.{up,down}.sql`
+
+### Creating New Migrations
+
+**Using CLI tool (cross-platform):**
+```bash
+# Create migration for auth module
+go run cmd/migration/main.go -module=auth -name=add_refresh_tokens
+
+# Create migration for users module
+go run cmd/migration/main.go -module=users -name=add_avatar_field
+```
 
 ### Stored Procedures Drive Logic
-All CUD operations use stored procedures in the `auth` schema:
+
+All CUD operations use stored procedures:
 - `sp_create_user`, `sp_update_user`, `sp_login_user`, etc.
 - Repositories call these via `dbService.QueryRow(ctx, "SELECT * FROM auth.sp_...", params...)`
-- Example: `repositories/user_repository.go:22-50` shows SP parameter binding pattern
+- Example: `modules/auth/repositories/auth_repository.go` shows SP parameter binding pattern
 
 ### Connection Pooling
 - Database uses `pgxpool` with configurable pool size (`DATABASE_POOL_SIZE` env var)
-- Retry logic in `services/database_service.go:25-44` handles startup connection failures
+- Retry logic in `modules/core/services/database_service.go` handles startup connection failures
 - Always pass `context.Context` to database methods for cancellation
 
-### Migrations
-- Use `golang-migrate/migrate` - runs automatically on startup
-- Up/down pairs: `20240922230933_table_users.{up,down}.sql`
-- Schema lives in `auth` namespace, uses UUID primary keys via `uuid-ossp`
+## Error Handling (Modular)
 
-## Error Handling Convention
+### Error Constants by Module
 
-### Centralized Error Catalog
-- All errors defined as constants in `common/error.go` (e.g., `UserCreateFailed`)
-- Use `common.BuildError(err)` for simple errors, `common.BuildErrorDetail(code, details)` for validation
-- Error responses include **translatable messages** via `lang/*.json` files
+Each module defines its own error constants:
 
-**Example Pattern:**
 ```go
-if err := ctx.ShouldBindJSON(&dto); err != nil {
-    ctx.JSON(http.StatusBadRequest, common.BuildErrorDetail(
-        common.UserValidationFailed,
-        utils.ExtractValidationError(err), // Field-level errors
-    ))
-    return
+// modules/auth/errors/errors.go
+package errors
+
+const (
+    UserLoginInvalidCredentials = "user.login.invalid-credentials"
+    SessionInactive             = "session.inactive"
+    TokenRefreshExpired         = "token.refresh.expired"
+)
+
+// modules/users/errors/errors.go
+package errors
+
+const (
+    UserCreateFailed      = "user.create.failed"
+    UserDeleteNotAllowed  = "user.delete.not-allowed"
+)
+
+// modules/core/errors/error.go (shared)
+package errors
+
+const (
+    InvalidUUID = "validation.invalid-uuid"
+)
+```
+
+### Error Response Utilities
+
+Use functions from `modules/core/errors/error.go`:
+
+```go
+import (
+    coreErrors "josex/web/modules/core/errors"
+    authErrors "josex/web/modules/auth/errors"
+)
+
+// Simple error
+return coreErrors.BuildErrorSingle(authErrors.SessionInactive)
+
+// Error with details
+return coreErrors.BuildErrorDetail(
+    authErrors.UserLoginValidationFailed,
+    utils.ExtractValidationError(err),
+)
+
+// Error from exception
+return coreErrors.BuildError(err)
+```
+
+### Error Translations (Modular)
+
+Each module has its own `lang/` directory:
+
+```json
+// modules/auth/lang/en.json
+{
+  "user.login.invalid-credentials": "Invalid login credentials",
+  "session.inactive": "Session is not active or has been closed"
+}
+
+// modules/auth/lang/es.json
+{
+  "user.login.invalid-credentials": "Credenciales de inicio de sesión inválidas",
+  "session.inactive": "La sesión no está activa o ha sido cerrada"
 }
 ```
+
+**Loading translations:**
+```go
+// Automatic at startup (main.go)
+languages := []string{"en", "es"}
+coreServices.LoadAllTranslations(languages)
+
+// Translations are automatically merged from all enabled modules
+```
+
+**Adding translations for new module:**
+1. Create `modules/yourmodule/lang/en.json` and `es.json`
+2. Restart the app - translations auto-load from all enabled modules (defined in `ENABLED_MODULES` env var)
 
 ## Validation & DTOs
 
@@ -66,14 +242,14 @@ if err := ctx.ShouldBindJSON(&dto); err != nil {
 ### DTO Binding Tags
 - Use `binding:"required,email-valid"` for validation
 - Use `conform:"trim,lowercase"` for input sanitization
-- See `models/create_user_dto.go:6` for canonical example
+- See `modules/auth/models/auth_dtos.go` for canonical examples
 
 ## Authentication & Authorization
 
 ### JWT Double-Token System
 - `JWTService` generates **access** (short-lived) + **refresh** (long-lived) tokens
 - Claims include `user_id` + `session_id` (stored in `auth.user_sessions` table)
-- Middleware: `middleware/auth_middleware.go:13` validates access token, sets context vars
+- Middleware: `modules/auth/middleware/auth_middleware.go` validates access token, sets context vars
 
 ### REST API Routes Convention
 Routes follow RESTful principles with proper HTTP verbs:
@@ -86,9 +262,9 @@ POST   /auth/register
 POST   /auth/logout
 POST   /auth/token/refresh
 
-// Profile (GET/PUT - resource-based)
+// Profile (GET/PATCH - resource-based)
 GET    /auth/profile          // Get user profile
-PUT    /auth/profile          // Update user profile
+PATCH  /auth/profile          // Update user profile (partial)
 
 // Password Management (PUT for modifications)
 PUT    /auth/password         // Change password
@@ -109,7 +285,7 @@ import "josex/web/modules/auth/middleware"
 
 protectedRoutes := authGroup.Use(middleware.AuthMiddleware(jwtService))
 protectedRoutes.GET("/profile", controller.GetProfile)
-protectedRoutes.PUT("/profile", controller.UpdateProfile)
+protectedRoutes.PATCH("/profile", controller.UpdateProfile)
 ```
 
 ### Middleware Organization
@@ -126,7 +302,7 @@ protectedRoutes.PUT("/profile", controller.UpdateProfile)
 ### Running Locally
 ```powershell
 # Copy environment template
-cp .env.sample-dev .env
+cp .env.example .env
 
 # Install dependencies
 go mod tidy
@@ -137,9 +313,7 @@ go run .
 
 ### Docker Compose (with PostgreSQL)
 ```powershell
-# Use Docker-specific env file
-docker compose --env-file .env.docker build
-docker compose --env-file .env.docker up
+docker compose up
 ```
 
 ### Swagger Documentation
@@ -151,38 +325,46 @@ docker compose --env-file .env.docker up
 
 **Constructor Pattern:** Services/controllers receive interfaces as constructor params:
 ```go
-// routes/routes.go:36-40
+// routes/routes.go
 userRepository := repositories.NewUserRepository(dbService)
 userService := services.NewUserService(userRepository)
 authController := controllers.NewAuthController(userService, jwtService, parser, dbService)
 ```
 
-## Multi-Language Support
+## Multi-Language Support (Modular)
 
-- Translation files: `lang/{en,es}.json` with error code → message mappings
-- Load at startup: `services.LoadAllTranslations([]string{"en", "es"})`
-- Middleware: `middleware/language_middleware.go` sets language from Accept-Language header
+- Translation files per module: `modules/<module>/lang/{en,es}.json`
+- Auto-load at startup: `services.LoadAllTranslations([]string{"en", "es"})`
+- Middleware: `modules/core/middleware/language_middleware.go` sets language from Accept-Language header
+- Translations automatically merged from all enabled modules
 
 ## Rate Limiting
 
 - Uses `tollbooth` with token bucket algorithm
-- Configured in `routes/routes.go:46-49` (10 req/sec per IP)
+- Configured in `routes/routes.go` (10 req/sec per IP)
 - Checks `RemoteAddr`, `X-Forwarded-For`, `X-Real-IP` headers
 
 ## Critical Files to Reference
 
 - `routes/routes.go` - Route setup, DI wiring, middleware order
-- `services/database_service.go` - Connection pool, retry logic, context handling
-- `common/error.go` - Error constant catalog (always use these, never string literals)
+- `modules/core/services/database_service.go` - Connection pool, retry logic, context handling
+- `modules/core/errors/error.go` - Error response utilities (BuildError, BuildErrorSingle, BuildErrorDetail)
+- `modules/auth/errors/errors.go` - Auth module error constants
+- `modules/users/errors/errors.go` - Users module error constants
+- `modules/core/services/translator_service.go` - Modular translation loading
 - `migrations/20240922231132_sp_create_user.up.sql` - Example stored procedure pattern
-- `controllers/auth_controller.go:45-80` - Canonical controller pattern (validation → service → JWT → response)
+- `modules/auth/controllers/auth_controller.go` - Canonical controller pattern (validation → service → JWT → response)
 
 ## When Adding New Features
 
-1. **Define error constants** in `common/error.go` + translations in `lang/*.json`
-2. **Create interface** in `interfaces/` for testability
-3. **Write stored procedure** in `migrations/` (follow numbering convention)
-4. **Add repository method** calling the SP with parameter binding
-5. **Add service method** for orchestration (can call multiple repos)
-6. **Add controller** with Swagger annotations, validation, error handling
-7. **Register routes** in `routes/routes.go` with appropriate middleware
+1. **Choose the appropriate module** (or create a new one if needed)
+2. **Define error constants** in `modules/<module>/errors/errors.go`
+3. **Add translations** in `modules/<module>/lang/{en,es}.json`
+4. **Add config variables** in `modules/<module>/config/config.go` (use `utils.GetEnv*`)
+5. **Create interface** in `modules/<module>/interfaces/` for testability
+6. **Write stored procedure** in `modules/<module>/migrations/` (use migration CLI tool)
+7. **Add repository method** calling the SP with parameter binding
+8. **Add service method** for orchestration (can call multiple repos)
+9. **Add controller** with Swagger annotations, validation, error handling
+10. **Register routes** in `modules/<module>/routes/<module>_routes.go`
+11. **Wire up in main routes** (`routes/routes.go`) with module check: `if coreConfig.IsModuleEnabled("modulename") { ... }`
