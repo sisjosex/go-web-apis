@@ -199,8 +199,9 @@ func (uc *AuthController) RefreshToken(c *gin.Context) {
 
 	// Now we need to extract claims from refresh token to validate session
 	// We'll parse the token manually to get the claims
+	authConf := config.ModularAppConfig.Auth
 	token, err := jwt.Parse(req.RefreshToken, func(token *jwt.Token) (interface{}, error) {
-		return []byte(config.AppConfig.JwtRefreshKey), nil
+		return []byte(authConf.JWTRefreshKey), nil
 	})
 
 	if err != nil {
@@ -416,8 +417,9 @@ func (uc *AuthController) GenerateEmailVerificationToken(ctx *gin.Context) {
 	}
 
 	// Send verification email
+	coreConf := config.ModularAppConfig.Core
 	emailData := map[string]string{
-		"VerificationURL": config.AppConfig.FrontendUrl + "/confirm_email?token=" + token.Token.String(),
+		"VerificationURL": coreConf.FrontendURL + "/confirm_email?token=" + token.Token.String(),
 	}
 
 	templatePath := coreServices.GetTemplatePath("auth", "verify-email.html")
@@ -539,8 +541,9 @@ func (uc *AuthController) GeneratePasswordResetToken(ctx *gin.Context) {
 	}
 
 	// Send password reset email
+	coreConf := config.ModularAppConfig.Core
 	emailData := map[string]string{
-		"PasswordResetURL": config.AppConfig.FrontendUrl + "/reset_password?token=" + token.Token.String(),
+		"PasswordResetURL": coreConf.FrontendURL + "/reset_password?token=" + token.Token.String(),
 	}
 
 	templatePath := coreServices.GetTemplatePath("auth", "password-reset.html")

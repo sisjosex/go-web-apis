@@ -30,12 +30,14 @@ func (ws *WebServerService) Initialize() {
 	ws.setupServer()
 	ws.setupRoutes()
 
-	log.Printf("Server running in mode: %s", config.AppConfig.AppMode)
+	coreConf := config.ModularAppConfig.Core
+	log.Printf("Server running in mode: %s", coreConf.AppMode)
 }
 
 func (ws *WebServerService) setupServer() {
 	// Configurar modo de Gin
-	gin.SetMode(config.AppConfig.AppMode)
+	coreConf := config.ModularAppConfig.Core
+	gin.SetMode(coreConf.AppMode)
 
 	// Configurar proxies de confianza
 	ws.Server.SetTrustedProxies([]string{"127.0.0.1"})
@@ -48,13 +50,14 @@ func (ws *WebServerService) setupRoutes() {
 }
 
 func (ws *WebServerService) Start(quit <-chan os.Signal) {
+	coreConf := config.ModularAppConfig.Core
 	srv := &http.Server{
-		Addr:    config.AppConfig.AppHost + ":" + config.AppConfig.AppPort,
+		Addr:    coreConf.AppHost + ":" + coreConf.AppPort,
 		Handler: ws.Server,
 	}
 
 	go func() {
-		log.Printf("Server started on %s:%s", config.AppConfig.AppHost, config.AppConfig.AppPort)
+		log.Printf("Server started on %s:%s", coreConf.AppHost, coreConf.AppPort)
 		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 			log.Fatalf("Failed to start server: %s", err)
 		}

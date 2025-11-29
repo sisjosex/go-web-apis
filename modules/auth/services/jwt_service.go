@@ -37,7 +37,7 @@ func (j *jwtService) GenerateAccessToken(userID uuid.UUID, sessionID uuid.UUID) 
 	claims := jwt.MapClaims{
 		"user_id":    userID,
 		"session_id": sessionID,
-		"exp":        time.Now().Add(time.Second * time.Duration(j.accessTTL)).Unix(),
+		"exp":        time.Now().Add(j.accessTTL).Unix(),
 		"iat":        time.Now().Unix(),
 	}
 
@@ -56,7 +56,7 @@ func (j *jwtService) GenerateRefreshToken(userID uuid.UUID, sessionID uuid.UUID)
 	claims := jwt.MapClaims{
 		"user_id":    userID,
 		"session_id": sessionID,
-		"exp":        time.Now().Add(time.Second * time.Duration(j.refreshTTL)).Unix(),
+		"exp":        time.Now().Add(j.refreshTTL).Unix(),
 		"iat":        time.Now().Unix(),
 	}
 

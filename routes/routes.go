@@ -26,11 +26,12 @@ import (
 
 func SetupRoutes(r *gin.Engine, dbService coreServices.DatabaseService) {
 
+	authConf := config.ModularAppConfig.Auth
 	var jwtService = authServices.NewJWTService(
-		config.AppConfig.JwtSecretKey,
-		config.AppConfig.JwtRefreshKey,
-		time.Duration(config.AppConfig.JwtExpirationSeconds),
-		time.Duration(config.AppConfig.JwtRefreshExpirationSeconds),
+		authConf.JWTSecretKey,
+		authConf.JWTRefreshKey,
+		authConf.JWTExpiration,
+		authConf.JWTRefreshExpiration,
 	)
 
 	parser, err := uaparser.New("./config/regexes.yaml")

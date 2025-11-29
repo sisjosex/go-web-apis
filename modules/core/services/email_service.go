@@ -26,12 +26,13 @@ type emailService struct {
 
 // NewEmailService creates a new email service instance
 func NewEmailService() EmailService {
+	authConf := config.ModularAppConfig.Auth
 	return &emailService{
-		smtpHost: config.AppConfig.SmtpHost,
-		smtpPort: config.AppConfig.SmtpPort,
-		smtpUser: config.AppConfig.SmtpUser,
-		smtpPass: config.AppConfig.SmtpPass,
-		smtpFrom: config.AppConfig.SmtpFrom,
+		smtpHost: authConf.SMTPHost,
+		smtpPort: authConf.SMTPPort,
+		smtpUser: authConf.SMTPUser,
+		smtpPass: authConf.SMTPPass,
+		smtpFrom: authConf.SMTPFrom,
 	}
 }
 

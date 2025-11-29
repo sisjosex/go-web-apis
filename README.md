@@ -2,7 +2,24 @@
 
 Este backend está optimizado para manejar múltiples conexiones a PostgreSQL utilizando un pool de conexiones. Se basa en Gin, un framework web rápido y ligero para Go.
 
-## Requisitos
+## 🏗️ Architecture
+
+This project follows a **modular architecture** with the following characteristics:
+
+- **Modular Design**: Each feature is organized as an independent module (`core`, `auth`, `users`)
+- **Stored Procedure-Centric**: Business logic lives in PostgreSQL stored procedures
+- **Layered Structure**: Controllers → Services → Repositories → Database
+- **Dependency Injection**: Interfaces for testability and flexibility
+- **Modular Configuration**: Each module manages its own configuration
+- **Modular Migrations**: Per-module migration tracking and deployment control
+
+### Modules
+
+- **`modules/core/`**: Infrastructure services (database, migrations, language, validation)
+- **`modules/auth/`**: Authentication & session management (login, JWT, OAuth, email verification)
+- **`modules/users/`**: User CRUD operations and admin functionality
+
+## 📋 Requisitos
 
 Antes de ejecutar el proyecto, asegúrate de tener instaladas las siguientes dependencias:
 
@@ -10,14 +27,50 @@ Antes de ejecutar el proyecto, asegúrate de tener instaladas las siguientes dep
 - **PostgreSQL**: Base de datos relacional utilizada en el backend.
 - **Docker & Docker Compose** (Opcional): Para ejecutar el entorno en contenedores.
 
-## Tecnologías y Librerías
+## 🚀 Tecnologías y Librerías
 
 Este proyecto utiliza las siguientes tecnologías y librerías:
 
 - **Go**: Lenguaje de programación principal.
 - **Gin**: Framework web en Go para manejar solicitudes HTTP.
 - **PostgreSQL**: Base de datos utilizada para almacenar información.
+- **pgx/pgxpool**: Driver PostgreSQL con connection pooling.
+- **golang-migrate**: Modular migration system with per-module tracking.
+- **JWT**: Authentication via JSON Web Tokens (access + refresh).
 - **Docker Compose**: Herramienta para definir y gestionar entornos en contenedores.
+
+---
+
+## ⚙️ Configuration
+
+This project uses a **modular configuration system**. Each module has its own configuration file:
+
+- **Core Config**: `modules/core/config/config.go` - Database, enabled modules, server settings
+- **Auth Config**: `modules/auth/config/config.go` - JWT, OAuth, email verification
+- **Users Config**: `modules/users/config/config.go` - Pagination, user management
+
+### Quick Start
+
+1. Copy the environment template:
+   ```sh
+   cp .env.example .env
+   ```
+
+2. Edit `.env` with your settings:
+   ```env
+   # Core Module
+   DATABASE_URL=postgres://user:pass@localhost:5432/dbname
+   ENABLED_MODULES=core,auth,users
+   
+   # Auth Module
+   JWT_SECRET_KEY=your-secret-key
+   JWT_REFRESH_KEY=your-refresh-key
+   
+   # Users Module
+   USERS_DEFAULT_PAGE_SIZE=20
+   ```
+
+3. See **[Configuration Documentation](docs/CONFIGURATION.md)** for complete details.
 
 ---
 
@@ -25,25 +78,73 @@ Este proyecto utiliza las siguientes tecnologías y librerías:
 
 Sigue estos pasos para ejecutar el backend en tu máquina local:
 
-1. Renombra el archivo de entorno de desarrollo:
+1. Copia el archivo de entorno de ejemplo:
 
    ```sh
-   mv .env.sample-dev .env
+   cp .env.example .env
    ```
 
-2. Descarga las dependencias del proyecto ejecutando:
+2. Edita el archivo `.env` con tus credenciales (ver [Configuration Docs](docs/CONFIGURATION.md))
+
+3. Descarga las dependencias del proyecto ejecutando:
 
    ```sh
    go mod tidy
    ```
 
-3. Inicia el servidor ejecutando:
+4. Inicia el servidor ejecutando:
 
    ```sh
    go run .
    ```
 
-   Esto ejecutará el servidor en el puerto configurado en el código.
+   Esto ejecutará el servidor en el puerto configurado (por defecto `8080`).
+
+5. Las migraciones se ejecutan automáticamente al iniciar el servidor según los módulos habilitados en `ENABLED_MODULES`.
+
+---
+
+## 📦 Migrations
+
+This project uses a **modular migration system**. Each module has its own migrations directory and tracking table.
+
+### Creating a New Migration
+
+Use the migration generator tool:
+
+```sh
+go run cmd/migration/main.go -module=auth -name=add_refresh_tokens
+```
+
+This creates:
+- `modules/auth/migrations/YYYYMMDDHHMMSS_add_refresh_tokens.up.sql`
+- `modules/auth/migrations/YYYYMMDDHHMMSS_add_refresh_tokens.down.sql`
+
+### Controlling Which Modules Run Migrations
+
+Set the `ENABLED_MODULES` environment variable:
+
+```env
+# Enable all modules
+ENABLED_MODULES=core,auth,users
+
+# Enable only core and auth
+ENABLED_MODULES=core,auth
+```
+
+### Migration Status
+
+Migrations are tracked per-module in separate tables:
+- `schema_migrations_core`
+- `schema_migrations_auth`
+- `schema_migrations_users`
+
+See migration status on server startup:
+```
+🔧 Module: core (ENABLED) - Path: modules/core/migrations
+🔧 Module: auth (ENABLED) - Path: modules/auth/migrations
+🔧 Module: users (ENABLED) - Path: modules/users/migrations
+```
 
 ---
 

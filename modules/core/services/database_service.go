@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"josex/web/config"
+	coreConfig "josex/web/modules/core/config"
 	"log"
 	"time"
 
@@ -34,10 +35,12 @@ func NewDatabaseService() DatabaseService {
 func (ds *databaseService) InitDatabase(ctx context.Context) {
 	retryInterval := 5 * time.Second
 
-	dataBaseUrl := config.AppConfig.DatabaseUrl
+	// Use modular config
+	coreConf := config.ModularAppConfig.Core
+	dataBaseUrl := coreConf.DatabaseURL
 
 	for {
-		pool, err := connectDatabase(ctx, dataBaseUrl, config.AppConfig.DatabasePoolSize)
+		pool, err := connectDatabase(ctx, dataBaseUrl, coreConf.DatabasePoolSize)
 		if err != nil {
 			log.Printf("Failed to connect to database: %v", err)
 		}
@@ -122,8 +125,14 @@ func (ds *databaseService) runModularMigrations(databaseURL string) error {
 		return err
 	}
 
-	// Create migration service
-	migrationService := NewMigrationService(sqlDB)
+	// Load core config to get enabled modules
+	coreConf := config.ModularAppConfig.Core
+	if coreConf == nil {
+		coreConf = coreConfig.LoadCoreConfig()
+	}
+
+	// Create migration service with module configuration
+	migrationService := NewMigrationService(sqlDB, coreConf)
 
 	// Print module status
 	migrationService.PrintModuleStatus()

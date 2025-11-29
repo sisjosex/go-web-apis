@@ -8,6 +8,8 @@ import (
 	"sort"
 	"strings"
 
+	coreConfig "josex/web/modules/core/config"
+
 	"github.com/golang-migrate/migrate/v4"
 	"github.com/golang-migrate/migrate/v4/database/postgres"
 	_ "github.com/golang-migrate/migrate/v4/source/file"
@@ -26,17 +28,46 @@ type MigrationService struct {
 	db      *sql.DB
 }
 
-// NewMigrationService creates a migration service with configurable modules
-func NewMigrationService(db *sql.DB) *MigrationService {
+// NewMigrationService creates a migration service with configurable modules from CoreConfig
+func NewMigrationService(db *sql.DB, config *coreConfig.CoreConfig) *MigrationService {
+	// Define all available modules
+	allModules := map[string]string{
+		"core":  "modules/core/migrations",
+		"auth":  "modules/auth/migrations",
+		"users": "modules/users/migrations",
+		// Future modules can be added here:
+		// "notifications": "modules/notifications/migrations",
+	}
+
+	// Build enabled modules list from config
+	modules := []Module{}
+
+	// Core is always enabled first
+	if config.IsModuleEnabled("core") {
+		modules = append(modules, Module{
+			Name:    "core",
+			Path:    allModules["core"],
+			Enabled: true,
+		})
+	}
+
+	// Add other enabled modules
+	for _, moduleName := range config.EnabledModules {
+		if moduleName == "core" {
+			continue // Already added
+		}
+		if path, exists := allModules[moduleName]; exists {
+			modules = append(modules, Module{
+				Name:    moduleName,
+				Path:    path,
+				Enabled: true,
+			})
+		}
+	}
+
 	return &MigrationService{
-		db: db,
-		modules: []Module{
-			{Name: "core", Path: "modules/core/migrations", Enabled: true},   // Always enabled
-			{Name: "auth", Path: "modules/auth/migrations", Enabled: true},   // Can be toggled
-			{Name: "users", Path: "modules/users/migrations", Enabled: true}, // Can be toggled
-			// Future modules can be added here:
-			// {Name: "notifications", Path: "modules/notifications/migrations", Enabled: false},
-		},
+		db:      db,
+		modules: modules,
 	}
 }
 
