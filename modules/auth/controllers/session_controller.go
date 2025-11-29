@@ -2,7 +2,7 @@ package controllers
 
 import (
 	authInterfaces "josex/web/modules/auth/interfaces"
-	"josex/web/modules/core/errors"
+	coreErrors "josex/web/modules/core/errors"
 	"net/http"
 
 	"github.com/gin-gonic/gin"
@@ -35,13 +35,13 @@ func (sc *SessionController) GetActiveSessions(c *gin.Context) {
 	userIDStr := c.GetString("user_id")
 	userID, err := uuid.Parse(userIDStr)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, errors.BuildErrorSingle(errors.InvalidUUID))
+		c.JSON(http.StatusBadRequest, coreErrors.BuildErrorSingle(coreErrors.InvalidUUID))
 		return
 	}
 
 	sessions, err := sc.authService.GetUserSessions(userID)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, errors.BuildError(err))
+		c.JSON(http.StatusBadRequest, coreErrors.BuildError(err))
 		return
 	}
 
@@ -65,20 +65,20 @@ func (sc *SessionController) LogoutSession(c *gin.Context) {
 	userIDStr := c.GetString("user_id")
 	userID, err := uuid.Parse(userIDStr)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, errors.BuildErrorSingle(errors.InvalidUUID))
+		c.JSON(http.StatusBadRequest, coreErrors.BuildErrorSingle(coreErrors.InvalidUUID))
 		return
 	}
 
 	sessionIDStr := c.Param("id")
 	sessionID, err := uuid.Parse(sessionIDStr)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, errors.BuildErrorSingle(errors.InvalidUUID))
+		c.JSON(http.StatusBadRequest, coreErrors.BuildErrorSingle(coreErrors.InvalidUUID))
 		return
 	}
 
 	err = sc.authService.LogoutSession(userID, sessionID)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, errors.BuildError(err))
+		c.JSON(http.StatusBadRequest, coreErrors.BuildError(err))
 		return
 	}
 
@@ -101,7 +101,7 @@ func (sc *SessionController) LogoutAllSessions(c *gin.Context) {
 	userIDStr := c.GetString("user_id")
 	userID, err := uuid.Parse(userIDStr)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, errors.BuildErrorSingle(errors.InvalidUUID))
+		c.JSON(http.StatusBadRequest, coreErrors.BuildErrorSingle(coreErrors.InvalidUUID))
 		return
 	}
 
@@ -117,7 +117,7 @@ func (sc *SessionController) LogoutAllSessions(c *gin.Context) {
 
 	count, err := sc.authService.LogoutAllSessions(userID, currentSessionID)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, errors.BuildError(err))
+		c.JSON(http.StatusBadRequest, coreErrors.BuildError(err))
 		return
 	}
 

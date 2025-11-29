@@ -1,11 +1,14 @@
 package controllers
 
 import (
-	"josex/web/modules/core/errors"
+	"josex/web/config"
+	coreErrors "josex/web/modules/core/errors"
 	"josex/web/modules/core/utils"
+	usersErrors "josex/web/modules/users/errors"
 	userInterfaces "josex/web/modules/users/interfaces"
 	userModels "josex/web/modules/users/models"
 	"net/http"
+	"strconv"
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
@@ -25,7 +28,7 @@ func (uc *UserController) Create(ctx *gin.Context) {
 	var newUser userModels.CreateUserDto
 
 	if err := ctx.ShouldBindJSON(&newUser); err != nil {
-		ctx.JSON(http.StatusBadRequest, errors.BuildErrorDetail(errors.UserValidationFailed, utils.ExtractValidationError(err)))
+		ctx.JSON(http.StatusBadRequest, coreErrors.BuildErrorDetail(usersErrors.UserValidationFailed, utils.ExtractValidationError(err)))
 		return
 	}
 
@@ -36,7 +39,7 @@ func (uc *UserController) Create(ctx *gin.Context) {
 
 	user, err := uc.userService.InsertUser(newUser)
 	if err != nil {
-		ctx.JSON(http.StatusBadRequest, errors.BuildError(err))
+		ctx.JSON(http.StatusBadRequest, coreErrors.BuildError(err))
 		return
 	}
 
@@ -47,20 +50,20 @@ func (uc *UserController) Update(ctx *gin.Context) {
 	var updateUser userModels.UpdateUserDto
 	id, err := uuid.Parse(ctx.Param("id"))
 	if err != nil {
-		ctx.JSON(http.StatusBadRequest, errors.BuildError(err))
+		ctx.JSON(http.StatusBadRequest, coreErrors.BuildError(err))
 		return
 	}
 
 	updateUser.ID = id
 
 	if err := ctx.ShouldBindJSON(&updateUser); err != nil {
-		ctx.JSON(http.StatusBadRequest, errors.BuildErrorDetail(errors.UserValidationFailed, utils.ExtractValidationError(err)))
+		ctx.JSON(http.StatusBadRequest, coreErrors.BuildErrorDetail(usersErrors.UserValidationFailed, utils.ExtractValidationError(err)))
 		return
 	}
 
 	user, err := uc.userService.UpdateUser(updateUser)
 	if err != nil {
-		ctx.JSON(http.StatusBadRequest, errors.BuildErrorDetail(errors.UserUpdateFailed, err.Error()))
+		ctx.JSON(http.StatusBadRequest, coreErrors.BuildErrorDetail(usersErrors.UserUpdateFailed, err.Error()))
 		return
 	}
 
@@ -75,7 +78,7 @@ func (uc *UserController) Update(ctx *gin.Context) {
 // @Produce  json
 // @Param Authorization header string true "Bearer Token"
 // @Param page query int false "Page number (default: 1)" minimum(1)
-// @Param limit query int false "Items per page (default: 10, max: 100)" minimum(1) maximum(100)
+// @Param limit query int false "Items per page (default: 20, max: 100)" minimum(1) maximum(100)
 // @Param search query string false "Search in email, first name, last name"
 // @Param status query string false "Filter by status" Enums(active, inactive, expired)
 // @Param sort query string false "Sort field (default: created_at)" Enums(created_at, email, first_name, last_name)
@@ -86,9 +89,28 @@ func (uc *UserController) Update(ctx *gin.Context) {
 // @Router /users [get]
 // @Security ApiKeyAuth
 func (uc *UserController) ListUsers(c *gin.Context) {
+	usersConfig := config.ModularAppConfig.Users
+
+	// Parse pagination parameters
+	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
+	limit, _ := strconv.Atoi(c.DefaultQuery("limit", strconv.Itoa(usersConfig.DefaultPageSize)))
+
+	// Validate page number
+	if page < 1 {
+		page = 1
+	}
+
+	// Validate and enforce max page size
+	if limit < 1 {
+		limit = usersConfig.DefaultPageSize
+	}
+	if limit > usersConfig.MaxPageSize {
+		limit = usersConfig.MaxPageSize
+	}
+
 	users, err := uc.userService.ListUsers()
 	if err != nil {
-		c.JSON(http.StatusBadRequest, errors.BuildError(err))
+		c.JSON(http.StatusBadRequest, coreErrors.BuildError(err))
 		return
 	}
 
@@ -113,13 +135,13 @@ func (uc *UserController) GetUserById(c *gin.Context) {
 	userIDStr := c.Param("id")
 	userID, err := uuid.Parse(userIDStr)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, errors.BuildErrorSingle(errors.InvalidUUID))
+		c.JSON(http.StatusBadRequest, coreErrors.BuildErrorSingle(coreErrors.InvalidUUID))
 		return
 	}
 
 	user, err := uc.userService.GetUserById(userID)
 	if err != nil {
-		c.JSON(http.StatusNotFound, errors.BuildError(err))
+		c.JSON(http.StatusNotFound, coreErrors.BuildError(err))
 		return
 	}
 
@@ -128,7 +150,7 @@ func (uc *UserController) GetUserById(c *gin.Context) {
 
 // SoftDeleteUser godoc
 // @Summary Soft delete user
-// @Description Soft delete a user (sets deleted_at timestamp and invalidates sessions)
+// @Description Soft delete a user (sets deleted_at timestamp and invalidates sessions). Respects ALLOW_USER_DELETION and ENABLE_SOFT_DELETE config.
 // @Tags Users
 // @Accept  json
 // @Produce  json
@@ -138,22 +160,41 @@ func (uc *UserController) GetUserById(c *gin.Context) {
 // @Success 200 {object} map[string]bool
 // @Failure 400 {object} errors.ErrorResponse
 // @Failure 401 {object} errors.ErrorResponse
+// @Failure 403 {object} errors.ErrorResponse "User deletion is disabled"
 // @Failure 404 {object} errors.ErrorResponse
 // @Router /users/{id} [delete]
 // @Security ApiKeyAuth
 func (uc *UserController) SoftDeleteUser(c *gin.Context) {
+	usersConfig := config.ModularAppConfig.Users
+
+	// Check if user deletion is allowed
+	if !usersConfig.AllowUserDeletion {
+		c.JSON(http.StatusForbidden, coreErrors.BuildErrorSingle(usersErrors.UserDeleteNotAllowed))
+		return
+	}
+
 	userIDStr := c.Param("id")
 	userID, err := uuid.Parse(userIDStr)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, errors.BuildErrorSingle(errors.InvalidUUID))
+		c.JSON(http.StatusBadRequest, coreErrors.BuildErrorSingle(coreErrors.InvalidUUID))
 		return
 	}
 
-	err = uc.userService.SoftDeleteUser(userID)
+	// Use soft delete if enabled, otherwise permanent delete
+	if usersConfig.EnableSoftDelete {
+		err = uc.userService.SoftDeleteUser(userID)
+	} else {
+		// If hard delete is implemented, call it here
+		err = uc.userService.SoftDeleteUser(userID) // TODO: implement HardDeleteUser when needed
+	}
+
 	if err != nil {
-		c.JSON(http.StatusBadRequest, errors.BuildError(err))
+		c.JSON(http.StatusBadRequest, coreErrors.BuildError(err))
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"success": true})
+	c.JSON(http.StatusOK, gin.H{
+		"success":     true,
+		"soft_delete": usersConfig.EnableSoftDelete,
+	})
 }

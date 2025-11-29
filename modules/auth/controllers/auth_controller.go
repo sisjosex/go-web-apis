@@ -2,10 +2,11 @@ package controllers
 
 import (
 	"josex/web/config"
+	authErrors "josex/web/modules/auth/errors"
 	authInterfaces "josex/web/modules/auth/interfaces"
 	authModels "josex/web/modules/auth/models"
 	"josex/web/modules/auth/services"
-	"josex/web/modules/core/errors"
+	coreErrors "josex/web/modules/core/errors"
 	coreModels "josex/web/modules/core/models" // Used in Swagger annotations
 	coreServices "josex/web/modules/core/services"
 	"josex/web/modules/core/utils"
@@ -60,7 +61,7 @@ func (uc *AuthController) Login(c *gin.Context) {
 	var loginUserRequest authModels.LoginUserRequestDto
 
 	if err := c.ShouldBindJSON(&loginUserRequest); err != nil {
-		c.JSON(http.StatusBadRequest, errors.BuildErrorDetail(errors.UserLoginValidationFailed, utils.ExtractValidationError(err)))
+		c.JSON(http.StatusBadRequest, coreErrors.BuildErrorDetail(authErrors.UserLoginValidationFailed, utils.ExtractValidationError(err)))
 		return
 	}
 
@@ -82,19 +83,19 @@ func (uc *AuthController) Login(c *gin.Context) {
 
 	sessionUser, err := uc.authService.LoginUser(loginUser)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, errors.BuildError(err))
+		c.JSON(http.StatusBadRequest, coreErrors.BuildError(err))
 		return
 	}
 
 	accessToken, err := uc.jwtService.GenerateAccessToken(sessionUser.UserId, sessionUser.SessionId)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, errors.BuildError(err))
+		c.JSON(http.StatusBadRequest, coreErrors.BuildError(err))
 		return
 	}
 
 	refreshtoken, err := uc.jwtService.GenerateRefreshToken(sessionUser.UserId, sessionUser.SessionId)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, errors.BuildError(err))
+		c.JSON(http.StatusBadRequest, coreErrors.BuildError(err))
 		return
 	}
 
@@ -119,7 +120,7 @@ func (uc *AuthController) LoginFacebook(c *gin.Context) {
 	var loginExternalRequestDto authModels.LoginExternalRequestDto
 
 	if err := c.ShouldBindJSON(&loginExternalRequestDto); err != nil {
-		c.JSON(http.StatusBadRequest, errors.BuildErrorDetail(errors.UserLoginValidationFailed, utils.ExtractValidationError(err)))
+		c.JSON(http.StatusBadRequest, coreErrors.BuildErrorDetail(authErrors.UserLoginValidationFailed, utils.ExtractValidationError(err)))
 		return
 	}
 
@@ -147,19 +148,19 @@ func (uc *AuthController) LoginFacebook(c *gin.Context) {
 
 	sessionUser, err := uc.authService.LoginExternal(loginExternal)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, errors.BuildError(err))
+		c.JSON(http.StatusBadRequest, coreErrors.BuildError(err))
 		return
 	}
 
 	accessToken, err := uc.jwtService.GenerateAccessToken(sessionUser.UserId, sessionUser.SessionId)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, errors.BuildError(err))
+		c.JSON(http.StatusBadRequest, coreErrors.BuildError(err))
 		return
 	}
 
 	refreshtoken, err := uc.jwtService.GenerateRefreshToken(sessionUser.UserId, sessionUser.SessionId)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, errors.BuildError(err))
+		c.JSON(http.StatusBadRequest, coreErrors.BuildError(err))
 		return
 	}
 
@@ -185,7 +186,7 @@ func (uc *AuthController) RefreshToken(c *gin.Context) {
 	var req authModels.RefreshTokenRequestDto
 
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, errors.BuildErrorDetail(errors.UserLoginValidationFailed, utils.ExtractValidationError(err)))
+		c.JSON(http.StatusBadRequest, coreErrors.BuildErrorDetail(authErrors.UserLoginValidationFailed, utils.ExtractValidationError(err)))
 		return
 	}
 
@@ -193,7 +194,7 @@ func (uc *AuthController) RefreshToken(c *gin.Context) {
 	// and returns a new access token
 	newAccessToken, err := uc.jwtService.RefreshAccessToken(req.RefreshToken)
 	if err != nil {
-		c.JSON(http.StatusUnauthorized, errors.BuildError(err))
+		c.JSON(http.StatusUnauthorized, coreErrors.BuildError(err))
 		return
 	}
 
@@ -205,33 +206,33 @@ func (uc *AuthController) RefreshToken(c *gin.Context) {
 	})
 
 	if err != nil {
-		c.JSON(http.StatusUnauthorized, errors.BuildErrorSingle(errors.TokenRefreshInvalid))
+		c.JSON(http.StatusUnauthorized, coreErrors.BuildErrorSingle(authErrors.TokenRefreshInvalid))
 		return
 	}
 
 	claims, ok := token.Claims.(jwt.MapClaims)
 	if !ok {
-		c.JSON(http.StatusUnauthorized, errors.BuildErrorSingle(errors.TokenRefreshClaimsInvalid))
+		c.JSON(http.StatusUnauthorized, coreErrors.BuildErrorSingle(authErrors.TokenRefreshClaimsInvalid))
 		return
 	}
 
 	// Parse user_id and session_id from claims
 	userID, err := uuid.Parse(claims["user_id"].(string))
 	if err != nil {
-		c.JSON(http.StatusUnauthorized, errors.BuildErrorSingle(errors.TokenRefreshClaimsInvalid))
+		c.JSON(http.StatusUnauthorized, coreErrors.BuildErrorSingle(authErrors.TokenRefreshClaimsInvalid))
 		return
 	}
 
 	sessionID, err := uuid.Parse(claims["session_id"].(string))
 	if err != nil {
-		c.JSON(http.StatusUnauthorized, errors.BuildErrorSingle(errors.TokenRefreshClaimsInvalid))
+		c.JSON(http.StatusUnauthorized, coreErrors.BuildErrorSingle(authErrors.TokenRefreshClaimsInvalid))
 		return
 	}
 
 	// Validate that the session is still active in database
 	err = uc.authService.ValidateSession(userID, sessionID)
 	if err != nil {
-		c.JSON(http.StatusUnauthorized, errors.BuildError(err))
+		c.JSON(http.StatusUnauthorized, coreErrors.BuildError(err))
 		return
 	}
 
@@ -255,13 +256,13 @@ func (uc *AuthController) Register(ctx *gin.Context) {
 	var newUser authModels.CreateUserDto
 
 	if err := ctx.ShouldBindJSON(&newUser); err != nil {
-		ctx.JSON(http.StatusBadRequest, errors.BuildErrorDetail(errors.UserValidationFailed, utils.ExtractValidationError(err)))
+		ctx.JSON(http.StatusBadRequest, coreErrors.BuildErrorDetail(authErrors.UserRegisterValidationFailed, utils.ExtractValidationError(err)))
 		return
 	}
 
 	user, err := uc.authService.InsertUser(newUser)
 	if err != nil {
-		ctx.JSON(http.StatusBadRequest, errors.BuildError(err))
+		ctx.JSON(http.StatusBadRequest, coreErrors.BuildError(err))
 		return
 	}
 
@@ -282,13 +283,13 @@ func (uc *AuthController) Register(ctx *gin.Context) {
 func (uc *AuthController) Logout(c *gin.Context) {
 	userId, err := uuid.Parse(c.GetString("user_id"))
 	if err != nil {
-		c.JSON(http.StatusBadRequest, errors.BuildError(err))
+		c.JSON(http.StatusBadRequest, coreErrors.BuildError(err))
 		return
 	}
 
 	sessionId, err := uuid.Parse(c.GetString("session_id"))
 	if err != nil {
-		c.JSON(http.StatusBadRequest, errors.BuildError(err))
+		c.JSON(http.StatusBadRequest, coreErrors.BuildError(err))
 		return
 	}
 
@@ -299,7 +300,7 @@ func (uc *AuthController) Logout(c *gin.Context) {
 
 	unregisteredSession, err := uc.authService.LogoutUser(logoutSessionDto)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, errors.BuildError(err))
+		c.JSON(http.StatusBadRequest, coreErrors.BuildError(err))
 		return
 	}
 
@@ -321,14 +322,14 @@ func (uc *AuthController) GetProfile(ctx *gin.Context) {
 	var getProfileDto authModels.GetProfileDto
 	userID, err := uuid.Parse(ctx.GetString("user_id"))
 	if err != nil {
-		ctx.JSON(http.StatusBadRequest, errors.BuildError(err))
+		ctx.JSON(http.StatusBadRequest, coreErrors.BuildError(err))
 		return
 	}
 	getProfileDto.ID = userID
 
 	user, err := uc.authService.GetProfile(getProfileDto)
 	if err != nil {
-		ctx.JSON(http.StatusBadRequest, errors.BuildError(err))
+		ctx.JSON(http.StatusBadRequest, coreErrors.BuildError(err))
 		return
 	}
 
@@ -351,19 +352,19 @@ func (uc *AuthController) UpdateProfile(ctx *gin.Context) {
 	var updateUser authModels.UpdateProfileDto
 	userID, err := uuid.Parse(ctx.GetString("user_id"))
 	if err != nil {
-		ctx.JSON(http.StatusBadRequest, errors.BuildError(err))
+		ctx.JSON(http.StatusBadRequest, coreErrors.BuildError(err))
 		return
 	}
 	updateUser.ID = userID
 
 	if err := ctx.ShouldBindJSON(&updateUser); err != nil {
-		ctx.JSON(http.StatusBadRequest, errors.BuildErrorDetail(errors.UserValidationFailed, utils.ExtractValidationError(err)))
+		ctx.JSON(http.StatusBadRequest, coreErrors.BuildErrorDetail(authErrors.UserProfileValidationFailed, utils.ExtractValidationError(err)))
 		return
 	}
 
 	user, err := uc.authService.UpdateProfile(updateUser)
 	if err != nil {
-		ctx.JSON(http.StatusBadRequest, errors.BuildError(err))
+		ctx.JSON(http.StatusBadRequest, coreErrors.BuildError(err))
 		return
 	}
 
@@ -387,14 +388,14 @@ func (uc *AuthController) GenerateEmailVerificationToken(ctx *gin.Context) {
 
 	if ctx.Request.ContentLength > 0 {
 		if err := ctx.ShouldBindJSON(&verifyEmailRequestDto); err != nil {
-			ctx.JSON(http.StatusBadRequest, errors.BuildErrorDetail(errors.UserRequestEmailError, utils.ExtractValidationError(err)))
+			ctx.JSON(http.StatusBadRequest, coreErrors.BuildErrorDetail(authErrors.UserRequestEmailError, utils.ExtractValidationError(err)))
 			return
 		}
 	}
 
 	userID, err := uuid.Parse(ctx.GetString("user_id"))
 	if err != nil {
-		ctx.JSON(http.StatusBadRequest, errors.BuildError(err))
+		ctx.JSON(http.StatusBadRequest, coreErrors.BuildError(err))
 		return
 	}
 
@@ -405,13 +406,13 @@ func (uc *AuthController) GenerateEmailVerificationToken(ctx *gin.Context) {
 
 	tx, err := uc.dbService.BeginTransaction(ctx)
 	if err != nil {
-		ctx.JSON(http.StatusBadRequest, errors.BuildError(err))
+		ctx.JSON(http.StatusBadRequest, coreErrors.BuildError(err))
 		return
 	}
 
 	token, err := uc.authService.GenerateEmailVerificationToken(*verifyEmailRequest, tx)
 	if err != nil {
-		ctx.JSON(http.StatusBadRequest, errors.BuildError(err))
+		ctx.JSON(http.StatusBadRequest, coreErrors.BuildError(err))
 		tx.Rollback(ctx)
 		return
 	}
@@ -425,14 +426,14 @@ func (uc *AuthController) GenerateEmailVerificationToken(ctx *gin.Context) {
 	templatePath := coreServices.GetTemplatePath("auth", "verify-email.html")
 	err = uc.emailService.SendEmail(*verifyEmailRequest.Email, "Verifica tu cuenta", templatePath, emailData)
 	if err != nil {
-		ctx.JSON(http.StatusBadRequest, errors.BuildErrorDetail(errors.UserChangeEmailSendingError, err.Error()))
+		ctx.JSON(http.StatusBadRequest, coreErrors.BuildErrorDetail(authErrors.UserChangeEmailSendingError, err.Error()))
 		tx.Rollback(ctx)
 		return
 	}
 
 	err = tx.Commit(ctx)
 	if err != nil {
-		ctx.JSON(http.StatusBadRequest, errors.BuildError(err))
+		ctx.JSON(http.StatusBadRequest, coreErrors.BuildError(err))
 		return
 	}
 
@@ -454,13 +455,13 @@ func (uc *AuthController) ConfirmEmailAddress(ctx *gin.Context) {
 	var verifyEmailRequest authModels.VerifyEmailToken
 
 	if err := ctx.ShouldBindJSON(&verifyEmailRequest); err != nil {
-		ctx.JSON(http.StatusBadRequest, errors.BuildErrorDetail(errors.UserEmailVerification, utils.ExtractValidationError(err)))
+		ctx.JSON(http.StatusBadRequest, coreErrors.BuildErrorDetail(authErrors.UserEmailVerification, utils.ExtractValidationError(err)))
 		return
 	}
 
 	confirmed, err := uc.authService.ConfirmEmailAddress(verifyEmailRequest)
 	if err != nil {
-		ctx.JSON(http.StatusBadRequest, errors.BuildError(err))
+		ctx.JSON(http.StatusBadRequest, coreErrors.BuildError(err))
 		return
 	}
 
@@ -483,13 +484,13 @@ func (uc *AuthController) ChangePassword(ctx *gin.Context) {
 	var changePasswordEequestDto authModels.ChangePasswordRequestDto
 
 	if err := ctx.ShouldBindJSON(&changePasswordEequestDto); err != nil {
-		ctx.JSON(http.StatusBadRequest, errors.BuildErrorDetail(errors.UserChangePasswordError, utils.ExtractValidationError(err)))
+		ctx.JSON(http.StatusBadRequest, coreErrors.BuildErrorDetail(authErrors.UserChangePasswordError, utils.ExtractValidationError(err)))
 		return
 	}
 
 	userID, err := uuid.Parse(ctx.GetString("user_id"))
 	if err != nil {
-		ctx.JSON(http.StatusBadRequest, errors.BuildError(err))
+		ctx.JSON(http.StatusBadRequest, coreErrors.BuildError(err))
 		return
 	}
 
@@ -501,7 +502,7 @@ func (uc *AuthController) ChangePassword(ctx *gin.Context) {
 
 	changed, err := uc.authService.ChangePassword(changePasswordDto)
 	if err != nil {
-		ctx.JSON(http.StatusBadRequest, errors.BuildError(err))
+		ctx.JSON(http.StatusBadRequest, coreErrors.BuildError(err))
 		return
 	}
 
@@ -523,19 +524,19 @@ func (uc *AuthController) GeneratePasswordResetToken(ctx *gin.Context) {
 	var passwordResetRequestDto authModels.PasswordResetRequestDto
 
 	if err := ctx.ShouldBindJSON(&passwordResetRequestDto); err != nil {
-		ctx.JSON(http.StatusBadRequest, errors.BuildErrorDetail(errors.UserPasswordResetError, utils.ExtractValidationError(err)))
+		ctx.JSON(http.StatusBadRequest, coreErrors.BuildErrorDetail(authErrors.UserPasswordResetError, utils.ExtractValidationError(err)))
 		return
 	}
 
 	tx, err := uc.dbService.BeginTransaction(ctx)
 	if err != nil {
-		ctx.JSON(http.StatusBadRequest, errors.BuildError(err))
+		ctx.JSON(http.StatusBadRequest, coreErrors.BuildError(err))
 		return
 	}
 
 	token, err := uc.authService.GeneratePasswordResetToken(passwordResetRequestDto, tx)
 	if err != nil {
-		ctx.JSON(http.StatusBadRequest, errors.BuildError(err))
+		ctx.JSON(http.StatusBadRequest, coreErrors.BuildError(err))
 		tx.Rollback(ctx)
 		return
 	}
@@ -549,14 +550,14 @@ func (uc *AuthController) GeneratePasswordResetToken(ctx *gin.Context) {
 	templatePath := coreServices.GetTemplatePath("auth", "password-reset.html")
 	err = uc.emailService.SendEmail(*passwordResetRequestDto.Email, "Restablece tu contraseña", templatePath, emailData)
 	if err != nil {
-		ctx.JSON(http.StatusBadRequest, errors.BuildErrorDetail(errors.UserForgorPasswordEmailSendingError, err.Error()))
+		ctx.JSON(http.StatusBadRequest, coreErrors.BuildErrorDetail(authErrors.UserForgorPasswordEmailSendingError, err.Error()))
 		tx.Rollback(ctx)
 		return
 	}
 
 	err = tx.Commit(ctx)
 	if err != nil {
-		ctx.JSON(http.StatusBadRequest, errors.BuildError(err))
+		ctx.JSON(http.StatusBadRequest, coreErrors.BuildError(err))
 		return
 	}
 
@@ -578,13 +579,13 @@ func (uc *AuthController) ResetPasswordWithToken(ctx *gin.Context) {
 	var passwordResetWithTokenDto authModels.PasswordResetWithTokenDto
 
 	if err := ctx.ShouldBindJSON(&passwordResetWithTokenDto); err != nil {
-		ctx.JSON(http.StatusBadRequest, errors.BuildErrorDetail(errors.UserPasswordResetError, utils.ExtractValidationError(err)))
+		ctx.JSON(http.StatusBadRequest, coreErrors.BuildErrorDetail(authErrors.UserPasswordResetError, utils.ExtractValidationError(err)))
 		return
 	}
 
 	changed, err := uc.authService.ResetPasswordWithToken(passwordResetWithTokenDto)
 	if err != nil {
-		ctx.JSON(http.StatusBadRequest, errors.BuildError(err))
+		ctx.JSON(http.StatusBadRequest, coreErrors.BuildError(err))
 		return
 	}
 

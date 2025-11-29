@@ -6,6 +6,7 @@ import (
 	"github.com/jackc/pgx/v5/pgconn"
 )
 
+// ErrorResponse represents a standardized error response
 type ErrorResponse struct {
 	// Error code
 	// example: 400
@@ -20,47 +21,8 @@ type ErrorResponse struct {
 	Detail interface{} `json:"detail,omitempty"`
 }
 
+// Common validation errors (used across modules)
 const (
-	UserCreateFailed                    = "user.create.failed"
-	UserUpdateFailed                    = "user.update.failed"
-	UserLoginFailed                     = "user.login.invalid-credentials2"
-	UserLoginValidationFailed           = "user.login.validation-failed"
-	UserLoginNotFound                   = "user.login.not-found"
-	UserLogoutValidationFailed          = "user.logout.validation-failed"
-	UserValidationFailed                = "user.create.validation-failed"
-	UserEmailAlreadyInUse               = "user.create.email-in-use"
-	UserSearchFailed                    = "user.search.failed"
-	UserRegisterFailed                  = "user.register.failed"
-	UserGetByIdNotFound                 = "user.get-by-id.not-found"
-	UserGetByIdEmailFound               = "user.get-by-email.not-found"
-	UserRequestEmailError               = "user.email.request.failed"
-	UserEmailVerification               = "user.email.verification.failed"
-	UserChangePasswordError             = "user.change-password.failed"
-	UserPasswordResetError              = "user.password-reset.failed"
-	UserChangeEmailSendingError         = "user.change-email.sending-email-failed"
-	UserForgorPasswordEmailSendingError = "user.forgot-password.sending-email-failed"
-
-	// Token refresh errors
-	TokenRefreshInvalid       = "token.refresh.invalid"
-	TokenRefreshExpired       = "token.refresh.expired"
-	TokenRefreshClaimsInvalid = "token.refresh.claims-invalid"
-
-	// Session errors
-	SessionInactive         = "session.inactive"
-	SessionNotFound         = "session.not-found"
-	SessionListFailed       = "session.list-failed"
-	SessionLogoutFailed     = "session.logout-failed"
-	SessionAlreadyLoggedOut = "session.already-logged-out"
-	SessionUnauthorized     = "session.unauthorized"
-
-	// User management errors
-	UserNotFound       = "user.not-found"
-	UserListFailed     = "user.list.failed"
-	UserGetFailed      = "user.get.failed"
-	UserDeleteFailed   = "user.delete.failed"
-	UserAlreadyDeleted = "user.already-deleted"
-
-	// Validation errors
 	InvalidUUID = "validation.invalid-uuid"
 )
 
@@ -68,19 +30,21 @@ type ErrorTag map[string]string
 
 var ErrorTagCatalog = ErrorTag{
 	"email-valid": "email-invalid",
-	//"email-exists": "user.email.exists",
 }
 
+// BuildErrorSingle creates an error response with just an error code
 func BuildErrorSingle(Error string) *ErrorResponse {
 	return &ErrorResponse{Error: Error}
 }
 
+// BuildErrorDetail creates an error response with error code and detail
 func BuildErrorDetail(Error string, Detail interface{}) *ErrorResponse {
 	return &ErrorResponse{Error: Error, Detail: Detail}
 }
 
+// BuildError creates an error response from a Go error
+// Handles PostgreSQL errors with special formatting
 func BuildError(err error) *ErrorResponse {
-
 	if err == nil {
 		return nil
 	}
