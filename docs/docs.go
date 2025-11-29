@@ -54,7 +54,7 @@ const docTemplate = `{
                     "400": {
                         "description": "Bad Request",
                         "schema": {
-                            "$ref": "#/definitions/common.ErrorResponse"
+                            "$ref": "#/definitions/errors.ErrorResponse"
                         }
                     }
                 }
@@ -103,7 +103,7 @@ const docTemplate = `{
                     "400": {
                         "description": "Bad Request",
                         "schema": {
-                            "$ref": "#/definitions/common.ErrorResponse"
+                            "$ref": "#/definitions/errors.ErrorResponse"
                         }
                     }
                 }
@@ -148,7 +148,7 @@ const docTemplate = `{
                     "400": {
                         "description": "Bad Request",
                         "schema": {
-                            "$ref": "#/definitions/common.ErrorResponse"
+                            "$ref": "#/definitions/errors.ErrorResponse"
                         }
                     }
                 }
@@ -193,7 +193,7 @@ const docTemplate = `{
                     "400": {
                         "description": "Bad Request",
                         "schema": {
-                            "$ref": "#/definitions/common.ErrorResponse"
+                            "$ref": "#/definitions/errors.ErrorResponse"
                         }
                     }
                 }
@@ -236,7 +236,7 @@ const docTemplate = `{
                     "400": {
                         "description": "Bad Request",
                         "schema": {
-                            "$ref": "#/definitions/common.ErrorResponse"
+                            "$ref": "#/definitions/errors.ErrorResponse"
                         }
                     }
                 }
@@ -288,7 +288,7 @@ const docTemplate = `{
                     "400": {
                         "description": "Bad Request",
                         "schema": {
-                            "$ref": "#/definitions/common.ErrorResponse"
+                            "$ref": "#/definitions/errors.ErrorResponse"
                         }
                     }
                 }
@@ -333,7 +333,7 @@ const docTemplate = `{
                     "400": {
                         "description": "Bad Request",
                         "schema": {
-                            "$ref": "#/definitions/common.ErrorResponse"
+                            "$ref": "#/definitions/errors.ErrorResponse"
                         }
                     }
                 }
@@ -376,7 +376,7 @@ const docTemplate = `{
                     "400": {
                         "description": "Bad Request",
                         "schema": {
-                            "$ref": "#/definitions/common.ErrorResponse"
+                            "$ref": "#/definitions/errors.ErrorResponse"
                         }
                     }
                 }
@@ -419,7 +419,7 @@ const docTemplate = `{
                     "400": {
                         "description": "Bad Request",
                         "schema": {
-                            "$ref": "#/definitions/common.ErrorResponse"
+                            "$ref": "#/definitions/errors.ErrorResponse"
                         }
                     }
                 }
@@ -469,7 +469,7 @@ const docTemplate = `{
                     "400": {
                         "description": "Bad Request",
                         "schema": {
-                            "$ref": "#/definitions/common.ErrorResponse"
+                            "$ref": "#/definitions/errors.ErrorResponse"
                         }
                     }
                 }
@@ -500,7 +500,7 @@ const docTemplate = `{
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/models.CreateUserDto"
+                            "$ref": "#/definitions/josex_web_modules_auth_models.CreateUserDto"
                         }
                     }
                 ],
@@ -514,7 +514,7 @@ const docTemplate = `{
                     "400": {
                         "description": "Bad Request",
                         "schema": {
-                            "$ref": "#/definitions/common.ErrorResponse"
+                            "$ref": "#/definitions/errors.ErrorResponse"
                         }
                     }
                 }
@@ -560,13 +560,13 @@ const docTemplate = `{
                     "400": {
                         "description": "Bad Request",
                         "schema": {
-                            "$ref": "#/definitions/common.ErrorResponse"
+                            "$ref": "#/definitions/errors.ErrorResponse"
                         }
                     },
                     "401": {
                         "description": "Unauthorized",
                         "schema": {
-                            "$ref": "#/definitions/common.ErrorResponse"
+                            "$ref": "#/definitions/errors.ErrorResponse"
                         }
                     }
                 }
@@ -610,13 +610,13 @@ const docTemplate = `{
                     "400": {
                         "description": "Bad Request",
                         "schema": {
-                            "$ref": "#/definitions/common.ErrorResponse"
+                            "$ref": "#/definitions/errors.ErrorResponse"
                         }
                     },
                     "401": {
                         "description": "Unauthorized",
                         "schema": {
-                            "$ref": "#/definitions/common.ErrorResponse"
+                            "$ref": "#/definitions/errors.ErrorResponse"
                         }
                     }
                 }
@@ -669,13 +669,13 @@ const docTemplate = `{
                     "400": {
                         "description": "Bad Request",
                         "schema": {
-                            "$ref": "#/definitions/common.ErrorResponse"
+                            "$ref": "#/definitions/errors.ErrorResponse"
                         }
                     },
                     "401": {
                         "description": "Unauthorized",
                         "schema": {
-                            "$ref": "#/definitions/common.ErrorResponse"
+                            "$ref": "#/definitions/errors.ErrorResponse"
                         }
                     }
                 }
@@ -720,13 +720,13 @@ const docTemplate = `{
                     "400": {
                         "description": "Bad Request",
                         "schema": {
-                            "$ref": "#/definitions/common.ErrorResponse"
+                            "$ref": "#/definitions/errors.ErrorResponse"
                         }
                     },
                     "401": {
                         "description": "Unauthorized",
                         "schema": {
-                            "$ref": "#/definitions/common.ErrorResponse"
+                            "$ref": "#/definitions/errors.ErrorResponse"
                         }
                     }
                 }
@@ -769,7 +769,7 @@ const docTemplate = `{
                         "maximum": 100,
                         "minimum": 1,
                         "type": "integer",
-                        "description": "Items per page (default: 10, max: 100)",
+                        "description": "Items per page (default: 20, max: 100)",
                         "name": "limit",
                         "in": "query"
                     },
@@ -823,13 +823,13 @@ const docTemplate = `{
                     "400": {
                         "description": "Bad Request",
                         "schema": {
-                            "$ref": "#/definitions/common.ErrorResponse"
+                            "$ref": "#/definitions/errors.ErrorResponse"
                         }
                     },
                     "401": {
                         "description": "Unauthorized",
                         "schema": {
-                            "$ref": "#/definitions/common.ErrorResponse"
+                            "$ref": "#/definitions/errors.ErrorResponse"
                         }
                     }
                 }
@@ -879,19 +879,19 @@ const docTemplate = `{
                     "400": {
                         "description": "Bad Request",
                         "schema": {
-                            "$ref": "#/definitions/common.ErrorResponse"
+                            "$ref": "#/definitions/errors.ErrorResponse"
                         }
                     },
                     "401": {
                         "description": "Unauthorized",
                         "schema": {
-                            "$ref": "#/definitions/common.ErrorResponse"
+                            "$ref": "#/definitions/errors.ErrorResponse"
                         }
                     },
                     "404": {
                         "description": "Not Found",
                         "schema": {
-                            "$ref": "#/definitions/common.ErrorResponse"
+                            "$ref": "#/definitions/errors.ErrorResponse"
                         }
                     }
                 }
@@ -902,7 +902,7 @@ const docTemplate = `{
                         "ApiKeyAuth": []
                     }
                 ],
-                "description": "Soft delete a user (sets deleted_at timestamp and invalidates sessions)",
+                "description": "Soft delete a user (sets deleted_at timestamp and invalidates sessions). Respects ALLOW_USER_DELETION and ENABLE_SOFT_DELETE config.",
                 "consumes": [
                     "application/json"
                 ],
@@ -950,19 +950,25 @@ const docTemplate = `{
                     "400": {
                         "description": "Bad Request",
                         "schema": {
-                            "$ref": "#/definitions/common.ErrorResponse"
+                            "$ref": "#/definitions/errors.ErrorResponse"
                         }
                     },
                     "401": {
                         "description": "Unauthorized",
                         "schema": {
-                            "$ref": "#/definitions/common.ErrorResponse"
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    },
+                    "403": {
+                        "description": "User deletion is disabled",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
                         }
                     },
                     "404": {
                         "description": "Not Found",
                         "schema": {
-                            "$ref": "#/definitions/common.ErrorResponse"
+                            "$ref": "#/definitions/errors.ErrorResponse"
                         }
                     }
                 }
@@ -970,7 +976,7 @@ const docTemplate = `{
         }
     },
     "definitions": {
-        "common.ErrorResponse": {
+        "errors.ErrorResponse": {
             "type": "object",
             "properties": {
                 "code": {
@@ -988,22 +994,7 @@ const docTemplate = `{
                 }
             }
         },
-        "models.ChangePasswordRequestDto": {
-            "type": "object",
-            "required": [
-                "password_current",
-                "password_new"
-            ],
-            "properties": {
-                "password_current": {
-                    "type": "string"
-                },
-                "password_new": {
-                    "type": "string"
-                }
-            }
-        },
-        "models.CreateUserDto": {
+        "josex_web_modules_auth_models.CreateUserDto": {
             "type": "object",
             "required": [
                 "email",
@@ -1037,6 +1028,21 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "website_url": {
+                    "type": "string"
+                }
+            }
+        },
+        "models.ChangePasswordRequestDto": {
+            "type": "object",
+            "required": [
+                "password_current",
+                "password_new"
+            ],
+            "properties": {
+                "password_current": {
+                    "type": "string"
+                },
+                "password_new": {
                     "type": "string"
                 }
             }
@@ -1091,15 +1097,12 @@ const docTemplate = `{
             ],
             "properties": {
                 "device_id": {
-                    "description": "DeviceId of the user",
                     "type": "string"
                 },
                 "email": {
-                    "description": "Email of the user",
                     "type": "string"
                 },
                 "password": {
-                    "description": "Password of the user",
                     "type": "string"
                 }
             }
@@ -1134,11 +1137,9 @@ const docTemplate = `{
             ],
             "properties": {
                 "password_new": {
-                    "description": "New password",
                     "type": "string"
                 },
                 "token": {
-                    "description": "Password reset token, see /auth/request_password_reset",
                     "type": "string"
                 }
             }
@@ -1316,7 +1317,6 @@ const docTemplate = `{
             "type": "object",
             "properties": {
                 "email": {
-                    "description": "Send only for request edit primary email address",
                     "type": "string"
                 }
             }

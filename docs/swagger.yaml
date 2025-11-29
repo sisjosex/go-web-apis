@@ -1,6 +1,6 @@
 basePath: /api/v1
 definitions:
-  common.ErrorResponse:
+  errors.ErrorResponse:
     properties:
       code:
         description: |-
@@ -18,17 +18,7 @@ definitions:
       message:
         description: Translated error message
     type: object
-  models.ChangePasswordRequestDto:
-    properties:
-      password_current:
-        type: string
-      password_new:
-        type: string
-    required:
-    - password_current
-    - password_new
-    type: object
-  models.CreateUserDto:
+  josex_web_modules_auth_models.CreateUserDto:
     properties:
       bio:
         type: string
@@ -53,6 +43,16 @@ definitions:
     - first_name
     - last_name
     - password
+    type: object
+  models.ChangePasswordRequestDto:
+    properties:
+      password_current:
+        type: string
+      password_new:
+        type: string
+    required:
+    - password_current
+    - password_new
     type: object
   models.LoginExternalRequestDto:
     properties:
@@ -85,13 +85,10 @@ definitions:
   models.LoginUserRequestDto:
     properties:
       device_id:
-        description: DeviceId of the user
         type: string
       email:
-        description: Email of the user
         type: string
       password:
-        description: Password of the user
         type: string
     required:
     - email
@@ -114,10 +111,8 @@ definitions:
   models.PasswordResetWithTokenDto:
     properties:
       password_new:
-        description: New password
         type: string
       token:
-        description: Password reset token, see /auth/request_password_reset
         type: string
     required:
     - password_new
@@ -240,7 +235,6 @@ definitions:
   models.VerifyEmailRequestDto:
     properties:
       email:
-        description: Send only for request edit primary email address
         type: string
     type: object
   models.VerifyEmailToken:
@@ -283,7 +277,7 @@ paths:
         "400":
           description: Bad Request
           schema:
-            $ref: '#/definitions/common.ErrorResponse'
+            $ref: '#/definitions/errors.ErrorResponse'
       security:
       - ApiKeyAuth: []
       summary: Request email verification
@@ -310,7 +304,7 @@ paths:
         "400":
           description: Bad Request
           schema:
-            $ref: '#/definitions/common.ErrorResponse'
+            $ref: '#/definitions/errors.ErrorResponse'
       security:
       - ApiKeyAuth: []
       summary: Confirm email address
@@ -339,7 +333,7 @@ paths:
         "400":
           description: Bad Request
           schema:
-            $ref: '#/definitions/common.ErrorResponse'
+            $ref: '#/definitions/errors.ErrorResponse'
       security:
       - ApiKeyAuth: []
       summary: Allow login based on email authentication, email can be confirmed after
@@ -368,7 +362,7 @@ paths:
         "400":
           description: Bad Request
           schema:
-            $ref: '#/definitions/common.ErrorResponse'
+            $ref: '#/definitions/errors.ErrorResponse'
       security:
       - ApiKeyAuth: []
       summary: Allow login based on Facebook authentication
@@ -395,7 +389,7 @@ paths:
         "400":
           description: Bad Request
           schema:
-            $ref: '#/definitions/common.ErrorResponse'
+            $ref: '#/definitions/errors.ErrorResponse'
       security:
       - ApiKeyAuth: []
       summary: Logout
@@ -428,7 +422,7 @@ paths:
         "400":
           description: Bad Request
           schema:
-            $ref: '#/definitions/common.ErrorResponse'
+            $ref: '#/definitions/errors.ErrorResponse'
       security:
       - ApiKeyAuth: []
       summary: Change user password
@@ -456,7 +450,7 @@ paths:
         "400":
           description: Bad Request
           schema:
-            $ref: '#/definitions/common.ErrorResponse'
+            $ref: '#/definitions/errors.ErrorResponse'
       security:
       - ApiKeyAuth: []
       summary: Request password reset
@@ -483,7 +477,7 @@ paths:
         "400":
           description: Bad Request
           schema:
-            $ref: '#/definitions/common.ErrorResponse'
+            $ref: '#/definitions/errors.ErrorResponse'
       security:
       - ApiKeyAuth: []
       summary: Reset password with token
@@ -510,7 +504,7 @@ paths:
         "400":
           description: Bad Request
           schema:
-            $ref: '#/definitions/common.ErrorResponse'
+            $ref: '#/definitions/errors.ErrorResponse'
       security:
       - ApiKeyAuth: []
       summary: Get user profile
@@ -543,7 +537,7 @@ paths:
         "400":
           description: Bad Request
           schema:
-            $ref: '#/definitions/common.ErrorResponse'
+            $ref: '#/definitions/errors.ErrorResponse'
       security:
       - ApiKeyAuth: []
       summary: Update user profile
@@ -560,7 +554,7 @@ paths:
         name: request
         required: true
         schema:
-          $ref: '#/definitions/models.CreateUserDto'
+          $ref: '#/definitions/josex_web_modules_auth_models.CreateUserDto'
       produces:
       - application/json
       responses:
@@ -571,7 +565,7 @@ paths:
         "400":
           description: Bad Request
           schema:
-            $ref: '#/definitions/common.ErrorResponse'
+            $ref: '#/definitions/errors.ErrorResponse'
       security:
       - ApiKeyAuth: []
       summary: Register
@@ -600,11 +594,11 @@ paths:
         "400":
           description: Bad Request
           schema:
-            $ref: '#/definitions/common.ErrorResponse'
+            $ref: '#/definitions/errors.ErrorResponse'
         "401":
           description: Unauthorized
           schema:
-            $ref: '#/definitions/common.ErrorResponse'
+            $ref: '#/definitions/errors.ErrorResponse'
       security:
       - ApiKeyAuth: []
       summary: Logout all sessions
@@ -632,11 +626,11 @@ paths:
         "400":
           description: Bad Request
           schema:
-            $ref: '#/definitions/common.ErrorResponse'
+            $ref: '#/definitions/errors.ErrorResponse'
         "401":
           description: Unauthorized
           schema:
-            $ref: '#/definitions/common.ErrorResponse'
+            $ref: '#/definitions/errors.ErrorResponse'
       security:
       - ApiKeyAuth: []
       summary: Get active sessions
@@ -670,11 +664,11 @@ paths:
         "400":
           description: Bad Request
           schema:
-            $ref: '#/definitions/common.ErrorResponse'
+            $ref: '#/definitions/errors.ErrorResponse'
         "401":
           description: Unauthorized
           schema:
-            $ref: '#/definitions/common.ErrorResponse'
+            $ref: '#/definitions/errors.ErrorResponse'
       security:
       - ApiKeyAuth: []
       summary: Logout specific session
@@ -702,11 +696,11 @@ paths:
         "400":
           description: Bad Request
           schema:
-            $ref: '#/definitions/common.ErrorResponse'
+            $ref: '#/definitions/errors.ErrorResponse'
         "401":
           description: Unauthorized
           schema:
-            $ref: '#/definitions/common.ErrorResponse'
+            $ref: '#/definitions/errors.ErrorResponse'
       security:
       - ApiKeyAuth: []
       summary: Refresh access token
@@ -728,7 +722,7 @@ paths:
         minimum: 1
         name: page
         type: integer
-      - description: 'Items per page (default: 10, max: 100)'
+      - description: 'Items per page (default: 20, max: 100)'
         in: query
         maximum: 100
         minimum: 1
@@ -772,11 +766,11 @@ paths:
         "400":
           description: Bad Request
           schema:
-            $ref: '#/definitions/common.ErrorResponse'
+            $ref: '#/definitions/errors.ErrorResponse'
         "401":
           description: Unauthorized
           schema:
-            $ref: '#/definitions/common.ErrorResponse'
+            $ref: '#/definitions/errors.ErrorResponse'
       security:
       - ApiKeyAuth: []
       summary: List users with pagination and filters
@@ -786,7 +780,8 @@ paths:
     delete:
       consumes:
       - application/json
-      description: Soft delete a user (sets deleted_at timestamp and invalidates sessions)
+      description: Soft delete a user (sets deleted_at timestamp and invalidates sessions).
+        Respects ALLOW_USER_DELETION and ENABLE_SOFT_DELETE config.
       parameters:
       - description: Bearer Token
         in: header
@@ -815,15 +810,19 @@ paths:
         "400":
           description: Bad Request
           schema:
-            $ref: '#/definitions/common.ErrorResponse'
+            $ref: '#/definitions/errors.ErrorResponse'
         "401":
           description: Unauthorized
           schema:
-            $ref: '#/definitions/common.ErrorResponse'
+            $ref: '#/definitions/errors.ErrorResponse'
+        "403":
+          description: User deletion is disabled
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
         "404":
           description: Not Found
           schema:
-            $ref: '#/definitions/common.ErrorResponse'
+            $ref: '#/definitions/errors.ErrorResponse'
       security:
       - ApiKeyAuth: []
       summary: Soft delete user
@@ -854,15 +853,15 @@ paths:
         "400":
           description: Bad Request
           schema:
-            $ref: '#/definitions/common.ErrorResponse'
+            $ref: '#/definitions/errors.ErrorResponse'
         "401":
           description: Unauthorized
           schema:
-            $ref: '#/definitions/common.ErrorResponse'
+            $ref: '#/definitions/errors.ErrorResponse'
         "404":
           description: Not Found
           schema:
-            $ref: '#/definitions/common.ErrorResponse'
+            $ref: '#/definitions/errors.ErrorResponse'
       security:
       - ApiKeyAuth: []
       summary: Get user by ID
