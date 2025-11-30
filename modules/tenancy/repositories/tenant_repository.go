@@ -239,17 +239,18 @@ func (r *tenantRepository) UpdateTenant(ctx context.Context, tenantID uuid.UUID,
 }
 
 // AddUserToTenant adds a user to a tenant
-func (r *tenantRepository) AddUserToTenant(ctx context.Context, tenantID uuid.UUID, userID uuid.UUID, role string) (*models.TenantUser, error) {
+func (r *tenantRepository) AddUserToTenant(ctx context.Context, tenantID uuid.UUID, requesterUserID uuid.UUID, userID uuid.UUID, role string) (*models.TenantUser, error) {
 	tenantUser := &models.TenantUser{}
 	query := `
 		SELECT * FROM tenancy.sp_add_user_to_tenant(
 			p_tenant_id := $1,
-			p_user_id := $2,
-			p_role := $3
+			p_requester_user_id := $2,
+			p_user_id := $3,
+			p_role := $4
 		)
 	`
 
-	row := r.dbService.QueryRow(ctx, query, tenantID, userID, role)
+	row := r.dbService.QueryRow(ctx, query, tenantID, requesterUserID, userID, role)
 
 	err := row.Scan(
 		&tenantUser.ID,
@@ -272,16 +273,17 @@ func (r *tenantRepository) AddUserToTenant(ctx context.Context, tenantID uuid.UU
 }
 
 // RemoveUserFromTenant removes a user from a tenant
-func (r *tenantRepository) RemoveUserFromTenant(ctx context.Context, tenantID uuid.UUID, userID uuid.UUID) error {
+func (r *tenantRepository) RemoveUserFromTenant(ctx context.Context, tenantID uuid.UUID, requesterUserID uuid.UUID, userID uuid.UUID) error {
 	query := `
 		SELECT tenancy.sp_remove_user_from_tenant(
 			p_tenant_id := $1,
-			p_user_id := $2
+			p_requester_user_id := $2,
+			p_user_id := $3
 		)
 	`
 
 	var success bool
-	err := r.dbService.QueryRow(ctx, query, tenantID, userID).Scan(&success)
+	err := r.dbService.QueryRow(ctx, query, tenantID, requesterUserID, userID).Scan(&success)
 
 	if err != nil {
 		var pgErr *pgconn.PgError

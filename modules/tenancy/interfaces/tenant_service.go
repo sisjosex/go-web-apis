@@ -19,11 +19,11 @@ type TenantService interface {
 	// Update tenant (admin/owner only - enforced in controller)
 	UpdateTenant(ctx context.Context, tenantID uuid.UUID, dto *models.UpdateTenantDto) (*models.TenantDetailResponse, error)
 
-	// Add user to tenant (admin/owner only - enforced in controller)
-	AddUserToTenant(ctx context.Context, tenantID uuid.UUID, dto *models.AddUserToTenantDto) error
+	// Add user to tenant (requesterUserID validates permissions)
+	AddUserToTenant(ctx context.Context, tenantID uuid.UUID, requesterUserID uuid.UUID, dto *models.AddUserToTenantDto) error
 
-	// Remove user from tenant (admin/owner only - enforced in controller)
-	RemoveUserFromTenant(ctx context.Context, tenantID uuid.UUID, userID uuid.UUID) error
+	// Remove user from tenant (requesterUserID validates permissions)
+	RemoveUserFromTenant(ctx context.Context, tenantID uuid.UUID, requesterUserID uuid.UUID, userID uuid.UUID) error
 
 	// Verify user has access to tenant (used by middleware)
 	VerifyUserTenantAccess(ctx context.Context, userID uuid.UUID, slug string) (*models.TenantAccessInfo, error)

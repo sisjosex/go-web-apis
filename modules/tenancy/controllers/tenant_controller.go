@@ -267,13 +267,26 @@ func (tc *TenantController) AddUserToTenant(c *gin.Context) {
 		return
 	}
 
+	// Get requester user ID from JWT context
+	requesterUserIDStr, exists := c.Get("user_id")
+	if !exists {
+		c.JSON(http.StatusUnauthorized, coreErrors.BuildErrorSingle(c, tenancyErrors.TenantUserUnauthorized))
+		return
+	}
+
+	requesterUserID, err := uuid.Parse(requesterUserIDStr.(string))
+	if err != nil {
+		c.JSON(http.StatusBadRequest, coreErrors.BuildError(c, err))
+		return
+	}
+
 	var dto models.AddUserToTenantDto
 	if err := c.ShouldBindJSON(&dto); err != nil {
 		c.JSON(http.StatusBadRequest, coreErrors.BuildErrorDetail(c, tenancyErrors.TenantUserAddFailed, utils.ExtractValidationError(c, err)))
 		return
 	}
 
-	err = tc.tenantService.AddUserToTenant(c.Request.Context(), tenantID, &dto)
+	err = tc.tenantService.AddUserToTenant(c.Request.Context(), tenantID, requesterUserID, &dto)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, coreErrors.BuildError(c, err))
 		return
@@ -307,6 +320,19 @@ func (tc *TenantController) RemoveUserFromTenant(c *gin.Context) {
 		return
 	}
 
+	// Get requester user ID from JWT context
+	requesterUserIDStr, exists := c.Get("user_id")
+	if !exists {
+		c.JSON(http.StatusUnauthorized, coreErrors.BuildErrorSingle(c, tenancyErrors.TenantUserUnauthorized))
+		return
+	}
+
+	requesterUserID, err := uuid.Parse(requesterUserIDStr.(string))
+	if err != nil {
+		c.JSON(http.StatusBadRequest, coreErrors.BuildError(c, err))
+		return
+	}
+
 	userIDParam := c.Param("user_id")
 	userID, err := uuid.Parse(userIDParam)
 	if err != nil {
@@ -314,7 +340,7 @@ func (tc *TenantController) RemoveUserFromTenant(c *gin.Context) {
 		return
 	}
 
-	err = tc.tenantService.RemoveUserFromTenant(c.Request.Context(), tenantID, userID)
+	err = tc.tenantService.RemoveUserFromTenant(c.Request.Context(), tenantID, requesterUserID, userID)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, coreErrors.BuildError(c, err))
 		return

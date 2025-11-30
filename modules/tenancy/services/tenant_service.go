@@ -160,14 +160,14 @@ func (s *tenantService) UpdateTenant(ctx context.Context, tenantID uuid.UUID, dt
 }
 
 // AddUserToTenant adds a user to a tenant
-func (s *tenantService) AddUserToTenant(ctx context.Context, tenantID uuid.UUID, dto *models.AddUserToTenantDto) error {
-	_, err := s.tenantRepository.AddUserToTenant(ctx, tenantID, dto.UserID, dto.Role)
+func (s *tenantService) AddUserToTenant(ctx context.Context, tenantID uuid.UUID, requesterUserID uuid.UUID, dto *models.AddUserToTenantDto) error {
+	_, err := s.tenantRepository.AddUserToTenant(ctx, tenantID, requesterUserID, dto.UserID, dto.Role)
 	return err
 }
 
 // RemoveUserFromTenant removes a user from a tenant
-func (s *tenantService) RemoveUserFromTenant(ctx context.Context, tenantID uuid.UUID, userID uuid.UUID) error {
-	return s.tenantRepository.RemoveUserFromTenant(ctx, tenantID, userID)
+func (s *tenantService) RemoveUserFromTenant(ctx context.Context, tenantID uuid.UUID, requesterUserID uuid.UUID, userID uuid.UUID) error {
+	return s.tenantRepository.RemoveUserFromTenant(ctx, tenantID, requesterUserID, userID)
 }
 
 // VerifyUserTenantAccess verifies user has access to tenant (used by middleware)
