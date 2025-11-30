@@ -1,3 +1,6 @@
+-- Create auth schema
+CREATE SCHEMA IF NOT EXISTS auth;
+
 -- Users table (extensions and schema created in core module)
 CREATE TABLE IF NOT EXISTS
     auth.users (

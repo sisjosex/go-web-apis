@@ -8,6 +8,10 @@ import (
 	authServices "josex/web/modules/auth/services"
 	coreMiddleware "josex/web/modules/core/middleware"
 	coreServices "josex/web/modules/core/services"
+	tenancyControllers "josex/web/modules/tenancy/controllers"
+	tenancyRepos "josex/web/modules/tenancy/repositories"
+	tenancyRoutes "josex/web/modules/tenancy/routes"
+	tenancyServices "josex/web/modules/tenancy/services"
 	userControllers "josex/web/modules/users/controllers"
 	userRepos "josex/web/modules/users/repositories"
 	userRoutes "josex/web/modules/users/routes"
@@ -71,6 +75,20 @@ func SetupRoutes(r *gin.Engine, dbService coreServices.DatabaseService) {
 		// Register module routes
 		authRoutes.RegisterAuthRoutes(apiV1, authController, sessionController, jwtService)
 		userRoutes.RegisterUserRoutes(apiV1, userController, jwtService)
+
+		// Tenancy module (if enabled)
+		coreConf := config.ModularAppConfig.Core
+		tenancyConf := config.ModularAppConfig.Tenancy
+		if coreConf.IsModuleEnabled("tenancy") && tenancyConf != nil && tenancyConf.Enabled {
+			// Initialize tenancy services
+			tenantRepository := tenancyRepos.NewTenantRepository(dbService)
+			tenantService := tenancyServices.NewTenantService(tenantRepository, dbService)
+			tenantController := tenancyControllers.NewTenantController(tenantService)
+
+			// Register tenant routes
+			tenancyRoutes.RegisterTenantRoutes(apiV1, tenantController, tenantService, jwtService)
+			log.Println("✅ Tenancy module enabled and routes registered")
+		}
 	}
 
 	// Swagger documentation

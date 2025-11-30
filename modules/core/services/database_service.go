@@ -22,14 +22,20 @@ type DatabaseService interface {
 	Execute(ctx context.Context, query string, args ...interface{}) (int64, error)
 	CloseDatabase(ctx context.Context)
 	BeginTransaction(ctx context.Context) (pgx.Tx, error)
+	// Tenant-specific methods
+	GetPoolForTenant(ctx context.Context, databaseURL string) (*pgxpool.Pool, error)
+	GetPrimaryPool() *pgxpool.Pool
 }
 
 type databaseService struct {
-	pool *pgxpool.Pool
+	pool        *pgxpool.Pool
+	tenantPools map[string]*pgxpool.Pool // Cache of tenant database pools
 }
 
 func NewDatabaseService() DatabaseService {
-	return &databaseService{}
+	return &databaseService{
+		tenantPools: make(map[string]*pgxpool.Pool),
+	}
 }
 
 func (ds *databaseService) InitDatabase(ctx context.Context) {
@@ -105,8 +111,17 @@ func (ds *databaseService) CloseDatabase(ctx context.Context) {
 		return
 	}
 
+	// Close primary pool
 	ds.pool.Close()
 	ds.pool = nil
+
+	// Close all tenant pools
+	for dbURL, pool := range ds.tenantPools {
+		log.Printf("Closing tenant pool: %s", dbURL)
+		pool.Close()
+	}
+	ds.tenantPools = make(map[string]*pgxpool.Pool)
+
 	log.Println("Database closed")
 }
 
@@ -153,4 +168,37 @@ func (ds *databaseService) BeginTransaction(ctx context.Context) (pgx.Tx, error)
 	}
 
 	return tx, nil
+}
+
+// GetPoolForTenant returns a connection pool for a tenant database
+// If the pool doesn't exist, it creates and caches it
+func (ds *databaseService) GetPoolForTenant(ctx context.Context, databaseURL string) (*pgxpool.Pool, error) {
+	// Check if pool already exists in cache
+	if pool, exists := ds.tenantPools[databaseURL]; exists {
+		return pool, nil
+	}
+
+	// Get tenant pool size from config
+	tenancyConf := config.ModularAppConfig.Tenancy
+	poolSize := int32(5) // Default
+	if tenancyConf != nil {
+		poolSize = tenancyConf.TenantDatabasePoolSize
+	}
+
+	// Create new pool
+	pool, err := connectDatabase(ctx, databaseURL, poolSize)
+	if err != nil {
+		return nil, err
+	}
+
+	// Cache the pool
+	ds.tenantPools[databaseURL] = pool
+	log.Printf("Created tenant database pool for: %s (pool size: %d)", databaseURL, poolSize)
+
+	return pool, nil
+}
+
+// GetPrimaryPool returns the primary database pool
+func (ds *databaseService) GetPrimaryPool() *pgxpool.Pool {
+	return ds.pool
 }

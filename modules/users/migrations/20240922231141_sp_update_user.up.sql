@@ -75,7 +75,7 @@ $$ LANGUAGE plpgsql;
 
 // add comment to the function
 
-SELECT * FROM sp_update_user(
+SELECT * FROM users.sp_update_user(
 p_id := '0bd5a70a-1d7e-4429-b393-8f6cbaad8df3',
 p_first_name := ' Pedro17',
 p_last_name := 'Gomez',
@@ -93,7 +93,7 @@ p_website_url := ''
 
 */
 CREATE
-OR REPLACE FUNCTION auth.sp_update_user (
+OR REPLACE FUNCTION users.sp_update_user (
     p_id UUID,
     p_first_name VARCHAR DEFAULT NULL,
     p_last_name VARCHAR DEFAULT NULL,

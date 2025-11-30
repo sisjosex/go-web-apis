@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"path/filepath"
 	"sort"
 	"strings"
 
@@ -28,30 +29,57 @@ type MigrationService struct {
 	db      *sql.DB
 }
 
-// NewMigrationService creates a migration service with configurable modules from CoreConfig
-func NewMigrationService(db *sql.DB, config *coreConfig.CoreConfig) *MigrationService {
-	// Define all available modules
-	allModules := map[string]string{
-		"core":  "modules/core/migrations",
-		"auth":  "modules/auth/migrations",
-		"users": "modules/users/migrations",
-		// Future modules can be added here:
-		// "notifications": "modules/notifications/migrations",
+// discoverAvailableModules scans the modules/ directory to find all available modules
+func discoverAvailableModules() map[string]string {
+	availableModules := make(map[string]string)
+	modulesDir := "modules"
+
+	// Read modules directory
+	entries, err := os.ReadDir(modulesDir)
+	if err != nil {
+		log.Printf("⚠️  Warning: Could not read modules directory: %v", err)
+		return availableModules
 	}
+
+	// Scan each directory in modules/
+	for _, entry := range entries {
+		if !entry.IsDir() {
+			continue
+		}
+
+		moduleName := entry.Name()
+		// Use forward slashes for cross-platform compatibility with golang-migrate
+		migrationPath := filepath.ToSlash(filepath.Join(modulesDir, moduleName, "migrations"))
+
+		// Check if migrations directory exists
+		if _, err := os.Stat(filepath.FromSlash(migrationPath)); err == nil {
+			availableModules[moduleName] = migrationPath
+		}
+	}
+
+	return availableModules
+}
+
+// NewMigrationService creates a migration service with auto-discovered modules from filesystem
+func NewMigrationService(db *sql.DB, config *coreConfig.CoreConfig) *MigrationService {
+	// Auto-discover all available modules by scanning modules/ directory
+	allModules := discoverAvailableModules()
 
 	// Build enabled modules list from config
 	modules := []Module{}
 
 	// Core is always enabled first
 	if config.IsModuleEnabled("core") {
-		modules = append(modules, Module{
-			Name:    "core",
-			Path:    allModules["core"],
-			Enabled: true,
-		})
+		if path, exists := allModules["core"]; exists {
+			modules = append(modules, Module{
+				Name:    "core",
+				Path:    path,
+				Enabled: true,
+			})
+		}
 	}
 
-	// Add other enabled modules
+	// Add other enabled modules in order specified in config
 	for _, moduleName := range config.EnabledModules {
 		if moduleName == "core" {
 			continue // Already added
@@ -62,6 +90,8 @@ func NewMigrationService(db *sql.DB, config *coreConfig.CoreConfig) *MigrationSe
 				Path:    path,
 				Enabled: true,
 			})
+		} else {
+			log.Printf("⚠️  Warning: Module '%s' is enabled in config but not found in filesystem", moduleName)
 		}
 	}
 

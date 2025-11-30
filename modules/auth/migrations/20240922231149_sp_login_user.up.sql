@@ -152,10 +152,10 @@ BEGIN
     END IF;
 
     IF v_user_id IS NULL THEN
-         -- Asignamos los tres valores retornados por la función sp_create_user_external
+         -- Asignamos los tres valores retornados por la función sp_register_user_external
         SELECT new_user.user_id, new_user.is_active, new_user.expiration_date
         INTO v_user_id, v_is_active, v_expiration_date
-        FROM auth.sp_create_user_external(
+        FROM auth.sp_register_user_external(
             p_email := lower_email,
             p_first_name := p_first_name,
             p_last_name := p_last_name,

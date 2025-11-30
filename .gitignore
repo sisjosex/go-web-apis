@@ -1,3 +1,85 @@
+# Binaries
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
 web.exe
+bin/
+dist/
 
-go.sum
+# Test binary, built with `go test -c`
+*.test
+
+# Output of the go coverage tool
+*.out
+coverage.txt
+coverage.html
+
+# Go workspace file
+go.work
+
+# Dependency directories (remove the comment below to include it)
+# vendor/
+
+# Environment variables (CRITICAL - Never commit!)
+.env
+.env.local
+.env.development
+.env.production
+.env.*.local
+
+# Database files (if using SQLite locally)
+*.db
+*.sqlite
+*.sqlite3
+
+# IDE and Editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+logs/
+tmp/
+temp/
+
+# Swagger generated files (regenerate with swag init)
+docs/docs.go
+docs/swagger.json
+docs/swagger.yaml
+
+# OS specific
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Desktop.ini
+
+# Backup files
+*.bak
+*.backup
+*.old
+
+# Certificates and keys (NEVER commit!)
+*.pem
+*.key
+*.crt
+*.p12
+*.pfx
+ssl/
+certs/
+
+# Migration temporary files
+*.sql~
+
+# Build artifacts
+build/
+output/

@@ -1,0 +1,1 @@
+DROP FUNCTION IF EXISTS tenancy.sp_update_tenant(UUID, VARCHAR, TEXT, VARCHAR, JSONB);

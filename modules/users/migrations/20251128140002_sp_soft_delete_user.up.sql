@@ -7,13 +7,13 @@ Parameters:
 Returns: BOOLEAN (true if successful)
 
 Usage:
-SELECT auth.sp_soft_delete_user(
+SELECT users.sp_soft_delete_user(
   p_user_id := '8532fe8c-0f72-4997-8a3a-e0524e18921d',
   p_reason := 'User requested account deletion'
 );
 */
 
-CREATE OR REPLACE FUNCTION auth.sp_soft_delete_user(
+CREATE OR REPLACE FUNCTION users.sp_soft_delete_user(
     p_user_id UUID,
     p_reason TEXT DEFAULT NULL
 )
@@ -82,5 +82,5 @@ END;
 $$;
 
 -- Add comment
-COMMENT ON FUNCTION auth.sp_soft_delete_user(UUID, TEXT) IS 
+COMMENT ON FUNCTION users.sp_soft_delete_user(UUID, TEXT) IS 
 'Soft delete user by setting deleted_at timestamp and invalidating all active sessions. Does not physically delete data.';

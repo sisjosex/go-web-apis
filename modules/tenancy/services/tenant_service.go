@@ -1,0 +1,176 @@
+package services
+
+import (
+	"context"
+	"database/sql"
+	"fmt"
+	"log"
+
+	"josex/web/config"
+	coreConfig "josex/web/modules/core/config"
+	coreServices "josex/web/modules/core/services"
+	"josex/web/modules/tenancy/interfaces"
+	"josex/web/modules/tenancy/models"
+
+	"github.com/google/uuid"
+	_ "github.com/jackc/pgx/v5/stdlib"
+)
+
+type tenantService struct {
+	tenantRepository interfaces.TenantRepository
+	dbService        coreServices.DatabaseService
+}
+
+// NewTenantService creates a new instance of TenantService
+func NewTenantService(tenantRepository interfaces.TenantRepository, dbService coreServices.DatabaseService) interfaces.TenantService {
+	return &tenantService{
+		tenantRepository: tenantRepository,
+		dbService:        dbService,
+	}
+}
+
+// CreateTenant creates a new tenant
+func (s *tenantService) CreateTenant(ctx context.Context, dto *models.CreateTenantDto, creatorUserID uuid.UUID) (*models.TenantDetailResponse, error) {
+	// Validate custom database URL permission
+	tenancyConf := config.ModularAppConfig.Tenancy
+	if dto.DatabaseURL != nil && *dto.DatabaseURL != "" {
+		if !tenancyConf.AllowCustomDatabaseURLs {
+			return nil, fmt.Errorf("tenant.database-url.not-allowed")
+		}
+	}
+
+	tenant, err := s.tenantRepository.CreateTenant(ctx, dto, creatorUserID)
+	if err != nil {
+		return nil, err
+	}
+
+	// Run migrations on tenant database if custom database_url is provided
+	if tenant.DatabaseURL != nil && *tenant.DatabaseURL != "" {
+		log.Printf("🔄 Running migrations for tenant '%s' on custom database...", tenant.Slug)
+
+		if err := s.runTenantMigrations(*tenant.DatabaseURL); err != nil {
+			log.Printf("⚠️  Failed to run migrations for tenant '%s': %v", tenant.Slug, err)
+			// Don't fail tenant creation, but log the error
+			// Admin can manually run migrations later via endpoint
+		} else {
+			log.Printf("✅ Migrations completed successfully for tenant '%s'", tenant.Slug)
+		}
+	}
+
+	// Convert to response (exclude sensitive database_url)
+	response := &models.TenantDetailResponse{
+		ID:          tenant.ID,
+		Slug:        tenant.Slug,
+		Name:        tenant.Name,
+		SchemaName:  tenant.SchemaName,
+		IsActive:    tenant.IsActive,
+		IsSuspended: tenant.IsSuspended,
+		Settings:    tenant.Settings,
+		CreatedAt:   tenant.CreatedAt,
+		UpdatedAt:   tenant.UpdatedAt,
+	}
+
+	return response, nil
+}
+
+// runTenantMigrations executes all migrations on a tenant's database
+// Excludes 'tenancy' module as it should only exist in the main database
+func (s *tenantService) runTenantMigrations(databaseURL string) error {
+	// Open connection to tenant database
+	sqlDB, err := sql.Open("pgx", databaseURL)
+	if err != nil {
+		return fmt.Errorf("failed to connect to tenant database: %w", err)
+	}
+	defer sqlDB.Close()
+
+	// Test connection
+	if err := sqlDB.Ping(); err != nil {
+		return fmt.Errorf("failed to ping tenant database: %w", err)
+	}
+
+	// Create a copy of core config with excluded modules
+	// Strategy: Only business data in Tenant DB, authentication in Main DB
+	mainConfig := config.ModularAppConfig.Core
+	excludedModules := map[string]bool{
+		"auth":    true, // Authentication only in Main DB (centralized users)
+		"core":    true, // Core module always in Main DB
+		"tenancy": true, // Tenant management only in Main DB
+		"users":   true, // User management only in Main DB
+	}
+
+	tenantEnabledModules := []string{}
+	for _, module := range mainConfig.EnabledModules {
+		if !excludedModules[module] {
+			tenantEnabledModules = append(tenantEnabledModules, module)
+		}
+	}
+
+	// Create a custom config for tenant migrations (copy of core config)
+	tenantCoreConfig := &coreConfig.CoreConfig{
+		DatabaseURL:      mainConfig.DatabaseURL,
+		DatabasePoolSize: mainConfig.DatabasePoolSize,
+		EnabledModules:   tenantEnabledModules, // Filtered list without 'tenancy'
+		AppMode:          mainConfig.AppMode,
+		AppHost:          mainConfig.AppHost,
+		AppPort:          mainConfig.AppPort,
+		FrontendURL:      mainConfig.FrontendURL,
+		LogLevel:         mainConfig.LogLevel,
+		AllowedOrigins:   mainConfig.AllowedOrigins,
+	}
+
+	log.Printf("📋 Migrating modules for tenant DB: %v (excluded: tenancy, auth, users)", tenantEnabledModules)
+
+	// Create migration service for tenant database with filtered modules
+	migrationService := coreServices.NewMigrationService(sqlDB, tenantCoreConfig)
+
+	// Run filtered module migrations
+	if err := migrationService.RunMigrations(); err != nil {
+		return fmt.Errorf("migration execution failed: %w", err)
+	}
+
+	return nil
+}
+
+// GetUserTenants gets user's accessible tenants
+func (s *tenantService) GetUserTenants(ctx context.Context, userID uuid.UUID) ([]*models.UserTenantResponse, error) {
+	return s.tenantRepository.GetUserTenants(ctx, userID)
+}
+
+// UpdateTenant updates tenant information
+func (s *tenantService) UpdateTenant(ctx context.Context, tenantID uuid.UUID, dto *models.UpdateTenantDto) (*models.TenantDetailResponse, error) {
+	tenant, err := s.tenantRepository.UpdateTenant(ctx, tenantID, dto)
+	if err != nil {
+		return nil, err
+	}
+
+	// Convert to response (exclude sensitive database_url)
+	response := &models.TenantDetailResponse{
+		ID:          tenant.ID,
+		Slug:        tenant.Slug,
+		Name:        tenant.Name,
+		SchemaName:  tenant.SchemaName,
+		IsActive:    tenant.IsActive,
+		IsSuspended: tenant.IsSuspended,
+		Settings:    tenant.Settings,
+		CreatedAt:   tenant.CreatedAt,
+		UpdatedAt:   tenant.UpdatedAt,
+	}
+
+	return response, nil
+}
+
+// AddUserToTenant adds a user to a tenant
+func (s *tenantService) AddUserToTenant(ctx context.Context, tenantID uuid.UUID, dto *models.AddUserToTenantDto) error {
+	_, err := s.tenantRepository.AddUserToTenant(ctx, tenantID, dto.UserID, dto.Role)
+	return err
+}
+
+// RemoveUserFromTenant removes a user from a tenant
+func (s *tenantService) RemoveUserFromTenant(ctx context.Context, tenantID uuid.UUID, userID uuid.UUID) error {
+	return s.tenantRepository.RemoveUserFromTenant(ctx, tenantID, userID)
+}
+
+// VerifyUserTenantAccess verifies user has access to tenant (used by middleware)
+func (s *tenantService) VerifyUserTenantAccess(ctx context.Context, userID uuid.UUID, slug string) (*models.TenantAccessInfo, error) {
+	return s.tenantRepository.VerifyUserTenantAccess(ctx, userID, slug)
+}

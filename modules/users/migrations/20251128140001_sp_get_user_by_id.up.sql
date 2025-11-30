@@ -6,12 +6,12 @@ Parameters:
 Returns: User data or raises exception if not found
 
 Usage:
-SELECT * FROM auth.sp_get_user_by_id(
+SELECT * FROM users.sp_get_user_by_id(
   p_user_id := '8532fe8c-0f72-4997-8a3a-e0524e18921d'
 );
 */
 
-CREATE OR REPLACE FUNCTION auth.sp_get_user_by_id(
+CREATE OR REPLACE FUNCTION users.sp_get_user_by_id(
     p_user_id UUID
 )
 RETURNS TABLE (
@@ -66,5 +66,5 @@ END;
 $$;
 
 -- Add comment
-COMMENT ON FUNCTION auth.sp_get_user_by_id(UUID) IS 
+COMMENT ON FUNCTION users.sp_get_user_by_id(UUID) IS 
 'Get user by ID with profile data. Raises exception if user not found or deleted.';

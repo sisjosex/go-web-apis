@@ -24,7 +24,7 @@ func NewAuthRepository(dbService database.DatabaseService) interfaces.AuthReposi
 func (r *authRepository) InsertUser(userDTO authModels.CreateUserDto) (*coreModels.User, error) {
 	user := &coreModels.User{}
 	query := `
-        SELECT * FROM auth.sp_create_user(
+        SELECT * FROM auth.sp_register_user(
 			p_first_name := $1,
 			p_last_name := $2,
 			p_phone := $3,

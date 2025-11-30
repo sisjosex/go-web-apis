@@ -7,6 +7,7 @@ This is a **Go + Gin + PostgreSQL** REST API using a **stored procedure-centric 
 **Modular Structure:**
 - `modules/auth/` - Authentication & session management (login, logout, JWT, password reset)
 - `modules/users/` - User CRUD operations (admin)
+- `modules/tenancy/` - Multi-tenant architecture (optional, centralized authentication)
 - `modules/core/` - Shared infrastructure (database, validators, errors, utils, migrations, translations)
 
 **Key Layers (per module):**
@@ -354,6 +355,54 @@ authController := controllers.NewAuthController(userService, jwtService, parser,
 - `modules/core/services/translator_service.go` - Modular translation loading
 - `migrations/20240922231132_sp_create_user.up.sql` - Example stored procedure pattern
 - `modules/auth/controllers/auth_controller.go` - Canonical controller pattern (validation → service → JWT → response)
+- `modules/tenancy/README.md` - Multi-tenancy architecture and authentication strategy
+- `modules/tenancy/AUTHENTICATION_FLOW.md` - Complete multi-tenant auth flow examples
+
+## Multi-Tenancy Architecture (Optional Module)
+
+### Centralized Authentication Strategy
+
+The system uses **centralized authentication** where:
+
+**Main Database (Global):**
+- `auth.users` - ALL system users (single source of truth)
+- `auth.user_sessions` - Active sessions
+- `tenancy.tenants` - Tenant catalog with database URLs
+- `tenancy.tenant_users` - User ↔ Tenant relationships with roles
+
+**Tenant Database (Isolated):**
+- Only business data (invoices, products, inventory, etc.)
+- NO `auth.users` table (authentication centralized in Main DB)
+- NO `auth.user_sessions` (sessions in Main DB)
+
+### Module Migration Rules
+
+When creating a tenant with custom `database_url`, migrations are filtered:
+
+**Migrated to Tenant DB:**
+- ✅ `core` - Base extensions (uuid-ossp, etc.)
+- ✅ Business modules - `invoices`, `products`, `notifications`, etc.
+
+**Excluded from Tenant DB (auto-filtered):**
+- ❌ `tenancy` - Tenant management (Main DB only)
+- ❌ `auth` - Authentication (centralized in Main DB)
+- ❌ `users` - User management (centralized in Main DB)
+
+**Implementation:** See `modules/tenancy/services/tenant_service.go:runTenantMigrations()`
+
+### Authentication Flow
+
+1. **Login:** User authenticates against Main DB (`auth.sp_login_user`)
+2. **JWT:** Token contains `user_id` + `session_id` (NO tenant_id)
+3. **Multi-Tenant Access:** User lists available tenants (`tenancy.sp_get_user_tenants`)
+4. **Resource Access:** Middleware validates access via `tenancy.sp_verify_user_tenant_access(user_id, slug)`
+5. **Query Routing:** Controller uses `GetPoolForTenant(database_url)` to query correct Tenant DB
+
+**Benefits:**
+- ✅ Single Sign-On: One user → multiple tenants
+- ✅ No user duplication: `user@example.com` exists once
+- ✅ Centralized security: Passwords in one auditable location
+- ✅ Flexible roles: User can be `owner` in Tenant A, `viewer` in Tenant B
 
 ## When Adding New Features
 

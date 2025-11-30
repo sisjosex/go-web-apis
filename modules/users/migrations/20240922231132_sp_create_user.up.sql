@@ -1,3 +1,6 @@
+-- Create users schema
+CREATE SCHEMA IF NOT EXISTS users;
+
 /*
 SELECT * FROM private_find_or_create_user(
   p_email := 'asR@asd.com',
@@ -131,7 +134,7 @@ $$ LANGUAGE plpgsql;
 
 
 /*
-SELECT * FROM sp_create_user(
+SELECT * FROM users.sp_create_user(
   p_email := 'asd26@asd.com',
   p_first_name := 'Juan',
   p_last_name:= 'Perez',
@@ -144,7 +147,7 @@ SELECT * FROM sp_create_user(
 );
 */
 
-CREATE OR REPLACE FUNCTION auth.sp_create_user(
+CREATE OR REPLACE FUNCTION users.sp_create_user(
     p_email VARCHAR,
     p_first_name VARCHAR,
     p_last_name VARCHAR,
@@ -211,7 +214,7 @@ END;
 $$ LANGUAGE plpgsql;
 
 -- Función para buscar o crear un usuario
-CREATE OR REPLACE FUNCTION auth.sp_create_user_external(
+CREATE OR REPLACE FUNCTION users.sp_create_user_external(
     p_email VARCHAR,
     p_first_name VARCHAR,
     p_last_name VARCHAR,

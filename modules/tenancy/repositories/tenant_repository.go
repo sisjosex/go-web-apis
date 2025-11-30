@@ -1,0 +1,295 @@
+package repositories
+
+import (
+	"context"
+	"errors"
+
+	"josex/web/modules/core/services"
+	"josex/web/modules/tenancy/interfaces"
+	"josex/web/modules/tenancy/models"
+
+	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5/pgconn"
+)
+
+type tenantRepository struct {
+	dbService services.DatabaseService
+}
+
+// NewTenantRepository creates a new instance of TenantRepository
+func NewTenantRepository(dbService services.DatabaseService) interfaces.TenantRepository {
+	return &tenantRepository{dbService: dbService}
+}
+
+// CreateTenant creates a new tenant
+func (r *tenantRepository) CreateTenant(ctx context.Context, dto *models.CreateTenantDto, creatorUserID uuid.UUID) (*models.Tenant, error) {
+	tenant := &models.Tenant{}
+	query := `
+		SELECT * FROM tenancy.sp_create_tenant(
+			p_slug := $1,
+			p_name := $2,
+			p_creator_user_id := $3,
+			p_database_url := $4,
+			p_schema_name := $5,
+			p_settings := $6
+		)
+	`
+
+	// Default values
+	schemaName := "public"
+	if dto.SchemaName != nil && *dto.SchemaName != "" {
+		schemaName = *dto.SchemaName
+	}
+
+	settings := "{}"
+	if dto.Settings != nil && *dto.Settings != "" {
+		settings = *dto.Settings
+	}
+
+	params := []interface{}{
+		dto.Slug,
+		dto.Name,
+		creatorUserID,
+		dto.DatabaseURL,
+		schemaName,
+		settings,
+	}
+
+	row := r.dbService.QueryRow(ctx, query, params...)
+
+	err := row.Scan(
+		&tenant.ID,
+		&tenant.Slug,
+		&tenant.Name,
+		&tenant.DatabaseURL,
+		&tenant.SchemaName,
+		&tenant.IsActive,
+		&tenant.IsSuspended,
+		&tenant.SuspendedReason,
+		&tenant.Settings,
+		&tenant.CreatedAt,
+		&tenant.UpdatedAt,
+	)
+
+	if err != nil {
+		var pgErr *pgconn.PgError
+		if errors.As(err, &pgErr) {
+			return nil, pgErr
+		}
+		return nil, err
+	}
+
+	return tenant, nil
+}
+
+// GetTenantBySlug gets tenant by slug
+func (r *tenantRepository) GetTenantBySlug(ctx context.Context, slug string) (*models.Tenant, error) {
+	tenant := &models.Tenant{}
+	query := `
+		SELECT * FROM tenancy.sp_get_tenant_by_slug(
+			p_slug := $1
+		)
+	`
+
+	row := r.dbService.QueryRow(ctx, query, slug)
+
+	err := row.Scan(
+		&tenant.ID,
+		&tenant.Slug,
+		&tenant.Name,
+		&tenant.DatabaseURL,
+		&tenant.SchemaName,
+		&tenant.IsActive,
+		&tenant.IsSuspended,
+		&tenant.CreatedAt,
+	)
+
+	if err != nil {
+		var pgErr *pgconn.PgError
+		if errors.As(err, &pgErr) {
+			return nil, pgErr
+		}
+		return nil, err
+	}
+
+	return tenant, nil
+}
+
+// VerifyUserTenantAccess verifies user has access to tenant
+func (r *tenantRepository) VerifyUserTenantAccess(ctx context.Context, userID uuid.UUID, slug string) (*models.TenantAccessInfo, error) {
+	accessInfo := &models.TenantAccessInfo{}
+	query := `
+		SELECT * FROM tenancy.sp_verify_user_tenant_access(
+			p_user_id := $1,
+			p_tenant_slug := $2
+		)
+	`
+
+	row := r.dbService.QueryRow(ctx, query, userID, slug)
+
+	err := row.Scan(
+		&accessInfo.TenantID,
+		&accessInfo.Slug,
+		&accessInfo.Name,
+		&accessInfo.DatabaseURL,
+		&accessInfo.SchemaName,
+		&accessInfo.IsActive,
+		&accessInfo.IsSuspended,
+		&accessInfo.UserRole,
+		&accessInfo.UserIsActive,
+	)
+
+	if err != nil {
+		var pgErr *pgconn.PgError
+		if errors.As(err, &pgErr) {
+			return nil, pgErr
+		}
+		return nil, err
+	}
+
+	return accessInfo, nil
+}
+
+// GetUserTenants gets user's accessible tenants
+func (r *tenantRepository) GetUserTenants(ctx context.Context, userID uuid.UUID) ([]*models.UserTenantResponse, error) {
+	query := `
+		SELECT * FROM tenancy.sp_get_user_tenants(
+			p_user_id := $1
+		)
+	`
+
+	rows, err := r.dbService.Query(ctx, query, userID)
+	if err != nil {
+		var pgErr *pgconn.PgError
+		if errors.As(err, &pgErr) {
+			return nil, pgErr
+		}
+		return nil, err
+	}
+	defer rows.Close()
+
+	// Initialize with empty slice to return [] instead of null
+	tenants := make([]*models.UserTenantResponse, 0)
+	for rows.Next() {
+		tenant := &models.UserTenantResponse{}
+		err := rows.Scan(
+			&tenant.TenantID,
+			&tenant.Slug,
+			&tenant.Name,
+			&tenant.IsActive,
+			&tenant.IsSuspended,
+			&tenant.UserRole,
+			&tenant.JoinedAt,
+		)
+		if err != nil {
+			return nil, err
+		}
+		tenants = append(tenants, tenant)
+	}
+
+	return tenants, nil
+}
+
+// UpdateTenant updates tenant information
+func (r *tenantRepository) UpdateTenant(ctx context.Context, tenantID uuid.UUID, dto *models.UpdateTenantDto) (*models.Tenant, error) {
+	tenant := &models.Tenant{}
+	query := `
+		SELECT * FROM tenancy.sp_update_tenant(
+			p_tenant_id := $1,
+			p_name := $2,
+			p_database_url := $3,
+			p_schema_name := $4,
+			p_settings := $5
+		)
+	`
+
+	params := []interface{}{
+		tenantID,
+		dto.Name,
+		dto.DatabaseURL,
+		dto.SchemaName,
+		dto.Settings,
+	}
+
+	row := r.dbService.QueryRow(ctx, query, params...)
+
+	err := row.Scan(
+		&tenant.ID,
+		&tenant.Slug,
+		&tenant.Name,
+		&tenant.DatabaseURL,
+		&tenant.SchemaName,
+		&tenant.IsActive,
+		&tenant.IsSuspended,
+		&tenant.SuspendedReason,
+		&tenant.Settings,
+		&tenant.CreatedAt,
+		&tenant.UpdatedAt,
+	)
+
+	if err != nil {
+		var pgErr *pgconn.PgError
+		if errors.As(err, &pgErr) {
+			return nil, pgErr
+		}
+		return nil, err
+	}
+
+	return tenant, nil
+}
+
+// AddUserToTenant adds a user to a tenant
+func (r *tenantRepository) AddUserToTenant(ctx context.Context, tenantID uuid.UUID, userID uuid.UUID, role string) (*models.TenantUser, error) {
+	tenantUser := &models.TenantUser{}
+	query := `
+		SELECT * FROM tenancy.sp_add_user_to_tenant(
+			p_tenant_id := $1,
+			p_user_id := $2,
+			p_role := $3
+		)
+	`
+
+	row := r.dbService.QueryRow(ctx, query, tenantID, userID, role)
+
+	err := row.Scan(
+		&tenantUser.ID,
+		&tenantUser.TenantID,
+		&tenantUser.UserID,
+		&tenantUser.Role,
+		&tenantUser.IsActive,
+		&tenantUser.JoinedAt,
+	)
+
+	if err != nil {
+		var pgErr *pgconn.PgError
+		if errors.As(err, &pgErr) {
+			return nil, pgErr
+		}
+		return nil, err
+	}
+
+	return tenantUser, nil
+}
+
+// RemoveUserFromTenant removes a user from a tenant
+func (r *tenantRepository) RemoveUserFromTenant(ctx context.Context, tenantID uuid.UUID, userID uuid.UUID) error {
+	query := `
+		SELECT tenancy.sp_remove_user_from_tenant(
+			p_tenant_id := $1,
+			p_user_id := $2
+		)
+	`
+
+	var success bool
+	err := r.dbService.QueryRow(ctx, query, tenantID, userID).Scan(&success)
+
+	if err != nil {
+		var pgErr *pgconn.PgError
+		if errors.As(err, &pgErr) {
+			return pgErr
+		}
+		return err
+	}
+
+	return nil
+}

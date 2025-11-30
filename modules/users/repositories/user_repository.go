@@ -23,7 +23,7 @@ func NewUserRepository(dbService database.DatabaseService) interfaces.UserReposi
 func (r *userRepository) InsertUser(userDTO userModels.CreateUserDto) (*coreModels.User, error) {
 	user := &coreModels.User{}
 	query := `
-        SELECT * FROM auth.sp_create_user(
+        SELECT * FROM users.sp_create_user(
 p_first_name := $1,
 p_last_name := $2,
 p_phone := $3,
@@ -76,7 +76,7 @@ p_website_url := $9
 func (r *userRepository) UpdateUser(userDTO userModels.UpdateUserDto) (*coreModels.User, error) {
 	user := &coreModels.User{}
 	query := `
-        SELECT * FROM auth.sp_update_user(
+        SELECT * FROM users.sp_update_user(
 p_id := $1,
 p_first_name := $2,
 p_last_name := $3,
@@ -136,7 +136,7 @@ p_website_url := $13
 
 func (r *userRepository) ListUsers() ([]coreModels.User, error) {
 	ctx := context.Background()
-	query := `SELECT * FROM auth.sp_list_users()`
+	query := `SELECT * FROM users.sp_list_users()`
 
 	rows, err := r.dbService.Query(ctx, query)
 	if err != nil {
@@ -179,7 +179,7 @@ func (r *userRepository) ListUsers() ([]coreModels.User, error) {
 
 func (r *userRepository) GetUserById(userID uuid.UUID) (*coreModels.User, error) {
 	ctx := context.Background()
-	query := `SELECT * FROM auth.sp_get_user_by_id(p_user_id := $1)`
+	query := `SELECT * FROM users.sp_get_user_by_id(p_user_id := $1)`
 
 	var user coreModels.User
 	err := r.dbService.QueryRow(ctx, query, userID).Scan(
@@ -207,7 +207,7 @@ func (r *userRepository) GetUserById(userID uuid.UUID) (*coreModels.User, error)
 
 func (r *userRepository) SoftDeleteUser(userID uuid.UUID) error {
 	ctx := context.Background()
-	query := `SELECT auth.sp_soft_delete_user(p_user_id := $1)`
+	query := `SELECT users.sp_soft_delete_user(p_user_id := $1)`
 
 	var result bool
 	err := r.dbService.QueryRow(ctx, query, userID).Scan(&result)

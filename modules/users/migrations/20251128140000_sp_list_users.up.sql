@@ -12,20 +12,20 @@ Returns: TABLE of users + total count
 
 Usage:
 -- List all users (page 1, 10 items)
-SELECT * FROM auth.sp_list_users(
+SELECT * FROM users.sp_list_users(
   p_page := 1,
   p_limit := 10
 );
 
 -- Search users by name/email
-SELECT * FROM auth.sp_list_users(
+SELECT * FROM users.sp_list_users(
   p_page := 1,
   p_limit := 10,
   p_search := 'jose'
 );
 
 -- Filter active users, sort by email
-SELECT * FROM auth.sp_list_users(
+SELECT * FROM users.sp_list_users(
   p_page := 1,
   p_limit := 20,
   p_status := 'active',
@@ -34,7 +34,7 @@ SELECT * FROM auth.sp_list_users(
 );
 */
 
-CREATE OR REPLACE FUNCTION auth.sp_list_users(
+CREATE OR REPLACE FUNCTION users.sp_list_users(
     p_page INT DEFAULT 1,
     p_limit INT DEFAULT 10,
     p_search TEXT DEFAULT NULL,
@@ -138,5 +138,5 @@ END;
 $$;
 
 -- Add comment
-COMMENT ON FUNCTION auth.sp_list_users(INT, INT, TEXT, TEXT, TEXT, TEXT) IS 
+COMMENT ON FUNCTION users.sp_list_users(INT, INT, TEXT, TEXT, TEXT, TEXT) IS 
 'List users with pagination, search (email/name), status filter, and sorting. Returns total count for pagination.';
