@@ -17,10 +17,10 @@ CREATE TABLE IF NOT EXISTS tenancy.tenants (
 );
 
 -- Indexes for tenants table
-CREATE INDEX idx_tenants_slug ON tenancy.tenants (slug);
-CREATE INDEX idx_tenants_is_active ON tenancy.tenants (is_active);
-CREATE INDEX idx_tenants_is_suspended ON tenancy.tenants (is_suspended);
-CREATE INDEX idx_tenants_created_at ON tenancy.tenants (created_at);
+CREATE INDEX IF NOT EXISTS idx_tenants_slug ON tenancy.tenants (slug);
+CREATE INDEX IF NOT EXISTS idx_tenants_is_active ON tenancy.tenants (is_active);
+CREATE INDEX IF NOT EXISTS idx_tenants_is_suspended ON tenancy.tenants (is_suspended);
+CREATE INDEX IF NOT EXISTS idx_tenants_created_at ON tenancy.tenants (created_at);
 
 -- Trigger to update updated_at timestamp
 CREATE OR REPLACE FUNCTION tenancy.update_tenant_updated_at()
@@ -31,6 +31,7 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
+DROP TRIGGER IF EXISTS trigger_update_tenant_updated_at ON tenancy.tenants;
 CREATE TRIGGER trigger_update_tenant_updated_at
 BEFORE UPDATE ON tenancy.tenants
 FOR EACH ROW

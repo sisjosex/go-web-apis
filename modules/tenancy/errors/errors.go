@@ -25,10 +25,12 @@ const (
 
 // Tenant validation errors
 const (
-	TenantSlugInvalid        = "tenant.slug.invalid"
-	TenantSlugRequired       = "tenant.slug.required"
-	TenantNameRequired       = "tenant.name.required"
-	TenantDatabaseURLInvalid = "tenant.database-url.invalid"
+	TenantSlugInvalid         = "tenant.slug.invalid"
+	TenantSlugRequired        = "tenant.slug.required"
+	TenantNameRequired        = "tenant.name.required"
+	TenantDatabaseURLInvalid  = "tenant.database-url.invalid"
+	TenantLimitReached        = "tenant.limit-reached"
+	TenantSelfServiceDisabled = "tenant.self-service-disabled"
 )
 
 // Multitenancy disabled error

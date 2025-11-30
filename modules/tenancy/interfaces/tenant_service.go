@@ -27,4 +27,7 @@ type TenantService interface {
 
 	// Verify user has access to tenant (used by middleware)
 	VerifyUserTenantAccess(ctx context.Context, userID uuid.UUID, slug string) (*models.TenantAccessInfo, error)
+
+	// Count how many tenants a user owns (for subscription limits)
+	CountUserOwnedTenants(ctx context.Context, userID uuid.UUID) (int, error)
 }

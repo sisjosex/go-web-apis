@@ -1,8 +1,9 @@
 package routes
 
 import (
-	"josex/web/modules/auth/middleware"
+	authMiddleware "josex/web/modules/auth/middleware"
 	"josex/web/modules/auth/services"
+	coreMiddleware "josex/web/modules/core/middleware"
 	"josex/web/modules/tenancy/controllers"
 	"josex/web/modules/tenancy/interfaces"
 	tenantMiddleware "josex/web/modules/tenancy/middleware"
@@ -19,14 +20,21 @@ func RegisterTenantRoutes(
 ) {
 	// All tenant routes require authentication
 	tenantRoutes := router.Group("/tenants")
-	tenantRoutes.Use(middleware.AuthMiddleware(jwtService))
+	tenantRoutes.Use(authMiddleware.AuthMiddleware(jwtService))
 	{
 		// ========================================
-		// Tenant Management (System Admin)
+		// Tenant Management
 		// ========================================
 
-		// Create tenant (system admin only - TODO: add admin middleware)
-		tenantRoutes.POST("", tenantController.CreateTenant)
+		// Create tenant (super_admin only - full control, custom database_url allowed)
+		adminOnlyRoutes := tenantRoutes.Group("")
+		adminOnlyRoutes.Use(coreMiddleware.RequireSystemRole("super_admin")) // 🔒 PROTECTED
+		{
+			adminOnlyRoutes.POST("", tenantController.CreateTenant)
+		}
+
+		// Self-service tenant creation (authenticated users with plan limits)
+		tenantRoutes.POST("/self-service", tenantController.CreateTenantSelfService)
 
 		// Get user's accessible tenants
 		tenantRoutes.GET("/my-tenants", tenantController.GetUserTenants)

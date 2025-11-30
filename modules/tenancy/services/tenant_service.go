@@ -174,3 +174,8 @@ func (s *tenantService) RemoveUserFromTenant(ctx context.Context, tenantID uuid.
 func (s *tenantService) VerifyUserTenantAccess(ctx context.Context, userID uuid.UUID, slug string) (*models.TenantAccessInfo, error) {
 	return s.tenantRepository.VerifyUserTenantAccess(ctx, userID, slug)
 }
+
+// CountUserOwnedTenants counts how many tenants a user owns
+func (s *tenantService) CountUserOwnedTenants(ctx context.Context, userID uuid.UUID) (int, error) {
+	return s.tenantRepository.CountUserOwnedTenants(ctx, userID)
+}

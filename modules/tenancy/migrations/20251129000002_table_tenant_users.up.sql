@@ -10,8 +10,8 @@ CREATE TABLE IF NOT EXISTS tenancy.tenant_users (
 );
 
 -- Indexes for tenant_users table
-CREATE INDEX idx_tenant_users_tenant_id ON tenancy.tenant_users (tenant_id);
-CREATE INDEX idx_tenant_users_user_id ON tenancy.tenant_users (user_id);
-CREATE INDEX idx_tenant_users_role ON tenancy.tenant_users (role);
-CREATE INDEX idx_tenant_users_is_active ON tenancy.tenant_users (is_active);
-CREATE INDEX idx_tenant_users_joined_at ON tenancy.tenant_users (joined_at);
+CREATE INDEX IF NOT EXISTS idx_tenant_users_tenant_id ON tenancy.tenant_users (tenant_id);
+CREATE INDEX IF NOT EXISTS idx_tenant_users_user_id ON tenancy.tenant_users (user_id);
+CREATE INDEX IF NOT EXISTS idx_tenant_users_role ON tenancy.tenant_users (role);
+CREATE INDEX IF NOT EXISTS idx_tenant_users_is_active ON tenancy.tenant_users (is_active);
+CREATE INDEX IF NOT EXISTS idx_tenant_users_joined_at ON tenancy.tenant_users (joined_at);

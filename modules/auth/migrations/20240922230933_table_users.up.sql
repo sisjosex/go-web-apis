@@ -18,16 +18,16 @@ CREATE TABLE IF NOT EXISTS
         updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
     );
 
-CREATE INDEX idx_users_is_active ON auth.users (is_active);
-CREATE INDEX idx_users_email_verified ON auth.users (email_verified);
-CREATE INDEX idx_users_email ON auth.users (email);
-CREATE INDEX idx_users_birthday ON auth.users (birthday);
-CREATE INDEX idx_users_expiration_date ON auth.users (expiration_date);
-CREATE INDEX idx_users_created_at ON auth.users (created_at);
-CREATE INDEX idx_users_updated_at ON auth.users (updated_at);
+CREATE INDEX IF NOT EXISTS idx_users_is_active ON auth.users (is_active);
+CREATE INDEX IF NOT EXISTS idx_users_email_verified ON auth.users (email_verified);
+CREATE INDEX IF NOT EXISTS idx_users_email ON auth.users (email);
+CREATE INDEX IF NOT EXISTS idx_users_birthday ON auth.users (birthday);
+CREATE INDEX IF NOT EXISTS idx_users_expiration_date ON auth.users (expiration_date);
+CREATE INDEX IF NOT EXISTS idx_users_created_at ON auth.users (created_at);
+CREATE INDEX IF NOT EXISTS idx_users_updated_at ON auth.users (updated_at);
 
 -- Index for compare lower email
-CREATE INDEX idx_users_lower_email ON auth.users (LOWER(email));
+CREATE INDEX IF NOT EXISTS idx_users_lower_email ON auth.users (LOWER(email));
 
 CREATE TABLE IF NOT EXISTS auth.email_verification_tokens (
     id UUID PRIMARY KEY DEFAULT public.uuid_generate_v4 (),
@@ -38,10 +38,10 @@ CREATE TABLE IF NOT EXISTS auth.email_verification_tokens (
     created_at TIMESTAMP DEFAULT NOW()
 );
 
-CREATE INDEX idx_email_verify_user_id ON auth.email_verification_tokens (user_id);
-CREATE INDEX idx_email_verify_token ON auth.email_verification_tokens (token);
-CREATE INDEX idx_email_verify_new_email ON auth.email_verification_tokens (new_email);
-CREATE INDEX idx_email_verify_expires_at ON auth.email_verification_tokens (expires_at);
+CREATE INDEX IF NOT EXISTS idx_email_verify_user_id ON auth.email_verification_tokens (user_id);
+CREATE INDEX IF NOT EXISTS idx_email_verify_token ON auth.email_verification_tokens (token);
+CREATE INDEX IF NOT EXISTS idx_email_verify_new_email ON auth.email_verification_tokens (new_email);
+CREATE INDEX IF NOT EXISTS idx_email_verify_expires_at ON auth.email_verification_tokens (expires_at);
 
 
 CREATE TABLE IF NOT EXISTS auth.password_reset_tokens (
@@ -52,6 +52,6 @@ CREATE TABLE IF NOT EXISTS auth.password_reset_tokens (
     created_at TIMESTAMP DEFAULT NOW()
 );
 
-CREATE INDEX idx_forgot_user_id ON auth.password_reset_tokens (user_id);
-CREATE INDEX idx_forgot_token ON auth.password_reset_tokens (token);
-CREATE INDEX idx_forgot_expires_at ON auth.password_reset_tokens (expires_at);
+CREATE INDEX IF NOT EXISTS idx_forgot_user_id ON auth.password_reset_tokens (user_id);
+CREATE INDEX IF NOT EXISTS idx_forgot_token ON auth.password_reset_tokens (token);
+CREATE INDEX IF NOT EXISTS idx_forgot_expires_at ON auth.password_reset_tokens (expires_at);

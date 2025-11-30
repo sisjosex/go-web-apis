@@ -146,9 +146,11 @@ type SessionToken struct {
 
 // SessionUser represents an authenticated user with session info
 type SessionUser struct {
-	UserId    uuid.UUID `json:"user_id" binding:"required,uuidv4"`
-	SessionId uuid.UUID `json:"session_id" binding:"required,uuidv4"`
-	IsActive  bool      `json:"is_active"`
+	UserId           uuid.UUID `json:"user_id" binding:"required,uuidv4"`
+	SessionId        uuid.UUID `json:"session_id" binding:"required,uuidv4"`
+	SystemRole       string    `json:"system_role"`       // super_admin, admin, user
+	SubscriptionPlan string    `json:"subscription_plan"` // free, pro, enterprise
+	IsActive         bool      `json:"is_active"`
 }
 
 // UserSession represents a user's session details

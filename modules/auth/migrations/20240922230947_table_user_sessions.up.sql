@@ -23,9 +23,9 @@ CREATE TABLE IF NOT EXISTS
         CONSTRAINT fk_user_session_user FOREIGN KEY (user_id) REFERENCES auth.users (id) ON DELETE CASCADE
     );
 
-CREATE INDEX idx_user_sessions_created_at ON auth.user_sessions (created_at);
-CREATE INDEX idx_user_sessions_updated_at ON auth.user_sessions (updated_at);
+CREATE INDEX IF NOT EXISTS idx_user_sessions_created_at ON auth.user_sessions (created_at);
+CREATE INDEX IF NOT EXISTS idx_user_sessions_updated_at ON auth.user_sessions (updated_at);
 
-CREATE INDEX idx_user_sessions_verify ON auth.user_sessions (
+CREATE INDEX IF NOT EXISTS idx_user_sessions_verify ON auth.user_sessions (
     user_id, provider_name, auth_provider_id, device_id, is_active
 );

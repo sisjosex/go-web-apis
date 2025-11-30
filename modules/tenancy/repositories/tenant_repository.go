@@ -293,3 +293,21 @@ func (r *tenantRepository) RemoveUserFromTenant(ctx context.Context, tenantID uu
 
 	return nil
 }
+
+// CountUserOwnedTenants counts how many tenants a user owns
+func (r *tenantRepository) CountUserOwnedTenants(ctx context.Context, userID uuid.UUID) (int, error) {
+	query := `SELECT tenancy.sp_count_user_owned_tenants($1)`
+
+	var count int
+	err := r.dbService.QueryRow(ctx, query, userID).Scan(&count)
+
+	if err != nil {
+		var pgErr *pgconn.PgError
+		if errors.As(err, &pgErr) {
+			return 0, pgErr
+		}
+		return 0, err
+	}
+
+	return count, nil
+}

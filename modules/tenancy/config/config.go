@@ -17,6 +17,14 @@ type TenancyConfig struct {
 
 	// Default schema name for schema-based tenancy
 	DefaultSchemaName string
+
+	// Self-service tenant creation
+	AllowSelfService bool
+
+	// Subscription plan limits
+	FreePlanLimit       int
+	ProPlanLimit        int
+	EnterprisePlanLimit int // 0 = unlimited
 }
 
 // LoadTenancyConfig loads tenancy module configuration from environment
@@ -26,5 +34,9 @@ func LoadTenancyConfig() *TenancyConfig {
 		TenantDatabasePoolSize:  utils.GetEnvAsInt32("TENANCY_DATABASE_POOL_SIZE", 5),
 		AllowCustomDatabaseURLs: utils.GetEnvAsBool("TENANCY_ALLOW_CUSTOM_DATABASE_URLS", true),
 		DefaultSchemaName:       utils.GetEnv("TENANCY_DEFAULT_SCHEMA", "public"),
+		AllowSelfService:        utils.GetEnvAsBool("TENANCY_ALLOW_SELF_SERVICE", true),
+		FreePlanLimit:           utils.GetEnvAsInt("TENANCY_FREE_PLAN_LIMIT", 1),
+		ProPlanLimit:            utils.GetEnvAsInt("TENANCY_PRO_PLAN_LIMIT", 5),
+		EnterprisePlanLimit:     utils.GetEnvAsInt("TENANCY_ENTERPRISE_PLAN_LIMIT", 0), // 0 = unlimited
 	}
 }

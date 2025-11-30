@@ -28,6 +28,12 @@ const (
 	InvalidUUID = "validation.invalid-uuid"
 )
 
+// Authorization errors
+const (
+	UserUnauthorized            = "user.unauthorized"
+	UserInsufficientPermissions = "user.insufficient-permissions"
+)
+
 // BuildErrorSingle creates an error response with just an error code and translates it
 func BuildErrorSingle(c *gin.Context, errorCode string) *ErrorResponse {
 	lang := getLangFromContext(c)

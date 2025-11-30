@@ -11,5 +11,7 @@
   "validation.oneof": "Value must be one of the allowed options",
   "validation.url": "Invalid URL format",
   "validation.datetime": "Invalid date/time format",
-  "validation.uuid": "Invalid UUID format"
+  "validation.uuid": "Invalid UUID format",
+  "user.unauthorized": "User is not authenticated",
+  "user.insufficient-permissions": "You do not have permission to perform this action"
 }

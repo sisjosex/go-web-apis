@@ -160,6 +160,8 @@ p_user_agent := $8
 	err := row.Scan(
 		&token.UserId,
 		&token.SessionId,
+		&token.SystemRole,
+		&token.SubscriptionPlan,
 	)
 
 	if err != nil {
@@ -212,8 +214,10 @@ p_user_agent := $13
 	row := r.dbService.QueryRow(context.Background(), query, params...)
 
 	err := row.Scan(
-		&token.UserId,
 		&token.SessionId,
+		&token.UserId,
+		&token.SystemRole,
+		&token.SubscriptionPlan,
 	)
 
 	if err != nil {

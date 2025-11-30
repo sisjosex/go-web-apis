@@ -20,5 +20,7 @@
   "tenant.creator.required": "Creator user ID is required",
   "tenant.database-url.invalid": "Invalid database URL format",
   "tenant.database-url.not-allowed": "Custom database URLs are not allowed. Contact administrator.",
+  "tenant.limit-reached": "You have reached your subscription plan limit for tenants. Upgrade to create more.",
+  "tenant.self-service-disabled": "Self-service tenant creation is disabled. Contact administrator.",
   "multitenancy.disabled": "Multitenancy is not enabled on this server"
 }

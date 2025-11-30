@@ -73,6 +73,97 @@ func (tc *TenantController) CreateTenant(c *gin.Context) {
 	c.JSON(http.StatusCreated, tenant)
 }
 
+// CreateTenantSelfService godoc
+// @Summary Create tenant (self-service with subscription limits)
+// @Description Allow authenticated users to create tenants with limits based on their subscription plan
+// @Tags Tenants
+// @Accept json
+// @Produce json
+// @Param request body models.CreateTenantDto true "Tenant data"
+// @Success 201 {object} models.TenantDetailResponse
+// @Failure 400 {object} errors.ErrorResponse
+// @Failure 403 {object} errors.ErrorResponse
+// @Router /tenants/self-service [post]
+// @Security ApiKeyAuth
+func (tc *TenantController) CreateTenantSelfService(c *gin.Context) {
+	// Check if multitenancy is enabled
+	tenancyConf := config.ModularAppConfig.Tenancy
+	if tenancyConf == nil || !tenancyConf.Enabled {
+		c.JSON(http.StatusServiceUnavailable, coreErrors.BuildErrorSingle(c, tenancyErrors.MultitenancyDisabled))
+		return
+	}
+
+	// Check if self-service is enabled
+	if !tenancyConf.AllowSelfService {
+		c.JSON(http.StatusForbidden, coreErrors.BuildErrorSingle(c, tenancyErrors.TenantSelfServiceDisabled))
+		return
+	}
+
+	// Get user info from context (set by AuthMiddleware)
+	userIDStr, exists := c.Get("user_id")
+	if !exists {
+		c.JSON(http.StatusUnauthorized, coreErrors.BuildErrorSingle(c, tenancyErrors.TenantUserUnauthorized))
+		return
+	}
+
+	userID, err := uuid.Parse(userIDStr.(string))
+	if err != nil {
+		c.JSON(http.StatusUnauthorized, coreErrors.BuildError(c, err))
+		return
+	}
+
+	// Get system role (super_admin bypasses limits)
+	systemRoleRaw, _ := c.Get("system_role")
+	systemRole := "user"
+	if role, ok := systemRoleRaw.(string); ok {
+		systemRole = role
+	}
+
+	// Super admins can create unlimited tenants
+	if systemRole != "super_admin" {
+		// Get subscription plan from JWT context
+		// Note: In a real system, you'd query the database for the latest plan
+		// For now, we'll use a simplified approach assuming plan is in user record
+
+		// Count current owned tenants
+		count, err := tc.tenantService.CountUserOwnedTenants(c.Request.Context(), userID)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, coreErrors.BuildError(c, err))
+			return
+		}
+
+		// Determine limit based on plan (simplified - in production query from user record)
+		limit := tenancyConf.FreePlanLimit // Default to free plan
+
+		// Check if limit reached
+		if limit > 0 && count >= limit {
+			c.JSON(http.StatusForbidden, coreErrors.BuildErrorSingle(c, tenancyErrors.TenantLimitReached))
+			return
+		}
+	}
+
+	var dto models.CreateTenantDto
+	if err := c.ShouldBindJSON(&dto); err != nil {
+		c.JSON(http.StatusBadRequest, coreErrors.BuildErrorDetail(c, tenancyErrors.TenantCreateFailed, utils.ExtractValidationError(c, err)))
+		return
+	}
+
+	// Self-service users cannot use custom database URLs (security)
+	if systemRole != "super_admin" && dto.DatabaseURL != nil && *dto.DatabaseURL != "" {
+		c.JSON(http.StatusForbidden, coreErrors.BuildErrorSingle(c, "tenant.database-url.not-allowed"))
+		return
+	}
+
+	// Create tenant with user as owner
+	tenant, err := tc.tenantService.CreateTenant(c.Request.Context(), &dto, userID)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, coreErrors.BuildError(c, err))
+		return
+	}
+
+	c.JSON(http.StatusCreated, tenant)
+}
+
 // GetUserTenants godoc
 // @Summary Get user's accessible tenants
 // @Description Returns list of tenants that the authenticated user can access

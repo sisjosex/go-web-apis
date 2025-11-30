@@ -2,8 +2,8 @@ package middleware
 
 import (
 	"fmt"
-	"josex/web/modules/core/errors"
 	"josex/web/modules/auth/services"
+	"josex/web/modules/core/errors"
 	"net/http"
 	"strings"
 
@@ -29,6 +29,13 @@ func AuthMiddleware(jwtService services.JWTService) gin.HandlerFunc {
 		// Guardar datos en el contexto de la request
 		c.Set("user_id", claims["user_id"])
 		c.Set("session_id", claims["session_id"])
+
+		// Set system_role if present (backward compatible with old tokens)
+		if systemRole, ok := claims["system_role"].(string); ok {
+			c.Set("system_role", systemRole)
+		} else {
+			c.Set("system_role", "user") // Default for old tokens
+		}
 
 		c.Next()
 	}

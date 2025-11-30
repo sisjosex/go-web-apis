@@ -10,8 +10,8 @@ import (
 )
 
 type JWTService interface {
-	GenerateAccessToken(userID uuid.UUID, sessionID uuid.UUID) (*string, error)
-	GenerateRefreshToken(userID uuid.UUID, sessionID uuid.UUID) (*string, error)
+	GenerateAccessToken(userID uuid.UUID, sessionID uuid.UUID, systemRole string) (*string, error)
+	GenerateRefreshToken(userID uuid.UUID, sessionID uuid.UUID, systemRole string) (*string, error)
 	ValidateToken(token string) (jwt.MapClaims, error)
 	RefreshAccessToken(refreshToken string) (*string, error)
 }
@@ -33,12 +33,13 @@ func NewJWTService(accessSecret, refreshSecret string, accessTTL, refreshTTL tim
 }
 
 // 📌 Genera un Access Token con duración corta (15-60 min)
-func (j *jwtService) GenerateAccessToken(userID uuid.UUID, sessionID uuid.UUID) (*string, error) {
+func (j *jwtService) GenerateAccessToken(userID uuid.UUID, sessionID uuid.UUID, systemRole string) (*string, error) {
 	claims := jwt.MapClaims{
-		"user_id":    userID,
-		"session_id": sessionID,
-		"exp":        time.Now().Add(j.accessTTL).Unix(),
-		"iat":        time.Now().Unix(),
+		"user_id":     userID,
+		"session_id":  sessionID,
+		"system_role": systemRole, // super_admin, admin, user
+		"exp":         time.Now().Add(j.accessTTL).Unix(),
+		"iat":         time.Now().Unix(),
 	}
 
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
@@ -52,12 +53,13 @@ func (j *jwtService) GenerateAccessToken(userID uuid.UUID, sessionID uuid.UUID) 
 }
 
 // 📌 Genera un Refresh Token con duración más larga (7-30 días)
-func (j *jwtService) GenerateRefreshToken(userID uuid.UUID, sessionID uuid.UUID) (*string, error) {
+func (j *jwtService) GenerateRefreshToken(userID uuid.UUID, sessionID uuid.UUID, systemRole string) (*string, error) {
 	claims := jwt.MapClaims{
-		"user_id":    userID,
-		"session_id": sessionID,
-		"exp":        time.Now().Add(j.refreshTTL).Unix(),
-		"iat":        time.Now().Unix(),
+		"user_id":     userID,
+		"session_id":  sessionID,
+		"system_role": systemRole, // Include for refresh
+		"exp":         time.Now().Add(j.refreshTTL).Unix(),
+		"iat":         time.Now().Unix(),
 	}
 
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
@@ -136,8 +138,14 @@ func (j *jwtService) RefreshAccessToken(refreshToken string) (*string, error) {
 		return nil, errors.New("invalid token data")
 	}
 
+	// Extract system_role from refresh token (backward compatible)
+	systemRole := "user" // default
+	if role, ok := claims["system_role"].(string); ok {
+		systemRole = role
+	}
+
 	// Generar un nuevo Access Token
-	return j.GenerateAccessToken(userID, sessionID)
+	return j.GenerateAccessToken(userID, sessionID, systemRole)
 }
 
 func validateTokenClaims(claims jwt.MapClaims) error {

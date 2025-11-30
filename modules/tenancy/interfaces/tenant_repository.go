@@ -30,4 +30,7 @@ type TenantRepository interface {
 
 	// Remove user from tenant
 	RemoveUserFromTenant(ctx context.Context, tenantID uuid.UUID, userID uuid.UUID) error
+
+	// Count how many tenants a user owns (for subscription limits)
+	CountUserOwnedTenants(ctx context.Context, userID uuid.UUID) (int, error)
 }

@@ -9,5 +9,5 @@ CREATE TABLE
         updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
     );
 
-CREATE INDEX idx_user_profile_created_at ON auth.user_profile (created_at);
-CREATE INDEX idx_user_profile_updated_at ON auth.user_profile (updated_at);
+CREATE INDEX IF NOT EXISTS idx_user_profile_created_at ON auth.user_profile (created_at);
+CREATE INDEX IF NOT EXISTS idx_user_profile_updated_at ON auth.user_profile (updated_at);

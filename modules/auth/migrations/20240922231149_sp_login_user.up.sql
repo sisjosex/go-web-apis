@@ -1,3 +1,9 @@
+-- =====================================================
+-- DROP EXISTING FUNCTIONS (if schema changed)
+-- =====================================================
+DROP FUNCTION IF EXISTS auth.sp_login_email;
+DROP FUNCTION IF EXISTS auth.sp_login_external;
+
 -- Función para gestionar las sesiones
 CREATE
 OR REPLACE FUNCTION auth.private_manage_user_session (
@@ -103,7 +109,7 @@ OR REPLACE FUNCTION auth.sp_login_external (
     p_device_os VARCHAR DEFAULT NULL,
     p_browser VARCHAR DEFAULT NULL,
     p_user_agent TEXT DEFAULT NULL
-) RETURNS TABLE (session_id UUID, user_id UUID) LANGUAGE plpgsql AS $$
+) RETURNS TABLE (session_id UUID, user_id UUID, system_role VARCHAR, subscription_plan VARCHAR) LANGUAGE plpgsql AS $$
 DECLARE
     v_user_id UUID;
     v_session_id UUID;
@@ -195,7 +201,7 @@ BEGIN
 
     -- Devolver la información del usuario y la sesión
     RETURN QUERY
-    SELECT v_user_id, v_session_id
+    SELECT v_session_id, v_user_id, u.system_role, u.subscription_plan
     FROM auth.users u
     WHERE u.id = v_user_id
     LIMIT 1;
@@ -227,7 +233,7 @@ OR REPLACE FUNCTION auth.sp_login_email (
     p_device_os VARCHAR DEFAULT NULL,
     p_browser VARCHAR DEFAULT NULL,
     p_user_agent TEXT DEFAULT NULL
-) RETURNS TABLE (user_id UUID, session_id UUID) LANGUAGE plpgsql AS $$
+) RETURNS TABLE (user_id UUID, session_id UUID, system_role VARCHAR, subscription_plan VARCHAR) LANGUAGE plpgsql AS $$
 DECLARE
     v_user_id UUID;
     v_session_id UUID;
@@ -282,7 +288,7 @@ BEGIN
 
     -- Devolver la información del usuario y la sesión
     RETURN QUERY
-    SELECT v_user_id, v_session_id
+    SELECT v_user_id, v_session_id, u.system_role, u.subscription_plan
     FROM auth.users u
     WHERE u.id = v_user_id
     LIMIT 1;
