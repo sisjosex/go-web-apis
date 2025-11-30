@@ -15,6 +15,7 @@ RETURNS TABLE (
 ) LANGUAGE plpgsql AS $$
 DECLARE
     v_role VARCHAR;
+    v_existing_active BOOLEAN;
 BEGIN
     -- Validate role
     v_role := LOWER(TRIM(p_role));
@@ -32,7 +33,17 @@ BEGIN
         RAISE EXCEPTION 'user.not-found' USING ERRCODE = 'U0001';
     END IF;
 
-    -- Insert or update tenant user
+    -- Check if user is already active in this tenant
+    SELECT is_active INTO v_existing_active
+    FROM tenancy.tenant_users
+    WHERE tenant_id = p_tenant_id
+      AND user_id = p_user_id;
+
+    IF v_existing_active = TRUE THEN
+        RAISE EXCEPTION 'tenant.user.already-exists' USING ERRCODE = 'T0013';
+    END IF;
+
+    -- Insert or reactivate tenant user
     INSERT INTO tenancy.tenant_users (tenant_id, user_id, role, is_active)
     VALUES (p_tenant_id, p_user_id, v_role, TRUE)
     ON CONFLICT (tenant_id, user_id) 

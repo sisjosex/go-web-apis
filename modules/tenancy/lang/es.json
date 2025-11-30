@@ -9,6 +9,7 @@
   "tenant.suspended": "El tenant ha sido suspendido",
   "tenant.user.not-found": "El usuario no es miembro de este tenant",
   "tenant.user.already-exists": "El usuario ya es miembro de este tenant",
+  "tenant.user.already-removed": "El usuario ya ha sido removido de este tenant",
   "tenant.user.unauthorized": "No tienes permisos para acceder a este tenant",
   "tenant.user.invalid-role": "Rol de tenant inválido",
   "tenant.user.add-failed": "Error al agregar usuario al tenant",

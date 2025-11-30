@@ -14,13 +14,14 @@ const (
 
 // Tenant user errors
 const (
-	TenantUserNotFound      = "tenant.user.not-found"
-	TenantUserAlreadyExists = "tenant.user.already-exists"
-	TenantUserUnauthorized  = "tenant.user.unauthorized"
-	TenantUserInvalidRole   = "tenant.user.invalid-role"
-	TenantUserAddFailed     = "tenant.user.add-failed"
-	TenantUserRemoveFailed  = "tenant.user.remove-failed"
-	TenantUserUpdateFailed  = "tenant.user.update-failed"
+	TenantUserNotFound       = "tenant.user.not-found"
+	TenantUserAlreadyExists  = "tenant.user.already-exists"
+	TenantUserAlreadyRemoved = "tenant.user.already-removed"
+	TenantUserUnauthorized   = "tenant.user.unauthorized"
+	TenantUserInvalidRole    = "tenant.user.invalid-role"
+	TenantUserAddFailed      = "tenant.user.add-failed"
+	TenantUserRemoveFailed   = "tenant.user.remove-failed"
+	TenantUserUpdateFailed   = "tenant.user.update-failed"
 )
 
 // Tenant validation errors
