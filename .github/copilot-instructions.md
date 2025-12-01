@@ -147,6 +147,65 @@ All CUD operations use stored procedures:
 - Retry logic in `modules/core/services/database_service.go` handles startup connection failures
 - Always pass `context.Context` to database methods for cancellation
 
+### Business Logic Validation (ALWAYS in PostgreSQL)
+
+**ALL business logic validations MUST be implemented in PostgreSQL stored procedures, NEVER in Go.**
+
+**Examples of validations that belong in PostgreSQL:**
+- Entity existence checks (company exists? vehicle exists? etc.)
+- Uniqueness constraints (plate number unique within company, name unique within tenant, etc.)
+- Enum/type validations (vehicle_type must be 'bus', 'van', or 'car', etc.)
+- Status/state validations (is access_active? is session still valid? etc.)
+- Foreign key relationships (tenant exists for this user? etc.)
+- Business rule checks (duplicate active grants? already assigned? etc.)
+
+**Pattern for raising validation errors in PostgreSQL:**
+```sql
+-- In stored procedures, validate and raise exceptions with error codes
+IF p_vehicle_type NOT IN ('bus', 'van', 'car') THEN
+    RAISE EXCEPTION 'TRACKING_ERROR:vehicle.invalid-type' USING ERRCODE = 'P0001';
+END IF;
+
+IF NOT EXISTS (SELECT 1 FROM tracking.transport_companies WHERE id = p_company_id) THEN
+    RAISE EXCEPTION 'TRACKING_ERROR:company.not-found' USING ERRCODE = 'P0001';
+END IF;
+
+IF EXISTS (SELECT 1 FROM tracking.vehicles WHERE company_id = p_company_id AND plate_number = p_plate_number) THEN
+    RAISE EXCEPTION 'TRACKING_ERROR:vehicle.plate-already-exists' USING ERRCODE = 'P0001';
+END IF;
+```
+
+**Go controller pattern for error handling:**
+```go
+// Call SP - validation happens in database
+vehicle, err := ctrl.trackingService.CreateVehicle(c.Request.Context(), &dto)
+if err != nil {
+    // Extract error code raised by PostgreSQL
+    errorCode := trackingUtils.ExtractTrackingErrorCode(err)
+    switch errorCode {
+    case "company.not-found":
+        c.JSON(http.StatusNotFound, coreErrors.BuildErrorSingle(c, trackingErrors.CompanyNotFound))
+        return
+    case "vehicle.invalid-type":
+        c.JSON(http.StatusBadRequest, coreErrors.BuildErrorSingle(c, trackingErrors.VehicleInvalidType))
+        return
+    case "vehicle.plate-already-exists":
+        c.JSON(http.StatusConflict, coreErrors.BuildErrorSingle(c, trackingErrors.VehiclePlateAlreadyExists))
+        return
+    }
+    c.JSON(http.StatusInternalServerError, coreErrors.BuildError(c, err))
+    return
+}
+c.JSON(http.StatusCreated, vehicle)
+```
+
+**Go should ONLY:**
+- Extract error codes from PostgreSQL exceptions
+- Map error codes to HTTP status codes
+- Never perform business logic validation
+- Never check if resources exist
+- Never validate business rules
+
 ## Error Handling (Modular)
 
 ### Error Constants by Module
@@ -412,8 +471,14 @@ When creating a tenant with custom `database_url`, migrations are filtered:
 4. **Add config variables** in `modules/<module>/config/config.go` (use `utils.GetEnv*`)
 5. **Create interface** in `modules/<module>/interfaces/` for testability
 6. **Write stored procedure** in `modules/<module>/migrations/` (use migration CLI tool)
+   - **IMPORTANT:** Implement ALL business logic validations in the SP, NOT in Go
+   - Raise `TRACKING_ERROR:error.code` exceptions for validation failures
+   - Examples: entity existence, uniqueness constraints, enum validation, state checks
 7. **Add repository method** calling the SP with parameter binding
 8. **Add service method** for orchestration (can call multiple repos)
-9. **Add controller** with Swagger annotations, validation, error handling
+9. **Add controller** with Swagger annotations
+   - Extract error codes via `trackingUtils.ExtractTrackingErrorCode(err)`
+   - Map error codes to HTTP status codes (400, 404, 409, 500, etc.)
+   - **NEVER validate business logic in Go** - only extract and map error codes
 10. **Register routes** in `modules/<module>/routes/<module>_routes.go`
 11. **Wire up in main routes** (`routes/routes.go`) with module check: `if coreConfig.IsModuleEnabled("modulename") { ... }`

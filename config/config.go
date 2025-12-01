@@ -5,15 +5,17 @@ import (
 	coreConfig "josex/web/modules/core/config"
 	"josex/web/modules/core/utils"
 	tenancyConfig "josex/web/modules/tenancy/config"
+	trackingConfig "josex/web/modules/tracking/config"
 	usersConfig "josex/web/modules/users/config"
 )
 
 // ModularConfig holds all modular configuration
 type ModularConfig struct {
-	Core    *coreConfig.CoreConfig
-	Auth    *authConfig.AuthConfig
-	Users   *usersConfig.UsersConfig
-	Tenancy *tenancyConfig.TenancyConfig
+	Core     *coreConfig.CoreConfig
+	Auth     *authConfig.AuthConfig
+	Users    *usersConfig.UsersConfig
+	Tenancy  *tenancyConfig.TenancyConfig
+	Tracking *trackingConfig.TrackingConfig
 }
 
 // Global modular configuration (loaded on init)
@@ -25,9 +27,10 @@ func init() {
 
 	// Load all module configurations
 	ModularAppConfig = &ModularConfig{
-		Core:    coreConfig.LoadCoreConfig(),
-		Auth:    authConfig.LoadAuthConfig(),
-		Users:   usersConfig.LoadUsersConfig(),
-		Tenancy: tenancyConfig.LoadTenancyConfig(),
+		Core:     coreConfig.LoadCoreConfig(),
+		Auth:     authConfig.LoadAuthConfig(),
+		Users:    usersConfig.LoadUsersConfig(),
+		Tenancy:  tenancyConfig.LoadTenancyConfig(),
+		Tracking: trackingConfig.LoadTrackingConfig(),
 	}
 }

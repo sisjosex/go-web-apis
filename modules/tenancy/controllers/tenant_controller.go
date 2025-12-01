@@ -348,3 +348,41 @@ func (tc *TenantController) RemoveUserFromTenant(c *gin.Context) {
 
 	c.JSON(http.StatusOK, gin.H{"message": "User removed from tenant successfully"})
 }
+
+// RunTenantMigrations godoc
+// @Summary Run migrations on tenant database
+// @Description Execute all pending migrations on a tenant's custom database (admin/super_admin only)
+// @Tags Tenants
+// @Produce json
+// @Param tenant_slug path string true "Tenant slug"
+// @Success 200 {object} map[string]string
+// @Failure 400 {object} errors.ErrorResponse
+// @Failure 403 {object} errors.ErrorResponse
+// @Failure 404 {object} errors.ErrorResponse
+// @Router /tenants/{tenant_slug}/migrate [post]
+// @Security ApiKeyAuth
+func (tc *TenantController) RunTenantMigrations(c *gin.Context) {
+	// Check system role (only super_admin or admin)
+	systemRole, exists := c.Get("system_role")
+	if !exists || (systemRole != "super_admin" && systemRole != "admin") {
+		c.JSON(http.StatusForbidden, coreErrors.BuildErrorSingle(c, tenancyErrors.TenantUserInsufficientPermissions))
+		return
+	}
+
+	tenantSlug := c.Param("tenant_slug")
+	if tenantSlug == "" {
+		c.JSON(http.StatusBadRequest, coreErrors.BuildErrorSingle(c, coreErrors.InvalidUUID))
+		return
+	}
+
+	err := tc.tenantService.RunTenantMigrations(c.Request.Context(), tenantSlug)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, coreErrors.BuildError(c, err))
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"message": "Migrations executed successfully",
+		"tenant":  tenantSlug,
+	})
+}

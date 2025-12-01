@@ -33,4 +33,7 @@ type TenantRepository interface {
 
 	// Count how many tenants a user owns (for subscription limits)
 	CountUserOwnedTenants(ctx context.Context, userID uuid.UUID) (int, error)
+
+	// List all tenants with custom database URLs (for CLI migrations)
+	ListTenantsWithCustomDB(ctx context.Context) ([]*models.Tenant, error)
 }

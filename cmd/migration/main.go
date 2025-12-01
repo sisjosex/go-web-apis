@@ -33,14 +33,15 @@ func main() {
 		fmt.Println("  go run . migration -module=auth -name=add_refresh_tokens")
 		fmt.Println("  go run . migration -module=users -name=add_avatar_field")
 		fmt.Println("  go run . migration -module=core -name=add_postgis_extension")
-		fmt.Println("\nAvailable modules: core, auth, users")
+		fmt.Println("  go run . migration -module=tracking -name=add_client_tenant_field")
+		fmt.Println("\nAvailable modules: core, auth, users, tracking")
 		os.Exit(1)
 	}
 
 	// Validate module
-	validModules := map[string]bool{"core": true, "auth": true, "users": true}
+	validModules := map[string]bool{"core": true, "auth": true, "users": true, "tracking": true}
 	if !validModules[*module] {
-		fmt.Printf("❌ Error: Invalid module '%s'. Valid modules: core, auth, users\n", *module)
+		fmt.Printf("❌ Error: Invalid module '%s'. Valid modules: core, auth, users, tracking\n", *module)
 		os.Exit(1)
 	}
 

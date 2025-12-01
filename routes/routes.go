@@ -9,9 +9,14 @@ import (
 	coreMiddleware "josex/web/modules/core/middleware"
 	coreServices "josex/web/modules/core/services"
 	tenancyControllers "josex/web/modules/tenancy/controllers"
+	tenancyMW "josex/web/modules/tenancy/middleware"
 	tenancyRepos "josex/web/modules/tenancy/repositories"
 	tenancyRoutes "josex/web/modules/tenancy/routes"
 	tenancyServices "josex/web/modules/tenancy/services"
+	trackingControllers "josex/web/modules/tracking/controllers"
+	trackingRepos "josex/web/modules/tracking/repositories"
+	trackingRoutes "josex/web/modules/tracking/routes"
+	trackingServices "josex/web/modules/tracking/services"
 	userControllers "josex/web/modules/users/controllers"
 	userRepos "josex/web/modules/users/repositories"
 	userRoutes "josex/web/modules/users/routes"
@@ -76,18 +81,36 @@ func SetupRoutes(r *gin.Engine, dbService coreServices.DatabaseService) {
 		authRoutes.RegisterAuthRoutes(apiV1, authController, sessionController, jwtService)
 		userRoutes.RegisterUserRoutes(apiV1, userController, jwtService)
 
-		// Tenancy module (if enabled)
+		// Get config
 		coreConf := config.ModularAppConfig.Core
 		tenancyConf := config.ModularAppConfig.Tenancy
+
+		// Initialize tenancy services (needed for other modules)
+		var tenantMiddleware gin.HandlerFunc
 		if coreConf.IsModuleEnabled("tenancy") && tenancyConf != nil && tenancyConf.Enabled {
-			// Initialize tenancy services
 			tenantRepository := tenancyRepos.NewTenantRepository(dbService)
 			tenantService := tenancyServices.NewTenantService(tenantRepository, dbService)
 			tenantController := tenancyControllers.NewTenantController(tenantService)
 
 			// Register tenant routes
 			tenancyRoutes.RegisterTenantRoutes(apiV1, tenantController, tenantService, jwtService)
+
+			// Create tenant middleware for use in other modules (optional header, allows main DB access for admins)
+			tenantMiddleware = tenancyMW.TenantMiddlewareFromHeaderOptional(tenantService)
+
 			log.Println("✅ Tenancy module enabled and routes registered")
+		}
+
+		// Tracking module (if enabled)
+		if coreConf.IsModuleEnabled("tracking") {
+			// Initialize tracking services
+			trackingRepository := trackingRepos.NewTrackingRepository(dbService)
+			trackingService := trackingServices.NewTrackingService(trackingRepository)
+			trackingController := trackingControllers.NewTrackingController(trackingService)
+
+			// Register tracking routes with tenant middleware and JWT service for auth
+			trackingRoutes.RegisterTrackingRoutes(r, trackingController, tenantMiddleware, jwtService)
+			log.Println("✅ Tracking module enabled and routes registered")
 		}
 	}
 

@@ -182,8 +182,10 @@ func (ms *MigrationService) runModuleMigrations(module Module) error {
 		return fmt.Errorf("failed to create driver: %w", err)
 	}
 
-	// Use relative path (works better on Windows)
+	// Use the path as-is (already in forward slash format from discoverAvailableModules)
 	sourceURL := fmt.Sprintf("file://%s", module.Path)
+	log.Printf("🔍 Migration source URL for %s: %s", module.Name, sourceURL)
+
 	m, err := migrate.NewWithDatabaseInstance(sourceURL, "postgres", driver)
 	if err != nil {
 		return fmt.Errorf("failed to create migrate instance: %w", err)
@@ -191,11 +193,79 @@ func (ms *MigrationService) runModuleMigrations(module Module) error {
 	// Don't defer close - will close the shared DB connection
 
 	// Run migrations
-	if err := m.Up(); err != nil && err != migrate.ErrNoChange {
+	err = m.Up()
+	log.Printf("🔍 Migration result for %s: %v", module.Name, err)
+
+	if err != nil && err != migrate.ErrNoChange {
+		// Check if error is due to dirty database
+		if strings.Contains(err.Error(), "Dirty database") {
+			log.Printf("⚠️  Detected dirty database state for module %s, attempting to force clean...", module.Name)
+
+			// Extract version number from error message
+			versionStr := extractVersionFromError(err.Error())
+			if versionStr != "" {
+				dirtyVersion := parseVersion(versionStr)
+
+				// Check if the migration file exists for this version
+				upFile := filepath.Join(module.Path, fmt.Sprintf("%s_*.up.sql", versionStr))
+				matches, _ := filepath.Glob(upFile)
+
+				if len(matches) == 0 {
+					// Migration file doesn't exist, force to previous version (dirty - 1)
+					log.Printf("⚠️  Migration file for version %s not found, forcing to previous version...", versionStr)
+					if forceErr := m.Force(dirtyVersion - 1); forceErr != nil {
+						log.Printf("❌ Failed to force clean to previous version: %v", forceErr)
+						return fmt.Errorf("migration execution failed: %w (force clean to previous version also failed: %v)", err, forceErr)
+					}
+				} else {
+					// File exists, just mark it as not dirty
+					if forceErr := m.Force(dirtyVersion); forceErr != nil {
+						log.Printf("❌ Failed to force clean version: %v", forceErr)
+						return fmt.Errorf("migration execution failed: %w (force clean also failed: %v)", err, forceErr)
+					}
+				}
+
+				log.Printf("✅ Successfully forced clean state, retrying migration...")
+
+				// Retry the migration
+				if retryErr := m.Up(); retryErr != nil && retryErr != migrate.ErrNoChange {
+					return fmt.Errorf("migration retry failed after force clean: %w", retryErr)
+				}
+				log.Printf("✅ Migration completed successfully after cleaning dirty state")
+				return nil
+			}
+		}
 		return fmt.Errorf("migration execution failed: %w", err)
 	}
 
 	return nil
+}
+
+// extractVersionFromError extracts the version number from a "Dirty database version X" error message
+func extractVersionFromError(errorMsg string) string {
+	// Example: "Dirty database version 20251130181230. Fix and force version."
+	parts := strings.Split(errorMsg, "version ")
+	if len(parts) < 2 {
+		return ""
+	}
+	versionPart := parts[1]
+	// Extract just the number part
+	versionStr := ""
+	for _, char := range versionPart {
+		if char >= '0' && char <= '9' {
+			versionStr += string(char)
+		} else {
+			break
+		}
+	}
+	return versionStr
+}
+
+// parseVersion converts a version string to an int
+func parseVersion(versionStr string) int {
+	version := 0
+	fmt.Sscanf(versionStr, "%d", &version)
+	return version
 }
 
 // GetModuleStatus returns the status of all modules

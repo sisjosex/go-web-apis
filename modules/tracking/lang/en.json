@@ -1,0 +1,66 @@
+{
+  "tracking.vehicle.not-found": "Vehicle not found",
+  "tracking.vehicle.already-exists": "Vehicle with this license plate already exists",
+  "tracking.vehicle.create.failed": "Failed to create vehicle",
+  "tracking.vehicle.update.failed": "Failed to update vehicle",
+  "tracking.vehicle.delete.failed": "Failed to delete vehicle",
+  "tracking.vehicle.invalid-license": "Invalid license plate format",
+
+  "tracking.route.not-found": "Route not found",
+  "tracking.route.already-exists": "Route already exists",
+  "tracking.route.create.failed": "Failed to create route",
+  "tracking.route.update.failed": "Failed to update route",
+  "tracking.route.delete.failed": "Failed to delete route",
+
+  "tracking.rider.not-found": "Rider (student/employee) not found",
+  "tracking.rider.already-exists": "Rider already exists",
+  "tracking.rider.create.failed": "Failed to create rider",
+  "tracking.rider.update.failed": "Failed to update rider",
+  "tracking.rider.delete.failed": "Failed to delete rider",
+
+  "tracking.assignment.not-found": "Rider assignment not found",
+  "tracking.assignment.create.failed": "Failed to assign rider to route",
+  "tracking.assignment.delete.failed": "Failed to remove rider from route",
+  "tracking.assignment.already-exists": "Rider is already assigned to this route",
+
+  "tracking.location.update.failed": "Failed to update vehicle location",
+  "tracking.location.invalid-coordinates": "Invalid GPS coordinates",
+  "tracking.location.not-found": "No location data available for this vehicle",
+
+  "tracking.event.record.failed": "Failed to record ride event",
+  "tracking.event.not-found": "Ride event not found",
+  "tracking.event.invalid-type": "Invalid event type",
+
+  "tracking.alert.create.failed": "Failed to create route alert",
+  "tracking.alert.not-found": "Alert not found",
+  "tracking.alert.update.failed": "Failed to update alert",
+  "tracking.alert.resolve.failed": "Failed to resolve alert",
+
+  "tracking.company.not-found": "Transport company not found",
+  "tracking.company.create.failed": "Failed to create transport company",
+  "tracking.company.update.failed": "Failed to update transport company",
+  "tracking.company.delete.failed": "Failed to delete transport company",
+  "tracking.company.already-exists": "Transport company with this name already exists",
+  "tracking.company.list.failed": "Failed to retrieve transport companies",
+
+  "tracking.vehicle.list.failed": "Failed to retrieve vehicles",
+  "tracking.route.list.failed": "Failed to retrieve routes",
+  "tracking.route-stop.not-found": "Route stop not found",
+  "tracking.route-stop.create.failed": "Failed to add stop to route",
+  "tracking.route-stop.list.failed": "Failed to retrieve route stops",
+  "tracking.route-stop.delete.failed": "Failed to remove stop from route",
+  "tracking.rider.list.failed": "Failed to retrieve riders",
+  "tracking.assignment.list.failed": "Failed to retrieve rider assignments",
+
+  "tracking.client-access.not-found": "Client access not found",
+  "tracking.client-access.already-exists": "Client already has access to this company",
+  "tracking.client-access.grant.failed": "Failed to grant client access",
+  "tracking.client-access.revoke.failed": "Failed to revoke client access",
+  "tracking.client-access.list.failed": "Failed to retrieve client access list",
+  "tracking.tenant.not-found": "Client tenant not found",
+
+  "tracking.unauthorized": "Unauthorized access to tracking module",
+  "tracking.forbidden": "You don't have permission to perform this action",
+  "tracking.internal-error": "Internal tracking service error",
+  "tracking.tenant.required": "A tenant must be specified via X-Tenant-Slug header"
+}

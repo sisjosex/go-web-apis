@@ -93,14 +93,14 @@ func (s *tenantService) runTenantMigrations(databaseURL string) error {
 	mainConfig := config.ModularAppConfig.Core
 	excludedModules := map[string]bool{
 		"auth":    true, // Authentication only in Main DB (centralized users)
-		"core":    true, // Core module always in Main DB
 		"tenancy": true, // Tenant management only in Main DB
 		"users":   true, // User management only in Main DB
 	}
 
-	tenantEnabledModules := []string{}
+	// Always include 'core' module for base extensions (uuid-ossp, etc.)
+	tenantEnabledModules := []string{"core"}
 	for _, module := range mainConfig.EnabledModules {
-		if !excludedModules[module] {
+		if !excludedModules[module] && module != "core" {
 			tenantEnabledModules = append(tenantEnabledModules, module)
 		}
 	}
@@ -178,4 +178,28 @@ func (s *tenantService) VerifyUserTenantAccess(ctx context.Context, userID uuid.
 // CountUserOwnedTenants counts how many tenants a user owns
 func (s *tenantService) CountUserOwnedTenants(ctx context.Context, userID uuid.UUID) (int, error) {
 	return s.tenantRepository.CountUserOwnedTenants(ctx, userID)
+}
+
+// RunTenantMigrations runs migrations on a specific tenant's database
+func (s *tenantService) RunTenantMigrations(ctx context.Context, tenantSlug string) error {
+	// Get tenant details
+	tenant, err := s.tenantRepository.GetTenantBySlug(ctx, tenantSlug)
+	if err != nil {
+		return fmt.Errorf("tenant not found: %w", err)
+	}
+
+	// Only run migrations if tenant has custom database_url
+	if tenant.DatabaseURL == nil || *tenant.DatabaseURL == "" {
+		return fmt.Errorf("tenant uses shared database - migrations run automatically on main DB")
+	}
+
+	log.Printf("🔄 Running migrations for tenant '%s' on database: %s", tenantSlug, *tenant.DatabaseURL)
+
+	if err := s.runTenantMigrations(*tenant.DatabaseURL); err != nil {
+		log.Printf("❌ Migration failed for tenant '%s': %v", tenantSlug, err)
+		return fmt.Errorf("migration execution failed: %w", err)
+	}
+
+	log.Printf("✅ Migrations completed successfully for tenant '%s'", tenantSlug)
+	return nil
 }

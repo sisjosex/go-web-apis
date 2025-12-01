@@ -56,6 +56,12 @@ func RegisterTenantRoutes(
 				adminRoutes.POST("/users", tenantController.AddUserToTenant)
 				adminRoutes.DELETE("/users/:user_id", tenantController.RemoveUserFromTenant)
 			}
+
+			// Run migrations on tenant database (super_admin only)
+			superAdminRoutes := tenantScopedRoutes.Use(coreMiddleware.RequireSystemRole("super_admin"))
+			{
+				superAdminRoutes.POST("/migrate", tenantController.RunTenantMigrations)
+			}
 		}
 	}
 }

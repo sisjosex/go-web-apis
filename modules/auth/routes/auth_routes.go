@@ -25,7 +25,7 @@ func RegisterAuthRoutes(
 		authRoutes.POST("/login", authController.Login)
 		authRoutes.POST("/login/facebook", authController.LoginFacebook)
 		authRoutes.POST("/register", authController.Register)
-		authRoutes.POST("/token/refresh", authController.RefreshToken)
+		authRoutes.POST("/refresh_token", authController.RefreshToken)
 
 		// Email verification (public - requires token in body)
 		authRoutes.PUT("/email/verification", authController.ConfirmEmailAddress)

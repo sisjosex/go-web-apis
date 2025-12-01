@@ -1,0 +1,175 @@
+package models
+
+import (
+	"time"
+
+	"github.com/google/uuid"
+)
+
+// TransportCompany represents a school, corporate, or transport provider
+type TransportCompany struct {
+	ID             uuid.UUID  `json:"id"`
+	TenantID       *uuid.UUID `json:"tenant_id"` // NULL for main database companies, UUID for tenant-specific
+	Name           string     `json:"name"`
+	CompanyType    string     `json:"company_type"` // school, corporate, transport_provider
+	ContactName    *string    `json:"contact_name"`
+	ContactPhone   *string    `json:"contact_phone"`
+	ContactEmail   *string    `json:"contact_email"`
+	Address        *string    `json:"address"`
+	ClientTenantID *uuid.UUID `json:"client_tenant_id"` // Tenant that has read-only access
+	IsActive       bool       `json:"is_active"`
+	CreatedAt      time.Time  `json:"created_at"`
+	UpdatedAt      time.Time  `json:"updated_at"`
+}
+
+// Vehicle represents a bus or van with GPS tracking
+type Vehicle struct {
+	ID          uuid.UUID `json:"id"`
+	CompanyID   uuid.UUID `json:"company_id"`
+	PlateNumber string    `json:"plate_number"`
+	VehicleType string    `json:"vehicle_type"` // bus, van, car
+	Brand       *string   `json:"brand"`
+	Model       *string   `json:"model"`
+	Year        *int32    `json:"year"`
+	Capacity    int32     `json:"capacity"`
+	VIN         *string   `json:"vin"` // Vehicle Identification Number
+	IsActive    bool      `json:"is_active"`
+	CreatedAt   time.Time `json:"created_at"`
+	UpdatedAt   time.Time `json:"updated_at"`
+}
+
+// Route represents a transport route with origin and destination
+type Route struct {
+	ID                       uuid.UUID  `json:"id"`
+	CompanyID                uuid.UUID  `json:"company_id"`
+	VehicleID                *uuid.UUID `json:"vehicle_id"`
+	RouteName                string     `json:"route_name"`
+	RouteCode                *string    `json:"route_code"`
+	OriginAddress            string     `json:"origin_address"`
+	OriginLat                *float64   `json:"origin_lat"`
+	OriginLng                *float64   `json:"origin_lng"`
+	DestinationAddress       string     `json:"destination_address"`
+	DestinationLat           *float64   `json:"destination_lat"`
+	DestinationLng           *float64   `json:"destination_lng"`
+	ScheduleType             string     `json:"schedule_type"` // morning, afternoon, custom
+	ScheduledStartTime       *string    `json:"scheduled_start_time"`
+	ScheduledEndTime         *string    `json:"scheduled_end_time"`
+	EstimatedDurationMinutes *int32     `json:"estimated_duration_minutes"`
+	IsActive                 bool       `json:"is_active"`
+	CreatedAt                time.Time  `json:"created_at"`
+	UpdatedAt                time.Time  `json:"updated_at"`
+}
+
+// RouteStop represents an intermediate stop along a route
+type RouteStop struct {
+	ID                            uuid.UUID `json:"id"`
+	RouteID                       uuid.UUID `json:"route_id"`
+	StopName                      string    `json:"stop_name"`
+	Address                       string    `json:"address"`
+	Latitude                      *float64  `json:"latitude"`
+	Longitude                     *float64  `json:"longitude"`
+	StopOrder                     int32     `json:"stop_order"`
+	ScheduledArrivalOffsetMinutes *int32    `json:"scheduled_arrival_offset_minutes"`
+	IsActive                      bool      `json:"is_active"`
+	CreatedAt                     time.Time `json:"created_at"`
+	UpdatedAt                     time.Time `json:"updated_at"`
+}
+
+// Rider represents a student or employee using transport
+type Rider struct {
+	ID                    uuid.UUID  `json:"id"`
+	CompanyID             uuid.UUID  `json:"company_id"`
+	RiderType             string     `json:"rider_type"` // student, employee
+	FirstName             string     `json:"first_name"`
+	LastName              string     `json:"last_name"`
+	IdentificationNumber  *string    `json:"identification_number"`
+	Phone                 *string    `json:"phone"`
+	Email                 *string    `json:"email"`
+	EmergencyContactName  *string    `json:"emergency_contact_name"`
+	EmergencyContactPhone *string    `json:"emergency_contact_phone"`
+	GuardianUserID        *uuid.UUID `json:"guardian_user_id"`
+	GuardianName          *string    `json:"guardian_name"`
+	GuardianPhone         *string    `json:"guardian_phone"`
+	GuardianEmail         *string    `json:"guardian_email"`
+	Address               *string    `json:"address"`
+	IsActive              bool       `json:"is_active"`
+	CreatedAt             time.Time  `json:"created_at"`
+	UpdatedAt             time.Time  `json:"updated_at"`
+}
+
+// RiderAssignment maps riders to routes with pickup/dropoff stops
+type RiderAssignment struct {
+	ID            uuid.UUID  `json:"id"`
+	RiderID       uuid.UUID  `json:"rider_id"`
+	RouteID       uuid.UUID  `json:"route_id"`
+	PickupStopID  *uuid.UUID `json:"pickup_stop_id"`
+	DropoffStopID *uuid.UUID `json:"dropoff_stop_id"`
+	IsActive      bool       `json:"is_active"`
+	AssignedAt    time.Time  `json:"assigned_at"`
+	UnassignedAt  *time.Time `json:"unassigned_at"`
+	CreatedAt     time.Time  `json:"created_at"`
+	UpdatedAt     time.Time  `json:"updated_at"`
+}
+
+// VehicleLocation represents GPS coordinates of a vehicle
+type VehicleLocation struct {
+	ID         int64     `json:"id"`
+	VehicleID  uuid.UUID `json:"vehicle_id"`
+	Latitude   float64   `json:"latitude"`
+	Longitude  float64   `json:"longitude"`
+	Speed      *float64  `json:"speed"`
+	Heading    *float64  `json:"heading"`
+	Altitude   *float64  `json:"altitude"`
+	Accuracy   *float64  `json:"accuracy"`
+	RecordedAt time.Time `json:"recorded_at"`
+	CreatedAt  time.Time `json:"created_at"`
+}
+
+// RideEvent represents boarding/arrival events
+type RideEvent struct {
+	ID           uuid.UUID  `json:"id"`
+	RiderID      uuid.UUID  `json:"rider_id"`
+	RouteID      uuid.UUID  `json:"route_id"`
+	VehicleID    uuid.UUID  `json:"vehicle_id"`
+	AssignmentID *uuid.UUID `json:"assignment_id"`
+	EventType    string     `json:"event_type"` // boarded, arrived_destination, no_show
+	StopID       *uuid.UUID `json:"stop_id"`
+	Latitude     *float64   `json:"latitude"`
+	Longitude    *float64   `json:"longitude"`
+	EventTime    time.Time  `json:"event_time"`
+	Notes        *string    `json:"notes"`
+	CreatedBy    *uuid.UUID `json:"created_by"`
+	CreatedAt    time.Time  `json:"created_at"`
+}
+
+// RouteAlert represents route delays/incidents
+type RouteAlert struct {
+	ID                    uuid.UUID  `json:"id"`
+	RouteID               uuid.UUID  `json:"route_id"`
+	VehicleID             *uuid.UUID `json:"vehicle_id"`
+	AlertType             string     `json:"alert_type"` // delay, breakdown, traffic, cancelled, other
+	Severity              string     `json:"severity"`   // low, medium, high, critical
+	Title                 string     `json:"title"`
+	Message               string     `json:"message"`
+	EstimatedDelayMinutes *int32     `json:"estimated_delay_minutes"`
+	IsActive              bool       `json:"is_active"`
+	CreatedBy             *uuid.UUID `json:"created_by"`
+	CreatedAt             time.Time  `json:"created_at"`
+	ResolvedAt            *time.Time `json:"resolved_at"`
+	ResolvedBy            *uuid.UUID `json:"resolved_by"`
+}
+
+// CompanyClientAccess represents multi-client access to a transport company
+type CompanyClientAccess struct {
+	ID             uuid.UUID  `json:"id"`
+	CompanyID      uuid.UUID  `json:"company_id"`
+	ClientTenantID uuid.UUID  `json:"client_tenant_id"`
+	ClientName     string     `json:"client_name"`  // From tenancy.tenants.name
+	AccessLevel    string     `json:"access_level"` // read_only, read_write
+	GrantedAt      time.Time  `json:"granted_at"`
+	GrantedBy      *uuid.UUID `json:"granted_by"`
+	RevokedAt      *time.Time `json:"revoked_at"`
+	RevokedBy      *uuid.UUID `json:"revoked_by"`
+	IsActive       bool       `json:"is_active"`
+	Notes          *string    `json:"notes"`
+}

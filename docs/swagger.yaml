@@ -44,6 +44,51 @@ definitions:
     - last_name
     - password
     type: object
+  models.AddUserToTenantDto:
+    properties:
+      role:
+        type: string
+      user_id:
+        type: string
+    required:
+    - role
+    - user_id
+    type: object
+  models.AlertCreatedResponse:
+    properties:
+      affected_riders:
+        type: integer
+      alert_id:
+        type: string
+      alert_type:
+        type: string
+      estimated_delay_minutes:
+        type: integer
+      message:
+        type: string
+      route_id:
+        type: string
+      route_name:
+        type: string
+      severity:
+        type: string
+      title:
+        type: string
+    type: object
+  models.AssignRiderDto:
+    properties:
+      dropoff_stop_id:
+        type: string
+      pickup_stop_id:
+        type: string
+      rider_id:
+        type: string
+      route_id:
+        type: string
+    required:
+    - rider_id
+    - route_id
+    type: object
   models.ChangePasswordRequestDto:
     properties:
       password_current:
@@ -53,6 +98,346 @@ definitions:
     required:
     - password_current
     - password_new
+    type: object
+  models.CompanyClientAccess:
+    properties:
+      access_level:
+        description: read_only, read_write
+        type: string
+      client_name:
+        description: From tenancy.tenants.name
+        type: string
+      client_tenant_id:
+        type: string
+      company_id:
+        type: string
+      granted_at:
+        type: string
+      granted_by:
+        type: string
+      id:
+        type: string
+      is_active:
+        type: boolean
+      notes:
+        type: string
+      revoked_at:
+        type: string
+      revoked_by:
+        type: string
+    type: object
+  models.CreateAlertDto:
+    properties:
+      alert_type:
+        enum:
+        - delay
+        - breakdown
+        - traffic
+        - cancelled
+        - other
+        type: string
+      estimated_delay_minutes:
+        maximum: 999
+        minimum: 1
+        type: integer
+      message:
+        maxLength: 1000
+        minLength: 5
+        type: string
+      route_id:
+        type: string
+      severity:
+        enum:
+        - low
+        - medium
+        - high
+        - critical
+        type: string
+      title:
+        maxLength: 255
+        minLength: 3
+        type: string
+      vehicle_id:
+        type: string
+    required:
+    - alert_type
+    - message
+    - route_id
+    - title
+    type: object
+  models.CreateCompanyDto:
+    properties:
+      address:
+        maxLength: 500
+        type: string
+      company_type:
+        enum:
+        - school
+        - corporate
+        - transport_provider
+        type: string
+      contact_email:
+        type: string
+      contact_name:
+        maxLength: 255
+        type: string
+      contact_phone:
+        maxLength: 50
+        type: string
+      name:
+        maxLength: 255
+        minLength: 3
+        type: string
+    required:
+    - company_type
+    - name
+    type: object
+  models.CreateRiderDto:
+    properties:
+      address:
+        maxLength: 500
+        type: string
+      company_id:
+        type: string
+      email:
+        type: string
+      emergency_contact_name:
+        maxLength: 255
+        type: string
+      emergency_contact_phone:
+        maxLength: 50
+        type: string
+      first_name:
+        maxLength: 255
+        minLength: 2
+        type: string
+      guardian_email:
+        type: string
+      guardian_name:
+        maxLength: 255
+        type: string
+      guardian_phone:
+        maxLength: 50
+        type: string
+      guardian_user_id:
+        type: string
+      identification_number:
+        maxLength: 100
+        type: string
+      last_name:
+        maxLength: 255
+        minLength: 2
+        type: string
+      phone:
+        maxLength: 50
+        type: string
+      rider_type:
+        enum:
+        - student
+        - employee
+        type: string
+    required:
+    - company_id
+    - first_name
+    - last_name
+    - rider_type
+    type: object
+  models.CreateRouteDto:
+    properties:
+      company_id:
+        type: string
+      destination_address:
+        maxLength: 500
+        minLength: 5
+        type: string
+      destination_lat:
+        maximum: 90
+        minimum: -90
+        type: number
+      destination_lng:
+        maximum: 180
+        minimum: -180
+        type: number
+      estimated_duration_minutes:
+        maximum: 999
+        minimum: 1
+        type: integer
+      origin_address:
+        maxLength: 500
+        minLength: 5
+        type: string
+      origin_lat:
+        maximum: 90
+        minimum: -90
+        type: number
+      origin_lng:
+        maximum: 180
+        minimum: -180
+        type: number
+      route_code:
+        maxLength: 50
+        type: string
+      route_name:
+        maxLength: 255
+        minLength: 3
+        type: string
+      schedule_type:
+        enum:
+        - morning
+        - afternoon
+        - custom
+        type: string
+      scheduled_end_time:
+        description: HH:MM:SS
+        type: string
+      scheduled_start_time:
+        description: HH:MM:SS
+        type: string
+      vehicle_id:
+        type: string
+    required:
+    - company_id
+    - destination_address
+    - origin_address
+    - route_name
+    type: object
+  models.CreateRouteStopDto:
+    properties:
+      latitude:
+        maximum: 90
+        minimum: -90
+        type: number
+      longitude:
+        maximum: 180
+        minimum: -180
+        type: number
+      route_id:
+        type: string
+      scheduled_time:
+        description: HH:MM:SS
+        type: string
+      sequence_order:
+        minimum: 1
+        type: integer
+      stop_address:
+        maxLength: 500
+        minLength: 5
+        type: string
+      stop_name:
+        maxLength: 255
+        minLength: 3
+        type: string
+    required:
+    - latitude
+    - longitude
+    - route_id
+    - sequence_order
+    - stop_address
+    - stop_name
+    type: object
+  models.CreateTenantDto:
+    properties:
+      database_url:
+        type: string
+      name:
+        type: string
+      schema_name:
+        type: string
+      settings:
+        description: JSONB as string
+        type: string
+      slug:
+        type: string
+    required:
+    - name
+    - slug
+    type: object
+  models.CreateVehicleDto:
+    properties:
+      brand:
+        maxLength: 100
+        type: string
+      capacity:
+        maximum: 200
+        minimum: 1
+        type: integer
+      company_id:
+        type: string
+      model:
+        maxLength: 100
+        type: string
+      plate_number:
+        maxLength: 50
+        minLength: 3
+        type: string
+      vehicle_type:
+        enum:
+        - bus
+        - van
+        - car
+        type: string
+      vin:
+        maxLength: 100
+        type: string
+      year:
+        maximum: 2100
+        minimum: 1900
+        type: integer
+    required:
+    - capacity
+    - company_id
+    - plate_number
+    - vehicle_type
+    type: object
+  models.CurrentLocationResponse:
+    properties:
+      age_seconds:
+        description: How old is this location data
+        type: integer
+      heading:
+        type: number
+      latitude:
+        type: number
+      license_plate:
+        type: string
+      longitude:
+        type: number
+      recorded_at:
+        type: string
+      speed:
+        type: number
+      vehicle_id:
+        type: string
+    type: object
+  models.EventRecordedResponse:
+    properties:
+      event_id:
+        type: string
+      event_time:
+        type: string
+      event_type:
+        type: string
+      rider_id:
+        type: string
+      rider_name:
+        type: string
+      stop_name:
+        type: string
+    type: object
+  models.GrantClientAccessDto:
+    properties:
+      access_level:
+        enum:
+        - read_only
+        - read_write
+        type: string
+      client_tenant_id:
+        type: string
+      notes:
+        maxLength: 500
+        type: string
+    required:
+    - client_tenant_id
     type: object
   models.LoginExternalRequestDto:
     properties:
@@ -118,6 +503,39 @@ definitions:
     - password_new
     - token
     type: object
+  models.RecordEventDto:
+    properties:
+      event_type:
+        enum:
+        - boarded
+        - arrived_destination
+        - no_show
+        type: string
+      latitude:
+        maximum: 90
+        minimum: -90
+        type: number
+      longitude:
+        maximum: 180
+        minimum: -180
+        type: number
+      notes:
+        maxLength: 500
+        type: string
+      rider_id:
+        type: string
+      route_id:
+        type: string
+      stop_id:
+        type: string
+      vehicle_id:
+        type: string
+    required:
+    - event_type
+    - rider_id
+    - route_id
+    - vehicle_id
+    type: object
   models.RefreshTokenRequestDto:
     properties:
       refresh_token:
@@ -130,6 +548,202 @@ definitions:
         description: JWT token
         type: string
     type: object
+  models.Rider:
+    properties:
+      address:
+        type: string
+      company_id:
+        type: string
+      created_at:
+        type: string
+      email:
+        type: string
+      emergency_contact_name:
+        type: string
+      emergency_contact_phone:
+        type: string
+      first_name:
+        type: string
+      guardian_email:
+        type: string
+      guardian_name:
+        type: string
+      guardian_phone:
+        type: string
+      guardian_user_id:
+        type: string
+      id:
+        type: string
+      identification_number:
+        type: string
+      is_active:
+        type: boolean
+      last_name:
+        type: string
+      phone:
+        type: string
+      rider_type:
+        description: student, employee
+        type: string
+      updated_at:
+        type: string
+    type: object
+  models.RiderAssignment:
+    properties:
+      assigned_at:
+        type: string
+      created_at:
+        type: string
+      dropoff_stop_id:
+        type: string
+      id:
+        type: string
+      is_active:
+        type: boolean
+      pickup_stop_id:
+        type: string
+      rider_id:
+        type: string
+      route_id:
+        type: string
+      unassigned_at:
+        type: string
+      updated_at:
+        type: string
+    type: object
+  models.RiderStatusResponse:
+    properties:
+      active_alerts:
+        type: integer
+      driver_name:
+        type: string
+      last_event_stop:
+        type: string
+      last_event_time:
+        type: string
+      last_event_type:
+        type: string
+      license_plate:
+        type: string
+      location_age_seconds:
+        type: integer
+      rider_id:
+        type: string
+      rider_name:
+        type: string
+      route_id:
+        type: string
+      route_name:
+        type: string
+      scheduled_dropoff_stop:
+        type: string
+      scheduled_pickup_stop:
+        type: string
+      vehicle_id:
+        type: string
+      vehicle_latitude:
+        type: number
+      vehicle_longitude:
+        type: number
+      vehicle_speed:
+        type: number
+    type: object
+  models.Route:
+    properties:
+      company_id:
+        type: string
+      created_at:
+        type: string
+      destination_address:
+        type: string
+      destination_lat:
+        type: number
+      destination_lng:
+        type: number
+      estimated_duration_minutes:
+        type: integer
+      id:
+        type: string
+      is_active:
+        type: boolean
+      origin_address:
+        type: string
+      origin_lat:
+        type: number
+      origin_lng:
+        type: number
+      route_code:
+        type: string
+      route_name:
+        type: string
+      schedule_type:
+        description: morning, afternoon, custom
+        type: string
+      scheduled_end_time:
+        type: string
+      scheduled_start_time:
+        type: string
+      updated_at:
+        type: string
+      vehicle_id:
+        type: string
+    type: object
+  models.RouteRealtimeStatusResponse:
+    properties:
+      active_alerts:
+        type: integer
+      arrived_count:
+        type: integer
+      boarded_count:
+        type: integer
+      current_latitude:
+        type: number
+      current_longitude:
+        type: number
+      current_speed:
+        type: number
+      license_plate:
+        type: string
+      location_age_seconds:
+        type: integer
+      no_show_count:
+        type: integer
+      pending_count:
+        type: integer
+      route_id:
+        type: string
+      route_name:
+        type: string
+      total_riders:
+        type: integer
+      vehicle_id:
+        type: string
+    type: object
+  models.RouteStop:
+    properties:
+      address:
+        type: string
+      created_at:
+        type: string
+      id:
+        type: string
+      is_active:
+        type: boolean
+      latitude:
+        type: number
+      longitude:
+        type: number
+      route_id:
+        type: string
+      scheduled_arrival_offset_minutes:
+        type: integer
+      stop_name:
+        type: string
+      stop_order:
+        type: integer
+      updated_at:
+        type: string
+    type: object
   models.SoftDeleteUserDto:
     properties:
       id:
@@ -140,6 +754,108 @@ definitions:
         type: string
     required:
     - id
+    type: object
+  models.TenantDetailResponse:
+    properties:
+      created_at:
+        type: string
+      id:
+        type: string
+      is_active:
+        type: boolean
+      is_suspended:
+        type: boolean
+      name:
+        type: string
+      schema_name:
+        type: string
+      settings:
+        type: string
+      slug:
+        type: string
+      updated_at:
+        type: string
+    type: object
+  models.TransportCompany:
+    properties:
+      address:
+        type: string
+      client_tenant_id:
+        description: Tenant that has read-only access
+        type: string
+      company_type:
+        description: school, corporate, transport_provider
+        type: string
+      contact_email:
+        type: string
+      contact_name:
+        type: string
+      contact_phone:
+        type: string
+      created_at:
+        type: string
+      id:
+        type: string
+      is_active:
+        type: boolean
+      name:
+        type: string
+      tenant_id:
+        type: string
+      updated_at:
+        type: string
+    type: object
+  models.UpdateCompanyDto:
+    properties:
+      address:
+        maxLength: 500
+        type: string
+      contact_email:
+        type: string
+      contact_name:
+        maxLength: 255
+        type: string
+      contact_phone:
+        maxLength: 50
+        type: string
+      is_active:
+        type: boolean
+      name:
+        maxLength: 255
+        minLength: 3
+        type: string
+    type: object
+  models.UpdateLocationDto:
+    properties:
+      accuracy:
+        minimum: 0
+        type: number
+      altitude:
+        type: number
+      heading:
+        maximum: 360
+        minimum: 0
+        type: number
+      latitude:
+        maximum: 90
+        minimum: -90
+        type: number
+      longitude:
+        maximum: 180
+        minimum: -180
+        type: number
+      recorded_at:
+        description: ISO8601 timestamp
+        type: string
+      speed:
+        minimum: 0
+        type: number
+      vehicle_id:
+        type: string
+    required:
+    - latitude
+    - longitude
+    - vehicle_id
     type: object
   models.UpdateProfileDto:
     properties:
@@ -163,6 +879,119 @@ definitions:
         type: string
       website_url:
         type: string
+    type: object
+  models.UpdateRiderDto:
+    properties:
+      address:
+        maxLength: 500
+        type: string
+      email:
+        type: string
+      emergency_contact_name:
+        maxLength: 255
+        type: string
+      emergency_contact_phone:
+        maxLength: 50
+        type: string
+      guardian_email:
+        type: string
+      guardian_name:
+        maxLength: 255
+        type: string
+      guardian_phone:
+        maxLength: 50
+        type: string
+      guardian_user_id:
+        type: string
+      is_active:
+        type: boolean
+      phone:
+        maxLength: 50
+        type: string
+    type: object
+  models.UpdateRouteDto:
+    properties:
+      destination_address:
+        maxLength: 500
+        minLength: 5
+        type: string
+      destination_lat:
+        maximum: 90
+        minimum: -90
+        type: number
+      destination_lng:
+        maximum: 180
+        minimum: -180
+        type: number
+      estimated_duration_minutes:
+        maximum: 999
+        minimum: 1
+        type: integer
+      is_active:
+        type: boolean
+      origin_address:
+        maxLength: 500
+        minLength: 5
+        type: string
+      origin_lat:
+        maximum: 90
+        minimum: -90
+        type: number
+      origin_lng:
+        maximum: 180
+        minimum: -180
+        type: number
+      route_code:
+        maxLength: 50
+        type: string
+      route_name:
+        maxLength: 255
+        minLength: 3
+        type: string
+      scheduled_end_time:
+        type: string
+      scheduled_start_time:
+        type: string
+      vehicle_id:
+        type: string
+    type: object
+  models.UpdateTenantDto:
+    properties:
+      database_url:
+        type: string
+      name:
+        type: string
+      schema_name:
+        type: string
+      settings:
+        description: JSONB as string
+        type: string
+    type: object
+  models.UpdateVehicleDto:
+    properties:
+      brand:
+        maxLength: 100
+        type: string
+      capacity:
+        maximum: 200
+        minimum: 1
+        type: integer
+      is_active:
+        type: boolean
+      model:
+        maxLength: 100
+        type: string
+      plate_number:
+        maxLength: 50
+        minLength: 3
+        type: string
+      vin:
+        maxLength: 100
+        type: string
+      year:
+        maximum: 2100
+        minimum: 1900
+        type: integer
     type: object
   models.User:
     properties:
@@ -231,6 +1060,52 @@ definitions:
         type: string
       user_id:
         type: string
+    type: object
+  models.UserTenantResponse:
+    properties:
+      is_active:
+        type: boolean
+      is_suspended:
+        type: boolean
+      joined_at:
+        type: string
+      name:
+        type: string
+      slug:
+        type: string
+      tenant_id:
+        type: string
+      user_role:
+        type: string
+    type: object
+  models.Vehicle:
+    properties:
+      brand:
+        type: string
+      capacity:
+        type: integer
+      company_id:
+        type: string
+      created_at:
+        type: string
+      id:
+        type: string
+      is_active:
+        type: boolean
+      model:
+        type: string
+      plate_number:
+        type: string
+      updated_at:
+        type: string
+      vehicle_type:
+        description: bus, van, car
+        type: string
+      vin:
+        description: Vehicle Identification Number
+        type: string
+      year:
+        type: integer
     type: object
   models.VerifyEmailRequestDto:
     properties:
@@ -706,6 +1581,1386 @@ paths:
       summary: Refresh access token
       tags:
       - Auth
+  /tenants:
+    post:
+      consumes:
+      - application/json
+      description: Create a new tenant with optional custom database URL. Creator
+        becomes owner automatically.
+      parameters:
+      - description: Tenant data
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/models.CreateTenantDto'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/models.TenantDetailResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+      security:
+      - ApiKeyAuth: []
+      summary: Create a new tenant (authenticated users)
+      tags:
+      - Tenants
+  /tenants/{tenant_slug}:
+    patch:
+      consumes:
+      - application/json
+      description: Update tenant name, database URL, schema, or settings
+      parameters:
+      - description: Tenant slug
+        in: path
+        name: tenant_slug
+        required: true
+        type: string
+      - description: Updated tenant data
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/models.UpdateTenantDto'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/models.TenantDetailResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+      security:
+      - ApiKeyAuth: []
+      summary: Update tenant information (owner/admin only)
+      tags:
+      - Tenants
+  /tenants/{tenant_slug}/migrate:
+    post:
+      description: Execute all pending migrations on a tenant's custom database (admin/super_admin
+        only)
+      parameters:
+      - description: Tenant slug
+        in: path
+        name: tenant_slug
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+      security:
+      - ApiKeyAuth: []
+      summary: Run migrations on tenant database
+      tags:
+      - Tenants
+  /tenants/{tenant_slug}/users:
+    post:
+      consumes:
+      - application/json
+      description: Add a user to the tenant with specified role
+      parameters:
+      - description: Tenant slug
+        in: path
+        name: tenant_slug
+        required: true
+        type: string
+      - description: User and role data
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/models.AddUserToTenantDto'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+      security:
+      - ApiKeyAuth: []
+      summary: Add a user to tenant (owner/admin only)
+      tags:
+      - Tenants
+  /tenants/{tenant_slug}/users/{user_id}:
+    delete:
+      consumes:
+      - application/json
+      description: Remove a user from the tenant
+      parameters:
+      - description: Tenant slug
+        in: path
+        name: tenant_slug
+        required: true
+        type: string
+      - description: User ID
+        in: path
+        name: user_id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+      security:
+      - ApiKeyAuth: []
+      summary: Remove a user from tenant (owner/admin only)
+      tags:
+      - Tenants
+  /tenants/my-tenants:
+    get:
+      description: Returns list of tenants that the authenticated user can access
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/models.UserTenantResponse'
+            type: array
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+      security:
+      - ApiKeyAuth: []
+      summary: Get user's accessible tenants
+      tags:
+      - Tenants
+  /tenants/self-service:
+    post:
+      consumes:
+      - application/json
+      description: Allow authenticated users to create tenants with limits based on
+        their subscription plan
+      parameters:
+      - description: Tenant data
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/models.CreateTenantDto'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/models.TenantDetailResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+      security:
+      - ApiKeyAuth: []
+      summary: Create tenant (self-service with subscription limits)
+      tags:
+      - Tenants
+  /tracking/alerts:
+    post:
+      consumes:
+      - application/json
+      description: Create a delay, breakdown, or cancellation alert for a route
+      parameters:
+      - description: Alert data
+        in: body
+        name: alert
+        required: true
+        schema:
+          $ref: '#/definitions/models.CreateAlertDto'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/models.AlertCreatedResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Create route alert
+      tags:
+      - Tracking - Alerts
+  /tracking/assignments:
+    get:
+      description: Get all route assignments for a rider
+      parameters:
+      - description: Rider ID (UUID)
+        in: query
+        name: rider_id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/models.RiderAssignment'
+            type: array
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: List rider assignments
+      tags:
+      - Tracking - Assignments
+    post:
+      consumes:
+      - application/json
+      description: Assign a rider to a route with pickup/dropoff stops
+      parameters:
+      - description: Assignment data
+        in: body
+        name: assignment
+        required: true
+        schema:
+          $ref: '#/definitions/models.AssignRiderDto'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/models.RiderAssignment'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Assign rider to route
+      tags:
+      - Tracking - Assignments
+  /tracking/assignments/{id}:
+    delete:
+      description: Remove a rider from a route
+      parameters:
+      - description: Assignment ID (UUID)
+        in: path
+        name: id
+        required: true
+        type: string
+      responses:
+        "204":
+          description: No Content
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Unassign rider from route
+      tags:
+      - Tracking - Assignments
+  /tracking/companies:
+    get:
+      description: Get all companies accessible to the tenant (owned or client access)
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/models.TransportCompany'
+            type: array
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: List transport companies
+      tags:
+      - Tracking - Companies
+    post:
+      consumes:
+      - application/json
+      description: Create a new transport company (school, corporate, transport provider)
+      parameters:
+      - description: Company data
+        in: body
+        name: company
+        required: true
+        schema:
+          $ref: '#/definitions/models.CreateCompanyDto'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/models.TransportCompany'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Create transport company
+      tags:
+      - Tracking - Companies
+  /tracking/companies/{company_id}/clients:
+    get:
+      description: Get all client tenants (e.g., schools) that have access to this
+        transport company
+      parameters:
+      - description: Company UUID
+        in: path
+        name: company_id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/models.CompanyClientAccess'
+            type: array
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+      summary: List client tenants with access to company
+      tags:
+      - Tracking - Companies
+    post:
+      consumes:
+      - application/json
+      description: Allow a client tenant (e.g., school) to access a transport company's
+        services
+      parameters:
+      - description: Company UUID
+        in: path
+        name: company_id
+        required: true
+        type: string
+      - description: Client access data
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/models.GrantClientAccessDto'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/models.CompanyClientAccess'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+      summary: Grant client tenant access to company
+      tags:
+      - Tracking - Companies
+  /tracking/companies/{company_id}/clients/{client_tenant_id}:
+    delete:
+      description: Remove a client tenant's access to a transport company
+      parameters:
+      - description: Company UUID
+        in: path
+        name: company_id
+        required: true
+        type: string
+      - description: Client Tenant UUID
+        in: path
+        name: client_tenant_id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "204":
+          description: No Content
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+      summary: Revoke client tenant access to company
+      tags:
+      - Tracking - Companies
+  /tracking/companies/{id}:
+    delete:
+      description: Delete a transport company (owner only)
+      parameters:
+      - description: Company ID (UUID)
+        in: path
+        name: id
+        required: true
+        type: string
+      responses:
+        "204":
+          description: No Content
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Delete transport company
+      tags:
+      - Tracking - Companies
+    get:
+      description: Get a single transport company by ID
+      parameters:
+      - description: Company ID (UUID)
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/models.TransportCompany'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Get company by ID
+      tags:
+      - Tracking - Companies
+    patch:
+      consumes:
+      - application/json
+      description: Update existing transport company details
+      parameters:
+      - description: Company ID (UUID)
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Updated company data
+        in: body
+        name: company
+        required: true
+        schema:
+          $ref: '#/definitions/models.UpdateCompanyDto'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/models.TransportCompany'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Update transport company
+      tags:
+      - Tracking - Companies
+  /tracking/events:
+    post:
+      consumes:
+      - application/json
+      description: Record when a student/employee boards, arrives, or doesn't show
+      parameters:
+      - description: Ride event data
+        in: body
+        name: event
+        required: true
+        schema:
+          $ref: '#/definitions/models.RecordEventDto'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/models.EventRecordedResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Record ride event (check-in/checkout)
+      tags:
+      - Tracking - Events
+  /tracking/locations:
+    post:
+      consumes:
+      - application/json
+      description: Insert GPS coordinates for a vehicle (high-frequency operation)
+      parameters:
+      - description: GPS location data
+        in: body
+        name: location
+        required: true
+        schema:
+          $ref: '#/definitions/models.UpdateLocationDto'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/models.CurrentLocationResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+      summary: Update vehicle GPS location
+      tags:
+      - Tracking - Locations
+  /tracking/riders:
+    get:
+      description: Get all riders for a company
+      parameters:
+      - description: Company ID (UUID)
+        in: query
+        name: company_id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/models.Rider'
+            type: array
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: List riders
+      tags:
+      - Tracking - Riders
+    post:
+      consumes:
+      - application/json
+      description: Create a new rider (student/employee)
+      parameters:
+      - description: Rider data
+        in: body
+        name: rider
+        required: true
+        schema:
+          $ref: '#/definitions/models.CreateRiderDto'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/models.Rider'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Create rider
+      tags:
+      - Tracking - Riders
+  /tracking/riders/{id}:
+    delete:
+      description: Delete a rider (owner only)
+      parameters:
+      - description: Rider ID (UUID)
+        in: path
+        name: id
+        required: true
+        type: string
+      responses:
+        "204":
+          description: No Content
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Delete rider
+      tags:
+      - Tracking - Riders
+    get:
+      description: Get a single rider by ID (supports guardian access)
+      parameters:
+      - description: Rider ID (UUID)
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/models.Rider'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Get rider by ID
+      tags:
+      - Tracking - Riders
+    patch:
+      consumes:
+      - application/json
+      description: Update existing rider details
+      parameters:
+      - description: Rider ID (UUID)
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Updated rider data
+        in: body
+        name: rider
+        required: true
+        schema:
+          $ref: '#/definitions/models.UpdateRiderDto'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/models.Rider'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Update rider
+      tags:
+      - Tracking - Riders
+  /tracking/riders/{rider_id}/status:
+    get:
+      consumes:
+      - application/json
+      description: Get rider status including bus location, last event, and alerts
+        (parent view)
+      parameters:
+      - description: Rider ID (UUID)
+        in: path
+        name: rider_id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/models.RiderStatusResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Get rider status (for guardians)
+      tags:
+      - Tracking - Status
+  /tracking/route-stops:
+    post:
+      consumes:
+      - application/json
+      description: Add a new stop to a route
+      parameters:
+      - description: Route stop data
+        in: body
+        name: stop
+        required: true
+        schema:
+          $ref: '#/definitions/models.CreateRouteStopDto'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/models.RouteStop'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Create route stop
+      tags:
+      - Tracking - Route Stops
+  /tracking/route-stops/{id}:
+    delete:
+      description: Remove a stop from a route
+      parameters:
+      - description: Route Stop ID (UUID)
+        in: path
+        name: id
+        required: true
+        type: string
+      responses:
+        "204":
+          description: No Content
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Delete route stop
+      tags:
+      - Tracking - Route Stops
+  /tracking/routes:
+    get:
+      description: Get all routes for a company
+      parameters:
+      - description: Company ID (UUID)
+        in: query
+        name: company_id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/models.Route'
+            type: array
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: List routes
+      tags:
+      - Tracking - Routes
+    post:
+      consumes:
+      - application/json
+      description: Create a new transportation route
+      parameters:
+      - description: Route data
+        in: body
+        name: route
+        required: true
+        schema:
+          $ref: '#/definitions/models.CreateRouteDto'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/models.Route'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Create route
+      tags:
+      - Tracking - Routes
+  /tracking/routes/{id}:
+    delete:
+      description: Delete a route (owner only)
+      parameters:
+      - description: Route ID (UUID)
+        in: path
+        name: id
+        required: true
+        type: string
+      responses:
+        "204":
+          description: No Content
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Delete route
+      tags:
+      - Tracking - Routes
+    get:
+      description: Get a single route by ID
+      parameters:
+      - description: Route ID (UUID)
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/models.Route'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Get route by ID
+      tags:
+      - Tracking - Routes
+    patch:
+      consumes:
+      - application/json
+      description: Update existing route details
+      parameters:
+      - description: Route ID (UUID)
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Updated route data
+        in: body
+        name: route
+        required: true
+        schema:
+          $ref: '#/definitions/models.UpdateRouteDto'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/models.Route'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Update route
+      tags:
+      - Tracking - Routes
+  /tracking/routes/{route_id}/status:
+    get:
+      consumes:
+      - application/json
+      description: 'Get comprehensive route status: vehicle location, rider counts,
+        alerts'
+      parameters:
+      - description: Route ID (UUID)
+        in: path
+        name: route_id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/models.RouteRealtimeStatusResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Get route real-time status
+      tags:
+      - Tracking - Status
+  /tracking/routes/{route_id}/stops:
+    get:
+      description: Get all stops for a route in order
+      parameters:
+      - description: Route ID (UUID)
+        in: path
+        name: route_id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/models.RouteStop'
+            type: array
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: List route stops
+      tags:
+      - Tracking - Route Stops
+  /tracking/vehicles:
+    get:
+      description: Get all vehicles for a company
+      parameters:
+      - description: Company ID (UUID)
+        in: query
+        name: company_id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/models.Vehicle'
+            type: array
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: List vehicles
+      tags:
+      - Tracking - Vehicles
+    post:
+      consumes:
+      - application/json
+      description: Create a new vehicle for a transport company
+      parameters:
+      - description: Vehicle data
+        in: body
+        name: vehicle
+        required: true
+        schema:
+          $ref: '#/definitions/models.CreateVehicleDto'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/models.Vehicle'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Create vehicle
+      tags:
+      - Tracking - Vehicles
+  /tracking/vehicles/{id}:
+    delete:
+      description: Delete a vehicle (owner only)
+      parameters:
+      - description: Vehicle ID (UUID)
+        in: path
+        name: id
+        required: true
+        type: string
+      responses:
+        "204":
+          description: No Content
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Delete vehicle
+      tags:
+      - Tracking - Vehicles
+    get:
+      description: Get a single vehicle by ID
+      parameters:
+      - description: Vehicle ID (UUID)
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/models.Vehicle'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Get vehicle by ID
+      tags:
+      - Tracking - Vehicles
+    patch:
+      consumes:
+      - application/json
+      description: Update existing vehicle details
+      parameters:
+      - description: Vehicle ID (UUID)
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Updated vehicle data
+        in: body
+        name: vehicle
+        required: true
+        schema:
+          $ref: '#/definitions/models.UpdateVehicleDto'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/models.Vehicle'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Update vehicle
+      tags:
+      - Tracking - Vehicles
+  /tracking/vehicles/{id}/location:
+    get:
+      consumes:
+      - application/json
+      description: Retrieve the most recent GPS location for a vehicle
+      parameters:
+      - description: Vehicle ID (UUID)
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/models.CurrentLocationResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+      summary: Get vehicle current location
+      tags:
+      - Tracking - Locations
   /users:
     get:
       consumes:

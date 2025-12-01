@@ -1,0 +1,66 @@
+{
+  "tracking.vehicle.not-found": "Vehículo no encontrado",
+  "tracking.vehicle.already-exists": "Ya existe un vehículo con esta placa",
+  "tracking.vehicle.create.failed": "Error al crear vehículo",
+  "tracking.vehicle.update.failed": "Error al actualizar vehículo",
+  "tracking.vehicle.delete.failed": "Error al eliminar vehículo",
+  "tracking.vehicle.invalid-license": "Formato de placa inválido",
+
+  "tracking.route.not-found": "Ruta no encontrada",
+  "tracking.route.already-exists": "La ruta ya existe",
+  "tracking.route.create.failed": "Error al crear ruta",
+  "tracking.route.update.failed": "Error al actualizar ruta",
+  "tracking.route.delete.failed": "Error al eliminar ruta",
+
+  "tracking.rider.not-found": "Pasajero (estudiante/empleado) no encontrado",
+  "tracking.rider.already-exists": "El pasajero ya existe",
+  "tracking.rider.create.failed": "Error al crear pasajero",
+  "tracking.rider.update.failed": "Error al actualizar pasajero",
+  "tracking.rider.delete.failed": "Error al eliminar pasajero",
+
+  "tracking.assignment.not-found": "Asignación de pasajero no encontrada",
+  "tracking.assignment.create.failed": "Error al asignar pasajero a la ruta",
+  "tracking.assignment.delete.failed": "Error al remover pasajero de la ruta",
+  "tracking.assignment.already-exists": "El pasajero ya está asignado a esta ruta",
+
+  "tracking.location.update.failed": "Error al actualizar ubicación del vehículo",
+  "tracking.location.invalid-coordinates": "Coordenadas GPS inválidas",
+  "tracking.location.not-found": "No hay datos de ubicación disponibles para este vehículo",
+
+  "tracking.event.record.failed": "Error al registrar evento de viaje",
+  "tracking.event.not-found": "Evento de viaje no encontrado",
+  "tracking.event.invalid-type": "Tipo de evento inválido",
+
+  "tracking.alert.create.failed": "Error al crear alerta de ruta",
+  "tracking.alert.not-found": "Alerta no encontrada",
+  "tracking.alert.update.failed": "Error al actualizar alerta",
+  "tracking.alert.resolve.failed": "Error al resolver alerta",
+
+  "tracking.company.not-found": "Empresa de transporte no encontrada",
+  "tracking.company.create.failed": "Error al crear empresa de transporte",
+  "tracking.company.update.failed": "Error al actualizar empresa de transporte",
+  "tracking.company.delete.failed": "Error al eliminar empresa de transporte",
+  "tracking.company.already-exists": "Ya existe una empresa de transporte con este nombre",
+  "tracking.company.list.failed": "Error al obtener empresas de transporte",
+
+  "tracking.vehicle.list.failed": "Error al obtener vehículos",
+  "tracking.route.list.failed": "Error al obtener rutas",
+  "tracking.route-stop.not-found": "Parada de ruta no encontrada",
+  "tracking.route-stop.create.failed": "Error al agregar parada a la ruta",
+  "tracking.route-stop.list.failed": "Error al obtener paradas de la ruta",
+  "tracking.route-stop.delete.failed": "Error al eliminar parada de la ruta",
+  "tracking.rider.list.failed": "Error al obtener pasajeros",
+  "tracking.assignment.list.failed": "Error al obtener asignaciones de pasajeros",
+
+  "tracking.client-access.not-found": "Acceso de cliente no encontrado",
+  "tracking.client-access.already-exists": "El cliente ya tiene acceso a esta empresa",
+  "tracking.client-access.grant.failed": "Error al otorgar acceso al cliente",
+  "tracking.client-access.revoke.failed": "Error al revocar acceso del cliente",
+  "tracking.client-access.list.failed": "Error al obtener lista de accesos de clientes",
+  "tracking.tenant.not-found": "Tenant cliente no encontrado",
+
+  "tracking.unauthorized": "Acceso no autorizado al módulo de seguimiento",
+  "tracking.forbidden": "No tienes permiso para realizar esta acción",
+  "tracking.internal-error": "Error interno del servicio de seguimiento",
+  "tracking.tenant.required": "Un tenant debe especificarse mediante el header X-Tenant-Slug"
+}
