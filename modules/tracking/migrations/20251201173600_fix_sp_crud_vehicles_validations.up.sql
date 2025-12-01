@@ -1,13 +1,13 @@
--- Migration: sp_crud_vehicles
+-- Migration: fix_sp_crud_vehicles_validations
 -- Module: tracking
--- Created: 2025-11-30 15:13:14
+-- Created: 2025-12-01 17:36:00
+-- Description: Add validations to vehicle creation and update
 
--- ============================================================================
--- VEHICLES CRUD STORED PROCEDURES
--- ============================================================================
+DROP FUNCTION IF EXISTS tracking.sp_create_vehicle(UUID, VARCHAR, VARCHAR, VARCHAR, VARCHAR, INTEGER, INTEGER, VARCHAR);
+DROP FUNCTION IF EXISTS tracking.sp_update_vehicle(UUID, VARCHAR, VARCHAR, VARCHAR, INTEGER, INTEGER, VARCHAR, BOOLEAN);
 
 -- CREATE VEHICLE
-CREATE OR REPLACE FUNCTION tracking.sp_create_vehicle(
+CREATE FUNCTION tracking.sp_create_vehicle(
     p_company_id UUID,
     p_plate_number VARCHAR(50),
     p_vehicle_type VARCHAR(50),
@@ -67,7 +67,7 @@ END;
 $$ LANGUAGE plpgsql;
 
 -- UPDATE VEHICLE
-CREATE OR REPLACE FUNCTION tracking.sp_update_vehicle(
+CREATE FUNCTION tracking.sp_update_vehicle(
     p_vehicle_id UUID,
     p_plate_number VARCHAR(50) DEFAULT NULL,
     p_brand VARCHAR(100) DEFAULT NULL,
@@ -132,102 +132,5 @@ BEGIN
         vehicles.id, vehicles.company_id, vehicles.plate_number, vehicles.vehicle_type,
         vehicles.brand, vehicles.model, vehicles.year, vehicles.capacity, vehicles.vin,
         vehicles.is_active, vehicles.created_at, vehicles.updated_at;
-
-    IF NOT FOUND THEN
-        RAISE EXCEPTION 'vehicle_not_found';
-    END IF;
 END;
 $$ LANGUAGE plpgsql;
-
--- LIST VEHICLES
-CREATE OR REPLACE FUNCTION tracking.sp_list_vehicles(
-    p_company_id UUID DEFAULT NULL,
-    p_vehicle_type VARCHAR(50) DEFAULT NULL,
-    p_is_active BOOLEAN DEFAULT NULL
-)
-RETURNS TABLE(
-    id UUID,
-    company_id UUID,
-    plate_number VARCHAR(50),
-    vehicle_type VARCHAR(50),
-    brand VARCHAR(100),
-    model VARCHAR(100),
-    year INTEGER,
-    capacity INTEGER,
-    vin VARCHAR(100),
-    is_active BOOLEAN,
-    created_at TIMESTAMP,
-    updated_at TIMESTAMP
-) AS $$
-BEGIN
-    RETURN QUERY
-    SELECT
-        v.id, v.company_id, v.plate_number, v.vehicle_type,
-        v.brand, v.model, v.year, v.capacity, v.vin,
-        v.is_active, v.created_at, v.updated_at
-    FROM tracking.vehicles v
-    WHERE
-        (p_company_id IS NULL OR v.company_id = p_company_id)
-        AND (p_vehicle_type IS NULL OR v.vehicle_type = p_vehicle_type)
-        AND (p_is_active IS NULL OR v.is_active = p_is_active)
-    ORDER BY v.created_at DESC;
-END;
-$$ LANGUAGE plpgsql;
-
--- GET VEHICLE
-CREATE OR REPLACE FUNCTION tracking.sp_get_vehicle(
-    p_vehicle_id UUID
-)
-RETURNS TABLE(
-    id UUID,
-    company_id UUID,
-    plate_number VARCHAR(50),
-    vehicle_type VARCHAR(50),
-    brand VARCHAR(100),
-    model VARCHAR(100),
-    year INTEGER,
-    capacity INTEGER,
-    vin VARCHAR(100),
-    is_active BOOLEAN,
-    created_at TIMESTAMP,
-    updated_at TIMESTAMP
-) AS $$
-BEGIN
-    RETURN QUERY
-    SELECT
-        v.id, v.company_id, v.plate_number, v.vehicle_type,
-        v.brand, v.model, v.year, v.capacity, v.vin,
-        v.is_active, v.created_at, v.updated_at
-    FROM tracking.vehicles v
-    WHERE v.id = p_vehicle_id;
-
-    IF NOT FOUND THEN
-        RAISE EXCEPTION 'vehicle_not_found';
-    END IF;
-END;
-$$ LANGUAGE plpgsql;
-
--- DELETE VEHICLE (soft delete)
-CREATE OR REPLACE FUNCTION tracking.sp_delete_vehicle(
-    p_vehicle_id UUID
-)
-RETURNS BOOLEAN AS $$
-BEGIN
-    UPDATE tracking.vehicles
-    SET is_active = false, updated_at = CURRENT_TIMESTAMP
-    WHERE id = p_vehicle_id;
-
-    IF NOT FOUND THEN
-        RAISE EXCEPTION 'vehicle_not_found';
-    END IF;
-
-    RETURN TRUE;
-END;
-$$ LANGUAGE plpgsql;
--- Example:
--- CREATE TABLE IF NOT EXISTS auth.my_table (
---     id UUID PRIMARY KEY DEFAULT public.uuid_generate_v4(),
---     name VARCHAR(255) NOT NULL,
---     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
--- );
-

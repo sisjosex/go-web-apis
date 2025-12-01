@@ -25,7 +25,7 @@ BEGIN
           AND transport_companies.tenant_id = p_user_tenant_id 
           AND transport_companies.is_active = true
     ) THEN
-        RAISE EXCEPTION 'TRACKING_ERROR:company.not-found' USING ERRCODE = 'P0001';
+        RAISE EXCEPTION 'company.not-found' USING ERRCODE = 'P0001';
     END IF;
     
     -- Check if access already exists (reactivate if previously revoked)
@@ -79,7 +79,7 @@ BEGIN
           AND transport_companies.tenant_id = p_user_tenant_id 
           AND transport_companies.is_active = true
     ) THEN
-        RAISE EXCEPTION 'TRACKING_ERROR:company.not-found' USING ERRCODE = 'P0001';
+        RAISE EXCEPTION 'company.not-found' USING ERRCODE = 'P0001';
     END IF;
     
     -- Revoke access

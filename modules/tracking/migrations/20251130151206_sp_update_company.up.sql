@@ -50,7 +50,7 @@ BEGIN
               AND transport_companies.name = p_name
               AND transport_companies.id != p_company_id
         ) THEN
-            RAISE EXCEPTION 'TRACKING_ERROR:company.already-exists' USING ERRCODE = 'P0001';
+            RAISE EXCEPTION 'company.already-exists' USING ERRCODE = 'P0001';
         END IF;
     END IF;
 

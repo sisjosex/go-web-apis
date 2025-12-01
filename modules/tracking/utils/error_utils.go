@@ -1,14 +1,12 @@
 package utils
 
 import (
-	"strings"
-
 	"github.com/jackc/pgx/v5/pgconn"
 )
 
-// ExtractTrackingErrorCode extracts error code from PL/pgsql TRACKING_ERROR
-// Expected format: "TRACKING_ERROR:error.code"
-// Example: "TRACKING_ERROR:company.not-found"
+// ExtractTrackingErrorCode extracts error code from PL/pgsql exceptions
+// Expected format: "error.code" (e.g., "company.not-found")
+// The error message from PostgreSQL is used directly as the error code
 func ExtractTrackingErrorCode(err error) string {
 	if err == nil {
 		return ""
@@ -19,11 +17,6 @@ func ExtractTrackingErrorCode(err error) string {
 		return ""
 	}
 
-	// Message format: TRACKING_ERROR:error.code
-	message := pgErr.Message
-	if strings.HasPrefix(message, "TRACKING_ERROR:") {
-		return strings.TrimPrefix(message, "TRACKING_ERROR:")
-	}
-
-	return ""
+	// Return message directly (contains error code like "company.not-found")
+	return pgErr.Message
 }

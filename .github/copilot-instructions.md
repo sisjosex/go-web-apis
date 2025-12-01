@@ -163,15 +163,15 @@ All CUD operations use stored procedures:
 ```sql
 -- In stored procedures, validate and raise exceptions with error codes
 IF p_vehicle_type NOT IN ('bus', 'van', 'car') THEN
-    RAISE EXCEPTION 'TRACKING_ERROR:vehicle.invalid-type' USING ERRCODE = 'P0001';
+    RAISE EXCEPTION 'vehicle.invalid-type' USING ERRCODE = 'P0001';
 END IF;
 
 IF NOT EXISTS (SELECT 1 FROM tracking.transport_companies WHERE id = p_company_id) THEN
-    RAISE EXCEPTION 'TRACKING_ERROR:company.not-found' USING ERRCODE = 'P0001';
+    RAISE EXCEPTION 'company.not-found' USING ERRCODE = 'P0001';
 END IF;
 
 IF EXISTS (SELECT 1 FROM tracking.vehicles WHERE company_id = p_company_id AND plate_number = p_plate_number) THEN
-    RAISE EXCEPTION 'TRACKING_ERROR:vehicle.plate-already-exists' USING ERRCODE = 'P0001';
+    RAISE EXCEPTION 'vehicle.plate-already-exists' USING ERRCODE = 'P0001';
 END IF;
 ```
 

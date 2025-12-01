@@ -25,7 +25,7 @@ BEGIN
           AND transport_companies.tenant_id = p_user_tenant_id 
           AND transport_companies.is_active = true
     ) THEN
-        RAISE EXCEPTION 'TRACKING_ERROR:company.not-found' USING ERRCODE = 'P0001';
+        RAISE EXCEPTION 'company.not-found' USING ERRCODE = 'P0001';
     END IF;
     
     -- Verify client tenant exists
@@ -33,7 +33,7 @@ BEGIN
         SELECT 1 FROM tenancy.tenants 
         WHERE tenancy.tenants.id = p_client_tenant_id
     ) THEN
-        RAISE EXCEPTION 'TRACKING_ERROR:tenant.not-found' USING ERRCODE = 'P0001';
+        RAISE EXCEPTION 'tenant.not-found' USING ERRCODE = 'P0001';
     END IF;
     
     -- Check if access already exists and is active (reject if duplicate)
@@ -44,7 +44,7 @@ BEGIN
           AND company_client_access.is_active = true
     ) THEN
         -- Access already exists and is active - reject
-        RAISE EXCEPTION 'TRACKING_ERROR:client-access.already-exists' USING ERRCODE = 'P0001';
+        RAISE EXCEPTION 'client-access.already-exists' USING ERRCODE = 'P0001';
     END IF;
     
     -- Check if access was previously revoked (reactivate it)
@@ -102,7 +102,7 @@ BEGIN
           AND transport_companies.tenant_id = p_user_tenant_id 
           AND transport_companies.is_active = true
     ) THEN
-        RAISE EXCEPTION 'TRACKING_ERROR:company.not-found' USING ERRCODE = 'P0001';
+        RAISE EXCEPTION 'company.not-found' USING ERRCODE = 'P0001';
     END IF;
     
     -- Verify client access exists AND is active
@@ -112,7 +112,7 @@ BEGIN
           AND company_client_access.client_tenant_id = p_client_tenant_id
           AND company_client_access.is_active = true
     ) THEN
-        RAISE EXCEPTION 'TRACKING_ERROR:client-access.not-found' USING ERRCODE = 'P0001';
+        RAISE EXCEPTION 'client-access.not-found' USING ERRCODE = 'P0001';
     END IF;
     
     -- Revoke access
