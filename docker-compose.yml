@@ -1,44 +1,60 @@
 services:
-  web-app:
-    image: golang:1.23.0-alpine3.20
+  # ============ PLATFORM API (Admin) ============
+  platform-app:
     build:
       context: .
       dockerfile: Dockerfile
+      args:
+        GO_MAIN: platform
     ports:
-      - "${APP_PORT}:8080"
+      - "8080:8080"
     depends_on:
-      - db
+      - platform-db
     env_file:
-      - .env.docker
+      - .env.platform
     environment:
-      - DATABASE_URL=${DATABASE_URL}
-      - DATABASE_POOL_SIZE=${DATABASE_POOL_SIZE}
-      - APP_MODE=${APP_MODE}
-      - FRONTEND_URL=${FRONTEND_URL}
-      - APP_HOST=0.0.0.0  # Para que escuche en todas las interfaces dentro del contenedor
-      - APP_PORT=${APP_PORT}
-      - JWT_SECRET_KEY=${JWT_SECRET_KEY}
-      - JWT_REFRESH_KEY=${JWT_REFRESH_KEY}
-      - JWT_EXPIRATION_SECONDS=${JWT_EXPIRATION_SECONDS}
-      - JWT_REFRESH_SECONDS=${JWT_REFRESH_SECONDS}
-      - SMTP_HOST=${SMTP_HOST}
-      - SMTP_PORT=${SMTP_PORT}
-      - SMTP_USER=${SMTP_USER}
-      - SMTP_PASSWORD=${SMTP_PASSWORD}
-      - SMTP_FROM=${SMTP_FROM}
-    command: ["./main"]
+      - APP_HOST=0.0.0.0
+      - APP_PORT=8080
 
-  db:
-    image: postgres:alpine
+  platform-db:
+    image: postgres:16-alpine
     restart: always
-    container_name: db
-    env_file:
-      - .env.docker
+    container_name: platform-db
     environment:
-      POSTGRES_USER: ${POSTGRES_USER}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
-      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: web
     ports:
-      - "${POSTGRES_PORT}:5432"
+      - "5432:5432"
+    volumes:
+      - ./docker/postgres/init.sql:/docker-entrypoint-initdb.d/init.sql
+
+  # ============ TENANT API (Business) ============
+  tenant-app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        GO_MAIN: tenant
+    ports:
+      - "9080:9080"
+    depends_on:
+      - tenant-db
+    env_file:
+      - .env.tenant
+    environment:
+      - APP_HOST=0.0.0.0
+      - APP_PORT=9080
+
+  tenant-db:
+    image: postgres:16-alpine
+    restart: always
+    container_name: tenant-db
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: tenant_db
+    ports:
+      - "5433:5432"
     volumes:
       - ./docker/postgres/init.sql:/docker-entrypoint-initdb.d/init.sql

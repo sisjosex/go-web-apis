@@ -1,0 +1,55 @@
+// Package main: CLI development tool for migrations and tenant management
+//
+// Subcommands:
+//   - migration: Generate new database migration files (independent, no config needed)
+//   - tenant:    Manage tenant instances and run tenant-specific migrations (requires .env.platform)
+//
+// Each subcommand has its own handler file:
+//   - migration.go:    Migration generation logic
+//   - tenant_mgmt.go:  Tenant management and operations
+//   - main.go:         CLI routing and help (this file)
+package main
+
+import (
+	"fmt"
+	"os"
+)
+
+func main() {
+	if len(os.Args) < 2 {
+		printMainUsage()
+		os.Exit(0)
+	}
+
+	subcommand := os.Args[1]
+	args := os.Args[2:]
+
+	switch subcommand {
+	case "migration", "m":
+		CmdMigration(args)
+	case "tenant", "t":
+		CmdTenant(args)
+	case "help", "h", "-h", "--help":
+		printMainUsage()
+	default:
+		fmt.Printf("❌ Unknown subcommand: %s\n\n", subcommand)
+		printMainUsage()
+		os.Exit(1)
+	}
+}
+
+// printMainUsage displays the main CLI help
+func printMainUsage() {
+	fmt.Println("🛠️  Go Web API - Development CLI Tool")
+	fmt.Println("\nUsage:")
+	fmt.Println("  go run ./cmd/cli <subcommand> [flags]")
+	fmt.Println("\nSubcommands:")
+	fmt.Println("  migration, m    Create new database schema migrations")
+	fmt.Println("  tenant, t       Manage tenant instances and run tenant migrations")
+	fmt.Println("  help, -h        Show this help message")
+	fmt.Println("\nExamples:")
+	fmt.Println("  go run ./cmd/cli migration -module=auth -name=add_refresh_tokens")
+	fmt.Println("  go run ./cmd/cli tenant -list")
+	fmt.Println("  go run ./cmd/cli tenant -migrate all")
+	fmt.Println("\nRun 'go run ./cmd/cli <subcommand> -h' for subcommand help")
+}

@@ -1,9 +1,11 @@
 package routes
 
 import (
+	"josex/web/modules/auth/config"
 	"josex/web/modules/auth/controllers"
 	"josex/web/modules/auth/middleware"
 	"josex/web/modules/auth/services"
+	coreServices "josex/web/modules/core/services"
 
 	"github.com/gin-gonic/gin"
 )
@@ -56,4 +58,15 @@ func RegisterAuthRoutes(
 			protectedRoutes.POST("/logout", authController.Logout)
 		}
 	}
+}
+
+// RegisterOtpRoutes registers all OTP-related routes
+// This is called from the main routes setup with auth config and database service
+func RegisterOtpRoutes(
+	authGroup *gin.RouterGroup,
+	dbService coreServices.DatabaseService,
+	authConfig *config.AuthConfig,
+) {
+	// Setup OTP routes using the function from otp_routes.go
+	SetupOtpRoutes(authGroup, dbService, authConfig)
 }

@@ -3,19 +3,23 @@ package errors
 // Tracking module error codes
 const (
 	// Vehicle errors (TR0001-TR0020)
-	VehicleNotFound       = "tracking.vehicle.not-found"
-	VehicleAlreadyExists  = "tracking.vehicle.already-exists"
-	VehicleCreateFailed   = "tracking.vehicle.create.failed"
-	VehicleUpdateFailed   = "tracking.vehicle.update.failed"
-	VehicleDeleteFailed   = "tracking.vehicle.delete.failed"
-	VehicleInvalidLicense = "tracking.vehicle.invalid-license"
+	VehicleNotFound           = "tracking.vehicle.not-found"
+	VehicleAlreadyExists      = "tracking.vehicle.already-exists"
+	VehiclePlateAlreadyExists = "tracking.vehicle.plate-already-exists"
+	VehicleInvalidType        = "tracking.vehicle.invalid-type"
+	VehicleCreateFailed       = "tracking.vehicle.create.failed"
+	VehicleUpdateFailed       = "tracking.vehicle.update.failed"
+	VehicleDeleteFailed       = "tracking.vehicle.delete.failed"
+	VehicleInvalidLicense     = "tracking.vehicle.invalid-license"
 
 	// Route errors (TR0021-TR0040)
-	RouteNotFound      = "tracking.route.not-found"
-	RouteAlreadyExists = "tracking.route.already-exists"
-	RouteCreateFailed  = "tracking.route.create.failed"
-	RouteUpdateFailed  = "tracking.route.update.failed"
-	RouteDeleteFailed  = "tracking.route.delete.failed"
+	RouteNotFound            = "tracking.route.not-found"
+	RouteAlreadyExists       = "tracking.route.already-exists"
+	RouteCreateFailed        = "tracking.route.create.failed"
+	RouteUpdateFailed        = "tracking.route.update.failed"
+	RouteDeleteFailed        = "tracking.route.delete.failed"
+	RouteInvalidScheduleType = "tracking.route.invalid-schedule-type"
+	RouteCodeAlreadyExists   = "tracking.route.code-already-exists"
 
 	// Rider errors (TR0041-TR0060)
 	RiderNotFound      = "tracking.rider.not-found"
@@ -53,6 +57,7 @@ const (
 	CompanyDeleteFailed  = "tracking.company.delete.failed"
 	CompanyAlreadyExists = "tracking.company.already-exists"
 	CompanyListFailed    = "tracking.company.list.failed"
+	CompanyHasVehicles   = "tracking.company.has-vehicles"
 
 	// Additional resource list errors
 	VehicleListFailed     = "tracking.vehicle.list.failed"
@@ -90,4 +95,9 @@ func (e *TrackingError) Error() string {
 		return e.Code + ": " + e.Err.Error()
 	}
 	return e.Code
+}
+
+// Unwrap returns the wrapped error, allowing errors.As to work
+func (e *TrackingError) Unwrap() error {
+	return e.Err
 }

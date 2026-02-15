@@ -3,16 +3,15 @@ FROM golang:1.23-alpine AS builder
 WORKDIR /app
 COPY . .
 RUN go mod tidy
-RUN go build -o main .
+ARG GO_MAIN=platform
+RUN go build -o app ./cmd/${GO_MAIN}
 
 # Runner
 FROM alpine:3.20
 WORKDIR /app
-COPY --from=builder /app/main ./main
-COPY --from=builder /app/migrations ./migrations
-COPY --from=builder /app/lang ./lang
+COPY --from=builder /app/app ./app
+COPY --from=builder /app/modules ./modules
 COPY config/regexes.yaml ./config/regexes.yaml
-COPY .env .
 
-EXPOSE 8080
-CMD ["./main"]
+EXPOSE 8080 9080
+CMD ["./app"]

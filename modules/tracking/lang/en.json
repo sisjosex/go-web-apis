@@ -1,6 +1,8 @@
 {
   "tracking.vehicle.not-found": "Vehicle not found",
   "tracking.vehicle.already-exists": "Vehicle with this license plate already exists",
+  "tracking.vehicle.plate-already-exists": "Vehicle plate number already exists for this company",
+  "tracking.vehicle.invalid-type": "Invalid vehicle type. Must be: bus, van, or car",
   "tracking.vehicle.create.failed": "Failed to create vehicle",
   "tracking.vehicle.update.failed": "Failed to update vehicle",
   "tracking.vehicle.delete.failed": "Failed to delete vehicle",
@@ -11,6 +13,8 @@
   "tracking.route.create.failed": "Failed to create route",
   "tracking.route.update.failed": "Failed to update route",
   "tracking.route.delete.failed": "Failed to delete route",
+  "tracking.route.invalid-schedule-type": "Invalid schedule type. Must be: morning, afternoon, or custom",
+  "tracking.route.code-already-exists": "Route code already exists for this company",
 
   "tracking.rider.not-found": "Rider (student/employee) not found",
   "tracking.rider.already-exists": "Rider already exists",
@@ -40,8 +44,9 @@
   "tracking.company.create.failed": "Failed to create transport company",
   "tracking.company.update.failed": "Failed to update transport company",
   "tracking.company.delete.failed": "Failed to delete transport company",
-  "tracking.company.already-exists": "Transport company with this name already exists",
+  "tracking.company.already-exists": "Transport company with this registration number already exists",
   "tracking.company.list.failed": "Failed to retrieve transport companies",
+  "tracking.company.has-vehicles": "Cannot delete company that has associated vehicles",
 
   "tracking.vehicle.list.failed": "Failed to retrieve vehicles",
   "tracking.route.list.failed": "Failed to retrieve routes",

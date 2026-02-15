@@ -2,33 +2,34 @@ package models
 
 import (
 	coreModels "josex/web/modules/core/models"
+	"time"
 
 	"github.com/google/uuid"
 )
 
 // LoginUserRequestDto is a model for login user request
 type LoginUserRequestDto struct {
-	Email    string    `json:"email" binding:"required,email-valid" conform:"trim,lowercase"`
-	Password string    `json:"password" binding:"required"`
-	DeviceId uuid.UUID `json:"device_id,omitempty" binding:"omitempty,uuidv4"`
+	Email    string     `json:"email" binding:"required,email-valid" conform:"trim,lowercase"`
+	Password string     `json:"password" binding:"required"`
+	DeviceId *uuid.UUID `json:"device_id,omitempty" binding:"omitempty,uuidv4"`
 }
 
 // LoginUserDto is a model for login user request (internal use with device info)
 type LoginUserDto struct {
-	Email      string    `json:"email" binding:"required,email-valid" conform:"trim,lowercase"`
-	Password   string    `json:"password" binding:"required"`
-	DeviceId   uuid.UUID `json:"device_id,omitempty" binding:"omitempty,uuidv4"`
-	IpAddress  string    `json:"ip_address"`
-	DeviceInfo string    `json:"device_info"`
-	DeviceOs   string    `json:"device_os"`
-	Browser    string    `json:"browser"`
-	UserAgent  string    `json:"user_agent"`
+	Email      string     `json:"email" binding:"required,email-valid" conform:"trim,lowercase"`
+	Password   string     `json:"password" binding:"required"`
+	DeviceId   *uuid.UUID `json:"device_id,omitempty" binding:"omitempty,uuidv4"`
+	IpAddress  string     `json:"ip_address"`
+	DeviceInfo string     `json:"device_info"`
+	DeviceOs   string     `json:"device_os"`
+	Browser    string     `json:"browser"`
+	UserAgent  string     `json:"user_agent"`
 }
 
 // LoginExternalRequestDto for OAuth logins (Facebook, Google, etc.)
 type LoginExternalRequestDto struct {
 	AuthProviderId string               `json:"auth_provider_id" binding:"required" conform:"trim,lowercase"`
-	DeviceId       uuid.UUID            `json:"device_id,omitempty" binding:"omitempty,uuidv4"`
+	DeviceId       *uuid.UUID           `json:"device_id,omitempty" binding:"omitempty,uuidv4"`
 	FirstName      *string              `json:"first_name"`
 	LastName       *string              `json:"last_name"`
 	Email          *string              `form:"email" binding:"omitempty,email-valid" conform:"trim,lowercase"`
@@ -40,7 +41,7 @@ type LoginExternalRequestDto struct {
 type LoginExternalDto struct {
 	AuthProviderName string               `json:"auth_provider_name" conform:"trim,lowercase"`
 	AuthProviderId   string               `json:"auth_provider_id" binding:"required" conform:"trim,lowercase"`
-	DeviceId         uuid.UUID            `json:"device_id,omitempty" binding:"omitempty,uuidv4"`
+	DeviceId         *uuid.UUID           `json:"device_id,omitempty" binding:"omitempty,uuidv4"`
 	FirstName        *string              `json:"first_name"`
 	LastName         *string              `json:"last_name"`
 	Email            *string              `form:"email" binding:"omitempty,email-valid" conform:"trim,lowercase"`
@@ -165,4 +166,85 @@ type UserSession struct {
 	LastActive coreModels.DateTime  `json:"last_active"`
 	LogoutTime *coreModels.DateTime `json:"logout_time,omitempty"`
 	IsActive   bool                 `json:"is_active"`
+}
+
+// ============================================================================
+// OTP DTOs - Multi-channel authentication (WhatsApp, SMS, Email)
+// ============================================================================
+
+// RequestOtpRequestDto is the request DTO for requesting an OTP code
+// destination can be a phone number (e.g., "+1234567890") or email (e.g., "user@example.com")
+// channel specifies the delivery method: "whatsapp", "sms", "email"
+type RequestOtpRequestDto struct {
+	Destination string     `json:"destination" binding:"required" conform:"trim"`                   // phone or email
+	Channel     string     `json:"channel" binding:"required,otp-channel" conform:"trim,lowercase"` // whatsapp, sms, email
+	DeviceId    *uuid.UUID `json:"device_id,omitempty" binding:"omitempty,uuidv4"`
+}
+
+// RequestOtpDto is the internal DTO with device information
+type RequestOtpDto struct {
+	Destination string     `json:"destination"`
+	Channel     string     `json:"channel"`
+	DeviceId    *uuid.UUID `json:"device_id,omitempty"`
+	IpAddress   string     `json:"ip_address"`
+	DeviceInfo  string     `json:"device_info"`
+	DeviceOs    string     `json:"device_os"`
+	Browser     string     `json:"browser"`
+	UserAgent   string     `json:"user_agent"`
+}
+
+// RequestOtpResponse is the response after successfully requesting an OTP
+type RequestOtpResponse struct {
+	OtpId       string    `json:"otp_id"`
+	Destination string    `json:"destination"` // masked for security (e.g., "+12345****90")
+	Channel     string    `json:"channel"`
+	ExpiresAt   time.Time `json:"expires_at"`
+	Message     string    `json:"message"`
+}
+
+// VerifyOtpRequestDto is the request DTO for verifying an OTP code
+type VerifyOtpRequestDto struct {
+	Destination string     `json:"destination" binding:"required" conform:"trim"`
+	OtpCode     string     `json:"otp_code" binding:"required,len=6,numeric" conform:"trim"` // Exactly 6 digits
+	Channel     string     `json:"channel" binding:"required,otp-channel" conform:"trim,lowercase"`
+	DeviceId    *uuid.UUID `json:"device_id,omitempty" binding:"omitempty,uuidv4"`
+}
+
+// VerifyOtpDto is the internal DTO with device information
+type VerifyOtpDto struct {
+	Destination string
+	OtpCode     string
+	Channel     string
+	DeviceId    *uuid.UUID
+	IpAddress   string
+	DeviceInfo  string
+	DeviceOs    string
+	Browser     string
+	UserAgent   string
+}
+
+// VerifyOtpResponse is the response after successfully verifying an OTP
+type VerifyOtpResponse struct {
+	SessionId        uuid.UUID  `json:"session_id"`
+	UserId           *uuid.UUID `json:"user_id,omitempty"` // Null if user doesn't exist
+	UserExists       bool       `json:"user_exists"`       // Whether user was found
+	SystemRole       string     `json:"system_role,omitempty"`
+	SubscriptionPlan string     `json:"subscription_plan,omitempty"`
+	AccessToken      *string    `json:"access_token,omitempty"`  // JWT if user exists
+	RefreshToken     *string    `json:"refresh_token,omitempty"` // JWT if user exists
+}
+
+// OtpRequest represents an OTP record from the database
+type OtpRequest struct {
+	Id          uuid.UUID  `db:"id"`
+	Destination string     `db:"destination"`
+	OtpChannel  string     `db:"otp_channel"`
+	OtpCode     string     `db:"otp_code"`
+	UserId      *uuid.UUID `db:"user_id"`
+	IsVerified  bool       `db:"is_verified"`
+	VerifiedAt  *time.Time `db:"verified_at"`
+	Attempts    int        `db:"attempts"`
+	MaxAttempts int        `db:"max_attempts"`
+	CreatedAt   time.Time  `db:"created_at"`
+	ExpiresAt   time.Time  `db:"expires_at"`
 }

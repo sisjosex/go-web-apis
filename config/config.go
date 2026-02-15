@@ -1,6 +1,8 @@
 package config
 
 import (
+	"sync"
+
 	authConfig "josex/web/modules/auth/config"
 	coreConfig "josex/web/modules/core/config"
 	"josex/web/modules/core/utils"
@@ -18,19 +20,30 @@ type ModularConfig struct {
 	Tracking *trackingConfig.TrackingConfig
 }
 
-// Global modular configuration (loaded on init)
-var ModularAppConfig *ModularConfig
+// Global modular configuration (lazy-loaded on first access)
+var (
+	ModularAppConfig *ModularConfig
+	configOnce       sync.Once
+)
+
+// GetConfig returns the global config, loading it on first call
+func GetConfig() *ModularConfig {
+	configOnce.Do(func() {
+		// Ensure .env is loaded first
+		utils.LoadEnv()
+
+		// Load all module configurations
+		ModularAppConfig = &ModularConfig{
+			Core:     coreConfig.LoadCoreConfig(),
+			Auth:     authConfig.LoadAuthConfig(),
+			Users:    usersConfig.LoadUsersConfig(),
+			Tenancy:  tenancyConfig.LoadTenancyConfig(),
+			Tracking: trackingConfig.LoadTrackingConfig(),
+		}
+	})
+	return ModularAppConfig
+}
 
 func init() {
-	// Ensure .env is loaded first
-	utils.LoadEnv()
-
-	// Load all module configurations
-	ModularAppConfig = &ModularConfig{
-		Core:     coreConfig.LoadCoreConfig(),
-		Auth:     authConfig.LoadAuthConfig(),
-		Users:    usersConfig.LoadUsersConfig(),
-		Tenancy:  tenancyConfig.LoadTenancyConfig(),
-		Tracking: trackingConfig.LoadTrackingConfig(),
-	}
+	// Empty - config is now lazy-loaded
 }

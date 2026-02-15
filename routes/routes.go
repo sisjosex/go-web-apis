@@ -79,6 +79,7 @@ func SetupRoutes(r *gin.Engine, dbService coreServices.DatabaseService) {
 	{
 		// Register module routes
 		authRoutes.RegisterAuthRoutes(apiV1, authController, sessionController, jwtService)
+		authRoutes.RegisterOtpRoutes(apiV1, dbService, authConf)
 		userRoutes.RegisterUserRoutes(apiV1, userController, jwtService)
 
 		// Get config

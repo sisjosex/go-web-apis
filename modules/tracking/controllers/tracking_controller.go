@@ -14,7 +14,6 @@ import (
 	trackingErrors "josex/web/modules/tracking/errors"
 	"josex/web/modules/tracking/interfaces"
 	"josex/web/modules/tracking/models"
-	trackingUtils "josex/web/modules/tracking/utils"
 )
 
 type TrackingController struct {
@@ -351,13 +350,7 @@ func (ctrl *TrackingController) CreateCompany(c *gin.Context) {
 	}
 	conform.Strings(&dto)
 
-	tenantID, err := ctrl.getTenantID(c)
-	if err != nil {
-		c.JSON(http.StatusBadRequest, coreErrors.BuildError(c, err))
-		return
-	}
-
-	company, err := ctrl.trackingService.CreateCompany(c.Request.Context(), &dto, tenantID)
+	company, err := ctrl.trackingService.CreateCompany(c, &dto)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, coreErrors.BuildError(c, err))
 		return
@@ -392,21 +385,8 @@ func (ctrl *TrackingController) UpdateCompany(c *gin.Context) {
 	}
 	conform.Strings(&dto)
 
-	tenantID, err := ctrl.getTenantID(c)
+	company, err := ctrl.trackingService.UpdateCompany(c.Request.Context(), companyID, &dto)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, coreErrors.BuildError(c, err))
-		return
-	}
-
-	company, err := ctrl.trackingService.UpdateCompany(c.Request.Context(), companyID, &dto, tenantID)
-	if err != nil {
-		// Extract error code from PostgreSQL TRACKING_ERROR
-		errorCode := trackingUtils.ExtractTrackingErrorCode(err)
-		switch errorCode {
-		case "company.already-exists":
-			c.JSON(http.StatusConflict, coreErrors.BuildErrorSingle(c, trackingErrors.CompanyAlreadyExists))
-			return
-		}
 		c.JSON(http.StatusInternalServerError, coreErrors.BuildError(c, err))
 		return
 	}
@@ -423,13 +403,17 @@ func (ctrl *TrackingController) UpdateCompany(c *gin.Context) {
 // @Failure 500 {object} errors.ErrorResponse
 // @Router /tracking/companies [get]
 func (ctrl *TrackingController) ListCompanies(c *gin.Context) {
-	tenantID, err := ctrl.getTenantID(c)
-	if err != nil {
-		c.JSON(http.StatusBadRequest, coreErrors.BuildError(c, err))
-		return
+	var registrationNumber *string
+	var status *string
+
+	if reg := c.Query("registration_number"); reg != "" {
+		registrationNumber = &reg
+	}
+	if st := c.Query("status"); st != "" {
+		status = &st
 	}
 
-	companies, err := ctrl.trackingService.ListCompanies(c.Request.Context(), tenantID, nil, nil)
+	companies, err := ctrl.trackingService.ListCompanies(c.Request.Context(), registrationNumber, status)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, coreErrors.BuildError(c, err))
 		return
@@ -456,13 +440,7 @@ func (ctrl *TrackingController) GetCompany(c *gin.Context) {
 		return
 	}
 
-	tenantID, err := ctrl.getTenantID(c)
-	if err != nil {
-		c.JSON(http.StatusBadRequest, coreErrors.BuildError(c, err))
-		return
-	}
-
-	company, err := ctrl.trackingService.GetCompany(c.Request.Context(), companyID, tenantID)
+	company, err := ctrl.trackingService.GetCompany(c.Request.Context(), companyID)
 	if err != nil {
 		var trackingErr *trackingErrors.TrackingError
 		if errors.As(err, &trackingErr) && trackingErr.Code == trackingErrors.CompanyNotFound {
@@ -493,13 +471,7 @@ func (ctrl *TrackingController) DeleteCompany(c *gin.Context) {
 		return
 	}
 
-	tenantID, err := ctrl.getTenantID(c)
-	if err != nil {
-		c.JSON(http.StatusBadRequest, coreErrors.BuildError(c, err))
-		return
-	}
-
-	err = ctrl.trackingService.DeleteCompany(c.Request.Context(), companyID, tenantID)
+	err = ctrl.trackingService.DeleteCompany(c.Request.Context(), companyID)
 	if err != nil {
 		var trackingErr *trackingErrors.TrackingError
 		if errors.As(err, &trackingErr) && trackingErr.Code == trackingErrors.CompanyNotFound {
@@ -569,11 +541,6 @@ func (ctrl *TrackingController) UpdateVehicle(c *gin.Context) {
 	conform.Strings(&dto)
 	vehicle, err := ctrl.trackingService.UpdateVehicle(c.Request.Context(), vehicleID, &dto)
 	if err != nil {
-		var trackingErr *trackingErrors.TrackingError
-		if errors.As(err, &trackingErr) && trackingErr.Code == trackingErrors.VehicleNotFound {
-			c.JSON(http.StatusNotFound, coreErrors.BuildError(c, err))
-			return
-		}
 		c.JSON(http.StatusInternalServerError, coreErrors.BuildError(c, err))
 		return
 	}
@@ -978,13 +945,13 @@ func (ctrl *TrackingController) UpdateRider(c *gin.Context) {
 // @Tags Tracking - Riders
 // @Produce json
 // @Security BearerAuth
-// @Param company_id query string true "Company ID (UUID)"
+// @Param company_id path string true "Company ID (UUID)"
 // @Success 200 {array} models.Rider
 // @Failure 400 {object} errors.ErrorResponse
 // @Failure 500 {object} errors.ErrorResponse
-// @Router /tracking/riders [get]
+// @Router /tracking/companies/{company_id}/riders [get]
 func (ctrl *TrackingController) ListRiders(c *gin.Context) {
-	companyID, err := uuid.Parse(c.Query("company_id"))
+	companyID, err := uuid.Parse(c.Param("company_id"))
 	if err != nil {
 		c.JSON(http.StatusBadRequest, coreErrors.BuildErrorSingle(c, coreErrors.InvalidUUID))
 		return
@@ -1118,22 +1085,49 @@ func (ctrl *TrackingController) UnassignRider(c *gin.Context) {
 
 // ListRiderAssignments godoc
 // @Summary List rider assignments
-// @Description Get all route assignments for a rider
+// @Description Get all route assignments (filter by rider_id, route_id, or is_active)
 // @Tags Tracking - Assignments
 // @Produce json
 // @Security BearerAuth
-// @Param rider_id query string true "Rider ID (UUID)"
+// @Param rider_id query string false "Rider ID (UUID)"
+// @Param route_id query string false "Route ID (UUID)"
+// @Param is_active query boolean false "Filter by active status"
 // @Success 200 {array} models.RiderAssignment
 // @Failure 400 {object} errors.ErrorResponse
 // @Failure 500 {object} errors.ErrorResponse
 // @Router /tracking/assignments [get]
 func (ctrl *TrackingController) ListRiderAssignments(c *gin.Context) {
-	riderID, err := uuid.Parse(c.Query("rider_id"))
-	if err != nil {
-		c.JSON(http.StatusBadRequest, coreErrors.BuildErrorSingle(c, coreErrors.InvalidUUID))
-		return
+	var riderID *uuid.UUID
+	var routeID *uuid.UUID
+	var isActive *bool
+
+	// Parse optional rider_id
+	if riderIDStr := c.Query("rider_id"); riderIDStr != "" {
+		parsed, err := uuid.Parse(riderIDStr)
+		if err != nil {
+			c.JSON(http.StatusBadRequest, coreErrors.BuildErrorSingle(c, coreErrors.InvalidUUID))
+			return
+		}
+		riderID = &parsed
 	}
-	assignments, err := ctrl.trackingService.ListRiderAssignments(c.Request.Context(), &riderID, nil, nil)
+
+	// Parse optional route_id
+	if routeIDStr := c.Query("route_id"); routeIDStr != "" {
+		parsed, err := uuid.Parse(routeIDStr)
+		if err != nil {
+			c.JSON(http.StatusBadRequest, coreErrors.BuildErrorSingle(c, coreErrors.InvalidUUID))
+			return
+		}
+		routeID = &parsed
+	}
+
+	// Parse optional is_active
+	if isActiveStr := c.Query("is_active"); isActiveStr != "" {
+		active := isActiveStr == "true"
+		isActive = &active
+	}
+
+	assignments, err := ctrl.trackingService.ListRiderAssignments(c.Request.Context(), riderID, routeID, isActive)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, coreErrors.BuildError(c, err))
 		return
@@ -1179,19 +1173,6 @@ func (ctrl *TrackingController) GrantClientAccess(c *gin.Context) {
 
 	access, err := ctrl.trackingService.GrantClientAccess(c.Request.Context(), companyID, &dto, userUUID, tenantUUID)
 	if err != nil {
-		// Extract error code from PostgreSQL TRACKING_ERROR
-		errorCode := trackingUtils.ExtractTrackingErrorCode(err)
-		switch errorCode {
-		case "company.not-found":
-			c.JSON(http.StatusNotFound, coreErrors.BuildErrorSingle(c, trackingErrors.CompanyNotFound))
-			return
-		case "tenant.not-found":
-			c.JSON(http.StatusNotFound, coreErrors.BuildErrorSingle(c, trackingErrors.TenantNotFound))
-			return
-		case "client-access.already-exists":
-			c.JSON(http.StatusConflict, coreErrors.BuildErrorSingle(c, trackingErrors.ClientAccessAlreadyExists))
-			return
-		}
 		c.JSON(http.StatusInternalServerError, coreErrors.BuildError(c, err))
 		return
 	}
@@ -1232,16 +1213,6 @@ func (ctrl *TrackingController) RevokeClientAccess(c *gin.Context) {
 
 	err = ctrl.trackingService.RevokeClientAccess(c.Request.Context(), companyID, clientTenantID, userUUID, tenantUUID)
 	if err != nil {
-		// Extract error code from PostgreSQL TRACKING_ERROR
-		errorCode := trackingUtils.ExtractTrackingErrorCode(err)
-		switch errorCode {
-		case "company.not-found":
-			c.JSON(http.StatusNotFound, coreErrors.BuildErrorSingle(c, trackingErrors.CompanyNotFound))
-			return
-		case "client-access.not-found":
-			c.JSON(http.StatusNotFound, coreErrors.BuildErrorSingle(c, trackingErrors.ClientAccessNotFound))
-			return
-		}
 		c.JSON(http.StatusInternalServerError, coreErrors.BuildError(c, err))
 		return
 	}

@@ -25,16 +25,16 @@ type TrackingService interface {
 	CreateRouteAlert(ctx context.Context, dto *models.CreateAlertDto, createdBy *uuid.UUID) (*models.AlertCreatedResponse, error)
 
 	// Companies CRUD
-	CreateCompany(ctx context.Context, dto *models.CreateCompanyDto, tenantID *uuid.UUID) (*models.TransportCompany, error)
-	UpdateCompany(ctx context.Context, companyID uuid.UUID, dto *models.UpdateCompanyDto, userTenantID *uuid.UUID) (*models.TransportCompany, error)
-	ListCompanies(ctx context.Context, userTenantID *uuid.UUID, companyType *string, isActive *bool) ([]*models.TransportCompany, error)
-	GetCompany(ctx context.Context, companyID uuid.UUID, userTenantID *uuid.UUID) (*models.TransportCompany, error)
-	DeleteCompany(ctx context.Context, companyID uuid.UUID, userTenantID *uuid.UUID) error
+	CreateCompany(ctx context.Context, dto *models.CreateCompanyDto) (*models.TransportCompany, error)
+	UpdateCompany(ctx context.Context, companyID uuid.UUID, dto *models.UpdateCompanyDto) (*models.TransportCompany, error)
+	ListCompanies(ctx context.Context, registrationNumber *string, status *string) ([]*models.TransportCompany, error)
+	GetCompany(ctx context.Context, companyID uuid.UUID) (*models.TransportCompany, error)
+	DeleteCompany(ctx context.Context, companyID uuid.UUID) error
 
 	// Vehicles CRUD
 	CreateVehicle(ctx context.Context, dto *models.CreateVehicleDto) (*models.Vehicle, error)
 	UpdateVehicle(ctx context.Context, vehicleID uuid.UUID, dto *models.UpdateVehicleDto) (*models.Vehicle, error)
-	ListVehicles(ctx context.Context, companyID *uuid.UUID, vehicleType *string, isActive *bool) ([]*models.Vehicle, error)
+	ListVehicles(ctx context.Context, companyID *uuid.UUID, vehicleType *string, status *string) ([]*models.Vehicle, error)
 	GetVehicle(ctx context.Context, vehicleID uuid.UUID) (*models.Vehicle, error)
 	DeleteVehicle(ctx context.Context, vehicleID uuid.UUID) error
 

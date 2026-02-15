@@ -1,0 +1,2 @@
+-- Drop ride event function
+DROP FUNCTION IF EXISTS tracking.sp_record_ride_event CASCADE;

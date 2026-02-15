@@ -37,4 +37,18 @@ const (
 	SessionLogoutFailed     = "session.logout-failed"
 	SessionAlreadyLoggedOut = "session.already-logged-out"
 	SessionUnauthorized     = "session.unauthorized"
+
+	// OTP errors
+	OtpRequestFailed       = "otp.request.failed"
+	OtpGenerated           = "otp.request.generated"
+	OtpVerifyFailed        = "otp.verify.failed"
+	OtpInvalid             = "otp.verify.invalid"
+	OtpExpired             = "otp.verify.expired"
+	OtpNotFound            = "otp.not-found"
+	OtpMaxAttempts         = "otp.verify.max-attempts"
+	OtpDestinationInvalid  = "otp.destination.invalid"
+	OtpChannelInvalid      = "otp.channel.invalid"
+	OtpChannelDisabled     = "otp.channel.disabled"
+	OtpCodeInvalid         = "otp.code.invalid"
+	PhoneAlreadyRegistered = "phone.already-registered"
 )

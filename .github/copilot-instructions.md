@@ -5,10 +5,11 @@
 This is a **Go + Gin + PostgreSQL** REST API using a **stored procedure-centric architecture** with **modular organization**. Business logic lives primarily in PostgreSQL stored procedures (`modules/*/migrations/*sp_*.up.sql`), not in Go code. The Go layer handles HTTP, validation, auth middleware, and orchestration.
 
 **Modular Structure:**
+- `modules/core/` - Shared infrastructure (database, validators, errors, utils, migrations, translations) - **ALWAYS REQUIRED**
 - `modules/auth/` - Authentication & session management (login, logout, JWT, password reset)
-- `modules/users/` - User CRUD operations (admin)
-- `modules/tenancy/` - Multi-tenant architecture (optional, centralized authentication)
-- `modules/core/` - Shared infrastructure (database, validators, errors, utils, migrations, translations)
+- `modules/users/` - User CRUD operations and admin functionality
+- `modules/tenancy/` - Multi-tenant architecture (optional, centralized authentication with platform/tenant separation)
+- `modules/tracking/` - Vehicle/fleet tracking and monitoring (tenant-isolated module)
 
 **Key Layers (per module):**
 - `controllers/` - HTTP handlers (thin, validation + error handling)
@@ -311,31 +312,58 @@ coreServices.LoadAllTranslations(languages)
 - Claims include `user_id` + `session_id` (stored in `auth.user_sessions` table)
 - Middleware: `modules/auth/middleware/auth_middleware.go` validates access token, sets context vars
 
+## Authentication & Authorization
+
+### JWT Double-Token System
+- `JWTService` generates **access** (short-lived) + **refresh** (long-lived) tokens
+- Claims include `user_id` + `session_id` (stored in `auth.user_sessions` table)
+- Middleware: `modules/auth/middleware/auth_middleware.go` validates access token, sets context vars
+
 ### REST API Routes Convention
 Routes follow RESTful principles with proper HTTP verbs:
 
-```go
-// Authentication (POST - actions, not resources)
-POST   /auth/login
-POST   /auth/login/facebook
-POST   /auth/register
-POST   /auth/logout
-POST   /auth/token/refresh
+**Authentication (POST - actions, not resources)**
+```
+POST   /auth/login                          # User login
+POST   /auth/login/facebook                 # OAuth login
+POST   /auth/register                       # Register new user
+POST   /auth/logout                         # Logout (invalidate session)
+POST   /auth/token/refresh                  # Refresh access token
+```
 
-// Profile (GET/PATCH - resource-based)
-GET    /auth/profile          // Get user profile
-PATCH  /auth/profile          // Update user profile (partial)
+**Profile (GET/PATCH - resource-based)**
+```
+GET    /auth/profile                        # Get user profile
+PATCH  /auth/profile                        # Update user profile (partial)
+```
 
-// Password Management (PUT for modifications)
-PUT    /auth/password         // Change password
+**Password Management (PUT for modifications)**
+```
+PUT    /auth/password                       # Change password (requires current password)
+```
 
-// Email Verification (POST request, PUT confirmation)
-POST   /auth/email/verification  // Request verification token
-PUT    /auth/email/verification  // Confirm with token
+**Email Verification (POST request, PUT confirmation)**
+```
+POST   /auth/email/verification             # Request verification token
+PUT    /auth/email/verification             # Confirm with token
+```
 
-// Password Reset (POST request, PUT confirmation)
-POST   /auth/password/reset   // Request reset token
-PUT    /auth/password/reset   // Reset with token
+**Password Reset (POST request, PUT confirmation)**
+```
+POST   /auth/password/reset                 # Request reset token
+PUT    /auth/password/reset                 # Reset with token
+```
+
+**Tracking Module (Resource CRUD operations)**
+```
+GET    /tracking/vehicles                   # List vehicles (paginated)
+POST   /tracking/vehicles                   # Create vehicle
+GET    /tracking/vehicles/:id                # Get vehicle details
+PUT    /tracking/vehicles/:id                # Update vehicle
+DELETE /tracking/vehicles/:id                # Delete vehicle
+
+GET    /tracking/locations/current          # Get current vehicle location
+GET    /tracking/locations/history          # Get location history
 ```
 
 **Protected Routes Pattern:**
@@ -351,35 +379,82 @@ protectedRoutes.PATCH("/profile", controller.UpdateProfile)
 ### Middleware Organization
 - **Auth Middleware**: `modules/auth/middleware/auth_middleware.go` - JWT validation
 - **Language Middleware**: `modules/core/middleware/language_middleware.go` - i18n support
+- **Tenancy Middleware** (optional): `modules/tenancy/middleware/` - Tenant access validation
 
 ### Session Management
 - User-Agent parsing via `uaparser` stores device/browser/OS in sessions
 - IP extraction: `utils.GetClientIp(c)` handles X-Forwarded-For
 - Logout invalidates sessions in database
 
-## Key Development Workflows
+## Build & Deployment Strategy
 
-### Running Locally
+### Two-Server Architecture
+
+The project uses **two independent binaries** for different deployment scenarios:
+
+**1. Platform Server** (`cmd/platform/main.go`)
+- Runs on `.env.platform` configuration
+- Modules: `core`, `auth`, `users`, `tenancy`
+- Database: Single main PostgreSQL (centralized auth, tenant management)
+- Purpose: Central administration (user management, tenant creation)
+- Port: 8080 (by default)
+
+**2. Tenant Server** (`cmd/tenant/main.go`)
+- Runs on `.env.tenant` configuration
+- Modules: `core`, `auth`, `users`, `tracking`
+- Database: Isolated tenant-specific PostgreSQL (from `TENANT_DATABASE_URL`)
+- Purpose: Tenant-specific operations (vehicle tracking, business logic)
+- Port: 8081 (by default)
+
+### CLI Tools
+
+**3. Migration CLI** (`cmd/migration/main.go`)
+- Lightweight migration file generator (no config needed)
+- Creates timestamped SQL migration files
+- Usage: `go run ./cmd/migration -module=auth -name=add_field`
+
+**4. Tenancy CLI** (`cmd/tenancy-cli/main.go`)
+- Manages tenant lifecycle (create, configure, migrate)
+- Requires `.env.platform` configuration
+- Handles database setup and initial migrations for new tenants
+
+**5. CLI Tool** (`cmd/cli/main.go`)
+- Combined management tool (migrations, tenant management)
+- Can run on either platform or tenant config
+
+### Running with Makefile
+
 ```powershell
-# Copy environment template
-cp .env.example .env
-
-# Install dependencies
-go mod tidy
-
-# Run server (auto-migrates DB on startup)
-go run .
+make help                    # View all available commands
+make dev-platform           # Run platform server in dev mode
+make dev-tenant             # Run tenant server in dev mode
+make build                  # Build all binaries
+make docker-up              # Start docker-compose services
+make migrate-create MODULE=auth NAME=field_name  # Create new migration
 ```
 
 ### Docker Compose (with PostgreSQL)
+
 ```powershell
-docker compose up
+# View services and status
+docker compose ps
+
+# Start services
+docker compose up -d
+
+# View logs
+docker compose logs -f postgres
+docker compose logs -f app
+
+# Stop services
+docker compose down
 ```
 
 ### Swagger Documentation
 - Auto-generated via `swaggo/swag` annotations in controllers
-- Regenerate: `swag init` (updates `docs/`)
-- Access at: `http://localhost:8080/swagger/index.html`
+- Regenerate: `make swagger` (updates `docs/`)
+- Access Platform at: `http://localhost:8080/swagger/index.html`
+- Access Tenant at: `http://localhost:8081/swagger/index.html`
 
 ## Dependency Injection
 
@@ -407,15 +482,20 @@ authController := controllers.NewAuthController(userService, jwtService, parser,
 ## Critical Files to Reference
 
 - `routes/routes.go` - Route setup, DI wiring, middleware order
+- `config/config.go` - Global modular configuration initialization
 - `modules/core/services/database_service.go` - Connection pool, retry logic, context handling
 - `modules/core/errors/error.go` - Error response utilities (BuildError, BuildErrorSingle, BuildErrorDetail)
+- `modules/core/utils/env.go` - Environment variable loading functions
 - `modules/auth/errors/errors.go` - Auth module error constants
 - `modules/users/errors/errors.go` - Users module error constants
+- `modules/tracking/errors/errors.go` - Tracking module error constants
+- `modules/tracking/utils/` - Tracking-specific utilities (error extraction)
 - `modules/core/services/translator_service.go` - Modular translation loading
-- `migrations/20240922231132_sp_create_user.up.sql` - Example stored procedure pattern
 - `modules/auth/controllers/auth_controller.go` - Canonical controller pattern (validation → service → JWT → response)
-- `modules/tenancy/README.md` - Multi-tenancy architecture and authentication strategy
-- `modules/tenancy/AUTHENTICATION_FLOW.md` - Complete multi-tenant auth flow examples
+- `modules/tenancy/middleware/tenancy_middleware.go` - Tenant access validation
+- `Makefile` - Build commands, migrations, Docker management
+- `.env.platform` - Platform server configuration (centralized auth/tenancy)
+- `.env.tenant` - Tenant server configuration (isolated business logic)
 
 ## Multi-Tenancy Architecture (Optional Module)
 
@@ -466,19 +546,115 @@ When creating a tenant with custom `database_url`, migrations are filtered:
 ## When Adding New Features
 
 1. **Choose the appropriate module** (or create a new one if needed)
+   - Use `modules/tracking/` for vehicle/fleet tracking features
+   - Use `modules/auth/` for authentication-related features
+   - Use `modules/users/` for user management features
+   - Use `modules/tenancy/` for multi-tenant specific features
+   - Create a new module for completely new domains
+
 2. **Define error constants** in `modules/<module>/errors/errors.go`
+   - Follow naming convention: `domain.action.error-type`
+   - Examples: `vehicle.create.invalid-type`, `company.not-found`, `tracking.access-denied`
+
 3. **Add translations** in `modules/<module>/lang/{en,es}.json`
-4. **Add config variables** in `modules/<module>/config/config.go` (use `utils.GetEnv*`)
-5. **Create interface** in `modules/<module>/interfaces/` for testability
-6. **Write stored procedure** in `modules/<module>/migrations/` (use migration CLI tool)
-   - **IMPORTANT:** Implement ALL business logic validations in the SP, NOT in Go
-   - Raise `TRACKING_ERROR:error.code` exceptions for validation failures
-   - Examples: entity existence, uniqueness constraints, enum validation, state checks
-7. **Add repository method** calling the SP with parameter binding
-8. **Add service method** for orchestration (can call multiple repos)
+   - One entry per error constant
+   - Automatic loading during app initialization
+
+4. **Add config variables** in `modules/<module>/config/config.go` 
+   - Use `utils.GetEnv*()` family of functions
+   - Example: `utils.GetEnvAsBool("TRACKING_ENABLED", false)`
+
+5. **Create interface** in `modules/<module>/interfaces/` 
+   - Define contracts for repositories and services
+   - Enables dependency injection and testability
+
+6. **Write stored procedure** in `modules/<module>/migrations/` (use Makefile: `make migrate-create MODULE=tracking NAME=sp_create_vehicle`)
+   - **CRITICAL:** Implement ALL business logic validations in PostgreSQL, NEVER in Go
+   - Raise `EXCEPTION` with error code pattern: `'module.error.type'`
+   - Example validations in SP: entity existence, uniqueness constraints, enum validation, state checks
+   
+   ```sql
+   -- Example SP pattern with validation
+   CREATE OR REPLACE FUNCTION tracking.sp_create_vehicle(
+       p_company_id UUID,
+       p_plate_number VARCHAR,
+       p_vehicle_type VARCHAR
+   ) RETURNS TABLE(id UUID, plate VARCHAR) AS $$
+   BEGIN
+       -- Validation: company exists
+       IF NOT EXISTS (SELECT 1 FROM tracking.transport_companies WHERE id = p_company_id) THEN
+           RAISE EXCEPTION 'company.not-found' USING ERRCODE = 'P0001';
+       END IF;
+       
+       -- Validation: vehicle type enum
+       IF p_vehicle_type NOT IN ('bus', 'van', 'car') THEN
+           RAISE EXCEPTION 'vehicle.invalid-type' USING ERRCODE = 'P0001';
+       END IF;
+       
+       -- Validation: uniqueness constraint
+       IF EXISTS (SELECT 1 FROM tracking.vehicles WHERE company_id = p_company_id AND plate_number = p_plate_number) THEN
+           RAISE EXCEPTION 'vehicle.plate-already-exists' USING ERRCODE = 'P0001';
+       END IF;
+       
+       -- Insert and return
+       INSERT INTO tracking.vehicles(company_id, plate_number, vehicle_type) 
+       VALUES(p_company_id, p_plate_number, p_vehicle_type)
+       RETURNING id, plate_number;
+   END;
+   $$ LANGUAGE plpgsql;
+   ```
+
+7. **Add repository method** calling the SP with proper parameter binding
+   ```go
+   func (r *VehicleRepository) CreateVehicle(ctx context.Context, companyID, plateNumber, vehicleType string) (*models.Vehicle, error) {
+       return r.dbService.QueryRow(ctx, 
+           "SELECT id, plate FROM tracking.sp_create_vehicle($1, $2, $3)",
+           companyID, plateNumber, vehicleType,
+       )
+   }
+   ```
+
+8. **Add service method** for orchestration
+   - Can call multiple repositories
+   - Composes business operations
+   - No business logic validation (already in DB)
+
 9. **Add controller** with Swagger annotations
-   - Extract error codes via `trackingUtils.ExtractTrackingErrorCode(err)`
-   - Map error codes to HTTP status codes (400, 404, 409, 500, etc.)
-   - **NEVER validate business logic in Go** - only extract and map error codes
+   - Extract error codes from PostgreSQL exceptions
+   - Map error codes to appropriate HTTP status codes (400, 404, 409, 500, etc.)
+   - Example error mapping for tracking module:
+   
+   ```go
+   vehicle, err := ctrl.trackingService.CreateVehicle(c.Request.Context(), &dto)
+   if err != nil {
+       errorCode := trackingUtils.ExtractTrackingErrorCode(err)
+       switch errorCode {
+       case "company.not-found":
+           c.JSON(http.StatusNotFound, coreErrors.BuildErrorSingle(c, trackingErrors.CompanyNotFound))
+           return
+       case "vehicle.invalid-type":
+           c.JSON(http.StatusBadRequest, coreErrors.BuildErrorSingle(c, trackingErrors.VehicleInvalidType))
+           return
+       case "vehicle.plate-already-exists":
+           c.JSON(http.StatusConflict, coreErrors.BuildErrorSingle(c, trackingErrors.VehiclePlateAlreadyExists))
+           return
+       }
+       c.JSON(http.StatusInternalServerError, coreErrors.BuildError(c, err))
+       return
+   }
+   c.JSON(http.StatusCreated, vehicle)
+   ```
+   - **NEVER perform business logic validation in Go** - only extract and map error codes
+
 10. **Register routes** in `modules/<module>/routes/<module>_routes.go`
-11. **Wire up in main routes** (`routes/routes.go`) with module check: `if coreConfig.IsModuleEnabled("modulename") { ... }`
+    - Follow RESTful conventions
+    - Add Swagger annotations for documentation
+
+11. **Wire up in main routes** (`routes/routes.go`)
+    - Check if module is enabled: `if coreConfig.IsModuleEnabled("modulename") { ... }`
+    - Instantiate DI containers (repositories, services, controllers)
+    - Register routes
+
+12. **Update `.env.platform` and `.env.tenant` if needed**
+    - `.env.platform`: Add to `ENABLED_MODULES=core,auth,users,tenancy,tracking`
+    - `.env.tenant`: Add to `ENABLED_MODULES=core,auth,users,tracking`

@@ -1,7 +1,9 @@
 package validators
 
 import (
+	"reflect"
 	"regexp"
+	"strings"
 
 	"github.com/gin-gonic/gin/binding"
 	"github.com/go-playground/validator/v10"
@@ -11,9 +13,9 @@ import (
 func EmailValidation(fl validator.FieldLevel) bool {
 	emailStr := fl.Field().String()
 
-	// Si es nil, se considera como válido
+	// Si es vacío, se considera como inválido
 	if emailStr == "" {
-		return false
+		return true
 	}
 
 	// Obtener el valor desreferenciado y validar si es una cadena válida
@@ -22,17 +24,50 @@ func EmailValidation(fl validator.FieldLevel) bool {
 }
 
 func validateUUIDv4(fl validator.FieldLevel) bool {
-	id := fl.Field().String()
-	if id == "" {
-		return false
+	field := fl.Field()
+
+	// Handle pointer types (*uuid.UUID)
+	if field.Kind().String() == "ptr" {
+		if field.IsNil() {
+			return true // nil is valid for omitempty
+		}
+		field = field.Elem()
 	}
+
+	// Handle uuid.UUID type directly - convert to string for validation
+	if field.Type() == reflect.TypeOf(uuid.UUID{}) {
+		u := field.Interface().(uuid.UUID)
+		// uuid.UUID zero value is invalid, but we let omitempty handle that
+		return u != uuid.UUID{}
+	}
+
+	// Fallback: try as string
+	id := field.String()
+	if id == "" {
+		return true
+	}
+
 	_, err := uuid.Parse(id)
-	return err != nil
+	return err == nil
+}
+
+// validateOtpChannel validates OTP channel is one of allowed values
+func validateOtpChannel(fl validator.FieldLevel) bool {
+	channel := strings.ToLower(strings.TrimSpace(fl.Field().String()))
+	allowedChannels := []string{"whatsapp", "sms", "email"}
+
+	for _, allowed := range allowedChannels {
+		if channel == allowed {
+			return true
+		}
+	}
+	return false
 }
 
 func RegisterValidations() *validator.Validate {
 	validate := binding.Validator.Engine().(*validator.Validate)
 	validate.RegisterValidation("email-valid", EmailValidation)
 	validate.RegisterValidation("uuidv4", validateUUIDv4)
+	validate.RegisterValidation("otp-channel", validateOtpChannel)
 	return validate
 }

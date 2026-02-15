@@ -14,6 +14,8 @@ CREATE TABLE IF NOT EXISTS
         is_active BOOLEAN DEFAULT TRUE,
         email_verified BOOLEAN DEFAULT TRUE,
         expiration_date TIMESTAMP WITH TIME ZONE DEFAULT NULL,
+        system_role VARCHAR(20) DEFAULT 'user' CHECK (system_role IN ('super_admin', 'admin', 'user')),
+        subscription_plan VARCHAR(20) DEFAULT 'free' CHECK (subscription_plan IN ('free', 'pro', 'enterprise')),
         created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
         updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
     );
@@ -23,11 +25,17 @@ CREATE INDEX IF NOT EXISTS idx_users_email_verified ON auth.users (email_verifie
 CREATE INDEX IF NOT EXISTS idx_users_email ON auth.users (email);
 CREATE INDEX IF NOT EXISTS idx_users_birthday ON auth.users (birthday);
 CREATE INDEX IF NOT EXISTS idx_users_expiration_date ON auth.users (expiration_date);
+CREATE INDEX IF NOT EXISTS idx_users_system_role ON auth.users (system_role);
+CREATE INDEX IF NOT EXISTS idx_users_subscription_plan ON auth.users (subscription_plan);
 CREATE INDEX IF NOT EXISTS idx_users_created_at ON auth.users (created_at);
 CREATE INDEX IF NOT EXISTS idx_users_updated_at ON auth.users (updated_at);
 
 -- Index for compare lower email
 CREATE INDEX IF NOT EXISTS idx_users_lower_email ON auth.users (LOWER(email));
+
+-- Column comments
+COMMENT ON COLUMN auth.users.system_role IS 'System-level role: super_admin (full access), admin (user management), user (default)';
+COMMENT ON COLUMN auth.users.subscription_plan IS 'Subscription plan affecting tenant limits: free (1 tenant), pro (5 tenants), enterprise (unlimited)';
 
 CREATE TABLE IF NOT EXISTS auth.email_verification_tokens (
     id UUID PRIMARY KEY DEFAULT public.uuid_generate_v4 (),

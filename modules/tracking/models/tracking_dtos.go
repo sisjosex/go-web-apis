@@ -35,7 +35,7 @@ type RecordEventDto struct {
 	RiderID   uuid.UUID  `json:"rider_id" binding:"required,uuidv4"`
 	RouteID   uuid.UUID  `json:"route_id" binding:"required,uuidv4"`
 	VehicleID uuid.UUID  `json:"vehicle_id" binding:"required,uuidv4"`
-	EventType string     `json:"event_type" binding:"required,oneof=boarded arrived_destination no_show"`
+	EventType string     `json:"event_type" binding:"required,oneof=check_in checkout no_show emergency"`
 	StopID    *uuid.UUID `json:"stop_id" binding:"omitempty,uuidv4"`
 	Latitude  *float64   `json:"latitude" binding:"omitempty,min=-90,max=90"`
 	Longitude *float64   `json:"longitude" binding:"omitempty,min=-180,max=180"`
@@ -89,6 +89,7 @@ type RiderStatusResponse struct {
 	LocationAgeSeconds   *int32     `json:"location_age_seconds"`
 	LastEventType        *string    `json:"last_event_type"`
 	LastEventTime        *string    `json:"last_event_time"`
+	LastEventNotes       *string    `json:"last_event_notes"`
 	LastEventStop        *string    `json:"last_event_stop"`
 	ScheduledPickupStop  *string    `json:"scheduled_pickup_stop"`
 	ScheduledDropoffStop *string    `json:"scheduled_dropoff_stop"`
@@ -101,7 +102,7 @@ type RiderStatusResponse struct {
 type CreateAlertDto struct {
 	RouteID               uuid.UUID  `json:"route_id" binding:"required,uuidv4"`
 	VehicleID             *uuid.UUID `json:"vehicle_id" binding:"omitempty,uuidv4"`
-	AlertType             string     `json:"alert_type" binding:"required,oneof=delay breakdown traffic cancelled other"`
+	AlertType             string     `json:"alert_type" binding:"required,oneof=delay breakdown traffic cancellation emergency other"`
 	Title                 string     `json:"title" binding:"required,min=3,max=255" conform:"trim"`
 	Message               string     `json:"message" binding:"required,min=5,max=1000" conform:"trim"`
 	Severity              string     `json:"severity" binding:"omitempty,oneof=low medium high critical"`
@@ -110,37 +111,41 @@ type CreateAlertDto struct {
 
 // AlertCreatedResponse represents response after creating alert
 type AlertCreatedResponse struct {
-	AlertID               uuid.UUID `json:"alert_id"`
-	RouteID               uuid.UUID `json:"route_id"`
-	RouteName             string    `json:"route_name"`
-	AlertType             string    `json:"alert_type"`
-	Title                 string    `json:"title"`
-	Message               string    `json:"message"`
-	Severity              string    `json:"severity"`
-	EstimatedDelayMinutes *int32    `json:"estimated_delay_minutes"`
-	AffectedRiders        int32     `json:"affected_riders"`
+	AlertID               uuid.UUID  `json:"alert_id"`
+	RouteID               uuid.UUID  `json:"route_id"`
+	VehicleID             *uuid.UUID `json:"vehicle_id"`
+	AlertType             string     `json:"alert_type"`
+	Title                 string     `json:"title"`
+	Message               string     `json:"message"`
+	Severity              string     `json:"severity"`
+	EstimatedDelayMinutes *int32     `json:"estimated_delay_minutes"`
+	Status                string     `json:"status"`
+	CreatedBy             uuid.UUID  `json:"created_by"`
+	CreatedAt             string     `json:"created_at"`
 }
 
 // === DTOs for Company Management ===
 
 // CreateCompanyDto represents request to create transport company
 type CreateCompanyDto struct {
-	Name         string  `json:"name" binding:"required,min=3,max=255" conform:"trim"`
-	CompanyType  string  `json:"company_type" binding:"required,oneof=school corporate transport_provider"`
-	ContactName  *string `json:"contact_name" binding:"omitempty,max=255" conform:"trim"`
-	ContactPhone *string `json:"contact_phone" binding:"omitempty,max=50" conform:"trim"`
-	ContactEmail *string `json:"contact_email" binding:"omitempty,email-valid" conform:"trim,lowercase"`
-	Address      *string `json:"address" binding:"omitempty,max=500" conform:"trim"`
+	Name               string  `json:"name" binding:"required,min=3,max=255" conform:"trim"`
+	Email              string  `json:"email" binding:"omitempty,email-valid" conform:"trim,lowercase"`
+	Phone              string  `json:"phone" binding:"required,max=20" conform:"trim"`
+	Address            string  `json:"address" binding:"required,max=500" conform:"trim"`
+	City               string  `json:"city" binding:"max=100" conform:"trim"`
+	Country            string  `json:"country" binding:"max=100" conform:"trim"`
+	RegistrationNumber string  `json:"registration_number" binding:"max=100" conform:"trim"`
+	Status             *string `json:"status" binding:"omitempty,oneof=active inactive suspended" conform:"trim,lowercase"`
 }
 
 // UpdateCompanyDto represents request to update transport company
 type UpdateCompanyDto struct {
-	Name         *string `json:"name" binding:"omitempty,min=3,max=255" conform:"trim"`
-	ContactName  *string `json:"contact_name" binding:"omitempty,max=255" conform:"trim"`
-	ContactPhone *string `json:"contact_phone" binding:"omitempty,max=50" conform:"trim"`
-	ContactEmail *string `json:"contact_email" binding:"omitempty,email-valid" conform:"trim,lowercase"`
-	Address      *string `json:"address" binding:"omitempty,max=500" conform:"trim"`
-	IsActive     *bool   `json:"is_active"`
+	Name    *string `json:"name" binding:"omitempty,min=3,max=255" conform:"trim"`
+	Email   *string `json:"email" binding:"omitempty,email-valid" conform:"trim,lowercase"`
+	Phone   *string `json:"phone" binding:"omitempty,max=20" conform:"trim"`
+	Address *string `json:"address" binding:"omitempty,max=500" conform:"trim"`
+	City    *string `json:"city" binding:"omitempty,max=100" conform:"trim"`
+	Country *string `json:"country" binding:"omitempty,max=100" conform:"trim"`
 }
 
 // === DTOs for Vehicle Management ===
@@ -154,7 +159,8 @@ type CreateVehicleDto struct {
 	Model       *string   `json:"model" binding:"omitempty,max=100" conform:"trim"`
 	Year        *int32    `json:"year" binding:"omitempty,min=1900,max=2100"`
 	Capacity    int32     `json:"capacity" binding:"required,min=1,max=200"`
-	VIN         *string   `json:"vin" binding:"omitempty,max=100" conform:"trim,uppercase"`
+	GPSDeviceID *string   `json:"gps_device_id" binding:"omitempty,max=100" conform:"trim,uppercase"`
+	Status      string    `json:"status" binding:"required,oneof=active inactive maintenance"`
 }
 
 // UpdateVehicleDto represents request to update vehicle
@@ -164,8 +170,8 @@ type UpdateVehicleDto struct {
 	Model       *string `json:"model" binding:"omitempty,max=100" conform:"trim"`
 	Year        *int32  `json:"year" binding:"omitempty,min=1900,max=2100"`
 	Capacity    *int32  `json:"capacity" binding:"omitempty,min=1,max=200"`
-	VIN         *string `json:"vin" binding:"omitempty,max=100" conform:"trim,uppercase"`
-	IsActive    *bool   `json:"is_active"`
+	GPSDeviceID *string `json:"gps_device_id" binding:"omitempty,max=100" conform:"trim,uppercase"`
+	Status      *string `json:"status" binding:"omitempty,oneof=active inactive maintenance"`
 }
 
 // === DTOs for Rider Management ===

@@ -65,7 +65,7 @@ func RegisterTrackingRoutes(router *gin.Engine, trackingController *controllers.
 
 		// Riders CRUD
 		protectedRoutes.POST("/riders", trackingController.CreateRider)
-		protectedRoutes.GET("/riders", trackingController.ListRiders)
+		protectedRoutes.GET("/companies/:company_id/riders", trackingController.ListRiders)
 		protectedRoutes.GET("/riders/:rider_id", trackingController.GetRider)
 		protectedRoutes.GET("/riders/:rider_id/status", trackingController.GetRiderStatus)
 		protectedRoutes.PATCH("/riders/:rider_id", trackingController.UpdateRider)
@@ -116,7 +116,7 @@ func RegisterTrackingRoutes(router *gin.Engine, trackingController *controllers.
 
 		// Riders CRUD
 		trackingGroup.POST("/riders", trackingController.CreateRider)
-		trackingGroup.GET("/riders", trackingController.ListRiders)
+		trackingGroup.GET("/companies/:company_id/riders", trackingController.ListRiders)
 		trackingGroup.GET("/riders/:rider_id", trackingController.GetRider)
 		trackingGroup.GET("/riders/:rider_id/status", trackingController.GetRiderStatus)
 		trackingGroup.PATCH("/riders/:rider_id", trackingController.UpdateRider)

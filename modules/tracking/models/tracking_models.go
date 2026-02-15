@@ -8,18 +8,17 @@ import (
 
 // TransportCompany represents a school, corporate, or transport provider
 type TransportCompany struct {
-	ID             uuid.UUID  `json:"id"`
-	TenantID       *uuid.UUID `json:"tenant_id"` // NULL for main database companies, UUID for tenant-specific
-	Name           string     `json:"name"`
-	CompanyType    string     `json:"company_type"` // school, corporate, transport_provider
-	ContactName    *string    `json:"contact_name"`
-	ContactPhone   *string    `json:"contact_phone"`
-	ContactEmail   *string    `json:"contact_email"`
-	Address        *string    `json:"address"`
-	ClientTenantID *uuid.UUID `json:"client_tenant_id"` // Tenant that has read-only access
-	IsActive       bool       `json:"is_active"`
-	CreatedAt      time.Time  `json:"created_at"`
-	UpdatedAt      time.Time  `json:"updated_at"`
+	ID                 uuid.UUID `json:"id"`
+	Name               string    `json:"name"`
+	Email              *string   `json:"email"`
+	Phone              *string   `json:"phone"`
+	Address            *string   `json:"address"`
+	City               *string   `json:"city"`
+	Country            *string   `json:"country"`
+	RegistrationNumber string    `json:"registration_number"`
+	Status             *string   `json:"status"`
+	CreatedAt          time.Time `json:"created_at"`
+	UpdatedAt          time.Time `json:"updated_at"`
 }
 
 // Vehicle represents a bus or van with GPS tracking
@@ -32,8 +31,8 @@ type Vehicle struct {
 	Model       *string   `json:"model"`
 	Year        *int32    `json:"year"`
 	Capacity    int32     `json:"capacity"`
-	VIN         *string   `json:"vin"` // Vehicle Identification Number
-	IsActive    bool      `json:"is_active"`
+	GPSDeviceID *string   `json:"gps_device_id"`
+	Status      string    `json:"status"` // active, inactive, maintenance
 	CreatedAt   time.Time `json:"created_at"`
 	UpdatedAt   time.Time `json:"updated_at"`
 }
@@ -79,7 +78,7 @@ type RouteStop struct {
 type Rider struct {
 	ID                    uuid.UUID  `json:"id"`
 	CompanyID             uuid.UUID  `json:"company_id"`
-	RiderType             string     `json:"rider_type"` // student, employee
+	RiderType             *string    `json:"rider_type"` // student, employee (nullable as it's not persisted)
 	FirstName             string     `json:"first_name"`
 	LastName              string     `json:"last_name"`
 	IdentificationNumber  *string    `json:"identification_number"`
@@ -147,7 +146,7 @@ type RouteAlert struct {
 	ID                    uuid.UUID  `json:"id"`
 	RouteID               uuid.UUID  `json:"route_id"`
 	VehicleID             *uuid.UUID `json:"vehicle_id"`
-	AlertType             string     `json:"alert_type"` // delay, breakdown, traffic, cancelled, other
+	AlertType             string     `json:"alert_type"` // delay, breakdown, traffic, cancelled, emergency, other
 	Severity              string     `json:"severity"`   // low, medium, high, critical
 	Title                 string     `json:"title"`
 	Message               string     `json:"message"`

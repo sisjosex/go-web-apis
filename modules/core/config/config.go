@@ -11,7 +11,8 @@ type CoreConfig struct {
 	DatabasePoolSize int32
 
 	// Migrations
-	EnabledModules []string // Which modules to run migrations for
+	EnabledModules         []string // Which modules to run migrations for
+	ExcludedFromMigration  []string // Modules to load but not migrate in Main DB (e.g., tracking for tenant-only mode)
 
 	// Server
 	AppMode string
@@ -51,6 +52,8 @@ func LoadCoreConfig() *CoreConfig {
 
 		// Migrations - comma-separated list: "core,auth,users"
 		EnabledModules: utils.GetEnvAsStringSlice("ENABLED_MODULES", []string{"core", "auth", "users"}),
+		// Modules to load but exclude from migrations (e.g., "tracking" for tenant-only mode)
+		ExcludedFromMigration: utils.GetEnvAsStringSlice("EXCLUDED_FROM_MIGRATION", []string{}),
 
 		// Server
 		AppMode: utils.GetEnv("APP_MODE", "debug"),
@@ -71,6 +74,24 @@ func LoadCoreConfig() *CoreConfig {
 // IsModuleEnabled checks if a module is enabled
 func (c *CoreConfig) IsModuleEnabled(moduleName string) bool {
 	for _, m := range c.EnabledModules {
+		if m == moduleName {
+			return true
+		}
+	}
+	return false
+}
+
+// GetEnabledModules returns the list of enabled modules
+func (c *CoreConfig) GetEnabledModules() []string {
+	if len(c.EnabledModules) == 0 {
+		return []string{"core"}
+	}
+	return c.EnabledModules
+}
+
+// IsModuleExcludedFromMigration checks if a module should not be migrated in this database
+func (c *CoreConfig) IsModuleExcludedFromMigration(moduleName string) bool {
+	for _, m := range c.ExcludedFromMigration {
 		if m == moduleName {
 			return true
 		}

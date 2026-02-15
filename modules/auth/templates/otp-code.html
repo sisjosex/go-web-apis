@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>{{.Title}}</title>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background-color: #f5f5f5;
+            margin: 0;
+            padding: 0;
+        }
+        .container {
+            background-color: #ffffff;
+            margin: 20px auto;
+            padding: 40px;
+            max-width: 500px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+        }
+        h2 {
+            color: #333333;
+            margin-top: 0;
+        }
+        .otp-section {
+            background-color: #f9f9f9;
+            padding: 20px;
+            border-radius: 6px;
+            text-align: center;
+            margin: 30px 0;
+            border-left: 4px solid #007bff;
+        }
+        .otp-code {
+            font-size: 36px;
+            font-weight: bold;
+            color: #007bff;
+            letter-spacing: 6px;
+            font-family: 'Courier New', monospace;
+            margin: 15px 0;
+        }
+        .expiration-info {
+            color: #666666;
+            font-size: 14px;
+            margin-top: 15px;
+        }
+        .warning {
+            background-color: #fff3cd;
+            border: 1px solid #ffc107;
+            color: #856404;
+            padding: 12px;
+            border-radius: 4px;
+            margin-top: 20px;
+            font-size: 13px;
+        }
+        .footer {
+            color: #999999;
+            font-size: 12px;
+            margin-top: 30px;
+            padding-top: 20px;
+            border-top: 1px solid #eeeeee;
+        }
+        a {
+            color: #007bff;
+            text-decoration: none;
+        }
+        a:hover {
+            text-decoration: underline;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h2>{{.Greeting}}</h2>
+        
+        <p>{{.Description}}</p>
+        
+        <div class="otp-section">
+            <p style="margin: 0 0 10px 0; color: #666666;">{{.CodeLabel}}</p>
+            <div class="otp-code">{{.OtpCode}}</div>
+            <div class="expiration-info">
+                ⏱️ {{.ExpirationText}}
+            </div>
+        </div>
+
+        <div class="warning">
+            <strong>⚠️ {{.SecurityWarning}}</strong>
+        </div>
+
+        <p style="margin-top: 20px;">
+            {{.IgnoreText}}
+        </p>
+
+        <div class="footer">
+            <p>{{.SignOff}}</p>
+            <p style="margin-top: 10px; color: #cccccc;">{{.AutomatedNote}}</p>
+        </div>
+    </div>
+</body>
+</html>

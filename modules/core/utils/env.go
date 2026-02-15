@@ -4,6 +4,7 @@ package utils
 import (
 	"log"
 	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
@@ -14,16 +15,59 @@ import (
 var envLoaded bool
 
 // LoadEnv loads environment variables from .env file if not already loaded
+// Smart detection: tries ENV_FILE env var, then auto-detects platform/tenant, then .env
 // This is called automatically by GetEnv functions, but can be called manually
 // Safe to call multiple times - only loads once
 func LoadEnv() {
 	if !envLoaded {
-		err := godotenv.Load()
+		// 1. Check if ENV_FILE is explicitly set
+		envFile := os.Getenv("ENV_FILE")
+		
+		// 2. Auto-detect from running app (platform or tenant)
+		if envFile == "" {
+			envFile = detectEnvFile()
+		}
+		
+		// 3. Default fallback
+		if envFile == "" {
+			envFile = ".env"
+		}
+
+		err := godotenv.Load(envFile)
 		if err != nil {
-			log.Println("No .env file found, using system environment variables")
+			log.Printf("📝 Loading environment from: %s", envFile)
+		} else {
+			log.Printf("✅ Loaded environment from: %s", envFile)
 		}
 		envLoaded = true
 	}
+}
+
+// detectEnvFile auto-detects which .env file to load based on the running app
+// Returns ".env.platform", ".env.tenant", or "" (fallback to .env)
+func detectEnvFile() string {
+	// Get the executable name or process name
+	// When using go run, this will be something like "platform" or "tenant"
+	// When using docker/binary, it will be the binary name
+	
+	// Try from ENV_FILE_AUTO if set
+	if autoDetect := os.Getenv("ENV_FILE_AUTO"); autoDetect != "" {
+		return autoDetect
+	}
+
+	// Check if running as platform or tenant based on command-line args or executable name
+	// os.Args[0] contains the program name
+	progName := filepath.Base(os.Args[0])
+	
+	switch {
+	case strings.Contains(progName, "platform"):
+		return ".env.platform"
+	case strings.Contains(progName, "tenant"):
+		return ".env.tenant"
+	}
+	
+	// No auto-detection possible, use default
+	return ""
 }
 
 // GetEnv gets an environment variable or returns a default value

@@ -84,6 +84,11 @@ func NewMigrationService(db *sql.DB, config *coreConfig.CoreConfig) *MigrationSe
 		if moduleName == "core" {
 			continue // Already added
 		}
+		// Skip modules that are excluded from migration (e.g., tracking in Main DB)
+		if config.IsModuleExcludedFromMigration(moduleName) {
+			log.Printf("⏭️  Skipping migrations for module '%s' (excluded by EXCLUDED_FROM_MIGRATION)", moduleName)
+			continue
+		}
 		if path, exists := allModules[moduleName]; exists {
 			modules = append(modules, Module{
 				Name:    moduleName,

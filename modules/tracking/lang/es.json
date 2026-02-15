@@ -1,6 +1,8 @@
 {
   "tracking.vehicle.not-found": "Vehículo no encontrado",
   "tracking.vehicle.already-exists": "Ya existe un vehículo con esta placa",
+  "tracking.vehicle.plate-already-exists": "El número de placa ya existe para esta empresa",
+  "tracking.vehicle.invalid-type": "Tipo de vehículo inválido. Debe ser: bus, van, o car",
   "tracking.vehicle.create.failed": "Error al crear vehículo",
   "tracking.vehicle.update.failed": "Error al actualizar vehículo",
   "tracking.vehicle.delete.failed": "Error al eliminar vehículo",
@@ -11,6 +13,8 @@
   "tracking.route.create.failed": "Error al crear ruta",
   "tracking.route.update.failed": "Error al actualizar ruta",
   "tracking.route.delete.failed": "Error al eliminar ruta",
+  "tracking.route.invalid-schedule-type": "Tipo de horario inválido. Debe ser: morning, afternoon, o custom",
+  "tracking.route.code-already-exists": "El código de ruta ya existe para esta empresa",
 
   "tracking.rider.not-found": "Pasajero (estudiante/empleado) no encontrado",
   "tracking.rider.already-exists": "El pasajero ya existe",
@@ -40,8 +44,9 @@
   "tracking.company.create.failed": "Error al crear empresa de transporte",
   "tracking.company.update.failed": "Error al actualizar empresa de transporte",
   "tracking.company.delete.failed": "Error al eliminar empresa de transporte",
-  "tracking.company.already-exists": "Ya existe una empresa de transporte con este nombre",
+  "tracking.company.already-exists": "Ya existe una empresa de transporte con este número de registro",
   "tracking.company.list.failed": "Error al obtener empresas de transporte",
+  "tracking.company.has-vehicles": "No se puede eliminar una empresa que tiene vehículos asociados",
 
   "tracking.vehicle.list.failed": "Error al obtener vehículos",
   "tracking.route.list.failed": "Error al obtener rutas",

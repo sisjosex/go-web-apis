@@ -33,6 +33,19 @@ type AuthConfig struct {
 	SMTPUser string
 	SMTPPass string
 	SMTPFrom string
+
+	// OTP Configuration
+	OTPExpiryMinutes   time.Duration
+	OTPLength          int
+	OTPMaxAttempts     int
+	OTPEnabledChannels []string // "whatsapp", "sms", "email"
+	OTPDefaultChannel  string   // "whatsapp"
+
+	// Twilio Configuration (for SMS and WhatsApp)
+	TwilioAccountSID     string
+	TwilioAuthToken      string
+	TwilioSmsNumber      string
+	TwilioWhatsAppNumber string
 }
 
 // LoadAuthConfig loads auth configuration from environment
@@ -64,5 +77,18 @@ func LoadAuthConfig() *AuthConfig {
 		SMTPUser: utils.GetEnv("SMTP_USER", ""),
 		SMTPPass: utils.GetEnv("SMTP_PASS", ""),
 		SMTPFrom: utils.GetEnv("SMTP_FROM", "noreply@example.com"),
+
+		// OTP Configuration
+		OTPExpiryMinutes:   utils.GetEnvAsDuration("OTP_EXPIRY_MINUTES", 10*time.Minute),
+		OTPLength:          utils.GetEnvAsInt("OTP_LENGTH", 6),
+		OTPMaxAttempts:     utils.GetEnvAsInt("OTP_MAX_ATTEMPTS", 5),
+		OTPEnabledChannels: utils.GetEnvAsStringSlice("OTP_ENABLED_CHANNELS", []string{"whatsapp", "sms", "email"}),
+		OTPDefaultChannel:  utils.GetEnv("OTP_DEFAULT_CHANNEL", "whatsapp"),
+
+		// Twilio Configuration
+		TwilioAccountSID:     utils.GetEnv("TWILIO_ACCOUNT_SID", ""),
+		TwilioAuthToken:      utils.GetEnv("TWILIO_AUTH_TOKEN", ""),
+		TwilioSmsNumber:      utils.GetEnv("TWILIO_SMS_NUMBER", ""),
+		TwilioWhatsAppNumber: utils.GetEnv("TWILIO_WHATSAPP_NUMBER", ""),
 	}
 }

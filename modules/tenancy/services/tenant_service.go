@@ -89,12 +89,11 @@ func (s *tenantService) runTenantMigrations(databaseURL string) error {
 	}
 
 	// Create a copy of core config with excluded modules
-	// Strategy: Only business data in Tenant DB, authentication in Main DB
+	// Strategy: Each Tenant DB has its own auth/users (local tenant users)
+	// Only tenancy management stays in Main DB (multi-tenancy control)
 	mainConfig := config.ModularAppConfig.Core
 	excludedModules := map[string]bool{
-		"auth":    true, // Authentication only in Main DB (centralized users)
 		"tenancy": true, // Tenant management only in Main DB
-		"users":   true, // User management only in Main DB
 	}
 
 	// Always include 'core' module for base extensions (uuid-ossp, etc.)
@@ -107,18 +106,19 @@ func (s *tenantService) runTenantMigrations(databaseURL string) error {
 
 	// Create a custom config for tenant migrations (copy of core config)
 	tenantCoreConfig := &coreConfig.CoreConfig{
-		DatabaseURL:      mainConfig.DatabaseURL,
-		DatabasePoolSize: mainConfig.DatabasePoolSize,
-		EnabledModules:   tenantEnabledModules, // Filtered list without 'tenancy'
-		AppMode:          mainConfig.AppMode,
-		AppHost:          mainConfig.AppHost,
-		AppPort:          mainConfig.AppPort,
-		FrontendURL:      mainConfig.FrontendURL,
-		LogLevel:         mainConfig.LogLevel,
-		AllowedOrigins:   mainConfig.AllowedOrigins,
+		DatabaseURL:           mainConfig.DatabaseURL,
+		DatabasePoolSize:      mainConfig.DatabasePoolSize,
+		EnabledModules:        tenantEnabledModules,              // Filtered list without 'tenancy', 'auth', 'users'
+		ExcludedFromMigration: mainConfig.ExcludedFromMigration, // Keep exclusions from main config
+		AppMode:               mainConfig.AppMode,
+		AppHost:               mainConfig.AppHost,
+		AppPort:               mainConfig.AppPort,
+		FrontendURL:           mainConfig.FrontendURL,
+		LogLevel:              mainConfig.LogLevel,
+		AllowedOrigins:        mainConfig.AllowedOrigins,
 	}
 
-	log.Printf("📋 Migrating modules for tenant DB: %v (excluded: tenancy, auth, users)", tenantEnabledModules)
+	log.Printf("📋 Migrating modules for tenant DB: %v (excluded: tenancy)", tenantEnabledModules)
 
 	// Create migration service for tenant database with filtered modules
 	migrationService := coreServices.NewMigrationService(sqlDB, tenantCoreConfig)

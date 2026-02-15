@@ -51,24 +51,24 @@ func (s *TrackingService) CreateRouteAlert(ctx context.Context, dto *models.Crea
 
 // ==================== COMPANIES CRUD ====================
 
-func (s *TrackingService) CreateCompany(ctx context.Context, dto *models.CreateCompanyDto, tenantID *uuid.UUID) (*models.TransportCompany, error) {
-	return s.trackingRepo.CreateCompany(ctx, dto, tenantID)
+func (s *TrackingService) CreateCompany(ctx context.Context, dto *models.CreateCompanyDto) (*models.TransportCompany, error) {
+	return s.trackingRepo.CreateCompany(ctx, dto)
 }
 
-func (s *TrackingService) UpdateCompany(ctx context.Context, companyID uuid.UUID, dto *models.UpdateCompanyDto, userTenantID *uuid.UUID) (*models.TransportCompany, error) {
-	return s.trackingRepo.UpdateCompany(ctx, companyID, dto, userTenantID)
+func (s *TrackingService) UpdateCompany(ctx context.Context, companyID uuid.UUID, dto *models.UpdateCompanyDto) (*models.TransportCompany, error) {
+	return s.trackingRepo.UpdateCompany(ctx, companyID, dto)
 }
 
-func (s *TrackingService) ListCompanies(ctx context.Context, userTenantID *uuid.UUID, companyType *string, isActive *bool) ([]*models.TransportCompany, error) {
-	return s.trackingRepo.ListCompanies(ctx, userTenantID, companyType, isActive)
+func (s *TrackingService) ListCompanies(ctx context.Context, registrationNumber *string, status *string) ([]*models.TransportCompany, error) {
+	return s.trackingRepo.ListCompanies(ctx, registrationNumber, status)
 }
 
-func (s *TrackingService) GetCompany(ctx context.Context, companyID uuid.UUID, userTenantID *uuid.UUID) (*models.TransportCompany, error) {
-	return s.trackingRepo.GetCompany(ctx, companyID, userTenantID)
+func (s *TrackingService) GetCompany(ctx context.Context, companyID uuid.UUID) (*models.TransportCompany, error) {
+	return s.trackingRepo.GetCompany(ctx, companyID)
 }
 
-func (s *TrackingService) DeleteCompany(ctx context.Context, companyID uuid.UUID, userTenantID *uuid.UUID) error {
-	return s.trackingRepo.DeleteCompany(ctx, companyID, userTenantID)
+func (s *TrackingService) DeleteCompany(ctx context.Context, companyID uuid.UUID) error {
+	return s.trackingRepo.DeleteCompany(ctx, companyID)
 }
 
 // ==================== VEHICLES CRUD ====================
@@ -81,8 +81,8 @@ func (s *TrackingService) UpdateVehicle(ctx context.Context, vehicleID uuid.UUID
 	return s.trackingRepo.UpdateVehicle(ctx, vehicleID, dto)
 }
 
-func (s *TrackingService) ListVehicles(ctx context.Context, companyID *uuid.UUID, vehicleType *string, isActive *bool) ([]*models.Vehicle, error) {
-	return s.trackingRepo.ListVehicles(ctx, companyID, vehicleType, isActive)
+func (s *TrackingService) ListVehicles(ctx context.Context, companyID *uuid.UUID, vehicleType *string, status *string) ([]*models.Vehicle, error) {
+	return s.trackingRepo.ListVehicles(ctx, companyID, vehicleType, status)
 }
 
 func (s *TrackingService) GetVehicle(ctx context.Context, vehicleID uuid.UUID) (*models.Vehicle, error) {
