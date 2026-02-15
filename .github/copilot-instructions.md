@@ -143,6 +143,35 @@ All CUD operations use stored procedures:
 - Repositories call these via `dbService.QueryRow(ctx, "SELECT * FROM auth.sp_...", params...)`
 - Example: `modules/auth/repositories/auth_repository.go` shows SP parameter binding pattern
 
+### Repository Scan Patterns
+
+When calling stored procedures that return multiple columns, **ALL columns must be scanned**:
+
+```go
+// ✅ CORRECT: Scan all columns returned by SP
+var message string
+err := row.Scan(
+    &otpRecord.Id,
+    &otpRecord.Destination,
+    &otpRecord.OtpChannel,
+    &otpRecord.ExpiresAt,
+    &message,  // Must include even if you ignore the value
+)
+
+// ❌ WRONG: Skipping columns causes mismatch error
+err := row.Scan(
+    &otpRecord.Id,
+    &otpRecord.Destination,
+    &otpRecord.OtpChannel,
+    &otpRecord.ExpiresAt,
+    // Missing message column
+)
+```
+
+**Error Pattern:** `sql: expected 4 destination columns, got 5`
+
+**Solution:** Count RETURN QUERY columns in SP and match Scan() exactly
+
 ### Connection Pooling
 - Database uses `pgxpool` with configurable pool size (`DATABASE_POOL_SIZE` env var)
 - Retry logic in `modules/core/services/database_service.go` handles startup connection failures
@@ -305,6 +334,54 @@ coreServices.LoadAllTranslations(languages)
 - Use `conform:"trim,lowercase"` for input sanitization
 - See `modules/auth/models/auth_dtos.go` for canonical examples
 
+### Pointer Types in DTOs (Optional Fields)
+
+For optional fields in DTOs, use **pointer types** with `binding:"omitempty"`:
+
+```go
+type LoginUserRequestDto struct {
+    Email    string     `json:"email" binding:"required,email-valid"`
+    Password string     `json:"password" binding:"required"`
+    DeviceId *uuid.UUID `json:"device_id" binding:"omitempty,uuidv4"`  // Optional UUID
+}
+```
+
+**Why pointers?**
+- JSON unmarshaling an omitted field into a non-pointer type creates a zero value (00000000-... for UUID)
+- Zero values fail validation even with `omitempty`
+- Pointer types remain `nil` when field is omitted
+- Validators can check `field.IsNil()` for pointer types
+
+**Validator Pattern** (for custom validators):
+```go
+func validateUUIDv4(field reflect.Value) error {
+    // Handle pointer types
+    if field.Kind().String() == "ptr" {
+        if field.IsNil() {
+            return nil // nil is acceptable with omitempty
+        }
+        field = field.Elem()
+    }
+    
+    // Handle uuid.UUID type
+    if field.Type() == reflect.TypeOf(uuid.UUID{}) {
+        id := field.Interface().(uuid.UUID)
+        if id == uuid.Nil {
+            return errors.New("Invalid UUID format")
+        }
+        return nil
+    }
+    
+    // Handle string type (parse UUID)
+    s := field.String()
+    if s == "" {
+        return nil
+    }
+    _, err := uuid.Parse(s)
+    return err
+}
+```
+
 ## Authentication & Authorization
 
 ### JWT Double-Token System
@@ -385,6 +462,246 @@ protectedRoutes.PATCH("/profile", controller.UpdateProfile)
 - User-Agent parsing via `uaparser` stores device/browser/OS in sessions
 - IP extraction: `utils.GetClientIp(c)` handles X-Forwarded-For
 - Logout invalidates sessions in database
+
+## OTP (One-Time Password) System
+
+### Architecture
+
+The OTP system uses a **Strategy Pattern** with pluggable providers for multi-channel authentication:
+
+```
+OtpController → OtpService → OtpProvider (interface)
+                                ├── EmailProvider
+                                ├── WhatsAppProvider  
+                                └── SmsProvider
+                         ↓
+                    OtpRepository → PostgreSQL (auth.otp_requests)
+```
+
+### Key Components
+
+**1. OTP Provider Interface** (`modules/auth/services/otp/otp_provider.go`)
+```go
+type OtpProvider interface {
+    SendOtp(ctx context.Context, destination, otpCode, lang string) (*time.Time, error)
+    IsEnabled() bool
+}
+```
+
+**2. Database Schema** (`modules/auth/migrations/20260116170950_table_otp_requests.up.sql`)
+- Table `auth.otp_requests` - Stores OTP codes for all channels (agnostic)
+- Stored Procedures:
+  - `sp_request_otp(destination, channel, code)` - Generate and store
+  - `sp_verify_otp(destination, code, channel, device_id, ...)` - Verify and create session
+
+**3. Stored Procedure Type Casting Rules** (CRITICAL)
+- **ALWAYS use explicit CAST to VARCHAR** in RETURN QUERY statements
+- PostgreSQL functions like `TRIM()`, `LOWER()` return TEXT by default
+- String concatenation also returns TEXT
+- **MUST match** the RETURNS TABLE definition exactly
+
+Example pattern:
+```sql
+RETURNS TABLE (
+    destination VARCHAR,
+    channel VARCHAR,
+    message TEXT
+) LANGUAGE plpgsql AS $$
+BEGIN
+    RETURN QUERY
+    SELECT 
+        CAST(TRIM(p_destination) AS VARCHAR),
+        CAST(LOWER(TRIM(p_channel)) AS VARCHAR),
+        'Message text'::TEXT;
+END;
+$$;
+```
+
+**4. Row Aliases in SELECT Statements** (CRITICAL)
+- Use table aliases in SELECT queries to avoid ambiguous column references
+- Example: `SELECT us.session_id FROM auth.user_sessions us WHERE us.user_id = ...`
+- NOT: `SELECT auth.user_sessions.session_id FROM auth.user_sessions WHERE ...`
+
+**5. Multilingual Template Support**
+- Single HTML template with placeholder structure: `{{.FieldName}}`
+- Language detection via middleware: `?lang=es` or `Accept-Language` header
+- Pass `lang` through context: `ctx = context.WithValue(ctx, "lang", lang)`
+- Providers retrieve translations: `coreUtils.GetTranslation(lang, "key")`
+- Create entries in `modules/auth/lang/{en,es}.json` for each placeholder
+
+Example template flow:
+```go
+// Controller
+lang := c.GetString("lang") // Set by middleware
+ctx = context.WithValue(c.Request.Context(), "lang", lang)
+
+// Service extracts lang from context
+lang := ctx.Value("lang").(string)
+provider.SendOtp(ctx, destination, code, lang)
+
+// Provider translates placeholders
+data := map[string]interface{}{
+    "OtpCode": code,
+    "Title": coreUtils.GetTranslation(lang, "otp.email.title"),
+    "Greeting": coreUtils.GetTranslation(lang, "otp.email.greeting"),
+    ...
+}
+```
+
+### Configuration
+
+Add to `modules/auth/config/config.go`:
+```go
+type AuthConfig struct {
+    OTPExpiryMinutes   int
+    OTPLength          int
+    OTPMaxAttempts     int
+    OTPEnabledChannels string // comma-separated: "email,whatsapp,sms"
+    OTPDefaultChannel  string
+}
+```
+
+Add to `.env` files:
+```env
+OTP_EXPIRY_MINUTES=10
+OTP_LENGTH=6
+OTP_MAX_ATTEMPTS=5
+OTP_ENABLED_CHANNELS=email,whatsapp,sms
+OTP_DEFAULT_CHANNEL=email
+```
+
+### API Endpoints
+
+**OTP Request (POST - multi-channel)**
+```
+POST   /api/v1/otp/email/request            # Email OTP
+POST   /api/v1/otp/whatsapp/request         # WhatsApp OTP
+POST   /api/v1/otp/sms/request              # SMS OTP
+```
+
+**OTP Verify (POST - single endpoint for all channels)**
+```
+POST   /api/v1/otp/verify                   # Verify any OTP channel
+```
+
+### Error Codes (PostgreSQL)
+
+Define in `modules/auth/migrations/sp_request_otp`:
+```
+O0001 - otp.destination.invalid  (destination is required/invalid)
+O0002 - otp.channel.invalid      (channel is required/invalid)
+O0003 - otp.code.invalid         (code must be 6 digits)
+O0004 - otp.not-found            (no valid OTP found)
+O0005 - otp.expired              (OTP has expired)
+O0006 - otp.invalid              (wrong OTP code)
+L0007 - user.login.device-id-required (device_id required)
+```
+
+### Common Issues & Solutions
+
+**Issue:** `"structure of query does not match function result type"` / `"Returned type text does not match expected type character varying"`
+- **Cause:** Missing explicit CAST in RETURN QUERY
+- **Solution:** Add `CAST(...AS VARCHAR)` for all VARCHAR columns
+
+**Issue:** `"column reference \"session_id\" is ambiguous"`
+- **Cause:** Not using table alias in SELECT
+- **Solution:** Use alias: `SELECT us.session_id FROM table us WHERE ...`
+
+**Issue:** `"ON CONFLICT DO UPDATE requires inference specification"`
+- **Cause:** No unique constraint defined for conflict target
+- **Solution:** Check for existing record first, then INSERT or UPDATE accordingly
+
+**Issue:** Repository scan error - column count mismatch
+- **Cause:** RETURN QUERY columns don't match Scan() parameters
+- **Solution:** Ensure repository scans ALL columns returned by SP (don't skip columns)
+
+## Provider/Strategy Pattern for Pluggable Features
+
+### When to Use Strategy Pattern
+
+Use the **Strategy Pattern** with a provider interface when you need:
+- Multiple implementations of similar functionality (e.g., OTP via Email, SMS, WhatsApp)
+- Pluggable/swappable implementations at runtime
+- Configuration-driven feature enablement
+- Clear separation of concerns
+
+### Example: OTP Providers
+
+**1. Define Provider Interface**
+```go
+// modules/auth/services/otp/otp_provider.go
+type OtpProvider interface {
+    SendOtp(ctx context.Context, destination, otpCode, lang string) (*time.Time, error)
+    IsEnabled() bool
+}
+```
+
+**2. Create Concrete Implementations**
+```go
+// modules/auth/services/otp/email_provider.go
+type EmailProvider struct {
+    emailService coreServices.EmailService
+}
+
+func (p *EmailProvider) SendOtp(ctx context.Context, destination, otpCode, lang string) (*time.Time, error) {
+    // Implementation
+}
+
+func (p *EmailProvider) IsEnabled() bool {
+    return true // Check config if needed
+}
+```
+
+**3. Register Providers in Routes**
+```go
+// modules/auth/routes/otp_routes.go
+providers := map[string]otp.OtpProvider{
+    "email":    otp.NewEmailProvider(emailService),
+    "whatsapp": otp.NewWhatsAppProvider(twilioClient),
+    "sms":      otp.NewSmsProvider(twilioClient),
+}
+
+otpService := services.NewOtpService(otpRepository, providers, authConfig)
+```
+
+**4. Service Selects Provider at Runtime**
+```go
+// modules/auth/services/otp_service.go
+func (s *OtpServiceImpl) RequestOtp(ctx context.Context, dto authModels.RequestOtpDto) (*authModels.RequestOtpResponse, error) {
+    provider, exists := s.providers[dto.Channel]
+    if !exists || !provider.IsEnabled() {
+        return nil, errors.New("Invalid or disabled OTP channel: " + dto.Channel)
+    }
+    
+    // Use provider
+    expiresAt, err := provider.SendOtp(ctx, dto.Destination, otpCode, lang)
+    // ...
+}
+```
+
+### Benefits
+
+- ✅ **Easy to add new providers** - Just implement interface and register
+- ✅ **Configuration-driven** - Enable/disable features via config
+- ✅ **Testable** - Mock providers in tests
+- ✅ **Separation of concerns** - Each provider handles its own logic
+- ✅ **Extensible** - Add Twilio, Firebase, custom SMS gateways, etc.
+
+### Context Propagation for Configuration
+
+Pass runtime configuration (like language) through context:
+
+```go
+// Controller injects context value
+lang := c.GetString("lang")
+ctx := context.WithValue(c.Request.Context(), "lang", lang)
+
+// Service extracts from context
+lang := ctx.Value("lang").(string)
+
+// Provider uses for dynamic behavior
+translations := coreUtils.GetTranslation(lang, "key")
+```
 
 ## Build & Deployment Strategy
 
