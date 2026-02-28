@@ -32,7 +32,7 @@ type LoginExternalRequestDto struct {
 	DeviceId       *uuid.UUID           `json:"device_id,omitempty" binding:"omitempty,uuidv4"`
 	FirstName      *string              `json:"first_name"`
 	LastName       *string              `json:"last_name"`
-	Email          *string              `form:"email" binding:"omitempty,email-valid" conform:"trim,lowercase"`
+	Email          *string              `json:"email" binding:"required,email-valid" conform:"trim,lowercase"`
 	Phone          *string              `json:"phone"`
 	Birthday       *coreModels.DateOnly `json:"birthday" time_format:"2006-01-02"`
 }
@@ -44,7 +44,7 @@ type LoginExternalDto struct {
 	DeviceId         *uuid.UUID           `json:"device_id,omitempty" binding:"omitempty,uuidv4"`
 	FirstName        *string              `json:"first_name"`
 	LastName         *string              `json:"last_name"`
-	Email            *string              `form:"email" binding:"omitempty,email-valid" conform:"trim,lowercase"`
+	Email            *string              `json:"email" binding:"required,email-valid" conform:"trim,lowercase"`
 	Phone            *string              `json:"phone"`
 	Birthday         *coreModels.DateOnly `json:"birthday" time_format:"2006-01-02"`
 	IpAddress        string               `json:"ip_address"`
@@ -224,14 +224,14 @@ type VerifyOtpDto struct {
 }
 
 // VerifyOtpResponse is the response after successfully verifying an OTP
+// Only returns JWT tokens - JWT contains all necessary info (user_id, session_id, claims, etc.)
+// If OTP is invalid/expired, API returns error instead
 type VerifyOtpResponse struct {
-	SessionId        uuid.UUID  `json:"session_id"`
-	UserId           *uuid.UUID `json:"user_id,omitempty"` // Null if user doesn't exist
-	UserExists       bool       `json:"user_exists"`       // Whether user was found
-	SystemRole       string     `json:"system_role,omitempty"`
-	SubscriptionPlan string     `json:"subscription_plan,omitempty"`
-	AccessToken      *string    `json:"access_token,omitempty"`  // JWT if user exists
-	RefreshToken     *string    `json:"refresh_token,omitempty"` // JWT if user exists
+	AccessToken  *string   `json:"access_token"`  // JWT access token
+	RefreshToken *string   `json:"refresh_token"` // JWT refresh token
+	SystemRole   string    `json:"-"`             // Internal field for JWT generation (not exposed in JSON)
+	SessionId    uuid.UUID `json:"-"`             // Internal field for JWT generation (not exposed in JSON)
+	UserId       uuid.UUID `json:"-"`             // Internal field for JWT generation (not exposed in JSON)
 }
 
 // OtpRequest represents an OTP record from the database

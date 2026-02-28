@@ -280,3 +280,11 @@ Estos ejemplos pueden ejecutarse en una terminal o Postman para interactuar con 
 _(Aquí puedes agregar una lista de códigos de error que pueda devolver el backend y su significado.)_
 
 ---
+
+
+## Integration Tests
+
+```sh
+go run ./cmd/testutil -reset
+go test -tags=integration ./modules/auth/tests
+```

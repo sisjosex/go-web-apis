@@ -67,7 +67,14 @@ func (uc *AuthController) Login(c *gin.Context) {
 
 	userAgent := c.GetHeader("User-Agent")
 
-	client := uc.parser.Parse(userAgent)
+	var deviceInfo, deviceOs string
+
+	// Parse user agent only if parser is available
+	if uc.parser != nil {
+		client := uc.parser.Parse(userAgent)
+		deviceInfo = strings.TrimSpace(client.Device.Family)
+		deviceOs = strings.TrimSpace(client.Os.Family + " " + client.Os.Major)
+	}
 
 	loginUser := authModels.LoginUserDto{
 		Email:    loginUserRequest.Email,
@@ -76,9 +83,16 @@ func (uc *AuthController) Login(c *gin.Context) {
 	}
 
 	loginUser.IpAddress = utils.GetClientIp(c)
-	loginUser.DeviceInfo = strings.TrimSpace(client.Device.Family)
-	loginUser.DeviceOs = strings.TrimSpace(client.Os.Family + " " + client.Os.Major)
-	loginUser.Browser = strings.TrimSpace(client.UserAgent.Family + " " + client.UserAgent.Major)
+	loginUser.DeviceInfo = deviceInfo
+	loginUser.DeviceOs = deviceOs
+
+	// Set browser info only if parser is available
+	var browser string
+	if uc.parser != nil {
+		client := uc.parser.Parse(userAgent)
+		browser = strings.TrimSpace(client.UserAgent.Family + " " + client.UserAgent.Major)
+	}
+	loginUser.Browser = browser
 	loginUser.UserAgent = userAgent
 
 	sessionUser, err := uc.authService.LoginUser(loginUser)
@@ -126,7 +140,15 @@ func (uc *AuthController) LoginFacebook(c *gin.Context) {
 
 	userAgent := c.GetHeader("User-Agent")
 
-	client := uc.parser.Parse(userAgent)
+	var deviceInfo, deviceOs, browser string
+
+	// Parse user agent only if parser is available
+	if uc.parser != nil {
+		client := uc.parser.Parse(userAgent)
+		deviceInfo = strings.TrimSpace(client.Device.Family)
+		deviceOs = strings.TrimSpace(client.Os.Family)
+		browser = strings.TrimSpace(client.UserAgent.Family)
+	}
 
 	loginExternal := authModels.LoginExternalDto{
 		AuthProviderId: loginExternalRequestDto.AuthProviderId,
@@ -139,9 +161,9 @@ func (uc *AuthController) LoginFacebook(c *gin.Context) {
 	}
 
 	loginExternal.IpAddress = utils.GetClientIp(c)
-	loginExternal.DeviceInfo = strings.TrimSpace(client.Device.Family)
-	loginExternal.DeviceOs = strings.TrimSpace(client.Os.Family)
-	loginExternal.Browser = strings.TrimSpace(client.UserAgent.Family)
+	loginExternal.DeviceInfo = deviceInfo
+	loginExternal.DeviceOs = deviceOs
+	loginExternal.Browser = browser
 	loginExternal.UserAgent = userAgent
 	// Facabeook Login
 	loginExternal.AuthProviderName = "facebook"
@@ -502,7 +524,7 @@ func (uc *AuthController) ChangePassword(ctx *gin.Context) {
 
 	changed, err := uc.authService.ChangePassword(changePasswordDto)
 	if err != nil {
-		ctx.JSON(http.StatusBadRequest, coreErrors.BuildError(ctx, err))
+		ctx.JSON(http.StatusUnauthorized, coreErrors.BuildError(ctx, err))
 		return
 	}
 

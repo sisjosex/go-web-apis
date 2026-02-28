@@ -6,6 +6,7 @@ import (
 	"josex/web/config"
 	coreConfig "josex/web/modules/core/config"
 	"log"
+	"os"
 	"time"
 
 	_ "github.com/golang-migrate/migrate/v4/database/postgres"
@@ -45,6 +46,9 @@ func (ds *databaseService) InitDatabase(ctx context.Context) {
 	coreConf := config.ModularAppConfig.Core
 	dataBaseUrl := coreConf.DatabaseURL
 
+	// Check if we should skip migrations (for tests)
+	skipMigrations := os.Getenv("SKIP_MIGRATIONS") == "true"
+
 	for {
 		pool, err := connectDatabase(ctx, dataBaseUrl, coreConf.DatabasePoolSize)
 		if err != nil {
@@ -53,7 +57,12 @@ func (ds *databaseService) InitDatabase(ctx context.Context) {
 
 		ds.pool = pool
 
-		// Run modular migrations
+		// Run modular migrations (unless skipped)
+		if skipMigrations {
+			log.Println("⏭️  Skipping migrations (SKIP_MIGRATIONS=true)")
+			return
+		}
+
 		if err := ds.runModularMigrations(dataBaseUrl); err == nil {
 			log.Println("✅ All modular migrations completed successfully")
 			return

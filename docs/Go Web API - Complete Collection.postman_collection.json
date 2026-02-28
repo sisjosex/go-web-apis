@@ -11,6 +11,82 @@
       "name": "Auth",
       "item": [
         {
+          "name": "Otp",
+          "item": [
+            {
+              "name": "Request Email",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  },
+                  {
+                    "key": "Accept-Language",
+                    "value": "en",
+                    "description": "Language: en/es"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"destination\": \"+1234567890\",\n  \"channel\": \"email\",\n  \"device_id\": \"9a46fccf-fdb6-4fee-bdfa-fbae006f97d3\"\n}"
+                },
+                "url": {
+                  "raw": "{{base_url}}/otp/email/request?lang=es",
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "path": [
+                    "otp",
+                    "email",
+                    "request"
+                  ],
+                  "query": [
+                    {
+                      "key": "lang",
+                      "value": "es"
+                    }
+                  ]
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "Verify",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  },
+                  {
+                    "key": "Accept-Language",
+                    "value": "en",
+                    "description": "Language: en/es"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n    \"device_id\": \"9a46fccf-fdb6-4fee-bdfa-fbae006f97d3\",\n    \"destination\": \"+1234567890\",\n    \"channel\": \"email\",\n    \"otp_code\": \"508169\"\n}"
+                },
+                "url": {
+                  "raw": "{{base_url}}/otp/verify",
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "path": [
+                    "otp",
+                    "verify"
+                  ]
+                }
+              },
+              "response": []
+            }
+          ]
+        },
+        {
           "name": "Login",
           "event": [
             {
@@ -61,8 +137,13 @@
             },
             "url": {
               "raw": "{{base_url}}/auth/login",
-              "host": ["{{base_url}}"],
-              "path": ["auth", "login"]
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "auth",
+                "login"
+              ]
             },
             "description": "Authenticate user with email/password. Returns JWT tokens that are automatically saved to environment."
           },
@@ -101,8 +182,14 @@
             },
             "url": {
               "raw": "{{base_url}}/auth/login/facebook",
-              "host": ["{{base_url}}"],
-              "path": ["auth", "login", "facebook"]
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "auth",
+                "login",
+                "facebook"
+              ]
             }
           },
           "response": []
@@ -136,8 +223,13 @@
             },
             "url": {
               "raw": "{{base_url}}/auth/register",
-              "host": ["{{base_url}}"],
-              "path": ["auth", "register"]
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "auth",
+                "register"
+              ]
             }
           },
           "response": []
@@ -174,8 +266,13 @@
             },
             "url": {
               "raw": "{{base_url}}/auth/refresh_token",
-              "host": ["{{base_url}}"],
-              "path": ["auth", "refresh_token"]
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "auth",
+                "refresh_token"
+              ]
             }
           },
           "response": []
@@ -213,8 +310,13 @@
             "header": [],
             "url": {
               "raw": "{{base_url}}/auth/profile",
-              "host": ["{{base_url}}"],
-              "path": ["auth", "profile"]
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "auth",
+                "profile"
+              ]
             },
             "description": "Get authenticated user profile (protected endpoint)"
           },
@@ -257,8 +359,13 @@
             },
             "url": {
               "raw": "{{base_url}}/auth/profile",
-              "host": ["{{base_url}}"],
-              "path": ["auth", "profile"]
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "auth",
+                "profile"
+              ]
             }
           },
           "response": []
@@ -289,8 +396,13 @@
             },
             "url": {
               "raw": "{{base_url}}/auth/password",
-              "host": ["{{base_url}}"],
-              "path": ["auth", "password"]
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "auth",
+                "password"
+              ]
             }
           },
           "response": []
@@ -321,8 +433,14 @@
             },
             "url": {
               "raw": "{{base_url}}/auth/email/verification",
-              "host": ["{{base_url}}"],
-              "path": ["auth", "email", "verification"]
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "auth",
+                "email",
+                "verification"
+              ]
             }
           },
           "response": []
@@ -343,8 +461,14 @@
             },
             "url": {
               "raw": "{{base_url}}/auth/email/verification",
-              "host": ["{{base_url}}"],
-              "path": ["auth", "email", "verification"]
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "auth",
+                "email",
+                "verification"
+              ]
             }
           },
           "response": []
@@ -365,8 +489,14 @@
             },
             "url": {
               "raw": "{{base_url}}/auth/password/reset",
-              "host": ["{{base_url}}"],
-              "path": ["auth", "password", "reset"]
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "auth",
+                "password",
+                "reset"
+              ]
             }
           },
           "response": []
@@ -387,8 +517,14 @@
             },
             "url": {
               "raw": "{{base_url}}/auth/password/reset",
-              "host": ["{{base_url}}"],
-              "path": ["auth", "password", "reset"]
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "auth",
+                "password",
+                "reset"
+              ]
             }
           },
           "response": []
@@ -424,8 +560,13 @@
             "header": [],
             "url": {
               "raw": "{{base_url}}/auth/logout",
-              "host": ["{{base_url}}"],
-              "path": ["auth", "logout"]
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "auth",
+                "logout"
+              ]
             }
           },
           "response": []
@@ -452,8 +593,12 @@
             "header": [],
             "url": {
               "raw": "{{base_url}}/users",
-              "host": ["{{base_url}}"],
-              "path": ["users"]
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "users"
+              ]
             },
             "description": "List all users (admin only)"
           },
@@ -501,8 +646,12 @@
             },
             "url": {
               "raw": "{{base_url}}/users",
-              "host": ["{{base_url}}"],
-              "path": ["users"]
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "users"
+              ]
             },
             "description": "Create new user (admin/super_admin only)"
           },
@@ -525,8 +674,13 @@
             "header": [],
             "url": {
               "raw": "{{base_url}}/users/{{user_id}}",
-              "host": ["{{base_url}}"],
-              "path": ["users", "{{user_id}}"]
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "users",
+                "{{user_id}}"
+              ]
             },
             "description": "Get user by ID (admin only)"
           },
@@ -558,8 +712,13 @@
             },
             "url": {
               "raw": "{{base_url}}/users/{{user_id}}",
-              "host": ["{{base_url}}"],
-              "path": ["users", "{{user_id}}"]
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "users",
+                "{{user_id}}"
+              ]
             },
             "description": "Update user details (admin only)"
           },
@@ -582,8 +741,13 @@
             "header": [],
             "url": {
               "raw": "{{base_url}}/users/{{user_id}}",
-              "host": ["{{base_url}}"],
-              "path": ["users", "{{user_id}}"]
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "users",
+                "{{user_id}}"
+              ]
             },
             "description": "Soft delete user (admin only)"
           },
@@ -640,8 +804,12 @@
             },
             "url": {
               "raw": "{{base_url}}/tenants",
-              "host": ["{{base_url}}"],
-              "path": ["tenants"]
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "tenants"
+              ]
             },
             "description": "Create a new tenant (super_admin only). Can optionally specify custom database_url."
           },
@@ -690,8 +858,13 @@
             },
             "url": {
               "raw": "{{base_url}}/tenants/self-service",
-              "host": ["{{base_url}}"],
-              "path": ["tenants", "self-service"]
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "tenants",
+                "self-service"
+              ]
             },
             "description": "Self-service tenant creation for authenticated users. Subject to plan limits."
           },
@@ -714,8 +887,13 @@
             "header": [],
             "url": {
               "raw": "{{base_url}}/tenants/my-tenants",
-              "host": ["{{base_url}}"],
-              "path": ["tenants", "my-tenants"]
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "tenants",
+                "my-tenants"
+              ]
             },
             "description": "Get list of tenants accessible to the current user"
           },
@@ -747,8 +925,13 @@
             },
             "url": {
               "raw": "{{base_url}}/tenants/{{tenant_slug}}",
-              "host": ["{{base_url}}"],
-              "path": ["tenants", "{{tenant_slug}}"]
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "tenants",
+                "{{tenant_slug}}"
+              ]
             },
             "description": "Update tenant information (owner/admin only)"
           },
@@ -780,8 +963,14 @@
             },
             "url": {
               "raw": "{{base_url}}/tenants/{{tenant_slug}}/users",
-              "host": ["{{base_url}}"],
-              "path": ["tenants", "{{tenant_slug}}", "users"]
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "tenants",
+                "{{tenant_slug}}",
+                "users"
+              ]
             },
             "description": "Add a user to the tenant with specified role (owner/admin only)"
           },
@@ -804,8 +993,15 @@
             "header": [],
             "url": {
               "raw": "{{base_url}}/tenants/{{tenant_slug}}/users/{{user_id}}",
-              "host": ["{{base_url}}"],
-              "path": ["tenants", "{{tenant_slug}}", "users", "{{user_id}}"]
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "tenants",
+                "{{tenant_slug}}",
+                "users",
+                "{{user_id}}"
+              ]
             },
             "description": "Remove a user from the tenant (owner/admin only)"
           },
@@ -837,8 +1033,14 @@
             },
             "url": {
               "raw": "{{base_url}}/tenants/{{tenant_slug}}/migrate",
-              "host": ["{{base_url}}"],
-              "path": ["tenants", "{{tenant_slug}}", "migrate"]
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "tenants",
+                "{{tenant_slug}}",
+                "migrate"
+              ]
             },
             "description": "Run database migrations on tenant database (super_admin only)"
           },
@@ -902,8 +1104,13 @@
                 },
                 "url": {
                   "raw": "{{base_url}}/tracking/companies",
-                  "host": ["{{base_url}}"],
-                  "path": ["tracking", "companies"]
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "path": [
+                    "tracking",
+                    "companies"
+                  ]
                 },
                 "description": "Create a transport company. Valid company_type values: school | corporate | transport_provider"
               },
@@ -931,8 +1138,13 @@
                 ],
                 "url": {
                   "raw": "{{base_url}}/tracking/companies",
-                  "host": ["{{base_url}}"],
-                  "path": ["tracking", "companies"]
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "path": [
+                    "tracking",
+                    "companies"
+                  ]
                 }
               },
               "response": []
@@ -959,8 +1171,14 @@
                 ],
                 "url": {
                   "raw": "{{base_url}}/tracking/companies/:company_id",
-                  "host": ["{{base_url}}"],
-                  "path": ["tracking", "companies", ":company_id"],
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "path": [
+                    "tracking",
+                    "companies",
+                    ":company_id"
+                  ],
                   "variable": [
                     {
                       "key": "company_id",
@@ -1001,8 +1219,14 @@
                 },
                 "url": {
                   "raw": "{{base_url}}/tracking/companies/:company_id",
-                  "host": ["{{base_url}}"],
-                  "path": ["tracking", "companies", ":company_id"],
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "path": [
+                    "tracking",
+                    "companies",
+                    ":company_id"
+                  ],
                   "variable": [
                     {
                       "key": "company_id",
@@ -1035,8 +1259,14 @@
                 ],
                 "url": {
                   "raw": "{{base_url}}/tracking/companies/:company_id",
-                  "host": ["{{base_url}}"],
-                  "path": ["tracking", "companies", ":company_id"],
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "path": [
+                    "tracking",
+                    "companies",
+                    ":company_id"
+                  ],
                   "variable": [
                     {
                       "key": "company_id",
@@ -1101,8 +1331,13 @@
                 },
                 "url": {
                   "raw": "{{base_url}}/tracking/vehicles",
-                  "host": ["{{base_url}}"],
-                  "path": ["tracking", "vehicles"]
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "path": [
+                    "tracking",
+                    "vehicles"
+                  ]
                 }
               },
               "response": []
@@ -1129,8 +1364,13 @@
                 ],
                 "url": {
                   "raw": "{{base_url}}/tracking/vehicles?company_id={{company_id}}",
-                  "host": ["{{base_url}}"],
-                  "path": ["tracking", "vehicles"],
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "path": [
+                    "tracking",
+                    "vehicles"
+                  ],
                   "query": [
                     {
                       "key": "company_id",
@@ -1163,8 +1403,14 @@
                 ],
                 "url": {
                   "raw": "{{base_url}}/tracking/vehicles/:vehicle_id",
-                  "host": ["{{base_url}}"],
-                  "path": ["tracking", "vehicles", ":vehicle_id"],
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "path": [
+                    "tracking",
+                    "vehicles",
+                    ":vehicle_id"
+                  ],
                   "variable": [
                     {
                       "key": "vehicle_id",
@@ -1205,8 +1451,14 @@
                 },
                 "url": {
                   "raw": "{{base_url}}/tracking/vehicles/:vehicle_id",
-                  "host": ["{{base_url}}"],
-                  "path": ["tracking", "vehicles", ":vehicle_id"],
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "path": [
+                    "tracking",
+                    "vehicles",
+                    ":vehicle_id"
+                  ],
                   "variable": [
                     {
                       "key": "vehicle_id",
@@ -1238,8 +1490,13 @@
                 },
                 "url": {
                   "raw": "{{base_url}}/tracking/locations",
-                  "host": ["{{base_url}}"],
-                  "path": ["tracking", "locations"]
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "path": [
+                    "tracking",
+                    "locations"
+                  ]
                 },
                 "description": "GPS device endpoint (no auth required, uses API key)"
               },
@@ -1267,8 +1524,15 @@
                 ],
                 "url": {
                   "raw": "{{base_url}}/tracking/vehicles/:vehicle_id/location",
-                  "host": ["{{base_url}}"],
-                  "path": ["tracking", "vehicles", ":vehicle_id", "location"],
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "path": [
+                    "tracking",
+                    "vehicles",
+                    ":vehicle_id",
+                    "location"
+                  ],
                   "variable": [
                     {
                       "key": "vehicle_id",
@@ -1302,8 +1566,14 @@
                 ],
                 "url": {
                   "raw": "{{base_url}}/tracking/vehicles/:vehicle_id",
-                  "host": ["{{base_url}}"],
-                  "path": ["tracking", "vehicles", ":vehicle_id"],
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "path": [
+                    "tracking",
+                    "vehicles",
+                    ":vehicle_id"
+                  ],
                   "variable": [
                     {
                       "key": "vehicle_id",
@@ -1365,8 +1635,13 @@
                 },
                 "url": {
                   "raw": "{{base_url}}/tracking/routes",
-                  "host": ["{{base_url}}"],
-                  "path": ["tracking", "routes"]
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "path": [
+                    "tracking",
+                    "routes"
+                  ]
                 }
               },
               "response": []
@@ -1401,8 +1676,14 @@
                 },
                 "url": {
                   "raw": "{{base_url}}/tracking/routes/:route_id",
-                  "host": ["{{base_url}}"],
-                  "path": ["tracking", "routes", ":route_id"],
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "path": [
+                    "tracking",
+                    "routes",
+                    ":route_id"
+                  ],
                   "variable": [
                     {
                       "key": "route_id",
@@ -1435,8 +1716,13 @@
                 ],
                 "url": {
                   "raw": "{{base_url}}/tracking/routes?company_id={{company_id}}",
-                  "host": ["{{base_url}}"],
-                  "path": ["tracking", "routes"],
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "path": [
+                    "tracking",
+                    "routes"
+                  ],
                   "query": [
                     {
                       "key": "company_id",
@@ -1469,8 +1755,14 @@
                 ],
                 "url": {
                   "raw": "{{base_url}}/tracking/routes/:route_id",
-                  "host": ["{{base_url}}"],
-                  "path": ["tracking", "routes", ":route_id"],
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "path": [
+                    "tracking",
+                    "routes",
+                    ":route_id"
+                  ],
                   "variable": [
                     {
                       "key": "route_id",
@@ -1503,8 +1795,15 @@
                 ],
                 "url": {
                   "raw": "{{base_url}}/tracking/routes/:route_id/status",
-                  "host": ["{{base_url}}"],
-                  "path": ["tracking", "routes", ":route_id", "status"],
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "path": [
+                    "tracking",
+                    "routes",
+                    ":route_id",
+                    "status"
+                  ],
                   "variable": [
                     {
                       "key": "route_id",
@@ -1538,8 +1837,14 @@
                 ],
                 "url": {
                   "raw": "{{base_url}}/tracking/routes/:route_id",
-                  "host": ["{{base_url}}"],
-                  "path": ["tracking", "routes", ":route_id"],
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "path": [
+                    "tracking",
+                    "routes",
+                    ":route_id"
+                  ],
                   "variable": [
                     {
                       "key": "route_id",
@@ -1599,8 +1904,13 @@
                 },
                 "url": {
                   "raw": "{{base_url}}/tracking/route-stops",
-                  "host": ["{{base_url}}"],
-                  "path": ["tracking", "route-stops"]
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "path": [
+                    "tracking",
+                    "route-stops"
+                  ]
                 }
               },
               "response": []
@@ -1627,8 +1937,15 @@
                 ],
                 "url": {
                   "raw": "{{base_url}}/tracking/routes/:route_id/stops",
-                  "host": ["{{base_url}}"],
-                  "path": ["tracking", "routes", ":route_id", "stops"],
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "path": [
+                    "tracking",
+                    "routes",
+                    ":route_id",
+                    "stops"
+                  ],
                   "variable": [
                     {
                       "key": "route_id",
@@ -1661,8 +1978,14 @@
                 ],
                 "url": {
                   "raw": "{{base_url}}/tracking/route-stops/:stop_id",
-                  "host": ["{{base_url}}"],
-                  "path": ["tracking", "route-stops", ":stop_id"],
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "path": [
+                    "tracking",
+                    "route-stops",
+                    ":stop_id"
+                  ],
                   "variable": [
                     {
                       "key": "stop_id",
@@ -1724,8 +2047,13 @@
                 },
                 "url": {
                   "raw": "{{base_url}}/tracking/riders",
-                  "host": ["{{base_url}}"],
-                  "path": ["tracking", "riders"]
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "path": [
+                    "tracking",
+                    "riders"
+                  ]
                 }
               },
               "response": []
@@ -1752,8 +2080,15 @@
                 ],
                 "url": {
                   "raw": "{{base_url}}/tracking/companies/:company_id/riders",
-                  "host": ["{{base_url}}"],
-                  "path": ["tracking", "companies", ":company_id", "riders"],
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "path": [
+                    "tracking",
+                    "companies",
+                    ":company_id",
+                    "riders"
+                  ],
                   "variable": [
                     {
                       "key": "company_id",
@@ -1786,8 +2121,14 @@
                 ],
                 "url": {
                   "raw": "{{base_url}}/tracking/riders/:rider_id",
-                  "host": ["{{base_url}}"],
-                  "path": ["tracking", "riders", ":rider_id"],
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "path": [
+                    "tracking",
+                    "riders",
+                    ":rider_id"
+                  ],
                   "variable": [
                     {
                       "key": "rider_id",
@@ -1820,8 +2161,15 @@
                 ],
                 "url": {
                   "raw": "{{base_url}}/tracking/riders/:rider_id/status",
-                  "host": ["{{base_url}}"],
-                  "path": ["tracking", "riders", ":rider_id", "status"],
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "path": [
+                    "tracking",
+                    "riders",
+                    ":rider_id",
+                    "status"
+                  ],
                   "variable": [
                     {
                       "key": "rider_id",
@@ -1863,8 +2211,14 @@
                 },
                 "url": {
                   "raw": "{{base_url}}/tracking/riders/:rider_id",
-                  "host": ["{{base_url}}"],
-                  "path": ["tracking", "riders", ":rider_id"],
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "path": [
+                    "tracking",
+                    "riders",
+                    ":rider_id"
+                  ],
                   "variable": [
                     {
                       "key": "rider_id",
@@ -1897,8 +2251,14 @@
                 ],
                 "url": {
                   "raw": "{{base_url}}/tracking/riders/:rider_id",
-                  "host": ["{{base_url}}"],
-                  "path": ["tracking", "riders", ":rider_id"],
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "path": [
+                    "tracking",
+                    "riders",
+                    ":rider_id"
+                  ],
                   "variable": [
                     {
                       "key": "rider_id",
@@ -1939,8 +2299,13 @@
                 },
                 "url": {
                   "raw": "{{base_url}}/tracking/assignments",
-                  "host": ["{{base_url}}"],
-                  "path": ["tracking", "assignments"]
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "path": [
+                    "tracking",
+                    "assignments"
+                  ]
                 }
               },
               "response": []
@@ -1967,8 +2332,13 @@
                 ],
                 "url": {
                   "raw": "{{base_url}}/tracking/assignments?route_id={{route_id}}&is_active=true",
-                  "host": ["{{base_url}}"],
-                  "path": ["tracking", "assignments"],
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "path": [
+                    "tracking",
+                    "assignments"
+                  ],
                   "query": [
                     {
                       "key": "route_id",
@@ -2005,8 +2375,14 @@
                 ],
                 "url": {
                   "raw": "{{base_url}}/tracking/assignments/:assignment_id",
-                  "host": ["{{base_url}}"],
-                  "path": ["tracking", "assignments", ":assignment_id"],
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "path": [
+                    "tracking",
+                    "assignments",
+                    ":assignment_id"
+                  ],
                   "variable": [
                     {
                       "key": "assignment_id",
@@ -2057,8 +2433,13 @@
                 },
                 "url": {
                   "raw": "{{base_url}}/tracking/events",
-                  "host": ["{{base_url}}"],
-                  "path": ["tracking", "events"]
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "path": [
+                    "tracking",
+                    "events"
+                  ]
                 }
               },
               "response": []
@@ -2098,8 +2479,13 @@
                 },
                 "url": {
                   "raw": "{{base_url}}/tracking/events",
-                  "host": ["{{base_url}}"],
-                  "path": ["tracking", "events"]
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "path": [
+                    "tracking",
+                    "events"
+                  ]
                 }
               },
               "response": []
@@ -2139,8 +2525,13 @@
                 },
                 "url": {
                   "raw": "{{base_url}}/tracking/events",
-                  "host": ["{{base_url}}"],
-                  "path": ["tracking", "events"]
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "path": [
+                    "tracking",
+                    "events"
+                  ]
                 }
               },
               "response": []
@@ -2180,8 +2571,13 @@
                 },
                 "url": {
                   "raw": "{{base_url}}/tracking/events",
-                  "host": ["{{base_url}}"],
-                  "path": ["tracking", "events"]
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "path": [
+                    "tracking",
+                    "events"
+                  ]
                 }
               },
               "response": []
@@ -2226,8 +2622,13 @@
                 },
                 "url": {
                   "raw": "{{base_url}}/tracking/alerts",
-                  "host": ["{{base_url}}"],
-                  "path": ["tracking", "alerts"]
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "path": [
+                    "tracking",
+                    "alerts"
+                  ]
                 }
               },
               "response": []
@@ -2267,8 +2668,13 @@
                 },
                 "url": {
                   "raw": "{{base_url}}/tracking/alerts",
-                  "host": ["{{base_url}}"],
-                  "path": ["tracking", "alerts"]
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "path": [
+                    "tracking",
+                    "alerts"
+                  ]
                 }
               },
               "response": []
@@ -2308,8 +2714,13 @@
                 },
                 "url": {
                   "raw": "{{base_url}}/tracking/alerts",
-                  "host": ["{{base_url}}"],
-                  "path": ["tracking", "alerts"]
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "path": [
+                    "tracking",
+                    "alerts"
+                  ]
                 }
               },
               "response": []
@@ -2349,8 +2760,13 @@
                 },
                 "url": {
                   "raw": "{{base_url}}/tracking/alerts",
-                  "host": ["{{base_url}}"],
-                  "path": ["tracking", "alerts"]
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "path": [
+                    "tracking",
+                    "alerts"
+                  ]
                 }
               },
               "response": []

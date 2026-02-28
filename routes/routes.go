@@ -25,6 +25,7 @@ import (
 	"time"
 
 	_ "josex/web/docs"
+	coreValidators "josex/web/modules/core/validators"
 
 	"github.com/didip/tollbooth/v7"
 	"github.com/didip/tollbooth_gin"
@@ -35,6 +36,8 @@ import (
 )
 
 func SetupRoutes(r *gin.Engine, dbService coreServices.DatabaseService) {
+	// Register custom validators (must be done before any validation runs)
+	coreValidators.RegisterValidations()
 
 	authConf := config.ModularAppConfig.Auth
 	var jwtService = authServices.NewJWTService(
@@ -44,9 +47,12 @@ func SetupRoutes(r *gin.Engine, dbService coreServices.DatabaseService) {
 		authConf.JWTRefreshExpiration,
 	)
 
+	// Try to load regexes from standard location
+	// If not found (e.g., in tests), use a basic parser
 	parser, err := uaparser.New("./config/regexes.yaml")
 	if err != nil {
-		log.Fatal(err)
+		log.Printf("⚠️  Warning: Could not load UA parser regexes: %v (using nil parser)", err)
+		parser = nil
 	}
 
 	// Core services
@@ -79,7 +85,7 @@ func SetupRoutes(r *gin.Engine, dbService coreServices.DatabaseService) {
 	{
 		// Register module routes
 		authRoutes.RegisterAuthRoutes(apiV1, authController, sessionController, jwtService)
-		authRoutes.RegisterOtpRoutes(apiV1, dbService, authConf)
+		authRoutes.RegisterOtpRoutes(apiV1, dbService, authConf, jwtService)
 		userRoutes.RegisterUserRoutes(apiV1, userController, jwtService)
 
 		// Get config

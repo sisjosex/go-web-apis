@@ -109,13 +109,8 @@ func (s *OtpServiceImpl) VerifyOtp(
 
 	response := &authModels.VerifyOtpResponse{
 		SessionId:  sessionUser.SessionId,
-		UserId:     &sessionUser.UserId,
-		UserExists: sessionUser.UserId != [16]byte{}, // UUID zero value check
-	}
-
-	if response.UserExists {
-		response.SystemRole = sessionUser.SystemRole
-		response.SubscriptionPlan = sessionUser.SubscriptionPlan
+		UserId:     sessionUser.UserId,
+		SystemRole: sessionUser.SystemRole,
 	}
 
 	return response, nil

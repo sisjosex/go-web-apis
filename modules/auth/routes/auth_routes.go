@@ -63,10 +63,15 @@ func RegisterAuthRoutes(
 // RegisterOtpRoutes registers all OTP-related routes
 // This is called from the main routes setup with auth config and database service
 func RegisterOtpRoutes(
-	authGroup *gin.RouterGroup,
+	apiV1Group *gin.RouterGroup,
 	dbService coreServices.DatabaseService,
 	authConfig *config.AuthConfig,
+	jwtService services.JWTService,
 ) {
-	// Setup OTP routes using the function from otp_routes.go
-	SetupOtpRoutes(authGroup, dbService, authConfig)
+	// Create auth routes group for OTP routes
+	authGroup := apiV1Group.Group("/auth")
+	{
+		// Setup OTP routes using the function from otp_routes.go
+		SetupOtpRoutes(authGroup, dbService, authConfig, jwtService)
+	}
 }

@@ -18,6 +18,7 @@ func SetupOtpRoutes(
 	authGroup *gin.RouterGroup,
 	dbService coreServices.DatabaseService,
 	authConfig *config.AuthConfig,
+	jwtService otpServices.JWTService,
 ) {
 	// Initialize OTP providers (WhatsApp, SMS, Email)
 	whatsappProvider := otpProviders.NewWhatsAppProvider(authConfig)
@@ -40,11 +41,12 @@ func SetupOtpRoutes(
 	// Initialize parser for User-Agent
 	parser, err := uaparser.New("./config/regexes.yaml")
 	if err != nil {
-		log.Fatal(err)
+		log.Printf("⚠️  Warning: Could not load UA parser regexes: %v (using nil parser)", err)
+		parser = nil
 	}
 
 	// Initialize controller
-	otpController := otpControllers.NewOtpController(otpService, parser)
+	otpController := otpControllers.NewOtpController(otpService, jwtService, parser)
 
 	// Setup routes
 	// OTP Request endpoints (per channel)
