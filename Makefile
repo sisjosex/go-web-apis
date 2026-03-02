@@ -158,7 +158,7 @@ test-all: db-reset
 # ════════════════════════════════════════════════════════════════
 db-reset:
 	@echo "🔄 Resetting test database..."
-	go run ./cmd/testutil -reset
+	go run ./cmd/testutil/main.go ./cmd/testutil/seed.go -reset
 
 # ════════════════════════════════════════════════════════════════
 # DOCKER

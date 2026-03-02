@@ -46,6 +46,7 @@ func setupTestDB() {
 	dbName := getDatabaseName()
 	recreateDatabase(dbName)
 	runMigrations()
+	seedDatabase()
 	fmt.Println("✅ Test database setup complete!")
 }
 
@@ -56,6 +57,7 @@ func resetTestDB() {
 	dbName := getDatabaseName()
 	recreateDatabase(dbName)
 	runMigrations()
+	seedDatabase()
 	fmt.Println("✅ Test database reset and ready!")
 }
 
@@ -140,6 +142,28 @@ func runMigrations() {
 	}
 
 	fmt.Println("✅ Migrations complete!")
+}
+
+func seedDatabase() {
+	fmt.Println("🌱 Seeding test data...")
+	databaseURL := coreUtils.GetEnv("DATABASE_URL", "")
+	if databaseURL == "" {
+		log.Fatal("❌ DATABASE_URL not set")
+	}
+
+	db, err := sql.Open("pgx", databaseURL)
+	if err != nil {
+		log.Fatalf("❌ Failed to connect to database: %v", err)
+	}
+	defer db.Close()
+
+	if err := db.Ping(); err != nil {
+		log.Fatalf("❌ Database connection failed: %v", err)
+	}
+
+	if err := seedTestData(db); err != nil {
+		log.Fatalf("❌ Seeding failed: %v", err)
+	}
 }
 
 func execSQL(database, query string) {

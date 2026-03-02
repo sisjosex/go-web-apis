@@ -246,6 +246,20 @@ func (h *ApiTestHelper) Login(email, password string) (map[string]interface{}, e
 	return response, nil
 }
 
+// LoginAsSuperAdmin logs in as the pre-seeded super_admin user
+// Email: superadmin@test.local
+// Password: SuperAdmin123!
+func (h *ApiTestHelper) LoginAsSuperAdmin() (map[string]interface{}, error) {
+	return h.Login("superadmin@test.local", "SuperAdmin123!")
+}
+
+// LoginAsAdmin logs in as the pre-seeded admin user
+// Email: admin@test.local
+// Password: Admin123!
+func (h *ApiTestHelper) LoginAsAdmin() (map[string]interface{}, error) {
+	return h.Login("admin@test.local", "Admin123!")
+}
+
 // RefreshToken refreshes the access token
 func (h *ApiTestHelper) RefreshToken() (string, error) {
 	body := map[string]interface{}{

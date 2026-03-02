@@ -249,7 +249,7 @@ BEGIN
     SELECT u.id, u.password, u.is_active, u.expiration_date, u.email_verified
     INTO v_user_id, v_password_hash, v_is_active, v_expiration_date, v_email_verified
     FROM auth.users u
-    WHERE u.email = lower_email
+    WHERE LOWER(u.email) = lower_email
     LIMIT 1;
 
     IF NOT FOUND THEN
