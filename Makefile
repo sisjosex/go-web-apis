@@ -128,7 +128,7 @@ dev-tenant:
 # TESTS
 # ════════════════════════════════════════════════════════════════
 test: db-reset
-	go test -tags=integration $(GOFLAGS) ./modules/auth/tests -timeout=120s
+	go test -tags=integration $(GOFLAGS) ./modules/auth/tests ./modules/tenancy/tests -timeout=120s
 
 test-auth: db-reset
 	go test -tags=integration $(GOFLAGS) ./modules/auth/tests -timeout=120s
