@@ -8,6 +8,7 @@ import (
 	authServices "josex/web/modules/auth/services"
 	coreMiddleware "josex/web/modules/core/middleware"
 	coreServices "josex/web/modules/core/services"
+	inventoryRoutes "josex/web/modules/inventory/routes"
 	tenancyControllers "josex/web/modules/tenancy/controllers"
 	tenancyMW "josex/web/modules/tenancy/middleware"
 	tenancyRepos "josex/web/modules/tenancy/repositories"
@@ -118,6 +119,11 @@ func SetupRoutes(r *gin.Engine, dbService coreServices.DatabaseService) {
 			// Register tracking routes with tenant middleware and JWT service for auth
 			trackingRoutes.RegisterTrackingRoutes(r, trackingController, tenantMiddleware, jwtService)
 			log.Println("✅ Tracking module enabled and routes registered")
+		}
+
+		// Inventory module (if enabled)
+		if coreConf.IsModuleEnabled("inventory") {
+			inventoryRoutes.RegisterInventoryRoutes(apiV1, dbService)
 		}
 	}
 

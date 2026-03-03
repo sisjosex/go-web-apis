@@ -279,3 +279,9 @@ func ValidAssignmentDto() models.AssignRiderDto {
 		DropoffStopID: &dropoffStop,
 	}
 }
+
+// CleanTrackingDatabase cleans only tracking tables while preserving auth and system data
+// This is the proper cleanup for tracking-specific tests
+func CleanTrackingDatabase(helper *testhelpers.ApiTestHelper) error {
+	return helper.CleanDatabaseForSchemas("tracking")
+}

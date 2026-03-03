@@ -1,4 +1,3 @@
-// filepath: modules/auth/tests/auth_api_test.go
 //go:build integration
 // +build integration
 

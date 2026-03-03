@@ -61,7 +61,7 @@ func BuildError(c *gin.Context, err error) *ErrorResponse {
 	}
 
 	lang := getLangFromContext(c)
-	
+
 	// Try to unwrap and find PostgreSQL error
 	var pgErr *pgconn.PgError
 	if errors.As(err, &pgErr) {

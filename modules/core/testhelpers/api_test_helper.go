@@ -144,8 +144,13 @@ func SetupApiTest(t *testing.T) *ApiTestHelper {
 		t:         t,
 	}
 
-	// Clean database before test (silent)
-	_ = helper.CleanDatabase()
+	// Clean database before test (silent) - skip if DEBUG_KEEP_DB_DATA is set
+	skipClean := os.Getenv("DEBUG_KEEP_DB_DATA") == "true"
+	if !skipClean {
+		//_ = helper.CleanDatabase()
+	} else {
+		t.Logf("⚠️  DEBUG_KEEP_DB_DATA=true - Database will NOT be cleaned before test")
+	}
 
 	return helper
 }
@@ -155,9 +160,101 @@ func (h *ApiTestHelper) Close() {
 	// Database cleanup is handled by cmd/testutil between test runs
 }
 
-// CleanDatabase removes test data by truncating tables
+// CleanDatabase removes all test data by truncating business logic tables
+// Uses CleanDatabaseWithExclusions to exclude auth schema by default
 func (h *ApiTestHelper) CleanDatabase() error {
-	// Silent - don't print logs during test execution
+	return h.CleanDatabaseWithExclusions("auth") // Default: exclude auth schema
+}
+
+// CleanDatabaseWithExclusions removes test data from all schemas except specified exclusions
+// exclusions: schemas to exclude from truncation (e.g., "auth", "pg_catalog", "information_schema")
+// Pass empty args to clean all schemas (not recommended unless you know what you're doing)
+func (h *ApiTestHelper) CleanDatabaseWithExclusions(exclusions ...string) error {
+	if h.dbService == nil {
+		return nil
+	}
+
+	ctx := context.Background()
+
+	// Build schema filter to exclude specified schemas
+	excludeList := "'" + strings.Join(append(exclusions, "pg_catalog", "information_schema"), "','") + "'"
+	schemaFilter := `schemaname NOT IN (` + excludeList + `)`
+
+	// Get all tables from non-excluded schemas
+	query := `
+		SELECT schemaname, tablename FROM pg_tables 
+		WHERE ` + schemaFilter + `
+		  AND tablename NOT IN ('schema_migrations_core', 'schema_migrations_auth', 
+		                         'schema_migrations_users', 'schema_migrations_tenancy', 
+		                         'schema_migrations_tracking', 'schema_migrations_inventory')
+		ORDER BY schemaname, tablename
+	`
+
+	rows, err := h.dbService.Query(ctx, query)
+	if err != nil {
+		// Silently fail if we can't query tables (may not exist yet in test env)
+		return nil
+	}
+	defer rows.Close()
+
+	// Truncate each table that exists
+	for rows.Next() {
+		var schema, tableName string
+		if err := rows.Scan(&schema, &tableName); err != nil {
+			continue
+		}
+
+		// Truncate with CASCADE to handle foreign keys
+		fullName := schema + "." + tableName
+		_, _ = h.dbService.Execute(ctx, "TRUNCATE TABLE "+fullName+" CASCADE")
+	}
+
+	return nil
+}
+
+// CleanDatabaseForSchemas removes test data from specific schemas only
+// schemas: schemas to clean (e.g., "inventory", "tracking")
+// Always excludes: pg_catalog, information_schema
+func (h *ApiTestHelper) CleanDatabaseForSchemas(schemas ...string) error {
+	if h.dbService == nil || len(schemas) == 0 {
+		return nil
+	}
+
+	ctx := context.Background()
+
+	// Build schema filter - only specified schemas
+	schemaList := "'" + strings.Join(schemas, "','") + "'"
+	schemaFilter := `schemaname IN (` + schemaList + `)`
+
+	// Get all tables from specified schemas
+	query := `
+		SELECT schemaname, tablename FROM pg_tables 
+		WHERE ` + schemaFilter + `
+		  AND tablename NOT IN ('schema_migrations_core', 'schema_migrations_auth', 
+		                         'schema_migrations_users', 'schema_migrations_tenancy', 
+		                         'schema_migrations_tracking', 'schema_migrations_inventory')
+		ORDER BY schemaname, tablename
+	`
+
+	rows, err := h.dbService.Query(ctx, query)
+	if err != nil {
+		// Silently fail if we can't query tables (may not exist yet in test env)
+		return nil
+	}
+	defer rows.Close()
+
+	// Truncate each table that exists
+	for rows.Next() {
+		var schema, tableName string
+		if err := rows.Scan(&schema, &tableName); err != nil {
+			continue
+		}
+
+		// Truncate with CASCADE to handle foreign keys
+		fullName := schema + "." + tableName
+		_, _ = h.dbService.Execute(ctx, "TRUNCATE TABLE "+fullName+" CASCADE")
+	}
+
 	return nil
 }
 

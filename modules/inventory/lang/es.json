@@ -1,0 +1,7 @@
+{
+  "product.not-found": "Producto no encontrado",
+  "product.sku.already-exists": "El SKU del producto ya existe",
+  "inventory.insufficient-stock": "Stock insuficiente",
+  "inventory.invalid-movement-type": "Tipo de movimiento de inventario inválido",
+  "inventory.movement.not-found": "Movimiento no encontrado"
+}

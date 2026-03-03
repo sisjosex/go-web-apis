@@ -11,8 +11,8 @@ type CoreConfig struct {
 	DatabasePoolSize int32
 
 	// Migrations
-	EnabledModules         []string // Which modules to run migrations for
-	ExcludedFromMigration  []string // Modules to load but not migrate in Main DB (e.g., tracking for tenant-only mode)
+	EnabledModules        []string // Which modules to run migrations for
+	ExcludedFromMigration []string // Modules to load but not migrate in Main DB (e.g., tracking for tenant-only mode)
 
 	// Server
 	AppMode string
@@ -34,7 +34,7 @@ func DefaultCoreConfig() *CoreConfig {
 	return &CoreConfig{
 		DatabaseURL:      "postgres://postgres:postgres@localhost:5432/web?sslmode=disable",
 		DatabasePoolSize: 10,
-		EnabledModules:   []string{"core", "auth", "users"}, // All modules enabled by default
+		EnabledModules:   []string{"core", "auth", "users", "tracking", "inventory"}, // All modules enabled by default
 		AppMode:          "debug",
 		AppHost:          "127.0.0.1",
 		AppPort:          "8080",
