@@ -2,6 +2,7 @@ package repositories
 
 import (
 	"context"
+	"strings"
 	"time"
 
 	coreServices "josex/web/modules/core/services"
@@ -361,9 +362,16 @@ func (r *TrackingRepository) CreateRouteAlert(ctx context.Context, dto *models.C
 
 func (r *TrackingRepository) CreateCompany(ctx context.Context, dto *models.CreateCompanyDto) (*models.TransportCompany, error) {
 	var company models.TransportCompany
+
+	// Auto-generate registration number if not provided
+	registrationNumber := strings.TrimSpace(dto.RegistrationNumber)
+	if registrationNumber == "" {
+		registrationNumber = "REG-" + uuid.New().String()[:12]
+	}
+
 	err := r.dbService.QueryRow(ctx,
 		`SELECT * FROM tracking.sp_create_company($1, $2, $3, $4, $5, $6, $7, $8)`,
-		dto.Name, dto.Email, dto.Phone, dto.Address, dto.City, dto.Country, dto.RegistrationNumber, dto.Status,
+		dto.Name, dto.Email, dto.Phone, dto.Address, dto.City, dto.Country, registrationNumber, dto.Status,
 	).Scan(&company.ID, &company.Name, &company.Email, &company.Phone, &company.Address, &company.City, &company.Country, &company.RegistrationNumber, &company.Status, &company.CreatedAt, &company.UpdatedAt)
 	if err != nil {
 		return nil, &trackingErrors.TrackingError{Code: trackingErrors.CompanyCreateFailed, Err: err}

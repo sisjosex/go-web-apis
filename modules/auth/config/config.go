@@ -28,11 +28,12 @@ type AuthConfig struct {
 	EnableGoogleAuth   bool
 
 	// SMTP configuration
-	SMTPHost string
-	SMTPPort int
-	SMTPUser string
-	SMTPPass string
-	SMTPFrom string
+	SMTPEnabled bool
+	SMTPHost    string
+	SMTPPort    int
+	SMTPUser    string
+	SMTPPass    string
+	SMTPFrom    string
 
 	// OTP Configuration
 	OTPExpiryMinutes   time.Duration
@@ -72,11 +73,12 @@ func LoadAuthConfig() *AuthConfig {
 		EnableGoogleAuth:   utils.GetEnvAsBool("ENABLE_GOOGLE_AUTH", false),
 
 		// SMTP configuration for emails
-		SMTPHost: utils.GetEnv("SMTP_HOST", "mail.smtp2go.com"),
-		SMTPPort: utils.GetEnvAsInt("SMTP_PORT", 2525),
-		SMTPUser: utils.GetEnv("SMTP_USER", ""),
-		SMTPPass: utils.GetEnv("SMTP_PASS", ""),
-		SMTPFrom: utils.GetEnv("SMTP_FROM", "noreply@example.com"),
+		SMTPEnabled: utils.GetEnvAsBool("SMTP_ENABLED", false),
+		SMTPHost:    utils.GetEnv("SMTP_HOST", "mail.smtp2go.com"),
+		SMTPPort:    utils.GetEnvAsInt("SMTP_PORT", 2525),
+		SMTPUser:    utils.GetEnv("SMTP_USER", ""),
+		SMTPPass:    utils.GetEnv("SMTP_PASS", ""),
+		SMTPFrom:    utils.GetEnv("SMTP_FROM", "noreply@example.com"),
 
 		// OTP Configuration
 		OTPExpiryMinutes:   utils.GetEnvAsDuration("OTP_EXPIRY_MINUTES", 10*time.Minute),

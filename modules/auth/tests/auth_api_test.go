@@ -568,28 +568,28 @@ func TestGeneratePasswordResetTokenSuccess(t *testing.T) {
 	helper := testhelpers.SetupApiTest(t)
 	defer helper.Close()
 
+	// Use unique email to avoid conflicts with other tests
+	testEmail := "reset-" + uuid.New().String() + "@test.com"
+
 	// Register a user first
-	helper.Register("reset@test.com", "$Password2025", "Reset", "User")
+	helper.Register(testEmail, "$Password2025", "Reset", "User")
 
 	// Request password reset token
 	body := map[string]interface{}{
-		"email": "reset@test.com",
+		"email": testEmail,
 	}
 
 	w := helper.DoRequest("POST", "/auth/password/reset", body, map[string]string{})
 
-	// Password reset endpoint should respond (email sending may fail gracefully if template missing)
-	// 200 OK - successful
-	// 201 Created - token created
-	// 400 BadRequest - validation error
-	if w.Code == http.StatusOK || w.Code == http.StatusCreated {
-		assert.True(t, true)
-		t.Logf("✅ Password reset token generated")
+	// Should return 200 OK with token
+	if w.Code == http.StatusOK {
+		var response map[string]interface{}
+		err := json.Unmarshal(w.Body.Bytes(), &response)
+		assert.NoError(t, err, "Should unmarshal response")
+		assert.NotEmpty(t, response["token"], "Response should contain token")
+		t.Logf("✅ Password reset token generated successfully")
 	} else {
-		// Email sending may fail gracefully (template not found), but endpoint should respond
-		assert.True(t, w.Code == http.StatusBadRequest || w.Code == http.StatusInternalServerError,
-			fmt.Sprintf("Expected 200/201/400/500, got %d", w.Code))
-		t.Logf("⚠️  Password reset returned %d (email may have failed gracefully)", w.Code)
+		assert.Equal(t, http.StatusOK, w.Code, fmt.Sprintf("Expected 200, got %d: %s", w.Code, w.Body.String()))
 	}
 }
 
