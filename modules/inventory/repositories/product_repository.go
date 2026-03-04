@@ -31,7 +31,7 @@ func (r *ProductRepository) CreateProductWithVariants(
 
 	err := r.dbService.QueryRow(
 		ctx,
-		`SELECT product_id, sku, name, message FROM inventory.sp_create_product_with_variants($1, $2, $3, $4, $5::JSONB, NULL::UUID)`,
+		`SELECT CAST(product_id AS VARCHAR), sku, name, message FROM inventory.sp_create_product_with_variants($1, $2, $3, $4, $5::JSONB, NULL::UUID)`,
 		sku, name, description, basePrice, variantsJSON,
 	).Scan(&productID, &respSku, &respName, &message)
 
@@ -43,7 +43,7 @@ func (r *ProductRepository) CreateProductWithVariants(
 	}
 
 	if r.logger != nil {
-		r.logger.Printf("✅ Product created: %s (%s)", productID, sku)
+		r.logger.Printf("✅ Product created: ID=%s, SKU=%s, Name=%s", productID, respSku, respName)
 	}
 	return &models.CreateProductResponse{
 		ProductID: productID,

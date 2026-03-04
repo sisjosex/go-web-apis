@@ -16,14 +16,17 @@ func RegisterInventoryRoutes(
 	// Create repositories
 	productRepo := repositories.NewProductRepository(dbService, nil)
 	movementRepo := repositories.NewMovementRepository(dbService, nil)
+	stockRepo := repositories.NewStockRepository(dbService, nil)
 
 	// Create services
 	productService := inventoryServices.NewProductService(productRepo, nil)
 	movementService := inventoryServices.NewMovementService(movementRepo, nil)
+	stockService := inventoryServices.NewStockService(stockRepo)
 
 	// Create controllers
 	productController := controllers.NewProductController(productService)
 	movementController := controllers.NewMovementController(movementService)
+	stockController := controllers.NewStockController(stockService)
 
 	// Public routes
 	api := router.Group("/inventory")
@@ -38,4 +41,9 @@ func RegisterInventoryRoutes(
 	api.POST("/movements", movementController.RecordMovement)
 	api.GET("/movements/:id", movementController.GetMovement)
 	api.GET("/stock/:product_id", movementController.GetProductStock)
+
+	// Stock Management
+	api.POST("/reserve", stockController.ReserveStock)
+	api.POST("/release-reserved", stockController.ReleaseReservedStock)
+	api.PATCH("/products/:product_id/reorder-level", stockController.UpdateReorderLevel)
 }

@@ -720,7 +720,26 @@
                   "path": ["inventory", "stock", "{{product_id}}"]
                 }
               },
-              "response": []
+              "response": [
+                {
+                  "name": "Stock Response Example",
+                  "originalRequest": {
+                    "method": "GET",
+                    "header": [],
+                    "url": {
+                      "raw": "{{base_url}}/inventory/stock/{{product_id}}",
+                      "host": ["{{base_url}}"],
+                      "path": ["inventory", "stock", "{{product_id}}"]
+                    }
+                  },
+                  "status": "OK",
+                  "code": 200,
+                  "_postman_previewlanguage": "json",
+                  "header": [],
+                  "cookie": [],
+                  "body": "{\n  \"current_quantity\": 103,\n  \"reserved_quantity\": 5,\n  \"available_quantity\": 98,\n  \"reorder_level\": 20,\n  \"status\": \"ok\",\n  \"last_updated_at\": \"2026-03-04T12:40:02.586168Z\"\n}"
+                }
+              ]
             },
             {
               "name": "Get Movement",

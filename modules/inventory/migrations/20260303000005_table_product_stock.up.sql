@@ -3,6 +3,9 @@ CREATE TABLE IF NOT EXISTS inventory.product_stock (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     product_id UUID NOT NULL REFERENCES inventory.products(id) ON DELETE CASCADE,
     current_quantity DECIMAL(12,2) NOT NULL DEFAULT 0,
+    reserved_quantity DECIMAL(12,2) NOT NULL DEFAULT 0,
+    reorder_level DECIMAL(12,2) NOT NULL DEFAULT 10,
+    status VARCHAR(50) NOT NULL DEFAULT 'ok', -- ok, low, critical, out_of_stock
     last_updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     UNIQUE(product_id)
 );

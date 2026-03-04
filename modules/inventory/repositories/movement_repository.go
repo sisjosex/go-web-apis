@@ -89,10 +89,10 @@ func (r *MovementRepository) GetProductStock(ctx context.Context, productID stri
 
 	err := r.dbService.QueryRow(
 		ctx,
-		`SELECT id, product_id, current_quantity, last_updated_at 
+		`SELECT current_quantity, reserved_quantity, available_quantity, reorder_level, status, last_updated_at 
 		 FROM inventory.sp_get_product_stock($1)`,
 		productID,
-	).Scan(&stock.ID, &stock.ProductID, &stock.CurrentQuantity, &stock.LastUpdatedAt)
+	).Scan(&stock.CurrentQuantity, &stock.ReservedQuantity, &stock.AvailableQuantity, &stock.ReorderLevel, &stock.Status, &stock.LastUpdatedAt)
 
 	if err != nil {
 		if r.logger != nil {

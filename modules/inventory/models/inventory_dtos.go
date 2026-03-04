@@ -37,6 +37,25 @@ type RecordMovementResponse struct {
 	Message          string  `json:"message"`
 }
 
+type UpdateReorderLevelDto struct {
+	ReorderLevel float64 `json:"reorder_level" binding:"required,gte=0"`
+}
+
+type UpdateReorderLevelResponse struct {
+	ProductID    string  `json:"product_id"`
+	ReorderLevel float64 `json:"reorder_level"`
+	CurrentQty   float64 `json:"current_quantity"`
+	Status       string  `json:"status"`
+	Message      string  `json:"message"`
+}
+
+type StockReservationResponse struct {
+	ReservedQuantity  float64 `json:"reserved_quantity"`
+	AvailableQuantity float64 `json:"available_quantity"`
+	Status            string  `json:"status"`
+	Message           string  `json:"message"`
+}
+
 // Domain Models
 
 type Product struct {
@@ -51,10 +70,12 @@ type Product struct {
 }
 
 type ProductStock struct {
-	ID              string    `db:"id" json:"id"`
-	ProductID       string    `db:"product_id" json:"product_id"`
-	CurrentQuantity float64   `db:"current_quantity" json:"current_quantity"`
-	LastUpdatedAt   time.Time `db:"last_updated_at" json:"last_updated_at"`
+	CurrentQuantity   float64   `db:"current_quantity" json:"current_quantity"`
+	ReservedQuantity  float64   `db:"reserved_quantity" json:"reserved_quantity"`
+	AvailableQuantity float64   `db:"available_quantity" json:"available_quantity"`
+	ReorderLevel      float64   `db:"reorder_level" json:"reorder_level"`
+	Status            string    `db:"status" json:"status"` // ok, low, critical, out_of_stock
+	LastUpdatedAt     time.Time `db:"last_updated_at" json:"last_updated_at"`
 }
 
 type InventoryMovement struct {
