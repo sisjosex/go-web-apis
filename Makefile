@@ -1,4 +1,4 @@
-.PHONY: help swagger build build-platform build-tenant run run-platform run-tenant dev dev-platform dev-tenant test test-auth test-users test-core test-tenancy test-tracking test-inventory test-all db-reset docker-up docker-down clean
+.PHONY: help swagger build build-platform build-tenant run run-platform run-tenant dev dev-platform dev-tenant test test-auth test-users test-core test-tenancy test-tracking test-inventory test-sales test-all db-reset docker-up docker-down clean
 
 # Build variables
 BINARY_PLATFORM := bin/platform
@@ -34,6 +34,7 @@ help:
 	@echo "  make test-tenancy      - Run tenancy module tests"
 	@echo "  make test-tracking     - Run tracking module tests"
 	@echo "  make test-inventory    - Run inventory module tests"
+	@echo "  make test-sales        - Run sales module tests"
 	@echo "  make test-all          - Run all module tests"
 	@echo ""
 	@echo "🗄️  DATABASE:"
@@ -129,7 +130,7 @@ dev-tenant:
 # TESTS
 # ════════════════════════════════════════════════════════════════
 test: db-reset
-	go test -tags=integration $(GOFLAGS) ./modules/auth/tests ./modules/tenancy/tests ./modules/inventory/tests -timeout=120s
+	go test -tags=integration $(GOFLAGS) ./modules/auth/tests ./modules/tenancy/tests ./modules/inventory/tests ./modules/sales/tests -timeout=120s
 
 test-auth: db-reset
 	go test -tags=integration $(GOFLAGS) ./modules/auth/tests -timeout=120s
@@ -149,6 +150,9 @@ test-tracking: db-reset
 test-inventory: db-reset
 	go test -tags=integration $(GOFLAGS) ./modules/inventory/tests -timeout=120s
 
+test-sales: db-reset
+	go test -tags=integration $(GOFLAGS) ./modules/sales/tests -timeout=120s
+
 test-all: db-reset
 	@echo "🧪 Running all module tests..."
 	go test -tags=integration $(GOFLAGS) ./modules/auth/tests -timeout=120s
@@ -156,6 +160,7 @@ test-all: db-reset
 	go test -tags=integration $(GOFLAGS) ./modules/tenancy/tests -timeout=120s
 	go test -tags=integration $(GOFLAGS) ./modules/tracking/tests -timeout=120s
 	go test -tags=integration $(GOFLAGS) ./modules/inventory/tests -timeout=120s
+	go test -tags=integration $(GOFLAGS) ./modules/sales/tests -timeout=120s
 	@echo "✅ All tests completed!"
 
 # ════════════════════════════════════════════════════════════════

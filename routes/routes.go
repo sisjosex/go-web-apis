@@ -9,6 +9,10 @@ import (
 	coreMiddleware "josex/web/modules/core/middleware"
 	coreServices "josex/web/modules/core/services"
 	inventoryRoutes "josex/web/modules/inventory/routes"
+	salesControllers "josex/web/modules/sales/controllers"
+	salesRepos "josex/web/modules/sales/repositories"
+	salesRoutes "josex/web/modules/sales/routes"
+	salesServices "josex/web/modules/sales/services"
 	tenancyControllers "josex/web/modules/tenancy/controllers"
 	tenancyMW "josex/web/modules/tenancy/middleware"
 	tenancyRepos "josex/web/modules/tenancy/repositories"
@@ -124,6 +128,23 @@ func SetupRoutes(r *gin.Engine, dbService coreServices.DatabaseService) {
 		// Inventory module (if enabled)
 		if coreConf.IsModuleEnabled("inventory") {
 			inventoryRoutes.RegisterInventoryRoutes(apiV1, dbService)
+		}
+
+		// Sales module (if enabled)
+		if coreConf.IsModuleEnabled("sales") {
+			// Initialize sales services
+			customerRepository := salesRepos.NewCustomerRepository(dbService)
+			salesOrderRepository := salesRepos.NewSalesOrderRepository(dbService)
+
+			customerService := salesServices.NewCustomerService(customerRepository)
+			salesOrderService := salesServices.NewSalesOrderService(salesOrderRepository)
+
+			customerController := salesControllers.NewCustomerController(customerService)
+			salesOrderController := salesControllers.NewSalesOrderController(salesOrderService)
+
+			// Register sales routes
+			salesRoutes.SetupSalesRoutes(apiV1, customerController, salesOrderController)
+			log.Println("✅ Sales module enabled and routes registered")
 		}
 	}
 

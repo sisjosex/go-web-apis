@@ -1,0 +1,18 @@
+{
+  "customer.not-found": "Customer not found",
+  "customer.already-exists": "Customer with this email already exists",
+  "customer.invalid-email": "Invalid email address format",
+  "customer.invalid-phone-number": "Invalid phone number format",
+  "sales-order.not-found": "Sales order not found",
+  "sales-order.invalid-status": "Invalid order status",
+  "sales-order.cannot-modify": "Cannot modify this order due to its current status",
+  "sales-order.empty-items": "Order must contain at least one item",
+  "sales-order.exceeded-max-items": "Order exceeds maximum number of items allowed",
+  "sales-order.insufficient-inventory": "Insufficient inventory for one or more items",
+  "order-item.not-found": "Order item not found",
+  "order-item.invalid-qty": "Invalid quantity - must be greater than 0",
+  "order-item.product-not-found": "Product not found in inventory",
+  "payment.failed": "Payment processing failed",
+  "payment.already-processed": "Payment has already been processed for this order",
+  "payment.partial-refund-needed": "Partial refund needed for this order"
+}

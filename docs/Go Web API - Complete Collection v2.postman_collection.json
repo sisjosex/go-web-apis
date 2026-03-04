@@ -1,0 +1,1536 @@
+{
+  "info": {
+    "_postman_id": "6dab79b0-167d-4aed-8d7e-66d0d7aeceb6",
+    "name": "Go Web API - Complete Collection v2",
+    "description": "# Go Web API - Modular REST API\n\n## Environment Setup\n\n**Variables Required:**\n- `base_url`: http://localhost:8080/api/v1\n- `token`: (auto-set on login)\n- `refresh_token`: (auto-set on login)\n- `user_id`: (auto-set on login)\n- `tenant_slug`: acme6\n- `product_id`: (auto-set on product create)\n- `customer_id`: (auto-set on customer create)\n- `sales_order_id`: (auto-set on order create)\n\n## Modules\n\n- **Auth**: Authentication & session management (OTP, Login, Register, Password Reset)\n- **Users**: User CRUD (admin only)\n- **Tenants**: Multi-tenant management\n- **Inventory**: Product management, variants, stock tracking\n- **Sales**: Customer management, sales orders\n- **Tracking**: GPS tracking for transport companies\n\n## Quick Start\n\n1. Set `base_url` in environment\n2. Run `Auth > Login` to get tokens\n3. Tokens auto-save to environment\n4. All protected endpoints auto-refresh on 401",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+    "_exporter_id": "1058220"
+  },
+  "item": [
+    {
+      "name": "Auth",
+      "item": [
+        {
+          "name": "OTP",
+          "item": [
+            {
+              "name": "Request Email OTP",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  },
+                  {
+                    "key": "Accept-Language",
+                    "value": "en"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"destination\": \"user@example.com\",\n  \"channel\": \"email\"\n}"
+                },
+                "url": {
+                  "raw": "{{base_url}}/otp/email/request",
+                  "host": ["{{base_url}}"],
+                  "path": ["otp", "email", "request"]
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "Verify OTP",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"destination\": \"user@example.com\",\n  \"channel\": \"email\",\n  \"otp_code\": \"123456\",\n  \"device_id\": \"device-uuid-here\"\n}"
+                },
+                "url": {
+                  "raw": "{{base_url}}/otp/verify",
+                  "host": ["{{base_url}}"],
+                  "path": ["otp", "verify"]
+                }
+              },
+              "response": []
+            }
+          ]
+        },
+        {
+          "name": "Login",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status is 200', () => pm.response.to.have.status(200));",
+                  "const jsonData = pm.response.json();",
+                  "if (pm.response.code === 200) {",
+                  "    pm.environment.set('token', jsonData.access_token);",
+                  "    pm.environment.set('refresh_token', jsonData.refresh_token);",
+                  "    if (jsonData.user && jsonData.user.id) {",
+                  "        pm.environment.set('user_id', jsonData.user.id);",
+                  "    }",
+                  "    console.log('✅ Tokens saved to environment');",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Accept-Language",
+                "value": "en"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"email\": \"admin@example.com\",\n    \"password\": \"$Password2025\",\n    \"device_id\": \"device-uuid-here\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/auth/login",
+              "host": ["{{base_url}}"],
+              "path": ["auth", "login"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Register",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"first_name\": \"John\",\n    \"last_name\": \"Doe\",\n    \"email\": \"john.doe@example.com\",\n    \"password\": \"$Password2025\",\n    \"phone\": \"+1234567890\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/auth/register",
+              "host": ["{{base_url}}"],
+              "path": ["auth", "register"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Refresh Token",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "const jsonData = pm.response.json();",
+                  "if (pm.response.code === 200 && jsonData.access_token) {",
+                  "    pm.environment.set('token', jsonData.access_token);",
+                  "    console.log('✅ Token refreshed');",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"refresh_token\": \"{{refresh_token}}\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/auth/refresh_token",
+              "host": ["{{base_url}}"],
+              "path": ["auth", "refresh_token"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get Profile",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/auth/profile",
+              "host": ["{{base_url}}"],
+              "path": ["auth", "profile"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Update Profile",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"first_name\": \"John\",\n    \"last_name\": \"Updated\",\n    \"phone\": \"+1234567890\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/auth/profile",
+              "host": ["{{base_url}}"],
+              "path": ["auth", "profile"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Change Password",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"password_current\": \"$Password2025\",\n    \"password_new\": \"$NewPassword2025\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/auth/password",
+              "host": ["{{base_url}}"],
+              "path": ["auth", "password"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Logout",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/auth/logout",
+              "host": ["{{base_url}}"],
+              "path": ["auth", "logout"]
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Users",
+      "item": [
+        {
+          "name": "List Users",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/users",
+              "host": ["{{base_url}}"],
+              "path": ["users"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Create User",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "const jsonData = pm.response.json();",
+                  "if (jsonData.id) {",
+                  "    pm.environment.set('user_id', jsonData.id);",
+                  "    console.log('✅ User created:', jsonData.id);",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"first_name\": \"John\",\n    \"last_name\": \"Doe\",\n    \"email\": \"john.doe@example.com\",\n    \"password\": \"$SecurePass123!\",\n    \"phone\": \"+1234567890\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/users",
+              "host": ["{{base_url}}"],
+              "path": ["users"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get User",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/users/{{user_id}}",
+              "host": ["{{base_url}}"],
+              "path": ["users", "{{user_id}}"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Update User",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"first_name\": \"Jane\",\n    \"last_name\": \"Smith\",\n    \"phone\": \"+9876543210\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/users/{{user_id}}",
+              "host": ["{{base_url}}"],
+              "path": ["users", "{{user_id}}"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Delete User",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/users/{{user_id}}",
+              "host": ["{{base_url}}"],
+              "path": ["users", "{{user_id}}"]
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Inventory",
+      "item": [
+        {
+          "name": "Products",
+          "item": [
+            {
+              "name": "Create Product",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "exec": [
+                      "pm.test('Status is 201', () => pm.response.to.have.status(201));",
+                      "const jsonData = pm.response.json();",
+                      "if (jsonData.product_id) {",
+                      "    pm.environment.set('product_id', jsonData.product_id);",
+                      "    console.log('✅ Product created:', jsonData.product_id);",
+                      "}"
+                    ],
+                    "type": "text/javascript"
+                  }
+                }
+              ],
+              "request": {
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{token}}",
+                      "type": "string"
+                    }
+                  ]
+                },
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"sku\": \"PROD-001\",\n  \"name\": \"Premium Widget\",\n  \"base_price\": 99.99,\n  \"description\": \"High-quality widget for all purposes\"\n}"
+                },
+                "url": {
+                  "raw": "{{base_url}}/inventory/products",
+                  "host": ["{{base_url}}"],
+                  "path": ["inventory", "products"]
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "Create Product with Variants",
+              "request": {
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{token}}",
+                      "type": "string"
+                    }
+                  ]
+                },
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"sku\": \"ICECREAM-001\",\n  \"name\": \"Classic Ice Cream\",\n  \"base_price\": 5.99,\n  \"variants\": {\n    \"groups\": [\n      {\n        \"group_type\": \"flavor\",\n        \"is_required\": true,\n        \"max_selections\": 1,\n        \"options\": [\n          {\"name\": \"Vanilla\", \"modifier\": 0.00},\n          {\"name\": \"Chocolate\", \"modifier\": 0.50},\n          {\"name\": \"Strawberry\", \"modifier\": 0.50}\n        ]\n      },\n      {\n        \"group_type\": \"size\",\n        \"is_required\": true,\n        \"max_selections\": 1,\n        \"options\": [\n          {\"name\": \"Small\", \"modifier\": 0.00},\n          {\"name\": \"Medium\", \"modifier\": 1.00},\n          {\"name\": \"Large\", \"modifier\": 2.00}\n        ]\n      }\n    ]\n  }\n}"
+                },
+                "url": {
+                  "raw": "{{base_url}}/inventory/products",
+                  "host": ["{{base_url}}"],
+                  "path": ["inventory", "products"]
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "List Products",
+              "request": {
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{token}}",
+                      "type": "string"
+                    }
+                  ]
+                },
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{base_url}}/inventory/products?limit=20&offset=0",
+                  "host": ["{{base_url}}"],
+                  "path": ["inventory", "products"],
+                  "query": [
+                    {
+                      "key": "limit",
+                      "value": "20"
+                    },
+                    {
+                      "key": "offset",
+                      "value": "0"
+                    }
+                  ]
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "Get Product",
+              "request": {
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{token}}",
+                      "type": "string"
+                    }
+                  ]
+                },
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{base_url}}/inventory/products/{{product_id}}",
+                  "host": ["{{base_url}}"],
+                  "path": ["inventory", "products", "{{product_id}}"]
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "Get Product by SKU",
+              "request": {
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{token}}",
+                      "type": "string"
+                    }
+                  ]
+                },
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{base_url}}/inventory/products/sku/PROD-001",
+                  "host": ["{{base_url}}"],
+                  "path": ["inventory", "products", "sku", "PROD-001"]
+                }
+              },
+              "response": []
+            }
+          ]
+        },
+        {
+          "name": "Stock Management",
+          "item": [
+            {
+              "name": "Record Movement - Purchase",
+              "request": {
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{token}}",
+                      "type": "string"
+                    }
+                  ]
+                },
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"product_id\": \"{{product_id}}\",\n  \"movement_type\": \"purchase\",\n  \"quantity\": 100,\n  \"reference_number\": \"PO-2024-001\",\n  \"notes\": \"Initial stock purchase\"\n}"
+                },
+                "url": {
+                  "raw": "{{base_url}}/inventory/movements",
+                  "host": ["{{base_url}}"],
+                  "path": ["inventory", "movements"]
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "Record Movement - Sale",
+              "request": {
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{token}}",
+                      "type": "string"
+                    }
+                  ]
+                },
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"product_id\": \"{{product_id}}\",\n  \"movement_type\": \"sale\",\n  \"quantity\": 5,\n  \"reference_number\": \"ORD-2024-001\",\n  \"notes\": \"Customer order\"\n}"
+                },
+                "url": {
+                  "raw": "{{base_url}}/inventory/movements",
+                  "host": ["{{base_url}}"],
+                  "path": ["inventory", "movements"]
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "Record Movement - Adjustment",
+              "request": {
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{token}}",
+                      "type": "string"
+                    }
+                  ]
+                },
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"product_id\": \"{{product_id}}\",\n  \"movement_type\": \"adjustment\",\n  \"quantity\": -2,\n  \"reference_number\": \"ADJ-2024-001\",\n  \"notes\": \"Inventory count discrepancy\"\n}"
+                },
+                "url": {
+                  "raw": "{{base_url}}/inventory/movements",
+                  "host": ["{{base_url}}"],
+                  "path": ["inventory", "movements"]
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "Get Product Stock",
+              "request": {
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{token}}",
+                      "type": "string"
+                    }
+                  ]
+                },
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{base_url}}/inventory/stock/{{product_id}}",
+                  "host": ["{{base_url}}"],
+                  "path": ["inventory", "stock", "{{product_id}}"]
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "Get Movement",
+              "request": {
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{token}}",
+                      "type": "string"
+                    }
+                  ]
+                },
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{base_url}}/inventory/movements/:movement_id",
+                  "host": ["{{base_url}}"],
+                  "path": ["inventory", "movements", ":movement_id"]
+                }
+              },
+              "response": []
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Sales",
+      "item": [
+        {
+          "name": "Customers",
+          "item": [
+            {
+              "name": "Create Customer",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "exec": [
+                      "const jsonData = pm.response.json();",
+                      "if (jsonData && jsonData.id) {",
+                      "    pm.environment.set('customer_id', jsonData.id);",
+                      "    console.log('✅ Customer created:', jsonData.id);",
+                      "}"
+                    ],
+                    "type": "text/javascript"
+                  }
+                }
+              ],
+              "request": {
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{token}}",
+                      "type": "string"
+                    }
+                  ]
+                },
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"name\": \"John Smith\",\n  \"email\": \"john.smith@example.com\",\n  \"phone_number\": \"+1234567890\",\n  \"address\": \"123 Main Street\",\n  \"city\": \"New York\",\n  \"state\": \"NY\",\n  \"postal_code\": \"10001\",\n  \"country\": \"USA\"\n}"
+                },
+                "url": {
+                  "raw": "{{base_url}}/sales/customers",
+                  "host": ["{{base_url}}"],
+                  "path": ["sales", "customers"]
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "List Customers",
+              "request": {
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{token}}",
+                      "type": "string"
+                    }
+                  ]
+                },
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{base_url}}/sales/customers?limit=20&offset=0",
+                  "host": ["{{base_url}}"],
+                  "path": ["sales", "customers"],
+                  "query": [
+                    {
+                      "key": "limit",
+                      "value": "20"
+                    },
+                    {
+                      "key": "offset",
+                      "value": "0"
+                    }
+                  ]
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "Get Customer",
+              "request": {
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{token}}",
+                      "type": "string"
+                    }
+                  ]
+                },
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{base_url}}/sales/customers/{{customer_id}}",
+                  "host": ["{{base_url}}"],
+                  "path": ["sales", "customers", "{{customer_id}}"]
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "Update Customer",
+              "request": {
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{token}}",
+                      "type": "string"
+                    }
+                  ]
+                },
+                "method": "PATCH",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"name\": \"John Smith Updated\",\n  \"phone_number\": \"+1987654321\",\n  \"city\": \"Los Angeles\"\n}"
+                },
+                "url": {
+                  "raw": "{{base_url}}/sales/customers/{{customer_id}}",
+                  "host": ["{{base_url}}"],
+                  "path": ["sales", "customers", "{{customer_id}}"]
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "Delete Customer",
+              "request": {
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{token}}",
+                      "type": "string"
+                    }
+                  ]
+                },
+                "method": "DELETE",
+                "header": [],
+                "url": {
+                  "raw": "{{base_url}}/sales/customers/{{customer_id}}",
+                  "host": ["{{base_url}}"],
+                  "path": ["sales", "customers", "{{customer_id}}"]
+                }
+              },
+              "response": []
+            }
+          ]
+        },
+        {
+          "name": "Sales Orders",
+          "item": [
+            {
+              "name": "Create Sales Order",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "exec": [
+                      "const jsonData = pm.response.json();",
+                      "if (jsonData && jsonData.id) {",
+                      "    pm.environment.set('sales_order_id', jsonData.id);",
+                      "    console.log('✅ Sales Order created:', jsonData.id);",
+                      "}"
+                    ],
+                    "type": "text/javascript"
+                  }
+                }
+              ],
+              "request": {
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{token}}",
+                      "type": "string"
+                    }
+                  ]
+                },
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"customer_id\": \"{{customer_id}}\",\n  \"shipping_address\": \"456 Oak Avenue\",\n  \"notes\": \"Priority delivery\",\n  \"discount_amount\": 10.50,\n  \"items\": [\n    {\n      \"product_id\": \"{{product_id}}\",\n      \"quantity\": 2\n    }\n  ]\n}"
+                },
+                "url": {
+                  "raw": "{{base_url}}/sales/orders",
+                  "host": ["{{base_url}}"],
+                  "path": ["sales", "orders"]
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "List Sales Orders",
+              "request": {
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{token}}",
+                      "type": "string"
+                    }
+                  ]
+                },
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{base_url}}/sales/orders?limit=20&offset=0",
+                  "host": ["{{base_url}}"],
+                  "path": ["sales", "orders"],
+                  "query": [
+                    {
+                      "key": "limit",
+                      "value": "20"
+                    },
+                    {
+                      "key": "offset",
+                      "value": "0"
+                    }
+                  ]
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "Get Sales Order",
+              "request": {
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{token}}",
+                      "type": "string"
+                    }
+                  ]
+                },
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{base_url}}/sales/orders/{{sales_order_id}}",
+                  "host": ["{{base_url}}"],
+                  "path": ["sales", "orders", "{{sales_order_id}}"]
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "Update Sales Order",
+              "request": {
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{token}}",
+                      "type": "string"
+                    }
+                  ]
+                },
+                "method": "PATCH",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"shipping_address\": \"789 New Address\",\n  \"notes\": \"Updated delivery notes\",\n  \"discount_amount\": 15.00\n}"
+                },
+                "url": {
+                  "raw": "{{base_url}}/sales/orders/{{sales_order_id}}",
+                  "host": ["{{base_url}}"],
+                  "path": ["sales", "orders", "{{sales_order_id}}"]
+                }
+              },
+              "response": []
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Tenants",
+      "item": [
+        {
+          "name": "Create Tenant",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Acme Corporation\",\n  \"slug\": \"acme-corp-2024\",\n  \"database_url\": \"postgres://postgres:postgres@localhost:5432/acme_db?sslmode=disable\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/tenants",
+              "host": ["{{base_url}}"],
+              "path": ["tenants"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "List My Tenants",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/tenants/my-tenants",
+              "host": ["{{base_url}}"],
+              "path": ["tenants", "my-tenants"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Update Tenant",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Updated Tenant Name\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/tenants/{{tenant_slug}}",
+              "host": ["{{base_url}}"],
+              "path": ["tenants", "{{tenant_slug}}"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Add User to Tenant",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"user_id\": \"{{user_id}}\",\n  \"role\": \"member\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/tenants/{{tenant_slug}}/users",
+              "host": ["{{base_url}}"],
+              "path": ["tenants", "{{tenant_slug}}", "users"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Run Tenant Migrations",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{}"
+            },
+            "url": {
+              "raw": "{{base_url}}/tenants/{{tenant_slug}}/migrate",
+              "host": ["{{base_url}}"],
+              "path": ["tenants", "{{tenant_slug}}", "migrate"]
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Tracking",
+      "item": [
+        {
+          "name": "Companies",
+          "item": [
+            {
+              "name": "Create Company",
+              "request": {
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{token}}",
+                      "type": "string"
+                    }
+                  ]
+                },
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"name\": \"Transport ABC\",\n  \"company_type\": \"transport_provider\",\n  \"email\": \"contact@transportabc.com\",\n  \"phone\": \"+1234567890\",\n  \"address\": \"123 Main St, City\",\n  \"registration_number\": \"REG123456\"\n}"
+                },
+                "url": {
+                  "raw": "{{base_url}}/tracking/companies",
+                  "host": ["{{base_url}}"],
+                  "path": ["tracking", "companies"]
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "List Companies",
+              "request": {
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{token}}",
+                      "type": "string"
+                    }
+                  ]
+                },
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{base_url}}/tracking/companies",
+                  "host": ["{{base_url}}"],
+                  "path": ["tracking", "companies"]
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "Get Company",
+              "request": {
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{token}}",
+                      "type": "string"
+                    }
+                  ]
+                },
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{base_url}}/tracking/companies/:company_id",
+                  "host": ["{{base_url}}"],
+                  "path": ["tracking", "companies", ":company_id"]
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "Update Company",
+              "request": {
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{token}}",
+                      "type": "string"
+                    }
+                  ]
+                },
+                "method": "PATCH",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"name\": \"Transport ABC Updated\",\n  \"phone\": \"+1987654321\"\n}"
+                },
+                "url": {
+                  "raw": "{{base_url}}/tracking/companies/:company_id",
+                  "host": ["{{base_url}}"],
+                  "path": ["tracking", "companies", ":company_id"]
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "Delete Company",
+              "request": {
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{token}}",
+                      "type": "string"
+                    }
+                  ]
+                },
+                "method": "DELETE",
+                "header": [],
+                "url": {
+                  "raw": "{{base_url}}/tracking/companies/:company_id",
+                  "host": ["{{base_url}}"],
+                  "path": ["tracking", "companies", ":company_id"]
+                }
+              },
+              "response": []
+            }
+          ]
+        },
+        {
+          "name": "Vehicles",
+          "item": [
+            {
+              "name": "Create Vehicle",
+              "request": {
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{token}}",
+                      "type": "string"
+                    }
+                  ]
+                },
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"company_id\": \"company-uuid-here\",\n  \"plate_number\": \"ABC-12345\",\n  \"vehicle_type\": \"bus\",\n  \"brand\": \"Mercedes\",\n  \"model\": \"Sprinter\",\n  \"year\": 2023,\n  \"capacity\": 20,\n  \"gps_device_id\": \"GPS001\",\n  \"status\": \"active\"\n}"
+                },
+                "url": {
+                  "raw": "{{base_url}}/tracking/vehicles",
+                  "host": ["{{base_url}}"],
+                  "path": ["tracking", "vehicles"]
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "List Vehicles",
+              "request": {
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{token}}",
+                      "type": "string"
+                    }
+                  ]
+                },
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{base_url}}/tracking/vehicles",
+                  "host": ["{{base_url}}"],
+                  "path": ["tracking", "vehicles"]
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "Get Vehicle",
+              "request": {
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{token}}",
+                      "type": "string"
+                    }
+                  ]
+                },
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{base_url}}/tracking/vehicles/:vehicle_id",
+                  "host": ["{{base_url}}"],
+                  "path": ["tracking", "vehicles", ":vehicle_id"]
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "Update Vehicle",
+              "request": {
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{token}}",
+                      "type": "string"
+                    }
+                  ]
+                },
+                "method": "PATCH",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"status\": \"maintenance\",\n  \"capacity\": 18\n}"
+                },
+                "url": {
+                  "raw": "{{base_url}}/tracking/vehicles/:vehicle_id",
+                  "host": ["{{base_url}}"],
+                  "path": ["tracking", "vehicles", ":vehicle_id"]
+                }
+              },
+              "response": []
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "variable": [
+    {
+      "key": "base_url",
+      "value": "http://localhost:8080/api/v1",
+      "type": "string"
+    },
+    {
+      "key": "token",
+      "value": "",
+      "type": "string",
+      "description": "JWT Access Token (auto-set on login)"
+    },
+    {
+      "key": "refresh_token",
+      "value": "",
+      "type": "string",
+      "description": "JWT Refresh Token (auto-set on login)"
+    },
+    {
+      "key": "user_id",
+      "value": "",
+      "type": "string",
+      "description": "Current user ID"
+    },
+    {
+      "key": "tenant_slug",
+      "value": "acme-corp-2024",
+      "type": "string",
+      "description": "Tenant slug for multi-tenant operations"
+    },
+    {
+      "key": "product_id",
+      "value": "",
+      "type": "string",
+      "description": "Product ID (auto-set on product create)"
+    },
+    {
+      "key": "customer_id",
+      "value": "",
+      "type": "string",
+      "description": "Customer ID (auto-set on customer create)"
+    },
+    {
+      "key": "sales_order_id",
+      "value": "",
+      "type": "string",
+      "description": "Sales Order ID (auto-set on order create)"
+    },
+    {
+      "key": "company_id",
+      "value": "",
+      "type": "string",
+      "description": "Tracking company ID"
+    },
+    {
+      "key": "vehicle_id",
+      "value": "",
+      "type": "string",
+      "description": "Tracking vehicle ID"
+    }
+  ]
+}

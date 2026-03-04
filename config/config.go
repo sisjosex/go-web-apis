@@ -7,6 +7,7 @@ import (
 	coreConfig "josex/web/modules/core/config"
 	"josex/web/modules/core/utils"
 	inventoryConfig "josex/web/modules/inventory/config"
+	salesConfig "josex/web/modules/sales/config"
 	tenancyConfig "josex/web/modules/tenancy/config"
 	trackingConfig "josex/web/modules/tracking/config"
 	usersConfig "josex/web/modules/users/config"
@@ -20,6 +21,7 @@ type ModularConfig struct {
 	Tenancy   *tenancyConfig.TenancyConfig
 	Tracking  *trackingConfig.TrackingConfig
 	Inventory *inventoryConfig.InventoryConfig
+	Sales     *salesConfig.SalesConfig
 }
 
 // Global modular configuration (lazy-loaded on first access)
@@ -42,6 +44,7 @@ func GetConfig() *ModularConfig {
 			Tenancy:   tenancyConfig.LoadTenancyConfig(),
 			Tracking:  trackingConfig.LoadTrackingConfig(),
 			Inventory: inventoryConfig.LoadInventoryConfig(),
+			Sales:     salesConfig.LoadSalesConfig(),
 		}
 	})
 	return ModularAppConfig

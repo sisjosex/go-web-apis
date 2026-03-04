@@ -1,0 +1,18 @@
+{
+  "customer.not-found": "Cliente no encontrado",
+  "customer.already-exists": "Cliente con este email ya existe",
+  "customer.invalid-email": "Formato de email inválido",
+  "customer.invalid-phone-number": "Número de teléfono inválido",
+  "sales-order.not-found": "Orden de venta no encontrada",
+  "sales-order.invalid-status": "Estado de orden inválido",
+  "sales-order.cannot-modify": "No se puede modificar esta orden por su estado actual",
+  "sales-order.empty-items": "La orden debe contener al menos un item",
+  "sales-order.exceeded-max-items": "La orden excede el número máximo de items permitidos",
+  "sales-order.insufficient-inventory": "Inventario insuficiente para uno o más items",
+  "order-item.not-found": "Item de orden no encontrado",
+  "order-item.invalid-qty": "Cantidad inválida - debe ser mayor a 0",
+  "order-item.product-not-found": "Producto no encontrado en inventario",
+  "payment.failed": "El procesamiento del pago falló",
+  "payment.already-processed": "El pago ya ha sido procesado para esta orden",
+  "payment.partial-refund-needed": "Se requiere reembolso parcial para esta orden"
+}
