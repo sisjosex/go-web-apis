@@ -1,9 +1,5 @@
 {
   "product.not-found": "Producto no encontrado",
-  "product.sku.already-exists": "El SKU del producto ya existe",
-  "inventory.insufficient-stock": "Stock insuficiente",
-  "inventory.invalid-movement-type": "Tipo de movimiento de inventario inválido",
-  "inventory.movement.not-found": "Movimiento no encontrado",
   "batch.lot-number-required": "El número de lote es requerido",
   "batch.expiry-date-must-be-future": "La fecha de vencimiento debe ser en el futuro",
   "batch.purchase-date-cannot-be-future": "La fecha de compra no puede ser en el futuro",

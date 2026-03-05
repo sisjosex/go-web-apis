@@ -1,6 +1,10 @@
 package routes
 
 import (
+	jwtService "josex/web/modules/auth/services"
+	batchControllers "josex/web/modules/batches/controllers"
+	batchRepositories "josex/web/modules/batches/repositories"
+	batchServices "josex/web/modules/batches/services"
 	coreServices "josex/web/modules/core/services"
 	"josex/web/modules/inventory/controllers"
 	"josex/web/modules/inventory/repositories"
@@ -12,6 +16,7 @@ import (
 func RegisterInventoryRoutes(
 	router *gin.RouterGroup,
 	dbService coreServices.DatabaseService,
+	jwtSvc jwtService.JWTService,
 ) {
 	// Create repositories
 	productRepo := repositories.NewProductRepository(dbService, nil)
@@ -28,7 +33,7 @@ func RegisterInventoryRoutes(
 	movementController := controllers.NewMovementController(movementService)
 	stockController := controllers.NewStockController(stockService)
 
-	// Public routes
+	// Public routes (no auth required for reads)
 	api := router.Group("/inventory")
 
 	// Products
@@ -46,4 +51,15 @@ func RegisterInventoryRoutes(
 	api.POST("/reserve", stockController.ReserveStock)
 	api.POST("/release-reserved", stockController.ReleaseReservedStock)
 	api.PATCH("/products/:product_id/reorder-level", stockController.UpdateReorderLevel)
+
+	// Batches routes (integrated into inventory)
+	batchRepository := batchRepositories.NewBatchRepository(dbService)
+	batchService := batchServices.NewBatchService(batchRepository)
+	batchController := batchControllers.NewBatchController(batchService)
+
+	// Public batch routes
+	api.POST("/batches", batchController.CreateBatch)
+	api.GET("/batches/:id", batchController.GetBatch)
+	api.GET("/batches/product/:productId", batchController.ListBatchesByProduct)
+	api.GET("/batches/product/:productId/oldest", batchController.GetOldestBatchForSale)
 }

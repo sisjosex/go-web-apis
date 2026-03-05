@@ -838,6 +838,314 @@ func TestDataConsistency_MultipleReservations(t *testing.T) {
 }
 
 // ============================================
+// Batch Tests
+// ============================================
+
+func TestCreateBatch_Success(t *testing.T) {
+	helper := testhelpers.SetupApiTest(t)
+	defer helper.Close()
+
+	// Create a product
+	productBody := models.CreateProductDto{
+		SKU:       fmt.Sprintf("BATCH_TEST_%d", time.Now().UnixNano()),
+		Name:      "Batch Test Product",
+		BasePrice: 100.00,
+	}
+	w := helper.DoRequest("POST", "/inventory/products", productBody, map[string]string{})
+	assert.Equal(t, http.StatusCreated, w.Code, "Failed to create product")
+
+	var createdProduct models.CreateProductResponse
+	json.Unmarshal(w.Body.Bytes(), &createdProduct)
+
+	// Create batch
+	nextTwoWeeks := time.Now().AddDate(0, 0, 14) // Far future to be "active"
+	yesterday := time.Now().AddDate(0, 0, -1)
+
+	batchBody := map[string]interface{}{
+		"product_id":       createdProduct.ProductID,
+		"lot_number":       fmt.Sprintf("LOT_%d", time.Now().UnixNano()),
+		"purchase_date":    yesterday.Format("2006-01-02"),
+		"expiry_date":      nextTwoWeeks.Format("2006-01-02"),
+		"unit_cost":        50.00,
+		"initial_quantity": 100.0,
+	}
+
+	w2 := helper.DoRequest("POST", "/inventory/batches", batchBody, map[string]string{})
+	if w2.Code != http.StatusCreated {
+		t.Logf("CreateBatch error response: %s", w2.Body.String())
+	}
+	assert.Equal(t, http.StatusCreated, w2.Code, "Failed to create batch")
+
+	var batch models.BatchResponse
+	json.Unmarshal(w2.Body.Bytes(), &batch)
+
+	assert.NotEmpty(t, batch.ID)
+	assert.Equal(t, createdProduct.ProductID, batch.ProductID.String())
+	assert.Equal(t, 100.0, batch.CurrentQuantity)
+	assert.Equal(t, 50.00, batch.UnitCost)
+	assert.Equal(t, "active", batch.Status)
+}
+
+func TestCreateBatch_InvalidExpiryDate(t *testing.T) {
+	helper := testhelpers.SetupApiTest(t)
+	defer helper.Close()
+
+	// Create product
+	productBody := models.CreateProductDto{
+		SKU:       fmt.Sprintf("BATCH_INV_%d", time.Now().UnixNano()),
+		Name:      "Batch Invalid Test",
+		BasePrice: 100.00,
+	}
+	w := helper.DoRequest("POST", "/inventory/products", productBody, map[string]string{})
+	var createdProduct models.CreateProductResponse
+	json.Unmarshal(w.Body.Bytes(), &createdProduct)
+
+	// Try to create batch with past expiry date
+	yesterday := time.Now().AddDate(0, 0, -1)
+
+	batchBody := map[string]interface{}{
+		"product_id":       createdProduct.ProductID,
+		"lot_number":       fmt.Sprintf("LOT_%d", time.Now().UnixNano()),
+		"purchase_date":    yesterday.Format("2006-01-02"),
+		"expiry_date":      yesterday.Format("2006-01-02"),
+		"unit_cost":        50.00,
+		"initial_quantity": 100.0,
+	}
+
+	w2 := helper.DoRequest("POST", "/inventory/batches", batchBody, map[string]string{})
+	assert.Equal(t, http.StatusInternalServerError, w2.Code, "Should fail with past expiry date")
+}
+
+func TestGetBatch_Success(t *testing.T) {
+	helper := testhelpers.SetupApiTest(t)
+	defer helper.Close()
+
+	// Create product and batch
+	productBody := models.CreateProductDto{
+		SKU:       fmt.Sprintf("BATCH_GET_%d", time.Now().UnixNano()),
+		Name:      "Batch Get Test",
+		BasePrice: 100.00,
+	}
+	w := helper.DoRequest("POST", "/inventory/products", productBody, map[string]string{})
+	var createdProduct models.CreateProductResponse
+	json.Unmarshal(w.Body.Bytes(), &createdProduct)
+
+	// Create batch
+	tomorrow := time.Now().AddDate(0, 0, 1)
+	yesterday := time.Now().AddDate(0, 0, -1)
+	lotNumber := fmt.Sprintf("LOT_%d", time.Now().UnixNano())
+
+	batchBody := map[string]interface{}{
+		"product_id":       createdProduct.ProductID,
+		"lot_number":       lotNumber,
+		"purchase_date":    yesterday.Format("2006-01-02"),
+		"expiry_date":      tomorrow.Format("2006-01-02"),
+		"unit_cost":        50.00,
+		"initial_quantity": 100.0,
+	}
+
+	w2 := helper.DoRequest("POST", "/inventory/batches", batchBody, map[string]string{})
+	var createdBatch models.BatchResponse
+	json.Unmarshal(w2.Body.Bytes(), &createdBatch)
+
+	// Get batch
+	w3 := helper.DoRequest("GET", fmt.Sprintf("/inventory/batches/%s", createdBatch.ID), nil, map[string]string{})
+	assert.Equal(t, http.StatusOK, w3.Code)
+
+	var retrievedBatch models.BatchResponse
+	json.Unmarshal(w3.Body.Bytes(), &retrievedBatch)
+
+	assert.Equal(t, createdBatch.ID, retrievedBatch.ID)
+	assert.Equal(t, lotNumber, retrievedBatch.LotNumber)
+	assert.Equal(t, 100.0, retrievedBatch.CurrentQuantity)
+}
+
+func TestListBatchesByProduct_Success(t *testing.T) {
+	helper := testhelpers.SetupApiTest(t)
+	defer helper.Close()
+
+	// Create product
+	productBody := models.CreateProductDto{
+		SKU:       fmt.Sprintf("BATCH_LIST_%d", time.Now().UnixNano()),
+		Name:      "Batch List Test",
+		BasePrice: 100.00,
+	}
+	w := helper.DoRequest("POST", "/inventory/products", productBody, map[string]string{})
+	var createdProduct models.CreateProductResponse
+	json.Unmarshal(w.Body.Bytes(), &createdProduct)
+
+	// Create 3 batches
+	tomorrow := time.Now().AddDate(0, 0, 1)
+	nextWeek := time.Now().AddDate(0, 0, 7)
+	nextMonth := time.Now().AddDate(0, 1, 0)
+	yesterday := time.Now().AddDate(0, 0, -1)
+
+	batches := []map[string]interface{}{
+		{
+			"product_id":       createdProduct.ProductID,
+			"lot_number":       fmt.Sprintf("LOT1_%d", time.Now().UnixNano()),
+			"purchase_date":    yesterday.Format("2006-01-02"),
+			"expiry_date":      tomorrow.Format("2006-01-02"),
+			"unit_cost":        50.00,
+			"initial_quantity": 100.0,
+		},
+		{
+			"product_id":       createdProduct.ProductID,
+			"lot_number":       fmt.Sprintf("LOT2_%d", time.Now().UnixNano()),
+			"purchase_date":    yesterday.Format("2006-01-02"),
+			"expiry_date":      nextWeek.Format("2006-01-02"),
+			"unit_cost":        55.00,
+			"initial_quantity": 200.0,
+		},
+		{
+			"product_id":       createdProduct.ProductID,
+			"lot_number":       fmt.Sprintf("LOT3_%d", time.Now().UnixNano()),
+			"purchase_date":    yesterday.Format("2006-01-02"),
+			"expiry_date":      nextMonth.Format("2006-01-02"),
+			"unit_cost":        60.00,
+			"initial_quantity": 150.0,
+		},
+	}
+
+	for _, batch := range batches {
+		w := helper.DoRequest("POST", "/inventory/batches", batch, map[string]string{})
+		assert.Equal(t, http.StatusCreated, w.Code)
+	}
+
+	// List batches by product
+	w4 := helper.DoRequest("GET", fmt.Sprintf("/inventory/batches/product/%s", createdProduct.ProductID), nil, map[string]string{})
+	assert.Equal(t, http.StatusOK, w4.Code)
+
+	var listResponse models.ListBatchesResponse
+	json.Unmarshal(w4.Body.Bytes(), &listResponse)
+
+	assert.Equal(t, 3, listResponse.Count)
+	assert.Equal(t, 3, len(listResponse.Batches))
+}
+
+func TestGetOldestBatchForSale_FIFO(t *testing.T) {
+	helper := testhelpers.SetupApiTest(t)
+	defer helper.Close()
+
+	// Create product
+	productBody := models.CreateProductDto{
+		SKU:       fmt.Sprintf("BATCH_FIFO_%d", time.Now().UnixNano()),
+		Name:      "Batch FIFO Test",
+		BasePrice: 100.00,
+	}
+	w := helper.DoRequest("POST", "/inventory/products", productBody, map[string]string{})
+	var createdProduct models.CreateProductResponse
+	json.Unmarshal(w.Body.Bytes(), &createdProduct)
+
+	// Create 3 batches in random order
+	tomorrow := time.Now().AddDate(0, 0, 1)
+	nextWeek := time.Now().AddDate(0, 0, 7)
+	nextMonth := time.Now().AddDate(0, 1, 0)
+	yesterday := time.Now().AddDate(0, 0, -1)
+
+	batches := []map[string]interface{}{
+		{
+			"product_id":       createdProduct.ProductID,
+			"lot_number":       fmt.Sprintf("LOT_THIRD_%d", time.Now().UnixNano()),
+			"purchase_date":    yesterday.Format("2006-01-02"),
+			"expiry_date":      nextMonth.Format("2006-01-02"),
+			"unit_cost":        60.00,
+			"initial_quantity": 150.0,
+		},
+		{
+			"product_id":       createdProduct.ProductID,
+			"lot_number":       fmt.Sprintf("LOT_FIRST_%d", time.Now().UnixNano()),
+			"purchase_date":    yesterday.Format("2006-01-02"),
+			"expiry_date":      tomorrow.Format("2006-01-02"),
+			"unit_cost":        50.00,
+			"initial_quantity": 100.0,
+		},
+		{
+			"product_id":       createdProduct.ProductID,
+			"lot_number":       fmt.Sprintf("LOT_SECOND_%d", time.Now().UnixNano()),
+			"purchase_date":    yesterday.Format("2006-01-02"),
+			"expiry_date":      nextWeek.Format("2006-01-02"),
+			"unit_cost":        55.00,
+			"initial_quantity": 200.0,
+		},
+	}
+
+	for _, batch := range batches {
+		w := helper.DoRequest("POST", "/inventory/batches", batch, map[string]string{})
+		assert.Equal(t, http.StatusCreated, w.Code)
+	}
+
+	// Get oldest batch for sale
+	w4 := helper.DoRequest("GET", fmt.Sprintf("/inventory/batches/product/%s/oldest", createdProduct.ProductID), nil, map[string]string{})
+	assert.Equal(t, http.StatusOK, w4.Code)
+
+	var oldestBatch models.BatchResponse
+	json.Unmarshal(w4.Body.Bytes(), &oldestBatch)
+
+	assert.NotEmpty(t, oldestBatch.ID)
+	assert.Equal(t, 100.0, oldestBatch.CurrentQuantity)
+	assert.Equal(t, 50.00, oldestBatch.UnitCost)
+	assert.Equal(t, "expiring_soon", oldestBatch.Status)
+}
+
+func TestBatchExpiryStatusCalculation(t *testing.T) {
+	helper := testhelpers.SetupApiTest(t)
+	defer helper.Close()
+
+	// Create product
+	productBody := models.CreateProductDto{
+		SKU:       fmt.Sprintf("BATCH_EXP_%d", time.Now().UnixNano()),
+		Name:      "Batch Expiry Test",
+		BasePrice: 100.00,
+	}
+	w := helper.DoRequest("POST", "/inventory/products", productBody, map[string]string{})
+	var createdProduct models.CreateProductResponse
+	json.Unmarshal(w.Body.Bytes(), &createdProduct)
+
+	yesterday := time.Now().AddDate(0, 0, -1)
+
+	// Active batch (far future)
+	nextMonth := time.Now().AddDate(0, 1, 0)
+	activeBatchBody := map[string]interface{}{
+		"product_id":       createdProduct.ProductID,
+		"lot_number":       fmt.Sprintf("LOT_ACTIVE_%d", time.Now().UnixNano()),
+		"purchase_date":    yesterday.Format("2006-01-02"),
+		"expiry_date":      nextMonth.Format("2006-01-02"),
+		"unit_cost":        50.00,
+		"initial_quantity": 100.0,
+	}
+
+	w1 := helper.DoRequest("POST", "/inventory/batches", activeBatchBody, map[string]string{})
+	var activeBatch models.BatchResponse
+	json.Unmarshal(w1.Body.Bytes(), &activeBatch)
+	assert.Equal(t, "active", activeBatch.Status)
+
+	// Expiring soon batch (within 7 days)
+	inFourDays := time.Now().AddDate(0, 0, 4)
+	expiringBatchBody := map[string]interface{}{
+		"product_id":       createdProduct.ProductID,
+		"lot_number":       fmt.Sprintf("LOT_EXPIRING_%d", time.Now().UnixNano()),
+		"purchase_date":    yesterday.Format("2006-01-02"),
+		"expiry_date":      inFourDays.Format("2006-01-02"),
+		"unit_cost":        50.00,
+		"initial_quantity": 100.0,
+	}
+
+	w2 := helper.DoRequest("POST", "/inventory/batches", expiringBatchBody, map[string]string{})
+	var expiringBatch models.BatchResponse
+	json.Unmarshal(w2.Body.Bytes(), &expiringBatch)
+	assert.Equal(t, "expiring_soon", expiringBatch.Status)
+}
+
+func TestBatchNotFound(t *testing.T) {
+	helper := testhelpers.SetupApiTest(t)
+	defer helper.Close()
+
+	w := helper.DoRequest("GET", "/inventory/batches/00000000-0000-0000-0000-000000000000", nil, map[string]string{})
+	assert.Equal(t, http.StatusNotFound, w.Code)
+}
+
+// ============================================
 // Helper Functions
 // ============================================
 

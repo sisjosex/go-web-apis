@@ -127,7 +127,8 @@ func SetupRoutes(r *gin.Engine, dbService coreServices.DatabaseService) {
 
 		// Inventory module (if enabled)
 		if coreConf.IsModuleEnabled("inventory") {
-			inventoryRoutes.RegisterInventoryRoutes(apiV1, dbService)
+			inventoryRoutes.RegisterInventoryRoutes(apiV1, dbService, jwtService)
+			log.Println("✅ Inventory module (with Batches) enabled and routes registered")
 		}
 
 		// Sales module (if enabled)

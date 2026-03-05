@@ -1,18 +1,8 @@
 package errors
 
 const (
-	// Products
-	ProductNotFound         = "product.not-found"
-	ProductSkuAlreadyExists = "product.sku.already-exists"
-
-	// Stock
-	InsufficientStock = "inventory.insufficient-stock"
-
-	// Movements
-	InvalidMovementType = "inventory.invalid-movement-type"
-	MovementNotFound    = "inventory.movement.not-found"
-
 	// Batch creation errors
+	ProductNotFound                 = "product.not-found"
 	BatchLotNumberRequired          = "batch.lot-number-required"
 	BatchExpiryDateMustBeFuture     = "batch.expiry-date-must-be-future"
 	BatchPurchaseDateCannotBeFuture = "batch.purchase-date-cannot-be-future"

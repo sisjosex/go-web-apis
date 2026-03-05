@@ -4,14 +4,16 @@ import "josex/web/modules/core/utils"
 
 // InventoryConfig holds configuration for inventory module
 type InventoryConfig struct {
-	EnableVariants bool
-	EnableAlerts   bool
+	EnableVariants      bool
+	EnableAlerts        bool
+	ExpiringWarningDays int
 }
 
 // LoadInventoryConfig loads inventory configuration from environment
 func LoadInventoryConfig() *InventoryConfig {
 	return &InventoryConfig{
-		EnableVariants: utils.GetEnvAsBool("INVENTORY_ENABLE_VARIANTS", true),
-		EnableAlerts:   utils.GetEnvAsBool("INVENTORY_ENABLE_ALERTS", true),
+		EnableVariants:      utils.GetEnvAsBool("INVENTORY_ENABLE_VARIANTS", true),
+		EnableAlerts:        utils.GetEnvAsBool("INVENTORY_ENABLE_ALERTS", true),
+		ExpiringWarningDays: utils.GetEnvAsInt("BATCHES_EXPIRING_WARNING_DAYS", 7),
 	}
 }
