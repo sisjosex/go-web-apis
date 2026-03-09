@@ -57,24 +57,26 @@ RETURNS TABLE (
 ) LANGUAGE plpgsql AS $$
 DECLARE
     v_category_id UUID;
+    v_name VARCHAR := TRIM(p_name);
+    v_slug VARCHAR := TRIM(p_slug);
 BEGIN
     -- Validate inputs
-    IF TRIM(p_name) = '' THEN
+    IF v_name = '' THEN
         RAISE EXCEPTION 'category.name-required' USING ERRCODE = 'P0001';
     END IF;
     
-    IF TRIM(p_slug) = '' THEN
+    IF v_slug = '' THEN
         RAISE EXCEPTION 'category.slug-required' USING ERRCODE = 'P0001';
     END IF;
 
     -- Check slug uniqueness
-    IF EXISTS (SELECT 1 FROM inventory.product_categories WHERE slug = p_slug AND deleted_at IS NULL) THEN
+    IF EXISTS (SELECT 1 FROM inventory.product_categories pc WHERE pc.slug = v_slug AND pc.deleted_at IS NULL) THEN
         RAISE EXCEPTION 'category.slug-already-exists' USING ERRCODE = 'P0001';
     END IF;
 
     -- Validate parent exists
     IF p_parent_id IS NOT NULL THEN
-        IF NOT EXISTS (SELECT 1 FROM inventory.product_categories WHERE id = p_parent_id AND deleted_at IS NULL) THEN
+        IF NOT EXISTS (SELECT 1 FROM inventory.product_categories pc WHERE pc.id = p_parent_id AND pc.deleted_at IS NULL) THEN
             RAISE EXCEPTION 'category.parent-not-found' USING ERRCODE = 'P0001';
         END IF;
     END IF;
@@ -88,8 +90,8 @@ BEGIN
 
     -- Insert category
     INSERT INTO inventory.product_categories (parent_id, name, slug, description, icon_url, display_order)
-    VALUES (p_parent_id, TRIM(p_name), TRIM(p_slug), p_description, p_icon_url, p_display_order)
-    RETURNING product_categories.id INTO v_category_id;
+    VALUES (p_parent_id, v_name, v_slug, p_description, p_icon_url, p_display_order)
+    RETURNING inventory.product_categories.id INTO v_category_id;
 
     -- Return created category (same fields as sp_get_category for consistency)
     RETURN QUERY
@@ -110,8 +112,6 @@ BEGIN
     WHERE pc.id = v_category_id
     GROUP BY pc.id, pc.parent_id, pc.name, pc.slug, pc.description, pc.icon_url, 
              pc.display_order, pc.is_active, pc.created_at, pc.updated_at;
-END;
-$$;
 END;
 $$;
 
@@ -139,17 +139,20 @@ RETURNS TABLE (
     created_at TIMESTAMP,
     updated_at TIMESTAMP
 ) LANGUAGE plpgsql AS $$
+DECLARE
+    v_new_slug VARCHAR;
 BEGIN
     -- Check category exists
-    IF NOT EXISTS (SELECT 1 FROM inventory.product_categories WHERE id = p_category_id AND deleted_at IS NULL) THEN
+    IF NOT EXISTS (SELECT 1 FROM inventory.product_categories pc WHERE pc.id = p_category_id AND pc.deleted_at IS NULL) THEN
         RAISE EXCEPTION 'category.not-found' USING ERRCODE = 'P0001';
     END IF;
 
     -- Check slug uniqueness (if updating slug)
     IF p_slug IS NOT NULL AND TRIM(p_slug) != '' THEN
+        v_new_slug := TRIM(p_slug);
         IF EXISTS (
-            SELECT 1 FROM inventory.product_categories 
-            WHERE slug = TRIM(p_slug) AND id != p_category_id AND deleted_at IS NULL
+            SELECT 1 FROM inventory.product_categories pc
+            WHERE pc.slug = v_new_slug AND pc.id != p_category_id AND pc.deleted_at IS NULL
         ) THEN
             RAISE EXCEPTION 'category.slug-already-exists' USING ERRCODE = 'P0001';
         END IF;
@@ -157,7 +160,7 @@ BEGIN
 
     -- Validate parent (if updating parent)
     IF p_parent_id IS NOT NULL THEN
-        IF NOT EXISTS (SELECT 1 FROM inventory.product_categories WHERE id = p_parent_id AND deleted_at IS NULL) THEN
+        IF NOT EXISTS (SELECT 1 FROM inventory.product_categories pc WHERE pc.id = p_parent_id AND pc.deleted_at IS NULL) THEN
             RAISE EXCEPTION 'category.parent-not-found' USING ERRCODE = 'P0001';
         END IF;
         -- Check circular hierarchy
@@ -167,16 +170,16 @@ BEGIN
     END IF;
 
     -- Update category
-    UPDATE inventory.product_categories SET
-        parent_id = COALESCE(p_parent_id, parent_id),
-        name = COALESCE(NULLIF(TRIM(p_name), ''), name),
-        slug = COALESCE(NULLIF(TRIM(p_slug), ''), slug),
-        description = COALESCE(p_description, description),
-        icon_url = COALESCE(p_icon_url, icon_url),
-        display_order = COALESCE(p_display_order, display_order),
-        is_active = COALESCE(p_is_active, is_active),
+    UPDATE inventory.product_categories pc SET
+        parent_id = COALESCE(p_parent_id, pc.parent_id),
+        name = COALESCE(NULLIF(TRIM(p_name), ''), pc.name),
+        slug = COALESCE(NULLIF(TRIM(p_slug), ''), pc.slug),
+        description = COALESCE(p_description, pc.description),
+        icon_url = COALESCE(p_icon_url, pc.icon_url),
+        display_order = COALESCE(p_display_order, pc.display_order),
+        is_active = COALESCE(p_is_active, pc.is_active),
         updated_at = NOW()
-    WHERE id = p_category_id;
+    WHERE pc.id = p_category_id;
 
     -- Return updated category (same fields as sp_get_category for consistency)
     RETURN QUERY
@@ -209,19 +212,19 @@ RETURNS TABLE (
 ) LANGUAGE plpgsql AS $$
 BEGIN
     -- Check category exists
-    IF NOT EXISTS (SELECT 1 FROM inventory.product_categories WHERE id = p_category_id AND deleted_at IS NULL) THEN
+    IF NOT EXISTS (SELECT 1 FROM inventory.product_categories pc WHERE pc.id = p_category_id AND pc.deleted_at IS NULL) THEN
         RAISE EXCEPTION 'category.not-found' USING ERRCODE = 'P0001';
     END IF;
 
     -- Check if category has products
-    IF EXISTS (SELECT 1 FROM inventory.product_category_mapping WHERE category_id = p_category_id) THEN
+    IF EXISTS (SELECT 1 FROM inventory.product_category_mapping pcm WHERE pcm.category_id = p_category_id) THEN
         RAISE EXCEPTION 'category.has-products' USING ERRCODE = 'P0001';
     END IF;
 
     -- Soft delete
-    UPDATE inventory.product_categories
+    UPDATE inventory.product_categories pc
     SET deleted_at = NOW()
-    WHERE id = p_category_id;
+    WHERE pc.id = p_category_id;
 
     -- Return deleted category
     RETURN QUERY
@@ -387,24 +390,24 @@ DECLARE
     v_mapping_id UUID;
 BEGIN
     -- Check product exists
-    IF NOT EXISTS (SELECT 1 FROM inventory.products WHERE id = p_product_id) THEN
+    IF NOT EXISTS (SELECT 1 FROM inventory.products pr WHERE pr.id = p_product_id) THEN
         RAISE EXCEPTION 'product.not-found' USING ERRCODE = 'P0001';
     END IF;
 
     -- Check category exists
-    IF NOT EXISTS (SELECT 1 FROM inventory.product_categories WHERE id = p_category_id AND deleted_at IS NULL) THEN
+    IF NOT EXISTS (SELECT 1 FROM inventory.product_categories pc WHERE pc.id = p_category_id AND pc.deleted_at IS NULL) THEN
         RAISE EXCEPTION 'category.not-found' USING ERRCODE = 'P0001';
     END IF;
 
     -- Check if already assigned
-    IF EXISTS (SELECT 1 FROM inventory.product_category_mapping WHERE product_id = p_product_id AND category_id = p_category_id) THEN
+    IF EXISTS (SELECT 1 FROM inventory.product_category_mapping pcm WHERE pcm.product_id = p_product_id AND pcm.category_id = p_category_id) THEN
         RAISE EXCEPTION 'product.already-in-category' USING ERRCODE = 'P0001';
     END IF;
 
     -- Insert mapping
     INSERT INTO inventory.product_category_mapping (product_id, category_id)
     VALUES (p_product_id, p_category_id)
-    RETURNING product_category_mapping.id INTO v_mapping_id;
+    RETURNING inventory.product_category_mapping.id INTO v_mapping_id;
 
     RETURN QUERY
     SELECT 
@@ -426,8 +429,8 @@ RETURNS TABLE (
     removed BOOLEAN
 ) LANGUAGE plpgsql AS $$
 BEGIN
-    DELETE FROM inventory.product_category_mapping
-    WHERE product_id = p_product_id AND category_id = p_category_id;
+    DELETE FROM inventory.product_category_mapping pcm
+    WHERE pcm.product_id = p_product_id AND pcm.category_id = p_category_id;
 
     RETURN QUERY
     SELECT 
@@ -457,7 +460,7 @@ RETURNS TABLE (
 ) LANGUAGE plpgsql AS $$
 BEGIN
     -- Check category exists
-    IF NOT EXISTS (SELECT 1 FROM inventory.product_categories WHERE id = p_category_id AND deleted_at IS NULL) THEN
+    IF NOT EXISTS (SELECT 1 FROM inventory.product_categories pc WHERE pc.id = p_category_id AND pc.deleted_at IS NULL) THEN
         RAISE EXCEPTION 'category.not-found' USING ERRCODE = 'P0001';
     END IF;
 

@@ -384,6 +384,10 @@ func (ctrl *CategoryController) GetProductsByCategory(c *gin.Context) {
 		return
 	}
 
+	// Ensure we return an empty array instead of null
+	if products == nil {
+		products = []models.GetProductsByCategoryResponse{}
+	}
 	c.JSON(http.StatusOK, products)
 }
 

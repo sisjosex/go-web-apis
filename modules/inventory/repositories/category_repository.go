@@ -328,11 +328,17 @@ func (r *CategoryRepository) GetProductsByCategory(ctx context.Context, category
 			&product.CostPrice, &product.QuantityOnHand, &product.ReorderLevel, &product.Status, &product.ImageURL,
 		)
 		if err != nil {
+			if r.logger != nil {
+				r.logger.Printf("❌ Error scanning product: %v", err)
+			}
 			continue
 		}
 		products = append(products, product)
 	}
 
+	if r.logger != nil {
+		r.logger.Printf("✓ GetProductsByCategory: categoryID=%s, found=%d products", categoryID, len(products))
+	}
 	return products, nil
 }
 
