@@ -3,8 +3,10 @@ package services
 import (
 	"context"
 
+	coreModels "josex/web/modules/core/models"
 	"josex/web/modules/sales/interfaces"
 	"josex/web/modules/sales/models"
+	"time"
 
 	"github.com/google/uuid"
 )
@@ -54,4 +56,70 @@ func (s *SalesOrderService) AddOrderItem(ctx context.Context, orderID uuid.UUID,
 // GetOrderItems retrieves all items for an order
 func (s *SalesOrderService) GetOrderItems(ctx context.Context, orderID uuid.UUID) ([]models.OrderItem, error) {
 	return s.orderRepository.GetOrderItems(ctx, orderID)
+}
+
+// ========== PHASE 1: Batch Assignment & Order Completion ==========
+
+// AddOrderItemWithBatch adds an item to an order with FIFO batch assignment
+func (s *SalesOrderService) AddOrderItemWithBatch(ctx context.Context, orderID uuid.UUID, productID uuid.UUID, quantity float64, unitPrice float64) (*models.OrderItem, error) {
+	return s.orderRepository.AddOrderItemWithBatch(ctx, orderID, productID, quantity, unitPrice)
+}
+
+// CompleteOrder completes an order and consumes inventory from batches
+func (s *SalesOrderService) CompleteOrder(ctx context.Context, orderID uuid.UUID) (*models.SalesOrder, error) {
+	return s.orderRepository.CompleteOrder(ctx, orderID)
+}
+
+// ========== PHASE 2: Reporting & Cancellation ==========
+
+// CancelOrder cancels an order and releases batch assignments
+func (s *SalesOrderService) CancelOrder(ctx context.Context, orderID uuid.UUID) (*models.SalesOrder, error) {
+	return s.orderRepository.CancelOrder(ctx, orderID)
+}
+
+// GetOrderWithBatches retrieves an order with batch assignment details
+func (s *SalesOrderService) GetOrderWithBatches(ctx context.Context, orderID uuid.UUID) (*models.OrderWithBatches, error) {
+	return s.orderRepository.GetOrderWithBatches(ctx, orderID)
+}
+
+// GetSalesReport retrieves sales metrics for a date range
+func (s *SalesOrderService) GetSalesReport(ctx context.Context, tenantID uuid.UUID, startDate, endDate coreModels.DateOnly) ([]models.SalesReport, error) {
+	return s.orderRepository.GetSalesReport(ctx, tenantID, time.Time(startDate), time.Time(endDate))
+}
+
+// ========== PHASE 3: Returns & Payments ==========
+
+// CreateReturn creates a return request for a completed order
+func (s *SalesOrderService) CreateReturn(ctx context.Context, orderID uuid.UUID, reason string) (*models.Return, error) {
+	return s.orderRepository.CreateReturn(ctx, orderID, reason)
+}
+
+// ApproveReturn approves a return and restores inventory
+func (s *SalesOrderService) ApproveReturn(ctx context.Context, returnID uuid.UUID) (*models.Return, error) {
+	return s.orderRepository.ApproveReturn(ctx, returnID)
+}
+
+// GetReturn retrieves a return by ID
+func (s *SalesOrderService) GetReturn(ctx context.Context, returnID uuid.UUID) (*models.Return, error) {
+	return s.orderRepository.GetReturn(ctx, returnID)
+}
+
+// GetReturnsByOrder retrieves all returns for an order
+func (s *SalesOrderService) GetReturnsByOrder(ctx context.Context, orderID uuid.UUID) ([]models.Return, error) {
+	return s.orderRepository.GetReturnsByOrder(ctx, orderID)
+}
+
+// CreatePayment creates a payment record for an order
+func (s *SalesOrderService) CreatePayment(ctx context.Context, orderID uuid.UUID, amount float64, paymentMethod string, referenceNumber string, notes string) (*models.Payment, error) {
+	return s.orderRepository.CreatePayment(ctx, orderID, amount, paymentMethod, referenceNumber, notes)
+}
+
+// GetPayments retrieves all payments for an order
+func (s *SalesOrderService) GetPayments(ctx context.Context, orderID uuid.UUID) ([]models.Payment, error) {
+	return s.orderRepository.GetPayments(ctx, orderID)
+}
+
+// GetPaymentByID retrieves a payment by ID
+func (s *SalesOrderService) GetPaymentByID(ctx context.Context, paymentID uuid.UUID) (*models.Payment, error) {
+	return s.orderRepository.GetPaymentByID(ctx, paymentID)
 }

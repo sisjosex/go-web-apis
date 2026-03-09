@@ -62,7 +62,10 @@ func (r *TrackingRepository) UpdateVehicleLocation(ctx context.Context, dto *mod
 
 	// Get vehicle details
 	var licensePlate string
-	err = r.dbService.QueryRow(ctx, `SELECT plate_number FROM tracking.vehicles WHERE id = $1`, vehicleID).Scan(&licensePlate)
+	err = r.dbService.QueryRow(ctx,
+		`SELECT plate_number FROM tracking.sp_get_vehicle_plate($1)`,
+		vehicleID,
+	).Scan(&licensePlate)
 	if err != nil {
 		return nil, &trackingErrors.TrackingError{Code: trackingErrors.VehicleNotFound, Err: err}
 	}

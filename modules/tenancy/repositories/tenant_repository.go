@@ -316,14 +316,10 @@ func (r *tenantRepository) CountUserOwnedTenants(ctx context.Context, userID uui
 
 // ListTenantsWithCustomDB lists all tenants that have custom database URLs
 func (r *tenantRepository) ListTenantsWithCustomDB(ctx context.Context) ([]*models.Tenant, error) {
-	query := `
-		SELECT id, slug, name, database_url, is_active, is_suspended, created_at
-		FROM tenancy.tenants
-		WHERE database_url IS NOT NULL AND database_url != ''
-		ORDER BY slug ASC
-	`
-
-	rows, err := r.dbService.Query(ctx, query)
+	rows, err := r.dbService.Query(ctx,
+		`SELECT id, slug, name, database_url, is_active, is_suspended, created_at
+		 FROM tenancy.sp_list_tenants_with_custom_db()`,
+	)
 	if err != nil {
 		return nil, err
 	}

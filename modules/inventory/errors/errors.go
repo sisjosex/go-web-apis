@@ -25,4 +25,14 @@ const (
 
 	// Batch depletion errors
 	InsufficientBatchQuantity = "batch.insufficient-quantity"
+
+	// Categories
+	CategoryNotFound          = "category.not-found"
+	CategoryNameRequired      = "category.name-required"
+	CategorySlugRequired      = "category.slug-required"
+	CategorySlugAlreadyExists = "category.slug-already-exists"
+	CategoryParentNotFound    = "category.parent-not-found"
+	CategoryCircularHierarchy = "category.circular-hierarchy"
+	CategoryHasProducts       = "category.has-products"
+	ProductAlreadyInCategory  = "product.already-in-category"
 )

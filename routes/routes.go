@@ -9,6 +9,9 @@ import (
 	coreMiddleware "josex/web/modules/core/middleware"
 	coreServices "josex/web/modules/core/services"
 	inventoryRoutes "josex/web/modules/inventory/routes"
+	purchasingControllers "josex/web/modules/purchasing/controllers"
+	purchasingRepos "josex/web/modules/purchasing/repositories"
+	purchasingServices "josex/web/modules/purchasing/services"
 	salesControllers "josex/web/modules/sales/controllers"
 	salesRepos "josex/web/modules/sales/repositories"
 	salesRoutes "josex/web/modules/sales/routes"
@@ -146,6 +149,49 @@ func SetupRoutes(r *gin.Engine, dbService coreServices.DatabaseService) {
 			// Register sales routes
 			salesRoutes.SetupSalesRoutes(apiV1, customerController, salesOrderController)
 			log.Println("✅ Sales module enabled and routes registered")
+		}
+
+		// Purchasing module (if enabled)
+		if coreConf.IsModuleEnabled("purchasing") {
+			// Initialize purchasing services
+			purchasingRepository := purchasingRepos.NewPurchasingRepository(dbService)
+			purchasingService := purchasingServices.NewPurchasingService(purchasingRepository)
+
+			// Customize auth middleware for purchasing
+			purchasingAuthMiddleware := func(c *gin.Context) {
+				// Reuse JWT validation from auth module
+				// This can be the auth middleware function passed in
+				c.Next()
+			}
+
+			// Use apiV1 router
+			purchasingRouteGroup := apiV1.Group("/purchasing")
+			purchasingRouteGroup.Use(purchasingAuthMiddleware)
+
+			purchasingCtrl := purchasingControllers.NewPurchasingController(purchasingService)
+
+			// Supplier routes
+			purchasingRouteGroup.POST("/suppliers", purchasingCtrl.CreateSupplier)
+			purchasingRouteGroup.GET("/suppliers", purchasingCtrl.ListSuppliers)
+			purchasingRouteGroup.GET("/suppliers/:id", purchasingCtrl.GetSupplier)
+
+			// Purchase Order routes
+			purchasingRouteGroup.POST("/purchase-orders", purchasingCtrl.CreatePurchaseOrder)
+			purchasingRouteGroup.GET("/purchase-orders", purchasingCtrl.ListPurchaseOrders)
+			purchasingRouteGroup.GET("/purchase-orders/:id", purchasingCtrl.GetPurchaseOrder)
+			purchasingRouteGroup.PATCH("/purchase-orders/:id/approve", purchasingCtrl.ApprovePurchaseOrder)
+			purchasingRouteGroup.PATCH("/purchase-orders/:id/receive", purchasingCtrl.ReceivePurchaseOrder)
+
+			// Purchase Order Items
+			purchasingRouteGroup.POST("/purchase-orders/:id/items", purchasingCtrl.AddPurchaseOrderItem)
+
+			// Purchase Order Invoices
+			purchasingRouteGroup.POST("/purchase-orders/:id/invoices", purchasingCtrl.AddInvoice)
+
+			// Reports
+			purchasingRouteGroup.GET("/pending-payments", purchasingCtrl.GetPendingPayments)
+
+			log.Println("✅ Purchasing module enabled and routes registered")
 		}
 	}
 

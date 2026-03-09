@@ -12,7 +12,15 @@
   "order-item.not-found": "Item de orden no encontrado",
   "order-item.invalid-qty": "Cantidad inválida - debe ser mayor a 0",
   "order-item.product-not-found": "Producto no encontrado en inventario",
+  "order-item.invalid-price": "Precio unitario inválido",
   "payment.failed": "El procesamiento del pago falló",
   "payment.already-processed": "El pago ya ha sido procesado para esta orden",
-  "payment.partial-refund-needed": "Se requiere reembolso parcial para esta orden"
+  "payment.partial-refund-needed": "Se requiere reembolso parcial para esta orden",
+  "payment.invalid-amount": "Monto de pago debe ser mayor a 0",
+  "payment.invalid-method": "Método de pago inválido",
+  "return.not-found": "Solicitud de devolución no encontrada",
+  "return.invalid-status": "Estado de devolución inválido",
+  "product-batch.not-found": "Lote de producto no encontrado",
+  "batch.insufficient-quantity": "Cantidad insuficiente en el lote"
 }
+

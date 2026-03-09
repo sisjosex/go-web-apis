@@ -11,5 +11,13 @@
   "batch.unit-cost-must-be-positive": "El costo unitario debe ser positivo",
   "batch.not-found": "Lote no encontrado",
   "batch.expired": "El lote ha vencido",
-  "batch.insufficient-quantity": "Cantidad insuficiente en el lote"
+  "batch.insufficient-quantity": "Cantidad insuficiente en el lote",
+  "category.not-found": "Categoría no encontrada",
+  "category.name-required": "El nombre de la categoría es requerido",
+  "category.slug-required": "El slug de la categoría es requerido",
+  "category.slug-already-exists": "El slug de la categoría ya existe",
+  "category.parent-not-found": "Categoría padre no encontrada",
+  "category.circular-hierarchy": "No se permite jerarquía circular",
+  "category.has-products": "No se puede eliminar una categoría que tiene productos asignados",
+  "product.already-in-category": "El producto ya está asignado a esta categoría"
 }

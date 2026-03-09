@@ -20,9 +20,20 @@ const (
 	OrderItemNotFound        = "order-item.not-found"
 	OrderItemInvalidQty      = "order-item.invalid-qty"
 	OrderItemProductNotFound = "order-item.product-not-found"
+	OrderItemInvalidPrice    = "order-item.invalid-price"
 
 	// Payment errors
 	PaymentFailed              = "payment.failed"
 	PaymentAlreadyProcessed    = "payment.already-processed"
 	PaymentPartialRefundNeeded = "payment.partial-refund-needed"
+	PaymentInvalidAmount       = "payment.invalid-amount"
+	PaymentInvalidMethod       = "payment.invalid-method"
+
+	// Return errors
+	ReturnNotFound      = "return.not-found"
+	ReturnInvalidStatus = "return.invalid-status"
+
+	// Batch errors
+	ProductBatchNotFound      = "product-batch.not-found"
+	BatchInsufficientQuantity = "batch.insufficient-quantity"
 )

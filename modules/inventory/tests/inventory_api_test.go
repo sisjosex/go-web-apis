@@ -1146,6 +1146,399 @@ func TestBatchNotFound(t *testing.T) {
 }
 
 // ============================================
+// Product Categories Tests
+// ============================================
+
+func TestCreateCategory_Success(t *testing.T) {
+	helper := testhelpers.SetupApiTest(t)
+	defer helper.Close()
+
+	createDto := models.CreateCategoryDto{
+		Name:        "Electronics",
+		Slug:        "electronics",
+		Description: ptrString("All electronic devices"),
+	}
+
+	w := helper.DoRequest("POST", "/inventory/categories", createDto, map[string]string{})
+
+	if w.Code != http.StatusCreated {
+		t.Logf("Error response (status %d): %s", w.Code, w.Body.String())
+	}
+	assert.Equal(t, http.StatusCreated, w.Code, "Expected 201 Created")
+
+	var resp models.CategoryResponse
+	err := json.Unmarshal(w.Body.Bytes(), &resp)
+	assert.NoError(t, err)
+
+	assert.Equal(t, "Electronics", resp.Name)
+	assert.Equal(t, "electronics", resp.Slug)
+	assert.Equal(t, "All electronic devices", *resp.Description)
+	assert.True(t, resp.IsActive)
+	assert.Equal(t, int64(0), resp.ProductCount)
+}
+
+func TestCreateCategory_DuplicateSlug(t *testing.T) {
+	helper := testhelpers.SetupApiTest(t)
+	defer helper.Close()
+
+	dto := models.CreateCategoryDto{
+		Name: "Clothes",
+		Slug: "clothes",
+	}
+
+	// Create first category
+	w1 := helper.DoRequest("POST", "/inventory/categories", dto, map[string]string{})
+	assert.Equal(t, http.StatusCreated, w1.Code)
+
+	// Try to create with same slug
+	w2 := helper.DoRequest("POST", "/inventory/categories", dto, map[string]string{})
+	assert.Equal(t, http.StatusConflict, w2.Code, "Duplicate slug should return 409 Conflict")
+}
+
+func TestCreateCategory_MissingRequired(t *testing.T) {
+	helper := testhelpers.SetupApiTest(t)
+	defer helper.Close()
+
+	// Missing name and slug
+	dto := models.CreateCategoryDto{}
+
+	w := helper.DoRequest("POST", "/inventory/categories", dto, map[string]string{})
+	assert.Equal(t, http.StatusBadRequest, w.Code, "Missing required fields should return 400")
+}
+
+func TestGetCategory_Success(t *testing.T) {
+	helper := testhelpers.SetupApiTest(t)
+	defer helper.Close()
+
+	// Create category
+	createDto := models.CreateCategoryDto{
+		Name: "Furniture",
+		Slug: "furniture",
+	}
+	w1 := helper.DoRequest("POST", "/inventory/categories", createDto, map[string]string{})
+	assert.Equal(t, http.StatusCreated, w1.Code)
+
+	var created models.CategoryResponse
+	json.Unmarshal(w1.Body.Bytes(), &created)
+
+	// Get category
+	w2 := helper.DoRequest("GET", fmt.Sprintf("/inventory/categories/%s", created.ID), nil, map[string]string{})
+	assert.Equal(t, http.StatusOK, w2.Code)
+
+	var retrieved models.CategoryResponse
+	json.Unmarshal(w2.Body.Bytes(), &retrieved)
+	assert.Equal(t, "Furniture", retrieved.Name)
+	assert.Equal(t, created.ID, retrieved.ID)
+}
+
+func TestGetCategory_NotFound(t *testing.T) {
+	helper := testhelpers.SetupApiTest(t)
+	defer helper.Close()
+
+	w := helper.DoRequest("GET", "/inventory/categories/00000000-0000-0000-0000-000000000000", nil, map[string]string{})
+	assert.Equal(t, http.StatusNotFound, w.Code)
+}
+
+func TestListCategories_Success(t *testing.T) {
+	helper := testhelpers.SetupApiTest(t)
+	defer helper.Close()
+
+	// Create multiple categories
+	for i := 1; i <= 3; i++ {
+		dto := models.CreateCategoryDto{
+			Name: fmt.Sprintf("Category %d", i),
+			Slug: fmt.Sprintf("cat%d", i),
+		}
+		helper.DoRequest("POST", "/inventory/categories", dto, map[string]string{})
+	}
+
+	// List categories
+	w := helper.DoRequest("GET", "/inventory/categories?page=1&limit=10", nil, map[string]string{})
+	assert.Equal(t, http.StatusOK, w.Code)
+
+	var resp models.ListCategoriesResponse
+	json.Unmarshal(w.Body.Bytes(), &resp)
+	assert.True(t, len(resp.Categories) >= 3, "Should have at least 3 categories")
+	assert.True(t, resp.Total >= 3)
+}
+
+func TestSearchCategories_Success(t *testing.T) {
+	helper := testhelpers.SetupApiTest(t)
+	defer helper.Close()
+
+	// Create a category with descriptive name
+	dto := models.CreateCategoryDto{
+		Name:        "Luxury Electronics",
+		Slug:        "luxury-electronics",
+		Description: ptrString("Premium electronic devices"),
+	}
+	helper.DoRequest("POST", "/inventory/categories", dto, map[string]string{})
+
+	// Search for categories
+	w := helper.DoRequest("GET", "/inventory/categories/search?q=Luxury", nil, map[string]string{})
+	assert.Equal(t, http.StatusOK, w.Code)
+
+	var resp models.ListCategoriesResponse
+	json.Unmarshal(w.Body.Bytes(), &resp)
+	assert.True(t, len(resp.Categories) > 0, "Search should find matching categories")
+}
+
+func TestUpdateCategory_Success(t *testing.T) {
+	helper := testhelpers.SetupApiTest(t)
+	defer helper.Close()
+
+	// Create category
+	createDto := models.CreateCategoryDto{
+		Name: "Old Name",
+		Slug: "old-slug",
+	}
+	w1 := helper.DoRequest("POST", "/inventory/categories", createDto, map[string]string{})
+	var created models.CategoryResponse
+	json.Unmarshal(w1.Body.Bytes(), &created)
+
+	// Update category
+	updateDto := models.UpdateCategoryDto{
+		Name:        ptrString("New Name"),
+		Description: ptrString("Updated description"),
+		IsActive:    ptrBool(false),
+	}
+	w2 := helper.DoRequest("PUT", fmt.Sprintf("/inventory/categories/%s", created.ID), updateDto, map[string]string{})
+	assert.Equal(t, http.StatusOK, w2.Code)
+
+	var updated models.CategoryResponse
+	json.Unmarshal(w2.Body.Bytes(), &updated)
+	assert.Equal(t, "New Name", updated.Name)
+	assert.Equal(t, false, updated.IsActive)
+}
+
+func TestUpdateCategory_NotFound(t *testing.T) {
+	helper := testhelpers.SetupApiTest(t)
+	defer helper.Close()
+
+	updateDto := models.UpdateCategoryDto{
+		Name: ptrString("Updated"),
+	}
+	w := helper.DoRequest("PUT", "/inventory/categories/00000000-0000-0000-0000-000000000000", updateDto, map[string]string{})
+	assert.Equal(t, http.StatusNotFound, w.Code)
+}
+
+func TestDeleteCategory_Success(t *testing.T) {
+	helper := testhelpers.SetupApiTest(t)
+	defer helper.Close()
+
+	// Create category
+	createDto := models.CreateCategoryDto{
+		Name: "To Delete",
+		Slug: "to-delete",
+	}
+	w1 := helper.DoRequest("POST", "/inventory/categories", createDto, map[string]string{})
+	var created models.CategoryResponse
+	json.Unmarshal(w1.Body.Bytes(), &created)
+
+	// Delete category
+	w2 := helper.DoRequest("DELETE", fmt.Sprintf("/inventory/categories/%s", created.ID), nil, map[string]string{})
+	assert.Equal(t, http.StatusNoContent, w2.Code)
+
+	// Verify it's deleted (soft delete - not found)
+	w3 := helper.DoRequest("GET", fmt.Sprintf("/inventory/categories/%s", created.ID), nil, map[string]string{})
+	assert.Equal(t, http.StatusNotFound, w3.Code)
+}
+
+func TestDeleteCategory_NotFound(t *testing.T) {
+	helper := testhelpers.SetupApiTest(t)
+	defer helper.Close()
+
+	w := helper.DoRequest("DELETE", "/inventory/categories/00000000-0000-0000-0000-000000000000", nil, map[string]string{})
+	assert.Equal(t, http.StatusNotFound, w.Code)
+}
+
+func TestCreateHierarchy_Success(t *testing.T) {
+	helper := testhelpers.SetupApiTest(t)
+	defer helper.Close()
+
+	// Create parent category
+	parentDto := models.CreateCategoryDto{
+		Name: "Electronics",
+		Slug: "electronics",
+	}
+	w1 := helper.DoRequest("POST", "/inventory/categories", parentDto, map[string]string{})
+	var parent models.CategoryResponse
+	json.Unmarshal(w1.Body.Bytes(), &parent)
+
+	// Create child category with parent
+	childDto := models.CreateCategoryDto{
+		Name:     "Smartphones",
+		Slug:     "smartphones",
+		ParentID: &parent.ID,
+	}
+	w2 := helper.DoRequest("POST", "/inventory/categories", childDto, map[string]string{})
+	assert.Equal(t, http.StatusCreated, w2.Code)
+
+	var child models.CategoryResponse
+	json.Unmarshal(w2.Body.Bytes(), &child)
+	assert.Equal(t, parent.ID, child.ParentID)
+}
+
+func TestCircularHierarchy_Prevented(t *testing.T) {
+	helper := testhelpers.SetupApiTest(t)
+	defer helper.Close()
+
+	// Create category A
+	dtoA := models.CreateCategoryDto{
+		Name: "Category A",
+		Slug: "cat-a",
+	}
+	w1 := helper.DoRequest("POST", "/inventory/categories", dtoA, map[string]string{})
+	var catA models.CategoryResponse
+	json.Unmarshal(w1.Body.Bytes(), &catA)
+
+	// Create category B with A as parent
+	dtoB := models.CreateCategoryDto{
+		Name:     "Category B",
+		Slug:     "cat-b",
+		ParentID: &catA.ID,
+	}
+	w2 := helper.DoRequest("POST", "/inventory/categories", dtoB, map[string]string{})
+	var catB models.CategoryResponse
+	json.Unmarshal(w2.Body.Bytes(), &catB)
+
+	// Try to make A's parent = B (creating circular reference)
+	updateDto := models.UpdateCategoryDto{
+		ParentID: &catB.ID,
+	}
+	w3 := helper.DoRequest("PUT", fmt.Sprintf("/inventory/categories/%s", catA.ID), updateDto, map[string]string{})
+	assert.Equal(t, http.StatusBadRequest, w3.Code, "Circular hierarchy should be prevented")
+}
+
+func TestAssignProductToCategory_Success(t *testing.T) {
+	helper := testhelpers.SetupApiTest(t)
+	defer helper.Close()
+
+	// Create product
+	productDto := models.CreateProductDto{
+		SKU:       "PROD001",
+		Name:      "Test Product",
+		BasePrice: 10.00,
+	}
+	w1 := helper.DoRequest("POST", "/inventory/products", productDto, map[string]string{})
+	var product models.CreateProductResponse
+	json.Unmarshal(w1.Body.Bytes(), &product)
+
+	// Create category
+	catDto := models.CreateCategoryDto{
+		Name: "Test Category",
+		Slug: "test-cat",
+	}
+	w2 := helper.DoRequest("POST", "/inventory/categories", catDto, map[string]string{})
+	var category models.CategoryResponse
+	json.Unmarshal(w2.Body.Bytes(), &category)
+
+	// Assign product to category
+	w3 := helper.DoRequest("POST", fmt.Sprintf("/inventory/products/%s/categories/%s", product.ProductID, category.ID), nil, map[string]string{})
+	assert.Equal(t, http.StatusNoContent, w3.Code)
+}
+
+func TestRemoveProductFromCategory_Success(t *testing.T) {
+	helper := testhelpers.SetupApiTest(t)
+	defer helper.Close()
+
+	// Create and assign product to category
+	productDto := models.CreateProductDto{
+		SKU:       "PROD002",
+		Name:      "Product To Unassign",
+		BasePrice: 20.00,
+	}
+	w1 := helper.DoRequest("POST", "/inventory/products", productDto, map[string]string{})
+	var product models.CreateProductResponse
+	json.Unmarshal(w1.Body.Bytes(), &product)
+
+	catDto := models.CreateCategoryDto{
+		Name: "Unassign Test",
+		Slug: "unassign-test",
+	}
+	w2 := helper.DoRequest("POST", "/inventory/categories", catDto, map[string]string{})
+	var category models.CategoryResponse
+	json.Unmarshal(w2.Body.Bytes(), &category)
+
+	// Assign
+	helper.DoRequest("POST", fmt.Sprintf("/inventory/products/%s/categories/%s", product.ProductID, category.ID), nil, map[string]string{})
+
+	// Remove
+	w4 := helper.DoRequest("DELETE", fmt.Sprintf("/inventory/products/%s/categories/%s", product.ProductID, category.ID), nil, map[string]string{})
+	assert.Equal(t, http.StatusNoContent, w4.Code)
+}
+
+func TestGetProductsByCategory_Success(t *testing.T) {
+	helper := testhelpers.SetupApiTest(t)
+	defer helper.Close()
+
+	// Create category and products
+	catDto := models.CreateCategoryDto{
+		Name: "Books",
+		Slug: "books",
+	}
+	w1 := helper.DoRequest("POST", "/inventory/categories", catDto, map[string]string{})
+	var category models.CategoryResponse
+	json.Unmarshal(w1.Body.Bytes(), &category)
+
+	// Create 2 products
+	for i := 1; i <= 2; i++ {
+		productDto := models.CreateProductDto{
+			SKU:       fmt.Sprintf("BOOK%d", i),
+			Name:      fmt.Sprintf("Book %d", i),
+			BasePrice: float64(10 * i),
+		}
+		w := helper.DoRequest("POST", "/inventory/products", productDto, map[string]string{})
+		var product models.CreateProductResponse
+		json.Unmarshal(w.Body.Bytes(), &product)
+
+		// Assign to category
+		helper.DoRequest("POST", fmt.Sprintf("/inventory/products/%s/categories/%s", product.ProductID, category.ID), nil, map[string]string{})
+	}
+
+	// Get products in category
+	w5 := helper.DoRequest("GET", fmt.Sprintf("/inventory/categories/%s/products", category.ID), nil, map[string]string{})
+	assert.Equal(t, http.StatusOK, w5.Code)
+
+	var resp []models.GetProductsByCategoryResponse
+	json.Unmarshal(w5.Body.Bytes(), &resp)
+	assert.Equal(t, 2, len(resp), "Should have 2 products in category")
+}
+
+func TestProductCountAggregation(t *testing.T) {
+	helper := testhelpers.SetupApiTest(t)
+	defer helper.Close()
+
+	// Create category
+	catDto := models.CreateCategoryDto{
+		Name: "Count Test",
+		Slug: "count-test",
+	}
+	w1 := helper.DoRequest("POST", "/inventory/categories", catDto, map[string]string{})
+	var category models.CategoryResponse
+	json.Unmarshal(w1.Body.Bytes(), &category)
+	assert.Equal(t, int64(0), category.ProductCount)
+
+	// Create product and assign
+	productDto := models.CreateProductDto{
+		SKU:       "COUNT001",
+		Name:      "Count Test Product",
+		BasePrice: 5.00,
+	}
+	w2 := helper.DoRequest("POST", "/inventory/products", productDto, map[string]string{})
+	var product models.CreateProductResponse
+	json.Unmarshal(w2.Body.Bytes(), &product)
+
+	helper.DoRequest("POST", fmt.Sprintf("/inventory/products/%s/categories/%s", product.ProductID, category.ID), nil, map[string]string{})
+
+	// Check updated count
+	w3 := helper.DoRequest("GET", fmt.Sprintf("/inventory/categories/%s", category.ID), nil, map[string]string{})
+	var updated models.CategoryResponse
+	json.Unmarshal(w3.Body.Bytes(), &updated)
+	assert.Equal(t, int64(1), updated.ProductCount, "Product count should be incremented")
+}
+
+// ============================================
 // Helper Functions
 // ============================================
 
@@ -1154,5 +1547,9 @@ func ptrFloat64(v float64) *float64 {
 }
 
 func ptrString(v string) *string {
+	return &v
+}
+
+func ptrBool(v bool) *bool {
 	return &v
 }

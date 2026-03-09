@@ -12,7 +12,15 @@
   "order-item.not-found": "Order item not found",
   "order-item.invalid-qty": "Invalid quantity - must be greater than 0",
   "order-item.product-not-found": "Product not found in inventory",
+  "order-item.invalid-price": "Invalid unit price",
   "payment.failed": "Payment processing failed",
   "payment.already-processed": "Payment has already been processed for this order",
-  "payment.partial-refund-needed": "Partial refund needed for this order"
+  "payment.partial-refund-needed": "Partial refund needed for this order",
+  "payment.invalid-amount": "Payment amount must be greater than 0",
+  "payment.invalid-method": "Invalid payment method",
+  "return.not-found": "Return request not found",
+  "return.invalid-status": "Invalid return status",
+  "product-batch.not-found": "Product batch not found",
+  "batch.insufficient-quantity": "Insufficient quantity in batch"
 }
+

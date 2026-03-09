@@ -7,6 +7,7 @@ import (
 	coreConfig "josex/web/modules/core/config"
 	"josex/web/modules/core/utils"
 	inventoryConfig "josex/web/modules/inventory/config"
+	purchasingConfig "josex/web/modules/purchasing/config"
 	salesConfig "josex/web/modules/sales/config"
 	tenancyConfig "josex/web/modules/tenancy/config"
 	trackingConfig "josex/web/modules/tracking/config"
@@ -15,13 +16,14 @@ import (
 
 // ModularConfig holds all modular configuration
 type ModularConfig struct {
-	Core      *coreConfig.CoreConfig
-	Auth      *authConfig.AuthConfig
-	Users     *usersConfig.UsersConfig
-	Tenancy   *tenancyConfig.TenancyConfig
-	Tracking  *trackingConfig.TrackingConfig
-	Inventory *inventoryConfig.InventoryConfig
-	Sales     *salesConfig.SalesConfig
+	Core       *coreConfig.CoreConfig
+	Auth       *authConfig.AuthConfig
+	Users      *usersConfig.UsersConfig
+	Tenancy    *tenancyConfig.TenancyConfig
+	Tracking   *trackingConfig.TrackingConfig
+	Inventory  *inventoryConfig.InventoryConfig
+	Sales      *salesConfig.SalesConfig
+	Purchasing *purchasingConfig.PurchasingConfig
 }
 
 // Global modular configuration (lazy-loaded on first access)
@@ -38,13 +40,14 @@ func GetConfig() *ModularConfig {
 
 		// Load all module configurations
 		ModularAppConfig = &ModularConfig{
-			Core:      coreConfig.LoadCoreConfig(),
-			Auth:      authConfig.LoadAuthConfig(),
-			Users:     usersConfig.LoadUsersConfig(),
-			Tenancy:   tenancyConfig.LoadTenancyConfig(),
-			Tracking:  trackingConfig.LoadTrackingConfig(),
-			Inventory: inventoryConfig.LoadInventoryConfig(),
-			Sales:     salesConfig.LoadSalesConfig(),
+			Core:       coreConfig.LoadCoreConfig(),
+			Auth:       authConfig.LoadAuthConfig(),
+			Users:      usersConfig.LoadUsersConfig(),
+			Tenancy:    tenancyConfig.LoadTenancyConfig(),
+			Tracking:   trackingConfig.LoadTrackingConfig(),
+			Inventory:  inventoryConfig.LoadInventoryConfig(),
+			Sales:      salesConfig.LoadSalesConfig(),
+			Purchasing: purchasingConfig.LoadPurchasingConfig(),
 		}
 	})
 	return ModularAppConfig

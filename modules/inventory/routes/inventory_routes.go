@@ -22,16 +22,19 @@ func RegisterInventoryRoutes(
 	productRepo := repositories.NewProductRepository(dbService, nil)
 	movementRepo := repositories.NewMovementRepository(dbService, nil)
 	stockRepo := repositories.NewStockRepository(dbService, nil)
+	categoryRepo := repositories.NewCategoryRepository(dbService, nil)
 
 	// Create services
 	productService := inventoryServices.NewProductService(productRepo, nil)
 	movementService := inventoryServices.NewMovementService(movementRepo, nil)
 	stockService := inventoryServices.NewStockService(stockRepo)
+	categoryService := inventoryServices.NewCategoryService(categoryRepo, nil)
 
 	// Create controllers
 	productController := controllers.NewProductController(productService)
 	movementController := controllers.NewMovementController(movementService)
 	stockController := controllers.NewStockController(stockService)
+	categoryController := controllers.NewCategoryController(categoryService)
 
 	// Public routes (no auth required for reads)
 	api := router.Group("/inventory")
@@ -51,6 +54,19 @@ func RegisterInventoryRoutes(
 	api.POST("/reserve", stockController.ReserveStock)
 	api.POST("/release-reserved", stockController.ReleaseReservedStock)
 	api.PATCH("/products/:product_id/reorder-level", stockController.UpdateReorderLevel)
+
+	// Categories
+	api.GET("/categories/search", categoryController.SearchCategories)
+	api.GET("/categories/:id/products", categoryController.GetProductsByCategory)
+	api.POST("/categories", categoryController.CreateCategory)
+	api.GET("/categories", categoryController.ListCategories)
+	api.GET("/categories/:id", categoryController.GetCategory)
+	api.PUT("/categories/:id", categoryController.UpdateCategory)
+	api.DELETE("/categories/:id", categoryController.DeleteCategory)
+
+	// Product-Category mapping
+	api.POST("/products/:productId/categories/:id", categoryController.AssignProductToCategory)
+	api.DELETE("/products/:productId/categories/:id", categoryController.RemoveProductFromCategory)
 
 	// Batches routes (integrated into inventory)
 	batchRepository := batchRepositories.NewBatchRepository(dbService)

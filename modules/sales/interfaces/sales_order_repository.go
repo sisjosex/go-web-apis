@@ -2,6 +2,7 @@ package interfaces
 
 import (
 	"context"
+	"time"
 
 	"josex/web/modules/sales/models"
 
@@ -18,4 +19,22 @@ type SalesOrderRepository interface {
 	GetSalesOrderByOrderNumber(ctx context.Context, orderNumber string, tenantID uuid.UUID) (*models.SalesOrder, error)
 	AddOrderItem(ctx context.Context, orderID uuid.UUID, dto *models.CreateOrderItemRequestDto) (*models.OrderItem, error)
 	GetOrderItems(ctx context.Context, orderID uuid.UUID) ([]models.OrderItem, error)
+
+	// Phase 1 methods
+	AddOrderItemWithBatch(ctx context.Context, orderID uuid.UUID, productID uuid.UUID, quantity float64, unitPrice float64) (*models.OrderItem, error)
+	CompleteOrder(ctx context.Context, orderID uuid.UUID) (*models.SalesOrder, error)
+
+	// Phase 2 methods
+	CancelOrder(ctx context.Context, orderID uuid.UUID) (*models.SalesOrder, error)
+	GetOrderWithBatches(ctx context.Context, orderID uuid.UUID) (*models.OrderWithBatches, error)
+	GetSalesReport(ctx context.Context, tenantID uuid.UUID, startDate time.Time, endDate time.Time) ([]models.SalesReport, error)
+
+	// Phase 3 methods
+	CreateReturn(ctx context.Context, orderID uuid.UUID, reason string) (*models.Return, error)
+	ApproveReturn(ctx context.Context, returnID uuid.UUID) (*models.Return, error)
+	GetReturn(ctx context.Context, returnID uuid.UUID) (*models.Return, error)
+	GetReturnsByOrder(ctx context.Context, orderID uuid.UUID) ([]models.Return, error)
+	CreatePayment(ctx context.Context, orderID uuid.UUID, amount float64, paymentMethod string, referenceNumber string, notes string) (*models.Payment, error)
+	GetPayments(ctx context.Context, orderID uuid.UUID) ([]models.Payment, error)
+	GetPaymentByID(ctx context.Context, paymentID uuid.UUID) (*models.Payment, error)
 }

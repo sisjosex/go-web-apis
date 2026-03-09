@@ -11,5 +11,13 @@
   "batch.unit-cost-must-be-positive": "Unit cost must be positive",
   "batch.not-found": "Batch not found",
   "batch.expired": "Batch has expired",
-  "batch.insufficient-quantity": "Insufficient quantity in batch"
+  "batch.insufficient-quantity": "Insufficient quantity in batch",
+  "category.not-found": "Category not found",
+  "category.name-required": "Category name is required",
+  "category.slug-required": "Category slug is required",
+  "category.slug-already-exists": "Category slug already exists",
+  "category.parent-not-found": "Parent category not found",
+  "category.circular-hierarchy": "Circular hierarchy is not allowed",
+  "category.has-products": "Cannot delete category with products assigned",
+  "product.already-in-category": "Product is already assigned to this category"
 }
