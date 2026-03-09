@@ -1494,8 +1494,10 @@ func TestGetProductsByCategory_Success(t *testing.T) {
 	w1 := helper.DoRequest("POST", "/inventory/categories", catDto, map[string]string{})
 	var category models.CategoryResponse
 	json.Unmarshal(w1.Body.Bytes(), &category)
+	t.Logf("Created category: ID=%s", category.ID)
 
 	// Create 2 products
+	productIDs := []string{}
 	for i := 1; i <= 2; i++ {
 		productDto := models.CreateProductDto{
 			SKU:       fmt.Sprintf("BOOK%d-", i) + uuid.New().String()[:8],
@@ -1505,6 +1507,8 @@ func TestGetProductsByCategory_Success(t *testing.T) {
 		w := helper.DoRequest("POST", "/inventory/products", productDto, map[string]string{})
 		var product models.CreateProductResponse
 		json.Unmarshal(w.Body.Bytes(), &product)
+		t.Logf("Created product %d: ID=%s, SKU=%s", i, product.ProductID, product.SKU)
+		productIDs = append(productIDs, product.ProductID)
 
 		// Assign to category
 		assignResp := helper.DoRequest("POST", fmt.Sprintf("/inventory/products/%s/categories/%s", product.ProductID, category.ID), nil, map[string]string{})
@@ -1521,10 +1525,11 @@ func TestGetProductsByCategory_Success(t *testing.T) {
 		t.Logf("Failed to unmarshal response: %v", err)
 	}
 	t.Logf("Products in category: len=%d, Response: %s", len(resp), w5.Body.String())
+	t.Logf("Assigned product IDs: %v", productIDs)
 	// Note: Currently the GET endpoint returns assigned products
 	// Once sp_get_products_by_category is fully integrated with the mapping table,
 	// this should return 2 products
-	assert.True(t, len(resp) >= 0, "Should return array of products (currently may be empty)")
+	assert.Equal(t, 2, len(resp), "Should return 2 assigned products")
 }
 
 func TestProductCountAggregation(t *testing.T) {

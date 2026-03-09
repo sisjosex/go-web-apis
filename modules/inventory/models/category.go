@@ -85,16 +85,12 @@ type AssignProductToCategoryDto struct {
 
 // GetProductsByCategoryResponse - Response DTO for products in category
 type GetProductsByCategoryResponse struct {
-	ID             string   `json:"id"`
-	Name           string   `json:"name"`
-	SKU            string   `json:"sku"`
-	Description    *string  `json:"description"`
-	Price          float64  `json:"price"`
-	CostPrice      *float64 `json:"cost_price"`
-	QuantityOnHand int64    `json:"quantity_on_hand"`
-	ReorderLevel   int64    `json:"reorder_level"`
-	Status         string   `json:"status"`
-	ImageURL       *string  `json:"image_url"`
+	ID          string  `json:"id"`
+	Name        string  `json:"name"`
+	SKU         string  `json:"sku"`
+	Description *string `json:"description"`
+	BasePrice   float64 `json:"base_price"`
+	Status      string  `json:"status"`
 }
 
 // ListCategoriesResponse - Response DTO for list of categories

@@ -451,12 +451,8 @@ RETURNS TABLE (
     name VARCHAR,
     sku VARCHAR,
     description TEXT,
-    price DECIMAL,
-    cost_price DECIMAL,
-    quantity_on_hand BIGINT,
-    reorder_level BIGINT,
-    status VARCHAR,
-    image_url VARCHAR
+    base_price DECIMAL,
+    status VARCHAR
 ) LANGUAGE plpgsql AS $$
 BEGIN
     -- Check category exists
@@ -470,12 +466,8 @@ BEGIN
         CAST(pr.name AS VARCHAR),
         CAST(pr.sku AS VARCHAR),
         pr.description,
-        pr.price,
-        pr.cost_price,
-        pr.quantity_on_hand,
-        pr.reorder_level,
-        CAST(pr.status AS VARCHAR),
-        CAST(pr.image_url AS VARCHAR)
+        pr.base_price,
+        CAST(pr.status AS VARCHAR)
     FROM inventory.products pr
     INNER JOIN inventory.product_category_mapping pcm ON pr.id = pcm.product_id
     WHERE pcm.category_id = p_category_id

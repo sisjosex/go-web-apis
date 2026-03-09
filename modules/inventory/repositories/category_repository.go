@@ -309,7 +309,7 @@ func (r *CategoryRepository) GetProductsByCategory(ctx context.Context, category
 	}
 
 	rows, err := r.dbService.Query(ctx,
-		`SELECT id, name, sku, description, price, cost_price, quantity_on_hand, reorder_level, status, image_url
+		`SELECT id, name, sku, description, base_price, status
 		 FROM inventory.sp_get_products_by_category($1, $2, $3)`,
 		catID, limit, offset,
 	)
@@ -324,8 +324,7 @@ func (r *CategoryRepository) GetProductsByCategory(ctx context.Context, category
 	for rows.Next() {
 		var product models.GetProductsByCategoryResponse
 		err := rows.Scan(
-			&product.ID, &product.Name, &product.SKU, &product.Description, &product.Price,
-			&product.CostPrice, &product.QuantityOnHand, &product.ReorderLevel, &product.Status, &product.ImageURL,
+			&product.ID, &product.Name, &product.SKU, &product.Description, &product.BasePrice, &product.Status,
 		)
 		if err != nil {
 			if r.logger != nil {
