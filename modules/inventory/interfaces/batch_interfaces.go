@@ -14,6 +14,7 @@ type BatchRepository interface {
 	GetBatch(ctx context.Context, batchID uuid.UUID) (*models.BatchResponse, error)
 	ListBatchesByProduct(ctx context.Context, productID uuid.UUID, onlyActive bool) (*models.ListBatchesResponse, error)
 	GetOldestBatchForSale(ctx context.Context, productID uuid.UUID) (*models.BatchResponse, error)
+	GetExpiringBatches(ctx context.Context, warningDays int) ([]*models.BatchResponse, error)
 	UpdateBatchQuantity(ctx context.Context, batchID uuid.UUID, quantityUsed float64) error
 }
 

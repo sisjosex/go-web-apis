@@ -2,6 +2,7 @@ package controllers
 
 import (
 	"net/http"
+	"strconv"
 
 	coreErrors "josex/web/modules/core/errors"
 	"josex/web/modules/inventory/errors"
@@ -141,4 +142,38 @@ func (ctrl *BatchController) GetOldestBatchForSale(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, batch)
+}
+
+// GetExpiringBatches godoc
+// @Summary Get all batches expiring soon
+// @Description Get all batches that will expire within the specified warning days
+// @Tags Batches
+// @Accept json
+// @Produce json
+// @Param warningDays query int false "Number of days to check for expiry (default: 30)"
+// @Success 200 {array} models.BatchResponse
+// @Failure 400 {object} map[string]interface{} "Invalid request"
+// @Router /batches/expiring [get]
+func (ctrl *BatchController) GetExpiringBatches(c *gin.Context) {
+	warningDays := 30 // default value
+	if days := c.Query("warningDays"); days != "" {
+		parsedDays, err := strconv.Atoi(days)
+		if err != nil {
+			c.JSON(http.StatusBadRequest, coreErrors.BuildErrorDetail(c, "validation.error", "warningDays must be a valid integer"))
+			return
+		}
+		if parsedDays <= 0 {
+			c.JSON(http.StatusBadRequest, coreErrors.BuildErrorDetail(c, "validation.error", "warningDays must be greater than 0"))
+			return
+		}
+		warningDays = parsedDays
+	}
+
+	batches, err := ctrl.service.GetExpiringBatches(c.Request.Context(), warningDays)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, coreErrors.BuildError(c, err))
+		return
+	}
+
+	c.JSON(http.StatusOK, batches)
 }

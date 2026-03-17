@@ -176,6 +176,53 @@ func (r *BatchRepository) GetOldestBatchForSale(ctx context.Context, productID u
 	return &response, nil
 }
 
+// GetExpiringBatches retrieves all batches expiring within the specified number of days
+func (r *BatchRepository) GetExpiringBatches(ctx context.Context, warningDays int) ([]*models.BatchResponse, error) {
+	rows, err := r.dbService.Query(ctx,
+		"SELECT id, product_id, lot_number, purchase_date, expiry_date, unit_cost, initial_quantity, current_quantity, status, days_to_expiry FROM inventory.sp_get_expiring_batches($1)",
+		warningDays,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var batches []*models.BatchResponse
+
+	for rows.Next() {
+		var batch models.BatchResponse
+		var daysToExpiry sql.NullInt64
+
+		if err := rows.Scan(
+			&batch.ID,
+			&batch.ProductID,
+			&batch.LotNumber,
+			&batch.PurchaseDate,
+			&batch.ExpiryDate,
+			&batch.UnitCost,
+			&batch.InitialQuantity,
+			&batch.CurrentQuantity,
+			&batch.Status,
+			&daysToExpiry,
+		); err != nil {
+			return nil, err
+		}
+
+		if daysToExpiry.Valid {
+			val := int(daysToExpiry.Int64)
+			batch.DaysToExpiry = &val
+		}
+
+		batches = append(batches, &batch)
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+
+	return batches, nil
+}
+
 // UpdateBatchQuantity updates the quantity in a batch
 func (r *BatchRepository) UpdateBatchQuantity(ctx context.Context, batchID uuid.UUID, quantityUsed float64) error {
 	// This will be called after a sale to reduce batch quantity

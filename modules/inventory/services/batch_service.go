@@ -41,8 +41,7 @@ func (s *BatchService) GetOldestBatchForSale(ctx context.Context, productID uuid
 
 // GetExpiringBatches gets all batches expiring soon
 func (s *BatchService) GetExpiringBatches(ctx context.Context, warningDays int) ([]*models.BatchResponse, error) {
-	// TODO: Implement query for batches expiring within warningDays
-	return []*models.BatchResponse{}, nil
+	return s.repository.GetExpiringBatches(ctx, warningDays)
 }
 
 // ConsumeBatchStock reduces batch quantity after a sale
