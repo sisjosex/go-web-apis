@@ -9,7 +9,6 @@ import (
 // Customer represents a sales customer
 type Customer struct {
 	ID          uuid.UUID `json:"id"`
-	TenantID    uuid.UUID `json:"tenant_id"`
 	Name        string    `json:"name"`
 	Email       string    `json:"email"`
 	PhoneNumber string    `json:"phone_number"`

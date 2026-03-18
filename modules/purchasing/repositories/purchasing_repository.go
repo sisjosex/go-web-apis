@@ -25,60 +25,60 @@ func NewPurchasingRepository(dbService services.DatabaseService) *PurchasingRepo
 // ========== SUPPLIER OPERATIONS ==========
 
 // CreateSupplier inserts a new supplier
-func (r *PurchasingRepository) CreateSupplier(ctx context.Context, tenantID uuid.UUID, dto *models.CreateSupplierRequestDto) (*models.Supplier, error) {
+func (r *PurchasingRepository) CreateSupplier(ctx context.Context, dto *models.CreateSupplierRequestDto) (*models.Supplier, error) {
 	supplier := &models.Supplier{}
 
 	row := r.dbService.QueryRow(ctx,
-		`SELECT * FROM purchasing.sp_create_supplier($1, $2, $3, $4, $5, $6, $7)`,
-		tenantID, dto.Name, dto.ContactPerson, dto.Email, dto.Phone, dto.Address, dto.PaymentTerms,
+		`SELECT * FROM purchasing.sp_create_supplier($1, $2, $3, $4, $5, $6)`,
+		dto.Name, dto.ContactPerson, dto.Email, dto.Phone, dto.Address, dto.PaymentTerms,
 	)
 
-	err := row.Scan(&supplier.ID, &supplier.TenantID, &supplier.Name, &supplier.ContactPerson, &supplier.Email,
+	err := row.Scan(&supplier.ID, &supplier.Name, &supplier.ContactPerson, &supplier.Email,
 		&supplier.Phone, &supplier.Address, &supplier.PaymentTerms, &supplier.IsActive, &supplier.CreatedAt, &supplier.UpdatedAt)
 
 	return supplier, err
 }
 
 // GetSupplier retrieves a single supplier
-func (r *PurchasingRepository) GetSupplier(ctx context.Context, supplierID, tenantID uuid.UUID) (*models.Supplier, error) {
+func (r *PurchasingRepository) GetSupplier(ctx context.Context, supplierID uuid.UUID) (*models.Supplier, error) {
 	supplier := &models.Supplier{}
 
 	row := r.dbService.QueryRow(ctx,
-		`SELECT id, tenant_id, name, contact_person, email, phone, address, payment_terms, is_active, created_at, updated_at
+		`SELECT id, name, contact_person, email, phone, address, payment_terms, is_active, created_at, updated_at
 		 FROM purchasing.suppliers
-		 WHERE id = $1 AND tenant_id = $2`,
-		supplierID, tenantID,
+		 WHERE id = $1`,
+		supplierID,
 	)
 
-	err := row.Scan(&supplier.ID, &supplier.TenantID, &supplier.Name, &supplier.ContactPerson, &supplier.Email,
+	err := row.Scan(&supplier.ID, &supplier.Name, &supplier.ContactPerson, &supplier.Email,
 		&supplier.Phone, &supplier.Address, &supplier.PaymentTerms, &supplier.IsActive, &supplier.CreatedAt, &supplier.UpdatedAt)
 
 	return supplier, err
 }
 
 // UpdateSupplier updates supplier information
-func (r *PurchasingRepository) UpdateSupplier(ctx context.Context, supplierID, tenantID uuid.UUID, dto *models.UpdateSupplierRequestDto) (*models.Supplier, error) {
+func (r *PurchasingRepository) UpdateSupplier(ctx context.Context, supplierID uuid.UUID, dto *models.UpdateSupplierRequestDto) (*models.Supplier, error) {
 	supplier := &models.Supplier{}
 
 	row := r.dbService.QueryRow(ctx,
-		`SELECT * FROM purchasing.sp_update_supplier($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
-		supplierID, tenantID, dto.Name, dto.ContactPerson, dto.Email, dto.Phone, dto.Address, dto.PaymentTerms, dto.IsActive,
+		`SELECT * FROM purchasing.sp_update_supplier($1, $2, $3, $4, $5, $6, $7, $8)`,
+		supplierID, dto.Name, dto.ContactPerson, dto.Email, dto.Phone, dto.Address, dto.PaymentTerms, dto.IsActive,
 	)
 
-	err := row.Scan(&supplier.ID, &supplier.TenantID, &supplier.Name, &supplier.ContactPerson, &supplier.Email,
+	err := row.Scan(&supplier.ID, &supplier.Name, &supplier.ContactPerson, &supplier.Email,
 		&supplier.Phone, &supplier.Address, &supplier.PaymentTerms, &supplier.IsActive, &supplier.CreatedAt, &supplier.UpdatedAt)
 
 	return supplier, err
 }
 
 // ListSuppliers retrieves paginated suppliers
-func (r *PurchasingRepository) ListSuppliers(ctx context.Context, tenantID uuid.UUID, page, pageSize int) ([]models.Supplier, int, error) {
+func (r *PurchasingRepository) ListSuppliers(ctx context.Context, page, pageSize int) ([]models.Supplier, int, error) {
 	offset := (page - 1) * pageSize
 	suppliers := []models.Supplier{}
 
 	rows, err := r.dbService.Query(ctx,
-		`SELECT * FROM purchasing.sp_list_suppliers($1, $2, $3)`,
-		tenantID, pageSize, offset,
+		`SELECT * FROM purchasing.sp_list_suppliers($1, $2)`,
+		pageSize, offset,
 	)
 	if err != nil {
 		return suppliers, 0, err
@@ -87,7 +87,7 @@ func (r *PurchasingRepository) ListSuppliers(ctx context.Context, tenantID uuid.
 
 	for rows.Next() {
 		supplier := models.Supplier{}
-		err := rows.Scan(&supplier.ID, &supplier.TenantID, &supplier.Name, &supplier.ContactPerson, &supplier.Email,
+		err := rows.Scan(&supplier.ID, &supplier.Name, &supplier.ContactPerson, &supplier.Email,
 			&supplier.Phone, &supplier.Address, &supplier.PaymentTerms, &supplier.IsActive, &supplier.CreatedAt, &supplier.UpdatedAt)
 		if err != nil {
 			return suppliers, 0, err
@@ -98,8 +98,7 @@ func (r *PurchasingRepository) ListSuppliers(ctx context.Context, tenantID uuid.
 	// Get total count
 	var totalCount int
 	countRow := r.dbService.QueryRow(ctx,
-		`SELECT total_count FROM purchasing.sp_get_suppliers_count($1)`,
-		tenantID,
+		`SELECT total_count FROM purchasing.sp_get_suppliers_count()`,
 	)
 	err = countRow.Scan(&totalCount)
 
@@ -107,11 +106,11 @@ func (r *PurchasingRepository) ListSuppliers(ctx context.Context, tenantID uuid.
 }
 
 // DeleteSupplier soft deletes a supplier
-func (r *PurchasingRepository) DeleteSupplier(ctx context.Context, supplierID, tenantID uuid.UUID) error {
+func (r *PurchasingRepository) DeleteSupplier(ctx context.Context, supplierID uuid.UUID) error {
 	var deleted bool
 	err := r.dbService.QueryRow(ctx,
-		`SELECT deleted FROM purchasing.sp_delete_supplier($1, $2)`,
-		supplierID, tenantID,
+		`SELECT deleted FROM purchasing.sp_delete_supplier($1)`,
+		supplierID,
 	).Scan(&deleted)
 	return err
 }
@@ -119,12 +118,12 @@ func (r *PurchasingRepository) DeleteSupplier(ctx context.Context, supplierID, t
 // ========== PURCHASE ORDER OPERATIONS ==========
 
 // CreatePurchaseOrder inserts a new purchase order
-func (r *PurchasingRepository) CreatePurchaseOrder(ctx context.Context, tenantID, supplierID uuid.UUID, expectedDelivery *string, notes *string, createdBy uuid.UUID) (*models.PurchaseOrder, error) {
+func (r *PurchasingRepository) CreatePurchaseOrder(ctx context.Context, supplierID uuid.UUID, expectedDelivery *string, notes *string, createdBy uuid.UUID) (*models.PurchaseOrder, error) {
 	po := &models.PurchaseOrder{}
 
 	row := r.dbService.QueryRow(ctx,
-		`SELECT * FROM purchasing.sp_create_purchase_order($1, $2, $3::DATE, $4, $5)`,
-		tenantID, supplierID, expectedDelivery, notes, createdBy,
+		`SELECT * FROM purchasing.sp_create_purchase_order($1, $2::DATE, $3, $4)`,
+		supplierID, expectedDelivery, notes, createdBy,
 	)
 
 	err := row.Scan(&po.ID, &po.PONumber, &po.SupplierID, &po.Status, &po.TotalAmount, &po.ExpectedDeliveryDate, &po.Notes)
@@ -133,18 +132,18 @@ func (r *PurchasingRepository) CreatePurchaseOrder(ctx context.Context, tenantID
 }
 
 // GetPurchaseOrder retrieves a single PO with items
-func (r *PurchasingRepository) GetPurchaseOrder(ctx context.Context, poID, tenantID uuid.UUID) (*models.PurchaseOrder, error) {
+func (r *PurchasingRepository) GetPurchaseOrder(ctx context.Context, poID uuid.UUID) (*models.PurchaseOrder, error) {
 	po := &models.PurchaseOrder{}
 
 	row := r.dbService.QueryRow(ctx,
-		`SELECT id, tenant_id, supplier_id, po_number, status, order_date, expected_delivery_date, 
+		`SELECT id, supplier_id, po_number, status, order_date, expected_delivery_date,
 		        total_amount, paid_amount, notes, created_by, created_at, updated_at
 		 FROM purchasing.purchase_orders
-		 WHERE id = $1 AND tenant_id = $2`,
-		poID, tenantID,
+		 WHERE id = $1`,
+		poID,
 	)
 
-	err := row.Scan(&po.ID, &po.TenantID, &po.SupplierID, &po.PONumber, &po.Status, &po.OrderDate,
+	err := row.Scan(&po.ID, &po.SupplierID, &po.PONumber, &po.Status, &po.OrderDate,
 		&po.ExpectedDeliveryDate, &po.TotalAmount, &po.PaidAmount, &po.Notes, &po.CreatedBy, &po.CreatedAt, &po.UpdatedAt)
 
 	if err != nil {
@@ -161,13 +160,13 @@ func (r *PurchasingRepository) GetPurchaseOrder(ctx context.Context, poID, tenan
 }
 
 // ListPurchaseOrders retrieves paginated purchase orders
-func (r *PurchasingRepository) ListPurchaseOrders(ctx context.Context, tenantID uuid.UUID, status *string, page, pageSize int) ([]models.PurchaseOrder, int, error) {
+func (r *PurchasingRepository) ListPurchaseOrders(ctx context.Context, status *string, page, pageSize int) ([]models.PurchaseOrder, int, error) {
 	offset := (page - 1) * pageSize
 	pos := []models.PurchaseOrder{}
 
 	rows, err := r.dbService.Query(ctx,
-		`SELECT * FROM purchasing.sp_list_purchase_orders($1, $2, $3, $4)`,
-		tenantID, status, pageSize, offset,
+		`SELECT * FROM purchasing.sp_list_purchase_orders($1, $2, $3)`,
+		status, pageSize, offset,
 	)
 	if err != nil {
 		return pos, 0, err
@@ -176,7 +175,7 @@ func (r *PurchasingRepository) ListPurchaseOrders(ctx context.Context, tenantID 
 
 	for rows.Next() {
 		po := models.PurchaseOrder{}
-		err := rows.Scan(&po.ID, &po.TenantID, &po.SupplierID, &po.PONumber, &po.Status, &po.OrderDate,
+		err := rows.Scan(&po.ID, &po.SupplierID, &po.PONumber, &po.Status, &po.OrderDate,
 			&po.ExpectedDeliveryDate, &po.TotalAmount, &po.PaidAmount, &po.Notes, &po.CreatedBy, &po.CreatedAt, &po.UpdatedAt)
 		if err != nil {
 			return pos, 0, err
@@ -186,8 +185,8 @@ func (r *PurchasingRepository) ListPurchaseOrders(ctx context.Context, tenantID 
 
 	// Get total count
 	countRow := r.dbService.QueryRow(ctx,
-		`SELECT total_count FROM purchasing.sp_get_purchase_orders_count($1, $2)`,
-		tenantID, status,
+		`SELECT total_count FROM purchasing.sp_get_purchase_orders_count($1)`,
+		status,
 	)
 	var totalCount int
 	err = countRow.Scan(&totalCount)
@@ -196,7 +195,7 @@ func (r *PurchasingRepository) ListPurchaseOrders(ctx context.Context, tenantID 
 }
 
 // ApprovePurchaseOrder changes PO status to approved
-func (r *PurchasingRepository) ApprovePurchaseOrder(ctx context.Context, poID, tenantID uuid.UUID) (*models.PurchaseOrder, error) {
+func (r *PurchasingRepository) ApprovePurchaseOrder(ctx context.Context, poID uuid.UUID) (*models.PurchaseOrder, error) {
 	po := &models.PurchaseOrder{}
 
 	row := r.dbService.QueryRow(ctx,
@@ -329,12 +328,11 @@ func (r *PurchasingRepository) MarkInvoiceAsPaid(ctx context.Context, invoiceID 
 // ========== REPORTS ==========
 
 // GetPendingPayments retrieves all outstanding invoices (accounts payable)
-func (r *PurchasingRepository) GetPendingPayments(ctx context.Context, tenantID uuid.UUID) ([]models.PurchaseOrder, error) {
+func (r *PurchasingRepository) GetPendingPayments(ctx context.Context) ([]models.PurchaseOrder, error) {
 	pos := []models.PurchaseOrder{}
 
 	rows, err := r.dbService.Query(ctx,
-		`SELECT * FROM purchasing.sp_get_pending_payments($1)`,
-		tenantID,
+		`SELECT * FROM purchasing.sp_get_pending_payments()`,
 	)
 	if err != nil {
 		return pos, err
@@ -343,7 +341,7 @@ func (r *PurchasingRepository) GetPendingPayments(ctx context.Context, tenantID 
 
 	for rows.Next() {
 		po := models.PurchaseOrder{}
-		err := rows.Scan(&po.ID, &po.TenantID, &po.SupplierID, &po.PONumber, &po.Status, &po.OrderDate,
+		err := rows.Scan(&po.ID, &po.SupplierID, &po.PONumber, &po.Status, &po.OrderDate,
 			&po.ExpectedDeliveryDate, &po.TotalAmount, &po.PaidAmount, &po.Notes, &po.CreatedBy, &po.CreatedAt, &po.UpdatedAt)
 		if err != nil {
 			return pos, err
@@ -357,11 +355,11 @@ func (r *PurchasingRepository) GetPendingPayments(ctx context.Context, tenantID 
 // ========== PHASE 2A: PRICE COMPARISON ==========
 
 // GetPriceComparison retrieves all supplier prices for a specific product
-func (r *PurchasingRepository) GetPriceComparison(ctx context.Context, tenantID, productID uuid.UUID) ([]models.PriceComparison, error) {
+func (r *PurchasingRepository) GetPriceComparison(ctx context.Context, productID uuid.UUID) ([]models.PriceComparison, error) {
 	comparisons := []models.PriceComparison{}
 
 	rows, err := r.dbService.Query(ctx,
-		`SELECT 
+		`SELECT
 			sr.product_id,
 			sr.supplier_id,
 			s.name,
@@ -371,9 +369,9 @@ func (r *PurchasingRepository) GetPriceComparison(ctx context.Context, tenantID,
 			COALESCE(AVG(sr.unit_cost) OVER (PARTITION BY sr.product_id), sr.unit_cost) as average_cost
 		 FROM purchasing.supplier_rates sr
 		 JOIN purchasing.suppliers s ON sr.supplier_id = s.id
-		 WHERE s.tenant_id = $1 AND sr.product_id = $2
+		 WHERE sr.product_id = $1
 		 ORDER BY sr.unit_cost ASC`,
-		tenantID, productID,
+		productID,
 	)
 	if err != nil {
 		return comparisons, err
@@ -393,20 +391,20 @@ func (r *PurchasingRepository) GetPriceComparison(ctx context.Context, tenantID,
 }
 
 // GetBestSupplierForProduct returns the supplier with lowest unit cost for a product
-func (r *PurchasingRepository) GetBestSupplierForProduct(ctx context.Context, tenantID, productID uuid.UUID) (*models.Supplier, error) {
+func (r *PurchasingRepository) GetBestSupplierForProduct(ctx context.Context, productID uuid.UUID) (*models.Supplier, error) {
 	supplier := &models.Supplier{}
 
 	row := r.dbService.QueryRow(ctx,
-		`SELECT s.id, s.tenant_id, s.name, s.contact_person, s.email, s.phone, s.address, s.payment_terms, s.is_active, s.created_at, s.updated_at
+		`SELECT s.id, s.name, s.contact_person, s.email, s.phone, s.address, s.payment_terms, s.is_active, s.created_at, s.updated_at
 		 FROM purchasing.suppliers s
 		 JOIN purchasing.supplier_rates sr ON s.id = sr.supplier_id
-		 WHERE s.tenant_id = $1 AND sr.product_id = $2
+		 WHERE sr.product_id = $1
 		 ORDER BY sr.unit_cost ASC
 		 LIMIT 1`,
-		tenantID, productID,
+		productID,
 	)
 
-	err := row.Scan(&supplier.ID, &supplier.TenantID, &supplier.Name, &supplier.ContactPerson, &supplier.Email,
+	err := row.Scan(&supplier.ID, &supplier.Name, &supplier.ContactPerson, &supplier.Email,
 		&supplier.Phone, &supplier.Address, &supplier.PaymentTerms, &supplier.IsActive, &supplier.CreatedAt, &supplier.UpdatedAt)
 
 	return supplier, err
@@ -415,27 +413,27 @@ func (r *PurchasingRepository) GetBestSupplierForProduct(ctx context.Context, te
 // ========== PHASE 2A: FIFO BATCH TRACKING ==========
 
 // CreateProductBatch records a new product batch for inventory tracking
-func (r *PurchasingRepository) CreateProductBatch(ctx context.Context, tenantID uuid.UUID, batch *models.ProductBatch) (*models.ProductBatch, error) {
+func (r *PurchasingRepository) CreateProductBatch(ctx context.Context, batch *models.ProductBatch) (*models.ProductBatch, error) {
 	newBatch := &models.ProductBatch{}
 
 	row := r.dbService.QueryRow(ctx,
-		`SELECT * FROM purchasing.sp_create_product_batch($1, $2, $3, $4, $5, $6, $7, $8)`,
-		tenantID, batch.ProductID, batch.BatchNumber, batch.Quantity, batch.UnitCost, batch.ReceiptDate, batch.ExpirationDate, batch.Status,
+		`SELECT * FROM purchasing.sp_create_product_batch($1, $2, $3, $4, $5, $6, $7)`,
+		batch.ProductID, batch.BatchNumber, batch.Quantity, batch.UnitCost, batch.ReceiptDate, batch.ExpirationDate, batch.Status,
 	)
 
-	err := row.Scan(&newBatch.ID, &newBatch.TenantID, &newBatch.ProductID, &newBatch.BatchNumber, &newBatch.Quantity,
+	err := row.Scan(&newBatch.ID, &newBatch.ProductID, &newBatch.BatchNumber, &newBatch.Quantity,
 		&newBatch.UnitCost, &newBatch.ReceiptDate, &newBatch.ExpirationDate, &newBatch.Status, &newBatch.CreatedAt, &newBatch.UpdatedAt)
 
 	return newBatch, err
 }
 
 // GetProductBatches retrieves all batches for a product ordered by receipt date (oldest first)
-func (r *PurchasingRepository) GetProductBatches(ctx context.Context, tenantID, productID uuid.UUID) ([]models.ProductBatch, error) {
+func (r *PurchasingRepository) GetProductBatches(ctx context.Context, productID uuid.UUID) ([]models.ProductBatch, error) {
 	batches := []models.ProductBatch{}
 
 	rows, err := r.dbService.Query(ctx,
-		`SELECT * FROM purchasing.sp_get_product_batches($1, $2)`,
-		tenantID, productID,
+		`SELECT * FROM purchasing.sp_get_product_batches($1)`,
+		productID,
 	)
 	if err != nil {
 		return batches, err
@@ -444,7 +442,7 @@ func (r *PurchasingRepository) GetProductBatches(ctx context.Context, tenantID, 
 
 	for rows.Next() {
 		batch := models.ProductBatch{}
-		err := rows.Scan(&batch.ID, &batch.TenantID, &batch.ProductID, &batch.BatchNumber, &batch.Quantity,
+		err := rows.Scan(&batch.ID, &batch.ProductID, &batch.BatchNumber, &batch.Quantity,
 			&batch.UnitCost, &batch.ReceiptDate, &batch.ExpirationDate, &batch.Status, &batch.CreatedAt, &batch.UpdatedAt)
 		if err != nil {
 			return batches, err
@@ -456,15 +454,15 @@ func (r *PurchasingRepository) GetProductBatches(ctx context.Context, tenantID, 
 }
 
 // GetOldestBatchForSale retrieves the oldest batch with remaining quantity (FIFO principle)
-func (r *PurchasingRepository) GetOldestBatchForSale(ctx context.Context, tenantID, productID uuid.UUID) (*models.ProductBatch, error) {
+func (r *PurchasingRepository) GetOldestBatchForSale(ctx context.Context, productID uuid.UUID) (*models.ProductBatch, error) {
 	batch := &models.ProductBatch{}
 
 	row := r.dbService.QueryRow(ctx,
-		`SELECT * FROM purchasing.sp_get_oldest_batch_for_sale($1, $2)`,
-		tenantID, productID,
+		`SELECT * FROM purchasing.sp_get_oldest_batch_for_sale($1)`,
+		productID,
 	)
 
-	err := row.Scan(&batch.ID, &batch.TenantID, &batch.ProductID, &batch.BatchNumber, &batch.Quantity,
+	err := row.Scan(&batch.ID, &batch.ProductID, &batch.BatchNumber, &batch.Quantity,
 		&batch.UnitCost, &batch.ReceiptDate, &batch.ExpirationDate, &batch.Status, &batch.CreatedAt, &batch.UpdatedAt)
 
 	return batch, err
@@ -473,31 +471,31 @@ func (r *PurchasingRepository) GetOldestBatchForSale(ctx context.Context, tenant
 // ========== PHASE 2A: RFQ (REQUEST FOR QUOTE) ==========
 
 // CreateRFQ creates a new Request for Quote
-func (r *PurchasingRepository) CreateRFQ(ctx context.Context, tenantID uuid.UUID, rfq *models.RequestForQuote) (*models.RequestForQuote, error) {
+func (r *PurchasingRepository) CreateRFQ(ctx context.Context, rfq *models.RequestForQuote) (*models.RequestForQuote, error) {
 	newRFQ := &models.RequestForQuote{}
 
 	row := r.dbService.QueryRow(ctx,
-		`SELECT * FROM purchasing.sp_create_rfq($1, $2, $3)`,
-		tenantID, rfq.RFQNumber, rfq.Status,
+		`SELECT * FROM purchasing.sp_create_rfq($1, $2)`,
+		rfq.RFQNumber, rfq.Status,
 	)
 
-	err := row.Scan(&newRFQ.ID, &newRFQ.TenantID, &newRFQ.RFQNumber, &newRFQ.Status, &newRFQ.CreatedAt, &newRFQ.UpdatedAt)
+	err := row.Scan(&newRFQ.ID, &newRFQ.RFQNumber, &newRFQ.Status, &newRFQ.CreatedAt, &newRFQ.UpdatedAt)
 
 	return newRFQ, err
 }
 
 // GetRFQ retrieves a Request for Quote with all items and responses
-func (r *PurchasingRepository) GetRFQ(ctx context.Context, rfqID, tenantID uuid.UUID) (*models.RequestForQuote, error) {
+func (r *PurchasingRepository) GetRFQ(ctx context.Context, rfqID uuid.UUID) (*models.RequestForQuote, error) {
 	rfq := &models.RequestForQuote{}
 
 	row := r.dbService.QueryRow(ctx,
-		`SELECT id, tenant_id, rfq_number, status, created_at, updated_at
+		`SELECT id, rfq_number, status, created_at, updated_at
 		 FROM purchasing.request_for_quotes
-		 WHERE id = $1 AND tenant_id = $2`,
-		rfqID, tenantID,
+		 WHERE id = $1`,
+		rfqID,
 	)
 
-	err := row.Scan(&rfq.ID, &rfq.TenantID, &rfq.RFQNumber, &rfq.Status, &rfq.CreatedAt, &rfq.UpdatedAt)
+	err := row.Scan(&rfq.ID, &rfq.RFQNumber, &rfq.Status, &rfq.CreatedAt, &rfq.UpdatedAt)
 	if err != nil {
 		return rfq, err
 	}
@@ -600,11 +598,11 @@ func (r *PurchasingRepository) GetRFQResponses(ctx context.Context, rfqID uuid.U
 }
 
 // SelectBestRFQResponse marks the chosen supplier response and closes the RFQ
-func (r *PurchasingRepository) SelectBestRFQResponse(ctx context.Context, rfqID, responseID, tenantID uuid.UUID) error {
+func (r *PurchasingRepository) SelectBestRFQResponse(ctx context.Context, rfqID, responseID uuid.UUID) error {
 	var updated bool
 	err := r.dbService.QueryRow(ctx,
-		`SELECT status_updated FROM purchasing.sp_select_best_rfq_response($1, $2)`,
-		rfqID, tenantID,
+		`SELECT status_updated FROM purchasing.sp_select_best_rfq_response($1)`,
+		rfqID,
 	).Scan(&updated)
 	return err
 }
@@ -613,8 +611,7 @@ func (r *PurchasingRepository) SelectBestRFQResponse(ctx context.Context, rfqID,
 func (r *PurchasingRepository) GetRFQComparison(ctx context.Context, rfqID uuid.UUID) (map[string]interface{}, error) {
 	comparison := map[string]interface{}{}
 
-	// Get RFQ info
-	rfq, err := r.GetRFQ(ctx, rfqID, uuid.Nil) // tenantID validation should be done at service level
+	rfq, err := r.GetRFQ(ctx, rfqID)
 	if err != nil {
 		return comparison, err
 	}

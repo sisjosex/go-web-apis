@@ -43,19 +43,7 @@ func (ctrl *SalesOrderController) CreateSalesOrder(c *gin.Context) {
 		return
 	}
 
-	tenantID := c.GetString("tenant_id")
-	if tenantID == "" {
-		c.JSON(http.StatusUnauthorized, coreErrors.BuildErrorSingle(c, "auth.tenant-required"))
-		return
-	}
-
-	tenantUUID, err := uuid.Parse(tenantID)
-	if err != nil {
-		c.JSON(http.StatusBadRequest, coreErrors.BuildErrorSingle(c, "validation.invalid-uuid"))
-		return
-	}
-
-	order, err := ctrl.service.CreateSalesOrder(c.Request.Context(), tenantUUID, &dto)
+	order, err := ctrl.service.CreateSalesOrder(c.Request.Context(), &dto)
 	if err != nil {
 		status := utils.GetHTTPStatusFromError(err)
 		c.JSON(status, coreErrors.BuildError(c, err))
@@ -103,14 +91,6 @@ func (ctrl *SalesOrderController) GetSalesOrder(c *gin.Context) {
 // @Success 200 {array} models.SalesOrder
 // @Router /sales/orders [get]
 func (ctrl *SalesOrderController) ListSalesOrders(c *gin.Context) {
-	tenantID := c.GetString("tenant_id")
-	if tenantID == "" {
-		c.JSON(http.StatusUnauthorized, coreErrors.BuildErrorSingle(c, "auth.tenant-required"))
-		return
-	}
-
-	tenantUUID, _ := uuid.Parse(tenantID)
-
 	limit := 20
 	offset := 0
 	if l := c.Query("limit"); l != "" {
@@ -124,7 +104,7 @@ func (ctrl *SalesOrderController) ListSalesOrders(c *gin.Context) {
 		}
 	}
 
-	orders, err := ctrl.service.GetSalesOrdersByTenant(c.Request.Context(), tenantUUID, limit, offset)
+	orders, err := ctrl.service.GetAllSalesOrders(c.Request.Context(), limit, offset)
 	if err != nil {
 		status := utils.GetHTTPStatusFromError(err)
 		c.JSON(status, coreErrors.BuildError(c, err))
@@ -296,18 +276,6 @@ func (ctrl *SalesOrderController) GetOrderWithBatches(c *gin.Context) {
 // @Failure 400 {object} coreErrors.ErrorResponse
 // @Router /sales/reports/sales [get]
 func (ctrl *SalesOrderController) GetSalesReport(c *gin.Context) {
-	tenantID := c.GetString("tenant_id")
-	if tenantID == "" {
-		c.JSON(http.StatusUnauthorized, coreErrors.BuildErrorSingle(c, "auth.tenant-required"))
-		return
-	}
-
-	tenantUUID, err := uuid.Parse(tenantID)
-	if err != nil {
-		c.JSON(http.StatusBadRequest, coreErrors.BuildErrorSingle(c, "validation.invalid-uuid"))
-		return
-	}
-
 	startDateStr := c.Query("start_date")
 	endDateStr := c.Query("end_date")
 
@@ -330,7 +298,7 @@ func (ctrl *SalesOrderController) GetSalesReport(c *gin.Context) {
 		return
 	}
 
-	reports, err := ctrl.service.GetSalesReport(c.Request.Context(), tenantUUID, startDate, endDate)
+	reports, err := ctrl.service.GetSalesReport(c.Request.Context(), startDate, endDate)
 	if err != nil {
 		status := utils.GetHTTPStatusFromError(err)
 		c.JSON(status, coreErrors.BuildError(c, err))

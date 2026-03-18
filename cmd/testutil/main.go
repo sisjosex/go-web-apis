@@ -227,6 +227,5 @@ Examples:
   go run cmd/testutil/main.go -clean
 
   # Just run migrations on existing DB
-  go run cmd/testutil/main.go -migrate
-`)
+  go run cmd/testutil/main.go -migrate`)
 }

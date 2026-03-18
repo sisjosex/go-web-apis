@@ -22,11 +22,10 @@ func NewCustomerRepository(dbService coreServices.DatabaseService) *CustomerRepo
 }
 
 // CreateCustomer creates a new customer
-func (r *CustomerRepository) CreateCustomer(ctx context.Context, dto *models.CreateCustomerRequestDto, tenantID uuid.UUID) (*models.Customer, error) {
+func (r *CustomerRepository) CreateCustomer(ctx context.Context, dto *models.CreateCustomerRequestDto) (*models.Customer, error) {
 	customer := &models.Customer{}
 	err := r.dbService.QueryRow(ctx,
-		`CALL sales.sp_create_customer($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`,
-		tenantID,
+		`SELECT * FROM sales.sp_create_customer($1, $2, $3, $4, $5, $6, $7, $8)`,
 		dto.Name,
 		dto.Email,
 		dto.PhoneNumber,
@@ -37,7 +36,6 @@ func (r *CustomerRepository) CreateCustomer(ctx context.Context, dto *models.Cre
 		dto.Country,
 	).Scan(
 		&customer.ID,
-		&customer.TenantID,
 		&customer.Name,
 		&customer.Email,
 		&customer.PhoneNumber,
@@ -57,11 +55,10 @@ func (r *CustomerRepository) CreateCustomer(ctx context.Context, dto *models.Cre
 func (r *CustomerRepository) GetCustomerByID(ctx context.Context, id uuid.UUID) (*models.Customer, error) {
 	customer := &models.Customer{}
 	err := r.dbService.QueryRow(ctx,
-		`CALL sales.sp_get_customer_by_id($1)`,
+		`SELECT * FROM sales.sp_get_customer_by_id($1)`,
 		id,
 	).Scan(
 		&customer.ID,
-		&customer.TenantID,
 		&customer.Name,
 		&customer.Email,
 		&customer.PhoneNumber,
@@ -77,12 +74,12 @@ func (r *CustomerRepository) GetCustomerByID(ctx context.Context, id uuid.UUID) 
 	return customer, err
 }
 
-// GetCustomersByTenant retrieves all customers for a tenant
-func (r *CustomerRepository) GetCustomersByTenant(ctx context.Context, tenantID uuid.UUID, limit int, offset int) ([]models.Customer, error) {
+// GetAllCustomers retrieves all customers
+func (r *CustomerRepository) GetAllCustomers(ctx context.Context, limit int, offset int) ([]models.Customer, error) {
 	var customers []models.Customer
 	rows, err := r.dbService.Query(ctx,
-		`CALL sales.sp_get_customers_by_tenant($1, $2, $3)`,
-		tenantID, limit, offset,
+		`SELECT * FROM sales.sp_get_all_customers($1, $2)`,
+		limit, offset,
 	)
 	if err != nil {
 		return customers, err
@@ -92,7 +89,7 @@ func (r *CustomerRepository) GetCustomersByTenant(ctx context.Context, tenantID 
 	for rows.Next() {
 		var c models.Customer
 		err := rows.Scan(
-			&c.ID, &c.TenantID, &c.Name, &c.Email, &c.PhoneNumber,
+			&c.ID, &c.Name, &c.Email, &c.PhoneNumber,
 			&c.Address, &c.City, &c.State, &c.PostalCode, &c.Country,
 			&c.Status, &c.CreatedAt, &c.UpdatedAt,
 		)
@@ -108,7 +105,7 @@ func (r *CustomerRepository) GetCustomersByTenant(ctx context.Context, tenantID 
 func (r *CustomerRepository) UpdateCustomer(ctx context.Context, id uuid.UUID, dto *models.UpdateCustomerRequestDto) (*models.Customer, error) {
 	customer := &models.Customer{}
 	err := r.dbService.QueryRow(ctx,
-		`CALL sales.sp_update_customer($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
+		`SELECT * FROM sales.sp_update_customer($1, $2, $3, $4, $5, $6, $7, $8)`,
 		id,
 		dto.Name,
 		dto.PhoneNumber,
@@ -118,7 +115,7 @@ func (r *CustomerRepository) UpdateCustomer(ctx context.Context, id uuid.UUID, d
 		dto.PostalCode,
 		dto.Country,
 	).Scan(
-		&customer.ID, &customer.TenantID, &customer.Name, &customer.Email, &customer.PhoneNumber,
+		&customer.ID, &customer.Name, &customer.Email, &customer.PhoneNumber,
 		&customer.Address, &customer.City, &customer.State, &customer.PostalCode, &customer.Country,
 		&customer.Status, &customer.CreatedAt, &customer.UpdatedAt,
 	)
@@ -132,13 +129,13 @@ func (r *CustomerRepository) DeleteCustomer(ctx context.Context, id uuid.UUID) e
 }
 
 // GetCustomerByEmail retrieves a customer by email
-func (r *CustomerRepository) GetCustomerByEmail(ctx context.Context, email string, tenantID uuid.UUID) (*models.Customer, error) {
+func (r *CustomerRepository) GetCustomerByEmail(ctx context.Context, email string) (*models.Customer, error) {
 	customer := &models.Customer{}
 	err := r.dbService.QueryRow(ctx,
-		`CALL sales.sp_get_customer_by_email($1, $2)`,
-		email, tenantID,
+		`SELECT * FROM sales.sp_get_customer_by_email($1)`,
+		email,
 	).Scan(
-		&customer.ID, &customer.TenantID, &customer.Name, &customer.Email, &customer.PhoneNumber,
+		&customer.ID, &customer.Name, &customer.Email, &customer.PhoneNumber,
 		&customer.Address, &customer.City, &customer.State, &customer.PostalCode, &customer.Country,
 		&customer.Status, &customer.CreatedAt, &customer.UpdatedAt,
 	)

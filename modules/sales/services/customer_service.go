@@ -9,6 +9,7 @@ import (
 	"github.com/google/uuid"
 )
 
+
 // CustomerService handles customer business logic
 type CustomerService struct {
 	repository interfaces.CustomerRepository
@@ -22,8 +23,8 @@ func NewCustomerService(repo interfaces.CustomerRepository) *CustomerService {
 }
 
 // CreateCustomer creates a new customer
-func (s *CustomerService) CreateCustomer(ctx context.Context, dto *models.CreateCustomerRequestDto, tenantID uuid.UUID) (*models.Customer, error) {
-	return s.repository.CreateCustomer(ctx, dto, tenantID)
+func (s *CustomerService) CreateCustomer(ctx context.Context, dto *models.CreateCustomerRequestDto) (*models.Customer, error) {
+	return s.repository.CreateCustomer(ctx, dto)
 }
 
 // GetCustomerByID retrieves a customer by ID
@@ -31,9 +32,9 @@ func (s *CustomerService) GetCustomerByID(ctx context.Context, id uuid.UUID) (*m
 	return s.repository.GetCustomerByID(ctx, id)
 }
 
-// GetCustomersByTenant retrieves all customers for a tenant
-func (s *CustomerService) GetCustomersByTenant(ctx context.Context, tenantID uuid.UUID, limit int, offset int) ([]models.Customer, error) {
-	return s.repository.GetCustomersByTenant(ctx, tenantID, limit, offset)
+// GetAllCustomers retrieves all customers
+func (s *CustomerService) GetAllCustomers(ctx context.Context, limit int, offset int) ([]models.Customer, error) {
+	return s.repository.GetAllCustomers(ctx, limit, offset)
 }
 
 // UpdateCustomer updates a customer

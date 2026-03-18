@@ -9,7 +9,6 @@ import (
 // Supplier represents a vendor
 type Supplier struct {
 	ID            uuid.UUID `json:"id"`
-	TenantID      uuid.UUID `json:"tenant_id"`
 	Name          string    `json:"name"`
 	ContactPerson *string   `json:"contact_person"`
 	Email         *string   `json:"email"`
@@ -24,7 +23,6 @@ type Supplier struct {
 // PurchaseOrder represents a purchase order from suppliers
 type PurchaseOrder struct {
 	ID                   uuid.UUID              `json:"id"`
-	TenantID             uuid.UUID              `json:"tenant_id"`
 	SupplierID           uuid.UUID              `json:"supplier_id"`
 	PONumber             string                 `json:"po_number"`
 	Status               string                 `json:"status"` // draft, approved, received, invoiced, paid, cancelled
@@ -95,7 +93,6 @@ type PriceComparison struct {
 // ProductBatch represents batch for FIFO tracking
 type ProductBatch struct {
 	ID             uuid.UUID  `json:"id"`
-	TenantID       uuid.UUID  `json:"tenant_id"`
 	ProductID      uuid.UUID  `json:"product_id"`
 	BatchNumber    string     `json:"batch_number"`
 	Quantity       int        `json:"quantity"`
@@ -110,7 +107,6 @@ type ProductBatch struct {
 // RequestForQuote represents a quote request to suppliers
 type RequestForQuote struct {
 	ID        uuid.UUID     `json:"id"`
-	TenantID  uuid.UUID     `json:"tenant_id"`
 	RFQNumber string        `json:"rfq_number"`
 	Status    string        `json:"status"` // draft, sent, responded, closed
 	Items     []RFQItem     `json:"items"`

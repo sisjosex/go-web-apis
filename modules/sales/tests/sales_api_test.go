@@ -111,8 +111,8 @@ func TestUpdateCustomer_RequiresAuth(t *testing.T) {
 
 	w := helper.DoRequest("PATCH", fmt.Sprintf("/sales/customers/%s", customerID), body, map[string]string{})
 
-	// Should return 404 when customer not found
-	assert.Equal(t, http.StatusNotFound, w.Code)
+	// Should require authentication
+	assert.Equal(t, http.StatusUnauthorized, w.Code)
 }
 
 func TestDeleteCustomer_RequiresAuth(t *testing.T) {
@@ -122,8 +122,8 @@ func TestDeleteCustomer_RequiresAuth(t *testing.T) {
 	customerID := "550e8400-e29b-41d4-a716-446655440000"
 	w := helper.DoRequest("DELETE", fmt.Sprintf("/sales/customers/%s", customerID), nil, map[string]string{})
 
-	// Should return 404 when customer not found
-	assert.Equal(t, http.StatusNotFound, w.Code)
+	// Should require authentication
+	assert.Equal(t, http.StatusUnauthorized, w.Code)
 }
 
 func TestGetSalesOrder_RequiresAuth(t *testing.T) {
@@ -133,6 +133,6 @@ func TestGetSalesOrder_RequiresAuth(t *testing.T) {
 	orderID := "550e8400-e29b-41d4-a716-446655440000"
 	w := helper.DoRequest("GET", fmt.Sprintf("/sales/orders/%s", orderID), nil, map[string]string{})
 
-	// Should return 404 when order not found
-	assert.Equal(t, http.StatusNotFound, w.Code)
+	// Should require authentication
+	assert.Equal(t, http.StatusUnauthorized, w.Code)
 }

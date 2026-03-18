@@ -23,17 +23,16 @@ func NewSalesOrderRepository(dbService coreServices.DatabaseService) *SalesOrder
 }
 
 // CreateSalesOrder creates a new sales order with items
-func (r *SalesOrderRepository) CreateSalesOrder(ctx context.Context, tenantID uuid.UUID, dto *models.CreateSalesOrderRequestDto) (*models.SalesOrder, error) {
+func (r *SalesOrderRepository) CreateSalesOrder(ctx context.Context, dto *models.CreateSalesOrderRequestDto) (*models.SalesOrder, error) {
 	order := &models.SalesOrder{}
 	err := r.dbService.QueryRow(ctx,
-		`CALL sales.sp_create_sales_order($1, $2, $3, $4, $5)`,
-		tenantID,
+		`SELECT * FROM sales.sp_create_sales_order($1, $2, $3, $4)`,
 		dto.CustomerID,
 		dto.ShippingAddress,
 		dto.Notes,
 		dto.DiscountAmount,
 	).Scan(
-		&order.ID, &order.TenantID, &order.CustomerID, &order.OrderNumber,
+		&order.ID, &order.CustomerID, &order.OrderNumber,
 		&order.Status, &order.SubTotal, &order.TaxAmount, &order.Total,
 		&order.DiscountAmount, &order.ShippingAddress, &order.Notes,
 		&order.CreatedAt, &order.UpdatedAt,
@@ -45,10 +44,10 @@ func (r *SalesOrderRepository) CreateSalesOrder(ctx context.Context, tenantID uu
 func (r *SalesOrderRepository) GetSalesOrderByID(ctx context.Context, id uuid.UUID) (*models.SalesOrder, error) {
 	order := &models.SalesOrder{}
 	err := r.dbService.QueryRow(ctx,
-		`CALL sales.sp_get_sales_order_by_id($1)`,
+		`SELECT * FROM sales.sp_get_sales_order_by_id($1)`,
 		id,
 	).Scan(
-		&order.ID, &order.TenantID, &order.CustomerID, &order.OrderNumber,
+		&order.ID, &order.CustomerID, &order.OrderNumber,
 		&order.Status, &order.SubTotal, &order.TaxAmount, &order.Total,
 		&order.DiscountAmount, &order.ShippingAddress, &order.Notes,
 		&order.CreatedAt, &order.UpdatedAt,
@@ -56,12 +55,12 @@ func (r *SalesOrderRepository) GetSalesOrderByID(ctx context.Context, id uuid.UU
 	return order, err
 }
 
-// GetSalesOrdersByTenant retrieves all sales orders for a tenant
-func (r *SalesOrderRepository) GetSalesOrdersByTenant(ctx context.Context, tenantID uuid.UUID, limit int, offset int) ([]models.SalesOrder, error) {
+// GetAllSalesOrders retrieves all sales orders
+func (r *SalesOrderRepository) GetAllSalesOrders(ctx context.Context, limit int, offset int) ([]models.SalesOrder, error) {
 	var orders []models.SalesOrder
 	rows, err := r.dbService.Query(ctx,
-		`CALL sales.sp_get_sales_orders_by_tenant($1, $2, $3)`,
-		tenantID, limit, offset,
+		`SELECT * FROM sales.sp_get_all_sales_orders($1, $2)`,
+		limit, offset,
 	)
 	if err != nil {
 		return orders, err
@@ -71,7 +70,7 @@ func (r *SalesOrderRepository) GetSalesOrdersByTenant(ctx context.Context, tenan
 	for rows.Next() {
 		var o models.SalesOrder
 		err := rows.Scan(
-			&o.ID, &o.TenantID, &o.CustomerID, &o.OrderNumber,
+			&o.ID, &o.CustomerID, &o.OrderNumber,
 			&o.Status, &o.SubTotal, &o.TaxAmount, &o.Total,
 			&o.DiscountAmount, &o.ShippingAddress, &o.Notes,
 			&o.CreatedAt, &o.UpdatedAt,
@@ -88,10 +87,10 @@ func (r *SalesOrderRepository) GetSalesOrdersByTenant(ctx context.Context, tenan
 func (r *SalesOrderRepository) UpdateSalesOrder(ctx context.Context, id uuid.UUID, dto *models.UpdateSalesOrderRequestDto) (*models.SalesOrder, error) {
 	order := &models.SalesOrder{}
 	err := r.dbService.QueryRow(ctx,
-		`CALL sales.sp_update_sales_order($1, $2, $3, $4, $5)`,
+		`SELECT * FROM sales.sp_update_sales_order($1, $2, $3, $4, $5)`,
 		id, dto.Status, dto.ShippingAddress, dto.Notes, dto.DiscountAmount,
 	).Scan(
-		&order.ID, &order.TenantID, &order.CustomerID, &order.OrderNumber,
+		&order.ID, &order.CustomerID, &order.OrderNumber,
 		&order.Status, &order.SubTotal, &order.TaxAmount, &order.Total,
 		&order.DiscountAmount, &order.ShippingAddress, &order.Notes,
 		&order.CreatedAt, &order.UpdatedAt,
@@ -103,7 +102,7 @@ func (r *SalesOrderRepository) UpdateSalesOrder(ctx context.Context, id uuid.UUI
 func (r *SalesOrderRepository) GetSalesOrdersByCustomer(ctx context.Context, customerID uuid.UUID) ([]models.SalesOrder, error) {
 	var orders []models.SalesOrder
 	rows, err := r.dbService.Query(ctx,
-		`CALL sales.sp_get_sales_orders_by_customer($1)`,
+		`SELECT * FROM sales.sp_get_sales_orders_by_customer($1)`,
 		customerID,
 	)
 	if err != nil {
@@ -114,7 +113,7 @@ func (r *SalesOrderRepository) GetSalesOrdersByCustomer(ctx context.Context, cus
 	for rows.Next() {
 		var o models.SalesOrder
 		err := rows.Scan(
-			&o.ID, &o.TenantID, &o.CustomerID, &o.OrderNumber,
+			&o.ID, &o.CustomerID, &o.OrderNumber,
 			&o.Status, &o.SubTotal, &o.TaxAmount, &o.Total,
 			&o.DiscountAmount, &o.ShippingAddress, &o.Notes,
 			&o.CreatedAt, &o.UpdatedAt,
@@ -128,13 +127,13 @@ func (r *SalesOrderRepository) GetSalesOrdersByCustomer(ctx context.Context, cus
 }
 
 // GetSalesOrderByOrderNumber retrieves an order by order number
-func (r *SalesOrderRepository) GetSalesOrderByOrderNumber(ctx context.Context, orderNumber string, tenantID uuid.UUID) (*models.SalesOrder, error) {
+func (r *SalesOrderRepository) GetSalesOrderByOrderNumber(ctx context.Context, orderNumber string) (*models.SalesOrder, error) {
 	order := &models.SalesOrder{}
 	err := r.dbService.QueryRow(ctx,
-		`CALL sales.sp_get_sales_order_by_number($1, $2)`,
-		orderNumber, tenantID,
+		`SELECT * FROM sales.sp_get_sales_order_by_number($1)`,
+		orderNumber,
 	).Scan(
-		&order.ID, &order.TenantID, &order.CustomerID, &order.OrderNumber,
+		&order.ID, &order.CustomerID, &order.OrderNumber,
 		&order.Status, &order.SubTotal, &order.TaxAmount, &order.Total,
 		&order.DiscountAmount, &order.ShippingAddress, &order.Notes,
 		&order.CreatedAt, &order.UpdatedAt,
@@ -187,7 +186,7 @@ func (r *SalesOrderRepository) GetOrderItems(ctx context.Context, orderID uuid.U
 func (r *SalesOrderRepository) AddOrderItemWithBatch(ctx context.Context, orderID uuid.UUID, productID uuid.UUID, quantity float64, unitPrice float64) (*models.OrderItem, error) {
 	var item models.OrderItem
 	row := r.dbService.QueryRow(ctx,
-		`SELECT id, order_id, product_id, product_sku, product_name, quantity, unit_price, line_total, created_at 
+		`SELECT id, order_id, product_id, product_sku, product_name, quantity, unit_price, line_total, created_at
 		 FROM sales.sp_add_order_item_with_batch($1, $2, $3, $4)`,
 		orderID, productID, quantity, unitPrice,
 	)
@@ -206,7 +205,7 @@ func (r *SalesOrderRepository) AddOrderItemWithBatch(ctx context.Context, orderI
 func (r *SalesOrderRepository) CompleteOrder(ctx context.Context, orderID uuid.UUID) (*models.SalesOrder, error) {
 	var order models.SalesOrder
 	row := r.dbService.QueryRow(ctx,
-		`SELECT order_id, order_number, customer_id, status, sub_total, tax_amount, total, discount_amount, shipping_address, notes, created_at, updated_at 
+		`SELECT order_id, order_number, customer_id, status, sub_total, tax_amount, total, discount_amount, shipping_address, notes, created_at, updated_at
 		 FROM sales.sp_complete_sales_order($1)`,
 		orderID,
 	)
@@ -228,7 +227,7 @@ func (r *SalesOrderRepository) CompleteOrder(ctx context.Context, orderID uuid.U
 func (r *SalesOrderRepository) CancelOrder(ctx context.Context, orderID uuid.UUID) (*models.SalesOrder, error) {
 	var order models.SalesOrder
 	row := r.dbService.QueryRow(ctx,
-		`SELECT id, order_number, customer_id, status, sub_total, tax_amount, total, discount_amount, shipping_address, notes, created_at, updated_at 
+		`SELECT id, order_number, customer_id, status, sub_total, tax_amount, total, discount_amount, shipping_address, notes, created_at, updated_at
 		 FROM sales.sp_cancel_sales_order($1)`,
 		orderID,
 	)
@@ -248,7 +247,7 @@ func (r *SalesOrderRepository) CancelOrder(ctx context.Context, orderID uuid.UUI
 func (r *SalesOrderRepository) GetOrderWithBatches(ctx context.Context, orderID uuid.UUID) (*models.OrderWithBatches, error) {
 	var order models.OrderWithBatches
 	row := r.dbService.QueryRow(ctx,
-		`SELECT order_id, order_number, customer_id, customer_name, status, sub_total, tax_amount, total, discount_amount, shipping_address, item_count, batch_count, created_at, updated_at 
+		`SELECT order_id, order_number, customer_id, customer_name, status, sub_total, tax_amount, total, discount_amount, shipping_address, item_count, batch_count, created_at, updated_at
 		 FROM sales.sp_get_order_with_batches($1)`,
 		orderID,
 	)
@@ -265,11 +264,11 @@ func (r *SalesOrderRepository) GetOrderWithBatches(ctx context.Context, orderID 
 }
 
 // GetSalesReport retrieves sales metrics for a date range
-func (r *SalesOrderRepository) GetSalesReport(ctx context.Context, tenantID uuid.UUID, startDate time.Time, endDate time.Time) ([]models.SalesReport, error) {
+func (r *SalesOrderRepository) GetSalesReport(ctx context.Context, startDate time.Time, endDate time.Time) ([]models.SalesReport, error) {
 	var reports []models.SalesReport
 	rows, err := r.dbService.Query(ctx,
-		`SELECT metric_name, metric_value, metric_type FROM sales.sp_get_sales_report($1, $2::DATE, $3::DATE)`,
-		tenantID, startDate, endDate,
+		`SELECT metric_name, metric_value, metric_type FROM sales.sp_get_sales_report($1::DATE, $2::DATE)`,
+		startDate, endDate,
 	)
 	if err != nil {
 		return reports, err
@@ -293,7 +292,7 @@ func (r *SalesOrderRepository) GetSalesReport(ctx context.Context, tenantID uuid
 func (r *SalesOrderRepository) CreateReturn(ctx context.Context, orderID uuid.UUID, reason string) (*models.Return, error) {
 	var ret models.Return
 	row := r.dbService.QueryRow(ctx,
-		`SELECT id, order_id, customer_id, return_number, total_amount, reason, status, created_at, updated_at 
+		`SELECT id, order_id, customer_id, return_number, total_amount, reason, status, created_at, updated_at
 		 FROM sales.sp_create_return($1, $2)`,
 		orderID, reason,
 	)
@@ -312,7 +311,7 @@ func (r *SalesOrderRepository) CreateReturn(ctx context.Context, orderID uuid.UU
 func (r *SalesOrderRepository) ApproveReturn(ctx context.Context, returnID uuid.UUID) (*models.Return, error) {
 	var ret models.Return
 	row := r.dbService.QueryRow(ctx,
-		`SELECT id, order_id, customer_id, return_number, total_amount, reason, status, created_at, updated_at 
+		`SELECT id, order_id, customer_id, return_number, total_amount, reason, status, created_at, updated_at
 		 FROM sales.sp_approve_return($1)`,
 		returnID,
 	)
@@ -331,7 +330,7 @@ func (r *SalesOrderRepository) ApproveReturn(ctx context.Context, returnID uuid.
 func (r *SalesOrderRepository) GetReturn(ctx context.Context, returnID uuid.UUID) (*models.Return, error) {
 	var ret models.Return
 	row := r.dbService.QueryRow(ctx,
-		`SELECT id, order_id, customer_id, return_number, total_amount, reason, status, created_at, updated_at 
+		`SELECT id, order_id, customer_id, return_number, total_amount, reason, status, created_at, updated_at
 		 FROM sales.sp_get_return($1)`,
 		returnID,
 	)
@@ -350,7 +349,7 @@ func (r *SalesOrderRepository) GetReturn(ctx context.Context, returnID uuid.UUID
 func (r *SalesOrderRepository) GetReturnsByOrder(ctx context.Context, orderID uuid.UUID) ([]models.Return, error) {
 	var returns []models.Return
 	rows, err := r.dbService.Query(ctx,
-		`SELECT id, order_id, customer_id, return_number, total_amount, reason, status, created_at, updated_at 
+		`SELECT id, order_id, customer_id, return_number, total_amount, reason, status, created_at, updated_at
 		 FROM sales.sp_get_returns_by_order($1)`,
 		orderID,
 	)
@@ -377,7 +376,7 @@ func (r *SalesOrderRepository) GetReturnsByOrder(ctx context.Context, orderID uu
 func (r *SalesOrderRepository) CreatePayment(ctx context.Context, orderID uuid.UUID, amount float64, paymentMethod string, referenceNumber string, notes string) (*models.Payment, error) {
 	var payment models.Payment
 	row := r.dbService.QueryRow(ctx,
-		`SELECT id, order_id, customer_id, amount, payment_method, status, reference_number, notes, created_at, updated_at 
+		`SELECT id, order_id, customer_id, amount, payment_method, status, reference_number, notes, created_at, updated_at
 		 FROM sales.sp_create_payment($1, $2, $3, $4, $5, $6)`,
 		orderID, amount, paymentMethod, referenceNumber, notes,
 	)
@@ -396,7 +395,7 @@ func (r *SalesOrderRepository) CreatePayment(ctx context.Context, orderID uuid.U
 func (r *SalesOrderRepository) GetPayments(ctx context.Context, orderID uuid.UUID) ([]models.Payment, error) {
 	var payments []models.Payment
 	rows, err := r.dbService.Query(ctx,
-		`SELECT id, order_id, customer_id, amount, payment_method, status, reference_number, notes, created_at, updated_at 
+		`SELECT id, order_id, customer_id, amount, payment_method, status, reference_number, notes, created_at, updated_at
 		 FROM sales.sp_get_payments($1)`,
 		orderID,
 	)
@@ -423,7 +422,7 @@ func (r *SalesOrderRepository) GetPayments(ctx context.Context, orderID uuid.UUI
 func (r *SalesOrderRepository) GetPaymentByID(ctx context.Context, paymentID uuid.UUID) (*models.Payment, error) {
 	var payment models.Payment
 	row := r.dbService.QueryRow(ctx,
-		`SELECT id, order_id, customer_id, amount, payment_method, status, reference_number, notes, created_at, updated_at 
+		`SELECT id, order_id, customer_id, amount, payment_method, status, reference_number, notes, created_at, updated_at
 		 FROM sales.sp_get_payment_by_id($1)`,
 		paymentID,
 	)

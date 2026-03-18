@@ -2,6 +2,7 @@ package utils
 
 import (
 	"errors"
+	"strings"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
@@ -54,7 +55,7 @@ func GetHTTPStatusFromError(err error) int {
 	return 500
 }
 
-// strContains checks if string contains substring (case-insensitive)
+// strContains checks if string contains substring
 func strContains(s, substr string) bool {
-	return len(s) >= len(substr) && (s == substr || len(substr) == 0 || (len(s) > 0 && len(substr) > 0))
+	return strings.Contains(s, substr)
 }

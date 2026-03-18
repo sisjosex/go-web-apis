@@ -24,8 +24,8 @@ func NewSalesOrderService(repo interfaces.SalesOrderRepository) *SalesOrderServi
 }
 
 // CreateSalesOrder creates a new sales order
-func (s *SalesOrderService) CreateSalesOrder(ctx context.Context, tenantID uuid.UUID, dto *models.CreateSalesOrderRequestDto) (*models.SalesOrder, error) {
-	return s.orderRepository.CreateSalesOrder(ctx, tenantID, dto)
+func (s *SalesOrderService) CreateSalesOrder(ctx context.Context, dto *models.CreateSalesOrderRequestDto) (*models.SalesOrder, error) {
+	return s.orderRepository.CreateSalesOrder(ctx, dto)
 }
 
 // GetSalesOrderByID retrieves a sales order by ID
@@ -33,9 +33,9 @@ func (s *SalesOrderService) GetSalesOrderByID(ctx context.Context, id uuid.UUID)
 	return s.orderRepository.GetSalesOrderByID(ctx, id)
 }
 
-// GetSalesOrdersByTenant retrieves all orders for a tenant
-func (s *SalesOrderService) GetSalesOrdersByTenant(ctx context.Context, tenantID uuid.UUID, limit int, offset int) ([]models.SalesOrder, error) {
-	return s.orderRepository.GetSalesOrdersByTenant(ctx, tenantID, limit, offset)
+// GetAllSalesOrders retrieves all sales orders
+func (s *SalesOrderService) GetAllSalesOrders(ctx context.Context, limit int, offset int) ([]models.SalesOrder, error) {
+	return s.orderRepository.GetAllSalesOrders(ctx, limit, offset)
 }
 
 // UpdateSalesOrder updates a sales order
@@ -83,8 +83,8 @@ func (s *SalesOrderService) GetOrderWithBatches(ctx context.Context, orderID uui
 }
 
 // GetSalesReport retrieves sales metrics for a date range
-func (s *SalesOrderService) GetSalesReport(ctx context.Context, tenantID uuid.UUID, startDate, endDate coreModels.DateOnly) ([]models.SalesReport, error) {
-	return s.orderRepository.GetSalesReport(ctx, tenantID, time.Time(startDate), time.Time(endDate))
+func (s *SalesOrderService) GetSalesReport(ctx context.Context, startDate, endDate coreModels.DateOnly) ([]models.SalesReport, error) {
+	return s.orderRepository.GetSalesReport(ctx, time.Time(startDate), time.Time(endDate))
 }
 
 // ========== PHASE 3: Returns & Payments ==========

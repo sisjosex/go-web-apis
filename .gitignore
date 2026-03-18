@@ -83,3 +83,6 @@ certs/
 # Build artifacts
 build/
 output/
+
+# IA
+.claude

@@ -42,7 +42,7 @@ func CmdMigration(args []string) {
 	fs.Parse(args)
 
 	if *module == "" || *name == "" {
-		fmt.Println("❌ Error: Both -module and -name flags are required\n")
+		fmt.Println("❌ Error: Both -module and -name flags are required")
 		fs.Usage()
 		os.Exit(1)
 	}

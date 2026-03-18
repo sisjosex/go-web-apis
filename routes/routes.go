@@ -3,6 +3,7 @@ package routes
 import (
 	"josex/web/config"
 	authControllers "josex/web/modules/auth/controllers"
+	authMW "josex/web/modules/auth/middleware"
 	authRepos "josex/web/modules/auth/repositories"
 	authRoutes "josex/web/modules/auth/routes"
 	authServices "josex/web/modules/auth/services"
@@ -146,8 +147,8 @@ func SetupRoutes(r *gin.Engine, dbService coreServices.DatabaseService) {
 			customerController := salesControllers.NewCustomerController(customerService)
 			salesOrderController := salesControllers.NewSalesOrderController(salesOrderService)
 
-			// Register sales routes
-			salesRoutes.SetupSalesRoutes(apiV1, customerController, salesOrderController)
+			// Register sales routes (with JWT auth middleware)
+			salesRoutes.SetupSalesRoutes(apiV1, customerController, salesOrderController, authMW.AuthMiddleware(jwtService))
 			log.Println("✅ Sales module enabled and routes registered")
 		}
 

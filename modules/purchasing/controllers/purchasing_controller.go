@@ -27,16 +27,6 @@ func NewPurchasingController(service interfaces.PurchasingService) *PurchasingCo
 
 // ========== SUPPLIER ENDPOINTS ==========
 
-// CreateSupplier godoc
-// @Summary Create a new supplier
-// @Description Create a new supplier for the tenant
-// @Tags Suppliers
-// @Accept json
-// @Produce json
-// @Param request body models.CreateSupplierRequestDto true "Supplier data"
-// @Success 201 {object} models.CreateSupplierResponse
-// @Failure 400 {object} map[string]interface{}
-// @Router /purchasing/suppliers [post]
 func (ctrl *PurchasingController) CreateSupplier(c *gin.Context) {
 	var dto models.CreateSupplierRequestDto
 	if err := c.ShouldBindJSON(&dto); err != nil {
@@ -44,14 +34,7 @@ func (ctrl *PurchasingController) CreateSupplier(c *gin.Context) {
 		return
 	}
 
-	tenantID := c.GetString("tenant_id")
-	tenantUUID, err := uuid.Parse(tenantID)
-	if err != nil {
-		c.JSON(http.StatusBadRequest, coreErrors.BuildErrorSingle(c, "invalid.tenant-id"))
-		return
-	}
-
-	supplier, err := ctrl.service.CreateSupplier(c.Request.Context(), tenantUUID, &dto)
+	supplier, err := ctrl.service.CreateSupplier(c.Request.Context(), &dto)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, coreErrors.BuildError(c, err))
 		return
@@ -65,13 +48,6 @@ func (ctrl *PurchasingController) CreateSupplier(c *gin.Context) {
 	c.JSON(http.StatusCreated, response)
 }
 
-// GetSupplier godoc
-// @Summary Get supplier details
-// @Tags Suppliers
-// @Param id path string true "Supplier ID"
-// @Success 200 {object} models.Supplier
-// @Failure 404 {object} map[string]interface{}
-// @Router /purchasing/suppliers/{id} [get]
 func (ctrl *PurchasingController) GetSupplier(c *gin.Context) {
 	supplierID, err := uuid.Parse(c.Param("id"))
 	if err != nil {
@@ -79,10 +55,7 @@ func (ctrl *PurchasingController) GetSupplier(c *gin.Context) {
 		return
 	}
 
-	tenantID := c.GetString("tenant_id")
-	tenantUUID, _ := uuid.Parse(tenantID)
-
-	supplier, err := ctrl.service.GetSupplier(c.Request.Context(), supplierID, tenantUUID)
+	supplier, err := ctrl.service.GetSupplier(c.Request.Context(), supplierID)
 	if err != nil {
 		c.JSON(http.StatusNotFound, coreErrors.BuildErrorSingle(c, errors.SupplierNotFound))
 		return
@@ -91,13 +64,6 @@ func (ctrl *PurchasingController) GetSupplier(c *gin.Context) {
 	c.JSON(http.StatusOK, supplier)
 }
 
-// ListSuppliers godoc
-// @Summary List all suppliers
-// @Tags Suppliers
-// @Param page query int false "Page number"
-// @Param page_size query int false "Page size"
-// @Success 200 {object} map[string]interface{}
-// @Router /purchasing/suppliers [get]
 func (ctrl *PurchasingController) ListSuppliers(c *gin.Context) {
 	page := 1
 	pageSize := 20
@@ -113,10 +79,7 @@ func (ctrl *PurchasingController) ListSuppliers(c *gin.Context) {
 		}
 	}
 
-	tenantID := c.GetString("tenant_id")
-	tenantUUID, _ := uuid.Parse(tenantID)
-
-	suppliers, totalCount, err := ctrl.service.ListSuppliers(c.Request.Context(), tenantUUID, page, pageSize)
+	suppliers, totalCount, err := ctrl.service.ListSuppliers(c.Request.Context(), page, pageSize)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, coreErrors.BuildError(c, err))
 		return
@@ -132,14 +95,6 @@ func (ctrl *PurchasingController) ListSuppliers(c *gin.Context) {
 
 // ========== PURCHASE ORDER ENDPOINTS ==========
 
-// CreatePurchaseOrder godoc
-// @Summary Create a new purchase order
-// @Tags Purchase Orders
-// @Accept json
-// @Produce json
-// @Param request body models.CreatePurchaseOrderRequestDto true "PO data"
-// @Success 201 {object} models.CreatePurchaseOrderResponse
-// @Router /purchasing/purchase-orders [post]
 func (ctrl *PurchasingController) CreatePurchaseOrder(c *gin.Context) {
 	var dto models.CreatePurchaseOrderRequestDto
 	if err := c.ShouldBindJSON(&dto); err != nil {
@@ -147,13 +102,11 @@ func (ctrl *PurchasingController) CreatePurchaseOrder(c *gin.Context) {
 		return
 	}
 
-	tenantID := c.GetString("tenant_id")
 	userID := c.GetString("user_id")
-	tenantUUID, _ := uuid.Parse(tenantID)
 	userUUID, _ := uuid.Parse(userID)
 	supplierUUID, _ := uuid.Parse(dto.SupplierID)
 
-	po, err := ctrl.service.CreatePurchaseOrder(c.Request.Context(), tenantUUID, supplierUUID, dto.ExpectedDeliveryDate, dto.Notes, userUUID)
+	po, err := ctrl.service.CreatePurchaseOrder(c.Request.Context(), supplierUUID, dto.ExpectedDeliveryDate, dto.Notes, userUUID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, coreErrors.BuildError(c, err))
 		return
@@ -170,12 +123,6 @@ func (ctrl *PurchasingController) CreatePurchaseOrder(c *gin.Context) {
 	c.JSON(http.StatusCreated, response)
 }
 
-// GetPurchaseOrder godoc
-// @Summary Get purchase order details
-// @Tags Purchase Orders
-// @Param id path string true "Purchase Order ID"
-// @Success 200 {object} models.PurchaseOrder
-// @Router /purchasing/purchase-orders/{id} [get]
 func (ctrl *PurchasingController) GetPurchaseOrder(c *gin.Context) {
 	poID, err := uuid.Parse(c.Param("id"))
 	if err != nil {
@@ -183,10 +130,7 @@ func (ctrl *PurchasingController) GetPurchaseOrder(c *gin.Context) {
 		return
 	}
 
-	tenantID := c.GetString("tenant_id")
-	tenantUUID, _ := uuid.Parse(tenantID)
-
-	po, err := ctrl.service.GetPurchaseOrder(c.Request.Context(), poID, tenantUUID)
+	po, err := ctrl.service.GetPurchaseOrder(c.Request.Context(), poID)
 	if err != nil {
 		c.JSON(http.StatusNotFound, coreErrors.BuildErrorSingle(c, errors.PONotFound))
 		return
@@ -195,14 +139,6 @@ func (ctrl *PurchasingController) GetPurchaseOrder(c *gin.Context) {
 	c.JSON(http.StatusOK, po)
 }
 
-// ListPurchaseOrders godoc
-// @Summary List purchase orders
-// @Tags Purchase Orders
-// @Param status query string false "Filter by status"
-// @Param page query int false "Page number"
-// @Param page_size query int false "Page size"
-// @Success 200 {object} map[string]interface{}
-// @Router /purchasing/purchase-orders [get]
 func (ctrl *PurchasingController) ListPurchaseOrders(c *gin.Context) {
 	page := 1
 	pageSize := 20
@@ -222,10 +158,7 @@ func (ctrl *PurchasingController) ListPurchaseOrders(c *gin.Context) {
 		status = &s
 	}
 
-	tenantID := c.GetString("tenant_id")
-	tenantUUID, _ := uuid.Parse(tenantID)
-
-	pos, totalCount, err := ctrl.service.ListPurchaseOrders(c.Request.Context(), tenantUUID, status, page, pageSize)
+	pos, totalCount, err := ctrl.service.ListPurchaseOrders(c.Request.Context(), status, page, pageSize)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, coreErrors.BuildError(c, err))
 		return
@@ -239,14 +172,6 @@ func (ctrl *PurchasingController) ListPurchaseOrders(c *gin.Context) {
 	})
 }
 
-// AddPurchaseOrderItem godoc
-// @Summary Add item to purchase order
-// @Tags Purchase Orders
-// @Accept json
-// @Param id path string true "Purchase Order ID"
-// @Param request body models.AddPurchaseOrderItemRequestDto true "Item data"
-// @Success 201 {object} models.AddPurchaseOrderItemResponse
-// @Router /purchasing/purchase-orders/{id}/items [post]
 func (ctrl *PurchasingController) AddPurchaseOrderItem(c *gin.Context) {
 	poID, err := uuid.Parse(c.Param("id"))
 	if err != nil {
@@ -280,12 +205,6 @@ func (ctrl *PurchasingController) AddPurchaseOrderItem(c *gin.Context) {
 	c.JSON(http.StatusCreated, response)
 }
 
-// ApprovePurchaseOrder godoc
-// @Summary Approve a purchase order
-// @Tags Purchase Orders
-// @Param id path string true "Purchase Order ID"
-// @Success 200 {object} models.PurchaseOrderActionResponse
-// @Router /purchasing/purchase-orders/{id}/approve [patch]
 func (ctrl *PurchasingController) ApprovePurchaseOrder(c *gin.Context) {
 	poID, err := uuid.Parse(c.Param("id"))
 	if err != nil {
@@ -293,10 +212,7 @@ func (ctrl *PurchasingController) ApprovePurchaseOrder(c *gin.Context) {
 		return
 	}
 
-	tenantID := c.GetString("tenant_id")
-	tenantUUID, _ := uuid.Parse(tenantID)
-
-	po, err := ctrl.service.ApprovePurchaseOrder(c.Request.Context(), poID, tenantUUID)
+	po, err := ctrl.service.ApprovePurchaseOrder(c.Request.Context(), poID)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, coreErrors.BuildError(c, err))
 		return
@@ -312,14 +228,6 @@ func (ctrl *PurchasingController) ApprovePurchaseOrder(c *gin.Context) {
 	c.JSON(http.StatusOK, response)
 }
 
-// ReceivePurchaseOrder godoc
-// @Summary Mark purchase order as received
-// @Tags Purchase Orders
-// @Accept json
-// @Param id path string true "Purchase Order ID"
-// @Param request body models.ReceivePurchaseOrderRequestDto true "Receipt data"
-// @Success 200 {object} models.PurchaseOrderActionResponse
-// @Router /purchasing/purchase-orders/{id}/receive [patch]
 func (ctrl *PurchasingController) ReceivePurchaseOrder(c *gin.Context) {
 	poID, err := uuid.Parse(c.Param("id"))
 	if err != nil {
@@ -353,14 +261,6 @@ func (ctrl *PurchasingController) ReceivePurchaseOrder(c *gin.Context) {
 	})
 }
 
-// AddInvoice godoc
-// @Summary Add supplier invoice to PO
-// @Tags Purchase Orders
-// @Accept json
-// @Param id path string true "Purchase Order ID"
-// @Param request body models.AddInvoiceRequestDto true "Invoice data"
-// @Success 201 {object} models.PurchaseOrderInvoice
-// @Router /purchasing/purchase-orders/{id}/invoices [post]
 func (ctrl *PurchasingController) AddInvoice(c *gin.Context) {
 	poID, err := uuid.Parse(c.Param("id"))
 	if err != nil {
@@ -383,16 +283,8 @@ func (ctrl *PurchasingController) AddInvoice(c *gin.Context) {
 	c.JSON(http.StatusCreated, invoice)
 }
 
-// GetPendingPayments godoc
-// @Summary Get all pending payments (accounts payable)
-// @Tags Reports
-// @Success 200 {object} map[string]interface{}
-// @Router /purchasing/pending-payments [get]
 func (ctrl *PurchasingController) GetPendingPayments(c *gin.Context) {
-	tenantID := c.GetString("tenant_id")
-	tenantUUID, _ := uuid.Parse(tenantID)
-
-	pos, err := ctrl.service.GetPendingPayments(c.Request.Context(), tenantUUID)
+	pos, err := ctrl.service.GetPendingPayments(c.Request.Context())
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, coreErrors.BuildError(c, err))
 		return
@@ -406,14 +298,6 @@ func (ctrl *PurchasingController) GetPendingPayments(c *gin.Context) {
 
 // ========== PHASE 2A: PRICE COMPARISON ==========
 
-// GetPriceComparison godoc
-// @Summary Compare supplier prices for a product
-// @Description Get all suppliers' prices for a specific product
-// @Tags Reports
-// @Param product_id query string true "Product ID"
-// @Success 200 {object} map[string]interface{}
-// @Failure 400 {object} map[string]interface{}
-// @Router /purchasing/price-comparison [get]
 func (ctrl *PurchasingController) GetPriceComparison(c *gin.Context) {
 	productID := c.Query("product_id")
 	if productID == "" {
@@ -427,10 +311,7 @@ func (ctrl *PurchasingController) GetPriceComparison(c *gin.Context) {
 		return
 	}
 
-	tenantID := c.GetString("tenant_id")
-	tenantUUID, _ := uuid.Parse(tenantID)
-
-	comparisons, err := ctrl.service.GetPriceComparison(c.Request.Context(), tenantUUID, productUUID)
+	comparisons, err := ctrl.service.GetPriceComparison(c.Request.Context(), productUUID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, coreErrors.BuildError(c, err))
 		return
@@ -447,16 +328,6 @@ func (ctrl *PurchasingController) GetPriceComparison(c *gin.Context) {
 
 // ========== PHASE 2A: FIFO BATCH TRACKING ==========
 
-// CreateProductBatch godoc
-// @Summary Create a new product batch
-// @Description Record a new batch for inventory/FIFO tracking
-// @Tags Inventory
-// @Accept json
-// @Produce json
-// @Param request body models.ProductBatch true "Batch data"
-// @Success 201 {object} models.ProductBatch
-// @Failure 400 {object} map[string]interface{}
-// @Router /purchasing/batches [post]
 func (ctrl *PurchasingController) CreateProductBatch(c *gin.Context) {
 	var batch models.ProductBatch
 	if err := c.ShouldBindJSON(&batch); err != nil {
@@ -464,10 +335,7 @@ func (ctrl *PurchasingController) CreateProductBatch(c *gin.Context) {
 		return
 	}
 
-	tenantID := c.GetString("tenant_id")
-	tenantUUID, _ := uuid.Parse(tenantID)
-
-	newBatch, err := ctrl.service.CreateProductBatch(c.Request.Context(), tenantUUID, &batch)
+	newBatch, err := ctrl.service.CreateProductBatch(c.Request.Context(), &batch)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, coreErrors.BuildError(c, err))
 		return
@@ -476,12 +344,6 @@ func (ctrl *PurchasingController) CreateProductBatch(c *gin.Context) {
 	c.JSON(http.StatusCreated, newBatch)
 }
 
-// GetProductBatches godoc
-// @Summary Get all batches for a product
-// @Tags Inventory
-// @Param product_id query string true "Product ID"
-// @Success 200 {object} map[string]interface{}
-// @Router /purchasing/batches [get]
 func (ctrl *PurchasingController) GetProductBatches(c *gin.Context) {
 	productID := c.Query("product_id")
 	if productID == "" {
@@ -495,10 +357,7 @@ func (ctrl *PurchasingController) GetProductBatches(c *gin.Context) {
 		return
 	}
 
-	tenantID := c.GetString("tenant_id")
-	tenantUUID, _ := uuid.Parse(tenantID)
-
-	batches, err := ctrl.service.GetProductBatches(c.Request.Context(), tenantUUID, productUUID)
+	batches, err := ctrl.service.GetProductBatches(c.Request.Context(), productUUID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, coreErrors.BuildError(c, err))
 		return
@@ -511,13 +370,6 @@ func (ctrl *PurchasingController) GetProductBatches(c *gin.Context) {
 	})
 }
 
-// GetOldestBatchForSale godoc
-// @Summary Get oldest batch with inventory (FIFO)
-// @Tags Inventory
-// @Param product_id query string true "Product ID"
-// @Success 200 {object} models.ProductBatch
-// @Failure 404 {object} map[string]interface{}
-// @Router /purchasing/batches/oldest [get]
 func (ctrl *PurchasingController) GetOldestBatchForSale(c *gin.Context) {
 	productID := c.Query("product_id")
 	if productID == "" {
@@ -531,10 +383,7 @@ func (ctrl *PurchasingController) GetOldestBatchForSale(c *gin.Context) {
 		return
 	}
 
-	tenantID := c.GetString("tenant_id")
-	tenantUUID, _ := uuid.Parse(tenantID)
-
-	batch, err := ctrl.service.GetOldestBatchForSale(c.Request.Context(), tenantUUID, productUUID)
+	batch, err := ctrl.service.GetOldestBatchForSale(c.Request.Context(), productUUID)
 	if err != nil {
 		c.JSON(http.StatusNotFound, coreErrors.BuildError(c, err))
 		return
@@ -545,16 +394,6 @@ func (ctrl *PurchasingController) GetOldestBatchForSale(c *gin.Context) {
 
 // ========== PHASE 2A: RFQ (REQUEST FOR QUOTE) ==========
 
-// CreateRFQ godoc
-// @Summary Create a new Request for Quote
-// @Description Submit RFQ to multiple suppliers
-// @Tags RFQ
-// @Accept json
-// @Produce json
-// @Param request body models.CreateRFQRequestDto true "RFQ data"
-// @Success 201 {object} models.RequestForQuote
-// @Failure 400 {object} map[string]interface{}
-// @Router /purchasing/rfq [post]
 func (ctrl *PurchasingController) CreateRFQ(c *gin.Context) {
 	var dto models.CreateRFQRequestDto
 	if err := c.ShouldBindJSON(&dto); err != nil {
@@ -562,21 +401,16 @@ func (ctrl *PurchasingController) CreateRFQ(c *gin.Context) {
 		return
 	}
 
-	tenantID := c.GetString("tenant_id")
-	tenantUUID, _ := uuid.Parse(tenantID)
-
-	// Create RFQ
 	rfq := &models.RequestForQuote{
 		RFQNumber: "RFQ-" + uuid.New().String()[:8],
 		Status:    "draft",
 	}
-	newRFQ, err := ctrl.service.CreateRFQ(c.Request.Context(), tenantUUID, rfq)
+	newRFQ, err := ctrl.service.CreateRFQ(c.Request.Context(), rfq)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, coreErrors.BuildError(c, err))
 		return
 	}
 
-	// Add items
 	for _, itemReq := range dto.Items {
 		productUUID, err := uuid.Parse(itemReq.ProductID)
 		if err != nil {
@@ -596,18 +430,10 @@ func (ctrl *PurchasingController) CreateRFQ(c *gin.Context) {
 		}
 	}
 
-	// Send to suppliers (mark as sent)
 	newRFQ.Status = "sent"
-
 	c.JSON(http.StatusCreated, newRFQ)
 }
 
-// GetRFQResponses godoc
-// @Summary Get all responses for an RFQ
-// @Tags RFQ
-// @Param rfq_id path string true "RFQ ID"
-// @Success 200 {object} map[string]interface{}
-// @Router /purchasing/rfq/{rfq_id}/responses [get]
 func (ctrl *PurchasingController) GetRFQResponses(c *gin.Context) {
 	rfqID := c.Param("rfq_id")
 	if rfqID == "" {
@@ -634,12 +460,6 @@ func (ctrl *PurchasingController) GetRFQResponses(c *gin.Context) {
 	})
 }
 
-// GetRFQComparison godoc
-// @Summary Get side-by-side RFQ comparison
-// @Tags RFQ
-// @Param rfq_id path string true "RFQ ID"
-// @Success 200 {object} map[string]interface{}
-// @Router /purchasing/rfq/{rfq_id}/comparison [get]
 func (ctrl *PurchasingController) GetRFQComparison(c *gin.Context) {
 	rfqID := c.Param("rfq_id")
 	if rfqID == "" {
@@ -662,13 +482,6 @@ func (ctrl *PurchasingController) GetRFQComparison(c *gin.Context) {
 	c.JSON(http.StatusOK, comparison)
 }
 
-// SelectRFQResponse godoc
-// @Summary Select the best RFQ response and close RFQ
-// @Tags RFQ
-// @Param rfq_id path string true "RFQ ID"
-// @Param response_id path string true "Response ID"
-// @Success 200 {object} map[string]interface{}
-// @Router /purchasing/rfq/{rfq_id}/responses/{response_id}/select [patch]
 func (ctrl *PurchasingController) SelectRFQResponse(c *gin.Context) {
 	rfqID := c.Param("rfq_id")
 	responseID := c.Param("response_id")
@@ -690,10 +503,7 @@ func (ctrl *PurchasingController) SelectRFQResponse(c *gin.Context) {
 		return
 	}
 
-	tenantID := c.GetString("tenant_id")
-	tenantUUID, _ := uuid.Parse(tenantID)
-
-	err = ctrl.service.SelectBestRFQResponse(c.Request.Context(), rfqUUID, responseUUID, tenantUUID)
+	err = ctrl.service.SelectBestRFQResponse(c.Request.Context(), rfqUUID, responseUUID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, coreErrors.BuildError(c, err))
 		return

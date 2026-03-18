@@ -11,12 +11,12 @@ import (
 
 // SalesOrderRepository defines sales order data access operations
 type SalesOrderRepository interface {
-	CreateSalesOrder(ctx context.Context, tenantID uuid.UUID, dto *models.CreateSalesOrderRequestDto) (*models.SalesOrder, error)
+	CreateSalesOrder(ctx context.Context, dto *models.CreateSalesOrderRequestDto) (*models.SalesOrder, error)
 	GetSalesOrderByID(ctx context.Context, id uuid.UUID) (*models.SalesOrder, error)
-	GetSalesOrdersByTenant(ctx context.Context, tenantID uuid.UUID, limit int, offset int) ([]models.SalesOrder, error)
+	GetAllSalesOrders(ctx context.Context, limit int, offset int) ([]models.SalesOrder, error)
 	UpdateSalesOrder(ctx context.Context, id uuid.UUID, dto *models.UpdateSalesOrderRequestDto) (*models.SalesOrder, error)
 	GetSalesOrdersByCustomer(ctx context.Context, customerID uuid.UUID) ([]models.SalesOrder, error)
-	GetSalesOrderByOrderNumber(ctx context.Context, orderNumber string, tenantID uuid.UUID) (*models.SalesOrder, error)
+	GetSalesOrderByOrderNumber(ctx context.Context, orderNumber string) (*models.SalesOrder, error)
 	AddOrderItem(ctx context.Context, orderID uuid.UUID, dto *models.CreateOrderItemRequestDto) (*models.OrderItem, error)
 	GetOrderItems(ctx context.Context, orderID uuid.UUID) ([]models.OrderItem, error)
 
@@ -27,7 +27,7 @@ type SalesOrderRepository interface {
 	// Phase 2 methods
 	CancelOrder(ctx context.Context, orderID uuid.UUID) (*models.SalesOrder, error)
 	GetOrderWithBatches(ctx context.Context, orderID uuid.UUID) (*models.OrderWithBatches, error)
-	GetSalesReport(ctx context.Context, tenantID uuid.UUID, startDate time.Time, endDate time.Time) ([]models.SalesReport, error)
+	GetSalesReport(ctx context.Context, startDate time.Time, endDate time.Time) ([]models.SalesReport, error)
 
 	// Phase 3 methods
 	CreateReturn(ctx context.Context, orderID uuid.UUID, reason string) (*models.Return, error)

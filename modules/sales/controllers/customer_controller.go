@@ -40,19 +40,7 @@ func (ctrl *CustomerController) CreateCustomer(c *gin.Context) {
 		return
 	}
 
-	tenantID := c.GetString("tenant_id")
-	if tenantID == "" {
-		c.JSON(http.StatusUnauthorized, coreErrors.BuildErrorSingle(c, "auth.tenant-required"))
-		return
-	}
-
-	tenantUUID, err := uuid.Parse(tenantID)
-	if err != nil {
-		c.JSON(http.StatusBadRequest, coreErrors.BuildErrorSingle(c, "validation.invalid-uuid"))
-		return
-	}
-
-	customer, err := ctrl.service.CreateCustomer(c.Request.Context(), &dto, tenantUUID)
+	customer, err := ctrl.service.CreateCustomer(c.Request.Context(), &dto)
 	if err != nil {
 		status := utils.GetHTTPStatusFromError(err)
 		c.JSON(status, coreErrors.BuildError(c, err))

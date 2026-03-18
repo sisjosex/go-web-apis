@@ -7,6 +7,7 @@ import (
 	coreConfig "josex/web/modules/core/config"
 	"log"
 	"os"
+	"sync"
 	"time"
 
 	_ "github.com/golang-migrate/migrate/v4/database/postgres"
@@ -15,6 +16,13 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 	_ "github.com/jackc/pgx/v5/stdlib"
 )
+
+// tenantDBURLKey is a typed context key to avoid collisions
+type tenantDBURLKey struct{}
+
+// TenantDatabaseURLKey is the context key used by tenant middleware to inject
+// the tenant's database URL into the request context
+var TenantDatabaseURLKey = tenantDBURLKey{}
 
 type DatabaseService interface {
 	InitDatabase(ctx context.Context)
@@ -31,6 +39,7 @@ type DatabaseService interface {
 type databaseService struct {
 	pool        *pgxpool.Pool
 	tenantPools map[string]*pgxpool.Pool // Cache of tenant database pools
+	mu          sync.RWMutex             // Protects tenantPools
 }
 
 func NewDatabaseService() DatabaseService {
@@ -98,16 +107,39 @@ func connectDatabase(ctx context.Context, dbURL string, poolSize int32) (*pgxpoo
 	return pool, nil
 }
 
+// resolvePool returns the appropriate pool based on tenant context.
+// If the context contains a non-empty tenant database URL, it returns
+// (or lazily creates) the tenant pool. Otherwise returns the primary pool.
+func (ds *databaseService) resolvePool(ctx context.Context) (*pgxpool.Pool, error) {
+	if dbURL, ok := ctx.Value(TenantDatabaseURLKey).(string); ok && dbURL != "" {
+		return ds.GetPoolForTenant(ctx, dbURL)
+	}
+	return ds.pool, nil
+}
+
 func (ds *databaseService) Query(ctx context.Context, query string, args ...interface{}) (pgx.Rows, error) {
-	return ds.pool.Query(ctx, query, args...)
+	pool, err := ds.resolvePool(ctx)
+	if err != nil {
+		return nil, err
+	}
+	return pool.Query(ctx, query, args...)
 }
 
 func (ds *databaseService) QueryRow(ctx context.Context, query string, args ...interface{}) pgx.Row {
-	return ds.pool.QueryRow(ctx, query, args...)
+	pool, err := ds.resolvePool(ctx)
+	if err != nil {
+		// pgx.Row with error — return a no-op row that surfaces the error on Scan
+		return errorRow{err}
+	}
+	return pool.QueryRow(ctx, query, args...)
 }
 
 func (ds *databaseService) Execute(ctx context.Context, query string, args ...interface{}) (int64, error) {
-	commandTag, err := ds.pool.Exec(ctx, query, args...)
+	pool, err := ds.resolvePool(ctx)
+	if err != nil {
+		return 0, err
+	}
+	commandTag, err := pool.Exec(ctx, query, args...)
 	if err != nil {
 		return 0, err
 	}
@@ -125,8 +157,9 @@ func (ds *databaseService) CloseDatabase(ctx context.Context) {
 	ds.pool = nil
 
 	// Close all tenant pools
-	for dbURL, pool := range ds.tenantPools {
-		log.Printf("Closing tenant pool: %s", dbURL)
+	ds.mu.Lock()
+	defer ds.mu.Unlock()
+	for _, pool := range ds.tenantPools {
 		pool.Close()
 	}
 	ds.tenantPools = make(map[string]*pgxpool.Pool)
@@ -171,38 +204,53 @@ func (ds *databaseService) runModularMigrations(databaseURL string) error {
 }
 
 func (ds *databaseService) BeginTransaction(ctx context.Context) (pgx.Tx, error) {
-	tx, err := ds.pool.Begin(ctx)
+	pool, err := ds.resolvePool(ctx)
 	if err != nil {
 		return nil, err
 	}
-
-	return tx, nil
+	return pool.Begin(ctx)
 }
 
-// GetPoolForTenant returns a connection pool for a tenant database
-// If the pool doesn't exist, it creates and caches it
+// errorRow implements pgx.Row and always returns the stored error on Scan.
+// Used when resolvePool fails inside QueryRow (which can't return an error).
+type errorRow struct{ err error }
+
+func (e errorRow) Scan(...interface{}) error { return e.err }
+
+// GetPoolForTenant returns a connection pool for a tenant database.
+// Pools are cached and created lazily. Safe for concurrent use.
 func (ds *databaseService) GetPoolForTenant(ctx context.Context, databaseURL string) (*pgxpool.Pool, error) {
-	// Check if pool already exists in cache
-	if pool, exists := ds.tenantPools[databaseURL]; exists {
+	// Fast path: pool already exists
+	ds.mu.RLock()
+	pool, exists := ds.tenantPools[databaseURL]
+	ds.mu.RUnlock()
+	if exists {
 		return pool, nil
 	}
 
-	// Get tenant pool size from config
+	// Slow path: create and cache the pool
+	ds.mu.Lock()
+	defer ds.mu.Unlock()
+
+	// Double-check after acquiring write lock
+	if pool, exists = ds.tenantPools[databaseURL]; exists {
+		return pool, nil
+	}
+
+	// Get tenant pool size from config (TENANCY_DATABASE_POOL_SIZE, default 5)
 	tenancyConf := config.ModularAppConfig.Tenancy
-	poolSize := int32(5) // Default
+	poolSize := int32(5)
 	if tenancyConf != nil {
 		poolSize = tenancyConf.TenantDatabasePoolSize
 	}
 
-	// Create new pool
 	pool, err := connectDatabase(ctx, databaseURL, poolSize)
 	if err != nil {
 		return nil, err
 	}
 
-	// Cache the pool
 	ds.tenantPools[databaseURL] = pool
-	log.Printf("Created tenant database pool for: %s (pool size: %d)", databaseURL, poolSize)
+	log.Printf("Created tenant database pool (pool size: %d)", poolSize)
 
 	return pool, nil
 }

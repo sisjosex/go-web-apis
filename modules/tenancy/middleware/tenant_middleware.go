@@ -1,10 +1,12 @@
 package middleware
 
 import (
+	"context"
 	"net/http"
 
 	"josex/web/config"
 	coreErrors "josex/web/modules/core/errors"
+	coreServices "josex/web/modules/core/services"
 	tenancyErrors "josex/web/modules/tenancy/errors"
 	"josex/web/modules/tenancy/interfaces"
 
@@ -69,12 +71,19 @@ func TenantMiddleware(tenantService interfaces.TenantService) gin.HandlerFunc {
 			return
 		}
 
-		// Store tenant access info in context for use in controllers
+		// Store tenant access info in gin context for controllers
 		c.Set("tenant_id", tenantAccess.TenantID.String())
 		c.Set("tenant_slug", tenantAccess.Slug)
 		c.Set("tenant_database_url", tenantAccess.DatabaseURL)
 		c.Set("tenant_schema_name", tenantAccess.SchemaName)
 		c.Set("tenant_user_role", tenantAccess.UserRole)
+
+		// Also inject database URL into the standard request context so
+		// DatabaseService.resolvePool can pick it up automatically
+		if tenantAccess.DatabaseURL != nil && *tenantAccess.DatabaseURL != "" {
+			ctx := context.WithValue(c.Request.Context(), coreServices.TenantDatabaseURLKey, *tenantAccess.DatabaseURL)
+			c.Request = c.Request.WithContext(ctx)
+		}
 
 		c.Next()
 	}
@@ -161,12 +170,18 @@ func TenantMiddlewareFromHeaderOptional(tenantService interfaces.TenantService) 
 			return
 		}
 
-		// Store tenant access info in context for use in controllers
+		// Store tenant access info in gin context for controllers
 		c.Set("tenant_id", tenantAccess.TenantID.String())
 		c.Set("tenant_slug", tenantAccess.Slug)
 		c.Set("tenant_database_url", tenantAccess.DatabaseURL)
 		c.Set("tenant_schema_name", tenantAccess.SchemaName)
 		c.Set("tenant_user_role", tenantAccess.UserRole)
+
+		// Also inject database URL into the standard request context
+		if tenantAccess.DatabaseURL != nil && *tenantAccess.DatabaseURL != "" {
+			ctx := context.WithValue(c.Request.Context(), coreServices.TenantDatabaseURLKey, *tenantAccess.DatabaseURL)
+			c.Request = c.Request.WithContext(ctx)
+		}
 
 		c.Next()
 	}

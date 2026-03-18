@@ -9,7 +9,6 @@ import (
 // SalesOrder represents a customer order
 type SalesOrder struct {
 	ID              uuid.UUID   `json:"id"`
-	TenantID        uuid.UUID   `json:"tenant_id"`
 	CustomerID      uuid.UUID   `json:"customer_id"`
 	OrderNumber     string      `json:"order_number"`
 	Status          string      `json:"status"` // pending, confirmed, shipped, delivered, cancelled
