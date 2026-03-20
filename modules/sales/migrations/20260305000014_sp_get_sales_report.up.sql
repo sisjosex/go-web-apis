@@ -19,10 +19,10 @@ DECLARE
 BEGIN
     -- Total number of orders
     SELECT COUNT(*) INTO v_total_orders
-    FROM sales.sales_orders
-    WHERE tenant_id = p_tenant_id
-        AND DATE(created_at) BETWEEN p_start_date AND p_end_date
-        AND status IN ('pending', 'completed');
+    FROM sales.sales_orders o
+    WHERE o.tenant_id = p_tenant_id
+        AND DATE(o.created_at) BETWEEN p_start_date AND p_end_date
+        AND o.status IN ('pending', 'completed');
 
     -- Total number of items sold
     SELECT COUNT(*) INTO v_total_items
@@ -33,11 +33,11 @@ BEGIN
         AND so.status IN ('pending', 'completed');
 
     -- Total revenue (sum of order totals)
-    SELECT COALESCE(SUM(total), 0) INTO v_total_revenue
-    FROM sales.sales_orders
-    WHERE tenant_id = p_tenant_id
-        AND DATE(created_at) BETWEEN p_start_date AND p_end_date
-        AND status IN ('pending', 'completed');
+    SELECT COALESCE(SUM(o.total), 0) INTO v_total_revenue
+    FROM sales.sales_orders o
+    WHERE o.tenant_id = p_tenant_id
+        AND DATE(o.created_at) BETWEEN p_start_date AND p_end_date
+        AND o.status IN ('pending', 'completed');
 
     -- Total COGS (sum of cost of assigned batches)
     SELECT COALESCE(SUM(oba.quantity_assigned * pb.unit_cost), 0) INTO v_total_cogs
@@ -49,14 +49,14 @@ BEGIN
         AND so.status IN ('pending', 'completed');
 
     -- Total discounts applied
-    SELECT COALESCE(SUM(discount_amount), 0) INTO v_total_discount
-    FROM sales.sales_orders
-    WHERE tenant_id = p_tenant_id
-        AND DATE(created_at) BETWEEN p_start_date AND p_end_date
-        AND status IN ('pending', 'completed');
+    SELECT COALESCE(SUM(o.discount_amount), 0) INTO v_total_discount
+    FROM sales.sales_orders o
+    WHERE o.tenant_id = p_tenant_id
+        AND DATE(o.created_at) BETWEEN p_start_date AND p_end_date
+        AND o.status IN ('pending', 'completed');
 
     -- Average order value
-    SELECT CASE 
+    SELECT CASE
         WHEN v_total_orders = 0 THEN 0
         ELSE v_total_revenue / v_total_orders
     END INTO v_avg_order_value;
@@ -69,9 +69,9 @@ BEGIN
         ('Total Revenue'::VARCHAR, v_total_revenue, 'currency'::VARCHAR),
         ('Total COGS'::VARCHAR, v_total_cogs, 'currency'::VARCHAR),
         ('Gross Profit'::VARCHAR, v_total_revenue - v_total_cogs, 'currency'::VARCHAR),
-        ('Profit Margin %'::VARCHAR, 
-         CASE WHEN v_total_revenue = 0 THEN 0 
-              ELSE ((v_total_revenue - v_total_cogs) / v_total_revenue * 100) 
+        ('Profit Margin %'::VARCHAR,
+         CASE WHEN v_total_revenue = 0 THEN 0
+              ELSE ((v_total_revenue - v_total_cogs) / v_total_revenue * 100)
          END, 'percentage'::VARCHAR),
         ('Total Discounts'::VARCHAR, v_total_discount, 'currency'::VARCHAR),
         ('Average Order Value'::VARCHAR, v_avg_order_value, 'currency'::VARCHAR);

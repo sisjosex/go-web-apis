@@ -37,6 +37,17 @@ func NewCategoryController(categoryService *services.CategoryService) *CategoryC
 // @Failure 409 {object} map[string]interface{}
 // @Router /api/v1/inventory/categories [post]
 func (ctrl *CategoryController) CreateCategory(c *gin.Context) {
+	tenantIDRaw, exists := c.Get("tenant_id")
+	if !exists || tenantIDRaw == nil {
+		c.JSON(http.StatusUnauthorized, coreErrors.BuildErrorSingle(c, "auth.invalid-tenant"))
+		return
+	}
+	tenantID, err := uuid.Parse(tenantIDRaw.(string))
+	if err != nil {
+		c.JSON(http.StatusUnauthorized, coreErrors.BuildErrorSingle(c, "auth.invalid-tenant"))
+		return
+	}
+
 	var dto models.CreateCategoryDto
 
 	if err := c.ShouldBindJSON(&dto); err != nil {
@@ -44,7 +55,7 @@ func (ctrl *CategoryController) CreateCategory(c *gin.Context) {
 		return
 	}
 
-	category, err := ctrl.categoryService.CreateCategory(c.Request.Context(), &dto)
+	category, err := ctrl.categoryService.CreateCategory(c.Request.Context(), tenantID, &dto)
 	if err != nil {
 		status := utils.GetHTTPStatusFromError(err)
 		c.JSON(status, coreErrors.BuildError(c, err))
@@ -81,6 +92,17 @@ func (ctrl *CategoryController) CreateCategory(c *gin.Context) {
 // @Failure 404 {object} map[string]interface{}
 // @Router /api/v1/inventory/categories/:id [put]
 func (ctrl *CategoryController) UpdateCategory(c *gin.Context) {
+	tenantIDRaw, exists := c.Get("tenant_id")
+	if !exists || tenantIDRaw == nil {
+		c.JSON(http.StatusUnauthorized, coreErrors.BuildErrorSingle(c, "auth.invalid-tenant"))
+		return
+	}
+	tenantID, err := uuid.Parse(tenantIDRaw.(string))
+	if err != nil {
+		c.JSON(http.StatusUnauthorized, coreErrors.BuildErrorSingle(c, "auth.invalid-tenant"))
+		return
+	}
+
 	categoryID := c.Param("id")
 	var dto models.UpdateCategoryDto
 
@@ -89,7 +111,7 @@ func (ctrl *CategoryController) UpdateCategory(c *gin.Context) {
 		return
 	}
 
-	category, err := ctrl.categoryService.UpdateCategory(c.Request.Context(), categoryID, &dto)
+	category, err := ctrl.categoryService.UpdateCategory(c.Request.Context(), tenantID, categoryID, &dto)
 	if err != nil {
 		status := utils.GetHTTPStatusFromError(err)
 		c.JSON(status, coreErrors.BuildError(c, err))
@@ -124,9 +146,20 @@ func (ctrl *CategoryController) UpdateCategory(c *gin.Context) {
 // @Failure 404 {object} map[string]interface{}
 // @Router /api/v1/inventory/categories/:id [delete]
 func (ctrl *CategoryController) DeleteCategory(c *gin.Context) {
+	tenantIDRaw, exists := c.Get("tenant_id")
+	if !exists || tenantIDRaw == nil {
+		c.JSON(http.StatusUnauthorized, coreErrors.BuildErrorSingle(c, "auth.invalid-tenant"))
+		return
+	}
+	tenantID, err := uuid.Parse(tenantIDRaw.(string))
+	if err != nil {
+		c.JSON(http.StatusUnauthorized, coreErrors.BuildErrorSingle(c, "auth.invalid-tenant"))
+		return
+	}
+
 	categoryID := c.Param("id")
 
-	_, err := ctrl.categoryService.DeleteCategory(c.Request.Context(), categoryID)
+	_, err = ctrl.categoryService.DeleteCategory(c.Request.Context(), tenantID, categoryID)
 	if err != nil {
 		status := utils.GetHTTPStatusFromError(err)
 		c.JSON(status, coreErrors.BuildError(c, err))
@@ -146,9 +179,20 @@ func (ctrl *CategoryController) DeleteCategory(c *gin.Context) {
 // @Failure 404 {object} map[string]interface{}
 // @Router /api/v1/inventory/categories/:id [get]
 func (ctrl *CategoryController) GetCategory(c *gin.Context) {
+	tenantIDRaw, exists := c.Get("tenant_id")
+	if !exists || tenantIDRaw == nil {
+		c.JSON(http.StatusUnauthorized, coreErrors.BuildErrorSingle(c, "auth.invalid-tenant"))
+		return
+	}
+	tenantID, err := uuid.Parse(tenantIDRaw.(string))
+	if err != nil {
+		c.JSON(http.StatusUnauthorized, coreErrors.BuildErrorSingle(c, "auth.invalid-tenant"))
+		return
+	}
+
 	categoryID := c.Param("id")
 
-	category, err := ctrl.categoryService.GetCategory(c.Request.Context(), categoryID)
+	category, err := ctrl.categoryService.GetCategory(c.Request.Context(), tenantID, categoryID)
 	if err != nil {
 		status := utils.GetHTTPStatusFromError(err)
 		c.JSON(status, coreErrors.BuildError(c, err))
@@ -184,6 +228,17 @@ func (ctrl *CategoryController) GetCategory(c *gin.Context) {
 // @Success 200 {object} models.ListCategoriesResponse
 // @Router /api/v1/inventory/categories [get]
 func (ctrl *CategoryController) ListCategories(c *gin.Context) {
+	tenantIDRaw, exists := c.Get("tenant_id")
+	if !exists || tenantIDRaw == nil {
+		c.JSON(http.StatusUnauthorized, coreErrors.BuildErrorSingle(c, "auth.invalid-tenant"))
+		return
+	}
+	tenantID, err := uuid.Parse(tenantIDRaw.(string))
+	if err != nil {
+		c.JSON(http.StatusUnauthorized, coreErrors.BuildErrorSingle(c, "auth.invalid-tenant"))
+		return
+	}
+
 	parentID := c.Query("parent_id")
 	isActive := true
 	if isActiveStr := c.Query("is_active"); isActiveStr != "" {
@@ -211,7 +266,7 @@ func (ctrl *CategoryController) ListCategories(c *gin.Context) {
 		parentIDPtr = &parentID
 	}
 
-	categories, err := ctrl.categoryService.ListCategories(c.Request.Context(), parentIDPtr, isActive, limit, offset)
+	categories, err := ctrl.categoryService.ListCategories(c.Request.Context(), tenantID, parentIDPtr, isActive, limit, offset)
 	if err != nil {
 		status := utils.GetHTTPStatusFromError(err)
 		c.JSON(status, coreErrors.BuildError(c, err))
@@ -251,6 +306,17 @@ func (ctrl *CategoryController) ListCategories(c *gin.Context) {
 // @Success 200 {array} models.CategoryResponse
 // @Router /api/v1/inventory/categories/search [get]
 func (ctrl *CategoryController) SearchCategories(c *gin.Context) {
+	tenantIDRaw, exists := c.Get("tenant_id")
+	if !exists || tenantIDRaw == nil {
+		c.JSON(http.StatusUnauthorized, coreErrors.BuildErrorSingle(c, "auth.invalid-tenant"))
+		return
+	}
+	tenantID, err := uuid.Parse(tenantIDRaw.(string))
+	if err != nil {
+		c.JSON(http.StatusUnauthorized, coreErrors.BuildErrorSingle(c, "auth.invalid-tenant"))
+		return
+	}
+
 	searchTerm := c.Query("search_term")
 	if searchTerm == "" {
 		c.JSON(http.StatusBadRequest, coreErrors.BuildErrorDetail(c, "validation.invalid", "search_term is required"))
@@ -270,7 +336,7 @@ func (ctrl *CategoryController) SearchCategories(c *gin.Context) {
 		}
 	}
 
-	categories, err := ctrl.categoryService.SearchCategories(c.Request.Context(), searchTerm, isActive, limit)
+	categories, err := ctrl.categoryService.SearchCategories(c.Request.Context(), tenantID, searchTerm, isActive, limit)
 	if err != nil {
 		status := utils.GetHTTPStatusFromError(err)
 		c.JSON(status, coreErrors.BuildError(c, err))
@@ -309,10 +375,21 @@ func (ctrl *CategoryController) SearchCategories(c *gin.Context) {
 // @Failure 409 {object} map[string]interface{}
 // @Router /api/v1/inventory/products/:productId/categories/:id [post]
 func (ctrl *CategoryController) AssignProductToCategory(c *gin.Context) {
+	tenantIDRaw, exists := c.Get("tenant_id")
+	if !exists || tenantIDRaw == nil {
+		c.JSON(http.StatusUnauthorized, coreErrors.BuildErrorSingle(c, "auth.invalid-tenant"))
+		return
+	}
+	tenantID, err := uuid.Parse(tenantIDRaw.(string))
+	if err != nil {
+		c.JSON(http.StatusUnauthorized, coreErrors.BuildErrorSingle(c, "auth.invalid-tenant"))
+		return
+	}
+
 	productID := c.Param("productId")
 	categoryID := c.Param("id")
 
-	err := ctrl.categoryService.AssignProductToCategory(c.Request.Context(), productID, categoryID)
+	err = ctrl.categoryService.AssignProductToCategory(c.Request.Context(), tenantID, productID, categoryID)
 	if err != nil {
 		status := utils.GetHTTPStatusFromError(err)
 		c.JSON(status, coreErrors.BuildError(c, err))
@@ -334,10 +411,21 @@ func (ctrl *CategoryController) AssignProductToCategory(c *gin.Context) {
 // @Failure 404 {object} map[string]interface{}
 // @Router /api/v1/inventory/products/:productId/categories/:id [delete]
 func (ctrl *CategoryController) RemoveProductFromCategory(c *gin.Context) {
+	tenantIDRaw, exists := c.Get("tenant_id")
+	if !exists || tenantIDRaw == nil {
+		c.JSON(http.StatusUnauthorized, coreErrors.BuildErrorSingle(c, "auth.invalid-tenant"))
+		return
+	}
+	tenantID, err := uuid.Parse(tenantIDRaw.(string))
+	if err != nil {
+		c.JSON(http.StatusUnauthorized, coreErrors.BuildErrorSingle(c, "auth.invalid-tenant"))
+		return
+	}
+
 	productID := c.Param("productId")
 	categoryID := c.Param("id")
 
-	err := ctrl.categoryService.RemoveProductFromCategory(c.Request.Context(), productID, categoryID)
+	err = ctrl.categoryService.RemoveProductFromCategory(c.Request.Context(), tenantID, productID, categoryID)
 	if err != nil {
 		status := utils.GetHTTPStatusFromError(err)
 		c.JSON(status, coreErrors.BuildError(c, err))
@@ -359,6 +447,17 @@ func (ctrl *CategoryController) RemoveProductFromCategory(c *gin.Context) {
 // @Failure 404 {object} map[string]interface{}
 // @Router /api/v1/inventory/categories/:id/products [get]
 func (ctrl *CategoryController) GetProductsByCategory(c *gin.Context) {
+	tenantIDRaw, exists := c.Get("tenant_id")
+	if !exists || tenantIDRaw == nil {
+		c.JSON(http.StatusUnauthorized, coreErrors.BuildErrorSingle(c, "auth.invalid-tenant"))
+		return
+	}
+	tenantID, err := uuid.Parse(tenantIDRaw.(string))
+	if err != nil {
+		c.JSON(http.StatusUnauthorized, coreErrors.BuildErrorSingle(c, "auth.invalid-tenant"))
+		return
+	}
+
 	categoryID := c.Param("id")
 
 	page := 1
@@ -377,7 +476,7 @@ func (ctrl *CategoryController) GetProductsByCategory(c *gin.Context) {
 
 	offset := (page - 1) * limit
 
-	products, err := ctrl.categoryService.GetProductsByCategory(c.Request.Context(), categoryID, limit, offset)
+	products, err := ctrl.categoryService.GetProductsByCategory(c.Request.Context(), tenantID, categoryID, limit, offset)
 	if err != nil {
 		status := utils.GetHTTPStatusFromError(err)
 		c.JSON(status, coreErrors.BuildError(c, err))

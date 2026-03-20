@@ -2,6 +2,7 @@ package middleware_test
 
 import (
 	"context"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -17,12 +18,16 @@ import (
 )
 
 // mockTenantService implements interfaces.TenantService for unit tests.
-// Only VerifyUserTenantAccess is used by the middleware.
 type mockTenantService struct {
-	accessInfo *models.TenantAccessInfo
-	err        error
+	accessInfo   *models.TenantAccessInfo
+	err          error
+	tenantBySlug *models.Tenant
+	slugErr      error
 }
 
+func (m *mockTenantService) GetTenantBySlug(_ context.Context, _ string) (*models.Tenant, error) {
+	return m.tenantBySlug, m.slugErr
+}
 func (m *mockTenantService) VerifyUserTenantAccess(_ context.Context, _ uuid.UUID, _ string) (*models.TenantAccessInfo, error) {
 	return m.accessInfo, m.err
 }
@@ -187,6 +192,95 @@ func TestTenantMiddleware_Returns403_WhenTenantInactive(t *testing.T) {
 
 	if status != http.StatusForbidden {
 		t.Errorf("expected 403 for inactive tenant, got %d", status)
+	}
+}
+
+// runMiddlewareFromHeader exercises TenantMiddlewareFromHeader with the
+// X-Tenant-Slug header and a pre-set system_role in context.
+func runMiddlewareFromHeader(tenantSlug string, userID uuid.UUID, systemRole string, svc *mockTenantService) (context.Context, int) {
+	var capturedCtx context.Context
+
+	eng := gin.New()
+	eng.GET("/test",
+		func(c *gin.Context) {
+			c.Set("user_id", userID.String())
+			c.Set("system_role", systemRole)
+			c.Next()
+		},
+		middleware.TenantMiddlewareFromHeader(svc),
+		func(c *gin.Context) {
+			capturedCtx = c.Request.Context()
+			c.Status(http.StatusOK)
+		},
+	)
+
+	req := httptest.NewRequest(http.MethodGet, "/test", nil)
+	if tenantSlug != "" {
+		req.Header.Set("X-Tenant-Slug", tenantSlug)
+	}
+
+	w := httptest.NewRecorder()
+	eng.ServeHTTP(w, req)
+	return capturedCtx, w.Code
+}
+
+// TestTenantMiddlewareFromHeader_MissingHeader_Returns400 verifies that all roles
+// get 400 when X-Tenant-Slug is absent — no bypass exists anymore.
+func TestTenantMiddlewareFromHeader_MissingHeader_Returns400(t *testing.T) {
+	svc := &mockTenantService{}
+	userID := uuid.New()
+
+	for _, role := range []string{"user", "admin", "super_admin"} {
+		_, status := runMiddlewareFromHeader("", userID, role, svc)
+		if status != http.StatusBadRequest {
+			t.Errorf("role=%q: expected 400 when header missing, got %d", role, status)
+		}
+	}
+}
+
+// TestTenantMiddlewareFromHeader_SuperAdminBypassesMembership verifies that
+// super_admin can access any tenant via GetTenantBySlug without being in tenant_users.
+func TestTenantMiddlewareFromHeader_SuperAdminBypassesMembership(t *testing.T) {
+	tenantID := uuid.New()
+	tenantURL := "postgres://tenant:pass@db.example.com:5432/tenant_db"
+
+	svc := &mockTenantService{
+		tenantBySlug: &models.Tenant{
+			ID:          tenantID,
+			Slug:        "any-tenant",
+			Name:        "Any Tenant",
+			DatabaseURL: &tenantURL,
+			SchemaName:  "public",
+			IsActive:    true,
+			IsSuspended: false,
+		},
+		// accessInfo is nil — super_admin path must NOT call VerifyUserTenantAccess
+	}
+
+	capturedCtx, status := runMiddlewareFromHeader("any-tenant", uuid.New(), "super_admin", svc)
+
+	if status != http.StatusOK {
+		t.Fatalf("expected 200 for super_admin, got %d", status)
+	}
+
+	injectedURL, ok := capturedCtx.Value(coreServices.TenantDatabaseURLKey).(string)
+	if !ok || injectedURL != tenantURL {
+		t.Errorf("expected tenant DB URL in context, got %q", injectedURL)
+	}
+}
+
+// TestTenantMiddlewareFromHeader_RegularUser_NoMembership_Returns403 verifies
+// that a regular user with no membership in the tenant gets 403.
+func TestTenantMiddlewareFromHeader_RegularUser_NoMembership_Returns403(t *testing.T) {
+	svc := &mockTenantService{
+		accessInfo: nil,
+		err:        fmt.Errorf("tenant.user.unauthorized"),
+	}
+
+	_, status := runMiddlewareFromHeader("some-tenant", uuid.New(), "user", svc)
+
+	if status != http.StatusForbidden {
+		t.Errorf("expected 403 for non-member user, got %d", status)
 	}
 }
 

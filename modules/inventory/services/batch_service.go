@@ -20,31 +20,31 @@ func NewBatchService(repository interfaces.BatchRepository) interfaces.BatchServ
 }
 
 // CreateBatch creates a new batch
-func (s *BatchService) CreateBatch(ctx context.Context, batch *models.CreateBatchDto) (*models.BatchResponse, error) {
-	return s.repository.CreateBatch(ctx, batch)
+func (s *BatchService) CreateBatch(ctx context.Context, tenantID uuid.UUID, batch *models.CreateBatchDto) (*models.BatchResponse, error) {
+	return s.repository.CreateBatch(ctx, tenantID, batch)
 }
 
 // GetBatch retrieves a batch by ID
-func (s *BatchService) GetBatch(ctx context.Context, batchID uuid.UUID) (*models.BatchResponse, error) {
-	return s.repository.GetBatch(ctx, batchID)
+func (s *BatchService) GetBatch(ctx context.Context, tenantID uuid.UUID, batchID uuid.UUID) (*models.BatchResponse, error) {
+	return s.repository.GetBatch(ctx, tenantID, batchID)
 }
 
 // ListBatchesByProduct lists all batches for a product
-func (s *BatchService) ListBatchesByProduct(ctx context.Context, productID uuid.UUID, onlyActive bool) (*models.ListBatchesResponse, error) {
-	return s.repository.ListBatchesByProduct(ctx, productID, onlyActive)
+func (s *BatchService) ListBatchesByProduct(ctx context.Context, tenantID uuid.UUID, productID uuid.UUID, onlyActive bool) (*models.ListBatchesResponse, error) {
+	return s.repository.ListBatchesByProduct(ctx, tenantID, productID, onlyActive)
 }
 
 // GetOldestBatchForSale gets the oldest batch for FIFO sales
-func (s *BatchService) GetOldestBatchForSale(ctx context.Context, productID uuid.UUID) (*models.BatchResponse, error) {
-	return s.repository.GetOldestBatchForSale(ctx, productID)
+func (s *BatchService) GetOldestBatchForSale(ctx context.Context, tenantID uuid.UUID, productID uuid.UUID) (*models.BatchResponse, error) {
+	return s.repository.GetOldestBatchForSale(ctx, tenantID, productID)
 }
 
 // GetExpiringBatches gets all batches expiring soon
-func (s *BatchService) GetExpiringBatches(ctx context.Context, warningDays int) ([]*models.BatchResponse, error) {
-	return s.repository.GetExpiringBatches(ctx, warningDays)
+func (s *BatchService) GetExpiringBatches(ctx context.Context, tenantID uuid.UUID, warningDays int) ([]*models.BatchResponse, error) {
+	return s.repository.GetExpiringBatches(ctx, tenantID, warningDays)
 }
 
 // ConsumeBatchStock reduces batch quantity after a sale
-func (s *BatchService) ConsumeBatchStock(ctx context.Context, batchID uuid.UUID, quantity float64) error {
-	return s.repository.UpdateBatchQuantity(ctx, batchID, quantity)
+func (s *BatchService) ConsumeBatchStock(ctx context.Context, tenantID uuid.UUID, batchID uuid.UUID, quantity float64) error {
+	return s.repository.UpdateBatchQuantity(ctx, tenantID, batchID, quantity)
 }

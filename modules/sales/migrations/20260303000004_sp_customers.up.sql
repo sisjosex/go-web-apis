@@ -1,5 +1,6 @@
 -- Create customer management stored procedures
 CREATE OR REPLACE FUNCTION sales.sp_create_customer(
+    p_tenant_id UUID,
     p_name VARCHAR,
     p_email VARCHAR,
     p_phone_number VARCHAR,
@@ -30,27 +31,27 @@ BEGIN
     IF p_name IS NULL OR TRIM(p_name) = '' THEN
         RAISE EXCEPTION 'customer.invalid-name' USING ERRCODE = 'P0001';
     END IF;
-    
+
     IF p_email IS NULL OR TRIM(p_email) = '' THEN
         RAISE EXCEPTION 'customer.invalid-email' USING ERRCODE = 'P0001';
     END IF;
 
-    -- Check if email already exists
-    IF EXISTS (SELECT 1 FROM sales.customers WHERE LOWER(email) = LOWER(TRIM(p_email))) THEN
+    -- Check if email already exists for this tenant
+    IF EXISTS (SELECT 1 FROM sales.customers c WHERE LOWER(c.email) = LOWER(TRIM(p_email)) AND c.tenant_id = p_tenant_id) THEN
         RAISE EXCEPTION 'customer.already-exists' USING ERRCODE = 'P0001';
     END IF;
 
     -- Insert customer
     INSERT INTO sales.customers (
-        name, email, phone_number, address, city, state, postal_code, country, status
+        tenant_id, name, email, phone_number, address, city, state, postal_code, country, status
     ) VALUES (
-        TRIM(p_name), LOWER(TRIM(p_email)), TRIM(p_phone_number),
+        p_tenant_id, TRIM(p_name), LOWER(TRIM(p_email)), TRIM(p_phone_number),
         TRIM(p_address), TRIM(p_city), TRIM(p_state), TRIM(p_postal_code), TRIM(p_country), 'active'
     ) RETURNING customers.id INTO v_customer_id;
 
     -- Return created customer
     RETURN QUERY
-    SELECT 
+    SELECT
         CAST(c.id AS UUID),
         CAST(c.name AS VARCHAR),
         CAST(c.email AS VARCHAR),
@@ -68,7 +69,10 @@ END;
 $$;
 
 -- Get customer by ID
-CREATE OR REPLACE FUNCTION sales.sp_get_customer_by_id(p_customer_id UUID)
+CREATE OR REPLACE FUNCTION sales.sp_get_customer_by_id(
+    p_tenant_id UUID,
+    p_customer_id UUID
+)
 RETURNS TABLE (
     id UUID,
     name VARCHAR,
@@ -84,12 +88,12 @@ RETURNS TABLE (
     updated_at TIMESTAMP
 ) LANGUAGE plpgsql AS $$
 BEGIN
-    IF NOT EXISTS (SELECT 1 FROM sales.customers WHERE id = p_customer_id) THEN
+    IF NOT EXISTS (SELECT 1 FROM sales.customers c WHERE c.id = p_customer_id AND c.tenant_id = p_tenant_id) THEN
         RAISE EXCEPTION 'customer.not-found' USING ERRCODE = 'P0001';
     END IF;
 
     RETURN QUERY
-    SELECT 
+    SELECT
         CAST(c.id AS UUID),
         CAST(c.name AS VARCHAR),
         CAST(c.email AS VARCHAR),
@@ -102,12 +106,13 @@ BEGIN
         CAST(c.status AS VARCHAR),
         CAST(c.created_at AS TIMESTAMP),
         CAST(c.updated_at AS TIMESTAMP)
-    FROM sales.customers c WHERE c.id = p_customer_id;
+    FROM sales.customers c WHERE c.id = p_customer_id AND c.tenant_id = p_tenant_id;
 END;
 $$;
 
 -- Get all customers
 CREATE OR REPLACE FUNCTION sales.sp_get_all_customers(
+    p_tenant_id UUID,
     p_limit INT DEFAULT 20,
     p_offset INT DEFAULT 0
 )
@@ -127,7 +132,7 @@ RETURNS TABLE (
 ) LANGUAGE plpgsql AS $$
 BEGIN
     RETURN QUERY
-    SELECT 
+    SELECT
         CAST(c.id AS UUID),
         CAST(c.name AS VARCHAR),
         CAST(c.email AS VARCHAR),
@@ -140,15 +145,18 @@ BEGIN
         CAST(c.status AS VARCHAR),
         CAST(c.created_at AS TIMESTAMP),
         CAST(c.updated_at AS TIMESTAMP)
-    FROM sales.customers c 
-    WHERE c.status = 'active'
+    FROM sales.customers c
+    WHERE c.tenant_id = p_tenant_id AND c.status = 'active'
     ORDER BY c.created_at DESC
     LIMIT p_limit OFFSET p_offset;
 END;
 $$;
 
 -- Get customer by email
-CREATE OR REPLACE FUNCTION sales.sp_get_customer_by_email(p_email VARCHAR)
+CREATE OR REPLACE FUNCTION sales.sp_get_customer_by_email(
+    p_tenant_id UUID,
+    p_email VARCHAR
+)
 RETURNS TABLE (
     id UUID,
     name VARCHAR,
@@ -165,7 +173,7 @@ RETURNS TABLE (
 ) LANGUAGE plpgsql AS $$
 BEGIN
     RETURN QUERY
-    SELECT 
+    SELECT
         CAST(c.id AS UUID),
         CAST(c.name AS VARCHAR),
         CAST(c.email AS VARCHAR),
@@ -178,13 +186,14 @@ BEGIN
         CAST(c.status AS VARCHAR),
         CAST(c.created_at AS TIMESTAMP),
         CAST(c.updated_at AS TIMESTAMP)
-    FROM sales.customers c 
-    WHERE LOWER(c.email) = LOWER(p_email);
+    FROM sales.customers c
+    WHERE c.tenant_id = p_tenant_id AND LOWER(c.email) = LOWER(p_email);
 END;
 $$;
 
 -- Update customer
 CREATE OR REPLACE FUNCTION sales.sp_update_customer(
+    p_tenant_id UUID,
     p_customer_id UUID,
     p_name VARCHAR,
     p_phone_number VARCHAR,
@@ -209,7 +218,7 @@ RETURNS TABLE (
     updated_at TIMESTAMP
 ) LANGUAGE plpgsql AS $$
 BEGIN
-    IF NOT EXISTS (SELECT 1 FROM sales.customers WHERE id = p_customer_id) THEN
+    IF NOT EXISTS (SELECT 1 FROM sales.customers c WHERE c.id = p_customer_id AND c.tenant_id = p_tenant_id) THEN
         RAISE EXCEPTION 'customer.not-found' USING ERRCODE = 'P0001';
     END IF;
 
@@ -221,10 +230,10 @@ BEGIN
         state = COALESCE(p_state, state),
         postal_code = COALESCE(p_postal_code, postal_code),
         country = COALESCE(p_country, country)
-    WHERE id = p_customer_id;
+    WHERE id = p_customer_id AND tenant_id = p_tenant_id;
 
     RETURN QUERY
-    SELECT 
+    SELECT
         CAST(c.id AS UUID),
         CAST(c.name AS VARCHAR),
         CAST(c.email AS VARCHAR),
@@ -237,18 +246,21 @@ BEGIN
         CAST(c.status AS VARCHAR),
         CAST(c.created_at AS TIMESTAMP),
         CAST(c.updated_at AS TIMESTAMP)
-    FROM sales.customers c WHERE c.id = p_customer_id;
+    FROM sales.customers c WHERE c.id = p_customer_id AND c.tenant_id = p_tenant_id;
 END;
 $$;
 
 -- Delete customer
-CREATE OR REPLACE FUNCTION sales.sp_delete_customer(p_customer_id UUID)
+CREATE OR REPLACE FUNCTION sales.sp_delete_customer(
+    p_tenant_id UUID,
+    p_customer_id UUID
+)
 RETURNS VOID LANGUAGE plpgsql AS $$
 BEGIN
-    IF NOT EXISTS (SELECT 1 FROM sales.customers WHERE id = p_customer_id) THEN
+    IF NOT EXISTS (SELECT 1 FROM sales.customers c WHERE c.id = p_customer_id AND c.tenant_id = p_tenant_id) THEN
         RAISE EXCEPTION 'customer.not-found' USING ERRCODE = 'P0001';
     END IF;
 
-    UPDATE sales.customers SET status = 'inactive' WHERE id = p_customer_id;
+    UPDATE sales.customers SET status = 'inactive' WHERE id = p_customer_id AND tenant_id = p_tenant_id;
 END;
 $$;

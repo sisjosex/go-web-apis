@@ -92,6 +92,7 @@ type ApiTestHelper struct {
 	token        string
 	refreshToken string
 	userId       string
+	tenantSlug   string
 	t            *testing.T
 }
 
@@ -281,6 +282,11 @@ func (h *ApiTestHelper) DoRequest(method, path string, body interface{}, headers
 		req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", h.token))
 	}
 
+	// Add tenant slug if set
+	if h.tenantSlug != "" && headers["X-Tenant-Slug"] == "" {
+		req.Header.Set("X-Tenant-Slug", h.tenantSlug)
+	}
+
 	w := httptest.NewRecorder()
 	h.engine.ServeHTTP(w, req)
 
@@ -384,6 +390,30 @@ func (h *ApiTestHelper) RefreshToken() (string, error) {
 func (h *ApiTestHelper) ClearToken() {
 	h.token = ""
 	h.refreshToken = ""
+}
+
+// GetUserID returns the authenticated user's ID.
+// If not cached from login, fetches it from GET /auth/profile.
+func (h *ApiTestHelper) GetUserID() string {
+	if h.userId != "" {
+		return h.userId
+	}
+	w := h.DoRequest("GET", "/auth/profile", nil, map[string]string{})
+	if w.Code != http.StatusOK {
+		return ""
+	}
+	var resp map[string]interface{}
+	json.Unmarshal(w.Body.Bytes(), &resp)
+	if id, ok := resp["id"].(string); ok {
+		h.userId = id
+	}
+	return h.userId
+}
+
+// SetTenantSlug stores the tenant slug so DoRequest automatically includes X-Tenant-Slug header.
+func (h *ApiTestHelper) SetTenantSlug(slug string) *ApiTestHelper {
+	h.tenantSlug = slug
+	return h
 }
 
 // GetUserFromDB retrieves user directly from database (via API call)

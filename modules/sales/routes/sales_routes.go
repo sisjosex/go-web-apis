@@ -7,9 +7,9 @@ import (
 )
 
 // SetupSalesRoutes registers all sales module routes
-func SetupSalesRoutes(apiV1 *gin.RouterGroup, customerCtrl *controllers.CustomerController, orderCtrl *controllers.SalesOrderController, authMiddleware gin.HandlerFunc) {
+func SetupSalesRoutes(apiV1 *gin.RouterGroup, customerCtrl *controllers.CustomerController, orderCtrl *controllers.SalesOrderController, authMiddleware gin.HandlerFunc, tenantMiddleware gin.HandlerFunc) {
 	// Customer routes
-	customerGroup := apiV1.Group("/sales/customers", authMiddleware)
+	customerGroup := apiV1.Group("/sales/customers", authMiddleware, tenantMiddleware)
 	{
 		customerGroup.POST("", customerCtrl.CreateCustomer)
 		customerGroup.GET("/:id", customerCtrl.GetCustomer)
@@ -18,7 +18,7 @@ func SetupSalesRoutes(apiV1 *gin.RouterGroup, customerCtrl *controllers.Customer
 	}
 
 	// Sales Order routes
-	orderGroup := apiV1.Group("/sales/orders", authMiddleware)
+	orderGroup := apiV1.Group("/sales/orders", authMiddleware, tenantMiddleware)
 	{
 		orderGroup.POST("", orderCtrl.CreateSalesOrder)
 		orderGroup.GET("", orderCtrl.ListSalesOrders)
@@ -35,14 +35,14 @@ func SetupSalesRoutes(apiV1 *gin.RouterGroup, customerCtrl *controllers.Customer
 	}
 
 	// Sales Reports routes
-	reportsGroup := apiV1.Group("/sales/reports", authMiddleware)
+	reportsGroup := apiV1.Group("/sales/reports", authMiddleware, tenantMiddleware)
 	{
 		// Phase 2: Sales Report
 		reportsGroup.GET("/sales", orderCtrl.GetSalesReport)
 	}
 
 	// Returns routes
-	returnsGroup := apiV1.Group("/sales/returns", authMiddleware)
+	returnsGroup := apiV1.Group("/sales/returns", authMiddleware, tenantMiddleware)
 	{
 		// Phase 3: Returns Management
 		returnsGroup.POST("", orderCtrl.CreateReturn)
@@ -51,7 +51,7 @@ func SetupSalesRoutes(apiV1 *gin.RouterGroup, customerCtrl *controllers.Customer
 	}
 
 	// Payments routes
-	paymentsGroup := apiV1.Group("/sales/payments", authMiddleware)
+	paymentsGroup := apiV1.Group("/sales/payments", authMiddleware, tenantMiddleware)
 	{
 		// Phase 3: Payments Management
 		paymentsGroup.POST("", orderCtrl.CreatePayment)

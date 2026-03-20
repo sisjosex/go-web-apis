@@ -15,8 +15,13 @@ func CleanInventoryDatabase(helper *coreTestHelpers.ApiTestHelper) error {
 	return helper.CleanDatabaseForSchemas("inventory")
 }
 
-// SetupInventoryTest initializes test with default cleanup (all non-auth tables)
-// Use CleanInventoryDatabase() manually in test if you need inventory-only cleanup
+// SetupInventoryTest initializes test, authenticates as super_admin, and sets the test tenant.
+// All inventory operations require a tenant context.
 func SetupInventoryTest(t *testing.T) *coreTestHelpers.ApiTestHelper {
-	return coreTestHelpers.SetupApiTest(t)
+	helper := coreTestHelpers.SetupApiTest(t)
+	if _, err := helper.LoginAsSuperAdmin(); err != nil {
+		t.Logf("⚠️  inventory test setup: login failed: %v", err)
+	}
+	helper.SetTenantSlug("test-company")
+	return helper
 }

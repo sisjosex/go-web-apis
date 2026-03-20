@@ -513,6 +513,143 @@ func TestTenantAccessControlMemberCannotUpdate(t *testing.T) {
 // TENANT PLAN LIMITS TESTS
 // ============================================================================
 
+// ============================================================================
+// TENANT USER MEMBERSHIP INTEGRITY TESTS
+// ============================================================================
+
+// TestAddUserToTenant_DuplicateMembership_Returns400 verifies that adding the
+// same user to a tenant twice is rejected. The DB enforces UNIQUE(tenant_id,
+// user_id) and sp_add_user_to_tenant raises tenant.user.already-exists (T0013).
+func TestAddUserToTenant_DuplicateMembership_Returns400(t *testing.T) {
+	ts := time.Now().UnixNano()
+	ownerEmail := fmt.Sprintf("owner-dup-%d@test.com", ts)
+	memberEmail := fmt.Sprintf("member-dup-%d@test.com", ts)
+	slug := fmt.Sprintf("dup-membership-%d", ts)
+
+	// Owner sets up tenant
+	owner := testhelpers.SetupApiTest(t)
+	defer owner.Close()
+	owner.Register(ownerEmail, "$Password2025", "Owner", "Dup")
+	owner.Login(ownerEmail, "$Password2025")
+	owner.DoRequest("POST", "/tenants/self-service", map[string]interface{}{
+		"slug": slug, "name": "Dup Membership Test",
+	}, map[string]string{})
+
+	// Get member user_id
+	member := testhelpers.SetupApiTest(t)
+	defer member.Close()
+	member.Register(memberEmail, "$Password2025", "Member", "Dup")
+	member.Login(memberEmail, "$Password2025")
+	memberID := member.GetUserID()
+
+	// First add — should succeed
+	w1 := owner.DoRequest("POST", fmt.Sprintf("/tenants/%s/users", slug),
+		map[string]interface{}{"user_id": memberID, "role": "member"},
+		map[string]string{})
+	assert.True(t, w1.Code == http.StatusOK || w1.Code == http.StatusCreated,
+		fmt.Sprintf("first add expected 200/201, got %d: %s", w1.Code, w1.Body.String()))
+
+	// Second add — same user, same tenant → must fail
+	w2 := owner.DoRequest("POST", fmt.Sprintf("/tenants/%s/users", slug),
+		map[string]interface{}{"user_id": memberID, "role": "member"},
+		map[string]string{})
+	assert.Equal(t, http.StatusBadRequest, w2.Code,
+		fmt.Sprintf("second add expected 400 (already-exists), got %d: %s", w2.Code, w2.Body.String()))
+}
+
+// TestAddUserToTenant_InvalidRole_Returns400 verifies that an unrecognised role
+// is rejected by sp_add_user_to_tenant before touching the DB row.
+func TestAddUserToTenant_InvalidRole_Returns400(t *testing.T) {
+	ts := time.Now().UnixNano()
+	ownerEmail := fmt.Sprintf("owner-role-%d@test.com", ts)
+	memberEmail := fmt.Sprintf("member-role-%d@test.com", ts)
+	slug := fmt.Sprintf("invalid-role-%d", ts)
+
+	owner := testhelpers.SetupApiTest(t)
+	defer owner.Close()
+	owner.Register(ownerEmail, "$Password2025", "Owner", "Role")
+	owner.Login(ownerEmail, "$Password2025")
+	owner.DoRequest("POST", "/tenants/self-service", map[string]interface{}{
+		"slug": slug, "name": "Invalid Role Test",
+	}, map[string]string{})
+
+	member := testhelpers.SetupApiTest(t)
+	defer member.Close()
+	member.Register(memberEmail, "$Password2025", "Member", "Role")
+	member.Login(memberEmail, "$Password2025")
+
+	w := owner.DoRequest("POST", fmt.Sprintf("/tenants/%s/users", slug),
+		map[string]interface{}{"user_id": member.GetUserID(), "role": "hacker"},
+		map[string]string{})
+	assert.Equal(t, http.StatusBadRequest, w.Code,
+		fmt.Sprintf("invalid role expected 400, got %d: %s", w.Code, w.Body.String()))
+}
+
+// TestAddUserToTenant_AdminCannotAssignOwnerRole verifies that an admin-role
+// tenant member cannot elevate another user to owner (only owners may do so).
+func TestAddUserToTenant_AdminCannotAssignOwnerRole(t *testing.T) {
+	ts := time.Now().UnixNano()
+	ownerEmail := fmt.Sprintf("owner-ao-%d@test.com", ts)
+	adminEmail := fmt.Sprintf("admin-ao-%d@test.com", ts)
+	newUserEmail := fmt.Sprintf("newuser-ao-%d@test.com", ts)
+	slug := fmt.Sprintf("admin-owner-assign-%d", ts)
+
+	// Owner creates tenant and promotes an admin
+	owner := testhelpers.SetupApiTest(t)
+	defer owner.Close()
+	owner.Register(ownerEmail, "$Password2025", "Owner", "AO")
+	owner.Login(ownerEmail, "$Password2025")
+	owner.DoRequest("POST", "/tenants/self-service", map[string]interface{}{
+		"slug": slug, "name": "Admin Owner Assign Test",
+	}, map[string]string{})
+
+	adminHelper := testhelpers.SetupApiTest(t)
+	defer adminHelper.Close()
+	adminHelper.Register(adminEmail, "$Password2025", "Admin", "AO")
+	adminHelper.Login(adminEmail, "$Password2025")
+
+	// Owner adds admin
+	owner.DoRequest("POST", fmt.Sprintf("/tenants/%s/users", slug),
+		map[string]interface{}{"user_id": adminHelper.GetUserID(), "role": "admin"},
+		map[string]string{})
+
+	// New user to be added
+	newUser := testhelpers.SetupApiTest(t)
+	defer newUser.Close()
+	newUser.Register(newUserEmail, "$Password2025", "New", "AO")
+	newUser.Login(newUserEmail, "$Password2025")
+
+	// Admin tries to assign owner role — must fail
+	w := adminHelper.DoRequest("POST", fmt.Sprintf("/tenants/%s/users", slug),
+		map[string]interface{}{"user_id": newUser.GetUserID(), "role": "owner"},
+		map[string]string{})
+	assert.Equal(t, http.StatusBadRequest, w.Code,
+		fmt.Sprintf("admin assigning owner expected 400, got %d: %s", w.Code, w.Body.String()))
+}
+
+// TestRemoveUser_CannotRemoveLastOwner verifies that the last owner of a tenant
+// cannot be removed — sp_remove_user_from_tenant raises T0018.
+func TestRemoveUser_CannotRemoveLastOwner(t *testing.T) {
+	ts := time.Now().UnixNano()
+	ownerEmail := fmt.Sprintf("owner-last-%d@test.com", ts)
+	slug := fmt.Sprintf("last-owner-%d", ts)
+
+	owner := testhelpers.SetupApiTest(t)
+	defer owner.Close()
+	owner.Register(ownerEmail, "$Password2025", "Owner", "Last")
+	owner.Login(ownerEmail, "$Password2025")
+	owner.DoRequest("POST", "/tenants/self-service", map[string]interface{}{
+		"slug": slug, "name": "Last Owner Test",
+	}, map[string]string{})
+
+	// Owner tries to remove themselves (the only owner) — must fail
+	w := owner.DoRequest("DELETE",
+		fmt.Sprintf("/tenants/%s/users/%s", slug, owner.GetUserID()),
+		nil, map[string]string{})
+	assert.Equal(t, http.StatusBadRequest, w.Code,
+		fmt.Sprintf("removing last owner expected 400, got %d: %s", w.Code, w.Body.String()))
+}
+
 // TestFreePlanLimitOneTenantsMax tests that free plan users can only create 1 tenant
 func TestFreePlanLimitOneTenantsMax(t *testing.T) {
 	helper := testhelpers.SetupApiTest(t)

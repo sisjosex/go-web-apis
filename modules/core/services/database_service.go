@@ -59,7 +59,7 @@ func (ds *databaseService) InitDatabase(ctx context.Context) {
 	skipMigrations := os.Getenv("SKIP_MIGRATIONS") == "true"
 
 	for {
-		pool, err := connectDatabase(ctx, dataBaseUrl, coreConf.DatabasePoolSize)
+		pool, err := connectDatabase(ctx, dataBaseUrl, coreConf.DatabasePoolSize, "josex_primary")
 		if err != nil {
 			log.Printf("Failed to connect to database: %v", err)
 		}
@@ -83,14 +83,18 @@ func (ds *databaseService) InitDatabase(ctx context.Context) {
 	}
 }
 
-// Conecta a la base de datos con el tamaño de pool especificado
-func connectDatabase(ctx context.Context, dbURL string, poolSize int32) (*pgxpool.Pool, error) {
+// connectDatabase creates a pgxpool with the given pool size and application_name.
+// appName is surfaced in pg_stat_activity and helps distinguish primary vs tenant pools.
+func connectDatabase(ctx context.Context, dbURL string, poolSize int32, appName string) (*pgxpool.Pool, error) {
 	config, err := pgxpool.ParseConfig(dbURL)
 	if err != nil {
 		return nil, err
 	}
 
 	config.MaxConns = poolSize
+	if appName != "" {
+		config.ConnConfig.RuntimeParams["application_name"] = appName
+	}
 	pool, err := pgxpool.NewWithConfig(ctx, config)
 	if err != nil {
 		return nil, err
@@ -244,7 +248,7 @@ func (ds *databaseService) GetPoolForTenant(ctx context.Context, databaseURL str
 		poolSize = tenancyConf.TenantDatabasePoolSize
 	}
 
-	pool, err := connectDatabase(ctx, databaseURL, poolSize)
+	pool, err := connectDatabase(ctx, databaseURL, poolSize, "josex_tenant")
 	if err != nil {
 		return nil, err
 	}

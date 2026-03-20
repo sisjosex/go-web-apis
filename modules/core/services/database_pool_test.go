@@ -146,6 +146,38 @@ func TestDatabaseService_Query_UsesTenantPoolWhenContextHasURL(t *testing.T) {
 		t.Fatal("could not read current_database() via tenant pool")
 	}
 	t.Logf("primary pool → %q, tenant pool → %q (same DB in test env)", primaryDB, tenantDB)
+
+	// Verify pool routing via application_name set at connection time.
+	// Even though both pools point to the same test DB, they were created with
+	// different application_name values — proving separate pool instances are used.
+	var primaryAppName string
+	appRows, err := svc.Query(ctx, "SELECT current_setting('application_name')")
+	if err != nil {
+		t.Fatalf("could not query application_name from primary pool: %v", err)
+	}
+	for appRows.Next() {
+		_ = appRows.Scan(&primaryAppName)
+	}
+	appRows.Close()
+
+	var tenantAppName string
+	appRows2, err := svc.Query(tenantCtx2, "SELECT current_setting('application_name')")
+	if err != nil {
+		t.Fatalf("could not query application_name from tenant pool: %v", err)
+	}
+	for appRows2.Next() {
+		_ = appRows2.Scan(&tenantAppName)
+	}
+	appRows2.Close()
+
+	t.Logf("primary application_name=%q, tenant application_name=%q", primaryAppName, tenantAppName)
+
+	if primaryAppName != "josex_primary" {
+		t.Errorf("expected primary pool application_name=%q, got %q", "josex_primary", primaryAppName)
+	}
+	if tenantAppName != "josex_tenant" {
+		t.Errorf("expected tenant pool application_name=%q, got %q", "josex_tenant", tenantAppName)
+	}
 }
 
 // TestDatabaseService_ConcurrentTenantPoolCreation verifies that concurrent

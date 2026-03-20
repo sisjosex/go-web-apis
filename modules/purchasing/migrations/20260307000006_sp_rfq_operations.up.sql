@@ -10,7 +10,6 @@ CREATE OR REPLACE FUNCTION purchasing.sp_create_rfq(
 )
 RETURNS TABLE(
     id UUID,
-    tenant_id UUID,
     rfq_number VARCHAR,
     status VARCHAR,
     created_at TIMESTAMP,
@@ -20,9 +19,8 @@ BEGIN
     RETURN QUERY
     INSERT INTO purchasing.request_for_quotes(tenant_id, rfq_number, status)
     VALUES(p_tenant_id, p_rfq_number, COALESCE(p_status, 'draft'))
-    RETURNING 
+    RETURNING
         request_for_quotes.id,
-        request_for_quotes.tenant_id,
         request_for_quotes.rfq_number,
         request_for_quotes.status,
         request_for_quotes.created_at,
@@ -32,6 +30,7 @@ $$;
 
 -- ADD RFQ ITEM
 CREATE OR REPLACE FUNCTION purchasing.sp_add_rfq_item(
+    p_tenant_id UUID,
     p_rfq_id UUID,
     p_product_id UUID,
     p_quantity DECIMAL,
@@ -46,10 +45,15 @@ RETURNS TABLE(
     created_at TIMESTAMP
 ) LANGUAGE plpgsql AS $$
 BEGIN
+    -- Validate RFQ belongs to tenant
+    IF NOT EXISTS (SELECT 1 FROM purchasing.request_for_quotes r WHERE r.id = p_rfq_id AND r.tenant_id = p_tenant_id) THEN
+        RAISE EXCEPTION 'rfq.not-found' USING ERRCODE = 'P0001';
+    END IF;
+
     RETURN QUERY
     INSERT INTO purchasing.rfq_items(rfq_id, product_id, quantity, description)
     VALUES(p_rfq_id, p_product_id, p_quantity, p_description)
-    RETURNING 
+    RETURNING
         rfq_items.id,
         rfq_items.rfq_id,
         rfq_items.product_id,
@@ -61,6 +65,7 @@ $$;
 
 -- ADD RFQ RESPONSE
 CREATE OR REPLACE FUNCTION purchasing.sp_add_rfq_response(
+    p_tenant_id UUID,
     p_rfq_id UUID,
     p_supplier_id UUID,
     p_total_price DECIMAL,
@@ -80,10 +85,20 @@ RETURNS TABLE(
     updated_at TIMESTAMP
 ) LANGUAGE plpgsql AS $$
 BEGIN
+    -- Validate RFQ belongs to tenant
+    IF NOT EXISTS (SELECT 1 FROM purchasing.request_for_quotes r WHERE r.id = p_rfq_id AND r.tenant_id = p_tenant_id) THEN
+        RAISE EXCEPTION 'rfq.not-found' USING ERRCODE = 'P0001';
+    END IF;
+
+    -- Validate supplier belongs to tenant
+    IF NOT EXISTS (SELECT 1 FROM purchasing.suppliers s WHERE s.id = p_supplier_id AND s.tenant_id = p_tenant_id) THEN
+        RAISE EXCEPTION 'supplier.not-found' USING ERRCODE = 'P0001';
+    END IF;
+
     RETURN QUERY
     INSERT INTO purchasing.rfq_responses(rfq_id, supplier_id, total_price, delivery_days, payment_terms, notes)
     VALUES(p_rfq_id, p_supplier_id, p_total_price, p_delivery_days, p_payment_terms, p_notes)
-    RETURNING 
+    RETURNING
         rfq_responses.id,
         rfq_responses.rfq_id,
         rfq_responses.supplier_id,
@@ -98,6 +113,7 @@ $$;
 
 -- GET RFQ ITEMS
 CREATE OR REPLACE FUNCTION purchasing.sp_get_rfq_items(
+    p_tenant_id UUID,
     p_rfq_id UUID
 )
 RETURNS TABLE(
@@ -109,8 +125,13 @@ RETURNS TABLE(
     created_at TIMESTAMP
 ) LANGUAGE plpgsql AS $$
 BEGIN
+    -- Validate RFQ belongs to tenant
+    IF NOT EXISTS (SELECT 1 FROM purchasing.request_for_quotes r WHERE r.id = p_rfq_id AND r.tenant_id = p_tenant_id) THEN
+        RAISE EXCEPTION 'rfq.not-found' USING ERRCODE = 'P0001';
+    END IF;
+
     RETURN QUERY
-    SELECT 
+    SELECT
         ri.id,
         ri.rfq_id,
         ri.product_id,
@@ -125,6 +146,7 @@ $$;
 
 -- GET RFQ RESPONSES
 CREATE OR REPLACE FUNCTION purchasing.sp_get_rfq_responses(
+    p_tenant_id UUID,
     p_rfq_id UUID
 )
 RETURNS TABLE(
@@ -139,8 +161,13 @@ RETURNS TABLE(
     updated_at TIMESTAMP
 ) LANGUAGE plpgsql AS $$
 BEGIN
+    -- Validate RFQ belongs to tenant
+    IF NOT EXISTS (SELECT 1 FROM purchasing.request_for_quotes r WHERE r.id = p_rfq_id AND r.tenant_id = p_tenant_id) THEN
+        RAISE EXCEPTION 'rfq.not-found' USING ERRCODE = 'P0001';
+    END IF;
+
     RETURN QUERY
-    SELECT 
+    SELECT
         rr.id,
         rr.rfq_id,
         rr.supplier_id,
@@ -158,17 +185,17 @@ $$;
 
 -- SELECT BEST RFQ RESPONSE (Close RFQ)
 CREATE OR REPLACE FUNCTION purchasing.sp_select_best_rfq_response(
-    p_rfq_id UUID,
-    p_tenant_id UUID
+    p_tenant_id UUID,
+    p_rfq_id UUID
 )
 RETURNS TABLE(
     status_updated BOOLEAN
 ) LANGUAGE plpgsql AS $$
 BEGIN
-    UPDATE purchasing.request_for_quotes
+    UPDATE purchasing.request_for_quotes r
     SET status = 'closed'
-    WHERE id = p_rfq_id AND tenant_id = p_tenant_id;
-    
+    WHERE r.id = p_rfq_id AND r.tenant_id = p_tenant_id;
+
     RETURN QUERY SELECT TRUE;
 END;
 $$;

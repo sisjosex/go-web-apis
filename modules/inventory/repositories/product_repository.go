@@ -6,6 +6,8 @@ import (
 
 	"josex/web/modules/core/services"
 	"josex/web/modules/inventory/models"
+
+	"github.com/google/uuid"
 )
 
 type ProductRepository struct {
@@ -22,6 +24,7 @@ func NewProductRepository(dbService services.DatabaseService, logger *log.Logger
 
 func (r *ProductRepository) CreateProductWithVariants(
 	ctx context.Context,
+	tenantID uuid.UUID,
 	sku, name string,
 	description *string,
 	basePrice float64,
@@ -31,8 +34,8 @@ func (r *ProductRepository) CreateProductWithVariants(
 
 	err := r.dbService.QueryRow(
 		ctx,
-		`SELECT CAST(product_id AS VARCHAR), sku, name, message FROM inventory.sp_create_product_with_variants($1, $2, $3, $4, $5::JSONB, NULL::UUID)`,
-		sku, name, description, basePrice, variantsJSON,
+		`SELECT CAST(product_id AS VARCHAR), sku, name, message FROM inventory.sp_create_product_with_variants($1, $2, $3, $4, $5, $6::JSONB, NULL::UUID)`,
+		tenantID, sku, name, description, basePrice, variantsJSON,
 	).Scan(&productID, &respSku, &respName, &message)
 
 	if err != nil {
@@ -53,14 +56,14 @@ func (r *ProductRepository) CreateProductWithVariants(
 	}, nil
 }
 
-func (r *ProductRepository) GetProduct(ctx context.Context, productID string) (*models.Product, error) {
+func (r *ProductRepository) GetProduct(ctx context.Context, tenantID uuid.UUID, productID string) (*models.Product, error) {
 	var product models.Product
 
 	err := r.dbService.QueryRow(
 		ctx,
-		`SELECT id, sku, name, description, base_price, has_variants, status, created_at 
-		 FROM inventory.sp_get_product($1)`,
-		productID,
+		`SELECT id, sku, name, description, base_price, has_variants, status, created_at
+		 FROM inventory.sp_get_product($1, $2)`,
+		tenantID, productID,
 	).Scan(&product.ID, &product.SKU, &product.Name, &product.Description, &product.BasePrice, &product.HasVariants, &product.Status, &product.CreatedAt)
 
 	if err != nil {
@@ -73,14 +76,14 @@ func (r *ProductRepository) GetProduct(ctx context.Context, productID string) (*
 	return &product, nil
 }
 
-func (r *ProductRepository) GetProductBySkU(ctx context.Context, sku string) (*models.Product, error) {
+func (r *ProductRepository) GetProductBySkU(ctx context.Context, tenantID uuid.UUID, sku string) (*models.Product, error) {
 	var product models.Product
 
 	err := r.dbService.QueryRow(
 		ctx,
-		`SELECT id, sku, name, description, base_price, has_variants, status, created_at 
-		 FROM inventory.sp_get_product_by_sku($1)`,
-		sku,
+		`SELECT id, sku, name, description, base_price, has_variants, status, created_at
+		 FROM inventory.sp_get_product_by_sku($1, $2)`,
+		tenantID, sku,
 	).Scan(&product.ID, &product.SKU, &product.Name, &product.Description, &product.BasePrice, &product.HasVariants, &product.Status, &product.CreatedAt)
 
 	if err != nil {
@@ -93,12 +96,12 @@ func (r *ProductRepository) GetProductBySkU(ctx context.Context, sku string) (*m
 	return &product, nil
 }
 
-func (r *ProductRepository) ListProducts(ctx context.Context, limit, offset int) ([]models.Product, error) {
+func (r *ProductRepository) ListProducts(ctx context.Context, tenantID uuid.UUID, limit, offset int) ([]models.Product, error) {
 	rows, err := r.dbService.Query(
 		ctx,
-		`SELECT id, sku, name, description, base_price, has_variants, status, created_at 
-		 FROM inventory.sp_list_products($1, $2)`,
-		limit, offset,
+		`SELECT id, sku, name, description, base_price, has_variants, status, created_at
+		 FROM inventory.sp_list_products($1, $2, $3)`,
+		tenantID, limit, offset,
 	)
 	if err != nil {
 		if r.logger != nil {

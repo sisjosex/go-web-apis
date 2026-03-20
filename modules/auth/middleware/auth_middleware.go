@@ -41,6 +41,23 @@ func AuthMiddleware(jwtService services.JWTService) gin.HandlerFunc {
 	}
 }
 
+// RequireSystemRole blocks requests whose JWT system_role is not in the allowed list.
+// Must be placed after AuthMiddleware.
+func RequireSystemRole(roles ...string) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		systemRole, _ := c.Get("system_role")
+		roleStr, _ := systemRole.(string)
+		for _, r := range roles {
+			if roleStr == r {
+				c.Next()
+				return
+			}
+		}
+		c.JSON(http.StatusForbidden, errors.BuildErrorSingle(c, "auth.insufficient-permissions"))
+		c.Abort()
+	}
+}
+
 func extractToken(c *gin.Context) (string, error) {
 	authHeader := c.GetHeader("Authorization")
 	if authHeader == "" {

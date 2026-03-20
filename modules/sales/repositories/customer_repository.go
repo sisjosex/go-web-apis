@@ -22,10 +22,11 @@ func NewCustomerRepository(dbService coreServices.DatabaseService) *CustomerRepo
 }
 
 // CreateCustomer creates a new customer
-func (r *CustomerRepository) CreateCustomer(ctx context.Context, dto *models.CreateCustomerRequestDto) (*models.Customer, error) {
+func (r *CustomerRepository) CreateCustomer(ctx context.Context, tenantID uuid.UUID, dto *models.CreateCustomerRequestDto) (*models.Customer, error) {
 	customer := &models.Customer{}
 	err := r.dbService.QueryRow(ctx,
-		`SELECT * FROM sales.sp_create_customer($1, $2, $3, $4, $5, $6, $7, $8)`,
+		`SELECT * FROM sales.sp_create_customer($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
+		tenantID,
 		dto.Name,
 		dto.Email,
 		dto.PhoneNumber,
@@ -52,10 +53,11 @@ func (r *CustomerRepository) CreateCustomer(ctx context.Context, dto *models.Cre
 }
 
 // GetCustomerByID retrieves a customer by ID
-func (r *CustomerRepository) GetCustomerByID(ctx context.Context, id uuid.UUID) (*models.Customer, error) {
+func (r *CustomerRepository) GetCustomerByID(ctx context.Context, tenantID uuid.UUID, id uuid.UUID) (*models.Customer, error) {
 	customer := &models.Customer{}
 	err := r.dbService.QueryRow(ctx,
-		`SELECT * FROM sales.sp_get_customer_by_id($1)`,
+		`SELECT * FROM sales.sp_get_customer_by_id($1, $2)`,
+		tenantID,
 		id,
 	).Scan(
 		&customer.ID,
@@ -75,11 +77,11 @@ func (r *CustomerRepository) GetCustomerByID(ctx context.Context, id uuid.UUID) 
 }
 
 // GetAllCustomers retrieves all customers
-func (r *CustomerRepository) GetAllCustomers(ctx context.Context, limit int, offset int) ([]models.Customer, error) {
+func (r *CustomerRepository) GetAllCustomers(ctx context.Context, tenantID uuid.UUID, limit int, offset int) ([]models.Customer, error) {
 	var customers []models.Customer
 	rows, err := r.dbService.Query(ctx,
-		`SELECT * FROM sales.sp_get_all_customers($1, $2)`,
-		limit, offset,
+		`SELECT * FROM sales.sp_get_all_customers($1, $2, $3)`,
+		tenantID, limit, offset,
 	)
 	if err != nil {
 		return customers, err
@@ -102,10 +104,11 @@ func (r *CustomerRepository) GetAllCustomers(ctx context.Context, limit int, off
 }
 
 // UpdateCustomer updates a customer
-func (r *CustomerRepository) UpdateCustomer(ctx context.Context, id uuid.UUID, dto *models.UpdateCustomerRequestDto) (*models.Customer, error) {
+func (r *CustomerRepository) UpdateCustomer(ctx context.Context, tenantID uuid.UUID, id uuid.UUID, dto *models.UpdateCustomerRequestDto) (*models.Customer, error) {
 	customer := &models.Customer{}
 	err := r.dbService.QueryRow(ctx,
-		`SELECT * FROM sales.sp_update_customer($1, $2, $3, $4, $5, $6, $7, $8)`,
+		`SELECT * FROM sales.sp_update_customer($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
+		tenantID,
 		id,
 		dto.Name,
 		dto.PhoneNumber,
@@ -123,16 +126,17 @@ func (r *CustomerRepository) UpdateCustomer(ctx context.Context, id uuid.UUID, d
 }
 
 // DeleteCustomer deletes a customer
-func (r *CustomerRepository) DeleteCustomer(ctx context.Context, id uuid.UUID) error {
-	_, err := r.dbService.Execute(ctx, `CALL sales.sp_delete_customer($1)`, id)
+func (r *CustomerRepository) DeleteCustomer(ctx context.Context, tenantID uuid.UUID, id uuid.UUID) error {
+	_, err := r.dbService.Execute(ctx, `CALL sales.sp_delete_customer($1, $2)`, tenantID, id)
 	return err
 }
 
 // GetCustomerByEmail retrieves a customer by email
-func (r *CustomerRepository) GetCustomerByEmail(ctx context.Context, email string) (*models.Customer, error) {
+func (r *CustomerRepository) GetCustomerByEmail(ctx context.Context, tenantID uuid.UUID, email string) (*models.Customer, error) {
 	customer := &models.Customer{}
 	err := r.dbService.QueryRow(ctx,
-		`SELECT * FROM sales.sp_get_customer_by_email($1)`,
+		`SELECT * FROM sales.sp_get_customer_by_email($1, $2)`,
+		tenantID,
 		email,
 	).Scan(
 		&customer.ID, &customer.Name, &customer.Email, &customer.PhoneNumber,

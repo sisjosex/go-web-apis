@@ -4,9 +4,10 @@
 -- ===== MAIN CATEGORIES TABLE =====
 CREATE TABLE IF NOT EXISTS inventory.product_categories (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    tenant_id UUID NOT NULL,
     parent_id UUID REFERENCES inventory.product_categories(id) ON DELETE SET NULL,
     name VARCHAR(255) NOT NULL,
-    slug VARCHAR(255) NOT NULL UNIQUE,
+    slug VARCHAR(255) NOT NULL,
     description TEXT,
     icon_url VARCHAR(512),
     display_order INTEGER DEFAULT 0,
@@ -16,8 +17,9 @@ CREATE TABLE IF NOT EXISTS inventory.product_categories (
     updated_at TIMESTAMP NOT NULL DEFAULT NOW()
 );
 
+CREATE INDEX idx_product_categories_tenant_id ON inventory.product_categories(tenant_id);
+CREATE UNIQUE INDEX idx_product_categories_slug ON inventory.product_categories(tenant_id, slug);
 CREATE INDEX idx_product_categories_parent_id ON inventory.product_categories(parent_id);
-CREATE INDEX idx_product_categories_slug ON inventory.product_categories(slug);
 CREATE INDEX idx_product_categories_is_active ON inventory.product_categories(is_active);
 CREATE INDEX idx_product_categories_deleted_at ON inventory.product_categories(deleted_at);
 

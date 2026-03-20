@@ -22,14 +22,15 @@ func NewBatchRepository(dbService coreServices.DatabaseService) *BatchRepository
 }
 
 // CreateBatch creates a new batch for a product
-func (r *BatchRepository) CreateBatch(ctx context.Context, batch *models.CreateBatchDto) (*models.BatchResponse, error) {
+func (r *BatchRepository) CreateBatch(ctx context.Context, tenantID uuid.UUID, batch *models.CreateBatchDto) (*models.BatchResponse, error) {
 	productID, err := uuid.Parse(batch.ProductID)
 	if err != nil {
 		return nil, err
 	}
 
 	row := r.dbService.QueryRow(ctx,
-		"SELECT id, product_id, lot_number, purchase_date, expiry_date, unit_cost, initial_quantity, current_quantity, status, message FROM inventory.sp_create_batch($1, $2, $3, $4, $5, $6)",
+		"SELECT id, product_id, lot_number, purchase_date, expiry_date, unit_cost, initial_quantity, current_quantity, status, message FROM inventory.sp_create_batch($1, $2, $3, $4, $5, $6, $7)",
+		tenantID,
 		productID,
 		batch.LotNumber,
 		time.Time(batch.PurchaseDate),
@@ -61,9 +62,10 @@ func (r *BatchRepository) CreateBatch(ctx context.Context, batch *models.CreateB
 }
 
 // GetBatch retrieves a batch by ID
-func (r *BatchRepository) GetBatch(ctx context.Context, batchID uuid.UUID) (*models.BatchResponse, error) {
+func (r *BatchRepository) GetBatch(ctx context.Context, tenantID uuid.UUID, batchID uuid.UUID) (*models.BatchResponse, error) {
 	row := r.dbService.QueryRow(ctx,
-		"SELECT id, product_id, lot_number, purchase_date, expiry_date, unit_cost, initial_quantity, current_quantity, status, days_to_expiry FROM inventory.sp_get_batch($1)",
+		"SELECT id, product_id, lot_number, purchase_date, expiry_date, unit_cost, initial_quantity, current_quantity, status, days_to_expiry FROM inventory.sp_get_batch($1, $2)",
+		tenantID,
 		batchID,
 	)
 
@@ -97,9 +99,10 @@ func (r *BatchRepository) GetBatch(ctx context.Context, batchID uuid.UUID) (*mod
 }
 
 // ListBatchesByProduct retrieves all batches for a product
-func (r *BatchRepository) ListBatchesByProduct(ctx context.Context, productID uuid.UUID, onlyActive bool) (*models.ListBatchesResponse, error) {
+func (r *BatchRepository) ListBatchesByProduct(ctx context.Context, tenantID uuid.UUID, productID uuid.UUID, onlyActive bool) (*models.ListBatchesResponse, error) {
 	rows, err := r.dbService.Query(ctx,
-		"SELECT id, product_id, lot_number, purchase_date, expiry_date, unit_cost, initial_quantity, current_quantity, status, days_to_expiry FROM inventory.sp_list_batches_by_product($1, $2)",
+		"SELECT id, product_id, lot_number, purchase_date, expiry_date, unit_cost, initial_quantity, current_quantity, status, days_to_expiry FROM inventory.sp_list_batches_by_product($1, $2, $3)",
+		tenantID,
 		productID,
 		onlyActive,
 	)
@@ -149,9 +152,10 @@ func (r *BatchRepository) ListBatchesByProduct(ctx context.Context, productID uu
 }
 
 // GetOldestBatchForSale retrieves the oldest active batch (FIFO)
-func (r *BatchRepository) GetOldestBatchForSale(ctx context.Context, productID uuid.UUID) (*models.BatchResponse, error) {
+func (r *BatchRepository) GetOldestBatchForSale(ctx context.Context, tenantID uuid.UUID, productID uuid.UUID) (*models.BatchResponse, error) {
 	row := r.dbService.QueryRow(ctx,
-		"SELECT id, product_id, lot_number, purchase_date, expiry_date, unit_cost, current_quantity, status, message FROM inventory.sp_get_oldest_batch_for_sale($1)",
+		"SELECT id, product_id, lot_number, purchase_date, expiry_date, unit_cost, current_quantity, status, message FROM inventory.sp_get_oldest_batch_for_sale($1, $2)",
+		tenantID,
 		productID,
 	)
 
@@ -177,9 +181,10 @@ func (r *BatchRepository) GetOldestBatchForSale(ctx context.Context, productID u
 }
 
 // GetExpiringBatches retrieves all batches expiring within the specified number of days
-func (r *BatchRepository) GetExpiringBatches(ctx context.Context, warningDays int) ([]*models.BatchResponse, error) {
+func (r *BatchRepository) GetExpiringBatches(ctx context.Context, tenantID uuid.UUID, warningDays int) ([]*models.BatchResponse, error) {
 	rows, err := r.dbService.Query(ctx,
-		"SELECT id, product_id, lot_number, purchase_date, expiry_date, unit_cost, initial_quantity, current_quantity, status, days_to_expiry FROM inventory.sp_get_expiring_batches($1)",
+		"SELECT id, product_id, lot_number, purchase_date, expiry_date, unit_cost, initial_quantity, current_quantity, status, days_to_expiry FROM inventory.sp_get_expiring_batches($1, $2)",
+		tenantID,
 		warningDays,
 	)
 	if err != nil {
@@ -224,7 +229,7 @@ func (r *BatchRepository) GetExpiringBatches(ctx context.Context, warningDays in
 }
 
 // UpdateBatchQuantity updates the quantity in a batch
-func (r *BatchRepository) UpdateBatchQuantity(ctx context.Context, batchID uuid.UUID, quantityUsed float64) error {
+func (r *BatchRepository) UpdateBatchQuantity(ctx context.Context, tenantID uuid.UUID, batchID uuid.UUID, quantityUsed float64) error {
 	// This will be called after a sale to reduce batch quantity
 	// Implementation will depend on final SP design
 	return nil

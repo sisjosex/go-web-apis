@@ -170,6 +170,11 @@ func (s *tenantService) RemoveUserFromTenant(ctx context.Context, tenantID uuid.
 	return s.tenantRepository.RemoveUserFromTenant(ctx, tenantID, requesterUserID, userID)
 }
 
+// GetTenantBySlug returns tenant by slug (used by middleware for super_admin access)
+func (s *tenantService) GetTenantBySlug(ctx context.Context, slug string) (*models.Tenant, error) {
+	return s.tenantRepository.GetTenantBySlug(ctx, slug)
+}
+
 // VerifyUserTenantAccess verifies user has access to tenant (used by middleware)
 func (s *tenantService) VerifyUserTenantAccess(ctx context.Context, userID uuid.UUID, slug string) (*models.TenantAccessInfo, error) {
 	return s.tenantRepository.VerifyUserTenantAccess(ctx, userID, slug)

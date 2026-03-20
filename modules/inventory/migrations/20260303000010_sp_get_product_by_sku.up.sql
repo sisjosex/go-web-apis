@@ -1,4 +1,5 @@
 CREATE OR REPLACE FUNCTION inventory.sp_get_product_by_sku(
+    p_tenant_id UUID,
     p_sku VARCHAR
 )
 RETURNS TABLE(
@@ -23,6 +24,6 @@ BEGIN
         p.status,
         p.created_at
     FROM inventory.products p
-    WHERE p.sku = p_sku AND p.status = 'active';
+    WHERE p.tenant_id = p_tenant_id AND p.sku = p_sku AND p.status = 'active';
 END;
 $$;

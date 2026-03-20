@@ -1,4 +1,5 @@
 CREATE OR REPLACE FUNCTION inventory.sp_get_product_stock(
+    p_tenant_id UUID,
     p_product_id UUID
 )
 RETURNS TABLE(
@@ -19,6 +20,7 @@ BEGIN
         ps.status,
         ps.last_updated_at
     FROM inventory.product_stock ps
-    WHERE ps.product_id = p_product_id;
+    JOIN inventory.products p ON p.id = ps.product_id
+    WHERE p.tenant_id = p_tenant_id AND ps.product_id = p_product_id;
 END;
 $$;

@@ -1,5 +1,6 @@
 -- Add item to purchase order
 CREATE OR REPLACE FUNCTION purchasing.sp_add_purchase_order_item(
+    p_tenant_id UUID,
     p_po_id UUID,
     p_product_id UUID,
     p_quantity INT,
@@ -19,13 +20,13 @@ DECLARE
     v_line_total DECIMAL;
     v_message TEXT := 'Item added to purchase order';
 BEGIN
-    -- Validate PO exists and is in draft/approved status
-    IF NOT EXISTS (SELECT 1 FROM purchasing.purchase_orders WHERE id = p_po_id AND status IN ('draft', 'approved')) THEN
+    -- Validate PO exists, belongs to tenant, and is in draft/approved status
+    IF NOT EXISTS (SELECT 1 FROM purchasing.purchase_orders po WHERE po.id = p_po_id AND po.tenant_id = p_tenant_id AND po.status IN ('draft', 'approved')) THEN
         RAISE EXCEPTION 'po.invalid-status' USING ERRCODE = 'P0001';
     END IF;
 
-    -- Validate product exists
-    IF NOT EXISTS (SELECT 1 FROM inventory.products WHERE id = p_product_id) THEN
+    -- Validate product exists and belongs to tenant
+    IF NOT EXISTS (SELECT 1 FROM inventory.products p WHERE p.id = p_product_id AND p.tenant_id = p_tenant_id) THEN
         RAISE EXCEPTION 'product.not-found' USING ERRCODE = 'P0001';
     END IF;
 
@@ -49,15 +50,15 @@ BEGIN
     -- Update PO total
     UPDATE purchasing.purchase_orders
     SET total_amount = (
-        SELECT COALESCE(SUM(line_total), 0) 
-        FROM purchasing.purchase_order_items 
-        WHERE purchase_order_id = p_po_id
+        SELECT COALESCE(SUM(poi.line_total), 0)
+        FROM purchasing.purchase_order_items poi
+        WHERE poi.purchase_order_id = p_po_id
     ),
     updated_at = CURRENT_TIMESTAMP
-    WHERE id = p_po_id;
+    WHERE id = p_po_id AND tenant_id = p_tenant_id;
 
     RETURN QUERY
-    SELECT 
+    SELECT
         v_item_id,
         p_po_id,
         p_product_id,
@@ -70,6 +71,7 @@ $$;
 
 -- Approve purchase order
 CREATE OR REPLACE FUNCTION purchasing.sp_approve_purchase_order(
+    p_tenant_id UUID,
     p_po_id UUID
 )
 RETURNS TABLE(
@@ -81,13 +83,13 @@ RETURNS TABLE(
 DECLARE
     v_message TEXT := 'Purchase order approved';
 BEGIN
-    -- Validate PO exists and is in draft
-    IF NOT EXISTS (SELECT 1 FROM purchasing.purchase_orders WHERE id = p_po_id AND status = 'draft') THEN
+    -- Validate PO exists, belongs to tenant, and is in draft
+    IF NOT EXISTS (SELECT 1 FROM purchasing.purchase_orders po WHERE po.id = p_po_id AND po.tenant_id = p_tenant_id AND po.status = 'draft') THEN
         RAISE EXCEPTION 'po.cannot-approve' USING ERRCODE = 'P0001';
     END IF;
 
     -- Validate PO has items
-    IF NOT EXISTS (SELECT 1 FROM purchasing.purchase_order_items WHERE purchase_order_id = p_po_id) THEN
+    IF NOT EXISTS (SELECT 1 FROM purchasing.purchase_order_items poi WHERE poi.purchase_order_id = p_po_id) THEN
         RAISE EXCEPTION 'po.no-items' USING ERRCODE = 'P0001';
     END IF;
 
@@ -95,19 +97,20 @@ BEGIN
     UPDATE purchasing.purchase_orders
     SET status = 'approved',
         updated_at = CURRENT_TIMESTAMP
-    WHERE id = p_po_id;
+    WHERE id = p_po_id AND tenant_id = p_tenant_id;
 
     RETURN QUERY
-    SELECT 
+    SELECT
         p_po_id,
         'approved'::VARCHAR,
-        (SELECT total_amount FROM purchasing.purchase_orders WHERE id = p_po_id),
+        (SELECT po.total_amount FROM purchasing.purchase_orders po WHERE po.id = p_po_id AND po.tenant_id = p_tenant_id),
         v_message::TEXT;
 END;
 $$;
 
 -- Receive purchase order items
 CREATE OR REPLACE FUNCTION purchasing.sp_receive_purchase_order_items(
+    p_tenant_id UUID,
     p_po_id UUID,
     p_receipt_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     p_received_by UUID DEFAULT NULL,
@@ -126,8 +129,8 @@ DECLARE
     v_items_count INT;
     v_message TEXT := 'Goods received and inventory updated';
 BEGIN
-    -- Validate PO exists and is approved or invoiced
-    IF NOT EXISTS (SELECT 1 FROM purchasing.purchase_orders WHERE id = p_po_id AND status IN ('approved', 'invoiced')) THEN
+    -- Validate PO exists, belongs to tenant, and is approved or invoiced
+    IF NOT EXISTS (SELECT 1 FROM purchasing.purchase_orders po WHERE po.id = p_po_id AND po.tenant_id = p_tenant_id AND po.status IN ('approved', 'invoiced')) THEN
         RAISE EXCEPTION 'po.cannot-receive' USING ERRCODE = 'P0001';
     END IF;
 
@@ -141,11 +144,11 @@ BEGIN
     VALUES(v_receipt_id, p_po_id, v_receipt_number, p_receipt_date, p_received_by, p_notes);
 
     -- Mark all items as received
-    UPDATE purchasing.purchase_order_items
-    SET received_quantity = quantity,
+    UPDATE purchasing.purchase_order_items poi
+    SET received_quantity = poi.quantity,
         status = 'received',
         updated_at = CURRENT_TIMESTAMP
-    WHERE purchase_order_id = p_po_id AND status != 'received';
+    WHERE poi.purchase_order_id = p_po_id AND poi.status != 'received';
 
     GET DIAGNOSTICS v_items_count = ROW_COUNT;
 
@@ -153,10 +156,10 @@ BEGIN
     UPDATE purchasing.purchase_orders
     SET status = 'received',
         updated_at = CURRENT_TIMESTAMP
-    WHERE id = p_po_id;
+    WHERE id = p_po_id AND tenant_id = p_tenant_id;
 
     RETURN QUERY
-    SELECT 
+    SELECT
         v_receipt_id,
         p_po_id,
         'received'::VARCHAR,

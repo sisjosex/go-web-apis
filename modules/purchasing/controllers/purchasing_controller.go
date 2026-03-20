@@ -28,13 +28,24 @@ func NewPurchasingController(service interfaces.PurchasingService) *PurchasingCo
 // ========== SUPPLIER ENDPOINTS ==========
 
 func (ctrl *PurchasingController) CreateSupplier(c *gin.Context) {
+	tenantIDRaw, exists := c.Get("tenant_id")
+	if !exists || tenantIDRaw == nil {
+		c.JSON(http.StatusUnauthorized, coreErrors.BuildErrorSingle(c, "auth.invalid-tenant"))
+		return
+	}
+	tenantID, err := uuid.Parse(tenantIDRaw.(string))
+	if err != nil {
+		c.JSON(http.StatusUnauthorized, coreErrors.BuildErrorSingle(c, "auth.invalid-tenant"))
+		return
+	}
+
 	var dto models.CreateSupplierRequestDto
 	if err := c.ShouldBindJSON(&dto); err != nil {
 		c.JSON(http.StatusBadRequest, coreErrors.BuildErrorDetail(c, err.Error(), err))
 		return
 	}
 
-	supplier, err := ctrl.service.CreateSupplier(c.Request.Context(), &dto)
+	supplier, err := ctrl.service.CreateSupplier(c.Request.Context(), tenantID, &dto)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, coreErrors.BuildError(c, err))
 		return
@@ -49,13 +60,24 @@ func (ctrl *PurchasingController) CreateSupplier(c *gin.Context) {
 }
 
 func (ctrl *PurchasingController) GetSupplier(c *gin.Context) {
+	tenantIDRaw, exists := c.Get("tenant_id")
+	if !exists || tenantIDRaw == nil {
+		c.JSON(http.StatusUnauthorized, coreErrors.BuildErrorSingle(c, "auth.invalid-tenant"))
+		return
+	}
+	tenantID, err := uuid.Parse(tenantIDRaw.(string))
+	if err != nil {
+		c.JSON(http.StatusUnauthorized, coreErrors.BuildErrorSingle(c, "auth.invalid-tenant"))
+		return
+	}
+
 	supplierID, err := uuid.Parse(c.Param("id"))
 	if err != nil {
 		c.JSON(http.StatusBadRequest, coreErrors.BuildErrorSingle(c, "validation.invalid-uuid"))
 		return
 	}
 
-	supplier, err := ctrl.service.GetSupplier(c.Request.Context(), supplierID)
+	supplier, err := ctrl.service.GetSupplier(c.Request.Context(), tenantID, supplierID)
 	if err != nil {
 		c.JSON(http.StatusNotFound, coreErrors.BuildErrorSingle(c, errors.SupplierNotFound))
 		return
@@ -65,6 +87,17 @@ func (ctrl *PurchasingController) GetSupplier(c *gin.Context) {
 }
 
 func (ctrl *PurchasingController) ListSuppliers(c *gin.Context) {
+	tenantIDRaw, exists := c.Get("tenant_id")
+	if !exists || tenantIDRaw == nil {
+		c.JSON(http.StatusUnauthorized, coreErrors.BuildErrorSingle(c, "auth.invalid-tenant"))
+		return
+	}
+	tenantID, err := uuid.Parse(tenantIDRaw.(string))
+	if err != nil {
+		c.JSON(http.StatusUnauthorized, coreErrors.BuildErrorSingle(c, "auth.invalid-tenant"))
+		return
+	}
+
 	page := 1
 	pageSize := 20
 
@@ -79,7 +112,7 @@ func (ctrl *PurchasingController) ListSuppliers(c *gin.Context) {
 		}
 	}
 
-	suppliers, totalCount, err := ctrl.service.ListSuppliers(c.Request.Context(), page, pageSize)
+	suppliers, totalCount, err := ctrl.service.ListSuppliers(c.Request.Context(), tenantID, page, pageSize)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, coreErrors.BuildError(c, err))
 		return
@@ -96,6 +129,17 @@ func (ctrl *PurchasingController) ListSuppliers(c *gin.Context) {
 // ========== PURCHASE ORDER ENDPOINTS ==========
 
 func (ctrl *PurchasingController) CreatePurchaseOrder(c *gin.Context) {
+	tenantIDRaw, exists := c.Get("tenant_id")
+	if !exists || tenantIDRaw == nil {
+		c.JSON(http.StatusUnauthorized, coreErrors.BuildErrorSingle(c, "auth.invalid-tenant"))
+		return
+	}
+	tenantID, err := uuid.Parse(tenantIDRaw.(string))
+	if err != nil {
+		c.JSON(http.StatusUnauthorized, coreErrors.BuildErrorSingle(c, "auth.invalid-tenant"))
+		return
+	}
+
 	var dto models.CreatePurchaseOrderRequestDto
 	if err := c.ShouldBindJSON(&dto); err != nil {
 		c.JSON(http.StatusBadRequest, coreErrors.BuildErrorDetail(c, err.Error(), err))
@@ -106,7 +150,7 @@ func (ctrl *PurchasingController) CreatePurchaseOrder(c *gin.Context) {
 	userUUID, _ := uuid.Parse(userID)
 	supplierUUID, _ := uuid.Parse(dto.SupplierID)
 
-	po, err := ctrl.service.CreatePurchaseOrder(c.Request.Context(), supplierUUID, dto.ExpectedDeliveryDate, dto.Notes, userUUID)
+	po, err := ctrl.service.CreatePurchaseOrder(c.Request.Context(), tenantID, supplierUUID, dto.ExpectedDeliveryDate, dto.Notes, userUUID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, coreErrors.BuildError(c, err))
 		return
@@ -124,13 +168,24 @@ func (ctrl *PurchasingController) CreatePurchaseOrder(c *gin.Context) {
 }
 
 func (ctrl *PurchasingController) GetPurchaseOrder(c *gin.Context) {
+	tenantIDRaw, exists := c.Get("tenant_id")
+	if !exists || tenantIDRaw == nil {
+		c.JSON(http.StatusUnauthorized, coreErrors.BuildErrorSingle(c, "auth.invalid-tenant"))
+		return
+	}
+	tenantID, err := uuid.Parse(tenantIDRaw.(string))
+	if err != nil {
+		c.JSON(http.StatusUnauthorized, coreErrors.BuildErrorSingle(c, "auth.invalid-tenant"))
+		return
+	}
+
 	poID, err := uuid.Parse(c.Param("id"))
 	if err != nil {
 		c.JSON(http.StatusBadRequest, coreErrors.BuildErrorSingle(c, "validation.invalid-uuid"))
 		return
 	}
 
-	po, err := ctrl.service.GetPurchaseOrder(c.Request.Context(), poID)
+	po, err := ctrl.service.GetPurchaseOrder(c.Request.Context(), tenantID, poID)
 	if err != nil {
 		c.JSON(http.StatusNotFound, coreErrors.BuildErrorSingle(c, errors.PONotFound))
 		return
@@ -140,6 +195,17 @@ func (ctrl *PurchasingController) GetPurchaseOrder(c *gin.Context) {
 }
 
 func (ctrl *PurchasingController) ListPurchaseOrders(c *gin.Context) {
+	tenantIDRaw, exists := c.Get("tenant_id")
+	if !exists || tenantIDRaw == nil {
+		c.JSON(http.StatusUnauthorized, coreErrors.BuildErrorSingle(c, "auth.invalid-tenant"))
+		return
+	}
+	tenantID, err := uuid.Parse(tenantIDRaw.(string))
+	if err != nil {
+		c.JSON(http.StatusUnauthorized, coreErrors.BuildErrorSingle(c, "auth.invalid-tenant"))
+		return
+	}
+
 	page := 1
 	pageSize := 20
 	var status *string
@@ -158,7 +224,7 @@ func (ctrl *PurchasingController) ListPurchaseOrders(c *gin.Context) {
 		status = &s
 	}
 
-	pos, totalCount, err := ctrl.service.ListPurchaseOrders(c.Request.Context(), status, page, pageSize)
+	pos, totalCount, err := ctrl.service.ListPurchaseOrders(c.Request.Context(), tenantID, status, page, pageSize)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, coreErrors.BuildError(c, err))
 		return
@@ -173,6 +239,17 @@ func (ctrl *PurchasingController) ListPurchaseOrders(c *gin.Context) {
 }
 
 func (ctrl *PurchasingController) AddPurchaseOrderItem(c *gin.Context) {
+	tenantIDRaw, exists := c.Get("tenant_id")
+	if !exists || tenantIDRaw == nil {
+		c.JSON(http.StatusUnauthorized, coreErrors.BuildErrorSingle(c, "auth.invalid-tenant"))
+		return
+	}
+	tenantID, err := uuid.Parse(tenantIDRaw.(string))
+	if err != nil {
+		c.JSON(http.StatusUnauthorized, coreErrors.BuildErrorSingle(c, "auth.invalid-tenant"))
+		return
+	}
+
 	poID, err := uuid.Parse(c.Param("id"))
 	if err != nil {
 		c.JSON(http.StatusBadRequest, coreErrors.BuildErrorSingle(c, "validation.invalid-uuid"))
@@ -187,7 +264,7 @@ func (ctrl *PurchasingController) AddPurchaseOrderItem(c *gin.Context) {
 
 	productUUID, _ := uuid.Parse(dto.ProductID)
 
-	item, err := ctrl.service.AddItemToPurchaseOrder(c.Request.Context(), poID, productUUID, dto.Quantity, dto.UnitCost)
+	item, err := ctrl.service.AddItemToPurchaseOrder(c.Request.Context(), tenantID, poID, productUUID, dto.Quantity, dto.UnitCost)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, coreErrors.BuildError(c, err))
 		return
@@ -206,13 +283,24 @@ func (ctrl *PurchasingController) AddPurchaseOrderItem(c *gin.Context) {
 }
 
 func (ctrl *PurchasingController) ApprovePurchaseOrder(c *gin.Context) {
+	tenantIDRaw, exists := c.Get("tenant_id")
+	if !exists || tenantIDRaw == nil {
+		c.JSON(http.StatusUnauthorized, coreErrors.BuildErrorSingle(c, "auth.invalid-tenant"))
+		return
+	}
+	tenantID, err := uuid.Parse(tenantIDRaw.(string))
+	if err != nil {
+		c.JSON(http.StatusUnauthorized, coreErrors.BuildErrorSingle(c, "auth.invalid-tenant"))
+		return
+	}
+
 	poID, err := uuid.Parse(c.Param("id"))
 	if err != nil {
 		c.JSON(http.StatusBadRequest, coreErrors.BuildErrorSingle(c, "validation.invalid-uuid"))
 		return
 	}
 
-	po, err := ctrl.service.ApprovePurchaseOrder(c.Request.Context(), poID)
+	po, err := ctrl.service.ApprovePurchaseOrder(c.Request.Context(), tenantID, poID)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, coreErrors.BuildError(c, err))
 		return
@@ -229,6 +317,17 @@ func (ctrl *PurchasingController) ApprovePurchaseOrder(c *gin.Context) {
 }
 
 func (ctrl *PurchasingController) ReceivePurchaseOrder(c *gin.Context) {
+	tenantIDRaw, exists := c.Get("tenant_id")
+	if !exists || tenantIDRaw == nil {
+		c.JSON(http.StatusUnauthorized, coreErrors.BuildErrorSingle(c, "auth.invalid-tenant"))
+		return
+	}
+	tenantID, err := uuid.Parse(tenantIDRaw.(string))
+	if err != nil {
+		c.JSON(http.StatusUnauthorized, coreErrors.BuildErrorSingle(c, "auth.invalid-tenant"))
+		return
+	}
+
 	poID, err := uuid.Parse(c.Param("id"))
 	if err != nil {
 		c.JSON(http.StatusBadRequest, coreErrors.BuildErrorSingle(c, "validation.invalid-uuid"))
@@ -248,7 +347,7 @@ func (ctrl *PurchasingController) ReceivePurchaseOrder(c *gin.Context) {
 		}
 	}
 
-	receipt, err := ctrl.service.ReceivePurchaseOrder(c.Request.Context(), poID, receivedBy, dto.Notes)
+	receipt, err := ctrl.service.ReceivePurchaseOrder(c.Request.Context(), tenantID, poID, receivedBy, dto.Notes)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, coreErrors.BuildError(c, err))
 		return
@@ -262,6 +361,17 @@ func (ctrl *PurchasingController) ReceivePurchaseOrder(c *gin.Context) {
 }
 
 func (ctrl *PurchasingController) AddInvoice(c *gin.Context) {
+	tenantIDRaw, exists := c.Get("tenant_id")
+	if !exists || tenantIDRaw == nil {
+		c.JSON(http.StatusUnauthorized, coreErrors.BuildErrorSingle(c, "auth.invalid-tenant"))
+		return
+	}
+	tenantID, err := uuid.Parse(tenantIDRaw.(string))
+	if err != nil {
+		c.JSON(http.StatusUnauthorized, coreErrors.BuildErrorSingle(c, "auth.invalid-tenant"))
+		return
+	}
+
 	poID, err := uuid.Parse(c.Param("id"))
 	if err != nil {
 		c.JSON(http.StatusBadRequest, coreErrors.BuildErrorSingle(c, "validation.invalid-uuid"))
@@ -274,7 +384,7 @@ func (ctrl *PurchasingController) AddInvoice(c *gin.Context) {
 		return
 	}
 
-	invoice, err := ctrl.service.AddInvoice(c.Request.Context(), poID, &dto)
+	invoice, err := ctrl.service.AddInvoice(c.Request.Context(), tenantID, poID, &dto)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, coreErrors.BuildError(c, err))
 		return
@@ -284,7 +394,18 @@ func (ctrl *PurchasingController) AddInvoice(c *gin.Context) {
 }
 
 func (ctrl *PurchasingController) GetPendingPayments(c *gin.Context) {
-	pos, err := ctrl.service.GetPendingPayments(c.Request.Context())
+	tenantIDRaw, exists := c.Get("tenant_id")
+	if !exists || tenantIDRaw == nil {
+		c.JSON(http.StatusUnauthorized, coreErrors.BuildErrorSingle(c, "auth.invalid-tenant"))
+		return
+	}
+	tenantID, err := uuid.Parse(tenantIDRaw.(string))
+	if err != nil {
+		c.JSON(http.StatusUnauthorized, coreErrors.BuildErrorSingle(c, "auth.invalid-tenant"))
+		return
+	}
+
+	pos, err := ctrl.service.GetPendingPayments(c.Request.Context(), tenantID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, coreErrors.BuildError(c, err))
 		return
@@ -299,6 +420,17 @@ func (ctrl *PurchasingController) GetPendingPayments(c *gin.Context) {
 // ========== PHASE 2A: PRICE COMPARISON ==========
 
 func (ctrl *PurchasingController) GetPriceComparison(c *gin.Context) {
+	tenantIDRaw, exists := c.Get("tenant_id")
+	if !exists || tenantIDRaw == nil {
+		c.JSON(http.StatusUnauthorized, coreErrors.BuildErrorSingle(c, "auth.invalid-tenant"))
+		return
+	}
+	tenantID, err := uuid.Parse(tenantIDRaw.(string))
+	if err != nil {
+		c.JSON(http.StatusUnauthorized, coreErrors.BuildErrorSingle(c, "auth.invalid-tenant"))
+		return
+	}
+
 	productID := c.Query("product_id")
 	if productID == "" {
 		c.JSON(http.StatusBadRequest, coreErrors.BuildErrorSingle(c, errors.InvalidProductID))
@@ -311,7 +443,7 @@ func (ctrl *PurchasingController) GetPriceComparison(c *gin.Context) {
 		return
 	}
 
-	comparisons, err := ctrl.service.GetPriceComparison(c.Request.Context(), productUUID)
+	comparisons, err := ctrl.service.GetPriceComparison(c.Request.Context(), tenantID, productUUID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, coreErrors.BuildError(c, err))
 		return
@@ -329,13 +461,24 @@ func (ctrl *PurchasingController) GetPriceComparison(c *gin.Context) {
 // ========== PHASE 2A: FIFO BATCH TRACKING ==========
 
 func (ctrl *PurchasingController) CreateProductBatch(c *gin.Context) {
+	tenantIDRaw, exists := c.Get("tenant_id")
+	if !exists || tenantIDRaw == nil {
+		c.JSON(http.StatusUnauthorized, coreErrors.BuildErrorSingle(c, "auth.invalid-tenant"))
+		return
+	}
+	tenantID, err := uuid.Parse(tenantIDRaw.(string))
+	if err != nil {
+		c.JSON(http.StatusUnauthorized, coreErrors.BuildErrorSingle(c, "auth.invalid-tenant"))
+		return
+	}
+
 	var batch models.ProductBatch
 	if err := c.ShouldBindJSON(&batch); err != nil {
 		c.JSON(http.StatusBadRequest, coreErrors.BuildErrorDetail(c, err.Error(), err))
 		return
 	}
 
-	newBatch, err := ctrl.service.CreateProductBatch(c.Request.Context(), &batch)
+	newBatch, err := ctrl.service.CreateProductBatch(c.Request.Context(), tenantID, &batch)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, coreErrors.BuildError(c, err))
 		return
@@ -345,6 +488,17 @@ func (ctrl *PurchasingController) CreateProductBatch(c *gin.Context) {
 }
 
 func (ctrl *PurchasingController) GetProductBatches(c *gin.Context) {
+	tenantIDRaw, exists := c.Get("tenant_id")
+	if !exists || tenantIDRaw == nil {
+		c.JSON(http.StatusUnauthorized, coreErrors.BuildErrorSingle(c, "auth.invalid-tenant"))
+		return
+	}
+	tenantID, err := uuid.Parse(tenantIDRaw.(string))
+	if err != nil {
+		c.JSON(http.StatusUnauthorized, coreErrors.BuildErrorSingle(c, "auth.invalid-tenant"))
+		return
+	}
+
 	productID := c.Query("product_id")
 	if productID == "" {
 		c.JSON(http.StatusBadRequest, coreErrors.BuildErrorSingle(c, errors.InvalidProductID))
@@ -357,7 +511,7 @@ func (ctrl *PurchasingController) GetProductBatches(c *gin.Context) {
 		return
 	}
 
-	batches, err := ctrl.service.GetProductBatches(c.Request.Context(), productUUID)
+	batches, err := ctrl.service.GetProductBatches(c.Request.Context(), tenantID, productUUID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, coreErrors.BuildError(c, err))
 		return
@@ -371,6 +525,17 @@ func (ctrl *PurchasingController) GetProductBatches(c *gin.Context) {
 }
 
 func (ctrl *PurchasingController) GetOldestBatchForSale(c *gin.Context) {
+	tenantIDRaw, exists := c.Get("tenant_id")
+	if !exists || tenantIDRaw == nil {
+		c.JSON(http.StatusUnauthorized, coreErrors.BuildErrorSingle(c, "auth.invalid-tenant"))
+		return
+	}
+	tenantID, err := uuid.Parse(tenantIDRaw.(string))
+	if err != nil {
+		c.JSON(http.StatusUnauthorized, coreErrors.BuildErrorSingle(c, "auth.invalid-tenant"))
+		return
+	}
+
 	productID := c.Query("product_id")
 	if productID == "" {
 		c.JSON(http.StatusBadRequest, coreErrors.BuildErrorSingle(c, errors.InvalidProductID))
@@ -383,7 +548,7 @@ func (ctrl *PurchasingController) GetOldestBatchForSale(c *gin.Context) {
 		return
 	}
 
-	batch, err := ctrl.service.GetOldestBatchForSale(c.Request.Context(), productUUID)
+	batch, err := ctrl.service.GetOldestBatchForSale(c.Request.Context(), tenantID, productUUID)
 	if err != nil {
 		c.JSON(http.StatusNotFound, coreErrors.BuildError(c, err))
 		return
@@ -395,6 +560,17 @@ func (ctrl *PurchasingController) GetOldestBatchForSale(c *gin.Context) {
 // ========== PHASE 2A: RFQ (REQUEST FOR QUOTE) ==========
 
 func (ctrl *PurchasingController) CreateRFQ(c *gin.Context) {
+	tenantIDRaw, exists := c.Get("tenant_id")
+	if !exists || tenantIDRaw == nil {
+		c.JSON(http.StatusUnauthorized, coreErrors.BuildErrorSingle(c, "auth.invalid-tenant"))
+		return
+	}
+	tenantID, err := uuid.Parse(tenantIDRaw.(string))
+	if err != nil {
+		c.JSON(http.StatusUnauthorized, coreErrors.BuildErrorSingle(c, "auth.invalid-tenant"))
+		return
+	}
+
 	var dto models.CreateRFQRequestDto
 	if err := c.ShouldBindJSON(&dto); err != nil {
 		c.JSON(http.StatusBadRequest, coreErrors.BuildErrorDetail(c, err.Error(), err))
@@ -405,7 +581,7 @@ func (ctrl *PurchasingController) CreateRFQ(c *gin.Context) {
 		RFQNumber: "RFQ-" + uuid.New().String()[:8],
 		Status:    "draft",
 	}
-	newRFQ, err := ctrl.service.CreateRFQ(c.Request.Context(), rfq)
+	newRFQ, err := ctrl.service.CreateRFQ(c.Request.Context(), tenantID, rfq)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, coreErrors.BuildError(c, err))
 		return
@@ -423,7 +599,7 @@ func (ctrl *PurchasingController) CreateRFQ(c *gin.Context) {
 			Quantity:    itemReq.Quantity,
 			Description: itemReq.Description,
 		}
-		_, err = ctrl.service.AddRFQItem(c.Request.Context(), newRFQ.ID, item)
+		_, err = ctrl.service.AddRFQItem(c.Request.Context(), tenantID, newRFQ.ID, item)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, coreErrors.BuildError(c, err))
 			return
@@ -435,6 +611,17 @@ func (ctrl *PurchasingController) CreateRFQ(c *gin.Context) {
 }
 
 func (ctrl *PurchasingController) GetRFQResponses(c *gin.Context) {
+	tenantIDRaw, exists := c.Get("tenant_id")
+	if !exists || tenantIDRaw == nil {
+		c.JSON(http.StatusUnauthorized, coreErrors.BuildErrorSingle(c, "auth.invalid-tenant"))
+		return
+	}
+	tenantID, err := uuid.Parse(tenantIDRaw.(string))
+	if err != nil {
+		c.JSON(http.StatusUnauthorized, coreErrors.BuildErrorSingle(c, "auth.invalid-tenant"))
+		return
+	}
+
 	rfqID := c.Param("rfq_id")
 	if rfqID == "" {
 		c.JSON(http.StatusBadRequest, coreErrors.BuildErrorSingle(c, "missing.rfq-id"))
@@ -447,7 +634,7 @@ func (ctrl *PurchasingController) GetRFQResponses(c *gin.Context) {
 		return
 	}
 
-	responses, err := ctrl.service.GetRFQResponses(c.Request.Context(), rfqUUID)
+	responses, err := ctrl.service.GetRFQResponses(c.Request.Context(), tenantID, rfqUUID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, coreErrors.BuildError(c, err))
 		return
@@ -461,6 +648,17 @@ func (ctrl *PurchasingController) GetRFQResponses(c *gin.Context) {
 }
 
 func (ctrl *PurchasingController) GetRFQComparison(c *gin.Context) {
+	tenantIDRaw, exists := c.Get("tenant_id")
+	if !exists || tenantIDRaw == nil {
+		c.JSON(http.StatusUnauthorized, coreErrors.BuildErrorSingle(c, "auth.invalid-tenant"))
+		return
+	}
+	tenantID, err := uuid.Parse(tenantIDRaw.(string))
+	if err != nil {
+		c.JSON(http.StatusUnauthorized, coreErrors.BuildErrorSingle(c, "auth.invalid-tenant"))
+		return
+	}
+
 	rfqID := c.Param("rfq_id")
 	if rfqID == "" {
 		c.JSON(http.StatusBadRequest, coreErrors.BuildErrorSingle(c, "missing.rfq-id"))
@@ -473,7 +671,7 @@ func (ctrl *PurchasingController) GetRFQComparison(c *gin.Context) {
 		return
 	}
 
-	comparison, err := ctrl.service.GetRFQComparison(c.Request.Context(), rfqUUID)
+	comparison, err := ctrl.service.GetRFQComparison(c.Request.Context(), tenantID, rfqUUID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, coreErrors.BuildError(c, err))
 		return
@@ -483,6 +681,17 @@ func (ctrl *PurchasingController) GetRFQComparison(c *gin.Context) {
 }
 
 func (ctrl *PurchasingController) SelectRFQResponse(c *gin.Context) {
+	tenantIDRaw, exists := c.Get("tenant_id")
+	if !exists || tenantIDRaw == nil {
+		c.JSON(http.StatusUnauthorized, coreErrors.BuildErrorSingle(c, "auth.invalid-tenant"))
+		return
+	}
+	tenantID, err := uuid.Parse(tenantIDRaw.(string))
+	if err != nil {
+		c.JSON(http.StatusUnauthorized, coreErrors.BuildErrorSingle(c, "auth.invalid-tenant"))
+		return
+	}
+
 	rfqID := c.Param("rfq_id")
 	responseID := c.Param("response_id")
 
@@ -503,7 +712,7 @@ func (ctrl *PurchasingController) SelectRFQResponse(c *gin.Context) {
 		return
 	}
 
-	err = ctrl.service.SelectBestRFQResponse(c.Request.Context(), rfqUUID, responseUUID)
+	err = ctrl.service.SelectBestRFQResponse(c.Request.Context(), tenantID, rfqUUID, responseUUID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, coreErrors.BuildError(c, err))
 		return

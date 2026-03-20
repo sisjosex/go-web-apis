@@ -1,1 +1,0 @@
--- No-op: CREATE OR REPLACE is idempotent, reverting would restore the broken version

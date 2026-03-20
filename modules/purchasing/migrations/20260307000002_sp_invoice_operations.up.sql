@@ -4,6 +4,7 @@
 
 -- ADD INVOICE
 CREATE OR REPLACE FUNCTION purchasing.sp_add_invoice(
+    p_tenant_id UUID,
     p_purchase_order_id UUID,
     p_invoice_number VARCHAR,
     p_invoice_date DATE,
@@ -24,10 +25,15 @@ RETURNS TABLE(
     updated_at TIMESTAMP
 ) LANGUAGE plpgsql AS $$
 BEGIN
+    -- Validate PO exists and belongs to tenant
+    IF NOT EXISTS (SELECT 1 FROM purchasing.purchase_orders po WHERE po.id = p_purchase_order_id AND po.tenant_id = p_tenant_id) THEN
+        RAISE EXCEPTION 'po.not-found' USING ERRCODE = 'P0001';
+    END IF;
+
     RETURN QUERY
     INSERT INTO purchasing.purchase_order_invoices(purchase_order_id, invoice_number, invoice_date, invoice_amount, tax_amount, due_date)
     VALUES(p_purchase_order_id, p_invoice_number, p_invoice_date, p_invoice_amount, COALESCE(p_tax_amount, 0), p_due_date)
-    RETURNING 
+    RETURNING
         purchase_order_invoices.id,
         purchase_order_invoices.purchase_order_id,
         purchase_order_invoices.invoice_number,
@@ -43,6 +49,7 @@ $$;
 
 -- MARK INVOICE AS PAID
 CREATE OR REPLACE FUNCTION purchasing.sp_mark_invoice_as_paid(
+    p_tenant_id UUID,
     p_invoice_id UUID
 )
 RETURNS TABLE(
@@ -58,11 +65,20 @@ RETURNS TABLE(
     updated_at TIMESTAMP
 ) LANGUAGE plpgsql AS $$
 BEGIN
+    -- Validate invoice's PO belongs to tenant
+    IF NOT EXISTS (
+        SELECT 1 FROM purchasing.purchase_order_invoices inv
+        JOIN purchasing.purchase_orders po ON po.id = inv.purchase_order_id
+        WHERE inv.id = p_invoice_id AND po.tenant_id = p_tenant_id
+    ) THEN
+        RAISE EXCEPTION 'invoice.not-found' USING ERRCODE = 'P0001';
+    END IF;
+
     RETURN QUERY
     UPDATE purchasing.purchase_order_invoices
     SET status = 'paid', updated_at = CURRENT_TIMESTAMP
     WHERE id = p_invoice_id
-    RETURNING 
+    RETURNING
         purchase_order_invoices.id,
         purchase_order_invoices.purchase_order_id,
         purchase_order_invoices.invoice_number,
@@ -78,6 +94,7 @@ $$;
 
 -- GET INVOICES FOR PO
 CREATE OR REPLACE FUNCTION purchasing.sp_get_invoices(
+    p_tenant_id UUID,
     p_purchase_order_id UUID
 )
 RETURNS TABLE(
@@ -93,8 +110,13 @@ RETURNS TABLE(
     updated_at TIMESTAMP
 ) LANGUAGE plpgsql AS $$
 BEGIN
+    -- Validate PO belongs to tenant
+    IF NOT EXISTS (SELECT 1 FROM purchasing.purchase_orders po WHERE po.id = p_purchase_order_id AND po.tenant_id = p_tenant_id) THEN
+        RAISE EXCEPTION 'po.not-found' USING ERRCODE = 'P0001';
+    END IF;
+
     RETURN QUERY
-    SELECT 
+    SELECT
         inv.id,
         inv.purchase_order_id,
         inv.invoice_number,

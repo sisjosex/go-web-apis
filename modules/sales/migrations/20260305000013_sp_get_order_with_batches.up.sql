@@ -1,5 +1,6 @@
 -- Get a sales order with all batch assignments and inventory details
 CREATE OR REPLACE FUNCTION sales.sp_get_order_with_batches(
+    p_tenant_id UUID,
     p_order_id UUID
 )
 RETURNS TABLE(
@@ -23,8 +24,8 @@ DECLARE
     v_batch_count INT;
 BEGIN
     -- Count items and batches
-    SELECT COUNT(*) INTO v_item_count FROM sales.order_items WHERE order_id = p_order_id;
-    SELECT COUNT(*) INTO v_batch_count FROM sales.order_batch_assignments WHERE order_id = p_order_id;
+    SELECT COUNT(*) INTO v_item_count FROM sales.order_items oi WHERE oi.order_id = p_order_id;
+    SELECT COUNT(*) INTO v_batch_count FROM sales.order_batch_assignments oba WHERE oba.order_id = p_order_id;
 
     RETURN QUERY
     SELECT
@@ -44,6 +45,6 @@ BEGIN
         so.updated_at
     FROM sales.sales_orders so
     LEFT JOIN sales.customers c ON c.id = so.customer_id
-    WHERE so.id = p_order_id;
+    WHERE so.tenant_id = p_tenant_id AND so.id = p_order_id;
 END;
 $$;

@@ -34,13 +34,24 @@ func NewCustomerController(service *services.CustomerService) *CustomerControlle
 // @Failure 400 {object} coreErrors.ErrorResponse
 // @Router /sales/customers [post]
 func (ctrl *CustomerController) CreateCustomer(c *gin.Context) {
+	tenantIDRaw, exists := c.Get("tenant_id")
+	if !exists || tenantIDRaw == nil {
+		c.JSON(http.StatusUnauthorized, coreErrors.BuildErrorSingle(c, "auth.invalid-tenant"))
+		return
+	}
+	tenantID, err := uuid.Parse(tenantIDRaw.(string))
+	if err != nil {
+		c.JSON(http.StatusUnauthorized, coreErrors.BuildErrorSingle(c, "auth.invalid-tenant"))
+		return
+	}
+
 	var dto models.CreateCustomerRequestDto
 	if err := c.ShouldBindJSON(&dto); err != nil {
 		c.JSON(http.StatusBadRequest, coreErrors.BuildErrorDetail(c, "validation.failed", err.Error()))
 		return
 	}
 
-	customer, err := ctrl.service.CreateCustomer(c.Request.Context(), &dto)
+	customer, err := ctrl.service.CreateCustomer(c.Request.Context(), tenantID, &dto)
 	if err != nil {
 		status := utils.GetHTTPStatusFromError(err)
 		c.JSON(status, coreErrors.BuildError(c, err))
@@ -59,13 +70,24 @@ func (ctrl *CustomerController) CreateCustomer(c *gin.Context) {
 // @Failure 404 {object} coreErrors.ErrorResponse
 // @Router /sales/customers/{id} [get]
 func (ctrl *CustomerController) GetCustomer(c *gin.Context) {
+	tenantIDRaw, exists := c.Get("tenant_id")
+	if !exists || tenantIDRaw == nil {
+		c.JSON(http.StatusUnauthorized, coreErrors.BuildErrorSingle(c, "auth.invalid-tenant"))
+		return
+	}
+	tenantID, err := uuid.Parse(tenantIDRaw.(string))
+	if err != nil {
+		c.JSON(http.StatusUnauthorized, coreErrors.BuildErrorSingle(c, "auth.invalid-tenant"))
+		return
+	}
+
 	id, err := uuid.Parse(c.Param("id"))
 	if err != nil {
 		c.JSON(http.StatusBadRequest, coreErrors.BuildErrorSingle(c, "validation.invalid-uuid"))
 		return
 	}
 
-	customer, err := ctrl.service.GetCustomerByID(c.Request.Context(), id)
+	customer, err := ctrl.service.GetCustomerByID(c.Request.Context(), tenantID, id)
 	if err != nil {
 		status := utils.GetHTTPStatusFromError(err)
 		c.JSON(status, coreErrors.BuildError(c, err))
@@ -87,6 +109,17 @@ func (ctrl *CustomerController) GetCustomer(c *gin.Context) {
 // @Failure 404 {object} coreErrors.ErrorResponse
 // @Router /sales/customers/{id} [patch]
 func (ctrl *CustomerController) UpdateCustomer(c *gin.Context) {
+	tenantIDRaw, exists := c.Get("tenant_id")
+	if !exists || tenantIDRaw == nil {
+		c.JSON(http.StatusUnauthorized, coreErrors.BuildErrorSingle(c, "auth.invalid-tenant"))
+		return
+	}
+	tenantID, err := uuid.Parse(tenantIDRaw.(string))
+	if err != nil {
+		c.JSON(http.StatusUnauthorized, coreErrors.BuildErrorSingle(c, "auth.invalid-tenant"))
+		return
+	}
+
 	id, err := uuid.Parse(c.Param("id"))
 	if err != nil {
 		c.JSON(http.StatusBadRequest, coreErrors.BuildErrorSingle(c, "validation.invalid-uuid"))
@@ -99,7 +132,7 @@ func (ctrl *CustomerController) UpdateCustomer(c *gin.Context) {
 		return
 	}
 
-	customer, err := ctrl.service.UpdateCustomer(c.Request.Context(), id, &dto)
+	customer, err := ctrl.service.UpdateCustomer(c.Request.Context(), tenantID, id, &dto)
 	if err != nil {
 		status := utils.GetHTTPStatusFromError(err)
 		c.JSON(status, coreErrors.BuildError(c, err))
@@ -118,13 +151,24 @@ func (ctrl *CustomerController) UpdateCustomer(c *gin.Context) {
 // @Failure 404 {object} coreErrors.ErrorResponse
 // @Router /sales/customers/{id} [delete]
 func (ctrl *CustomerController) DeleteCustomer(c *gin.Context) {
+	tenantIDRaw, exists := c.Get("tenant_id")
+	if !exists || tenantIDRaw == nil {
+		c.JSON(http.StatusUnauthorized, coreErrors.BuildErrorSingle(c, "auth.invalid-tenant"))
+		return
+	}
+	tenantID, err := uuid.Parse(tenantIDRaw.(string))
+	if err != nil {
+		c.JSON(http.StatusUnauthorized, coreErrors.BuildErrorSingle(c, "auth.invalid-tenant"))
+		return
+	}
+
 	id, err := uuid.Parse(c.Param("id"))
 	if err != nil {
 		c.JSON(http.StatusBadRequest, coreErrors.BuildErrorSingle(c, "validation.invalid-uuid"))
 		return
 	}
 
-	err = ctrl.service.DeleteCustomer(c.Request.Context(), id)
+	err = ctrl.service.DeleteCustomer(c.Request.Context(), tenantID, id)
 	if err != nil {
 		status := utils.GetHTTPStatusFromError(err)
 		c.JSON(status, coreErrors.BuildError(c, err))

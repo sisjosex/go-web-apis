@@ -7,6 +7,8 @@ import (
 
 	"josex/web/modules/inventory/interfaces"
 	"josex/web/modules/inventory/models"
+
+	"github.com/google/uuid"
 )
 
 type ProductService struct {
@@ -23,6 +25,7 @@ func NewProductService(repository interfaces.ProductRepository, logger *log.Logg
 
 func (s *ProductService) CreateProductWithVariants(
 	ctx context.Context,
+	tenantID uuid.UUID,
 	dto models.CreateProductDto,
 ) (*models.CreateProductResponse, error) {
 	var variantsJSON *string
@@ -41,6 +44,7 @@ func (s *ProductService) CreateProductWithVariants(
 
 	return s.repository.CreateProductWithVariants(
 		ctx,
+		tenantID,
 		dto.SKU,
 		dto.Name,
 		dto.Description,
@@ -49,14 +53,14 @@ func (s *ProductService) CreateProductWithVariants(
 	)
 }
 
-func (s *ProductService) GetProduct(ctx context.Context, productID string) (*models.Product, error) {
-	return s.repository.GetProduct(ctx, productID)
+func (s *ProductService) GetProduct(ctx context.Context, tenantID uuid.UUID, productID string) (*models.Product, error) {
+	return s.repository.GetProduct(ctx, tenantID, productID)
 }
 
-func (s *ProductService) GetProductBySkU(ctx context.Context, sku string) (*models.Product, error) {
-	return s.repository.GetProductBySkU(ctx, sku)
+func (s *ProductService) GetProductBySkU(ctx context.Context, tenantID uuid.UUID, sku string) (*models.Product, error) {
+	return s.repository.GetProductBySkU(ctx, tenantID, sku)
 }
 
-func (s *ProductService) ListProducts(ctx context.Context, limit, offset int) ([]models.Product, error) {
-	return s.repository.ListProducts(ctx, limit, offset)
+func (s *ProductService) ListProducts(ctx context.Context, tenantID uuid.UUID, limit, offset int) ([]models.Product, error) {
+	return s.repository.ListProducts(ctx, tenantID, limit, offset)
 }

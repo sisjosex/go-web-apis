@@ -49,11 +49,12 @@ func TestGetCustomer_NotFound(t *testing.T) {
 	helper := SetupSalesTest(t)
 	defer helper.Close()
 
-	// Authenticate as super admin first
+	// Authenticate as super admin and set tenant context
 	_, err := helper.LoginAsSuperAdmin()
 	if err != nil {
 		t.Logf("Login error: %v", err)
 	}
+	helper.SetTenantSlug("test-company")
 
 	w := helper.DoRequest("GET", "/sales/customers/550e8400-e29b-41d4-a716-446655440000", nil, map[string]string{})
 

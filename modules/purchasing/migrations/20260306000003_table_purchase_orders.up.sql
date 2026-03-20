@@ -1,7 +1,7 @@
 -- Purchase Orders table
 CREATE TABLE IF NOT EXISTS purchasing.purchase_orders (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    tenant_id UUID NOT NULL REFERENCES tenancy.tenants(id) ON DELETE CASCADE,
+    tenant_id UUID NOT NULL,
     supplier_id UUID NOT NULL REFERENCES purchasing.suppliers(id) ON DELETE RESTRICT,
     po_number VARCHAR(50) NOT NULL,          -- PO-2026-00001
     status VARCHAR(20) DEFAULT 'draft',      -- draft, approved, received, invoiced, paid, cancelled

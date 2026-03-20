@@ -1,4 +1,5 @@
 CREATE OR REPLACE FUNCTION inventory.sp_get_movement(
+    p_tenant_id UUID,
     p_movement_id UUID
 )
 RETURNS TABLE(
@@ -27,6 +28,6 @@ BEGIN
         m.created_by,
         m.created_at
     FROM inventory.inventory_movements m
-    WHERE m.id = p_movement_id;
+    WHERE m.tenant_id = p_tenant_id AND m.id = p_movement_id;
 END;
 $$;

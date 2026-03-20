@@ -1,5 +1,6 @@
 -- Complete a sales order - transition from pending/reserved to completed and consume inventory
 CREATE OR REPLACE FUNCTION sales.sp_complete_sales_order(
+    p_tenant_id UUID,
     p_order_id UUID
 )
 RETURNS TABLE(
@@ -15,11 +16,11 @@ DECLARE
     v_total_consumed DECIMAL;
     v_current_batch_qty DECIMAL;
 BEGIN
-    -- Get order details
-    SELECT id, order_number, status, total
+    -- Get order details (validate tenant)
+    SELECT o.id, o.order_number, o.status, o.total
     INTO v_order_record
-    FROM sales.sales_orders
-    WHERE id = p_order_id;
+    FROM sales.sales_orders o
+    WHERE o.id = p_order_id AND o.tenant_id = p_tenant_id;
 
     IF v_order_record IS NULL THEN
         RAISE EXCEPTION 'sales-order.not-found' USING ERRCODE = 'P0001';
@@ -37,9 +38,9 @@ BEGIN
         WHERE oba.order_id = p_order_id
     LOOP
         -- Get current batch quantity
-        SELECT current_quantity INTO v_current_batch_qty
-        FROM inventory.product_batches
-        WHERE id = v_batch_record.product_batch_id;
+        SELECT pb.current_quantity INTO v_current_batch_qty
+        FROM inventory.product_batches pb
+        WHERE pb.id = v_batch_record.product_batch_id;
 
         IF v_current_batch_qty IS NULL THEN
             RAISE EXCEPTION 'product-batch.not-found' USING ERRCODE = 'P0001';
@@ -58,7 +59,7 @@ BEGIN
     -- Update order status to completed
     UPDATE sales.sales_orders
     SET status = 'completed'
-    WHERE id = p_order_id;
+    WHERE id = p_order_id AND tenant_id = p_tenant_id;
 
     RETURN QUERY
     SELECT

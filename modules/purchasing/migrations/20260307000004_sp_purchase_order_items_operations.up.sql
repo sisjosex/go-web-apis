@@ -4,6 +4,7 @@
 
 -- GET PURCHASE ORDER ITEMS
 CREATE OR REPLACE FUNCTION purchasing.sp_get_purchase_order_items(
+    p_tenant_id UUID,
     p_purchase_order_id UUID
 )
 RETURNS TABLE(
@@ -19,8 +20,13 @@ RETURNS TABLE(
     updated_at TIMESTAMP
 ) LANGUAGE plpgsql AS $$
 BEGIN
+    -- Validate PO belongs to tenant
+    IF NOT EXISTS (SELECT 1 FROM purchasing.purchase_orders po WHERE po.id = p_purchase_order_id AND po.tenant_id = p_tenant_id) THEN
+        RAISE EXCEPTION 'po.not-found' USING ERRCODE = 'P0001';
+    END IF;
+
     RETURN QUERY
-    SELECT 
+    SELECT
         poi.id,
         poi.purchase_order_id,
         poi.product_id,

@@ -1,5 +1,6 @@
 -- Cancel a sales order - revert status and release batch assignments
 CREATE OR REPLACE FUNCTION sales.sp_cancel_sales_order(
+    p_tenant_id UUID,
     p_order_id UUID
 )
 RETURNS TABLE(
@@ -11,11 +12,11 @@ RETURNS TABLE(
 DECLARE
     v_order_record RECORD;
 BEGIN
-    -- Get order details
-    SELECT id, order_number, status
+    -- Get order details (validate tenant)
+    SELECT o.id, o.order_number, o.status
     INTO v_order_record
-    FROM sales.sales_orders
-    WHERE id = p_order_id;
+    FROM sales.sales_orders o
+    WHERE o.id = p_order_id AND o.tenant_id = p_tenant_id;
 
     IF v_order_record IS NULL THEN
         RAISE EXCEPTION 'sales-order.not-found' USING ERRCODE = 'P0001';
@@ -32,7 +33,7 @@ BEGIN
     -- Update order status to cancelled
     UPDATE sales.sales_orders
     SET status = 'cancelled'
-    WHERE id = p_order_id;
+    WHERE id = p_order_id AND tenant_id = p_tenant_id;
 
     RETURN QUERY
     SELECT

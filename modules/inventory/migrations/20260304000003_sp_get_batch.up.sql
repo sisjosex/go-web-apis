@@ -1,6 +1,7 @@
 -- Get batch details by ID
 DROP FUNCTION IF EXISTS inventory.sp_get_batch(UUID);
 CREATE OR REPLACE FUNCTION inventory.sp_get_batch(
+    p_tenant_id UUID,
     p_batch_id UUID
 )
 RETURNS TABLE(
@@ -28,6 +29,6 @@ BEGIN
         pb.status,
         pb.expiry_date - CURRENT_DATE
     FROM inventory.product_batches pb
-    WHERE pb.id = p_batch_id;
+    WHERE pb.tenant_id = p_tenant_id AND pb.id = p_batch_id;
 END;
 $$;

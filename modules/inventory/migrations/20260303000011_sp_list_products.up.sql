@@ -1,4 +1,5 @@
 CREATE OR REPLACE FUNCTION inventory.sp_list_products(
+    p_tenant_id UUID,
     p_limit INT DEFAULT 20,
     p_offset INT DEFAULT 0
 )
@@ -24,7 +25,7 @@ BEGIN
         p.status,
         p.created_at
     FROM inventory.products p
-    WHERE p.status = 'active'
+    WHERE p.tenant_id = p_tenant_id AND p.status = 'active'
     ORDER BY p.created_at DESC
     LIMIT p_limit
     OFFSET p_offset;

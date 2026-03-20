@@ -37,13 +37,24 @@ func NewSalesOrderController(service *services.SalesOrderService) *SalesOrderCon
 // @Failure 404 {object} coreErrors.ErrorResponse
 // @Router /sales/orders [post]
 func (ctrl *SalesOrderController) CreateSalesOrder(c *gin.Context) {
+	tenantIDRaw, exists := c.Get("tenant_id")
+	if !exists || tenantIDRaw == nil {
+		c.JSON(http.StatusUnauthorized, coreErrors.BuildErrorSingle(c, "auth.invalid-tenant"))
+		return
+	}
+	tenantID, err := uuid.Parse(tenantIDRaw.(string))
+	if err != nil {
+		c.JSON(http.StatusUnauthorized, coreErrors.BuildErrorSingle(c, "auth.invalid-tenant"))
+		return
+	}
+
 	var dto models.CreateSalesOrderRequestDto
 	if err := c.ShouldBindJSON(&dto); err != nil {
 		c.JSON(http.StatusBadRequest, coreErrors.BuildErrorDetail(c, "validation.failed", err.Error()))
 		return
 	}
 
-	order, err := ctrl.service.CreateSalesOrder(c.Request.Context(), &dto)
+	order, err := ctrl.service.CreateSalesOrder(c.Request.Context(), tenantID, &dto)
 	if err != nil {
 		status := utils.GetHTTPStatusFromError(err)
 		c.JSON(status, coreErrors.BuildError(c, err))
@@ -62,13 +73,24 @@ func (ctrl *SalesOrderController) CreateSalesOrder(c *gin.Context) {
 // @Failure 404 {object} coreErrors.ErrorResponse
 // @Router /sales/orders/{id} [get]
 func (ctrl *SalesOrderController) GetSalesOrder(c *gin.Context) {
+	tenantIDRaw, exists := c.Get("tenant_id")
+	if !exists || tenantIDRaw == nil {
+		c.JSON(http.StatusUnauthorized, coreErrors.BuildErrorSingle(c, "auth.invalid-tenant"))
+		return
+	}
+	tenantID, err := uuid.Parse(tenantIDRaw.(string))
+	if err != nil {
+		c.JSON(http.StatusUnauthorized, coreErrors.BuildErrorSingle(c, "auth.invalid-tenant"))
+		return
+	}
+
 	id, err := uuid.Parse(c.Param("id"))
 	if err != nil {
 		c.JSON(http.StatusBadRequest, coreErrors.BuildErrorSingle(c, "validation.invalid-uuid"))
 		return
 	}
 
-	order, err := ctrl.service.GetSalesOrderByID(c.Request.Context(), id)
+	order, err := ctrl.service.GetSalesOrderByID(c.Request.Context(), tenantID, id)
 	if err != nil {
 		status := utils.GetHTTPStatusFromError(err)
 		c.JSON(status, coreErrors.BuildError(c, err))
@@ -76,7 +98,7 @@ func (ctrl *SalesOrderController) GetSalesOrder(c *gin.Context) {
 	}
 
 	// Get order items
-	items, _ := ctrl.service.GetOrderItems(c.Request.Context(), id)
+	items, _ := ctrl.service.GetOrderItems(c.Request.Context(), tenantID, id)
 	order.Items = items
 
 	c.JSON(http.StatusOK, gin.H{"data": order})
@@ -91,6 +113,17 @@ func (ctrl *SalesOrderController) GetSalesOrder(c *gin.Context) {
 // @Success 200 {array} models.SalesOrder
 // @Router /sales/orders [get]
 func (ctrl *SalesOrderController) ListSalesOrders(c *gin.Context) {
+	tenantIDRaw, exists := c.Get("tenant_id")
+	if !exists || tenantIDRaw == nil {
+		c.JSON(http.StatusUnauthorized, coreErrors.BuildErrorSingle(c, "auth.invalid-tenant"))
+		return
+	}
+	tenantID, err := uuid.Parse(tenantIDRaw.(string))
+	if err != nil {
+		c.JSON(http.StatusUnauthorized, coreErrors.BuildErrorSingle(c, "auth.invalid-tenant"))
+		return
+	}
+
 	limit := 20
 	offset := 0
 	if l := c.Query("limit"); l != "" {
@@ -104,7 +137,7 @@ func (ctrl *SalesOrderController) ListSalesOrders(c *gin.Context) {
 		}
 	}
 
-	orders, err := ctrl.service.GetAllSalesOrders(c.Request.Context(), limit, offset)
+	orders, err := ctrl.service.GetAllSalesOrders(c.Request.Context(), tenantID, limit, offset)
 	if err != nil {
 		status := utils.GetHTTPStatusFromError(err)
 		c.JSON(status, coreErrors.BuildError(c, err))
@@ -126,6 +159,17 @@ func (ctrl *SalesOrderController) ListSalesOrders(c *gin.Context) {
 // @Failure 404 {object} coreErrors.ErrorResponse
 // @Router /sales/orders/{id} [patch]
 func (ctrl *SalesOrderController) UpdateSalesOrder(c *gin.Context) {
+	tenantIDRaw, exists := c.Get("tenant_id")
+	if !exists || tenantIDRaw == nil {
+		c.JSON(http.StatusUnauthorized, coreErrors.BuildErrorSingle(c, "auth.invalid-tenant"))
+		return
+	}
+	tenantID, err := uuid.Parse(tenantIDRaw.(string))
+	if err != nil {
+		c.JSON(http.StatusUnauthorized, coreErrors.BuildErrorSingle(c, "auth.invalid-tenant"))
+		return
+	}
+
 	id, err := uuid.Parse(c.Param("id"))
 	if err != nil {
 		c.JSON(http.StatusBadRequest, coreErrors.BuildErrorSingle(c, "validation.invalid-uuid"))
@@ -138,7 +182,7 @@ func (ctrl *SalesOrderController) UpdateSalesOrder(c *gin.Context) {
 		return
 	}
 
-	order, err := ctrl.service.UpdateSalesOrder(c.Request.Context(), id, &dto)
+	order, err := ctrl.service.UpdateSalesOrder(c.Request.Context(), tenantID, id, &dto)
 	if err != nil {
 		status := utils.GetHTTPStatusFromError(err)
 		c.JSON(status, coreErrors.BuildError(c, err))
@@ -163,6 +207,17 @@ func (ctrl *SalesOrderController) UpdateSalesOrder(c *gin.Context) {
 // @Failure 409 {object} coreErrors.ErrorResponse
 // @Router /sales/orders/{id}/items [post]
 func (ctrl *SalesOrderController) AddOrderItem(c *gin.Context) {
+	tenantIDRaw, exists := c.Get("tenant_id")
+	if !exists || tenantIDRaw == nil {
+		c.JSON(http.StatusUnauthorized, coreErrors.BuildErrorSingle(c, "auth.invalid-tenant"))
+		return
+	}
+	tenantID, err := uuid.Parse(tenantIDRaw.(string))
+	if err != nil {
+		c.JSON(http.StatusUnauthorized, coreErrors.BuildErrorSingle(c, "auth.invalid-tenant"))
+		return
+	}
+
 	orderId, err := uuid.Parse(c.Param("id"))
 	if err != nil {
 		c.JSON(http.StatusBadRequest, coreErrors.BuildErrorSingle(c, "validation.invalid-uuid"))
@@ -175,7 +230,7 @@ func (ctrl *SalesOrderController) AddOrderItem(c *gin.Context) {
 		return
 	}
 
-	item, err := ctrl.service.AddOrderItemWithBatch(c.Request.Context(), orderId, dto.ProductID, dto.Quantity, dto.UnitPrice)
+	item, err := ctrl.service.AddOrderItemWithBatch(c.Request.Context(), tenantID, orderId, dto.ProductID, dto.Quantity, dto.UnitPrice)
 	if err != nil {
 		status := utils.GetHTTPStatusFromError(err)
 		c.JSON(status, coreErrors.BuildError(c, err))
@@ -196,13 +251,24 @@ func (ctrl *SalesOrderController) AddOrderItem(c *gin.Context) {
 // @Failure 409 {object} coreErrors.ErrorResponse
 // @Router /sales/orders/{id}/complete [patch]
 func (ctrl *SalesOrderController) CompleteOrder(c *gin.Context) {
+	tenantIDRaw, exists := c.Get("tenant_id")
+	if !exists || tenantIDRaw == nil {
+		c.JSON(http.StatusUnauthorized, coreErrors.BuildErrorSingle(c, "auth.invalid-tenant"))
+		return
+	}
+	tenantID, err := uuid.Parse(tenantIDRaw.(string))
+	if err != nil {
+		c.JSON(http.StatusUnauthorized, coreErrors.BuildErrorSingle(c, "auth.invalid-tenant"))
+		return
+	}
+
 	orderId, err := uuid.Parse(c.Param("id"))
 	if err != nil {
 		c.JSON(http.StatusBadRequest, coreErrors.BuildErrorSingle(c, "validation.invalid-uuid"))
 		return
 	}
 
-	order, err := ctrl.service.CompleteOrder(c.Request.Context(), orderId)
+	order, err := ctrl.service.CompleteOrder(c.Request.Context(), tenantID, orderId)
 	if err != nil {
 		status := utils.GetHTTPStatusFromError(err)
 		c.JSON(status, coreErrors.BuildError(c, err))
@@ -225,13 +291,24 @@ func (ctrl *SalesOrderController) CompleteOrder(c *gin.Context) {
 // @Failure 409 {object} coreErrors.ErrorResponse
 // @Router /sales/orders/{id}/cancel [patch]
 func (ctrl *SalesOrderController) CancelOrder(c *gin.Context) {
+	tenantIDRaw, exists := c.Get("tenant_id")
+	if !exists || tenantIDRaw == nil {
+		c.JSON(http.StatusUnauthorized, coreErrors.BuildErrorSingle(c, "auth.invalid-tenant"))
+		return
+	}
+	tenantID, err := uuid.Parse(tenantIDRaw.(string))
+	if err != nil {
+		c.JSON(http.StatusUnauthorized, coreErrors.BuildErrorSingle(c, "auth.invalid-tenant"))
+		return
+	}
+
 	orderId, err := uuid.Parse(c.Param("id"))
 	if err != nil {
 		c.JSON(http.StatusBadRequest, coreErrors.BuildErrorSingle(c, "validation.invalid-uuid"))
 		return
 	}
 
-	order, err := ctrl.service.CancelOrder(c.Request.Context(), orderId)
+	order, err := ctrl.service.CancelOrder(c.Request.Context(), tenantID, orderId)
 	if err != nil {
 		status := utils.GetHTTPStatusFromError(err)
 		c.JSON(status, coreErrors.BuildError(c, err))
@@ -250,13 +327,24 @@ func (ctrl *SalesOrderController) CancelOrder(c *gin.Context) {
 // @Failure 404 {object} coreErrors.ErrorResponse
 // @Router /sales/orders/{id}/with-batches [get]
 func (ctrl *SalesOrderController) GetOrderWithBatches(c *gin.Context) {
+	tenantIDRaw, exists := c.Get("tenant_id")
+	if !exists || tenantIDRaw == nil {
+		c.JSON(http.StatusUnauthorized, coreErrors.BuildErrorSingle(c, "auth.invalid-tenant"))
+		return
+	}
+	tenantID, err := uuid.Parse(tenantIDRaw.(string))
+	if err != nil {
+		c.JSON(http.StatusUnauthorized, coreErrors.BuildErrorSingle(c, "auth.invalid-tenant"))
+		return
+	}
+
 	orderId, err := uuid.Parse(c.Param("id"))
 	if err != nil {
 		c.JSON(http.StatusBadRequest, coreErrors.BuildErrorSingle(c, "validation.invalid-uuid"))
 		return
 	}
 
-	order, err := ctrl.service.GetOrderWithBatches(c.Request.Context(), orderId)
+	order, err := ctrl.service.GetOrderWithBatches(c.Request.Context(), tenantID, orderId)
 	if err != nil {
 		status := utils.GetHTTPStatusFromError(err)
 		c.JSON(status, coreErrors.BuildError(c, err))
@@ -276,6 +364,17 @@ func (ctrl *SalesOrderController) GetOrderWithBatches(c *gin.Context) {
 // @Failure 400 {object} coreErrors.ErrorResponse
 // @Router /sales/reports/sales [get]
 func (ctrl *SalesOrderController) GetSalesReport(c *gin.Context) {
+	tenantIDRaw, exists := c.Get("tenant_id")
+	if !exists || tenantIDRaw == nil {
+		c.JSON(http.StatusUnauthorized, coreErrors.BuildErrorSingle(c, "auth.invalid-tenant"))
+		return
+	}
+	tenantID, err := uuid.Parse(tenantIDRaw.(string))
+	if err != nil {
+		c.JSON(http.StatusUnauthorized, coreErrors.BuildErrorSingle(c, "auth.invalid-tenant"))
+		return
+	}
+
 	startDateStr := c.Query("start_date")
 	endDateStr := c.Query("end_date")
 
@@ -298,7 +397,7 @@ func (ctrl *SalesOrderController) GetSalesReport(c *gin.Context) {
 		return
 	}
 
-	reports, err := ctrl.service.GetSalesReport(c.Request.Context(), startDate, endDate)
+	reports, err := ctrl.service.GetSalesReport(c.Request.Context(), tenantID, startDate, endDate)
 	if err != nil {
 		status := utils.GetHTTPStatusFromError(err)
 		c.JSON(status, coreErrors.BuildError(c, err))
@@ -322,13 +421,24 @@ func (ctrl *SalesOrderController) GetSalesReport(c *gin.Context) {
 // @Failure 409 {object} coreErrors.ErrorResponse
 // @Router /sales/returns [post]
 func (ctrl *SalesOrderController) CreateReturn(c *gin.Context) {
+	tenantIDRaw, exists := c.Get("tenant_id")
+	if !exists || tenantIDRaw == nil {
+		c.JSON(http.StatusUnauthorized, coreErrors.BuildErrorSingle(c, "auth.invalid-tenant"))
+		return
+	}
+	tenantID, err := uuid.Parse(tenantIDRaw.(string))
+	if err != nil {
+		c.JSON(http.StatusUnauthorized, coreErrors.BuildErrorSingle(c, "auth.invalid-tenant"))
+		return
+	}
+
 	var dto models.CreateReturnRequestDto
 	if err := c.ShouldBindJSON(&dto); err != nil {
 		c.JSON(http.StatusBadRequest, coreErrors.BuildErrorDetail(c, "validation.failed", err.Error()))
 		return
 	}
 
-	ret, err := ctrl.service.CreateReturn(c.Request.Context(), dto.OrderID, dto.Reason)
+	ret, err := ctrl.service.CreateReturn(c.Request.Context(), tenantID, dto.OrderID, dto.Reason)
 	if err != nil {
 		status := utils.GetHTTPStatusFromError(err)
 		c.JSON(status, coreErrors.BuildError(c, err))
@@ -349,13 +459,24 @@ func (ctrl *SalesOrderController) CreateReturn(c *gin.Context) {
 // @Failure 409 {object} coreErrors.ErrorResponse
 // @Router /sales/returns/{id}/approve [patch]
 func (ctrl *SalesOrderController) ApproveReturn(c *gin.Context) {
+	tenantIDRaw, exists := c.Get("tenant_id")
+	if !exists || tenantIDRaw == nil {
+		c.JSON(http.StatusUnauthorized, coreErrors.BuildErrorSingle(c, "auth.invalid-tenant"))
+		return
+	}
+	tenantID, err := uuid.Parse(tenantIDRaw.(string))
+	if err != nil {
+		c.JSON(http.StatusUnauthorized, coreErrors.BuildErrorSingle(c, "auth.invalid-tenant"))
+		return
+	}
+
 	returnId, err := uuid.Parse(c.Param("id"))
 	if err != nil {
 		c.JSON(http.StatusBadRequest, coreErrors.BuildErrorSingle(c, "validation.invalid-uuid"))
 		return
 	}
 
-	ret, err := ctrl.service.ApproveReturn(c.Request.Context(), returnId)
+	ret, err := ctrl.service.ApproveReturn(c.Request.Context(), tenantID, returnId)
 	if err != nil {
 		status := utils.GetHTTPStatusFromError(err)
 		c.JSON(status, coreErrors.BuildError(c, err))
@@ -374,6 +495,17 @@ func (ctrl *SalesOrderController) ApproveReturn(c *gin.Context) {
 // @Failure 400 {object} coreErrors.ErrorResponse
 // @Router /sales/returns [get]
 func (ctrl *SalesOrderController) GetReturns(c *gin.Context) {
+	tenantIDRaw, exists := c.Get("tenant_id")
+	if !exists || tenantIDRaw == nil {
+		c.JSON(http.StatusUnauthorized, coreErrors.BuildErrorSingle(c, "auth.invalid-tenant"))
+		return
+	}
+	tenantID, err := uuid.Parse(tenantIDRaw.(string))
+	if err != nil {
+		c.JSON(http.StatusUnauthorized, coreErrors.BuildErrorSingle(c, "auth.invalid-tenant"))
+		return
+	}
+
 	orderIdStr := c.Query("order_id")
 	if orderIdStr == "" {
 		c.JSON(http.StatusBadRequest, coreErrors.BuildErrorDetail(c, "validation.failed", "order_id is required"))
@@ -386,7 +518,7 @@ func (ctrl *SalesOrderController) GetReturns(c *gin.Context) {
 		return
 	}
 
-	returns, err := ctrl.service.GetReturnsByOrder(c.Request.Context(), orderId)
+	returns, err := ctrl.service.GetReturnsByOrder(c.Request.Context(), tenantID, orderId)
 	if err != nil {
 		status := utils.GetHTTPStatusFromError(err)
 		c.JSON(status, coreErrors.BuildError(c, err))
@@ -407,13 +539,24 @@ func (ctrl *SalesOrderController) GetReturns(c *gin.Context) {
 // @Failure 404 {object} coreErrors.ErrorResponse
 // @Router /sales/payments [post]
 func (ctrl *SalesOrderController) CreatePayment(c *gin.Context) {
+	tenantIDRaw, exists := c.Get("tenant_id")
+	if !exists || tenantIDRaw == nil {
+		c.JSON(http.StatusUnauthorized, coreErrors.BuildErrorSingle(c, "auth.invalid-tenant"))
+		return
+	}
+	tenantID, err := uuid.Parse(tenantIDRaw.(string))
+	if err != nil {
+		c.JSON(http.StatusUnauthorized, coreErrors.BuildErrorSingle(c, "auth.invalid-tenant"))
+		return
+	}
+
 	var dto models.CreatePaymentRequestDto
 	if err := c.ShouldBindJSON(&dto); err != nil {
 		c.JSON(http.StatusBadRequest, coreErrors.BuildErrorDetail(c, "validation.failed", err.Error()))
 		return
 	}
 
-	payment, err := ctrl.service.CreatePayment(c.Request.Context(), dto.OrderID, dto.Amount, dto.PaymentMethod, dto.ReferenceNumber, dto.Notes)
+	payment, err := ctrl.service.CreatePayment(c.Request.Context(), tenantID, dto.OrderID, dto.Amount, dto.PaymentMethod, dto.ReferenceNumber, dto.Notes)
 	if err != nil {
 		status := utils.GetHTTPStatusFromError(err)
 		c.JSON(status, coreErrors.BuildError(c, err))
@@ -432,6 +575,17 @@ func (ctrl *SalesOrderController) CreatePayment(c *gin.Context) {
 // @Failure 400 {object} coreErrors.ErrorResponse
 // @Router /sales/payments [get]
 func (ctrl *SalesOrderController) GetPayments(c *gin.Context) {
+	tenantIDRaw, exists := c.Get("tenant_id")
+	if !exists || tenantIDRaw == nil {
+		c.JSON(http.StatusUnauthorized, coreErrors.BuildErrorSingle(c, "auth.invalid-tenant"))
+		return
+	}
+	tenantID, err := uuid.Parse(tenantIDRaw.(string))
+	if err != nil {
+		c.JSON(http.StatusUnauthorized, coreErrors.BuildErrorSingle(c, "auth.invalid-tenant"))
+		return
+	}
+
 	orderIdStr := c.Query("order_id")
 	if orderIdStr == "" {
 		c.JSON(http.StatusBadRequest, coreErrors.BuildErrorDetail(c, "validation.failed", "order_id is required"))
@@ -444,7 +598,7 @@ func (ctrl *SalesOrderController) GetPayments(c *gin.Context) {
 		return
 	}
 
-	payments, err := ctrl.service.GetPayments(c.Request.Context(), orderId)
+	payments, err := ctrl.service.GetPayments(c.Request.Context(), tenantID, orderId)
 	if err != nil {
 		status := utils.GetHTTPStatusFromError(err)
 		c.JSON(status, coreErrors.BuildError(c, err))

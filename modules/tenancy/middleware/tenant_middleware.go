@@ -9,6 +9,7 @@ import (
 	coreServices "josex/web/modules/core/services"
 	tenancyErrors "josex/web/modules/tenancy/errors"
 	"josex/web/modules/tenancy/interfaces"
+	"josex/web/modules/tenancy/models"
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
@@ -89,11 +90,12 @@ func TenantMiddleware(tenantService interfaces.TenantService) gin.HandlerFunc {
 	}
 }
 
-// TenantMiddlewareFromHeaderOptional validates tenant access when tenant_slug is in X-Tenant-Slug header
-// Used for APIs that support both single-database and multi-tenant operations
-// - If X-Tenant-Slug is provided: validates user access to that tenant
-// - If X-Tenant-Slug is NOT provided: allows operation on main database (admin/super_admin only)
-func TenantMiddlewareFromHeaderOptional(tenantService interfaces.TenantService) gin.HandlerFunc {
+// TenantMiddlewareFromHeader validates tenant access from the X-Tenant-Slug header.
+// X-Tenant-Slug is always required — no bypass for any role.
+//
+// - super_admin: can switch to ANY tenant; membership in tenant_users is not required.
+// - All other roles: must be a member of the requested tenant (verified via tenant_users).
+func TenantMiddlewareFromHeader(tenantService interfaces.TenantService) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		// Check if multitenancy is enabled
 		tenancyConf := config.ModularAppConfig.Tenancy
@@ -103,31 +105,9 @@ func TenantMiddlewareFromHeaderOptional(tenantService interfaces.TenantService) 
 			return
 		}
 
-		// Get system role from context (set by AuthMiddleware)
-		systemRole, _ := c.Get("system_role")
-		systemRoleStr := ""
-		if sr, ok := systemRole.(string); ok {
-			systemRoleStr = sr
-		}
-
-		// Get tenant slug from X-Tenant-Slug header
+		// X-Tenant-Slug is always required
 		tenantSlug := c.GetHeader("X-Tenant-Slug")
-
-		// If no tenant slug provided, allow operation on main database for admins
 		if tenantSlug == "" {
-			// Super_admin and admin can operate on main database (global scope)
-			if systemRoleStr == "super_admin" || systemRoleStr == "admin" {
-				// Set nil tenant context to indicate global/main database scope
-				c.Set("tenant_id", nil)
-				c.Set("tenant_slug", "")
-				c.Set("tenant_database_url", "")
-				c.Set("tenant_schema_name", "")
-				c.Set("tenant_user_role", "")
-				c.Next()
-				return
-			}
-
-			// Regular users MUST provide tenant
 			c.JSON(http.StatusBadRequest, coreErrors.BuildErrorSingle(c, tenancyErrors.TenantSlugRequired))
 			c.Abort()
 			return
@@ -148,12 +128,37 @@ func TenantMiddlewareFromHeaderOptional(tenantService interfaces.TenantService) 
 			return
 		}
 
-		// Verify user has access to this tenant
-		tenantAccess, err := tenantService.VerifyUserTenantAccess(c.Request.Context(), userID, tenantSlug)
-		if err != nil {
-			c.JSON(http.StatusForbidden, coreErrors.BuildError(c, err))
-			c.Abort()
-			return
+		systemRoleStr, _ := c.Get("system_role")
+
+		var tenantAccess *models.TenantAccessInfo
+
+		if systemRoleStr == "super_admin" {
+			// super_admin can switch to any tenant — bypass membership check
+			tenant, err := tenantService.GetTenantBySlug(c.Request.Context(), tenantSlug)
+			if err != nil {
+				c.JSON(http.StatusNotFound, coreErrors.BuildErrorSingle(c, tenancyErrors.TenantNotFound))
+				c.Abort()
+				return
+			}
+			tenantAccess = &models.TenantAccessInfo{
+				TenantID:     tenant.ID,
+				Slug:         tenant.Slug,
+				Name:         tenant.Name,
+				DatabaseURL:  tenant.DatabaseURL,
+				SchemaName:   tenant.SchemaName,
+				IsActive:     tenant.IsActive,
+				IsSuspended:  tenant.IsSuspended,
+				UserRole:     "super_admin",
+				UserIsActive: true,
+			}
+		} else {
+			// Regular users must be members of the tenant
+			tenantAccess, err = tenantService.VerifyUserTenantAccess(c.Request.Context(), userID, tenantSlug)
+			if err != nil {
+				c.JSON(http.StatusForbidden, coreErrors.BuildError(c, err))
+				c.Abort()
+				return
+			}
 		}
 
 		// Check if tenant is active
@@ -170,14 +175,14 @@ func TenantMiddlewareFromHeaderOptional(tenantService interfaces.TenantService) 
 			return
 		}
 
-		// Store tenant access info in gin context for controllers
+		// Inject tenant context for controllers and downstream middleware
 		c.Set("tenant_id", tenantAccess.TenantID.String())
 		c.Set("tenant_slug", tenantAccess.Slug)
 		c.Set("tenant_database_url", tenantAccess.DatabaseURL)
 		c.Set("tenant_schema_name", tenantAccess.SchemaName)
 		c.Set("tenant_user_role", tenantAccess.UserRole)
 
-		// Also inject database URL into the standard request context
+		// Inject DB URL into request context so DatabaseService.resolvePool picks it up
 		if tenantAccess.DatabaseURL != nil && *tenantAccess.DatabaseURL != "" {
 			ctx := context.WithValue(c.Request.Context(), coreServices.TenantDatabaseURLKey, *tenantAccess.DatabaseURL)
 			c.Request = c.Request.WithContext(ctx)
@@ -186,6 +191,10 @@ func TenantMiddlewareFromHeaderOptional(tenantService interfaces.TenantService) 
 		c.Next()
 	}
 }
+
+// TenantMiddlewareFromHeaderOptional is kept as an alias for backward compatibility.
+// Prefer TenantMiddlewareFromHeader for new code.
+var TenantMiddlewareFromHeaderOptional = TenantMiddlewareFromHeader
 
 // RequireTenantRole middleware ensures user has specific role in tenant
 func RequireTenantRole(allowedRoles ...string) gin.HandlerFunc {

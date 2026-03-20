@@ -2,7 +2,7 @@
 CREATE TABLE IF NOT EXISTS purchasing.request_for_quotes (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     tenant_id UUID NOT NULL,
-    rfq_number VARCHAR(100) NOT NULL UNIQUE,
+    rfq_number VARCHAR(100) NOT NULL,
     status VARCHAR(50) DEFAULT 'draft',    -- draft, sent, responded, closed
     notes TEXT,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -34,6 +34,7 @@ CREATE TABLE IF NOT EXISTS purchasing.rfq_responses (
 );
 
 CREATE INDEX idx_request_for_quotes_tenant ON purchasing.request_for_quotes(tenant_id);
+CREATE UNIQUE INDEX idx_rfq_number ON purchasing.request_for_quotes(tenant_id, rfq_number);
 CREATE INDEX idx_request_for_quotes_status ON purchasing.request_for_quotes(status);
 CREATE INDEX idx_rfq_items_rfq ON purchasing.rfq_items(rfq_id);
 CREATE INDEX idx_rfq_items_product ON purchasing.rfq_items(product_id);

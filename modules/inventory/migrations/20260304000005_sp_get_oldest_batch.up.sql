@@ -1,6 +1,7 @@
 -- Get the oldest non-expired batch for a product (FIFO for sales)
 DROP FUNCTION IF EXISTS inventory.sp_get_oldest_batch_for_sale(UUID);
 CREATE OR REPLACE FUNCTION inventory.sp_get_oldest_batch_for_sale(
+    p_tenant_id UUID,
     p_product_id UUID
 )
 RETURNS TABLE(
@@ -26,7 +27,8 @@ BEGIN
         pb.status,
         'Batch retrieved for sale'::TEXT
     FROM inventory.product_batches pb
-    WHERE pb.product_id = p_product_id
+    WHERE pb.tenant_id = p_tenant_id
+        AND pb.product_id = p_product_id
         AND pb.status != 'expired'
         AND pb.current_quantity > 0
     ORDER BY pb.expiry_date ASC, pb.created_at ASC

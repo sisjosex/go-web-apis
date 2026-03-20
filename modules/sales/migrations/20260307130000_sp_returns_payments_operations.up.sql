@@ -4,7 +4,10 @@
 -- ===== RETURNS OPERATIONS =====
 
 -- sp_get_return: Get a return by ID
-CREATE OR REPLACE FUNCTION sales.sp_get_return(p_return_id UUID)
+CREATE OR REPLACE FUNCTION sales.sp_get_return(
+    p_tenant_id UUID,
+    p_return_id UUID
+)
 RETURNS TABLE (
     id UUID,
     order_id UUID,
@@ -18,7 +21,7 @@ RETURNS TABLE (
 ) LANGUAGE plpgsql AS $$
 BEGIN
     RETURN QUERY
-    SELECT 
+    SELECT
         CAST(r.id AS UUID),
         CAST(r.order_id AS UUID),
         CAST(r.customer_id AS UUID),
@@ -29,12 +32,16 @@ BEGIN
         r.created_at,
         r.updated_at
     FROM sales.returns r
-    WHERE r.id = p_return_id;
+    JOIN sales.sales_orders o ON o.id = r.order_id
+    WHERE r.id = p_return_id AND o.tenant_id = p_tenant_id;
 END;
 $$;
 
 -- sp_get_returns_by_order: Get all returns for an order
-CREATE OR REPLACE FUNCTION sales.sp_get_returns_by_order(p_order_id UUID)
+CREATE OR REPLACE FUNCTION sales.sp_get_returns_by_order(
+    p_tenant_id UUID,
+    p_order_id UUID
+)
 RETURNS TABLE (
     id UUID,
     order_id UUID,
@@ -47,8 +54,13 @@ RETURNS TABLE (
     updated_at TIMESTAMP
 ) LANGUAGE plpgsql AS $$
 BEGIN
+    -- Validate order belongs to tenant
+    IF NOT EXISTS (SELECT 1 FROM sales.sales_orders so WHERE so.id = p_order_id AND so.tenant_id = p_tenant_id) THEN
+        RAISE EXCEPTION 'sales-order.not-found' USING ERRCODE = 'P0001';
+    END IF;
+
     RETURN QUERY
-    SELECT 
+    SELECT
         CAST(r.id AS UUID),
         CAST(r.order_id AS UUID),
         CAST(r.customer_id AS UUID),
@@ -67,7 +79,10 @@ $$;
 -- ===== PAYMENTS OPERATIONS =====
 
 -- sp_get_payments: Get all payments for an order
-CREATE OR REPLACE FUNCTION sales.sp_get_payments(p_order_id UUID)
+CREATE OR REPLACE FUNCTION sales.sp_get_payments(
+    p_tenant_id UUID,
+    p_order_id UUID
+)
 RETURNS TABLE (
     id UUID,
     order_id UUID,
@@ -81,8 +96,13 @@ RETURNS TABLE (
     updated_at TIMESTAMP
 ) LANGUAGE plpgsql AS $$
 BEGIN
+    -- Validate order belongs to tenant
+    IF NOT EXISTS (SELECT 1 FROM sales.sales_orders so WHERE so.id = p_order_id AND so.tenant_id = p_tenant_id) THEN
+        RAISE EXCEPTION 'sales-order.not-found' USING ERRCODE = 'P0001';
+    END IF;
+
     RETURN QUERY
-    SELECT 
+    SELECT
         CAST(p.id AS UUID),
         CAST(p.order_id AS UUID),
         CAST(p.customer_id AS UUID),
@@ -100,7 +120,10 @@ END;
 $$;
 
 -- sp_get_payment_by_id: Get a payment by ID
-CREATE OR REPLACE FUNCTION sales.sp_get_payment_by_id(p_payment_id UUID)
+CREATE OR REPLACE FUNCTION sales.sp_get_payment_by_id(
+    p_tenant_id UUID,
+    p_payment_id UUID
+)
 RETURNS TABLE (
     id UUID,
     order_id UUID,
@@ -115,7 +138,7 @@ RETURNS TABLE (
 ) LANGUAGE plpgsql AS $$
 BEGIN
     RETURN QUERY
-    SELECT 
+    SELECT
         CAST(p.id AS UUID),
         CAST(p.order_id AS UUID),
         CAST(p.customer_id AS UUID),
@@ -127,6 +150,7 @@ BEGIN
         p.created_at,
         p.updated_at
     FROM sales.payments p
-    WHERE p.id = p_payment_id;
+    JOIN sales.sales_orders o ON o.id = p.order_id
+    WHERE p.id = p_payment_id AND o.tenant_id = p_tenant_id;
 END;
 $$;

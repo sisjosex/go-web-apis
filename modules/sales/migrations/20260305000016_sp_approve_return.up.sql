@@ -1,5 +1,6 @@
 -- Approve a return and restore inventory
 CREATE OR REPLACE FUNCTION sales.sp_approve_return(
+    p_tenant_id UUID,
     p_return_id UUID
 )
 RETURNS TABLE(
@@ -13,11 +14,12 @@ DECLARE
     v_order_id UUID;
     v_batch_record RECORD;
 BEGIN
-    -- Get return details
-    SELECT id, return_number, order_id, status
+    -- Get return details and validate through order's tenant
+    SELECT r.id, r.return_number, r.order_id, r.status
     INTO v_return_record
-    FROM sales.returns
-    WHERE id = p_return_id;
+    FROM sales.returns r
+    JOIN sales.sales_orders o ON o.id = r.order_id
+    WHERE r.id = p_return_id AND o.tenant_id = p_tenant_id;
 
     IF v_return_record IS NULL THEN
         RAISE EXCEPTION 'return.not-found' USING ERRCODE = 'P0001';

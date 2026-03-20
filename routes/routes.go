@@ -101,8 +101,13 @@ func SetupRoutes(r *gin.Engine, dbService coreServices.DatabaseService) {
 		coreConf := config.ModularAppConfig.Core
 		tenancyConf := config.ModularAppConfig.Tenancy
 
+		// Auth middleware shared across business modules
+		authMiddleware := authMW.AuthMiddleware(jwtService)
+
+		// Tenant middleware — no-op when tenancy is disabled so business routes still register
+		tenantMiddleware := gin.HandlerFunc(func(c *gin.Context) { c.Next() })
+
 		// Initialize tenancy services (needed for other modules)
-		var tenantMiddleware gin.HandlerFunc
 		if coreConf.IsModuleEnabled("tenancy") && tenancyConf != nil && tenancyConf.Enabled {
 			tenantRepository := tenancyRepos.NewTenantRepository(dbService)
 			tenantService := tenancyServices.NewTenantService(tenantRepository, dbService)
@@ -111,8 +116,16 @@ func SetupRoutes(r *gin.Engine, dbService coreServices.DatabaseService) {
 			// Register tenant routes
 			tenancyRoutes.RegisterTenantRoutes(apiV1, tenantController, tenantService, jwtService)
 
-			// Create tenant middleware for use in other modules (optional header, allows main DB access for admins)
-			tenantMiddleware = tenancyMW.TenantMiddlewareFromHeaderOptional(tenantService)
+			// Override tenant middleware with real implementation
+			// TenantMiddlewareFromHeader always requires X-Tenant-Slug;
+			// super_admin can switch to any tenant, regular users must be members.
+			tenantMiddleware = tenancyMW.TenantMiddlewareFromHeader(tenantService)
+
+			// Platform routes — cross-tenant, super_admin only, no tenant scope
+			platform := apiV1.Group("/platform")
+			platform.Use(authMiddleware, authMW.RequireSystemRole("super_admin"))
+			// Register platform-admin routes here as modules are added:
+			// platformRoutes.RegisterPlatformRoutes(platform, ...)
 
 			log.Println("✅ Tenancy module enabled and routes registered")
 		}
@@ -131,7 +144,7 @@ func SetupRoutes(r *gin.Engine, dbService coreServices.DatabaseService) {
 
 		// Inventory module (if enabled)
 		if coreConf.IsModuleEnabled("inventory") {
-			inventoryRoutes.RegisterInventoryRoutes(apiV1, dbService)
+			inventoryRoutes.RegisterInventoryRoutes(apiV1, dbService, authMiddleware, tenantMiddleware)
 			log.Println("✅ Inventory module (with Batches) enabled and routes registered")
 		}
 
@@ -147,8 +160,8 @@ func SetupRoutes(r *gin.Engine, dbService coreServices.DatabaseService) {
 			customerController := salesControllers.NewCustomerController(customerService)
 			salesOrderController := salesControllers.NewSalesOrderController(salesOrderService)
 
-			// Register sales routes (with JWT auth middleware)
-			salesRoutes.SetupSalesRoutes(apiV1, customerController, salesOrderController, authMW.AuthMiddleware(jwtService))
+			// Register sales routes (with JWT auth + tenant middleware)
+			salesRoutes.SetupSalesRoutes(apiV1, customerController, salesOrderController, authMiddleware, tenantMiddleware)
 			log.Println("✅ Sales module enabled and routes registered")
 		}
 
@@ -158,16 +171,9 @@ func SetupRoutes(r *gin.Engine, dbService coreServices.DatabaseService) {
 			purchasingRepository := purchasingRepos.NewPurchasingRepository(dbService)
 			purchasingService := purchasingServices.NewPurchasingService(purchasingRepository)
 
-			// Customize auth middleware for purchasing
-			purchasingAuthMiddleware := func(c *gin.Context) {
-				// Reuse JWT validation from auth module
-				// This can be the auth middleware function passed in
-				c.Next()
-			}
-
-			// Use apiV1 router
+			// Use apiV1 router with auth + tenant middleware
 			purchasingRouteGroup := apiV1.Group("/purchasing")
-			purchasingRouteGroup.Use(purchasingAuthMiddleware)
+			purchasingRouteGroup.Use(authMiddleware, tenantMiddleware)
 
 			purchasingCtrl := purchasingControllers.NewPurchasingController(purchasingService)
 

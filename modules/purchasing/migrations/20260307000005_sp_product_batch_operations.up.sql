@@ -15,7 +15,6 @@ CREATE OR REPLACE FUNCTION purchasing.sp_create_product_batch(
 )
 RETURNS TABLE(
     id UUID,
-    tenant_id UUID,
     product_id UUID,
     batch_number VARCHAR,
     quantity DECIMAL,
@@ -30,9 +29,8 @@ BEGIN
     RETURN QUERY
     INSERT INTO purchasing.product_batches(tenant_id, product_id, batch_number, quantity, unit_cost, receipt_date, expiration_date, status)
     VALUES(p_tenant_id, p_product_id, p_batch_number, p_quantity, p_unit_cost, p_receipt_date, p_expiration_date, COALESCE(p_status, 'received'))
-    RETURNING 
+    RETURNING
         product_batches.id,
-        product_batches.tenant_id,
         product_batches.product_id,
         product_batches.batch_number,
         product_batches.quantity,
@@ -52,7 +50,6 @@ CREATE OR REPLACE FUNCTION purchasing.sp_get_product_batches(
 )
 RETURNS TABLE(
     id UUID,
-    tenant_id UUID,
     product_id UUID,
     batch_number VARCHAR,
     quantity DECIMAL,
@@ -65,9 +62,8 @@ RETURNS TABLE(
 ) LANGUAGE plpgsql AS $$
 BEGIN
     RETURN QUERY
-    SELECT 
+    SELECT
         pb.id,
-        pb.tenant_id,
         pb.product_id,
         pb.batch_number,
         pb.quantity,
@@ -90,7 +86,6 @@ CREATE OR REPLACE FUNCTION purchasing.sp_get_oldest_batch_for_sale(
 )
 RETURNS TABLE(
     id UUID,
-    tenant_id UUID,
     product_id UUID,
     batch_number VARCHAR,
     quantity DECIMAL,
@@ -103,9 +98,8 @@ RETURNS TABLE(
 ) LANGUAGE plpgsql AS $$
 BEGIN
     RETURN QUERY
-    SELECT 
+    SELECT
         pb.id,
-        pb.tenant_id,
         pb.product_id,
         pb.batch_number,
         pb.quantity,

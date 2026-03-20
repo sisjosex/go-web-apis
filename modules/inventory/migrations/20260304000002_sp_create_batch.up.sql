@@ -1,5 +1,6 @@
 -- Create a new batch for a product
 CREATE OR REPLACE FUNCTION inventory.sp_create_batch(
+    p_tenant_id UUID,
     p_product_id UUID,
     p_lot_number VARCHAR,
     p_purchase_date DATE,
@@ -23,8 +24,8 @@ DECLARE
     v_batch_id UUID := gen_random_uuid();
     v_status   VARCHAR;
 BEGIN
-    -- Validate product exists
-    IF NOT EXISTS (SELECT 1 FROM inventory.products p WHERE p.id = p_product_id) THEN
+    -- Validate product exists and belongs to tenant
+    IF NOT EXISTS (SELECT 1 FROM inventory.products p WHERE p.id = p_product_id AND p.tenant_id = p_tenant_id) THEN
         RAISE EXCEPTION 'product.not-found' USING ERRCODE = 'P0001';
     END IF;
 
@@ -64,11 +65,11 @@ BEGIN
 
     -- Insert batch using pre-generated UUID (avoids RETURNING INTO column-name ambiguity)
     INSERT INTO inventory.product_batches(
-        id, product_id, lot_number, purchase_date, expiry_date,
+        id, tenant_id, product_id, lot_number, purchase_date, expiry_date,
         unit_cost, initial_quantity, current_quantity, status
     )
     VALUES(
-        v_batch_id, p_product_id, TRIM(p_lot_number), p_purchase_date, p_expiry_date,
+        v_batch_id, p_tenant_id, p_product_id, TRIM(p_lot_number), p_purchase_date, p_expiry_date,
         p_unit_cost, p_initial_quantity, p_initial_quantity, v_status
     );
 

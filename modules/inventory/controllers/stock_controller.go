@@ -10,6 +10,7 @@ import (
 	"josex/web/modules/inventory/utils"
 
 	"github.com/gin-gonic/gin"
+	"github.com/google/uuid"
 )
 
 type StockController struct {
@@ -35,6 +36,17 @@ func NewStockController(stockService *services.StockService) *StockController {
 // @Failure 404 {object} map[string]interface{}
 // @Router /api/v1/inventory/products/:product_id/reorder-level [patch]
 func (ctrl *StockController) UpdateReorderLevel(c *gin.Context) {
+	tenantIDRaw, exists := c.Get("tenant_id")
+	if !exists || tenantIDRaw == nil {
+		c.JSON(http.StatusUnauthorized, coreErrors.BuildErrorSingle(c, "auth.invalid-tenant"))
+		return
+	}
+	tenantID, err := uuid.Parse(tenantIDRaw.(string))
+	if err != nil {
+		c.JSON(http.StatusUnauthorized, coreErrors.BuildErrorSingle(c, "auth.invalid-tenant"))
+		return
+	}
+
 	productID := c.Param("product_id")
 	var dto models.UpdateReorderLevelDto
 
@@ -44,7 +56,7 @@ func (ctrl *StockController) UpdateReorderLevel(c *gin.Context) {
 	}
 
 	userID := c.GetString("user_id")
-	result, err := ctrl.stockService.UpdateReorderLevel(c.Request.Context(), productID, dto.ReorderLevel, &userID)
+	result, err := ctrl.stockService.UpdateReorderLevel(c.Request.Context(), tenantID, productID, dto.ReorderLevel, &userID)
 	if err != nil {
 		status := utils.GetHTTPStatusFromError(err)
 		c.JSON(status, coreErrors.BuildError(c, err))
@@ -67,6 +79,17 @@ func (ctrl *StockController) UpdateReorderLevel(c *gin.Context) {
 // @Failure 409 {object} map[string]interface{}
 // @Router /api/v1/inventory/reserve [post]
 func (ctrl *StockController) ReserveStock(c *gin.Context) {
+	tenantIDRaw, exists := c.Get("tenant_id")
+	if !exists || tenantIDRaw == nil {
+		c.JSON(http.StatusUnauthorized, coreErrors.BuildErrorSingle(c, "auth.invalid-tenant"))
+		return
+	}
+	tenantID, err := uuid.Parse(tenantIDRaw.(string))
+	if err != nil {
+		c.JSON(http.StatusUnauthorized, coreErrors.BuildErrorSingle(c, "auth.invalid-tenant"))
+		return
+	}
+
 	var body map[string]interface{}
 	if err := c.ShouldBindJSON(&body); err != nil {
 		c.JSON(http.StatusBadRequest, coreErrors.BuildErrorDetail(c, "validation.invalid", err.Error()))
@@ -98,7 +121,7 @@ func (ctrl *StockController) ReserveStock(c *gin.Context) {
 		return
 	}
 
-	result, err := ctrl.stockService.ReserveStock(c.Request.Context(), productID, quantity)
+	result, err := ctrl.stockService.ReserveStock(c.Request.Context(), tenantID, productID, quantity)
 	if err != nil {
 		status := utils.GetHTTPStatusFromError(err)
 		c.JSON(status, coreErrors.BuildError(c, err))
@@ -120,6 +143,17 @@ func (ctrl *StockController) ReserveStock(c *gin.Context) {
 // @Failure 404 {object} map[string]interface{}
 // @Router /api/v1/inventory/release-reserved [post]
 func (ctrl *StockController) ReleaseReservedStock(c *gin.Context) {
+	tenantIDRaw, exists := c.Get("tenant_id")
+	if !exists || tenantIDRaw == nil {
+		c.JSON(http.StatusUnauthorized, coreErrors.BuildErrorSingle(c, "auth.invalid-tenant"))
+		return
+	}
+	tenantID, err := uuid.Parse(tenantIDRaw.(string))
+	if err != nil {
+		c.JSON(http.StatusUnauthorized, coreErrors.BuildErrorSingle(c, "auth.invalid-tenant"))
+		return
+	}
+
 	var body map[string]interface{}
 	if err := c.ShouldBindJSON(&body); err != nil {
 		c.JSON(http.StatusBadRequest, coreErrors.BuildErrorDetail(c, "validation.invalid", err.Error()))
@@ -151,7 +185,7 @@ func (ctrl *StockController) ReleaseReservedStock(c *gin.Context) {
 		return
 	}
 
-	result, err := ctrl.stockService.ReleaseReservedStock(c.Request.Context(), productID, quantity)
+	result, err := ctrl.stockService.ReleaseReservedStock(c.Request.Context(), tenantID, productID, quantity)
 	if err != nil {
 		status := utils.GetHTTPStatusFromError(err)
 		c.JSON(status, coreErrors.BuildError(c, err))

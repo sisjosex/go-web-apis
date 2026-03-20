@@ -28,7 +28,7 @@ func init() {
 // ============================================
 
 func TestCreateProduct_Success(t *testing.T) {
-	helper := testhelpers.SetupApiTest(t)
+	helper := SetupInventoryTest(t)
 	defer helper.Close()
 
 	body := models.CreateProductDto{
@@ -50,7 +50,7 @@ func TestCreateProduct_Success(t *testing.T) {
 }
 
 func TestCreateProduct_WithVariants(t *testing.T) {
-	helper := testhelpers.SetupApiTest(t)
+	helper := SetupInventoryTest(t)
 	defer helper.Close()
 
 	variants := map[string]interface{}{
@@ -94,7 +94,7 @@ func TestCreateProduct_WithVariants(t *testing.T) {
 }
 
 func TestCreateProduct_SKUAlreadyExists(t *testing.T) {
-	helper := testhelpers.SetupApiTest(t)
+	helper := SetupInventoryTest(t)
 	defer helper.Close()
 
 	// Create first product
@@ -117,7 +117,7 @@ func TestCreateProduct_SKUAlreadyExists(t *testing.T) {
 }
 
 func TestCreateProduct_InvalidPrice(t *testing.T) {
-	helper := testhelpers.SetupApiTest(t)
+	helper := SetupInventoryTest(t)
 	defer helper.Close()
 
 	body := models.CreateProductDto{
@@ -131,7 +131,7 @@ func TestCreateProduct_InvalidPrice(t *testing.T) {
 }
 
 func TestCreateProduct_MissingRequiredFields(t *testing.T) {
-	helper := testhelpers.SetupApiTest(t)
+	helper := SetupInventoryTest(t)
 	defer helper.Close()
 
 	body := map[string]interface{}{
@@ -147,7 +147,7 @@ func TestCreateProduct_MissingRequiredFields(t *testing.T) {
 // ============================================
 
 func TestGetProduct_Success(t *testing.T) {
-	helper := testhelpers.SetupApiTest(t)
+	helper := SetupInventoryTest(t)
 	defer helper.Close()
 
 	// Create product first
@@ -173,7 +173,7 @@ func TestGetProduct_Success(t *testing.T) {
 }
 
 func TestGetProduct_NotFound(t *testing.T) {
-	helper := testhelpers.SetupApiTest(t)
+	helper := SetupInventoryTest(t)
 	defer helper.Close()
 
 	w := helper.DoRequest("GET", "/inventory/products/00000000-0000-0000-0000-000000000000", nil, map[string]string{})
@@ -181,7 +181,7 @@ func TestGetProduct_NotFound(t *testing.T) {
 }
 
 func TestGetProductBySkU_Success(t *testing.T) {
-	helper := testhelpers.SetupApiTest(t)
+	helper := SetupInventoryTest(t)
 	defer helper.Close()
 
 	// Create product
@@ -202,7 +202,7 @@ func TestGetProductBySkU_Success(t *testing.T) {
 }
 
 func TestListProducts_Success(t *testing.T) {
-	helper := testhelpers.SetupApiTest(t)
+	helper := SetupInventoryTest(t)
 	defer helper.Close()
 
 	// Create a few products
@@ -229,7 +229,7 @@ func TestListProducts_Success(t *testing.T) {
 // ============================================
 
 func TestRecordMovement_Purchase(t *testing.T) {
-	helper := testhelpers.SetupApiTest(t)
+	helper := SetupInventoryTest(t)
 	defer helper.Close()
 
 	// Create product
@@ -262,7 +262,7 @@ func TestRecordMovement_Purchase(t *testing.T) {
 }
 
 func TestRecordMovement_Sale(t *testing.T) {
-	helper := testhelpers.SetupApiTest(t)
+	helper := SetupInventoryTest(t)
 	defer helper.Close()
 
 	// Create and purchase product
@@ -298,7 +298,7 @@ func TestRecordMovement_Sale(t *testing.T) {
 }
 
 func TestRecordMovement_InsufficientStock(t *testing.T) {
-	helper := testhelpers.SetupApiTest(t)
+	helper := SetupInventoryTest(t)
 	defer helper.Close()
 
 	// Create product
@@ -322,7 +322,7 @@ func TestRecordMovement_InsufficientStock(t *testing.T) {
 }
 
 func TestRecordMovement_InvalidType(t *testing.T) {
-	helper := testhelpers.SetupApiTest(t)
+	helper := SetupInventoryTest(t)
 	defer helper.Close()
 
 	// Create product
@@ -349,7 +349,7 @@ func TestRecordMovement_InvalidType(t *testing.T) {
 }
 
 func TestRecordMovement_ProductNotFound(t *testing.T) {
-	helper := testhelpers.SetupApiTest(t)
+	helper := SetupInventoryTest(t)
 	defer helper.Close()
 
 	moveBody := models.RecordMovementDto{
@@ -366,7 +366,7 @@ func TestRecordMovement_ProductNotFound(t *testing.T) {
 // ============================================
 
 func TestGetProductStock_Success(t *testing.T) {
-	helper := testhelpers.SetupApiTest(t)
+	helper := SetupInventoryTest(t)
 	defer helper.Close()
 
 	// Create and purchase
@@ -400,7 +400,7 @@ func TestGetProductStock_Success(t *testing.T) {
 // ============================================
 
 func TestReserveStock_Success(t *testing.T) {
-	helper := testhelpers.SetupApiTest(t)
+	helper := SetupInventoryTest(t)
 	defer helper.Close()
 
 	// Create product with unique SKU
@@ -469,7 +469,7 @@ func TestReserveStock_Success(t *testing.T) {
 }
 
 func TestReserveStock_InsufficientStock(t *testing.T) {
-	helper := testhelpers.SetupApiTest(t)
+	helper := SetupInventoryTest(t)
 	defer helper.Close()
 
 	// Create product with 20 units
@@ -500,7 +500,7 @@ func TestReserveStock_InsufficientStock(t *testing.T) {
 }
 
 func TestReleaseReservedStock_Success(t *testing.T) {
-	helper := testhelpers.SetupApiTest(t)
+	helper := SetupInventoryTest(t)
 	defer helper.Close()
 
 	// Create product with 100 units
@@ -561,7 +561,7 @@ func TestReleaseReservedStock_Success(t *testing.T) {
 // ============================================
 
 func TestUpdateReorderLevel_Success(t *testing.T) {
-	helper := testhelpers.SetupApiTest(t)
+	helper := SetupInventoryTest(t)
 	defer helper.Close()
 
 	// Create product
@@ -611,7 +611,7 @@ func TestUpdateReorderLevel_Success(t *testing.T) {
 }
 
 func TestReorderLevel_StatusTransitions(t *testing.T) {
-	helper := testhelpers.SetupApiTest(t)
+	helper := SetupInventoryTest(t)
 	defer helper.Close()
 
 	// Create product with reorder_level = 20
@@ -737,7 +737,7 @@ func TestReorderLevel_StatusTransitions(t *testing.T) {
 // ============================================
 
 func TestDataConsistency_ReserveAndRelease(t *testing.T) {
-	helper := testhelpers.SetupApiTest(t)
+	helper := SetupInventoryTest(t)
 	defer helper.Close()
 
 	// Create product with 100 units
@@ -783,7 +783,7 @@ func TestDataConsistency_ReserveAndRelease(t *testing.T) {
 }
 
 func TestDataConsistency_MultipleReservations(t *testing.T) {
-	helper := testhelpers.SetupApiTest(t)
+	helper := SetupInventoryTest(t)
 	defer helper.Close()
 
 	// Create product with 100 units
@@ -844,7 +844,7 @@ func TestDataConsistency_MultipleReservations(t *testing.T) {
 // ============================================
 
 func TestCreateBatch_Success(t *testing.T) {
-	helper := testhelpers.SetupApiTest(t)
+	helper := SetupInventoryTest(t)
 	defer helper.Close()
 
 	// Create a product
@@ -889,7 +889,7 @@ func TestCreateBatch_Success(t *testing.T) {
 }
 
 func TestCreateBatch_InvalidExpiryDate(t *testing.T) {
-	helper := testhelpers.SetupApiTest(t)
+	helper := SetupInventoryTest(t)
 	defer helper.Close()
 
 	// Create product
@@ -919,7 +919,7 @@ func TestCreateBatch_InvalidExpiryDate(t *testing.T) {
 }
 
 func TestGetBatch_Success(t *testing.T) {
-	helper := testhelpers.SetupApiTest(t)
+	helper := SetupInventoryTest(t)
 	defer helper.Close()
 
 	// Create product and batch
@@ -963,7 +963,7 @@ func TestGetBatch_Success(t *testing.T) {
 }
 
 func TestListBatchesByProduct_Success(t *testing.T) {
-	helper := testhelpers.SetupApiTest(t)
+	helper := SetupInventoryTest(t)
 	defer helper.Close()
 
 	// Create product
@@ -1026,7 +1026,7 @@ func TestListBatchesByProduct_Success(t *testing.T) {
 }
 
 func TestGetOldestBatchForSale_FIFO(t *testing.T) {
-	helper := testhelpers.SetupApiTest(t)
+	helper := SetupInventoryTest(t)
 	defer helper.Close()
 
 	// Create product
@@ -1091,7 +1091,7 @@ func TestGetOldestBatchForSale_FIFO(t *testing.T) {
 }
 
 func TestBatchExpiryStatusCalculation(t *testing.T) {
-	helper := testhelpers.SetupApiTest(t)
+	helper := SetupInventoryTest(t)
 	defer helper.Close()
 
 	// Create product
@@ -1140,7 +1140,7 @@ func TestBatchExpiryStatusCalculation(t *testing.T) {
 }
 
 func TestBatchNotFound(t *testing.T) {
-	helper := testhelpers.SetupApiTest(t)
+	helper := SetupInventoryTest(t)
 	defer helper.Close()
 
 	w := helper.DoRequest("GET", "/inventory/batches/00000000-0000-0000-0000-000000000000", nil, map[string]string{})
@@ -1152,7 +1152,7 @@ func TestBatchNotFound(t *testing.T) {
 // ============================================
 
 func TestCreateCategory_Success(t *testing.T) {
-	helper := testhelpers.SetupApiTest(t)
+	helper := SetupInventoryTest(t)
 	defer helper.Close()
 
 	uniqueSlug := "electronics-" + uuid.New().String()[:8]
@@ -1176,7 +1176,7 @@ func TestCreateCategory_Success(t *testing.T) {
 }
 
 func TestCreateCategory_DuplicateSlug(t *testing.T) {
-	helper := testhelpers.SetupApiTest(t)
+	helper := SetupInventoryTest(t)
 	defer helper.Close()
 
 	uniqueSlug := "clothes-" + uuid.New().String()[:8]
@@ -1195,7 +1195,7 @@ func TestCreateCategory_DuplicateSlug(t *testing.T) {
 }
 
 func TestCreateCategory_MissingRequired(t *testing.T) {
-	helper := testhelpers.SetupApiTest(t)
+	helper := SetupInventoryTest(t)
 	defer helper.Close()
 
 	// Missing name and slug
@@ -1206,7 +1206,7 @@ func TestCreateCategory_MissingRequired(t *testing.T) {
 }
 
 func TestGetCategory_Success(t *testing.T) {
-	helper := testhelpers.SetupApiTest(t)
+	helper := SetupInventoryTest(t)
 	defer helper.Close()
 
 	// Create category
@@ -1232,7 +1232,7 @@ func TestGetCategory_Success(t *testing.T) {
 }
 
 func TestGetCategory_NotFound(t *testing.T) {
-	helper := testhelpers.SetupApiTest(t)
+	helper := SetupInventoryTest(t)
 	defer helper.Close()
 
 	w := helper.DoRequest("GET", "/inventory/categories/00000000-0000-0000-0000-000000000000", nil, map[string]string{})
@@ -1240,7 +1240,7 @@ func TestGetCategory_NotFound(t *testing.T) {
 }
 
 func TestListCategories_Success(t *testing.T) {
-	helper := testhelpers.SetupApiTest(t)
+	helper := SetupInventoryTest(t)
 	defer helper.Close()
 
 	// Create multiple categories
@@ -1263,7 +1263,7 @@ func TestListCategories_Success(t *testing.T) {
 }
 
 func TestSearchCategories_Success(t *testing.T) {
-	helper := testhelpers.SetupApiTest(t)
+	helper := SetupInventoryTest(t)
 	defer helper.Close()
 
 	// Create a category with descriptive name
@@ -1285,7 +1285,7 @@ func TestSearchCategories_Success(t *testing.T) {
 }
 
 func TestUpdateCategory_Success(t *testing.T) {
-	helper := testhelpers.SetupApiTest(t)
+	helper := SetupInventoryTest(t)
 	defer helper.Close()
 
 	// Create category
@@ -1314,7 +1314,7 @@ func TestUpdateCategory_Success(t *testing.T) {
 }
 
 func TestUpdateCategory_NotFound(t *testing.T) {
-	helper := testhelpers.SetupApiTest(t)
+	helper := SetupInventoryTest(t)
 	defer helper.Close()
 
 	updateDto := models.UpdateCategoryDto{
@@ -1325,7 +1325,7 @@ func TestUpdateCategory_NotFound(t *testing.T) {
 }
 
 func TestDeleteCategory_Success(t *testing.T) {
-	helper := testhelpers.SetupApiTest(t)
+	helper := SetupInventoryTest(t)
 	defer helper.Close()
 
 	// Create category
@@ -1350,7 +1350,7 @@ func TestDeleteCategory_Success(t *testing.T) {
 }
 
 func TestDeleteCategory_NotFound(t *testing.T) {
-	helper := testhelpers.SetupApiTest(t)
+	helper := SetupInventoryTest(t)
 	defer helper.Close()
 
 	w := helper.DoRequest("DELETE", "/inventory/categories/00000000-0000-0000-0000-000000000000", nil, map[string]string{})
@@ -1358,7 +1358,7 @@ func TestDeleteCategory_NotFound(t *testing.T) {
 }
 
 func TestCreateHierarchy_Success(t *testing.T) {
-	helper := testhelpers.SetupApiTest(t)
+	helper := SetupInventoryTest(t)
 	defer helper.Close()
 
 	// Create parent category
@@ -1390,7 +1390,7 @@ func TestCreateHierarchy_Success(t *testing.T) {
 }
 
 func TestCircularHierarchy_Prevented(t *testing.T) {
-	helper := testhelpers.SetupApiTest(t)
+	helper := SetupInventoryTest(t)
 	defer helper.Close()
 
 	// Create category A
@@ -1423,7 +1423,7 @@ func TestCircularHierarchy_Prevented(t *testing.T) {
 }
 
 func TestAssignProductToCategory_Success(t *testing.T) {
-	helper := testhelpers.SetupApiTest(t)
+	helper := SetupInventoryTest(t)
 	defer helper.Close()
 
 	// Create product
@@ -1452,7 +1452,7 @@ func TestAssignProductToCategory_Success(t *testing.T) {
 }
 
 func TestRemoveProductFromCategory_Success(t *testing.T) {
-	helper := testhelpers.SetupApiTest(t)
+	helper := SetupInventoryTest(t)
 	defer helper.Close()
 
 	// Create and assign product to category
@@ -1482,7 +1482,7 @@ func TestRemoveProductFromCategory_Success(t *testing.T) {
 }
 
 func TestGetProductsByCategory_Success(t *testing.T) {
-	helper := testhelpers.SetupApiTest(t)
+	helper := SetupInventoryTest(t)
 	defer helper.Close()
 
 	// Create category and products
@@ -1533,7 +1533,7 @@ func TestGetProductsByCategory_Success(t *testing.T) {
 }
 
 func TestProductCountAggregation(t *testing.T) {
-	helper := testhelpers.SetupApiTest(t)
+	helper := SetupInventoryTest(t)
 	defer helper.Close()
 
 	// Create category

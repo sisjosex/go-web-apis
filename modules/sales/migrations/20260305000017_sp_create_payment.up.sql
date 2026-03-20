@@ -1,5 +1,6 @@
 -- Create a payment record for an order
 CREATE OR REPLACE FUNCTION sales.sp_create_payment(
+    p_tenant_id UUID,
     p_order_id UUID,
     p_amount DECIMAL,
     p_payment_method VARCHAR,
@@ -18,10 +19,10 @@ DECLARE
     v_payment_id UUID := gen_random_uuid();
     v_order_record RECORD;
 BEGIN
-    -- Validate order exists
-    SELECT id, customer_id, total INTO v_order_record
-    FROM sales.sales_orders
-    WHERE id = p_order_id;
+    -- Validate order exists and belongs to tenant
+    SELECT o.id, o.customer_id, o.total INTO v_order_record
+    FROM sales.sales_orders o
+    WHERE o.id = p_order_id AND o.tenant_id = p_tenant_id;
 
     IF v_order_record IS NULL THEN
         RAISE EXCEPTION 'sales-order.not-found' USING ERRCODE = 'P0001';
@@ -39,11 +40,11 @@ BEGIN
 
     -- Create payment record
     INSERT INTO sales.payments(
-        id, order_id, customer_id, amount, payment_method, 
+        id, order_id, customer_id, amount, payment_method,
         reference_number, notes, status
     )
     VALUES(
-        v_payment_id, p_order_id, v_order_record.customer_id, p_amount, 
+        v_payment_id, p_order_id, v_order_record.customer_id, p_amount,
         p_payment_method, p_reference_number, p_notes, 'completed'
     );
 

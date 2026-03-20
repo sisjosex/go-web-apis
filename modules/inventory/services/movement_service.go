@@ -6,6 +6,8 @@ import (
 
 	"josex/web/modules/inventory/interfaces"
 	"josex/web/modules/inventory/models"
+
+	"github.com/google/uuid"
 )
 
 type MovementService struct {
@@ -22,11 +24,13 @@ func NewMovementService(repository interfaces.MovementRepository, logger *log.Lo
 
 func (s *MovementService) RecordMovement(
 	ctx context.Context,
+	tenantID uuid.UUID,
 	dto models.RecordMovementDto,
 	createdBy *string,
 ) (*models.RecordMovementResponse, error) {
 	return s.repository.RecordMovement(
 		ctx,
+		tenantID,
 		dto.ProductID,
 		dto.MovementType,
 		dto.Quantity,
@@ -38,10 +42,10 @@ func (s *MovementService) RecordMovement(
 	)
 }
 
-func (s *MovementService) GetProductStock(ctx context.Context, productID string) (*models.ProductStock, error) {
-	return s.repository.GetProductStock(ctx, productID)
+func (s *MovementService) GetProductStock(ctx context.Context, tenantID uuid.UUID, productID string) (*models.ProductStock, error) {
+	return s.repository.GetProductStock(ctx, tenantID, productID)
 }
 
-func (s *MovementService) GetMovement(ctx context.Context, movementID string) (*models.InventoryMovement, error) {
-	return s.repository.GetMovement(ctx, movementID)
+func (s *MovementService) GetMovement(ctx context.Context, tenantID uuid.UUID, movementID string) (*models.InventoryMovement, error) {
+	return s.repository.GetMovement(ctx, tenantID, movementID)
 }

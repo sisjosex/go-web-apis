@@ -9,6 +9,7 @@ import (
 	"josex/web/modules/inventory/utils"
 
 	"github.com/gin-gonic/gin"
+	"github.com/google/uuid"
 )
 
 type MovementController struct {
@@ -34,6 +35,17 @@ func NewMovementController(movementService *services.MovementService) *MovementC
 // @Failure 409 {object} map[string]interface{}
 // @Router /api/v1/inventory/movements [post]
 func (ctrl *MovementController) RecordMovement(c *gin.Context) {
+	tenantIDRaw, exists := c.Get("tenant_id")
+	if !exists || tenantIDRaw == nil {
+		c.JSON(http.StatusUnauthorized, coreErrors.BuildErrorSingle(c, "auth.invalid-tenant"))
+		return
+	}
+	tenantID, err := uuid.Parse(tenantIDRaw.(string))
+	if err != nil {
+		c.JSON(http.StatusUnauthorized, coreErrors.BuildErrorSingle(c, "auth.invalid-tenant"))
+		return
+	}
+
 	var dto models.RecordMovementDto
 
 	if err := c.ShouldBindJSON(&dto); err != nil {
@@ -42,7 +54,7 @@ func (ctrl *MovementController) RecordMovement(c *gin.Context) {
 	}
 
 	userID := c.GetString("user_id")
-	movement, err := ctrl.movementService.RecordMovement(c.Request.Context(), dto, &userID)
+	movement, err := ctrl.movementService.RecordMovement(c.Request.Context(), tenantID, dto, &userID)
 	if err != nil {
 		status := utils.GetHTTPStatusFromError(err)
 		c.JSON(status, coreErrors.BuildError(c, err))
@@ -62,9 +74,20 @@ func (ctrl *MovementController) RecordMovement(c *gin.Context) {
 // @Failure 404 {object} map[string]interface{}
 // @Router /api/v1/inventory/movements/:id [get]
 func (ctrl *MovementController) GetMovement(c *gin.Context) {
+	tenantIDRaw, exists := c.Get("tenant_id")
+	if !exists || tenantIDRaw == nil {
+		c.JSON(http.StatusUnauthorized, coreErrors.BuildErrorSingle(c, "auth.invalid-tenant"))
+		return
+	}
+	tenantID, err := uuid.Parse(tenantIDRaw.(string))
+	if err != nil {
+		c.JSON(http.StatusUnauthorized, coreErrors.BuildErrorSingle(c, "auth.invalid-tenant"))
+		return
+	}
+
 	movementID := c.Param("id")
 
-	movement, err := ctrl.movementService.GetMovement(c.Request.Context(), movementID)
+	movement, err := ctrl.movementService.GetMovement(c.Request.Context(), tenantID, movementID)
 	if err != nil {
 		status := utils.GetHTTPStatusFromError(err)
 		c.JSON(status, coreErrors.BuildError(c, err))
@@ -84,9 +107,20 @@ func (ctrl *MovementController) GetMovement(c *gin.Context) {
 // @Failure 404 {object} map[string]interface{}
 // @Router /api/v1/inventory/stock/:product_id [get]
 func (ctrl *MovementController) GetProductStock(c *gin.Context) {
+	tenantIDRaw, exists := c.Get("tenant_id")
+	if !exists || tenantIDRaw == nil {
+		c.JSON(http.StatusUnauthorized, coreErrors.BuildErrorSingle(c, "auth.invalid-tenant"))
+		return
+	}
+	tenantID, err := uuid.Parse(tenantIDRaw.(string))
+	if err != nil {
+		c.JSON(http.StatusUnauthorized, coreErrors.BuildErrorSingle(c, "auth.invalid-tenant"))
+		return
+	}
+
 	productID := c.Param("product_id")
 
-	stock, err := ctrl.movementService.GetProductStock(c.Request.Context(), productID)
+	stock, err := ctrl.movementService.GetProductStock(c.Request.Context(), tenantID, productID)
 	if err != nil {
 		status := utils.GetHTTPStatusFromError(err)
 		c.JSON(status, coreErrors.BuildError(c, err))

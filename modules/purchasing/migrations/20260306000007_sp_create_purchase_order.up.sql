@@ -22,17 +22,17 @@ DECLARE
     v_message TEXT := 'Purchase order created successfully';
 BEGIN
     -- Validate supplier exists and belongs to tenant
-    IF NOT EXISTS (SELECT 1 FROM purchasing.suppliers WHERE id = p_supplier_id AND tenant_id = p_tenant_id) THEN
+    IF NOT EXISTS (SELECT 1 FROM purchasing.suppliers s WHERE s.id = p_supplier_id AND s.tenant_id = p_tenant_id) THEN
         RAISE EXCEPTION 'supplier.not-found' USING ERRCODE = 'P0001';
     END IF;
 
-    -- Generate PO number (PO-YYYY-00001)
-    v_sequence := COALESCE((SELECT COUNT(*) + 1 FROM purchasing.purchase_orders WHERE tenant_id = p_tenant_id), 1);
+    -- Generate PO number (PO-YYYY-00001), scoped to tenant
+    v_sequence := COALESCE((SELECT COUNT(*) + 1 FROM purchasing.purchase_orders po WHERE po.tenant_id = p_tenant_id), 1);
     v_po_number := 'PO-' || TO_CHAR(CURRENT_DATE, 'YYYY') || '-' || LPAD(v_sequence::TEXT, 5, '0');
 
     -- Create PO with draft status
     INSERT INTO purchasing.purchase_orders(
-        id, tenant_id, supplier_id, po_number, status, 
+        id, tenant_id, supplier_id, po_number, status,
         expected_delivery_date, notes, created_by
     )
     VALUES(
@@ -41,7 +41,7 @@ BEGIN
     );
 
     RETURN QUERY
-    SELECT 
+    SELECT
         v_po_id,
         v_po_number,
         p_supplier_id,

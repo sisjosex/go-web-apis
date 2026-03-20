@@ -1,5 +1,6 @@
 -- Create product with variants
 CREATE OR REPLACE FUNCTION inventory.sp_create_product_with_variants(
+    p_tenant_id UUID,
     p_sku VARCHAR,
     p_name VARCHAR,
     p_description TEXT,
@@ -19,21 +20,21 @@ DECLARE
     v_option JSONB;
     v_group_id UUID;
 BEGIN
-    -- Validar SKU único
-    IF EXISTS (SELECT 1 FROM inventory.products WHERE products.sku = p_sku) THEN
+    -- Validate SKU unique per tenant
+    IF EXISTS (SELECT 1 FROM inventory.products p WHERE p.sku = p_sku AND p.tenant_id = p_tenant_id) THEN
         RAISE EXCEPTION 'product.sku.already-exists' USING ERRCODE = 'P0001';
     END IF;
 
-    -- Crear producto
-    INSERT INTO inventory.products (sku, name, description, base_price, has_variants)
-    VALUES (p_sku, p_name, p_description, p_base_price, CASE WHEN p_variants IS NOT NULL THEN TRUE ELSE FALSE END)
+    -- Create product
+    INSERT INTO inventory.products (tenant_id, sku, name, description, base_price, has_variants)
+    VALUES (p_tenant_id, p_sku, p_name, p_description, p_base_price, CASE WHEN p_variants IS NOT NULL THEN TRUE ELSE FALSE END)
     RETURNING products.id INTO v_product_id;
 
-    -- Crear stock inicial
+    -- Create initial stock
     INSERT INTO inventory.product_stock (product_id, current_quantity)
     VALUES (v_product_id, 0);
 
-    -- Si hay variantes, procesarlas
+    -- Process variants if provided
     IF p_variants IS NOT NULL THEN
         FOR v_group IN SELECT jsonb_array_elements(p_variants -> 'groups')
         LOOP
@@ -68,7 +69,7 @@ BEGIN
     END IF;
 
     -- Return with explicit casting
-    RETURN QUERY SELECT 
+    RETURN QUERY SELECT
         v_product_id,
         CAST(p_sku AS VARCHAR),
         CAST(p_name AS VARCHAR),

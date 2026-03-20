@@ -1,6 +1,7 @@
 -- Get all batches expiring within warning days
 DROP FUNCTION IF EXISTS inventory.sp_get_expiring_batches(INT);
 CREATE OR REPLACE FUNCTION inventory.sp_get_expiring_batches(
+    p_tenant_id UUID,
     p_warning_days INT
 )
 RETURNS TABLE(
@@ -28,7 +29,8 @@ BEGIN
         pb.status,
         CAST(pb.expiry_date - CURRENT_DATE AS INT)
     FROM inventory.product_batches pb
-    WHERE pb.expiry_date - CURRENT_DATE <= p_warning_days
+    WHERE pb.tenant_id = p_tenant_id
+        AND pb.expiry_date - CURRENT_DATE <= p_warning_days
         AND pb.expiry_date - CURRENT_DATE > 0
         AND pb.status IN ('active', 'expiring_soon')
     ORDER BY pb.expiry_date ASC;

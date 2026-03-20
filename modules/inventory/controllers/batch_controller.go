@@ -35,13 +35,24 @@ func NewBatchController(service interfaces.BatchService) *BatchController {
 // @Failure 404 {object} map[string]interface{} "Product not found"
 // @Router /batches [post]
 func (ctrl *BatchController) CreateBatch(c *gin.Context) {
+	tenantIDRaw, exists := c.Get("tenant_id")
+	if !exists || tenantIDRaw == nil {
+		c.JSON(http.StatusUnauthorized, coreErrors.BuildErrorSingle(c, "auth.invalid-tenant"))
+		return
+	}
+	tenantID, err := uuid.Parse(tenantIDRaw.(string))
+	if err != nil {
+		c.JSON(http.StatusUnauthorized, coreErrors.BuildErrorSingle(c, "auth.invalid-tenant"))
+		return
+	}
+
 	var dto models.CreateBatchDto
 	if err := c.ShouldBindJSON(&dto); err != nil {
 		c.JSON(http.StatusBadRequest, coreErrors.BuildErrorDetail(c, "validation.error", err.Error()))
 		return
 	}
 
-	batch, err := ctrl.service.CreateBatch(c.Request.Context(), &dto)
+	batch, err := ctrl.service.CreateBatch(c.Request.Context(), tenantID, &dto)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, coreErrors.BuildError(c, err))
 		return
@@ -61,13 +72,24 @@ func (ctrl *BatchController) CreateBatch(c *gin.Context) {
 // @Failure 404 {object} map[string]interface{} "Batch not found"
 // @Router /batches/{id} [get]
 func (ctrl *BatchController) GetBatch(c *gin.Context) {
+	tenantIDRaw, exists := c.Get("tenant_id")
+	if !exists || tenantIDRaw == nil {
+		c.JSON(http.StatusUnauthorized, coreErrors.BuildErrorSingle(c, "auth.invalid-tenant"))
+		return
+	}
+	tenantID, err := uuid.Parse(tenantIDRaw.(string))
+	if err != nil {
+		c.JSON(http.StatusUnauthorized, coreErrors.BuildErrorSingle(c, "auth.invalid-tenant"))
+		return
+	}
+
 	batchID, err := uuid.Parse(c.Param("id"))
 	if err != nil {
 		c.JSON(http.StatusBadRequest, coreErrors.BuildErrorSingle(c, errors.BatchNotFound))
 		return
 	}
 
-	batch, err := ctrl.service.GetBatch(c.Request.Context(), batchID)
+	batch, err := ctrl.service.GetBatch(c.Request.Context(), tenantID, batchID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, coreErrors.BuildError(c, err))
 		return
@@ -93,6 +115,17 @@ func (ctrl *BatchController) GetBatch(c *gin.Context) {
 // @Failure 400 {object} map[string]interface{} "Invalid request"
 // @Router /products/{productId}/batches [get]
 func (ctrl *BatchController) ListBatchesByProduct(c *gin.Context) {
+	tenantIDRaw, exists := c.Get("tenant_id")
+	if !exists || tenantIDRaw == nil {
+		c.JSON(http.StatusUnauthorized, coreErrors.BuildErrorSingle(c, "auth.invalid-tenant"))
+		return
+	}
+	tenantID, err := uuid.Parse(tenantIDRaw.(string))
+	if err != nil {
+		c.JSON(http.StatusUnauthorized, coreErrors.BuildErrorSingle(c, "auth.invalid-tenant"))
+		return
+	}
+
 	productID, err := uuid.Parse(c.Param("productId"))
 	if err != nil {
 		c.JSON(http.StatusBadRequest, coreErrors.BuildErrorSingle(c, errors.ProductNotFound))
@@ -104,7 +137,7 @@ func (ctrl *BatchController) ListBatchesByProduct(c *gin.Context) {
 		onlyActive = false
 	}
 
-	batches, err := ctrl.service.ListBatchesByProduct(c.Request.Context(), productID, onlyActive)
+	batches, err := ctrl.service.ListBatchesByProduct(c.Request.Context(), tenantID, productID, onlyActive)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, coreErrors.BuildError(c, err))
 		return
@@ -124,13 +157,24 @@ func (ctrl *BatchController) ListBatchesByProduct(c *gin.Context) {
 // @Failure 404 {object} map[string]interface{} "No active batches found"
 // @Router /products/{productId}/batches/oldest [get]
 func (ctrl *BatchController) GetOldestBatchForSale(c *gin.Context) {
+	tenantIDRaw, exists := c.Get("tenant_id")
+	if !exists || tenantIDRaw == nil {
+		c.JSON(http.StatusUnauthorized, coreErrors.BuildErrorSingle(c, "auth.invalid-tenant"))
+		return
+	}
+	tenantID, err := uuid.Parse(tenantIDRaw.(string))
+	if err != nil {
+		c.JSON(http.StatusUnauthorized, coreErrors.BuildErrorSingle(c, "auth.invalid-tenant"))
+		return
+	}
+
 	productID, err := uuid.Parse(c.Param("productId"))
 	if err != nil {
 		c.JSON(http.StatusBadRequest, coreErrors.BuildErrorSingle(c, errors.ProductNotFound))
 		return
 	}
 
-	batch, err := ctrl.service.GetOldestBatchForSale(c.Request.Context(), productID)
+	batch, err := ctrl.service.GetOldestBatchForSale(c.Request.Context(), tenantID, productID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, coreErrors.BuildError(c, err))
 		return
@@ -155,6 +199,17 @@ func (ctrl *BatchController) GetOldestBatchForSale(c *gin.Context) {
 // @Failure 400 {object} map[string]interface{} "Invalid request"
 // @Router /batches/expiring [get]
 func (ctrl *BatchController) GetExpiringBatches(c *gin.Context) {
+	tenantIDRaw, exists := c.Get("tenant_id")
+	if !exists || tenantIDRaw == nil {
+		c.JSON(http.StatusUnauthorized, coreErrors.BuildErrorSingle(c, "auth.invalid-tenant"))
+		return
+	}
+	tenantID, err := uuid.Parse(tenantIDRaw.(string))
+	if err != nil {
+		c.JSON(http.StatusUnauthorized, coreErrors.BuildErrorSingle(c, "auth.invalid-tenant"))
+		return
+	}
+
 	warningDays := 30 // default value
 	if days := c.Query("warningDays"); days != "" {
 		parsedDays, err := strconv.Atoi(days)
@@ -169,7 +224,7 @@ func (ctrl *BatchController) GetExpiringBatches(c *gin.Context) {
 		warningDays = parsedDays
 	}
 
-	batches, err := ctrl.service.GetExpiringBatches(c.Request.Context(), warningDays)
+	batches, err := ctrl.service.GetExpiringBatches(c.Request.Context(), tenantID, warningDays)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, coreErrors.BuildError(c, err))
 		return

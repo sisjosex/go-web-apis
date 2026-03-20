@@ -10,6 +10,7 @@ import (
 	"josex/web/modules/inventory/utils"
 
 	"github.com/gin-gonic/gin"
+	"github.com/google/uuid"
 )
 
 type ProductController struct {
@@ -34,6 +35,17 @@ func NewProductController(productService *services.ProductService) *ProductContr
 // @Failure 409 {object} map[string]interface{}
 // @Router /api/v1/inventory/products [post]
 func (ctrl *ProductController) CreateProductWithVariants(c *gin.Context) {
+	tenantIDRaw, exists := c.Get("tenant_id")
+	if !exists || tenantIDRaw == nil {
+		c.JSON(http.StatusUnauthorized, coreErrors.BuildErrorSingle(c, "auth.invalid-tenant"))
+		return
+	}
+	tenantID, err := uuid.Parse(tenantIDRaw.(string))
+	if err != nil {
+		c.JSON(http.StatusUnauthorized, coreErrors.BuildErrorSingle(c, "auth.invalid-tenant"))
+		return
+	}
+
 	var dto models.CreateProductDto
 
 	if err := c.ShouldBindJSON(&dto); err != nil {
@@ -41,7 +53,7 @@ func (ctrl *ProductController) CreateProductWithVariants(c *gin.Context) {
 		return
 	}
 
-	product, err := ctrl.productService.CreateProductWithVariants(c.Request.Context(), dto)
+	product, err := ctrl.productService.CreateProductWithVariants(c.Request.Context(), tenantID, dto)
 	if err != nil {
 		status := utils.GetHTTPStatusFromError(err)
 		c.JSON(status, coreErrors.BuildError(c, err))
@@ -61,9 +73,20 @@ func (ctrl *ProductController) CreateProductWithVariants(c *gin.Context) {
 // @Failure 404 {object} map[string]interface{}
 // @Router /api/v1/inventory/products/:id [get]
 func (ctrl *ProductController) GetProduct(c *gin.Context) {
+	tenantIDRaw, exists := c.Get("tenant_id")
+	if !exists || tenantIDRaw == nil {
+		c.JSON(http.StatusUnauthorized, coreErrors.BuildErrorSingle(c, "auth.invalid-tenant"))
+		return
+	}
+	tenantID, err := uuid.Parse(tenantIDRaw.(string))
+	if err != nil {
+		c.JSON(http.StatusUnauthorized, coreErrors.BuildErrorSingle(c, "auth.invalid-tenant"))
+		return
+	}
+
 	productID := c.Param("id")
 
-	product, err := ctrl.productService.GetProduct(c.Request.Context(), productID)
+	product, err := ctrl.productService.GetProduct(c.Request.Context(), tenantID, productID)
 	if err != nil {
 		status := utils.GetHTTPStatusFromError(err)
 		c.JSON(status, coreErrors.BuildError(c, err))
@@ -83,9 +106,20 @@ func (ctrl *ProductController) GetProduct(c *gin.Context) {
 // @Failure 404 {object} map[string]interface{}
 // @Router /api/v1/inventory/products/sku/:sku [get]
 func (ctrl *ProductController) GetProductBySkU(c *gin.Context) {
+	tenantIDRaw, exists := c.Get("tenant_id")
+	if !exists || tenantIDRaw == nil {
+		c.JSON(http.StatusUnauthorized, coreErrors.BuildErrorSingle(c, "auth.invalid-tenant"))
+		return
+	}
+	tenantID, err := uuid.Parse(tenantIDRaw.(string))
+	if err != nil {
+		c.JSON(http.StatusUnauthorized, coreErrors.BuildErrorSingle(c, "auth.invalid-tenant"))
+		return
+	}
+
 	sku := c.Param("sku")
 
-	product, err := ctrl.productService.GetProductBySkU(c.Request.Context(), sku)
+	product, err := ctrl.productService.GetProductBySkU(c.Request.Context(), tenantID, sku)
 	if err != nil {
 		status := utils.GetHTTPStatusFromError(err)
 		c.JSON(status, coreErrors.BuildError(c, err))
@@ -105,6 +139,17 @@ func (ctrl *ProductController) GetProductBySkU(c *gin.Context) {
 // @Success 200 {array} models.Product
 // @Router /api/v1/inventory/products [get]
 func (ctrl *ProductController) ListProducts(c *gin.Context) {
+	tenantIDRaw, exists := c.Get("tenant_id")
+	if !exists || tenantIDRaw == nil {
+		c.JSON(http.StatusUnauthorized, coreErrors.BuildErrorSingle(c, "auth.invalid-tenant"))
+		return
+	}
+	tenantID, err := uuid.Parse(tenantIDRaw.(string))
+	if err != nil {
+		c.JSON(http.StatusUnauthorized, coreErrors.BuildErrorSingle(c, "auth.invalid-tenant"))
+		return
+	}
+
 	limit, _ := strconv.Atoi(c.DefaultQuery("limit", "20"))
 	offset, _ := strconv.Atoi(c.DefaultQuery("offset", "0"))
 
@@ -115,7 +160,7 @@ func (ctrl *ProductController) ListProducts(c *gin.Context) {
 		limit = 100
 	}
 
-	products, err := ctrl.productService.ListProducts(c.Request.Context(), limit, offset)
+	products, err := ctrl.productService.ListProducts(c.Request.Context(), tenantID, limit, offset)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, coreErrors.BuildError(c, err))
 		return

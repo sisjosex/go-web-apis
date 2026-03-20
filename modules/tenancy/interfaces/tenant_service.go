@@ -25,6 +25,9 @@ type TenantService interface {
 	// Remove user from tenant (requesterUserID validates permissions)
 	RemoveUserFromTenant(ctx context.Context, tenantID uuid.UUID, requesterUserID uuid.UUID, userID uuid.UUID) error
 
+	// Get tenant by slug (used by middleware for super_admin access)
+	GetTenantBySlug(ctx context.Context, slug string) (*models.Tenant, error)
+
 	// Verify user has access to tenant (used by middleware)
 	VerifyUserTenantAccess(ctx context.Context, userID uuid.UUID, slug string) (*models.TenantAccessInfo, error)
 

@@ -1,5 +1,6 @@
 -- Create sales order management stored procedures
 CREATE OR REPLACE FUNCTION sales.sp_create_sales_order(
+    p_tenant_id UUID,
     p_customer_id UUID,
     p_shipping_address VARCHAR,
     p_notes TEXT,
@@ -23,8 +24,8 @@ DECLARE
     v_order_id UUID;
     v_order_number VARCHAR;
 BEGIN
-    -- Validate customer exists
-    IF NOT EXISTS (SELECT 1 FROM sales.customers WHERE id = p_customer_id) THEN
+    -- Validate customer exists and belongs to tenant
+    IF NOT EXISTS (SELECT 1 FROM sales.customers c WHERE c.id = p_customer_id AND c.tenant_id = p_tenant_id) THEN
         RAISE EXCEPTION 'customer.not-found' USING ERRCODE = 'P0001';
     END IF;
 
@@ -33,14 +34,14 @@ BEGIN
 
     -- Insert order
     INSERT INTO sales.sales_orders (
-        customer_id, order_number, shipping_address, notes, discount_amount
+        tenant_id, customer_id, order_number, shipping_address, notes, discount_amount
     ) VALUES (
-        p_customer_id, v_order_number, TRIM(p_shipping_address), p_notes, COALESCE(p_discount_amount, 0)
+        p_tenant_id, p_customer_id, v_order_number, TRIM(p_shipping_address), p_notes, COALESCE(p_discount_amount, 0)
     ) RETURNING sales_orders.id INTO v_order_id;
 
     -- Return created order
     RETURN QUERY
-    SELECT 
+    SELECT
         CAST(so.id AS UUID),
         CAST(so.customer_id AS UUID),
         CAST(so.order_number AS VARCHAR),
@@ -53,12 +54,15 @@ BEGIN
         CAST(so.notes AS TEXT),
         CAST(so.created_at AS TIMESTAMP),
         CAST(so.updated_at AS TIMESTAMP)
-    FROM sales.sales_orders so WHERE so.id = v_order_id;
+    FROM sales.sales_orders so WHERE so.id = v_order_id AND so.tenant_id = p_tenant_id;
 END;
 $$;
 
 -- Get sales order by ID
-CREATE OR REPLACE FUNCTION sales.sp_get_sales_order_by_id(p_order_id UUID)
+CREATE OR REPLACE FUNCTION sales.sp_get_sales_order_by_id(
+    p_tenant_id UUID,
+    p_order_id UUID
+)
 RETURNS TABLE (
     id UUID,
     customer_id UUID,
@@ -74,12 +78,12 @@ RETURNS TABLE (
     updated_at TIMESTAMP
 ) LANGUAGE plpgsql AS $$
 BEGIN
-    IF NOT EXISTS (SELECT 1 FROM sales.sales_orders WHERE id = p_order_id) THEN
+    IF NOT EXISTS (SELECT 1 FROM sales.sales_orders so WHERE so.id = p_order_id AND so.tenant_id = p_tenant_id) THEN
         RAISE EXCEPTION 'sales-order.not-found' USING ERRCODE = 'P0001';
     END IF;
 
     RETURN QUERY
-    SELECT 
+    SELECT
         CAST(so.id AS UUID),
         CAST(so.customer_id AS UUID),
         CAST(so.order_number AS VARCHAR),
@@ -92,12 +96,13 @@ BEGIN
         CAST(so.notes AS TEXT),
         CAST(so.created_at AS TIMESTAMP),
         CAST(so.updated_at AS TIMESTAMP)
-    FROM sales.sales_orders so WHERE so.id = p_order_id;
+    FROM sales.sales_orders so WHERE so.id = p_order_id AND so.tenant_id = p_tenant_id;
 END;
 $$;
 
 -- Get all sales orders
 CREATE OR REPLACE FUNCTION sales.sp_get_all_sales_orders(
+    p_tenant_id UUID,
     p_limit INT DEFAULT 20,
     p_offset INT DEFAULT 0
 )
@@ -117,7 +122,7 @@ RETURNS TABLE (
 ) LANGUAGE plpgsql AS $$
 BEGIN
     RETURN QUERY
-    SELECT 
+    SELECT
         CAST(so.id AS UUID),
         CAST(so.customer_id AS UUID),
         CAST(so.order_number AS VARCHAR),
@@ -130,14 +135,18 @@ BEGIN
         CAST(so.notes AS TEXT),
         CAST(so.created_at AS TIMESTAMP),
         CAST(so.updated_at AS TIMESTAMP)
-    FROM sales.sales_orders so 
+    FROM sales.sales_orders so
+    WHERE so.tenant_id = p_tenant_id
     ORDER BY so.created_at DESC
     LIMIT p_limit OFFSET p_offset;
 END;
 $$;
 
 -- Get sales orders by customer
-CREATE OR REPLACE FUNCTION sales.sp_get_sales_orders_by_customer(p_customer_id UUID)
+CREATE OR REPLACE FUNCTION sales.sp_get_sales_orders_by_customer(
+    p_tenant_id UUID,
+    p_customer_id UUID
+)
 RETURNS TABLE (
     id UUID,
     customer_id UUID,
@@ -154,7 +163,7 @@ RETURNS TABLE (
 ) LANGUAGE plpgsql AS $$
 BEGIN
     RETURN QUERY
-    SELECT 
+    SELECT
         CAST(so.id AS UUID),
         CAST(so.customer_id AS UUID),
         CAST(so.order_number AS VARCHAR),
@@ -167,14 +176,17 @@ BEGIN
         CAST(so.notes AS TEXT),
         CAST(so.created_at AS TIMESTAMP),
         CAST(so.updated_at AS TIMESTAMP)
-    FROM sales.sales_orders so 
-    WHERE so.customer_id = p_customer_id
+    FROM sales.sales_orders so
+    WHERE so.tenant_id = p_tenant_id AND so.customer_id = p_customer_id
     ORDER BY so.created_at DESC;
 END;
 $$;
 
 -- Get sales order by order number
-CREATE OR REPLACE FUNCTION sales.sp_get_sales_order_by_number(p_order_number VARCHAR)
+CREATE OR REPLACE FUNCTION sales.sp_get_sales_order_by_number(
+    p_tenant_id UUID,
+    p_order_number VARCHAR
+)
 RETURNS TABLE (
     id UUID,
     customer_id UUID,
@@ -191,7 +203,7 @@ RETURNS TABLE (
 ) LANGUAGE plpgsql AS $$
 BEGIN
     RETURN QUERY
-    SELECT 
+    SELECT
         CAST(so.id AS UUID),
         CAST(so.customer_id AS UUID),
         CAST(so.order_number AS VARCHAR),
@@ -204,13 +216,14 @@ BEGIN
         CAST(so.notes AS TEXT),
         CAST(so.created_at AS TIMESTAMP),
         CAST(so.updated_at AS TIMESTAMP)
-    FROM sales.sales_orders so 
-    WHERE so.order_number = p_order_number;
+    FROM sales.sales_orders so
+    WHERE so.tenant_id = p_tenant_id AND so.order_number = p_order_number;
 END;
 $$;
 
 -- Update sales order
 CREATE OR REPLACE FUNCTION sales.sp_update_sales_order(
+    p_tenant_id UUID,
     p_order_id UUID,
     p_status VARCHAR,
     p_shipping_address VARCHAR,
@@ -232,7 +245,7 @@ RETURNS TABLE (
     updated_at TIMESTAMP
 ) LANGUAGE plpgsql AS $$
 BEGIN
-    IF NOT EXISTS (SELECT 1 FROM sales.sales_orders WHERE id = p_order_id) THEN
+    IF NOT EXISTS (SELECT 1 FROM sales.sales_orders so WHERE so.id = p_order_id AND so.tenant_id = p_tenant_id) THEN
         RAISE EXCEPTION 'sales-order.not-found' USING ERRCODE = 'P0001';
     END IF;
 
@@ -245,10 +258,10 @@ BEGIN
         shipping_address = COALESCE(p_shipping_address, shipping_address),
         notes = COALESCE(p_notes, notes),
         discount_amount = COALESCE(p_discount_amount, discount_amount)
-    WHERE id = p_order_id;
+    WHERE id = p_order_id AND tenant_id = p_tenant_id;
 
     RETURN QUERY
-    SELECT 
+    SELECT
         CAST(so.id AS UUID),
         CAST(so.customer_id AS UUID),
         CAST(so.order_number AS VARCHAR),
@@ -261,12 +274,13 @@ BEGIN
         CAST(so.notes AS TEXT),
         CAST(so.created_at AS TIMESTAMP),
         CAST(so.updated_at AS TIMESTAMP)
-    FROM sales.sales_orders so WHERE so.id = p_order_id;
+    FROM sales.sales_orders so WHERE so.id = p_order_id AND so.tenant_id = p_tenant_id;
 END;
 $$;
 
 -- Add order item
 CREATE OR REPLACE FUNCTION sales.sp_add_order_item(
+    p_tenant_id UUID,
     p_order_id UUID,
     p_product_id UUID,
     p_quantity INT
@@ -288,7 +302,7 @@ DECLARE
     v_product_sku VARCHAR;
     v_product_name VARCHAR;
 BEGIN
-    IF NOT EXISTS (SELECT 1 FROM sales.sales_orders WHERE id = p_order_id) THEN
+    IF NOT EXISTS (SELECT 1 FROM sales.sales_orders so WHERE so.id = p_order_id AND so.tenant_id = p_tenant_id) THEN
         RAISE EXCEPTION 'sales-order.not-found' USING ERRCODE = 'P0001';
     END IF;
 
@@ -296,9 +310,9 @@ BEGIN
         RAISE EXCEPTION 'order-item.invalid-qty' USING ERRCODE = 'P0001';
     END IF;
 
-    -- Get product info from inventory
-    SELECT price, sku, name INTO v_unit_price, v_product_sku, v_product_name
-    FROM inventory.products WHERE id = p_product_id;
+    -- Get product info from inventory (validate product belongs to same tenant)
+    SELECT p.price, p.sku, p.name INTO v_unit_price, v_product_sku, v_product_name
+    FROM inventory.products p WHERE p.id = p_product_id AND p.tenant_id = p_tenant_id;
 
     IF v_unit_price IS NULL THEN
         RAISE EXCEPTION 'order-item.product-not-found' USING ERRCODE = 'P0001';
@@ -312,7 +326,7 @@ BEGIN
     ) RETURNING order_items.id INTO v_item_id;
 
     RETURN QUERY
-    SELECT 
+    SELECT
         CAST(oi.id AS UUID),
         CAST(oi.order_id AS UUID),
         CAST(oi.product_id AS UUID),
@@ -327,7 +341,10 @@ END;
 $$;
 
 -- Get order items
-CREATE OR REPLACE FUNCTION sales.sp_get_order_items(p_order_id UUID)
+CREATE OR REPLACE FUNCTION sales.sp_get_order_items(
+    p_tenant_id UUID,
+    p_order_id UUID
+)
 RETURNS TABLE (
     id UUID,
     order_id UUID,
@@ -340,8 +357,13 @@ RETURNS TABLE (
     created_at TIMESTAMP
 ) LANGUAGE plpgsql AS $$
 BEGIN
+    -- Validate order belongs to tenant
+    IF NOT EXISTS (SELECT 1 FROM sales.sales_orders so WHERE so.id = p_order_id AND so.tenant_id = p_tenant_id) THEN
+        RAISE EXCEPTION 'sales-order.not-found' USING ERRCODE = 'P0001';
+    END IF;
+
     RETURN QUERY
-    SELECT 
+    SELECT
         CAST(oi.id AS UUID),
         CAST(oi.order_id AS UUID),
         CAST(oi.product_id AS UUID),
@@ -351,7 +373,7 @@ BEGIN
         CAST(oi.unit_price AS DECIMAL),
         CAST(oi.line_total AS DECIMAL),
         CAST(oi.created_at AS TIMESTAMP)
-    FROM sales.order_items oi 
+    FROM sales.order_items oi
     WHERE oi.order_id = p_order_id
     ORDER BY oi.created_at;
 END;

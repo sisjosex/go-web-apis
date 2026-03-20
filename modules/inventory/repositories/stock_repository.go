@@ -6,6 +6,8 @@ import (
 
 	coreServices "josex/web/modules/core/services"
 	"josex/web/modules/inventory/models"
+
+	"github.com/google/uuid"
 )
 
 type StockRepository struct {
@@ -21,13 +23,14 @@ func NewStockRepository(dbService coreServices.DatabaseService, logger *log.Logg
 }
 
 // ReserveStock reserves inventory for a sales order
-func (r *StockRepository) ReserveStock(ctx context.Context, productID string, quantity float64) (*models.StockReservationResponse, error) {
+func (r *StockRepository) ReserveStock(ctx context.Context, tenantID uuid.UUID, productID string, quantity float64) (*models.StockReservationResponse, error) {
 	var response models.StockReservationResponse
 
 	err := r.dbService.QueryRow(
 		ctx,
-		`SELECT reserved_quantity, available_quantity, status, message 
-		 FROM inventory.sp_reserve_stock_for_order($1, $2)`,
+		`SELECT reserved_quantity, available_quantity, status, message
+		 FROM inventory.sp_reserve_stock_for_order($1, $2, $3)`,
+		tenantID,
 		productID,
 		quantity,
 	).Scan(&response.ReservedQuantity, &response.AvailableQuantity, &response.Status, &response.Message)
@@ -43,13 +46,14 @@ func (r *StockRepository) ReserveStock(ctx context.Context, productID string, qu
 }
 
 // ReleaseReservedStock releases reserved inventory when order is cancelled
-func (r *StockRepository) ReleaseReservedStock(ctx context.Context, productID string, quantity float64) (*models.StockReservationResponse, error) {
+func (r *StockRepository) ReleaseReservedStock(ctx context.Context, tenantID uuid.UUID, productID string, quantity float64) (*models.StockReservationResponse, error) {
 	var response models.StockReservationResponse
 
 	err := r.dbService.QueryRow(
 		ctx,
-		`SELECT reserved_quantity, available_quantity, status, message 
-		 FROM inventory.sp_release_reserved_stock($1, $2)`,
+		`SELECT reserved_quantity, available_quantity, status, message
+		 FROM inventory.sp_release_reserved_stock($1, $2, $3)`,
+		tenantID,
 		productID,
 		quantity,
 	).Scan(&response.ReservedQuantity, &response.AvailableQuantity, &response.Status, &response.Message)
@@ -65,13 +69,14 @@ func (r *StockRepository) ReleaseReservedStock(ctx context.Context, productID st
 }
 
 // UpdateReorderLevel updates the minimum stock level for a product
-func (r *StockRepository) UpdateReorderLevel(ctx context.Context, productID string, reorderLevel float64) (*models.UpdateReorderLevelResponse, error) {
+func (r *StockRepository) UpdateReorderLevel(ctx context.Context, tenantID uuid.UUID, productID string, reorderLevel float64) (*models.UpdateReorderLevelResponse, error) {
 	var response models.UpdateReorderLevelResponse
 
 	err := r.dbService.QueryRow(
 		ctx,
-		`SELECT product_id::VARCHAR, reorder_level, current_quantity, status, message 
-		 FROM inventory.sp_update_reorder_level($1::UUID, $2)`,
+		`SELECT product_id::VARCHAR, reorder_level, current_quantity, status, message
+		 FROM inventory.sp_update_reorder_level($1, $2::UUID, $3)`,
+		tenantID,
 		productID,
 		reorderLevel,
 	).Scan(&response.ProductID, &response.ReorderLevel, &response.CurrentQty, &response.Status, &response.Message)

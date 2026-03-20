@@ -28,17 +28,17 @@ DECLARE
     v_message TEXT := 'Order created successfully';
 BEGIN
     -- Validate customer exists and belongs to tenant
-    IF NOT EXISTS (SELECT 1 FROM sales.customers WHERE id = p_customer_id AND tenant_id = p_tenant_id) THEN
+    IF NOT EXISTS (SELECT 1 FROM sales.customers c WHERE c.id = p_customer_id AND c.tenant_id = p_tenant_id) THEN
         RAISE EXCEPTION 'customer.not-found' USING ERRCODE = 'P0001';
     END IF;
 
     -- Generate order number (YYYY-MM-DD-XXXXX format)
-    v_order_number := TO_CHAR(CURRENT_DATE, 'YYYY-MM-DD') || '-' || 
+    v_order_number := TO_CHAR(CURRENT_DATE, 'YYYY-MM-DD') || '-' ||
                       LPAD(CAST(EXTRACT(EPOCH FROM CURRENT_TIMESTAMP * 1000) AS BIGINT)::TEXT, 5, '0');
 
     -- Create order with pending status
     INSERT INTO sales.sales_orders(
-        id, tenant_id, customer_id, order_number, shipping_address, notes, 
+        id, tenant_id, customer_id, order_number, shipping_address, notes,
         discount_amount, status, sub_total, tax_amount, total
     )
     VALUES(
@@ -47,7 +47,7 @@ BEGIN
     );
 
     RETURN QUERY
-    SELECT 
+    SELECT
         v_order_id,
         v_order_number,
         p_customer_id,

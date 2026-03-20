@@ -11,7 +11,6 @@ CREATE OR REPLACE FUNCTION purchasing.sp_list_purchase_orders(
 )
 RETURNS TABLE(
     id UUID,
-    tenant_id UUID,
     supplier_id UUID,
     po_number VARCHAR,
     status VARCHAR,
@@ -27,9 +26,8 @@ RETURNS TABLE(
 BEGIN
     IF p_status IS NOT NULL THEN
         RETURN QUERY
-        SELECT 
+        SELECT
             po.id,
-            po.tenant_id,
             po.supplier_id,
             po.po_number,
             po.status,
@@ -47,9 +45,8 @@ BEGIN
         LIMIT p_page_size OFFSET p_offset;
     ELSE
         RETURN QUERY
-        SELECT 
+        SELECT
             po.id,
-            po.tenant_id,
             po.supplier_id,
             po.po_number,
             po.status,
@@ -81,13 +78,13 @@ BEGIN
     IF p_status IS NOT NULL THEN
         RETURN QUERY
         SELECT CAST(COUNT(*) AS INT)
-        FROM purchasing.purchase_orders
-        WHERE tenant_id = p_tenant_id AND status = p_status;
+        FROM purchasing.purchase_orders po
+        WHERE po.tenant_id = p_tenant_id AND po.status = p_status;
     ELSE
         RETURN QUERY
         SELECT CAST(COUNT(*) AS INT)
-        FROM purchasing.purchase_orders
-        WHERE tenant_id = p_tenant_id;
+        FROM purchasing.purchase_orders po
+        WHERE po.tenant_id = p_tenant_id;
     END IF;
 END;
 $$;
@@ -98,7 +95,6 @@ CREATE OR REPLACE FUNCTION purchasing.sp_get_pending_payments(
 )
 RETURNS TABLE(
     id UUID,
-    tenant_id UUID,
     supplier_id UUID,
     po_number VARCHAR,
     status VARCHAR,
@@ -113,9 +109,8 @@ RETURNS TABLE(
 ) LANGUAGE plpgsql AS $$
 BEGIN
     RETURN QUERY
-    SELECT DISTINCT 
+    SELECT DISTINCT
         po.id,
-        po.tenant_id,
         po.supplier_id,
         po.po_number,
         po.status,

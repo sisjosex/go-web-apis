@@ -3,6 +3,7 @@
 
 -- Function to reserve stock when order is created
 CREATE OR REPLACE FUNCTION inventory.sp_reserve_stock_for_order(
+    p_tenant_id UUID,
     p_product_id UUID,
     p_quantity DECIMAL
 )
@@ -20,13 +21,18 @@ DECLARE
     v_reorder_level DECIMAL;
     v_status VARCHAR;
 BEGIN
+    -- Validate product belongs to tenant
+    IF NOT EXISTS (SELECT 1 FROM inventory.products p WHERE p.id = p_product_id AND p.tenant_id = p_tenant_id) THEN
+        RAISE EXCEPTION 'product.not-found' USING ERRCODE = 'P0001';
+    END IF;
+
     -- Get current stock levels using alias
-    SELECT ps.current_quantity, ps.reserved_quantity, ps.reorder_level 
+    SELECT ps.current_quantity, ps.reserved_quantity, ps.reorder_level
     INTO v_current_quantity, v_reserved_quantity, v_reorder_level
     FROM inventory.product_stock ps
     WHERE ps.product_id = p_product_id;
 
-    -- Check if product exists
+    -- Check if product stock record exists
     IF v_current_quantity IS NULL THEN
         RAISE EXCEPTION 'product.not-found' USING ERRCODE = 'P0001';
     END IF;
@@ -59,7 +65,7 @@ BEGIN
     SET reserved_quantity = v_new_reserved, status = v_status, last_updated_at = CURRENT_TIMESTAMP
     WHERE product_id = p_product_id;
 
-    RETURN QUERY SELECT 
+    RETURN QUERY SELECT
         v_new_reserved,
         v_available,
         v_status,
@@ -69,6 +75,7 @@ $$;
 
 -- Function to release reserved stock (when order is cancelled)
 CREATE OR REPLACE FUNCTION inventory.sp_release_reserved_stock(
+    p_tenant_id UUID,
     p_product_id UUID,
     p_quantity DECIMAL
 )
@@ -86,13 +93,18 @@ DECLARE
     v_reorder_level DECIMAL;
     v_status VARCHAR;
 BEGIN
+    -- Validate product belongs to tenant
+    IF NOT EXISTS (SELECT 1 FROM inventory.products p WHERE p.id = p_product_id AND p.tenant_id = p_tenant_id) THEN
+        RAISE EXCEPTION 'product.not-found' USING ERRCODE = 'P0001';
+    END IF;
+
     -- Get current stock levels using alias
-    SELECT ps.current_quantity, ps.reserved_quantity, ps.reorder_level 
+    SELECT ps.current_quantity, ps.reserved_quantity, ps.reorder_level
     INTO v_current_quantity, v_reserved_quantity, v_reorder_level
     FROM inventory.product_stock ps
     WHERE ps.product_id = p_product_id;
 
-    -- Check if product exists
+    -- Check if product stock record exists
     IF v_current_quantity IS NULL THEN
         RAISE EXCEPTION 'product.not-found' USING ERRCODE = 'P0001';
     END IF;
@@ -117,7 +129,7 @@ BEGIN
     SET reserved_quantity = v_new_reserved, status = v_status, last_updated_at = CURRENT_TIMESTAMP
     WHERE product_id = p_product_id;
 
-    RETURN QUERY SELECT 
+    RETURN QUERY SELECT
         v_new_reserved,
         v_available,
         v_status,
@@ -127,6 +139,7 @@ $$;
 
 -- Function to update reorder level for a product
 CREATE OR REPLACE FUNCTION inventory.sp_update_reorder_level(
+    p_tenant_id UUID,
     p_product_id UUID,
     p_new_reorder_level DECIMAL
 )
@@ -141,7 +154,12 @@ DECLARE
     v_current_quantity DECIMAL;
     v_status VARCHAR;
 BEGIN
-    -- Check if product exists
+    -- Validate product belongs to tenant
+    IF NOT EXISTS (SELECT 1 FROM inventory.products p WHERE p.id = p_product_id AND p.tenant_id = p_tenant_id) THEN
+        RAISE EXCEPTION 'product.not-found' USING ERRCODE = 'P0001';
+    END IF;
+
+    -- Check if product stock record exists
     IF NOT EXISTS (SELECT 1 FROM inventory.product_stock ps WHERE ps.product_id = p_product_id) THEN
         RAISE EXCEPTION 'product.not-found' USING ERRCODE = 'P0001';
     END IF;
@@ -177,7 +195,7 @@ BEGIN
         RAISE EXCEPTION 'Failed to update reorder level' USING ERRCODE = 'P0002';
     END IF;
 
-    RETURN QUERY SELECT 
+    RETURN QUERY SELECT
         CAST(p_product_id AS UUID),
         CAST(p_new_reorder_level AS DECIMAL),
         CAST(v_current_quantity AS DECIMAL),

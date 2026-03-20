@@ -4,6 +4,7 @@ CREATE SCHEMA IF NOT EXISTS sales;
 -- Create customers table
 CREATE TABLE sales.customers (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    tenant_id UUID NOT NULL,
     name VARCHAR(255) NOT NULL,
     email VARCHAR(255) NOT NULL,
     phone_number VARCHAR(20) NOT NULL,
@@ -18,7 +19,8 @@ CREATE TABLE sales.customers (
 );
 
 -- Create indexes for customers
-CREATE UNIQUE INDEX idx_customers_email_unique ON sales.customers(email);
+CREATE UNIQUE INDEX idx_customers_email_unique ON sales.customers(tenant_id, email);
+CREATE INDEX idx_customers_tenant_id ON sales.customers(tenant_id);
 
 -- Create customers audit/update trigger
 CREATE OR REPLACE FUNCTION sales.customers_update_timestamp()

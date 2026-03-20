@@ -12,6 +12,8 @@ import (
 func RegisterInventoryRoutes(
 	router *gin.RouterGroup,
 	dbService coreServices.DatabaseService,
+	authMiddleware gin.HandlerFunc,
+	tenantMiddleware gin.HandlerFunc,
 ) {
 	// Create repositories
 	productRepo := repositories.NewProductRepository(dbService, nil)
@@ -34,8 +36,7 @@ func RegisterInventoryRoutes(
 	batchService := inventoryServices.NewBatchService(batchRepository)
 	batchController := controllers.NewBatchController(batchService)
 
-	// Public routes (no auth required for reads)
-	api := router.Group("/inventory")
+	api := router.Group("/inventory", authMiddleware, tenantMiddleware)
 
 	// Products
 	api.POST("/products", productController.CreateProductWithVariants)
