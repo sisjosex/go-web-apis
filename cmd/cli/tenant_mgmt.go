@@ -1,14 +1,3 @@
-// Package main: Tenant management
-//
-// This subcommand manages tenant instances and runs migrations on tenant databases.
-// It requires .env.platform with TENANCY_ENABLED=true to operate.
-//
-// Files organized as:
-//   - CmdTenant:                 CLI command handler
-//   - runTenantOps:              Router to specific operations
-//   - listTenants:               List all tenants with custom databases
-//   - runMigrations:             Run migrations on specific tenant(s)
-//   - Helper functions:          Database URL masking, display formatting
 package main
 
 import (
@@ -24,87 +13,69 @@ import (
 	tenancyServices "josex/web/modules/tenancy/services"
 )
 
-// CmdTenant handles the tenant subcommand
+// CmdTenant handles the `tenant` (alias: t) subcommand
 func CmdTenant(args []string) {
 	fs := flag.NewFlagSet("tenant", flag.ExitOnError)
-	listCmd := fs.Bool("list", false, "List all tenants with custom databases")
-	migrateCmd := fs.String("migrate", "", "Run migrations on tenant (slug) or 'all' for all tenants")
-	tenant := fs.String("tenant", "", "Tenant slug for operations")
+	listFlag := fs.Bool("list", false, "List all tenants with custom databases")
+	migrateFlag := fs.String("migrate", "", "Run migrations: tenant slug or 'all'")
 
 	fs.Usage = func() {
-		fmt.Println("🏢 Tenant Management - Manage tenant instances and migrations")
+		fmt.Println("🏢 Tenant Manager")
 		fmt.Println("\nUsage:")
-		fmt.Println("  go run ./cmd/cli tenant [flags]")
+		fmt.Println("  go run ./cmd/cli t [flags]")
 		fmt.Println("\nFlags:")
-		fmt.Println("  -list                    List all tenants with custom databases")
-		fmt.Println("  -migrate <slug|all>      Run migrations on specific tenant or all tenants")
-		fmt.Println("  -tenant <slug>           Specify tenant slug for operations")
+		fmt.Println("  -list                 List all tenants with custom databases (default)")
+		fmt.Println("  -migrate <slug|all>   Run migrations on a tenant or all tenants")
 		fmt.Println("\nExamples:")
-		fmt.Println("  go run ./cmd/cli tenant -list")
-		fmt.Println("  go run ./cmd/cli tenant -migrate acme")
-		fmt.Println("  go run ./cmd/cli tenant -migrate all")
-		fmt.Println("\nNote: Tenant creation and user management should be done via Platform API")
-		fmt.Println("Note: This command requires .env.platform with TENANCY_ENABLED=true")
+		fmt.Println("  go run ./cmd/cli t -list")
+		fmt.Println("  go run ./cmd/cli t -migrate acme")
+		fmt.Println("  go run ./cmd/cli t -migrate all")
+		fmt.Println("\nRequires: .env.platform with TENANCY_ENABLED=true")
 	}
 
 	fs.Parse(args)
 
-	// Default action: list all tenants
-	if !*listCmd && *migrateCmd == "" {
-		*listCmd = true
+	// Default action when no flag is given
+	if !*listFlag && *migrateFlag == "" {
+		*listFlag = true
 	}
 
-	// Set environment for tenant operations (requires platform context)
-	detectAndSetEnvForTenant()
+	// Ensure platform env is loaded
+	if os.Getenv("ENV_FILE") == "" {
+		os.Setenv("ENV_FILE", ".env.platform")
+		os.Setenv("ENABLED_MODULES", "core,auth,users,tenancy")
+	}
 
-	if err := runTenantOps(*listCmd, *migrateCmd, *tenant); err != nil {
-		fmt.Printf("❌ Error: %v\n", err)
+	if err := runTenantOps(*listFlag, *migrateFlag); err != nil {
+		fmt.Printf("❌ %v\n", err)
 		os.Exit(1)
 	}
 }
 
-// detectAndSetEnvForTenant ensures platform .env is loaded
-func detectAndSetEnvForTenant() {
-	if envFile := os.Getenv("ENV_FILE"); envFile != "" {
-		return
-	}
-	os.Setenv("ENV_FILE", ".env.platform")
-	os.Setenv("ENABLED_MODULES", "core,auth,users,tenancy")
-}
-
-// runTenantOps handles all tenant-related operations
-func runTenantOps(list bool, migrate, tenantSlug string) error {
-	// Load environment variables first
+func runTenantOps(list bool, migrate string) error {
 	utils.LoadEnv()
 
-	// Check if tenancy is enabled
-	tenancyEnabled := utils.GetEnv("TENANCY_ENABLED", "false")
-	if tenancyEnabled != "true" {
-		return fmt.Errorf("tenancy module is not enabled. Make sure you're using .env.platform with TENANCY_ENABLED=true")
+	if utils.GetEnv("TENANCY_ENABLED", "false") != "true" {
+		return fmt.Errorf("tenancy is not enabled — set TENANCY_ENABLED=true in .env.platform")
 	}
 
-	// Initialize services - this will load full config which requires all .env vars
 	ctx := context.Background()
 	dbService := coreServices.NewDatabaseService()
 	dbService.InitDatabase(ctx)
 	defer dbService.CloseDatabase(ctx)
 
-	// Initialize tenant repository and service
 	tenantRepo := tenancyRepos.NewTenantRepository(dbService)
 	tenantService := tenancyServices.NewTenantService(tenantRepo, dbService)
 
-	// Route to appropriate operation
 	switch {
 	case list:
 		return listTenants(ctx, tenantRepo)
 	case migrate != "":
 		return runMigrations(ctx, tenantService, tenantRepo, migrate)
-	default:
-		return nil
 	}
+	return nil
 }
 
-// listTenants lists all tenants with custom databases
 func listTenants(ctx context.Context, repo interfaces.TenantRepository) error {
 	tenants, err := repo.ListTenantsWithCustomDB(ctx)
 	if err != nil {
@@ -116,78 +87,65 @@ func listTenants(ctx context.Context, repo interfaces.TenantRepository) error {
 		return nil
 	}
 
-	fmt.Println("📋 Tenants with custom databases:")
+	fmt.Printf("📋 %d tenant(s) with custom databases:\n", len(tenants))
 	fmt.Println("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
-	for _, tenant := range tenants {
-		status := "✅ Active"
-		if !tenant.IsActive {
-			status = "❌ Inactive"
+	for _, t := range tenants {
+		status := "✅ active"
+		if !t.IsActive {
+			status = "❌ inactive"
 		}
-		fmt.Printf("  %s - %s (%s)\n", tenant.Slug, tenant.Name, status)
-		if tenant.DatabaseURL != nil {
-			fmt.Printf("    DB: %s\n", maskDatabaseURL(*tenant.DatabaseURL))
+		fmt.Printf("  %-20s %s  %s\n", t.Slug, t.Name, status)
+		if t.DatabaseURL != nil {
+			fmt.Printf("  %-20s %s\n", "", maskDatabaseURL(*t.DatabaseURL))
 		}
 	}
 	fmt.Println("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
-
 	return nil
 }
 
-// runMigrations runs migrations on specific tenant(s)
 func runMigrations(ctx context.Context, service interfaces.TenantService, repo interfaces.TenantRepository, target string) error {
-	if target == "all" {
-		// Get all tenants with custom DB
-		tenants, err := repo.ListTenantsWithCustomDB(ctx)
-		if err != nil {
-			return fmt.Errorf("failed to list tenants: %w", err)
+	if target != "all" {
+		fmt.Printf("🔄 Migrating tenant: %s\n", target)
+		if err := service.RunTenantMigrations(ctx, target); err != nil {
+			return fmt.Errorf("migration failed: %w", err)
 		}
-
-		if len(tenants) == 0 {
-			fmt.Println("📋 No tenants with custom databases found")
-			return nil
-		}
-
-		fmt.Printf("🚀 Running migrations on %d tenant(s)...\n", len(tenants))
-		fmt.Println("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
-
-		successCount := 0
-		failCount := 0
-
-		for _, tenant := range tenants {
-			fmt.Printf("\n🔄 Migrating tenant: %s\n", tenant.Slug)
-			err := service.RunTenantMigrations(ctx, tenant.Slug)
-			if err != nil {
-				fmt.Printf("❌ Failed: %v\n", err)
-				failCount++
-			} else {
-				fmt.Printf("✅ Success\n")
-				successCount++
-			}
-		}
-
-		fmt.Println("\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
-		fmt.Printf("📊 Results: %d succeeded, %d failed\n", successCount, failCount)
-
+		fmt.Println("✅ Done")
 		return nil
 	}
 
-	// Migrate specific tenant
-	fmt.Printf("🔄 Running migrations for tenant: %s\n", target)
-	err := service.RunTenantMigrations(ctx, target)
+	tenants, err := repo.ListTenantsWithCustomDB(ctx)
 	if err != nil {
-		return fmt.Errorf("migration failed: %w", err)
+		return fmt.Errorf("failed to list tenants: %w", err)
 	}
-	fmt.Println("✅ Migrations completed successfully")
+	if len(tenants) == 0 {
+		fmt.Println("📋 No tenants with custom databases found")
+		return nil
+	}
 
+	fmt.Printf("🚀 Migrating %d tenant(s)...\n", len(tenants))
+	fmt.Println("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
+
+	ok, fail := 0, 0
+	for _, t := range tenants {
+		fmt.Printf("  🔄 %-20s", t.Slug)
+		if err := service.RunTenantMigrations(ctx, t.Slug); err != nil {
+			fmt.Printf("❌ %v\n", err)
+			fail++
+		} else {
+			fmt.Println("✅")
+			ok++
+		}
+	}
+
+	fmt.Println("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
+	fmt.Printf("📊 %d succeeded, %d failed\n", ok, fail)
 	return nil
 }
 
-// maskDatabaseURL masks sensitive parts of database URL
+// maskDatabaseURL hides the password in a postgres connection string
 func maskDatabaseURL(url string) string {
-	// Simple masking - hide password
-	// postgres://user:password@host:port/db -> postgres://user:***@host:port/db
 	if len(url) < 20 {
 		return "***"
 	}
-	return url[:15] + "***" + url[len(url)-20:]
+	return url[:15] + "***" + url[len(url)-15:]
 }

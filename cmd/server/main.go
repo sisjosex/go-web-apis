@@ -1,12 +1,14 @@
-// @title Tenant API - Business Operations
+// @title Go Web API
 // @version 1.0
-// @description Business API for tracking, invoicing, and operations
-// @host localhost:9080
+// @description Modular API server. Run in platform or tenant mode via -mode flag.
+// @host localhost:8080
 // @BasePath /api/v1
 package main
 
 import (
 	"context"
+	"flag"
+	"fmt"
 	"josex/web/config"
 	"josex/web/modules/core/services"
 	"josex/web/routes"
@@ -16,16 +18,34 @@ import (
 	"time"
 )
 
-func init() {
-	// Explicitly set which .env file to load
-	os.Setenv("ENV_FILE", ".env.tenant")
-}
-
 func main() {
-	// Load translations from all enabled modules
+	mode := flag.String("mode", "", "Server mode: platform or tenant")
+	flag.Parse()
+
+	// Resolve mode: flag > ENV_FILE already set > default to platform
+	if *mode == "" {
+		switch os.Getenv("ENV_FILE") {
+		case ".env.tenant":
+			*mode = "tenant"
+		default:
+			*mode = "platform"
+		}
+	}
+
+	switch *mode {
+	case "platform":
+		os.Setenv("ENV_FILE", ".env.platform")
+	case "tenant":
+		os.Setenv("ENV_FILE", ".env.tenant")
+	default:
+		fmt.Fprintf(os.Stderr, "❌ Unknown mode %q — use -mode=platform or -mode=tenant\n", *mode)
+		os.Exit(1)
+	}
+
+	fmt.Printf("🚀 Starting server in %s mode\n", *mode)
+
 	languages := []string{"en", "es"}
-	enabledModules := config.GetConfig().Core.EnabledModules
-	services.LoadAllTranslations(languages, enabledModules)
+	services.LoadAllTranslations(languages, config.GetConfig().Core.EnabledModules)
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -33,23 +53,18 @@ func main() {
 	signalChan := make(chan os.Signal, 1)
 	signal.Notify(signalChan, os.Interrupt, syscall.SIGTERM)
 
-	// Database service
 	dbService := services.NewDatabaseService()
 	go dbService.InitDatabase(ctx)
 
-	// Web server
 	webServer := services.NewWebServerService()
 	webServer.Initialize()
 	routes.SetupRoutes(webServer.Server, dbService)
 
-	// Handle termination signals
 	go func() {
 		<-signalChan
 		cancel()
-
 		shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer shutdownCancel()
-
 		dbService.CloseDatabase(shutdownCtx)
 	}()
 

@@ -40,25 +40,23 @@ func main() {
 }
 
 func setupTestDB() {
-	fmt.Println("🔧 Setting up test database...")
-	os.Setenv("ENV_FILE", ".env.test")
-	coreUtils.LoadEnv()
-	dbName := getDatabaseName()
-	recreateDatabase(dbName)
-	runMigrations()
-	seedDatabase()
-	fmt.Println("✅ Test database setup complete!")
+	prepareTestDB("🔧 Setting up test database...", "✅ Test database setup complete!")
 }
 
 func resetTestDB() {
-	fmt.Println("🔄 Resetting test database...")
+	prepareTestDB("🔄 Resetting test database...", "✅ Test database reset and ready!")
+}
+
+// prepareTestDB is the shared logic for setup and reset: recreate + migrate + seed
+func prepareTestDB(startMsg, doneMsg string) {
+	fmt.Println(startMsg)
 	os.Setenv("ENV_FILE", ".env.test")
 	coreUtils.LoadEnv()
 	dbName := getDatabaseName()
 	recreateDatabase(dbName)
 	runMigrations()
 	seedDatabase()
-	fmt.Println("✅ Test database reset and ready!")
+	fmt.Println(doneMsg)
 }
 
 func cleanTestDB() {
@@ -167,16 +165,13 @@ func seedDatabase() {
 }
 
 func execSQL(database, query string) {
-	// Prepare environment with password from DATABASE_URL
-	env := os.Environ()
-	env = append(env, "PGPASSWORD=postgres")
+	databaseURL := coreUtils.GetEnv("DATABASE_URL", "")
+	user, password := extractCredentials(databaseURL)
 
-	cmd := exec.Command(
-		"psql",
-		"-U", "postgres",
-		"-d", database,
-		"-c", query,
-	)
+	env := os.Environ()
+	env = append(env, "PGPASSWORD="+password)
+
+	cmd := exec.Command("psql", "-U", user, "-d", database, "-c", query)
 	cmd.Env = env
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
@@ -184,6 +179,20 @@ func execSQL(database, query string) {
 	if err := cmd.Run(); err != nil {
 		log.Printf("⚠️  SQL execution note: %v", err)
 	}
+}
+
+// extractCredentials parses user and password from a PostgreSQL connection URL
+func extractCredentials(databaseURL string) (user, password string) {
+	u, err := url.Parse(databaseURL)
+	if err != nil || u.User == nil {
+		return "postgres", "postgres" // safe fallback for local dev
+	}
+	user = u.User.Username()
+	password, _ = u.User.Password()
+	if user == "" {
+		user = "postgres"
+	}
+	return user, password
 }
 
 // extractDatabaseName extracts database name from PostgreSQL connection URL

@@ -1,52 +1,85 @@
-.PHONY: help swagger build build-platform build-tenant run run-platform run-tenant dev dev-platform dev-tenant test test-auth test-users test-core test-tenancy test-tracking test-inventory test-sales test-all db-reset docker-up docker-down clean
+.PHONY: help swagger build run-platform run-tenant \
+        dev-platform dev-tenant \
+        migrate migrate-list tenant-list tenant-migrate \
+        test test-auth test-users test-core test-tenancy test-tracking test-inventory test-sales test-purchasing test-all \
+        db-reset docker-up docker-down clean
 
-# Build variables
-BINARY_PLATFORM := bin/platform
-BINARY_TENANT := bin/tenant
+# Build output
+BINARY := bin/server
 GOFLAGS := -v
 
+# ════════════════════════════════════════════════════════════════
+# HELP
+# ════════════════════════════════════════════════════════════════
 help:
 	@echo "════════════════════════════════════════════════════════════════"
 	@echo "  Go Web API - Makefile Commands"
 	@echo "════════════════════════════════════════════════════════════════"
 	@echo ""
-	@echo "📚 SWAGGER & BUILD:"
-	@echo "  make swagger           - Generate Swagger documentation"
-	@echo "  make build             - Build both platform and tenant binaries"
-	@echo "  make build-platform    - Build platform server binary"
-	@echo "  make build-tenant      - Build tenant server binary"
+	@echo "🗄️  MIGRATIONS  (MODULE and NAME required)"
+	@echo "  make migrate MODULE=auth NAME=add_field   - Create migration files"
+	@echo "  make migrate-list                         - List available modules"
 	@echo ""
-	@echo "🚀 RUN SERVERS (Compiled):"
-	@echo "  make run               - Run platform server (default)"
-	@echo "  make run-platform      - Run platform server on port 8080"
-	@echo "  make run-tenant        - Run tenant server on port 8081"
+	@echo "🏢 TENANTS  (requires .env.platform with TENANCY_ENABLED=true)"
+	@echo "  make tenant-list                          - List tenants with custom DBs"
+	@echo "  make tenant-migrate SLUG=acme             - Migrate a specific tenant"
+	@echo "  make tenant-migrate SLUG=all              - Migrate all tenants"
 	@echo ""
-	@echo "💻 DEVELOPMENT MODE (go run - Fast with auto-reload via air):"
-	@echo "  make dev               - Run platform in dev mode"
-	@echo "  make dev-platform      - Run platform in dev mode on port 8080"
-	@echo "  make dev-tenant        - Run tenant in dev mode on port 8081"
+	@echo "📚 SWAGGER & BUILD"
+	@echo "  make swagger          - Generate Swagger documentation"
+	@echo "  make build            - Build server binary"
 	@echo ""
-	@echo "🧪 TESTS:"
-	@echo "  make test              - Run auth tests (default)"
-	@echo "  make test-auth         - Run auth module tests"
-	@echo "  make test-users        - Run users module tests"
-	@echo "  make test-core         - Run core module tests"
-	@echo "  make test-tenancy      - Run tenancy module tests"
-	@echo "  make test-tracking     - Run tracking module tests"
-	@echo "  make test-inventory    - Run inventory module tests"
-	@echo "  make test-sales        - Run sales module tests"
-	@echo "  make test-all          - Run all module tests"
+	@echo "🚀 RUN  (compiled binary)"
+	@echo "  make run-platform     - Platform server (port 8080, uses .env.platform)"
+	@echo "  make run-tenant       - Tenant server   (port 8081, uses .env.tenant)"
 	@echo ""
-	@echo "🗄️  DATABASE:"
-	@echo "  make db-reset          - Reset test database"
+	@echo "💻 DEV  (go run, hot-reload with air if installed)"
+	@echo "  make dev-platform     - Platform in dev mode"
+	@echo "  make dev-tenant       - Tenant in dev mode"
 	@echo ""
-	@echo "🐳 DOCKER:"
-	@echo "  make docker-up         - Start docker-compose services"
-	@echo "  make docker-down       - Stop docker-compose services"
+	@echo "🧪 TESTS"
+	@echo "  make test             - Reset DB + run main test suite"
+	@echo "  make test-all         - Reset DB + run all module tests"
+	@echo "  make test-auth        - Auth module"
+	@echo "  make test-tenancy     - Tenancy module"
+	@echo "  make test-inventory   - Inventory module"
+	@echo "  make test-sales       - Sales module"
+	@echo "  make test-purchasing  - Purchasing module"
+	@echo "  make test-tracking    - Tracking module"
+	@echo "  make test-users       - Users module"
+	@echo "  make test-core        - Core module"
 	@echo ""
-	@echo "🧹 CLEANUP:"
-	@echo "  make clean             - Remove built binaries"
+	@echo "🗄️  DATABASE"
+	@echo "  make db-reset         - Drop, recreate, and migrate test database"
+	@echo ""
+	@echo "🐳 DOCKER"
+	@echo "  make docker-up        - Start docker-compose services"
+	@echo "  make docker-down      - Stop docker-compose services"
+	@echo ""
+	@echo "🧹 CLEANUP"
+	@echo "  make clean            - Remove built binary"
 	@echo "════════════════════════════════════════════════════════════════"
+
+# ════════════════════════════════════════════════════════════════
+# MIGRATIONS
+# ════════════════════════════════════════════════════════════════
+migrate:
+	@[ "$(MODULE)" ] || (echo "❌ MODULE required. Usage: make migrate MODULE=auth NAME=add_field"; exit 1)
+	@[ "$(NAME)" ]   || (echo "❌ NAME required.   Usage: make migrate MODULE=auth NAME=add_field"; exit 1)
+	go run ./cmd/cli m -module=$(MODULE) -name=$(NAME)
+
+migrate-list:
+	go run ./cmd/cli m -list
+
+# ════════════════════════════════════════════════════════════════
+# TENANT MANAGEMENT
+# ════════════════════════════════════════════════════════════════
+tenant-list:
+	go run ./cmd/cli t -list
+
+tenant-migrate:
+	@[ "$(SLUG)" ] || (echo "❌ SLUG required. Usage: make tenant-migrate SLUG=acme  (or SLUG=all)"; exit 1)
+	go run ./cmd/cli t -migrate=$(SLUG)
 
 # ════════════════════════════════════════════════════════════════
 # SWAGGER
@@ -54,114 +87,103 @@ help:
 swagger:
 	@echo "🔄 Generating Swagger documentation..."
 	@if command -v swag > /dev/null 2>&1; then \
-		swag init -g cmd/platform/main.go -d . -o docs --parseInternal --parseDepth 3 2>&1 | grep -v "warning" || true; \
-		if [ -f docs/swagger.json ]; then \
-			echo "✅ Swagger generated successfully in ./docs/"; \
-			echo "📚 Access at: http://localhost:8080/swagger/index.html"; \
-		fi; \
+		swag init -g cmd/server/main.go -d . -o docs --parseInternal --parseDepth 3 2>&1 | grep -v "warning" || true; \
+		[ -f docs/swagger.json ] && echo "✅ Swagger docs generated → http://localhost:8080/swagger/index.html"; \
 	else \
-		echo "❌ swag not installed. Install with:"; \
-		echo "   go install github.com/swaggo/swag/cmd/swag@latest"; \
+		echo "❌ swag not installed. Run: go install github.com/swaggo/swag/cmd/swag@latest"; \
 	fi
 
 # ════════════════════════════════════════════════════════════════
 # BUILD
 # ════════════════════════════════════════════════════════════════
-build: build-platform build-tenant
-	@echo "✅ Build complete! Binaries in ./bin/"
-
-build-platform:
-	@echo "🔨 Building platform server..."
-	go build $(GOFLAGS) -o $(BINARY_PLATFORM) ./cmd/platform
-	@echo "✅ Platform binary: $(BINARY_PLATFORM)"
-
-build-tenant:
-	@echo "🔨 Building tenant server..."
-	go build $(GOFLAGS) -o $(BINARY_TENANT) ./cmd/tenant
-	@echo "✅ Tenant binary: $(BINARY_TENANT)"
+build:
+	@echo "🔨 Building server..."
+	go build $(GOFLAGS) -o $(BINARY) ./cmd/server
+	@echo "✅ Binary: $(BINARY)"
 
 # ════════════════════════════════════════════════════════════════
-# RUN SERVERS
+# RUN (compiled)
 # ════════════════════════════════════════════════════════════════
-run: run-platform
+run-platform: build
+	@echo "🚀 Platform → http://localhost:8080  |  Swagger → http://localhost:8080/swagger/index.html"
+	./$(BINARY) -mode=platform
 
-run-platform: build-platform
-	@echo "🚀 Starting platform server on http://localhost:8080"
-	@echo "📚 Swagger docs: http://localhost:8080/swagger/index.html"
-	@echo "Press Ctrl+C to stop"
-	./$(BINARY_PLATFORM)
-
-run-tenant: build-tenant
-	@echo "🚀 Starting tenant server on http://localhost:8081"
-	@echo "📚 Swagger docs: http://localhost:8081/swagger/index.html"
-	@echo "Press Ctrl+C to stop"
-	./$(BINARY_TENANT)
+run-tenant: build
+	@echo "🚀 Tenant   → http://localhost:8081  |  Swagger → http://localhost:8081/swagger/index.html"
+	./$(BINARY) -mode=tenant
 
 # ════════════════════════════════════════════════════════════════
-# DEVELOPMENT MODE (go run - Hot reload with air)
+# DEV (go run, with optional air hot-reload)
 # ════════════════════════════════════════════════════════════════
-dev: dev-platform
-
 dev-platform:
-	@echo "💻 Starting platform in development mode..."
-	@echo "🔄 With auto-reload support (install air first: go install github.com/cosmtrek/air@latest)"
-	@echo "📚 Swagger docs: http://localhost:8080/swagger/index.html"
-	@echo "Press Ctrl+C to stop"
+	@echo "💻 Platform dev mode → http://localhost:8080"
 	@if command -v air > /dev/null 2>&1; then \
 		air -c .air.toml; \
 	else \
-		@echo "⚠️  air not installed, running without auto-reload..."; \
-		go run ./cmd/platform; \
+		echo "⚠️  air not installed (go install github.com/cosmtrek/air@latest). Running without hot-reload..."; \
+		go run ./cmd/server -mode=platform; \
 	fi
 
 dev-tenant:
-	@echo "💻 Starting tenant in development mode..."
-	@echo "🔄 With auto-reload support (install air first: go install github.com/cosmtrek/air@latest)"
-	@echo "📚 Swagger docs: http://localhost:8081/swagger/index.html"
-	@echo "Press Ctrl+C to stop"
+	@echo "💻 Tenant dev mode → http://localhost:8081"
 	@if command -v air > /dev/null 2>&1; then \
 		air -c .air.toml; \
 	else \
-		@echo "⚠️  air not installed, running without auto-reload..."; \
-		go run ./cmd/tenant; \
+		echo "⚠️  air not installed (go install github.com/cosmtrek/air@latest). Running without hot-reload..."; \
+		go run ./cmd/server -mode=tenant; \
 	fi
 
 # ════════════════════════════════════════════════════════════════
 # TESTS
 # ════════════════════════════════════════════════════════════════
+TEST_FLAGS := -tags=integration $(GOFLAGS) -timeout=120s
+
 test: db-reset
-	go test -tags=integration $(GOFLAGS) ./modules/auth/tests ./modules/tenancy/tests ./modules/inventory/tests ./modules/sales/tests -timeout=120s
-
-test-auth: db-reset
-	go test -tags=integration $(GOFLAGS) ./modules/auth/tests -timeout=120s
-
-test-users: db-reset
-	go test -tags=integration $(GOFLAGS) ./modules/users/tests -timeout=120s
-
-test-core: db-reset
-	go test -tags=integration $(GOFLAGS) ./modules/core/tests -timeout=120s
-
-test-tenancy: db-reset
-	go test -tags=integration $(GOFLAGS) ./modules/tenancy/tests -timeout=120s
-
-test-tracking: db-reset
-	go test -tags=integration $(GOFLAGS) ./modules/tracking/tests -timeout=120s
-
-test-inventory: db-reset
-	go test -tags=integration $(GOFLAGS) ./modules/inventory/tests -timeout=120s
-
-test-sales: db-reset
-	go test -tags=integration $(GOFLAGS) ./modules/sales/tests -timeout=120s
+	go test $(TEST_FLAGS) \
+		./modules/auth/tests \
+		./modules/tenancy/tests \
+		./modules/tenancy/middleware \
+		./modules/core/services \
+		./modules/inventory/tests \
+		./modules/sales/tests
 
 test-all: db-reset
 	@echo "🧪 Running all module tests..."
-	go test -tags=integration $(GOFLAGS) ./modules/auth/tests -timeout=120s
-	go test -tags=integration $(GOFLAGS) ./modules/users/tests -timeout=120s
-	go test -tags=integration $(GOFLAGS) ./modules/tenancy/tests -timeout=120s
-	go test -tags=integration $(GOFLAGS) ./modules/tracking/tests -timeout=120s
-	go test -tags=integration $(GOFLAGS) ./modules/inventory/tests -timeout=120s
-	go test -tags=integration $(GOFLAGS) ./modules/sales/tests -timeout=120s
-	@echo "✅ All tests completed!"
+	go test $(TEST_FLAGS) \
+		./modules/auth/tests \
+		./modules/users/tests \
+		./modules/tenancy/tests \
+		./modules/tenancy/middleware \
+		./modules/core/services \
+		./modules/tracking/tests \
+		./modules/inventory/tests \
+		./modules/sales/tests \
+		./modules/purchasing/tests
+	@echo "✅ All tests done"
+
+test-auth: db-reset
+	go test $(TEST_FLAGS) ./modules/auth/tests
+
+test-users: db-reset
+	go test $(TEST_FLAGS) ./modules/users/tests
+
+test-core: db-reset
+	go test $(TEST_FLAGS) ./modules/core/tests ./modules/core/services
+
+test-tenancy: db-reset
+	go test $(TEST_FLAGS) ./modules/tenancy/tests ./modules/tenancy/middleware
+
+test-tracking: db-reset
+	go test $(TEST_FLAGS) ./modules/tracking/tests
+
+test-inventory: db-reset
+	go test $(TEST_FLAGS) ./modules/inventory/tests
+
+test-sales: db-reset
+	go test $(TEST_FLAGS) ./modules/sales/tests
+
+test-purchasing: db-reset
+	go test $(TEST_FLAGS) ./modules/purchasing/tests
 
 # ════════════════════════════════════════════════════════════════
 # DATABASE
@@ -176,7 +198,7 @@ db-reset:
 docker-up:
 	@echo "🐳 Starting Docker services..."
 	docker-compose up -d
-	@echo "✅ Services started. Check with: docker-compose ps"
+	@echo "✅ Services started. Check: docker-compose ps"
 
 docker-down:
 	@echo "🛑 Stopping Docker services..."
@@ -187,8 +209,8 @@ docker-down:
 # CLEANUP
 # ════════════════════════════════════════════════════════════════
 clean:
-	@echo "🧹 Cleaning up..."
+	@echo "🧹 Removing binaries..."
 	@rm -rf bin/
-	@echo "✅ Cleanup complete"
+	@echo "✅ Done"
 
 .DEFAULT_GOAL := help

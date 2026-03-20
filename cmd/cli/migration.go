@@ -1,12 +1,3 @@
-// Package main: Migration generator
-//
-// This subcommand generates new SQL migration files for modules.
-// It's independent and doesn't require loading application config.
-//
-// Files organized as:
-//   - CmdMigration:     CLI command handler
-//   - migrationGenerator: Core migration generation logic
-//   - Helper functions: Template generation, success messages, validation
 package main
 
 import (
@@ -19,143 +10,159 @@ import (
 	"time"
 )
 
-// CmdMigration handles the migration subcommand
+// fallbackModules is used when ENABLED_MODULES is not set in the environment
+const fallbackModules = "core,auth,users,tenancy,tracking,inventory,sales,purchasing"
+
+// CmdMigration handles the `migration` (alias: m) subcommand
 func CmdMigration(args []string) {
 	fs := flag.NewFlagSet("migration", flag.ExitOnError)
-	module := fs.String("module", "", "Module name (core, auth, users, tracking)")
-	name := fs.String("name", "", "Migration name (e.g., add_refresh_tokens)")
+	module := fs.String("module", "", "Target module name")
+	name := fs.String("name", "", "Migration description, e.g. add_refresh_tokens")
+	listFlag := fs.Bool("list", false, "List available modules and exit")
+
+	modules := getEnabledModules()
 
 	fs.Usage = func() {
-		fmt.Println("📦 Migration Generator - Create new database schema migrations")
+		fmt.Println("📦 Migration Generator")
 		fmt.Println("\nUsage:")
-		fmt.Println("  go run ./cmd/cli migration -module=<module> -name=<migration_name>")
+		fmt.Println("  go run ./cmd/cli m -module=<module> -name=<description>")
 		fmt.Println("\nFlags:")
-		fmt.Println("  -module string    Module name (core, auth, users, tracking)")
-		fmt.Println("  -name string      Migration name (e.g., add_refresh_tokens)")
+		fmt.Println("  -module string    Target module [required]")
+		fmt.Println("  -name   string    Migration description, e.g. add_refresh_tokens [required]")
+		fmt.Println("  -list             List available modules and exit")
+		fmt.Println("\nAvailable modules:")
+		for _, m := range modules {
+			fmt.Printf("  • %s\n", m)
+		}
 		fmt.Println("\nExamples:")
-		fmt.Println("  go run ./cmd/cli migration -module=auth -name=add_refresh_tokens")
-		fmt.Println("  go run ./cmd/cli migration -module=users -name=add_avatar_field")
-		fmt.Println("  go run ./cmd/cli migration -module=core -name=add_postgis_extension")
-		fmt.Println("  go run ./cmd/cli migration -module=tracking -name=add_location_field")
+		fmt.Println("  go run ./cmd/cli m -module=auth  -name=add_refresh_tokens")
+		fmt.Println("  go run ./cmd/cli m -module=sales -name=add_discount_table")
+		fmt.Println("  go run ./cmd/cli m -list")
 	}
 
 	fs.Parse(args)
 
+	if *listFlag {
+		fmt.Println("📦 Available modules (ENABLED_MODULES):")
+		for _, m := range modules {
+			fmt.Printf("  • %s\n", m)
+		}
+		return
+	}
+
 	if *module == "" || *name == "" {
-		fmt.Println("❌ Error: Both -module and -name flags are required")
+		fmt.Println("❌ Both -module and -name are required")
+		fmt.Println()
 		fs.Usage()
 		os.Exit(1)
 	}
 
-	// Validate module
-	validModules := map[string]bool{"core": true, "auth": true, "users": true, "tracking": true}
-	if !validModules[*module] {
-		fmt.Printf("❌ Error: Invalid module '%s'. Valid modules: core, auth, users, tracking\n", *module)
+	if !isModuleEnabled(modules, *module) {
+		fmt.Printf("❌ Unknown module '%s'. Run with -list to see available modules.\n", *module)
 		os.Exit(1)
 	}
 
-	gen := newMigrationGenerator(*module, sanitizeName(*name))
+	gen := &migrationGenerator{module: *module, name: sanitizeName(*name)}
 	if err := gen.generate(); err != nil {
-		fmt.Printf("❌ Error: %v\n", err)
+		fmt.Printf("❌ %v\n", err)
 		os.Exit(1)
 	}
 }
 
-// migrationGenerator handles migration file creation
+// getEnabledModules reads the module list from ENABLED_MODULES env var.
+// Falls back to the full default list when the var is not set.
+func getEnabledModules() []string {
+	env := os.Getenv("ENABLED_MODULES")
+	if env == "" {
+		env = fallbackModules
+	}
+	var modules []string
+	for _, m := range strings.Split(env, ",") {
+		if m = strings.TrimSpace(m); m != "" {
+			modules = append(modules, m)
+		}
+	}
+	return modules
+}
+
+func isModuleEnabled(modules []string, module string) bool {
+	for _, m := range modules {
+		if m == module {
+			return true
+		}
+	}
+	return false
+}
+
+// migrationGenerator creates the up/down SQL files for a migration
 type migrationGenerator struct {
 	module string
 	name   string
 }
 
-func newMigrationGenerator(module, name string) *migrationGenerator {
-	return &migrationGenerator{
-		module: module,
-		name:   name,
-	}
-}
-
-// generate creates the up and down migration files
 func (mg *migrationGenerator) generate() error {
 	timestamp := time.Now().Format("20060102150405")
+	dir := filepath.Join("modules", mg.module, "migrations")
 
-	upFile := fmt.Sprintf("%s_%s.up.sql", timestamp, mg.name)
-	downFile := fmt.Sprintf("%s_%s.down.sql", timestamp, mg.name)
-
-	modulePath := filepath.Join("modules", mg.module, "migrations")
-
-	if err := os.MkdirAll(modulePath, 0755); err != nil {
-		return fmt.Errorf("failed to create directory: %w", err)
+	if err := os.MkdirAll(dir, 0755); err != nil {
+		return fmt.Errorf("failed to create migrations directory: %w", err)
 	}
 
-	upFilePath := filepath.Join(modulePath, upFile)
-	downFilePath := filepath.Join(modulePath, downFile)
+	upPath := filepath.Join(dir, fmt.Sprintf("%s_%s.up.sql", timestamp, mg.name))
+	downPath := filepath.Join(dir, fmt.Sprintf("%s_%s.down.sql", timestamp, mg.name))
 
-	if err := os.WriteFile(upFilePath, []byte(mg.upTemplate()), 0644); err != nil {
-		return fmt.Errorf("failed to create up migration: %w", err)
+	if err := os.WriteFile(upPath, []byte(mg.upTemplate()), 0644); err != nil {
+		return fmt.Errorf("failed to write up migration: %w", err)
+	}
+	if err := os.WriteFile(downPath, []byte(mg.downTemplate()), 0644); err != nil {
+		return fmt.Errorf("failed to write down migration: %w", err)
 	}
 
-	if err := os.WriteFile(downFilePath, []byte(mg.downTemplate()), 0644); err != nil {
-		return fmt.Errorf("failed to create down migration: %w", err)
-	}
-
-	mg.printSuccess(upFilePath, downFilePath, timestamp)
+	fmt.Printf("\n🎉 Migration created: %s\n", mg.name)
+	fmt.Printf("   ↑ %s\n", upPath)
+	fmt.Printf("   ↓ %s\n\n", downPath)
 	return nil
 }
 
-// upTemplate returns the SQL up migration template
 func (mg *migrationGenerator) upTemplate() string {
 	return fmt.Sprintf(`-- Migration: %s
--- Module: %s
--- Created: %s
+-- Module:    %s
+-- Created:   %s
 
 -- TODO: Write your migration SQL here
--- Example:
--- CREATE TABLE IF NOT EXISTS auth.my_table (
---     id UUID PRIMARY KEY DEFAULT public.uuid_generate_v4(),
---     name VARCHAR(255) NOT NULL,
+-- Example table:
+-- CREATE TABLE IF NOT EXISTS %s.my_table (
+--     id         UUID PRIMARY KEY DEFAULT public.uuid_generate_v4(),
+--     name       VARCHAR(255) NOT NULL,
 --     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 -- );
 
-`, mg.name, mg.module, time.Now().Format("2006-01-02 15:04:05"))
+-- Example stored procedure:
+-- CREATE OR REPLACE FUNCTION %s.sp_my_proc() RETURNS TABLE(...) LANGUAGE plpgsql AS $$
+-- BEGIN
+--     ...
+-- END;
+-- $$;
+`,
+		mg.name, mg.module, time.Now().Format("2006-01-02 15:04:05"),
+		mg.module, mg.module)
 }
 
-// downTemplate returns the SQL down migration template
 func (mg *migrationGenerator) downTemplate() string {
 	return fmt.Sprintf(`-- Rollback: %s
--- Module: %s
+-- Module:    %s
 
 -- TODO: Write your rollback SQL here
 -- Example:
--- DROP TABLE IF EXISTS auth.my_table;
-
-`, mg.name, mg.module)
+-- DROP TABLE IF EXISTS %s.my_table;
+-- DROP FUNCTION IF EXISTS %s.sp_my_proc;
+`,
+		mg.name, mg.module, mg.module, mg.module)
 }
 
-// printSuccess displays success message with created file paths
-func (mg *migrationGenerator) printSuccess(upPath, downPath, timestamp string) {
-	fmt.Println()
-	fmt.Println("🎉 Migration created successfully!")
-	fmt.Println("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
-	fmt.Printf("📦 Module:    %s\n", mg.module)
-	fmt.Printf("📝 Name:      %s\n", mg.name)
-	fmt.Printf("🕐 Timestamp: %s\n", timestamp)
-	fmt.Println()
-	fmt.Println("📁 Files created:")
-	fmt.Printf("   ↑ %s\n", upPath)
-	fmt.Printf("   ↓ %s\n", downPath)
-	fmt.Println()
-	fmt.Println("📝 Next steps:")
-	fmt.Printf("   1. Edit %s to add your SQL\n", filepath.Base(upPath))
-	fmt.Printf("   2. Edit %s for rollback\n", filepath.Base(downPath))
-	fmt.Println("   3. Restart your application to run migrations")
-	fmt.Println()
-}
-
-// sanitizeName cleans migration name of invalid characters
+// sanitizeName replaces any non-alphanumeric characters with underscores
 func sanitizeName(name string) string {
-	re := regexp.MustCompile(`[^a-zA-Z0-9_]+`)
-	sanitized := re.ReplaceAllString(name, "_")
-	re = regexp.MustCompile(`_+`)
-	sanitized = re.ReplaceAllString(sanitized, "_")
-	return strings.Trim(sanitized, "_")
+	name = regexp.MustCompile(`[^a-zA-Z0-9_]+`).ReplaceAllString(name, "_")
+	name = regexp.MustCompile(`_+`).ReplaceAllString(name, "_")
+	return strings.Trim(name, "_")
 }
