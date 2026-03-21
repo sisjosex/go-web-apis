@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 
+	"josex/web/config"
 	coreServices "josex/web/modules/core/services"
 	"josex/web/modules/core/utils"
 	"josex/web/modules/tenancy/interfaces"
@@ -54,6 +55,7 @@ func CmdTenant(args []string) {
 
 func runTenantOps(list bool, migrate string) error {
 	utils.LoadEnv()
+	config.GetConfig()
 
 	if utils.GetEnv("TENANCY_ENABLED", "false") != "true" {
 		return fmt.Errorf("tenancy is not enabled — set TENANCY_ENABLED=true in .env.platform")

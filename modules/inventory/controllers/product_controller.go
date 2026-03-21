@@ -69,7 +69,7 @@ func (ctrl *ProductController) CreateProductWithVariants(c *gin.Context) {
 // @Tags inventory
 // @Produce json
 // @Param id path string true "Product ID"
-// @Success 200 {object} models.Product
+// @Success 200 {object} models.ProductDetail
 // @Failure 404 {object} map[string]interface{}
 // @Router /api/v1/inventory/products/:id [get]
 func (ctrl *ProductController) GetProduct(c *gin.Context) {
@@ -102,7 +102,7 @@ func (ctrl *ProductController) GetProduct(c *gin.Context) {
 // @Tags inventory
 // @Produce json
 // @Param sku path string true "Product SKU"
-// @Success 200 {object} models.Product
+// @Success 200 {object} models.ProductDetail
 // @Failure 404 {object} map[string]interface{}
 // @Router /api/v1/inventory/products/sku/:sku [get]
 func (ctrl *ProductController) GetProductBySkU(c *gin.Context) {

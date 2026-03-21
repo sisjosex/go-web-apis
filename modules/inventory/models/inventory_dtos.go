@@ -69,6 +69,34 @@ type Product struct {
 	CreatedAt   time.Time `db:"created_at" json:"created_at"`
 }
 
+type VariantOption struct {
+	ID            string  `json:"id"`
+	Name          string  `json:"name"`
+	PriceModifier float64 `json:"price_modifier"`
+	IsAvailable   bool    `json:"is_available"`
+	SortOrder     int     `json:"sort_order"`
+}
+
+type VariantGroup struct {
+	GroupType     string          `json:"group_type"`
+	IsRequired    bool            `json:"is_required"`
+	MaxSelections int             `json:"max_selections"`
+	SortOrder     int             `json:"sort_order"`
+	Options       []VariantOption `json:"options"`
+}
+
+type ProductDetail struct {
+	ID          string         `json:"id"`
+	SKU         string         `json:"sku"`
+	Name        string         `json:"name"`
+	Description *string        `json:"description"`
+	BasePrice   float64        `json:"base_price"`
+	HasVariants bool           `json:"has_variants"`
+	Status      string         `json:"status"`
+	CreatedAt   time.Time      `json:"created_at"`
+	Variants    []VariantGroup `json:"variants"`
+}
+
 type ProductStock struct {
 	CurrentQuantity   float64   `db:"current_quantity" json:"current_quantity"`
 	ReservedQuantity  float64   `db:"reserved_quantity" json:"reserved_quantity"`

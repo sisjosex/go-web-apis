@@ -53,11 +53,11 @@ func (s *ProductService) CreateProductWithVariants(
 	)
 }
 
-func (s *ProductService) GetProduct(ctx context.Context, tenantID uuid.UUID, productID string) (*models.Product, error) {
-	return s.repository.GetProduct(ctx, tenantID, productID)
+func (s *ProductService) GetProduct(ctx context.Context, tenantID uuid.UUID, productID string) (*models.ProductDetail, error) {
+	return s.repository.GetProductWithVariants(ctx, tenantID, productID)
 }
 
-func (s *ProductService) GetProductBySkU(ctx context.Context, tenantID uuid.UUID, sku string) (*models.Product, error) {
+func (s *ProductService) GetProductBySkU(ctx context.Context, tenantID uuid.UUID, sku string) (*models.ProductDetail, error) {
 	return s.repository.GetProductBySkU(ctx, tenantID, sku)
 }
 

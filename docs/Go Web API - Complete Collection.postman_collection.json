@@ -647,6 +647,114 @@
               "response": []
             },
             {
+              "name": "Create Product - T-Shirt (size + color)",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "exec": [
+                      "const jsonData = pm.response.json();",
+                      "if ((pm.response.code === 200 || pm.response.code === 201) && jsonData.product_id) {",
+                      "    pm.environment.set('product_id', jsonData.product_id);",
+                      "    console.log('\\u2705 product_id saved:', jsonData.product_id);",
+                      "}"
+                    ],
+                    "type": "text/javascript"
+                  }
+                }
+              ],
+              "request": {
+                "method": "POST",
+                "header": [
+                  { "key": "Content-Type", "value": "application/json" },
+                  { "key": "X-Tenant-Slug", "value": "{{tenant_slug}}" }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n    \"sku\": \"TSHIRT-001\",\n    \"name\": \"Classic Cotton T-Shirt\",\n    \"description\": \"100% cotton unisex t-shirt\",\n    \"base_price\": 29.99,\n    \"variants\": {\n        \"groups\": [\n            {\n                \"group_type\": \"size\",\n                \"is_required\": true,\n                \"max_selections\": 1,\n                \"options\": [\n                    { \"name\": \"XS\", \"modifier\": 0.00 },\n                    { \"name\": \"S\",  \"modifier\": 0.00 },\n                    { \"name\": \"M\",  \"modifier\": 0.00 },\n                    { \"name\": \"L\",  \"modifier\": 0.00 },\n                    { \"name\": \"XL\", \"modifier\": 2.00 },\n                    { \"name\": \"XXL\",\"modifier\": 4.00 }\n                ]\n            },\n            {\n                \"group_type\": \"color\",\n                \"is_required\": true,\n                \"max_selections\": 1,\n                \"options\": [\n                    { \"name\": \"White\", \"modifier\": 0.00 },\n                    { \"name\": \"Black\", \"modifier\": 0.00 },\n                    { \"name\": \"Navy\",  \"modifier\": 0.00 },\n                    { \"name\": \"Red\",   \"modifier\": 1.00 }\n                ]\n            }\n        ]\n    }\n}",
+                  "options": { "raw": { "language": "json" } }
+                },
+                "url": {
+                  "raw": "{{base_url}}/inventory/products",
+                  "host": ["{{base_url}}"],
+                  "path": ["inventory", "products"]
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "Create Product - Shoes (size + color + width)",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "exec": [
+                      "const jsonData = pm.response.json();",
+                      "if ((pm.response.code === 200 || pm.response.code === 201) && jsonData.product_id) {",
+                      "    pm.environment.set('product_id', jsonData.product_id);",
+                      "    console.log('\\u2705 product_id saved:', jsonData.product_id);",
+                      "}"
+                    ],
+                    "type": "text/javascript"
+                  }
+                }
+              ],
+              "request": {
+                "method": "POST",
+                "header": [
+                  { "key": "Content-Type", "value": "application/json" },
+                  { "key": "X-Tenant-Slug", "value": "{{tenant_slug}}" }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n    \"sku\": \"SHOE-RUN-001\",\n    \"name\": \"Running Shoes Pro\",\n    \"description\": \"Lightweight professional running shoes\",\n    \"base_price\": 99.99,\n    \"variants\": {\n        \"groups\": [\n            {\n                \"group_type\": \"size\",\n                \"is_required\": true,\n                \"max_selections\": 1,\n                \"options\": [\n                    { \"name\": \"38\", \"modifier\": 0.00 },\n                    { \"name\": \"39\", \"modifier\": 0.00 },\n                    { \"name\": \"40\", \"modifier\": 0.00 },\n                    { \"name\": \"41\", \"modifier\": 0.00 },\n                    { \"name\": \"42\", \"modifier\": 0.00 },\n                    { \"name\": \"43\", \"modifier\": 0.00 },\n                    { \"name\": \"44\", \"modifier\": 0.00 },\n                    { \"name\": \"45\", \"modifier\": 0.00 }\n                ]\n            },\n            {\n                \"group_type\": \"color\",\n                \"is_required\": true,\n                \"max_selections\": 1,\n                \"options\": [\n                    { \"name\": \"Black\", \"modifier\": 0.00 },\n                    { \"name\": \"White\", \"modifier\": 0.00 },\n                    { \"name\": \"Blue\",  \"modifier\": 0.00 },\n                    { \"name\": \"Red\",   \"modifier\": 0.00 }\n                ]\n            },\n            {\n                \"group_type\": \"width\",\n                \"is_required\": false,\n                \"max_selections\": 1,\n                \"options\": [\n                    { \"name\": \"Normal\",     \"modifier\": 0.00 },\n                    { \"name\": \"Wide\",       \"modifier\": 5.00 },\n                    { \"name\": \"Extra Wide\", \"modifier\": 10.00 }\n                ]\n            }\n        ]\n    }\n}",
+                  "options": { "raw": { "language": "json" } }
+                },
+                "url": {
+                  "raw": "{{base_url}}/inventory/products",
+                  "host": ["{{base_url}}"],
+                  "path": ["inventory", "products"]
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "Create Product - Ice Cream (flavor + toppings)",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "exec": [
+                      "const jsonData = pm.response.json();",
+                      "if ((pm.response.code === 200 || pm.response.code === 201) && jsonData.product_id) {",
+                      "    pm.environment.set('product_id', jsonData.product_id);",
+                      "    console.log('\\u2705 product_id saved:', jsonData.product_id);",
+                      "}"
+                    ],
+                    "type": "text/javascript"
+                  }
+                }
+              ],
+              "request": {
+                "method": "POST",
+                "header": [
+                  { "key": "Content-Type", "value": "application/json" },
+                  { "key": "X-Tenant-Slug", "value": "{{tenant_slug}}" }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n    \"sku\": \"ICECREAM-001\",\n    \"name\": \"Classic Ice Cream\",\n    \"description\": \"Single scoop ice cream with your choice of flavor and toppings\",\n    \"base_price\": 3.50,\n    \"variants\": {\n        \"groups\": [\n            {\n                \"group_type\": \"flavor\",\n                \"is_required\": true,\n                \"max_selections\": 1,\n                \"options\": [\n                    { \"name\": \"Vanilla\",    \"modifier\": 0.00 },\n                    { \"name\": \"Chocolate\",  \"modifier\": 0.00 },\n                    { \"name\": \"Strawberry\", \"modifier\": 0.00 },\n                    { \"name\": \"Mint Chip\",  \"modifier\": 0.50 },\n                    { \"name\": \"Dulce de Leche\", \"modifier\": 0.50 }\n                ]\n            },\n            {\n                \"group_type\": \"topping\",\n                \"is_required\": false,\n                \"max_selections\": 3,\n                \"options\": [\n                    { \"name\": \"Sprinkles\",       \"modifier\": 0.50 },\n                    { \"name\": \"Chocolate Chips\", \"modifier\": 0.75 },\n                    { \"name\": \"Caramel Sauce\",   \"modifier\": 1.00 },\n                    { \"name\": \"Nuts\",            \"modifier\": 1.00 },\n                    { \"name\": \"Whipped Cream\",   \"modifier\": 0.75 }\n                ]\n            }\n        ]\n    }\n}",
+                  "options": { "raw": { "language": "json" } }
+                },
+                "url": {
+                  "raw": "{{base_url}}/inventory/products",
+                  "host": ["{{base_url}}"],
+                  "path": ["inventory", "products"]
+                }
+              },
+              "response": []
+            },
+            {
               "name": "List Products",
               "request": {
                 "method": "GET",
