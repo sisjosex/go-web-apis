@@ -1,91 +1,122 @@
 {
   "info": {
     "_postman_id": "6dab79b0-167d-4aed-8d7e-66d0d7aeceb6",
-    "name": "Go Web API - Complete Collection",
-    "description": "# Go Web API - Modular REST API\n\n## Environment Setup\n\n**Variables Required:**\n- `base_url`: http://localhost:8080/api/v1\n- `token`: (auto-set on login)\n- `refresh_token`: (auto-set on login)\n- `user_id`: (auto-set on login)\n- `tenant_slug`: acme6\n\n## Modules\n\n- **Auth**: Authentication & session management  \n- **Users**: User CRUD (admin only)  \n- **Tenants**: Multi-tenant management  \n- **Tracking**: GPS tracking for transport companies\n\n## Valid Enum Values\n\n**company_type**: `school` | `corporate` | `transport_provider`  \n**vehicle_status**: `active` | `maintenance` | `inactive`  \n**route_type**: `pickup` | `dropoff` | `round_trip`  \n**event_type**: `pickup` | `dropoff` | `absence` | `delay`  \n**alert_severity**: `low` | `medium` | `high` | `critical`  \n**access_level**: `read_only` | `read_write`  \n\n## Quick Start\n\n1. Set `base_url` in environment\n2. Run `Auth > Login` to get tokens\n3. Tokens auto-save to environment\n4. All protected endpoints auto-refresh on 401",
+    "name": "Go Web API - Frontend Integration",
+    "description": "# Go Web API - Frontend Integration Collection\n\n## Quick Setup\n\n1. **Login** — run `Auth > Login` to get tokens (auto-saved to environment)\n2. **List My Tenants** — run `Tenants > List My Tenants` to auto-save your `tenant_slug`\n3. **Start making business requests** — Inventory, Sales, Purchasing, and Tracking are ready\n\n## Auth\n\nCollection-level bearer auth uses `{{token}}`. Requests that do not need auth (Login, Register, OTP) explicitly set `noauth`.\n\n## X-Tenant-Slug\n\nAll requests in the Inventory, Sales, Purchasing, and Tracking folders include the `X-Tenant-Slug: {{tenant_slug}}` header automatically. Set `tenant_slug` by running `List My Tenants` or set it manually.\n\n## Folder Organization\n\n- **Auth** — Login, Register, Profile, Tokens, OTP\n- **Users** — Admin user management\n- **Tenants** — Multi-tenant management (no X-Tenant-Slug needed)\n- **Inventory** — Products, Categories, Batches, Stock movements\n- **Sales** — Customers, Orders, Returns, Payments, Reports\n- **Purchasing** — Suppliers, Purchase Orders\n- **Tracking** — Transport Companies, Vehicles",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
     "_exporter_id": "1058220"
   },
+  "auth": {
+    "type": "bearer",
+    "bearer": [
+      {
+        "key": "token",
+        "value": "{{token}}",
+        "type": "string"
+      }
+    ]
+  },
+  "variable": [
+    {
+      "key": "base_url",
+      "value": "http://localhost:8080/api/v1",
+      "type": "string"
+    },
+    {
+      "key": "token",
+      "value": "",
+      "type": "string",
+      "description": "JWT Access Token - auto-set on login"
+    },
+    {
+      "key": "refresh_token",
+      "value": "",
+      "type": "string",
+      "description": "JWT Refresh Token - auto-set on login"
+    },
+    {
+      "key": "user_id",
+      "value": "",
+      "type": "string",
+      "description": "Auto-set on login via JWT decode"
+    },
+    {
+      "key": "tenant_slug",
+      "value": "test-company",
+      "type": "string",
+      "description": "Set manually or auto-set from list-my-tenants"
+    },
+    {
+      "key": "product_id",
+      "value": "",
+      "type": "string",
+      "description": "Auto-set on product create"
+    },
+    {
+      "key": "batch_id",
+      "value": "",
+      "type": "string",
+      "description": "Auto-set on batch create"
+    },
+    {
+      "key": "category_id",
+      "value": "",
+      "type": "string",
+      "description": "Auto-set on category create"
+    },
+    {
+      "key": "customer_id",
+      "value": "",
+      "type": "string",
+      "description": "Auto-set on customer create"
+    },
+    {
+      "key": "sales_order_id",
+      "value": "",
+      "type": "string",
+      "description": "Auto-set on order create"
+    },
+    {
+      "key": "return_id",
+      "value": "",
+      "type": "string",
+      "description": "Auto-set on return create"
+    },
+    {
+      "key": "supplier_id",
+      "value": "",
+      "type": "string",
+      "description": "Auto-set on supplier create"
+    },
+    {
+      "key": "purchase_order_id",
+      "value": "",
+      "type": "string",
+      "description": "Auto-set on purchase order create"
+    },
+    {
+      "key": "company_id",
+      "value": "",
+      "type": "string",
+      "description": "Auto-set on company create"
+    },
+    {
+      "key": "vehicle_id",
+      "value": "",
+      "type": "string",
+      "description": "Auto-set on vehicle create"
+    },
+    {
+      "key": "member_user_id",
+      "value": "",
+      "type": "string",
+      "description": "Set manually for tenant user management"
+    }
+  ],
   "item": [
     {
       "name": "Auth",
       "item": [
-        {
-          "name": "Otp",
-          "item": [
-            {
-              "name": "Request Email",
-              "request": {
-                "method": "POST",
-                "header": [
-                  {
-                    "key": "Content-Type",
-                    "value": "application/json"
-                  },
-                  {
-                    "key": "Accept-Language",
-                    "value": "en",
-                    "description": "Language: en/es"
-                  }
-                ],
-                "body": {
-                  "mode": "raw",
-                  "raw": "{\n  \"destination\": \"+1234567890\",\n  \"channel\": \"email\",\n  \"device_id\": \"9a46fccf-fdb6-4fee-bdfa-fbae006f97d3\"\n}"
-                },
-                "url": {
-                  "raw": "{{base_url}}/otp/email/request?lang=es",
-                  "host": [
-                    "{{base_url}}"
-                  ],
-                  "path": [
-                    "otp",
-                    "email",
-                    "request"
-                  ],
-                  "query": [
-                    {
-                      "key": "lang",
-                      "value": "es"
-                    }
-                  ]
-                }
-              },
-              "response": []
-            },
-            {
-              "name": "Verify",
-              "request": {
-                "method": "POST",
-                "header": [
-                  {
-                    "key": "Content-Type",
-                    "value": "application/json"
-                  },
-                  {
-                    "key": "Accept-Language",
-                    "value": "en",
-                    "description": "Language: en/es"
-                  }
-                ],
-                "body": {
-                  "mode": "raw",
-                  "raw": "{\n    \"device_id\": \"9a46fccf-fdb6-4fee-bdfa-fbae006f97d3\",\n    \"destination\": \"+1234567890\",\n    \"channel\": \"email\",\n    \"otp_code\": \"508169\"\n}"
-                },
-                "url": {
-                  "raw": "{{base_url}}/otp/verify",
-                  "host": [
-                    "{{base_url}}"
-                  ],
-                  "path": [
-                    "otp",
-                    "verify"
-                  ]
-                }
-              },
-              "response": []
-            }
-          ]
-        },
         {
           "name": "Login",
           "event": [
@@ -93,75 +124,20 @@
               "listen": "test",
               "script": {
                 "exec": [
-                  "pm.test(\"Status is 200\", () => pm.response.to.have.status(200));",
-                  "pm.test(\"Response has access_token\", () => pm.expect(pm.response.json()).to.have.property('access_token'));",
-                  "pm.test(\"Response has refresh_token\", () => pm.expect(pm.response.json()).to.have.property('refresh_token'));",
-                  "",
+                  "pm.test('Status is 200', () => pm.response.to.have.status(200));",
                   "const jsonData = pm.response.json();",
                   "if (pm.response.code === 200) {",
-                  "    pm.environment.set(\"token\", jsonData.access_token);",
-                  "    pm.environment.set(\"refresh_token\", jsonData.refresh_token);",
-                  "    if (jsonData.user && jsonData.user.id) {",
-                  "        pm.environment.set(\"user_id\", jsonData.user.id);",
-                  "    }",
-                  "    console.log(\"✅ Tokens saved to environment\");",
-                  "}",
-                  "",
-                  "pm.test(\"Access token is JWT\", () => {",
-                  "    const token = jsonData.access_token;",
-                  "    pm.expect(token.split('.')).to.have.lengthOf(3);",
-                  "});"
-                ],
-                "type": "text/javascript",
-                "packages": {},
-                "requests": {}
-              }
-            }
-          ],
-          "request": {
-            "method": "POST",
-            "header": [
-              {
-                "key": "Content-Type",
-                "value": "application/json"
-              },
-              {
-                "key": "Accept-Language",
-                "value": "en",
-                "description": "Language: en/es"
-              }
-            ],
-            "body": {
-              "mode": "raw",
-              "raw": "{\n    \"email\": \"newuser@mail.com\",\n    \"password\": \"$Password2025\",\n    \"device_id\": \"9a46fccf-fdb6-4fee-bdfa-fbae006f97d3\"\n}"
-            },
-            "url": {
-              "raw": "{{base_url}}/auth/login",
-              "host": [
-                "{{base_url}}"
-              ],
-              "path": [
-                "auth",
-                "login"
-              ]
-            },
-            "description": "Authenticate user with email/password. Returns JWT tokens that are automatically saved to environment."
-          },
-          "response": []
-        },
-        {
-          "name": "Login Facebook",
-          "event": [
-            {
-              "listen": "test",
-              "script": {
-                "exec": [
-                  "pm.test(\"Status is 200\", () => pm.response.to.have.status(200));",
-                  "const jsonData = pm.response.json();",
-                  "if (pm.response.code === 200) {",
-                  "    pm.environment.set(\"token\", jsonData.access_token);",
-                  "    pm.environment.set(\"refresh_token\", jsonData.refresh_token);",
-                  "    console.log(\"✅ Facebook login successful\");",
+                  "    pm.environment.set('token', jsonData.access_token);",
+                  "    pm.environment.set('refresh_token', jsonData.refresh_token);",
+                  "    // Decode JWT payload to extract user_id",
+                  "    try {",
+                  "        const payload = JSON.parse(atob(jsonData.access_token.split('.')[1]));",
+                  "        if (payload.user_id) {",
+                  "            pm.environment.set('user_id', payload.user_id);",
+                  "            console.log('\\u2705 user_id saved:', payload.user_id);",
+                  "        }",
+                  "    } catch(e) {}",
+                  "    console.log('\\u2705 Tokens saved');",
                   "}"
                 ],
                 "type": "text/javascript"
@@ -169,6 +145,9 @@
             }
           ],
           "request": {
+            "auth": {
+              "type": "noauth"
+            },
             "method": "POST",
             "header": [
               {
@@ -178,38 +157,22 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n    \"auth_provider_id\": \"facebook_user_id_123\",\n    \"first_name\": \"John\",\n    \"last_name\": \"Doe\",\n    \"email\": \"john@example.com\",\n    \"device_id\": \"9a46fccf-fdb6-4fee-bdfa-fbae006f97d3\"\n}"
+              "raw": "{\n    \"email\": \"admin@example.com\",\n    \"password\": \"$Password2025\",\n    \"device_id\": \"device-uuid-here\"\n}"
             },
             "url": {
-              "raw": "{{base_url}}/auth/login/facebook",
-              "host": [
-                "{{base_url}}"
-              ],
-              "path": [
-                "auth",
-                "login",
-                "facebook"
-              ]
+              "raw": "{{base_url}}/auth/login",
+              "host": ["{{base_url}}"],
+              "path": ["auth", "login"]
             }
           },
           "response": []
         },
         {
           "name": "Register",
-          "event": [
-            {
-              "listen": "test",
-              "script": {
-                "exec": [
-                  "pm.test(\"Status is 200 or 201\", () => {",
-                  "    pm.expect(pm.response.code).to.be.oneOf([200, 201]);",
-                  "});"
-                ],
-                "type": "text/javascript"
-              }
-            }
-          ],
           "request": {
+            "auth": {
+              "type": "noauth"
+            },
             "method": "POST",
             "header": [
               {
@@ -219,17 +182,40 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n    \"first_name\": \"John\",\n    \"last_name\": \"Doe\",\n    \"email\": \"newuser@mail.com\",\n    \"password\": \"$Password2025\",\n    \"phone\": \"+1234567890\",\n    \"birthday\": \"1990-01-15\"\n}"
+              "raw": "{\n    \"first_name\": \"John\",\n    \"last_name\": \"Doe\",\n    \"email\": \"john.doe@example.com\",\n    \"password\": \"$Password2025\",\n    \"phone\": \"+1234567890\",\n    \"birthday\": \"1990-01-15\"\n}"
             },
             "url": {
               "raw": "{{base_url}}/auth/register",
-              "host": [
-                "{{base_url}}"
-              ],
-              "path": [
-                "auth",
-                "register"
-              ]
+              "host": ["{{base_url}}"],
+              "path": ["auth", "register"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get Profile",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "const jsonData = pm.response.json();",
+                  "if (pm.response.code === 200 && jsonData.id) {",
+                  "    pm.environment.set('user_id', jsonData.id);",
+                  "    console.log('\\u2705 user_id saved:', jsonData.id);",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/auth/profile",
+              "host": ["{{base_url}}"],
+              "path": ["auth", "profile"]
             }
           },
           "response": []
@@ -241,11 +227,10 @@
               "listen": "test",
               "script": {
                 "exec": [
-                  "pm.test(\"Status is 200\", () => pm.response.to.have.status(200));",
                   "const jsonData = pm.response.json();",
                   "if (pm.response.code === 200 && jsonData.access_token) {",
-                  "    pm.environment.set(\"token\", jsonData.access_token);",
-                  "    console.log(\"✅ Token refreshed\");",
+                  "    pm.environment.set('token', jsonData.access_token);",
+                  "    console.log('\\u2705 Token refreshed');",
                   "}"
                 ],
                 "type": "text/javascript"
@@ -265,107 +250,22 @@
               "raw": "{\n    \"refresh_token\": \"{{refresh_token}}\"\n}"
             },
             "url": {
-              "raw": "{{base_url}}/auth/refresh_token",
-              "host": [
-                "{{base_url}}"
-              ],
-              "path": [
-                "auth",
-                "refresh_token"
-              ]
+              "raw": "{{base_url}}/auth/token/refresh",
+              "host": ["{{base_url}}"],
+              "path": ["auth", "token", "refresh"]
             }
           },
           "response": []
         },
         {
-          "name": "Get Profile",
-          "event": [
-            {
-              "listen": "test",
-              "script": {
-                "exec": [
-                  "pm.test(\"Status is 200\", () => pm.response.to.have.status(200));",
-                  "pm.test(\"Response has user data\", () => {",
-                  "    const user = pm.response.json();",
-                  "    pm.expect(user).to.have.property('id');",
-                  "    pm.expect(user).to.have.property('email');",
-                  "});"
-                ],
-                "type": "text/javascript"
-              }
-            }
-          ],
+          "name": "Logout",
           "request": {
-            "auth": {
-              "type": "bearer",
-              "bearer": [
-                {
-                  "key": "token",
-                  "value": "{{token}}",
-                  "type": "string"
-                }
-              ]
-            },
-            "method": "GET",
+            "method": "POST",
             "header": [],
             "url": {
-              "raw": "{{base_url}}/auth/profile",
-              "host": [
-                "{{base_url}}"
-              ],
-              "path": [
-                "auth",
-                "profile"
-              ]
-            },
-            "description": "Get authenticated user profile (protected endpoint)"
-          },
-          "response": []
-        },
-        {
-          "name": "Update Profile",
-          "event": [
-            {
-              "listen": "test",
-              "script": {
-                "exec": [
-                  "pm.test(\"Status is 200\", () => pm.response.to.have.status(200));"
-                ],
-                "type": "text/javascript"
-              }
-            }
-          ],
-          "request": {
-            "auth": {
-              "type": "bearer",
-              "bearer": [
-                {
-                  "key": "token",
-                  "value": "{{token}}",
-                  "type": "string"
-                }
-              ]
-            },
-            "method": "PATCH",
-            "header": [
-              {
-                "key": "Content-Type",
-                "value": "application/json"
-              }
-            ],
-            "body": {
-              "mode": "raw",
-              "raw": "{\n    \"first_name\": \"John\",\n    \"last_name\": \"Updated\",\n    \"phone\": \"+1234567890\"\n}"
-            },
-            "url": {
-              "raw": "{{base_url}}/auth/profile",
-              "host": [
-                "{{base_url}}"
-              ],
-              "path": [
-                "auth",
-                "profile"
-              ]
+              "raw": "{{base_url}}/auth/logout",
+              "host": ["{{base_url}}"],
+              "path": ["auth", "logout"]
             }
           },
           "response": []
@@ -373,16 +273,6 @@
         {
           "name": "Change Password",
           "request": {
-            "auth": {
-              "type": "bearer",
-              "bearer": [
-                {
-                  "key": "token",
-                  "value": "{{token}}",
-                  "type": "string"
-                }
-              ]
-            },
             "method": "PUT",
             "header": [
               {
@@ -396,180 +286,66 @@
             },
             "url": {
               "raw": "{{base_url}}/auth/password",
-              "host": [
-                "{{base_url}}"
-              ],
-              "path": [
-                "auth",
-                "password"
-              ]
+              "host": ["{{base_url}}"],
+              "path": ["auth", "password"]
             }
           },
           "response": []
         },
         {
-          "name": "Request Email Verification",
-          "request": {
-            "auth": {
-              "type": "bearer",
-              "bearer": [
-                {
-                  "key": "token",
-                  "value": "{{token}}",
-                  "type": "string"
-                }
-              ]
-            },
-            "method": "POST",
-            "header": [
-              {
-                "key": "Content-Type",
-                "value": "application/json"
-              }
-            ],
-            "body": {
-              "mode": "raw",
-              "raw": "{\n    \"email\": \"user@mail.com\"\n}"
-            },
-            "url": {
-              "raw": "{{base_url}}/auth/email/verification",
-              "host": [
-                "{{base_url}}"
-              ],
-              "path": [
-                "auth",
-                "email",
-                "verification"
-              ]
-            }
-          },
-          "response": []
-        },
-        {
-          "name": "Confirm Email",
-          "request": {
-            "method": "PUT",
-            "header": [
-              {
-                "key": "Content-Type",
-                "value": "application/json"
-              }
-            ],
-            "body": {
-              "mode": "raw",
-              "raw": "{\n    \"token\": \"verification-token-from-email\"\n}"
-            },
-            "url": {
-              "raw": "{{base_url}}/auth/email/verification",
-              "host": [
-                "{{base_url}}"
-              ],
-              "path": [
-                "auth",
-                "email",
-                "verification"
-              ]
-            }
-          },
-          "response": []
-        },
-        {
-          "name": "Request Password Reset",
-          "request": {
-            "method": "POST",
-            "header": [
-              {
-                "key": "Content-Type",
-                "value": "application/json"
-              }
-            ],
-            "body": {
-              "mode": "raw",
-              "raw": "{\n    \"email\": \"user@mail.com\"\n}"
-            },
-            "url": {
-              "raw": "{{base_url}}/auth/password/reset",
-              "host": [
-                "{{base_url}}"
-              ],
-              "path": [
-                "auth",
-                "password",
-                "reset"
-              ]
-            }
-          },
-          "response": []
-        },
-        {
-          "name": "Reset Password",
-          "request": {
-            "method": "PUT",
-            "header": [
-              {
-                "key": "Content-Type",
-                "value": "application/json"
-              }
-            ],
-            "body": {
-              "mode": "raw",
-              "raw": "{\n    \"token\": \"reset-token-from-email\",\n    \"password\": \"$NewPassword2025\"\n}"
-            },
-            "url": {
-              "raw": "{{base_url}}/auth/password/reset",
-              "host": [
-                "{{base_url}}"
-              ],
-              "path": [
-                "auth",
-                "password",
-                "reset"
-              ]
-            }
-          },
-          "response": []
-        },
-        {
-          "name": "Logout",
-          "event": [
+          "name": "OTP",
+          "item": [
             {
-              "listen": "test",
-              "script": {
-                "exec": [
-                  "pm.test(\"Status is 200\", () => pm.response.to.have.status(200));",
-                  "pm.environment.unset(\"token\");",
-                  "pm.environment.unset(\"refresh_token\");",
-                  "console.log(\"✅ Logged out - tokens cleared\");"
+              "name": "Request Email OTP",
+              "request": {
+                "auth": {
+                  "type": "noauth"
+                },
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
                 ],
-                "type": "text/javascript"
-              }
-            }
-          ],
-          "request": {
-            "auth": {
-              "type": "bearer",
-              "bearer": [
-                {
-                  "key": "token",
-                  "value": "{{token}}",
-                  "type": "string"
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n    \"destination\": \"user@example.com\",\n    \"channel\": \"email\"\n}"
+                },
+                "url": {
+                  "raw": "{{base_url}}/otp/email/request",
+                  "host": ["{{base_url}}"],
+                  "path": ["otp", "email", "request"]
                 }
-              ]
+              },
+              "response": []
             },
-            "method": "POST",
-            "header": [],
-            "url": {
-              "raw": "{{base_url}}/auth/logout",
-              "host": [
-                "{{base_url}}"
-              ],
-              "path": [
-                "auth",
-                "logout"
-              ]
+            {
+              "name": "Verify OTP",
+              "request": {
+                "auth": {
+                  "type": "noauth"
+                },
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n    \"destination\": \"user@example.com\",\n    \"channel\": \"email\",\n    \"otp_code\": \"123456\",\n    \"device_id\": \"device-uuid-here\"\n}"
+                },
+                "url": {
+                  "raw": "{{base_url}}/otp/verify",
+                  "host": ["{{base_url}}"],
+                  "path": ["otp", "verify"]
+                }
+              },
+              "response": []
             }
-          },
-          "response": []
+          ]
         }
       ]
     },
@@ -579,28 +355,13 @@
         {
           "name": "List Users",
           "request": {
-            "auth": {
-              "type": "bearer",
-              "bearer": [
-                {
-                  "key": "token",
-                  "value": "{{token}}",
-                  "type": "string"
-                }
-              ]
-            },
             "method": "GET",
             "header": [],
             "url": {
               "raw": "{{base_url}}/users",
-              "host": [
-                "{{base_url}}"
-              ],
-              "path": [
-                "users"
-              ]
-            },
-            "description": "List all users (admin only)"
+              "host": ["{{base_url}}"],
+              "path": ["users"]
+            }
           },
           "response": []
         },
@@ -611,11 +372,10 @@
               "listen": "test",
               "script": {
                 "exec": [
-                  "pm.test(\"Status is 201\", () => pm.response.to.have.status(201));",
                   "const jsonData = pm.response.json();",
-                  "if (jsonData.id) {",
-                  "    pm.environment.set(\"user_id\", jsonData.id);",
-                  "    console.log(\"✅ New user created:\", jsonData.id);",
+                  "if (pm.response.code === 201 && jsonData.id) {",
+                  "    pm.environment.set('user_id', jsonData.id);",
+                  "    console.log('\\u2705 user_id saved:', jsonData.id);",
                   "}"
                 ],
                 "type": "text/javascript"
@@ -623,16 +383,6 @@
             }
           ],
           "request": {
-            "auth": {
-              "type": "bearer",
-              "bearer": [
-                {
-                  "key": "token",
-                  "value": "{{token}}",
-                  "type": "string"
-                }
-              ]
-            },
             "method": "POST",
             "header": [
               {
@@ -642,63 +392,32 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n    \"first_name\": \"John\",\n    \"last_name\": \"Doe\",\n    \"email\": \"john.doe@mail.com\",\n    \"password\": \"$SecurePass123!\",\n    \"phone\": \"+1234567890\"\n}"
+              "raw": "{\n    \"first_name\": \"Jane\",\n    \"last_name\": \"Doe\",\n    \"email\": \"jane.doe@example.com\",\n    \"password\": \"$Password2025\",\n    \"phone\": \"+1234567890\"\n}"
             },
             "url": {
               "raw": "{{base_url}}/users",
-              "host": [
-                "{{base_url}}"
-              ],
-              "path": [
-                "users"
-              ]
-            },
-            "description": "Create new user (admin/super_admin only)"
+              "host": ["{{base_url}}"],
+              "path": ["users"]
+            }
           },
           "response": []
         },
         {
           "name": "Get User",
           "request": {
-            "auth": {
-              "type": "bearer",
-              "bearer": [
-                {
-                  "key": "token",
-                  "value": "{{token}}",
-                  "type": "string"
-                }
-              ]
-            },
             "method": "GET",
             "header": [],
             "url": {
               "raw": "{{base_url}}/users/{{user_id}}",
-              "host": [
-                "{{base_url}}"
-              ],
-              "path": [
-                "users",
-                "{{user_id}}"
-              ]
-            },
-            "description": "Get user by ID (admin only)"
+              "host": ["{{base_url}}"],
+              "path": ["users", "{{user_id}}"]
+            }
           },
           "response": []
         },
         {
           "name": "Update User",
           "request": {
-            "auth": {
-              "type": "bearer",
-              "bearer": [
-                {
-                  "key": "token",
-                  "value": "{{token}}",
-                  "type": "string"
-                }
-              ]
-            },
             "method": "PUT",
             "header": [
               {
@@ -708,48 +427,26 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n    \"first_name\": \"Jane\",\n    \"last_name\": \"Smith\",\n    \"phone\": \"+9876543210\"\n}"
+              "raw": "{\n    \"first_name\": \"Jane\",\n    \"last_name\": \"Updated\",\n    \"phone\": \"+1987654321\"\n}"
             },
             "url": {
               "raw": "{{base_url}}/users/{{user_id}}",
-              "host": [
-                "{{base_url}}"
-              ],
-              "path": [
-                "users",
-                "{{user_id}}"
-              ]
-            },
-            "description": "Update user details (admin only)"
+              "host": ["{{base_url}}"],
+              "path": ["users", "{{user_id}}"]
+            }
           },
           "response": []
         },
         {
           "name": "Delete User",
           "request": {
-            "auth": {
-              "type": "bearer",
-              "bearer": [
-                {
-                  "key": "token",
-                  "value": "{{token}}",
-                  "type": "string"
-                }
-              ]
-            },
             "method": "DELETE",
             "header": [],
             "url": {
               "raw": "{{base_url}}/users/{{user_id}}",
-              "host": [
-                "{{base_url}}"
-              ],
-              "path": [
-                "users",
-                "{{user_id}}"
-              ]
-            },
-            "description": "Soft delete user (admin only)"
+              "host": ["{{base_url}}"],
+              "path": ["users", "{{user_id}}"]
+            }
           },
           "response": []
         }
@@ -759,75 +456,16 @@
       "name": "Tenants",
       "item": [
         {
-          "name": "Create Tenant (Super Admin)",
+          "name": "List My Tenants",
           "event": [
             {
               "listen": "test",
               "script": {
                 "exec": [
-                  "pm.test(\"Status is 201\", () => pm.response.to.have.status(201));",
-                  "const jsonData = pm.response.json();",
-                  "if (jsonData.id) {",
-                  "    pm.environment.set(\"tenant_id\", jsonData.id);",
-                  "    pm.environment.set(\"tenant_slug\", jsonData.slug);",
-                  "    console.log(\"✅ Tenant ID saved:\", jsonData.id);",
-                  "    console.log(\"✅ Tenant slug saved:\", jsonData.slug);",
-                  "}"
-                ],
-                "type": "text/javascript",
-                "packages": {},
-                "requests": {}
-              }
-            }
-          ],
-          "request": {
-            "auth": {
-              "type": "bearer",
-              "bearer": [
-                {
-                  "key": "token",
-                  "value": "{{token}}",
-                  "type": "string"
-                }
-              ]
-            },
-            "method": "POST",
-            "header": [
-              {
-                "key": "Content-Type",
-                "value": "application/json"
-              }
-            ],
-            "body": {
-              "mode": "raw",
-              "raw": "{\n    \"name\": \"Acme Corporation3\",\n    \"slug\": \"acme-corp4\",\n    \"database_url\": \"postgres://postgres:postgres@localhost:5432/web4?sslmode=disable\"\n}"
-            },
-            "url": {
-              "raw": "{{base_url}}/tenants",
-              "host": [
-                "{{base_url}}"
-              ],
-              "path": [
-                "tenants"
-              ]
-            },
-            "description": "Create a new tenant (super_admin only). Can optionally specify custom database_url."
-          },
-          "response": []
-        },
-        {
-          "name": "Create Tenant (Self-Service)",
-          "event": [
-            {
-              "listen": "test",
-              "script": {
-                "exec": [
-                  "pm.test(\"Status is 201\", () => pm.response.to.have.status(201));",
-                  "const jsonData = pm.response.json();",
-                  "if (jsonData.id) {",
-                  "    pm.environment.set(\"tenant_id\", jsonData.id);",
-                  "    pm.environment.set(\"tenant_slug\", jsonData.slug);",
-                  "    console.log(\"✅ Tenant created:\", jsonData.slug);",
+                  "const tenants = pm.response.json();",
+                  "if (tenants && tenants.length > 0) {",
+                  "    pm.environment.set('tenant_slug', tenants[0].slug);",
+                  "    console.log('\\u2705 Active tenant set:', tenants[0].slug);",
                   "}"
                 ],
                 "type": "text/javascript"
@@ -835,16 +473,19 @@
             }
           ],
           "request": {
-            "auth": {
-              "type": "bearer",
-              "bearer": [
-                {
-                  "key": "token",
-                  "value": "{{token}}",
-                  "type": "string"
-                }
-              ]
-            },
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/tenants/my-tenants",
+              "host": ["{{base_url}}"],
+              "path": ["tenants", "my-tenants"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Create Tenant - Self Service",
+          "request": {
             "method": "POST",
             "header": [
               {
@@ -854,64 +495,41 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n    \"name\": \"My Business\",\n    \"slug\": \"my-business-2024\",\n    \"database_url\": null\n}"
+              "raw": "{\n    \"slug\": \"my-company\",\n    \"name\": \"My Company LLC\"\n}"
             },
             "url": {
               "raw": "{{base_url}}/tenants/self-service",
-              "host": [
-                "{{base_url}}"
-              ],
-              "path": [
-                "tenants",
-                "self-service"
-              ]
-            },
-            "description": "Self-service tenant creation for authenticated users. Subject to plan limits."
+              "host": ["{{base_url}}"],
+              "path": ["tenants", "self-service"]
+            }
           },
           "response": []
         },
         {
-          "name": "Get My Tenants",
+          "name": "Create Tenant - Admin",
           "request": {
-            "auth": {
-              "type": "bearer",
-              "bearer": [
-                {
-                  "key": "token",
-                  "value": "{{token}}",
-                  "type": "string"
-                }
-              ]
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"slug\": \"new-tenant\",\n    \"name\": \"New Tenant Corp\",\n    \"database_url\": \"\"\n}"
             },
-            "method": "GET",
-            "header": [],
             "url": {
-              "raw": "{{base_url}}/tenants/my-tenants",
-              "host": [
-                "{{base_url}}"
-              ],
-              "path": [
-                "tenants",
-                "my-tenants"
-              ]
-            },
-            "description": "Get list of tenants accessible to the current user"
+              "raw": "{{base_url}}/tenants",
+              "host": ["{{base_url}}"],
+              "path": ["tenants"]
+            }
           },
           "response": []
         },
         {
           "name": "Update Tenant",
           "request": {
-            "auth": {
-              "type": "bearer",
-              "bearer": [
-                {
-                  "key": "token",
-                  "value": "{{token}}",
-                  "type": "string"
-                }
-              ]
-            },
             "method": "PATCH",
             "header": [
               {
@@ -921,35 +539,19 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n    \"name\": \"Updated Tenant Name\",\n    \"metadata\": {\n        \"industry\": \"tech\"\n    }\n}"
+              "raw": "{\n    \"name\": \"Updated Company Name\"\n}"
             },
             "url": {
               "raw": "{{base_url}}/tenants/{{tenant_slug}}",
-              "host": [
-                "{{base_url}}"
-              ],
-              "path": [
-                "tenants",
-                "{{tenant_slug}}"
-              ]
-            },
-            "description": "Update tenant information (owner/admin only)"
+              "host": ["{{base_url}}"],
+              "path": ["tenants", "{{tenant_slug}}"]
+            }
           },
           "response": []
         },
         {
           "name": "Add User to Tenant",
           "request": {
-            "auth": {
-              "type": "bearer",
-              "bearer": [
-                {
-                  "key": "token",
-                  "value": "{{token}}",
-                  "type": "string"
-                }
-              ]
-            },
             "method": "POST",
             "header": [
               {
@@ -959,92 +561,1425 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n    \"user_id\": \"df378da5-5113-4f55-baea-2b3ba00bc9a6\",\n    \"role\": \"member\"\n}"
+              "raw": "{\n    \"user_id\": \"{{member_user_id}}\",\n    \"role\": \"member\"\n}"
             },
             "url": {
               "raw": "{{base_url}}/tenants/{{tenant_slug}}/users",
-              "host": [
-                "{{base_url}}"
-              ],
-              "path": [
-                "tenants",
-                "{{tenant_slug}}",
-                "users"
-              ]
-            },
-            "description": "Add a user to the tenant with specified role (owner/admin only)"
+              "host": ["{{base_url}}"],
+              "path": ["tenants", "{{tenant_slug}}", "users"]
+            }
           },
           "response": []
         },
         {
           "name": "Remove User from Tenant",
           "request": {
-            "auth": {
-              "type": "bearer",
-              "bearer": [
-                {
-                  "key": "token",
-                  "value": "{{token}}",
-                  "type": "string"
-                }
-              ]
-            },
             "method": "DELETE",
             "header": [],
             "url": {
-              "raw": "{{base_url}}/tenants/{{tenant_slug}}/users/{{user_id}}",
-              "host": [
-                "{{base_url}}"
-              ],
-              "path": [
-                "tenants",
-                "{{tenant_slug}}",
-                "users",
-                "{{user_id}}"
-              ]
-            },
-            "description": "Remove a user from the tenant (owner/admin only)"
+              "raw": "{{base_url}}/tenants/{{tenant_slug}}/users/{{member_user_id}}",
+              "host": ["{{base_url}}"],
+              "path": ["tenants", "{{tenant_slug}}", "users", "{{member_user_id}}"]
+            }
           },
           "response": []
         },
         {
           "name": "Run Tenant Migrations",
           "request": {
-            "auth": {
-              "type": "bearer",
-              "bearer": [
-                {
-                  "key": "token",
-                  "value": "{{token}}",
-                  "type": "string"
-                }
-              ]
-            },
             "method": "POST",
-            "header": [
-              {
-                "key": "Content-Type",
-                "value": "application/json"
-              }
-            ],
-            "body": {
-              "mode": "raw",
-              "raw": "{}"
-            },
+            "header": [],
             "url": {
               "raw": "{{base_url}}/tenants/{{tenant_slug}}/migrate",
-              "host": [
-                "{{base_url}}"
-              ],
-              "path": [
-                "tenants",
-                "{{tenant_slug}}",
-                "migrate"
-              ]
-            },
-            "description": "Run database migrations on tenant database (super_admin only)"
+              "host": ["{{base_url}}"],
+              "path": ["tenants", "{{tenant_slug}}", "migrate"]
+            }
           },
           "response": []
+        }
+      ]
+    },
+    {
+      "name": "Inventory",
+      "item": [
+        {
+          "name": "Products",
+          "item": [
+            {
+              "name": "Create Product",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "exec": [
+                      "const jsonData = pm.response.json();",
+                      "if ((pm.response.code === 200 || pm.response.code === 201) && jsonData.product_id) {",
+                      "    pm.environment.set('product_id', jsonData.product_id);",
+                      "    console.log('\\u2705 product_id saved:', jsonData.product_id);",
+                      "}"
+                    ],
+                    "type": "text/javascript"
+                  }
+                }
+              ],
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  },
+                  {
+                    "key": "X-Tenant-Slug",
+                    "value": "{{tenant_slug}}"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n    \"sku\": \"PROD-001\",\n    \"name\": \"Sample Product\",\n    \"base_price\": 29.99,\n    \"description\": \"A sample product for testing\"\n}"
+                },
+                "url": {
+                  "raw": "{{base_url}}/inventory/products",
+                  "host": ["{{base_url}}"],
+                  "path": ["inventory", "products"]
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "List Products",
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "X-Tenant-Slug",
+                    "value": "{{tenant_slug}}"
+                  }
+                ],
+                "url": {
+                  "raw": "{{base_url}}/inventory/products?limit=20&offset=0",
+                  "host": ["{{base_url}}"],
+                  "path": ["inventory", "products"],
+                  "query": [
+                    {
+                      "key": "limit",
+                      "value": "20"
+                    },
+                    {
+                      "key": "offset",
+                      "value": "0"
+                    }
+                  ]
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "Get Product",
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "X-Tenant-Slug",
+                    "value": "{{tenant_slug}}"
+                  }
+                ],
+                "url": {
+                  "raw": "{{base_url}}/inventory/products/{{product_id}}",
+                  "host": ["{{base_url}}"],
+                  "path": ["inventory", "products", "{{product_id}}"]
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "Get Product by SKU",
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "X-Tenant-Slug",
+                    "value": "{{tenant_slug}}"
+                  }
+                ],
+                "url": {
+                  "raw": "{{base_url}}/inventory/products/sku/PROD-001",
+                  "host": ["{{base_url}}"],
+                  "path": ["inventory", "products", "sku", "PROD-001"]
+                }
+              },
+              "response": []
+            }
+          ]
+        },
+        {
+          "name": "Categories",
+          "item": [
+            {
+              "name": "Create Category",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "exec": [
+                      "const jsonData = pm.response.json();",
+                      "if ((pm.response.code === 200 || pm.response.code === 201) && jsonData.id) {",
+                      "    pm.environment.set('category_id', jsonData.id);",
+                      "    console.log('\\u2705 category_id saved:', jsonData.id);",
+                      "}"
+                    ],
+                    "type": "text/javascript"
+                  }
+                }
+              ],
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  },
+                  {
+                    "key": "X-Tenant-Slug",
+                    "value": "{{tenant_slug}}"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n    \"name\": \"Electronics\",\n    \"slug\": \"electronics\",\n    \"description\": \"Electronic products and gadgets\"\n}"
+                },
+                "url": {
+                  "raw": "{{base_url}}/inventory/categories",
+                  "host": ["{{base_url}}"],
+                  "path": ["inventory", "categories"]
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "List Categories",
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "X-Tenant-Slug",
+                    "value": "{{tenant_slug}}"
+                  }
+                ],
+                "url": {
+                  "raw": "{{base_url}}/inventory/categories",
+                  "host": ["{{base_url}}"],
+                  "path": ["inventory", "categories"]
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "Get Category",
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "X-Tenant-Slug",
+                    "value": "{{tenant_slug}}"
+                  }
+                ],
+                "url": {
+                  "raw": "{{base_url}}/inventory/categories/{{category_id}}",
+                  "host": ["{{base_url}}"],
+                  "path": ["inventory", "categories", "{{category_id}}"]
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "Update Category",
+              "request": {
+                "method": "PUT",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  },
+                  {
+                    "key": "X-Tenant-Slug",
+                    "value": "{{tenant_slug}}"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n    \"name\": \"Electronics Updated\",\n    \"description\": \"Updated description for electronics\"\n}"
+                },
+                "url": {
+                  "raw": "{{base_url}}/inventory/categories/{{category_id}}",
+                  "host": ["{{base_url}}"],
+                  "path": ["inventory", "categories", "{{category_id}}"]
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "Delete Category",
+              "request": {
+                "method": "DELETE",
+                "header": [
+                  {
+                    "key": "X-Tenant-Slug",
+                    "value": "{{tenant_slug}}"
+                  }
+                ],
+                "url": {
+                  "raw": "{{base_url}}/inventory/categories/{{category_id}}",
+                  "host": ["{{base_url}}"],
+                  "path": ["inventory", "categories", "{{category_id}}"]
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "Search Categories",
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "X-Tenant-Slug",
+                    "value": "{{tenant_slug}}"
+                  }
+                ],
+                "url": {
+                  "raw": "{{base_url}}/inventory/categories/search?q=electronics",
+                  "host": ["{{base_url}}"],
+                  "path": ["inventory", "categories", "search"],
+                  "query": [
+                    {
+                      "key": "q",
+                      "value": "electronics"
+                    }
+                  ]
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "Get Products by Category",
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "X-Tenant-Slug",
+                    "value": "{{tenant_slug}}"
+                  }
+                ],
+                "url": {
+                  "raw": "{{base_url}}/inventory/categories/{{category_id}}/products",
+                  "host": ["{{base_url}}"],
+                  "path": ["inventory", "categories", "{{category_id}}", "products"]
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "Assign Product to Category",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "X-Tenant-Slug",
+                    "value": "{{tenant_slug}}"
+                  }
+                ],
+                "url": {
+                  "raw": "{{base_url}}/inventory/products/{{product_id}}/categories/{{category_id}}",
+                  "host": ["{{base_url}}"],
+                  "path": ["inventory", "products", "{{product_id}}", "categories", "{{category_id}}"]
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "Remove Product from Category",
+              "request": {
+                "method": "DELETE",
+                "header": [
+                  {
+                    "key": "X-Tenant-Slug",
+                    "value": "{{tenant_slug}}"
+                  }
+                ],
+                "url": {
+                  "raw": "{{base_url}}/inventory/products/{{product_id}}/categories/{{category_id}}",
+                  "host": ["{{base_url}}"],
+                  "path": ["inventory", "products", "{{product_id}}", "categories", "{{category_id}}"]
+                }
+              },
+              "response": []
+            }
+          ]
+        },
+        {
+          "name": "Batches",
+          "item": [
+            {
+              "name": "Create Batch",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "exec": [
+                      "const jsonData = pm.response.json();",
+                      "if ((pm.response.code === 200 || pm.response.code === 201) && jsonData.id) {",
+                      "    pm.environment.set('batch_id', jsonData.id);",
+                      "    console.log('\\u2705 batch_id saved:', jsonData.id);",
+                      "}"
+                    ],
+                    "type": "text/javascript"
+                  }
+                }
+              ],
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  },
+                  {
+                    "key": "X-Tenant-Slug",
+                    "value": "{{tenant_slug}}"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n    \"product_id\": \"{{product_id}}\",\n    \"batch_number\": \"BATCH-2026-001\",\n    \"quantity\": 100,\n    \"cost_price\": 15.50,\n    \"expiry_date\": \"2027-01-01\",\n    \"supplier_id\": \"\"\n}"
+                },
+                "url": {
+                  "raw": "{{base_url}}/inventory/batches",
+                  "host": ["{{base_url}}"],
+                  "path": ["inventory", "batches"]
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "Get Batch",
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "X-Tenant-Slug",
+                    "value": "{{tenant_slug}}"
+                  }
+                ],
+                "url": {
+                  "raw": "{{base_url}}/inventory/batches/{{batch_id}}",
+                  "host": ["{{base_url}}"],
+                  "path": ["inventory", "batches", "{{batch_id}}"]
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "List Batches by Product",
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "X-Tenant-Slug",
+                    "value": "{{tenant_slug}}"
+                  }
+                ],
+                "url": {
+                  "raw": "{{base_url}}/inventory/batches/product/{{product_id}}",
+                  "host": ["{{base_url}}"],
+                  "path": ["inventory", "batches", "product", "{{product_id}}"]
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "Get Oldest Batch for Sale",
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "X-Tenant-Slug",
+                    "value": "{{tenant_slug}}"
+                  }
+                ],
+                "url": {
+                  "raw": "{{base_url}}/inventory/batches/product/{{product_id}}/oldest",
+                  "host": ["{{base_url}}"],
+                  "path": ["inventory", "batches", "product", "{{product_id}}", "oldest"]
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "Get Expiring Batches",
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "X-Tenant-Slug",
+                    "value": "{{tenant_slug}}"
+                  }
+                ],
+                "url": {
+                  "raw": "{{base_url}}/inventory/batches/expiring?days=30",
+                  "host": ["{{base_url}}"],
+                  "path": ["inventory", "batches", "expiring"],
+                  "query": [
+                    {
+                      "key": "days",
+                      "value": "30"
+                    }
+                  ]
+                }
+              },
+              "response": []
+            }
+          ]
+        },
+        {
+          "name": "Stock",
+          "item": [
+            {
+              "name": "Record Movement - Purchase",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  },
+                  {
+                    "key": "X-Tenant-Slug",
+                    "value": "{{tenant_slug}}"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n    \"product_id\": \"{{product_id}}\",\n    \"movement_type\": \"purchase\",\n    \"quantity\": 100,\n    \"reference_number\": \"PO-001\"\n}"
+                },
+                "url": {
+                  "raw": "{{base_url}}/inventory/movements",
+                  "host": ["{{base_url}}"],
+                  "path": ["inventory", "movements"]
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "Record Movement - Sale",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  },
+                  {
+                    "key": "X-Tenant-Slug",
+                    "value": "{{tenant_slug}}"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n    \"product_id\": \"{{product_id}}\",\n    \"movement_type\": \"sale\",\n    \"quantity\": 5\n}"
+                },
+                "url": {
+                  "raw": "{{base_url}}/inventory/movements",
+                  "host": ["{{base_url}}"],
+                  "path": ["inventory", "movements"]
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "Record Movement - Adjustment",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  },
+                  {
+                    "key": "X-Tenant-Slug",
+                    "value": "{{tenant_slug}}"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n    \"product_id\": \"{{product_id}}\",\n    \"movement_type\": \"adjustment\",\n    \"quantity\": -2\n}"
+                },
+                "url": {
+                  "raw": "{{base_url}}/inventory/movements",
+                  "host": ["{{base_url}}"],
+                  "path": ["inventory", "movements"]
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "Get Product Stock",
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "X-Tenant-Slug",
+                    "value": "{{tenant_slug}}"
+                  }
+                ],
+                "url": {
+                  "raw": "{{base_url}}/inventory/stock/{{product_id}}",
+                  "host": ["{{base_url}}"],
+                  "path": ["inventory", "stock", "{{product_id}}"]
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "Reserve Stock",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  },
+                  {
+                    "key": "X-Tenant-Slug",
+                    "value": "{{tenant_slug}}"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n    \"product_id\": \"{{product_id}}\",\n    \"quantity\": 5,\n    \"reference\": \"ORDER-001\"\n}"
+                },
+                "url": {
+                  "raw": "{{base_url}}/inventory/reserve",
+                  "host": ["{{base_url}}"],
+                  "path": ["inventory", "reserve"]
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "Release Reserved Stock",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  },
+                  {
+                    "key": "X-Tenant-Slug",
+                    "value": "{{tenant_slug}}"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n    \"product_id\": \"{{product_id}}\",\n    \"quantity\": 5,\n    \"reference\": \"ORDER-001\"\n}"
+                },
+                "url": {
+                  "raw": "{{base_url}}/inventory/release-reserved",
+                  "host": ["{{base_url}}"],
+                  "path": ["inventory", "release-reserved"]
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "Update Reorder Level",
+              "request": {
+                "method": "PATCH",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  },
+                  {
+                    "key": "X-Tenant-Slug",
+                    "value": "{{tenant_slug}}"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n    \"reorder_level\": 20\n}"
+                },
+                "url": {
+                  "raw": "{{base_url}}/inventory/products/{{product_id}}/reorder-level",
+                  "host": ["{{base_url}}"],
+                  "path": ["inventory", "products", "{{product_id}}", "reorder-level"]
+                }
+              },
+              "response": []
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Sales",
+      "item": [
+        {
+          "name": "Customers",
+          "item": [
+            {
+              "name": "Create Customer",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "exec": [
+                      "const jsonData = pm.response.json();",
+                      "if ((pm.response.code === 200 || pm.response.code === 201) && jsonData.id) {",
+                      "    pm.environment.set('customer_id', jsonData.id);",
+                      "    console.log('\\u2705 customer_id saved:', jsonData.id);",
+                      "}"
+                    ],
+                    "type": "text/javascript"
+                  }
+                }
+              ],
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  },
+                  {
+                    "key": "X-Tenant-Slug",
+                    "value": "{{tenant_slug}}"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n    \"name\": \"John Smith\",\n    \"email\": \"john.smith@customer.com\",\n    \"phone_number\": \"+1234567890\",\n    \"address\": \"123 Main Street\",\n    \"city\": \"New York\",\n    \"state\": \"NY\",\n    \"postal_code\": \"10001\",\n    \"country\": \"US\"\n}"
+                },
+                "url": {
+                  "raw": "{{base_url}}/sales/customers",
+                  "host": ["{{base_url}}"],
+                  "path": ["sales", "customers"]
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "Get Customer",
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "X-Tenant-Slug",
+                    "value": "{{tenant_slug}}"
+                  }
+                ],
+                "url": {
+                  "raw": "{{base_url}}/sales/customers/{{customer_id}}",
+                  "host": ["{{base_url}}"],
+                  "path": ["sales", "customers", "{{customer_id}}"]
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "Update Customer",
+              "request": {
+                "method": "PATCH",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  },
+                  {
+                    "key": "X-Tenant-Slug",
+                    "value": "{{tenant_slug}}"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n    \"name\": \"John Smith Updated\",\n    \"phone_number\": \"+1987654321\",\n    \"city\": \"Los Angeles\"\n}"
+                },
+                "url": {
+                  "raw": "{{base_url}}/sales/customers/{{customer_id}}",
+                  "host": ["{{base_url}}"],
+                  "path": ["sales", "customers", "{{customer_id}}"]
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "Delete Customer",
+              "request": {
+                "method": "DELETE",
+                "header": [
+                  {
+                    "key": "X-Tenant-Slug",
+                    "value": "{{tenant_slug}}"
+                  }
+                ],
+                "url": {
+                  "raw": "{{base_url}}/sales/customers/{{customer_id}}",
+                  "host": ["{{base_url}}"],
+                  "path": ["sales", "customers", "{{customer_id}}"]
+                }
+              },
+              "response": []
+            }
+          ]
+        },
+        {
+          "name": "Orders",
+          "item": [
+            {
+              "name": "Create Sales Order",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "exec": [
+                      "const jsonData = pm.response.json();",
+                      "if ((pm.response.code === 200 || pm.response.code === 201) && jsonData.id) {",
+                      "    pm.environment.set('sales_order_id', jsonData.id);",
+                      "    console.log('\\u2705 sales_order_id saved:', jsonData.id);",
+                      "}"
+                    ],
+                    "type": "text/javascript"
+                  }
+                }
+              ],
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  },
+                  {
+                    "key": "X-Tenant-Slug",
+                    "value": "{{tenant_slug}}"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n    \"customer_id\": \"{{customer_id}}\",\n    \"shipping_address\": \"456 Shipping Ave, New York, NY 10002\",\n    \"notes\": \"Please handle with care\",\n    \"discount_amount\": 10.50,\n    \"items\": [\n        {\n            \"product_id\": \"{{product_id}}\",\n            \"quantity\": 2\n        }\n    ]\n}"
+                },
+                "url": {
+                  "raw": "{{base_url}}/sales/orders",
+                  "host": ["{{base_url}}"],
+                  "path": ["sales", "orders"]
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "List Sales Orders",
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "X-Tenant-Slug",
+                    "value": "{{tenant_slug}}"
+                  }
+                ],
+                "url": {
+                  "raw": "{{base_url}}/sales/orders?limit=20&offset=0",
+                  "host": ["{{base_url}}"],
+                  "path": ["sales", "orders"],
+                  "query": [
+                    {
+                      "key": "limit",
+                      "value": "20"
+                    },
+                    {
+                      "key": "offset",
+                      "value": "0"
+                    }
+                  ]
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "Get Sales Order",
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "X-Tenant-Slug",
+                    "value": "{{tenant_slug}}"
+                  }
+                ],
+                "url": {
+                  "raw": "{{base_url}}/sales/orders/{{sales_order_id}}",
+                  "host": ["{{base_url}}"],
+                  "path": ["sales", "orders", "{{sales_order_id}}"]
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "Update Sales Order",
+              "request": {
+                "method": "PATCH",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  },
+                  {
+                    "key": "X-Tenant-Slug",
+                    "value": "{{tenant_slug}}"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n    \"shipping_address\": \"789 Updated Street, New York, NY 10003\",\n    \"notes\": \"Updated shipping notes\",\n    \"discount_amount\": 15.00\n}"
+                },
+                "url": {
+                  "raw": "{{base_url}}/sales/orders/{{sales_order_id}}",
+                  "host": ["{{base_url}}"],
+                  "path": ["sales", "orders", "{{sales_order_id}}"]
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "Add Order Item",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  },
+                  {
+                    "key": "X-Tenant-Slug",
+                    "value": "{{tenant_slug}}"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n    \"product_id\": \"{{product_id}}\",\n    \"quantity\": 1\n}"
+                },
+                "url": {
+                  "raw": "{{base_url}}/sales/orders/{{sales_order_id}}/items",
+                  "host": ["{{base_url}}"],
+                  "path": ["sales", "orders", "{{sales_order_id}}", "items"]
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "Complete Order",
+              "request": {
+                "method": "PATCH",
+                "header": [
+                  {
+                    "key": "X-Tenant-Slug",
+                    "value": "{{tenant_slug}}"
+                  }
+                ],
+                "url": {
+                  "raw": "{{base_url}}/sales/orders/{{sales_order_id}}/complete",
+                  "host": ["{{base_url}}"],
+                  "path": ["sales", "orders", "{{sales_order_id}}", "complete"]
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "Cancel Order",
+              "request": {
+                "method": "PATCH",
+                "header": [
+                  {
+                    "key": "X-Tenant-Slug",
+                    "value": "{{tenant_slug}}"
+                  }
+                ],
+                "url": {
+                  "raw": "{{base_url}}/sales/orders/{{sales_order_id}}/cancel",
+                  "host": ["{{base_url}}"],
+                  "path": ["sales", "orders", "{{sales_order_id}}", "cancel"]
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "Get Order with Batches",
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "X-Tenant-Slug",
+                    "value": "{{tenant_slug}}"
+                  }
+                ],
+                "url": {
+                  "raw": "{{base_url}}/sales/orders/{{sales_order_id}}/with-batches",
+                  "host": ["{{base_url}}"],
+                  "path": ["sales", "orders", "{{sales_order_id}}", "with-batches"]
+                }
+              },
+              "response": []
+            }
+          ]
+        },
+        {
+          "name": "Returns",
+          "item": [
+            {
+              "name": "Create Return",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "exec": [
+                      "const jsonData = pm.response.json();",
+                      "if ((pm.response.code === 200 || pm.response.code === 201) && jsonData.id) {",
+                      "    pm.environment.set('return_id', jsonData.id);",
+                      "    console.log('\\u2705 return_id saved:', jsonData.id);",
+                      "}"
+                    ],
+                    "type": "text/javascript"
+                  }
+                }
+              ],
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  },
+                  {
+                    "key": "X-Tenant-Slug",
+                    "value": "{{tenant_slug}}"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n    \"order_id\": \"{{sales_order_id}}\",\n    \"reason\": \"defective product\",\n    \"items\": [\n        {\n            \"product_id\": \"{{product_id}}\",\n            \"quantity\": 1\n        }\n    ]\n}"
+                },
+                "url": {
+                  "raw": "{{base_url}}/sales/returns",
+                  "host": ["{{base_url}}"],
+                  "path": ["sales", "returns"]
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "Get Returns",
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "X-Tenant-Slug",
+                    "value": "{{tenant_slug}}"
+                  }
+                ],
+                "url": {
+                  "raw": "{{base_url}}/sales/returns?order_id={{sales_order_id}}",
+                  "host": ["{{base_url}}"],
+                  "path": ["sales", "returns"],
+                  "query": [
+                    {
+                      "key": "order_id",
+                      "value": "{{sales_order_id}}"
+                    }
+                  ]
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "Approve Return",
+              "request": {
+                "method": "PATCH",
+                "header": [
+                  {
+                    "key": "X-Tenant-Slug",
+                    "value": "{{tenant_slug}}"
+                  }
+                ],
+                "url": {
+                  "raw": "{{base_url}}/sales/returns/{{return_id}}/approve",
+                  "host": ["{{base_url}}"],
+                  "path": ["sales", "returns", "{{return_id}}", "approve"]
+                }
+              },
+              "response": []
+            }
+          ]
+        },
+        {
+          "name": "Payments",
+          "item": [
+            {
+              "name": "Create Payment",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  },
+                  {
+                    "key": "X-Tenant-Slug",
+                    "value": "{{tenant_slug}}"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n    \"order_id\": \"{{sales_order_id}}\",\n    \"amount\": 100.00,\n    \"payment_method\": \"cash\",\n    \"reference\": \"PAY-001\"\n}"
+                },
+                "url": {
+                  "raw": "{{base_url}}/sales/payments",
+                  "host": ["{{base_url}}"],
+                  "path": ["sales", "payments"]
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "Get Payments",
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "X-Tenant-Slug",
+                    "value": "{{tenant_slug}}"
+                  }
+                ],
+                "url": {
+                  "raw": "{{base_url}}/sales/payments?order_id={{sales_order_id}}",
+                  "host": ["{{base_url}}"],
+                  "path": ["sales", "payments"],
+                  "query": [
+                    {
+                      "key": "order_id",
+                      "value": "{{sales_order_id}}"
+                    }
+                  ]
+                }
+              },
+              "response": []
+            }
+          ]
+        },
+        {
+          "name": "Reports",
+          "item": [
+            {
+              "name": "Sales Report",
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "X-Tenant-Slug",
+                    "value": "{{tenant_slug}}"
+                  }
+                ],
+                "url": {
+                  "raw": "{{base_url}}/sales/reports/sales?from=2026-01-01&to=2026-12-31",
+                  "host": ["{{base_url}}"],
+                  "path": ["sales", "reports", "sales"],
+                  "query": [
+                    {
+                      "key": "from",
+                      "value": "2026-01-01"
+                    },
+                    {
+                      "key": "to",
+                      "value": "2026-12-31"
+                    }
+                  ]
+                }
+              },
+              "response": []
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Purchasing",
+      "item": [
+        {
+          "name": "Suppliers",
+          "item": [
+            {
+              "name": "Create Supplier",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "exec": [
+                      "const jsonData = pm.response.json();",
+                      "if ((pm.response.code === 200 || pm.response.code === 201) && jsonData.id) {",
+                      "    pm.environment.set('supplier_id', jsonData.id);",
+                      "    console.log('\\u2705 supplier_id saved:', jsonData.id);",
+                      "}"
+                    ],
+                    "type": "text/javascript"
+                  }
+                }
+              ],
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  },
+                  {
+                    "key": "X-Tenant-Slug",
+                    "value": "{{tenant_slug}}"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n    \"name\": \"Proveedor ABC\",\n    \"contact_email\": \"contact@proveedor.com\",\n    \"contact_phone\": \"+1234567890\",\n    \"address\": \"123 Main St\"\n}"
+                },
+                "url": {
+                  "raw": "{{base_url}}/purchasing/suppliers",
+                  "host": ["{{base_url}}"],
+                  "path": ["purchasing", "suppliers"]
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "List Suppliers",
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "X-Tenant-Slug",
+                    "value": "{{tenant_slug}}"
+                  }
+                ],
+                "url": {
+                  "raw": "{{base_url}}/purchasing/suppliers",
+                  "host": ["{{base_url}}"],
+                  "path": ["purchasing", "suppliers"]
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "Get Supplier",
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "X-Tenant-Slug",
+                    "value": "{{tenant_slug}}"
+                  }
+                ],
+                "url": {
+                  "raw": "{{base_url}}/purchasing/suppliers/{{supplier_id}}",
+                  "host": ["{{base_url}}"],
+                  "path": ["purchasing", "suppliers", "{{supplier_id}}"]
+                }
+              },
+              "response": []
+            }
+          ]
+        },
+        {
+          "name": "Purchase Orders",
+          "item": [
+            {
+              "name": "Create Purchase Order",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "exec": [
+                      "const jsonData = pm.response.json();",
+                      "if ((pm.response.code === 200 || pm.response.code === 201) && jsonData.id) {",
+                      "    pm.environment.set('purchase_order_id', jsonData.id);",
+                      "    console.log('\\u2705 purchase_order_id saved:', jsonData.id);",
+                      "}"
+                    ],
+                    "type": "text/javascript"
+                  }
+                }
+              ],
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  },
+                  {
+                    "key": "X-Tenant-Slug",
+                    "value": "{{tenant_slug}}"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n    \"supplier_id\": \"{{supplier_id}}\",\n    \"expected_delivery_date\": \"2026-04-01\",\n    \"notes\": \"Urgent order\"\n}"
+                },
+                "url": {
+                  "raw": "{{base_url}}/purchasing/purchase-orders",
+                  "host": ["{{base_url}}"],
+                  "path": ["purchasing", "purchase-orders"]
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "List Purchase Orders",
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "X-Tenant-Slug",
+                    "value": "{{tenant_slug}}"
+                  }
+                ],
+                "url": {
+                  "raw": "{{base_url}}/purchasing/purchase-orders",
+                  "host": ["{{base_url}}"],
+                  "path": ["purchasing", "purchase-orders"]
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "Get Purchase Order",
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "X-Tenant-Slug",
+                    "value": "{{tenant_slug}}"
+                  }
+                ],
+                "url": {
+                  "raw": "{{base_url}}/purchasing/purchase-orders/{{purchase_order_id}}",
+                  "host": ["{{base_url}}"],
+                  "path": ["purchasing", "purchase-orders", "{{purchase_order_id}}"]
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "Add Item to Purchase Order",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  },
+                  {
+                    "key": "X-Tenant-Slug",
+                    "value": "{{tenant_slug}}"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n    \"product_id\": \"{{product_id}}\",\n    \"quantity\": 50,\n    \"unit_price\": 25.00\n}"
+                },
+                "url": {
+                  "raw": "{{base_url}}/purchasing/purchase-orders/{{purchase_order_id}}/items",
+                  "host": ["{{base_url}}"],
+                  "path": ["purchasing", "purchase-orders", "{{purchase_order_id}}", "items"]
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "Approve Purchase Order",
+              "request": {
+                "method": "PATCH",
+                "header": [
+                  {
+                    "key": "X-Tenant-Slug",
+                    "value": "{{tenant_slug}}"
+                  }
+                ],
+                "url": {
+                  "raw": "{{base_url}}/purchasing/purchase-orders/{{purchase_order_id}}/approve",
+                  "host": ["{{base_url}}"],
+                  "path": ["purchasing", "purchase-orders", "{{purchase_order_id}}", "approve"]
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "Receive Purchase Order",
+              "request": {
+                "method": "PATCH",
+                "header": [
+                  {
+                    "key": "X-Tenant-Slug",
+                    "value": "{{tenant_slug}}"
+                  }
+                ],
+                "url": {
+                  "raw": "{{base_url}}/purchasing/purchase-orders/{{purchase_order_id}}/receive",
+                  "host": ["{{base_url}}"],
+                  "path": ["purchasing", "purchase-orders", "{{purchase_order_id}}", "receive"]
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "Add Invoice to Purchase Order",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  },
+                  {
+                    "key": "X-Tenant-Slug",
+                    "value": "{{tenant_slug}}"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n    \"invoice_number\": \"INV-001\",\n    \"amount\": 1250.00,\n    \"due_date\": \"2026-05-01\"\n}"
+                },
+                "url": {
+                  "raw": "{{base_url}}/purchasing/purchase-orders/{{purchase_order_id}}/invoices",
+                  "host": ["{{base_url}}"],
+                  "path": ["purchasing", "purchase-orders", "{{purchase_order_id}}", "invoices"]
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "Get Pending Payments",
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "X-Tenant-Slug",
+                    "value": "{{tenant_slug}}"
+                  }
+                ],
+                "url": {
+                  "raw": "{{base_url}}/purchasing/pending-payments",
+                  "host": ["{{base_url}}"],
+                  "path": ["purchasing", "pending-payments"]
+                }
+              },
+              "response": []
+            }
+          ]
         }
       ]
     },
@@ -1061,32 +1996,17 @@
                   "listen": "test",
                   "script": {
                     "exec": [
-                      "pm.test(\"Status is 200 or 201\", () => {",
-                      "    pm.expect(pm.response.code).to.be.oneOf([200, 201]);",
-                      "});",
                       "const jsonData = pm.response.json();",
-                      "if (jsonData.id) {",
-                      "    pm.environment.set(\"company_id\", jsonData.id);",
-                      "    console.log(\"✅ Company ID saved:\", jsonData.id);",
+                      "if ((pm.response.code === 200 || pm.response.code === 201) && jsonData.id) {",
+                      "    pm.environment.set('company_id', jsonData.id);",
+                      "    console.log('\\u2705 company_id saved:', jsonData.id);",
                       "}"
                     ],
-                    "type": "text/javascript",
-                    "packages": {},
-                    "requests": {}
+                    "type": "text/javascript"
                   }
                 }
               ],
               "request": {
-                "auth": {
-                  "type": "bearer",
-                  "bearer": [
-                    {
-                      "key": "token",
-                      "value": "{{token}}",
-                      "type": "string"
-                    }
-                  ]
-                },
                 "method": "POST",
                 "header": [
                   {
@@ -1100,35 +2020,19 @@
                 ],
                 "body": {
                   "mode": "raw",
-                  "raw": "{\n    \"name\": \"Transport ABC\",\n    \"company_type\": \"transport_provider\",\n    \"email\": \"contact@transportabc.com\",\n    \"phone\": \"1234\",\n    \"address\": \"123 Main St, City\",\n    \"registration_number\": \"123345678\"\n}"
+                  "raw": "{\n    \"name\": \"Fast Transport Co\",\n    \"company_type\": \"transport_provider\",\n    \"email\": \"contact@fasttransport.com\",\n    \"phone\": \"+1234567890\",\n    \"address\": \"456 Transport Ave\",\n    \"registration_number\": \"REG-2026-001\"\n}"
                 },
                 "url": {
                   "raw": "{{base_url}}/tracking/companies",
-                  "host": [
-                    "{{base_url}}"
-                  ],
-                  "path": [
-                    "tracking",
-                    "companies"
-                  ]
-                },
-                "description": "Create a transport company. Valid company_type values: school | corporate | transport_provider"
+                  "host": ["{{base_url}}"],
+                  "path": ["tracking", "companies"]
+                }
               },
               "response": []
             },
             {
               "name": "List Companies",
               "request": {
-                "auth": {
-                  "type": "bearer",
-                  "bearer": [
-                    {
-                      "key": "token",
-                      "value": "{{token}}",
-                      "type": "string"
-                    }
-                  ]
-                },
                 "method": "GET",
                 "header": [
                   {
@@ -1138,13 +2042,8 @@
                 ],
                 "url": {
                   "raw": "{{base_url}}/tracking/companies",
-                  "host": [
-                    "{{base_url}}"
-                  ],
-                  "path": [
-                    "tracking",
-                    "companies"
-                  ]
+                  "host": ["{{base_url}}"],
+                  "path": ["tracking", "companies"]
                 }
               },
               "response": []
@@ -1152,16 +2051,6 @@
             {
               "name": "Get Company",
               "request": {
-                "auth": {
-                  "type": "bearer",
-                  "bearer": [
-                    {
-                      "key": "token",
-                      "value": "{{token}}",
-                      "type": "string"
-                    }
-                  ]
-                },
                 "method": "GET",
                 "header": [
                   {
@@ -1170,21 +2059,9 @@
                   }
                 ],
                 "url": {
-                  "raw": "{{base_url}}/tracking/companies/:company_id",
-                  "host": [
-                    "{{base_url}}"
-                  ],
-                  "path": [
-                    "tracking",
-                    "companies",
-                    ":company_id"
-                  ],
-                  "variable": [
-                    {
-                      "key": "company_id",
-                      "value": "{{company_id}}"
-                    }
-                  ]
+                  "raw": "{{base_url}}/tracking/companies/{{company_id}}",
+                  "host": ["{{base_url}}"],
+                  "path": ["tracking", "companies", "{{company_id}}"]
                 }
               },
               "response": []
@@ -1192,16 +2069,6 @@
             {
               "name": "Update Company",
               "request": {
-                "auth": {
-                  "type": "bearer",
-                  "bearer": [
-                    {
-                      "key": "token",
-                      "value": "{{token}}",
-                      "type": "string"
-                    }
-                  ]
-                },
                 "method": "PATCH",
                 "header": [
                   {
@@ -1215,24 +2082,12 @@
                 ],
                 "body": {
                   "mode": "raw",
-                  "raw": "{\n    \"name\": \"Transport ABC6\",\n    \"contact_phone\": \"+0987654321\"\n}"
+                  "raw": "{\n    \"name\": \"Fast Transport Co Updated\",\n    \"phone\": \"+1987654321\"\n}"
                 },
                 "url": {
-                  "raw": "{{base_url}}/tracking/companies/:company_id",
-                  "host": [
-                    "{{base_url}}"
-                  ],
-                  "path": [
-                    "tracking",
-                    "companies",
-                    ":company_id"
-                  ],
-                  "variable": [
-                    {
-                      "key": "company_id",
-                      "value": "{{company_id}}"
-                    }
-                  ]
+                  "raw": "{{base_url}}/tracking/companies/{{company_id}}",
+                  "host": ["{{base_url}}"],
+                  "path": ["tracking", "companies", "{{company_id}}"]
                 }
               },
               "response": []
@@ -1240,16 +2095,6 @@
             {
               "name": "Delete Company",
               "request": {
-                "auth": {
-                  "type": "bearer",
-                  "bearer": [
-                    {
-                      "key": "token",
-                      "value": "{{token}}",
-                      "type": "string"
-                    }
-                  ]
-                },
                 "method": "DELETE",
                 "header": [
                   {
@@ -1258,21 +2103,9 @@
                   }
                 ],
                 "url": {
-                  "raw": "{{base_url}}/tracking/companies/:company_id",
-                  "host": [
-                    "{{base_url}}"
-                  ],
-                  "path": [
-                    "tracking",
-                    "companies",
-                    ":company_id"
-                  ],
-                  "variable": [
-                    {
-                      "key": "company_id",
-                      "value": "{{company_id}}"
-                    }
-                  ]
+                  "raw": "{{base_url}}/tracking/companies/{{company_id}}",
+                  "host": ["{{base_url}}"],
+                  "path": ["tracking", "companies", "{{company_id}}"]
                 }
               },
               "response": []
@@ -1289,31 +2122,17 @@
                   "listen": "test",
                   "script": {
                     "exec": [
-                      "pm.test(\"Status is 200 or 201\", () => {",
-                      "    pm.expect(pm.response.code).to.be.oneOf([200, 201]);",
-                      "});",
                       "const jsonData = pm.response.json();",
-                      "if (jsonData.id) {",
-                      "    pm.environment.set(\"vehicle_id\", jsonData.id);",
+                      "if ((pm.response.code === 200 || pm.response.code === 201) && jsonData.id) {",
+                      "    pm.environment.set('vehicle_id', jsonData.id);",
+                      "    console.log('\\u2705 vehicle_id saved:', jsonData.id);",
                       "}"
                     ],
-                    "type": "text/javascript",
-                    "packages": {},
-                    "requests": {}
+                    "type": "text/javascript"
                   }
                 }
               ],
               "request": {
-                "auth": {
-                  "type": "bearer",
-                  "bearer": [
-                    {
-                      "key": "token",
-                      "value": "{{token}}",
-                      "type": "string"
-                    }
-                  ]
-                },
                 "method": "POST",
                 "header": [
                   {
@@ -1331,13 +2150,8 @@
                 },
                 "url": {
                   "raw": "{{base_url}}/tracking/vehicles",
-                  "host": [
-                    "{{base_url}}"
-                  ],
-                  "path": [
-                    "tracking",
-                    "vehicles"
-                  ]
+                  "host": ["{{base_url}}"],
+                  "path": ["tracking", "vehicles"]
                 }
               },
               "response": []
@@ -1345,16 +2159,6 @@
             {
               "name": "List Vehicles",
               "request": {
-                "auth": {
-                  "type": "bearer",
-                  "bearer": [
-                    {
-                      "key": "token",
-                      "value": "{{token}}",
-                      "type": "string"
-                    }
-                  ]
-                },
                 "method": "GET",
                 "header": [
                   {
@@ -1363,20 +2167,9 @@
                   }
                 ],
                 "url": {
-                  "raw": "{{base_url}}/tracking/vehicles?company_id={{company_id}}",
-                  "host": [
-                    "{{base_url}}"
-                  ],
-                  "path": [
-                    "tracking",
-                    "vehicles"
-                  ],
-                  "query": [
-                    {
-                      "key": "company_id",
-                      "value": "{{company_id}}"
-                    }
-                  ]
+                  "raw": "{{base_url}}/tracking/vehicles",
+                  "host": ["{{base_url}}"],
+                  "path": ["tracking", "vehicles"]
                 }
               },
               "response": []
@@ -1384,16 +2177,6 @@
             {
               "name": "Get Vehicle",
               "request": {
-                "auth": {
-                  "type": "bearer",
-                  "bearer": [
-                    {
-                      "key": "token",
-                      "value": "{{token}}",
-                      "type": "string"
-                    }
-                  ]
-                },
                 "method": "GET",
                 "header": [
                   {
@@ -1402,21 +2185,9 @@
                   }
                 ],
                 "url": {
-                  "raw": "{{base_url}}/tracking/vehicles/:vehicle_id",
-                  "host": [
-                    "{{base_url}}"
-                  ],
-                  "path": [
-                    "tracking",
-                    "vehicles",
-                    ":vehicle_id"
-                  ],
-                  "variable": [
-                    {
-                      "key": "vehicle_id",
-                      "value": "{{vehicle_id}}"
-                    }
-                  ]
+                  "raw": "{{base_url}}/tracking/vehicles/{{vehicle_id}}",
+                  "host": ["{{base_url}}"],
+                  "path": ["tracking", "vehicles", "{{vehicle_id}}"]
                 }
               },
               "response": []
@@ -1424,16 +2195,6 @@
             {
               "name": "Update Vehicle",
               "request": {
-                "auth": {
-                  "type": "bearer",
-                  "bearer": [
-                    {
-                      "key": "token",
-                      "value": "{{token}}",
-                      "type": "string"
-                    }
-                  ]
-                },
                 "method": "PATCH",
                 "header": [
                   {
@@ -1450,1323 +2211,9 @@
                   "raw": "{\n    \"status\": \"maintenance\",\n    \"capacity\": 18\n}"
                 },
                 "url": {
-                  "raw": "{{base_url}}/tracking/vehicles/:vehicle_id",
-                  "host": [
-                    "{{base_url}}"
-                  ],
-                  "path": [
-                    "tracking",
-                    "vehicles",
-                    ":vehicle_id"
-                  ],
-                  "variable": [
-                    {
-                      "key": "vehicle_id",
-                      "value": "{{vehicle_id}}"
-                    }
-                  ]
-                }
-              },
-              "response": []
-            },
-            {
-              "name": "Update Vehicle Location (GPS)",
-              "request": {
-                "method": "POST",
-                "header": [
-                  {
-                    "key": "Content-Type",
-                    "value": "application/json"
-                  },
-                  {
-                    "key": "X-GPS-Device-ID",
-                    "value": "GPS001",
-                    "description": "GPS device authentication"
-                  }
-                ],
-                "body": {
-                  "mode": "raw",
-                  "raw": "{\n    \"vehicle_id\": \"{{vehicle_id}}\",\n    \"gps_device_id\": \"GPS001\",\n    \"latitude\": -12.046375,\n    \"longitude\": -77.042793,\n    \"speed\": 45.5,\n    \"heading\": 180.0,\n    \"altitude\": 154.0,\n    \"accuracy\": 10.0\n}"
-                },
-                "url": {
-                  "raw": "{{base_url}}/tracking/locations",
-                  "host": [
-                    "{{base_url}}"
-                  ],
-                  "path": [
-                    "tracking",
-                    "locations"
-                  ]
-                },
-                "description": "GPS device endpoint (no auth required, uses API key)"
-              },
-              "response": []
-            },
-            {
-              "name": "Get Vehicle Location",
-              "request": {
-                "auth": {
-                  "type": "bearer",
-                  "bearer": [
-                    {
-                      "key": "token",
-                      "value": "{{token}}",
-                      "type": "string"
-                    }
-                  ]
-                },
-                "method": "GET",
-                "header": [
-                  {
-                    "key": "X-Tenant-Slug",
-                    "value": "{{tenant_slug}}"
-                  }
-                ],
-                "url": {
-                  "raw": "{{base_url}}/tracking/vehicles/:vehicle_id/location",
-                  "host": [
-                    "{{base_url}}"
-                  ],
-                  "path": [
-                    "tracking",
-                    "vehicles",
-                    ":vehicle_id",
-                    "location"
-                  ],
-                  "variable": [
-                    {
-                      "key": "vehicle_id",
-                      "value": "{{vehicle_id}}"
-                    }
-                  ]
-                },
-                "description": "Get real-time GPS location of vehicle"
-              },
-              "response": []
-            },
-            {
-              "name": "Delete Vehicle",
-              "request": {
-                "auth": {
-                  "type": "bearer",
-                  "bearer": [
-                    {
-                      "key": "token",
-                      "value": "{{token}}",
-                      "type": "string"
-                    }
-                  ]
-                },
-                "method": "DELETE",
-                "header": [
-                  {
-                    "key": "X-Tenant-Slug",
-                    "value": "{{tenant_slug}}"
-                  }
-                ],
-                "url": {
-                  "raw": "{{base_url}}/tracking/vehicles/:vehicle_id",
-                  "host": [
-                    "{{base_url}}"
-                  ],
-                  "path": [
-                    "tracking",
-                    "vehicles",
-                    ":vehicle_id"
-                  ],
-                  "variable": [
-                    {
-                      "key": "vehicle_id",
-                      "value": "{{vehicle_id}}"
-                    }
-                  ]
-                }
-              },
-              "response": []
-            }
-          ]
-        },
-        {
-          "name": "Routes",
-          "item": [
-            {
-              "name": "Create Route",
-              "event": [
-                {
-                  "listen": "test",
-                  "script": {
-                    "exec": [
-                      "const jsonData = pm.response.json();",
-                      "if (jsonData.id) {",
-                      "    pm.environment.set(\"route_id\", jsonData.id);",
-                      "}"
-                    ],
-                    "type": "text/javascript",
-                    "packages": {},
-                    "requests": {}
-                  }
-                }
-              ],
-              "request": {
-                "auth": {
-                  "type": "bearer",
-                  "bearer": [
-                    {
-                      "key": "token",
-                      "value": "{{token}}",
-                      "type": "string"
-                    }
-                  ]
-                },
-                "method": "POST",
-                "header": [
-                  {
-                    "key": "Content-Type",
-                    "value": "application/json"
-                  },
-                  {
-                    "key": "X-Tenant-Slug",
-                    "value": "{{tenant_slug}}"
-                  }
-                ],
-                "body": {
-                  "mode": "raw",
-                  "raw": "{\n    \"company_id\": \"{{company_id}}\",\n    \"vehicle_id\": \"{{vehicle_id}}\",\n    \"route_name\": \"Route A - Morning\",\n    \"origin_address\": \"123 Main St, City\",\n    \"destination_address\": \"456 School Ave, City\",\n    \"route_code\": \"RA-AM2\",\n    \"schedule_type\": \"morning\",\n    \"scheduled_start_time\": \"07:00:00\",\n    \"scheduled_end_time\": \"08:30:00\",\n    \"estimated_duration_minutes\": 90\n}"
-                },
-                "url": {
-                  "raw": "{{base_url}}/tracking/routes",
-                  "host": [
-                    "{{base_url}}"
-                  ],
-                  "path": [
-                    "tracking",
-                    "routes"
-                  ]
-                }
-              },
-              "response": []
-            },
-            {
-              "name": "Update Route",
-              "request": {
-                "auth": {
-                  "type": "bearer",
-                  "bearer": [
-                    {
-                      "key": "token",
-                      "value": "{{token}}",
-                      "type": "string"
-                    }
-                  ]
-                },
-                "method": "PATCH",
-                "header": [
-                  {
-                    "key": "Content-Type",
-                    "value": "application/json"
-                  },
-                  {
-                    "key": "X-Tenant-Slug",
-                    "value": "{{tenant_slug}}"
-                  }
-                ],
-                "body": {
-                  "mode": "raw",
-                  "raw": "{\n    \"route_name\": \"Route A - Morning (Updated)\",\n    \"start_time\": \"06:45:00\"\n}"
-                },
-                "url": {
-                  "raw": "{{base_url}}/tracking/routes/:route_id",
-                  "host": [
-                    "{{base_url}}"
-                  ],
-                  "path": [
-                    "tracking",
-                    "routes",
-                    ":route_id"
-                  ],
-                  "variable": [
-                    {
-                      "key": "route_id",
-                      "value": "{{route_id}}"
-                    }
-                  ]
-                }
-              },
-              "response": []
-            },
-            {
-              "name": "List Routes",
-              "request": {
-                "auth": {
-                  "type": "bearer",
-                  "bearer": [
-                    {
-                      "key": "token",
-                      "value": "{{token}}",
-                      "type": "string"
-                    }
-                  ]
-                },
-                "method": "GET",
-                "header": [
-                  {
-                    "key": "X-Tenant-Slug",
-                    "value": "{{tenant_slug}}"
-                  }
-                ],
-                "url": {
-                  "raw": "{{base_url}}/tracking/routes?company_id={{company_id}}",
-                  "host": [
-                    "{{base_url}}"
-                  ],
-                  "path": [
-                    "tracking",
-                    "routes"
-                  ],
-                  "query": [
-                    {
-                      "key": "company_id",
-                      "value": "{{company_id}}"
-                    }
-                  ]
-                }
-              },
-              "response": []
-            },
-            {
-              "name": "Get Route",
-              "request": {
-                "auth": {
-                  "type": "bearer",
-                  "bearer": [
-                    {
-                      "key": "token",
-                      "value": "{{token}}",
-                      "type": "string"
-                    }
-                  ]
-                },
-                "method": "GET",
-                "header": [
-                  {
-                    "key": "X-Tenant-Slug",
-                    "value": "{{tenant_slug}}"
-                  }
-                ],
-                "url": {
-                  "raw": "{{base_url}}/tracking/routes/:route_id",
-                  "host": [
-                    "{{base_url}}"
-                  ],
-                  "path": [
-                    "tracking",
-                    "routes",
-                    ":route_id"
-                  ],
-                  "variable": [
-                    {
-                      "key": "route_id",
-                      "value": "{{route_id}}"
-                    }
-                  ]
-                }
-              },
-              "response": []
-            },
-            {
-              "name": "Get Route Status",
-              "request": {
-                "auth": {
-                  "type": "bearer",
-                  "bearer": [
-                    {
-                      "key": "token",
-                      "value": "{{token}}",
-                      "type": "string"
-                    }
-                  ]
-                },
-                "method": "GET",
-                "header": [
-                  {
-                    "key": "X-Tenant-Slug",
-                    "value": "{{tenant_slug}}"
-                  }
-                ],
-                "url": {
-                  "raw": "{{base_url}}/tracking/routes/:route_id/status",
-                  "host": [
-                    "{{base_url}}"
-                  ],
-                  "path": [
-                    "tracking",
-                    "routes",
-                    ":route_id",
-                    "status"
-                  ],
-                  "variable": [
-                    {
-                      "key": "route_id",
-                      "value": "{{route_id}}"
-                    }
-                  ]
-                },
-                "description": "Get real-time route execution status"
-              },
-              "response": []
-            },
-            {
-              "name": "Delete Route",
-              "request": {
-                "auth": {
-                  "type": "bearer",
-                  "bearer": [
-                    {
-                      "key": "token",
-                      "value": "{{token}}",
-                      "type": "string"
-                    }
-                  ]
-                },
-                "method": "DELETE",
-                "header": [
-                  {
-                    "key": "X-Tenant-Slug",
-                    "value": "{{tenant_slug}}"
-                  }
-                ],
-                "url": {
-                  "raw": "{{base_url}}/tracking/routes/:route_id",
-                  "host": [
-                    "{{base_url}}"
-                  ],
-                  "path": [
-                    "tracking",
-                    "routes",
-                    ":route_id"
-                  ],
-                  "variable": [
-                    {
-                      "key": "route_id",
-                      "value": "{{route_id}}"
-                    }
-                  ]
-                }
-              },
-              "response": []
-            },
-            {
-              "name": "Create Route Stop",
-              "event": [
-                {
-                  "listen": "test",
-                  "script": {
-                    "exec": [
-                      "pm.test(\"Status is 200 or 201\", () => {\r",
-                      "    pm.expect(pm.response.code).to.be.oneOf([200, 201]);\r",
-                      "});\r",
-                      "const jsonData = pm.response.json();\r",
-                      "if (jsonData.id) {\r",
-                      "    pm.environment.set(\"stop_id\", jsonData.id);\r",
-                      "}"
-                    ],
-                    "type": "text/javascript",
-                    "packages": {},
-                    "requests": {}
-                  }
-                }
-              ],
-              "request": {
-                "auth": {
-                  "type": "bearer",
-                  "bearer": [
-                    {
-                      "key": "token",
-                      "value": "{{token}}",
-                      "type": "string"
-                    }
-                  ]
-                },
-                "method": "POST",
-                "header": [
-                  {
-                    "key": "Content-Type",
-                    "value": "application/json"
-                  },
-                  {
-                    "key": "X-Tenant-Slug",
-                    "value": "{{tenant_slug}}"
-                  }
-                ],
-                "body": {
-                  "mode": "raw",
-                  "raw": "{\n    \"route_id\": \"{{route_id}}\",\n    \"stop_name\": \"School Main Entrance\",\n    \"stop_address\": \"Av. Example 123, Lima\",\n    \"latitude\": -12.046374,\n    \"longitude\": -77.042793,\n    \"sequence_order\": 1,\n    \"scheduled_time\": \"07:15:00\"\n}"
-                },
-                "url": {
-                  "raw": "{{base_url}}/tracking/route-stops",
-                  "host": [
-                    "{{base_url}}"
-                  ],
-                  "path": [
-                    "tracking",
-                    "route-stops"
-                  ]
-                }
-              },
-              "response": []
-            },
-            {
-              "name": "List Route Stops",
-              "request": {
-                "auth": {
-                  "type": "bearer",
-                  "bearer": [
-                    {
-                      "key": "token",
-                      "value": "{{token}}",
-                      "type": "string"
-                    }
-                  ]
-                },
-                "method": "GET",
-                "header": [
-                  {
-                    "key": "X-Tenant-Slug",
-                    "value": "{{tenant_slug}}"
-                  }
-                ],
-                "url": {
-                  "raw": "{{base_url}}/tracking/routes/:route_id/stops",
-                  "host": [
-                    "{{base_url}}"
-                  ],
-                  "path": [
-                    "tracking",
-                    "routes",
-                    ":route_id",
-                    "stops"
-                  ],
-                  "variable": [
-                    {
-                      "key": "route_id",
-                      "value": "{{route_id}}"
-                    }
-                  ]
-                }
-              },
-              "response": []
-            },
-            {
-              "name": "Delete Route Stop",
-              "request": {
-                "auth": {
-                  "type": "bearer",
-                  "bearer": [
-                    {
-                      "key": "token",
-                      "value": "{{token}}",
-                      "type": "string"
-                    }
-                  ]
-                },
-                "method": "DELETE",
-                "header": [
-                  {
-                    "key": "X-Tenant-Slug",
-                    "value": "{{tenant_slug}}"
-                  }
-                ],
-                "url": {
-                  "raw": "{{base_url}}/tracking/route-stops/:stop_id",
-                  "host": [
-                    "{{base_url}}"
-                  ],
-                  "path": [
-                    "tracking",
-                    "route-stops",
-                    ":stop_id"
-                  ],
-                  "variable": [
-                    {
-                      "key": "stop_id",
-                      "value": "{{stop_id}}"
-                    }
-                  ]
-                }
-              },
-              "response": []
-            }
-          ]
-        },
-        {
-          "name": "Riders",
-          "item": [
-            {
-              "name": "Create Rider",
-              "event": [
-                {
-                  "listen": "test",
-                  "script": {
-                    "exec": [
-                      "const jsonData = pm.response.json();",
-                      "if (jsonData.id) {",
-                      "    pm.environment.set(\"rider_id\", jsonData.id);",
-                      "}"
-                    ],
-                    "type": "text/javascript",
-                    "packages": {},
-                    "requests": {}
-                  }
-                }
-              ],
-              "request": {
-                "auth": {
-                  "type": "bearer",
-                  "bearer": [
-                    {
-                      "key": "token",
-                      "value": "{{token}}",
-                      "type": "string"
-                    }
-                  ]
-                },
-                "method": "POST",
-                "header": [
-                  {
-                    "key": "Content-Type",
-                    "value": "application/json"
-                  },
-                  {
-                    "key": "X-Tenant-Slug",
-                    "value": "{{tenant_slug}}"
-                  }
-                ],
-                "body": {
-                  "mode": "raw",
-                  "raw": "{\n    \"company_id\": \"{{company_id}}\",\n    \"rider_type\": \"student\",\n    \"first_name\": \"Maria\",\n    \"last_name\": \"Garcia\",\n    \"date_of_birth\": \"2015-05-20\",\n    \"grade\": \"5th Grade\",\n    \"guardian_name\": \"Carlos Garcia\",\n    \"guardian_phone\": \"+1234567890\",\n    \"guardian_email\": \"carlos@mail.com\",\n    \"home_address\": \"456 Oak St\",\n    \"home_latitude\": -12.046374,\n    \"home_longitude\": -77.042793\n}"
-                },
-                "url": {
-                  "raw": "{{base_url}}/tracking/riders",
-                  "host": [
-                    "{{base_url}}"
-                  ],
-                  "path": [
-                    "tracking",
-                    "riders"
-                  ]
-                }
-              },
-              "response": []
-            },
-            {
-              "name": "List Riders",
-              "request": {
-                "auth": {
-                  "type": "bearer",
-                  "bearer": [
-                    {
-                      "key": "token",
-                      "value": "{{token}}",
-                      "type": "string"
-                    }
-                  ]
-                },
-                "method": "GET",
-                "header": [
-                  {
-                    "key": "X-Tenant-Slug",
-                    "value": "{{tenant_slug}}"
-                  }
-                ],
-                "url": {
-                  "raw": "{{base_url}}/tracking/companies/:company_id/riders",
-                  "host": [
-                    "{{base_url}}"
-                  ],
-                  "path": [
-                    "tracking",
-                    "companies",
-                    ":company_id",
-                    "riders"
-                  ],
-                  "variable": [
-                    {
-                      "key": "company_id",
-                      "value": "{{company_id}}"
-                    }
-                  ]
-                }
-              },
-              "response": []
-            },
-            {
-              "name": "Get Rider",
-              "request": {
-                "auth": {
-                  "type": "bearer",
-                  "bearer": [
-                    {
-                      "key": "token",
-                      "value": "{{token}}",
-                      "type": "string"
-                    }
-                  ]
-                },
-                "method": "GET",
-                "header": [
-                  {
-                    "key": "X-Tenant-Slug",
-                    "value": "{{tenant_slug}}"
-                  }
-                ],
-                "url": {
-                  "raw": "{{base_url}}/tracking/riders/:rider_id",
-                  "host": [
-                    "{{base_url}}"
-                  ],
-                  "path": [
-                    "tracking",
-                    "riders",
-                    ":rider_id"
-                  ],
-                  "variable": [
-                    {
-                      "key": "rider_id",
-                      "value": "{{rider_id}}"
-                    }
-                  ]
-                }
-              },
-              "response": []
-            },
-            {
-              "name": "Get Rider Status",
-              "request": {
-                "auth": {
-                  "type": "bearer",
-                  "bearer": [
-                    {
-                      "key": "token",
-                      "value": "{{token}}",
-                      "type": "string"
-                    }
-                  ]
-                },
-                "method": "GET",
-                "header": [
-                  {
-                    "key": "X-Tenant-Slug",
-                    "value": "{{tenant_slug}}"
-                  }
-                ],
-                "url": {
-                  "raw": "{{base_url}}/tracking/riders/:rider_id/status",
-                  "host": [
-                    "{{base_url}}"
-                  ],
-                  "path": [
-                    "tracking",
-                    "riders",
-                    ":rider_id",
-                    "status"
-                  ],
-                  "variable": [
-                    {
-                      "key": "rider_id",
-                      "value": "{{rider_id}}"
-                    }
-                  ]
-                },
-                "description": "Get real-time rider status (pickup, in-transit, dropped-off)"
-              },
-              "response": []
-            },
-            {
-              "name": "Update Rider",
-              "request": {
-                "auth": {
-                  "type": "bearer",
-                  "bearer": [
-                    {
-                      "key": "token",
-                      "value": "{{token}}",
-                      "type": "string"
-                    }
-                  ]
-                },
-                "method": "PATCH",
-                "header": [
-                  {
-                    "key": "Content-Type",
-                    "value": "application/json"
-                  },
-                  {
-                    "key": "X-Tenant-Slug",
-                    "value": "{{tenant_slug}}"
-                  }
-                ],
-                "body": {
-                  "mode": "raw",
-                  "raw": "{\n    \"grade\": \"6th Grade\",\n    \"guardian_phone\": \"+0987654322\"\n}"
-                },
-                "url": {
-                  "raw": "{{base_url}}/tracking/riders/:rider_id",
-                  "host": [
-                    "{{base_url}}"
-                  ],
-                  "path": [
-                    "tracking",
-                    "riders",
-                    ":rider_id"
-                  ],
-                  "variable": [
-                    {
-                      "key": "rider_id",
-                      "value": "{{rider_id}}"
-                    }
-                  ]
-                }
-              },
-              "response": []
-            },
-            {
-              "name": "Delete Rider",
-              "request": {
-                "auth": {
-                  "type": "bearer",
-                  "bearer": [
-                    {
-                      "key": "token",
-                      "value": "{{token}}",
-                      "type": "string"
-                    }
-                  ]
-                },
-                "method": "DELETE",
-                "header": [
-                  {
-                    "key": "X-Tenant-Slug",
-                    "value": "{{tenant_slug}}"
-                  }
-                ],
-                "url": {
-                  "raw": "{{base_url}}/tracking/riders/:rider_id",
-                  "host": [
-                    "{{base_url}}"
-                  ],
-                  "path": [
-                    "tracking",
-                    "riders",
-                    ":rider_id"
-                  ],
-                  "variable": [
-                    {
-                      "key": "rider_id",
-                      "value": "{{rider_id}}"
-                    }
-                  ]
-                }
-              },
-              "response": []
-            },
-            {
-              "name": "Assign Rider to Route",
-              "request": {
-                "auth": {
-                  "type": "bearer",
-                  "bearer": [
-                    {
-                      "key": "token",
-                      "value": "{{token}}",
-                      "type": "string"
-                    }
-                  ]
-                },
-                "method": "POST",
-                "header": [
-                  {
-                    "key": "Content-Type",
-                    "value": "application/json"
-                  },
-                  {
-                    "key": "X-Tenant-Slug",
-                    "value": "{{tenant_slug}}"
-                  }
-                ],
-                "body": {
-                  "mode": "raw",
-                  "raw": "{\n    \"rider_id\": \"{{rider_id}}\",\n    \"route_id\": \"{{route_id}}\",\n    \"pickup_stop_id\": \"d69813e2-6da4-4f60-92f0-7d4641aceeac\",\n    \"dropoff_stop_id\": \"d1780932-a1a4-43c0-b54e-4a86cca9997d\"\n}"
-                },
-                "url": {
-                  "raw": "{{base_url}}/tracking/assignments",
-                  "host": [
-                    "{{base_url}}"
-                  ],
-                  "path": [
-                    "tracking",
-                    "assignments"
-                  ]
-                }
-              },
-              "response": []
-            },
-            {
-              "name": "List Rider Assignments",
-              "request": {
-                "auth": {
-                  "type": "bearer",
-                  "bearer": [
-                    {
-                      "key": "token",
-                      "value": "{{token}}",
-                      "type": "string"
-                    }
-                  ]
-                },
-                "method": "GET",
-                "header": [
-                  {
-                    "key": "X-Tenant-Slug",
-                    "value": "{{tenant_slug}}"
-                  }
-                ],
-                "url": {
-                  "raw": "{{base_url}}/tracking/assignments?route_id={{route_id}}&is_active=true",
-                  "host": [
-                    "{{base_url}}"
-                  ],
-                  "path": [
-                    "tracking",
-                    "assignments"
-                  ],
-                  "query": [
-                    {
-                      "key": "route_id",
-                      "value": "{{route_id}}"
-                    },
-                    {
-                      "key": "is_active",
-                      "value": "true"
-                    }
-                  ]
-                }
-              },
-              "response": []
-            },
-            {
-              "name": "Unassign Rider",
-              "request": {
-                "auth": {
-                  "type": "bearer",
-                  "bearer": [
-                    {
-                      "key": "token",
-                      "value": "{{token}}",
-                      "type": "string"
-                    }
-                  ]
-                },
-                "method": "DELETE",
-                "header": [
-                  {
-                    "key": "X-Tenant-Slug",
-                    "value": "{{tenant_slug}}"
-                  }
-                ],
-                "url": {
-                  "raw": "{{base_url}}/tracking/assignments/:assignment_id",
-                  "host": [
-                    "{{base_url}}"
-                  ],
-                  "path": [
-                    "tracking",
-                    "assignments",
-                    ":assignment_id"
-                  ],
-                  "variable": [
-                    {
-                      "key": "assignment_id",
-                      "value": "dc5eecf6-ce2b-4635-abdf-fd2e8e58e76c"
-                    }
-                  ]
-                }
-              },
-              "response": []
-            }
-          ]
-        },
-        {
-          "name": "Rider Events",
-          "item": [
-            {
-              "name": "Checkin",
-              "request": {
-                "auth": {
-                  "type": "bearer",
-                  "bearer": [
-                    {
-                      "key": "token",
-                      "value": "{{token}}",
-                      "type": "string"
-                    }
-                  ]
-                },
-                "method": "POST",
-                "header": [
-                  {
-                    "key": "Content-Type",
-                    "value": "application/json"
-                  },
-                  {
-                    "key": "X-Tenant-Slug",
-                    "value": "{{tenant_slug}}"
-                  }
-                ],
-                "body": {
-                  "mode": "raw",
-                  "raw": "{\n    \"rider_id\": \"{{rider_id}}\",\n    \"vehicle_id\": \"{{vehicle_id}}\",\n    \"route_id\": \"{{route_id}}\",\n    \"event_type\": \"check_in\",\n    \"location_latitude\": -12.046374,\n    \"location_longitude\": -77.042793,\n    \"notes\": \"Abordó en Paradero Central\"\n}",
-                  "options": {
-                    "raw": {
-                      "language": "json"
-                    }
-                  }
-                },
-                "url": {
-                  "raw": "{{base_url}}/tracking/events",
-                  "host": [
-                    "{{base_url}}"
-                  ],
-                  "path": [
-                    "tracking",
-                    "events"
-                  ]
-                }
-              },
-              "response": []
-            },
-            {
-              "name": "Checkout",
-              "request": {
-                "auth": {
-                  "type": "bearer",
-                  "bearer": [
-                    {
-                      "key": "token",
-                      "value": "{{token}}",
-                      "type": "string"
-                    }
-                  ]
-                },
-                "method": "POST",
-                "header": [
-                  {
-                    "key": "Content-Type",
-                    "value": "application/json"
-                  },
-                  {
-                    "key": "X-Tenant-Slug",
-                    "value": "{{tenant_slug}}"
-                  }
-                ],
-                "body": {
-                  "mode": "raw",
-                  "raw": "{\n    \"rider_id\": \"{{rider_id}}\",\n    \"vehicle_id\": \"{{vehicle_id}}\",\n    \"route_id\": \"{{route_id}}\",\n    \"event_type\": \"checkout\",\n    \"location_latitude\": -12.056789,\n    \"location_longitude\": -77.052345,\n    \"notes\": \"Bajó en Paradero Norte\"\n}",
-                  "options": {
-                    "raw": {
-                      "language": "json"
-                    }
-                  }
-                },
-                "url": {
-                  "raw": "{{base_url}}/tracking/events",
-                  "host": [
-                    "{{base_url}}"
-                  ],
-                  "path": [
-                    "tracking",
-                    "events"
-                  ]
-                }
-              },
-              "response": []
-            },
-            {
-              "name": "Not presented",
-              "request": {
-                "auth": {
-                  "type": "bearer",
-                  "bearer": [
-                    {
-                      "key": "token",
-                      "value": "{{token}}",
-                      "type": "string"
-                    }
-                  ]
-                },
-                "method": "POST",
-                "header": [
-                  {
-                    "key": "Content-Type",
-                    "value": "application/json"
-                  },
-                  {
-                    "key": "X-Tenant-Slug",
-                    "value": "{{tenant_slug}}"
-                  }
-                ],
-                "body": {
-                  "mode": "raw",
-                  "raw": "{\n    \"rider_id\": \"{{rider_id}}\",\n    \"vehicle_id\": \"{{vehicle_id}}\",\n    \"route_id\": \"{{route_id}}\",\n    \"event_type\": \"no_show\",\n    \"location_latitude\": -12.046374,\n    \"location_longitude\": -77.042793,\n    \"notes\": \"No se presentó al abordaje\"\n}",
-                  "options": {
-                    "raw": {
-                      "language": "json"
-                    }
-                  }
-                },
-                "url": {
-                  "raw": "{{base_url}}/tracking/events",
-                  "host": [
-                    "{{base_url}}"
-                  ],
-                  "path": [
-                    "tracking",
-                    "events"
-                  ]
-                }
-              },
-              "response": []
-            },
-            {
-              "name": "Emergency",
-              "request": {
-                "auth": {
-                  "type": "bearer",
-                  "bearer": [
-                    {
-                      "key": "token",
-                      "value": "{{token}}",
-                      "type": "string"
-                    }
-                  ]
-                },
-                "method": "POST",
-                "header": [
-                  {
-                    "key": "Content-Type",
-                    "value": "application/json"
-                  },
-                  {
-                    "key": "X-Tenant-Slug",
-                    "value": "{{tenant_slug}}"
-                  }
-                ],
-                "body": {
-                  "mode": "raw",
-                  "raw": "{\n    \"rider_id\": \"{{rider_id}}\",\n    \"vehicle_id\": \"{{vehicle_id}}\",\n    \"route_id\": \"{{route_id}}\",\n    \"event_type\": \"emergency\",\n    \"location_latitude\": -12.046374,\n    \"location_longitude\": -77.042793,\n    \"notes\": \"Emergencia médica reportada\"\n}",
-                  "options": {
-                    "raw": {
-                      "language": "json"
-                    }
-                  }
-                },
-                "url": {
-                  "raw": "{{base_url}}/tracking/events",
-                  "host": [
-                    "{{base_url}}"
-                  ],
-                  "path": [
-                    "tracking",
-                    "events"
-                  ]
-                }
-              },
-              "response": []
-            }
-          ]
-        },
-        {
-          "name": "Vehicle Alerts",
-          "item": [
-            {
-              "name": "Traffic Delay",
-              "request": {
-                "auth": {
-                  "type": "bearer",
-                  "bearer": [
-                    {
-                      "key": "token",
-                      "value": "{{token}}",
-                      "type": "string"
-                    }
-                  ]
-                },
-                "method": "POST",
-                "header": [
-                  {
-                    "key": "Content-Type",
-                    "value": "application/json"
-                  },
-                  {
-                    "key": "X-Tenant-Slug",
-                    "value": "{{tenant_slug}}"
-                  }
-                ],
-                "body": {
-                  "mode": "raw",
-                  "raw": "{\n    \"route_id\": \"{{route_id}}\",\n    \"vehicle_id\": \"{{vehicle_id}}\",\n    \"alert_type\": \"delay\",\n    \"title\": \"Retraso por tráfico\",\n    \"message\": \"La ruta se encuentra retrasada 15 minutos debido a congestión vehicular en Av. Principal\",\n    \"severity\": \"medium\",\n    \"estimated_delay_minutes\": 15\n}",
-                  "options": {
-                    "raw": {
-                      "language": "json"
-                    }
-                  }
-                },
-                "url": {
-                  "raw": "{{base_url}}/tracking/alerts",
-                  "host": [
-                    "{{base_url}}"
-                  ],
-                  "path": [
-                    "tracking",
-                    "alerts"
-                  ]
-                }
-              },
-              "response": []
-            },
-            {
-              "name": "Breakdown",
-              "request": {
-                "auth": {
-                  "type": "bearer",
-                  "bearer": [
-                    {
-                      "key": "token",
-                      "value": "{{token}}",
-                      "type": "string"
-                    }
-                  ]
-                },
-                "method": "POST",
-                "header": [
-                  {
-                    "key": "Content-Type",
-                    "value": "application/json"
-                  },
-                  {
-                    "key": "X-Tenant-Slug",
-                    "value": "{{tenant_slug}}"
-                  }
-                ],
-                "body": {
-                  "mode": "raw",
-                  "raw": "{\n    \"route_id\": \"{{route_id}}\",\n    \"vehicle_id\": \"{{vehicle_id}}\",\n    \"alert_type\": \"breakdown\",\n    \"title\": \"Avería mecánica\",\n    \"message\": \"El vehículo presenta una avería en el motor. Se ha solicitado vehículo de reemplazo.\",\n    \"severity\": \"high\",\n    \"estimated_delay_minutes\": 45\n}",
-                  "options": {
-                    "raw": {
-                      "language": "json"
-                    }
-                  }
-                },
-                "url": {
-                  "raw": "{{base_url}}/tracking/alerts",
-                  "host": [
-                    "{{base_url}}"
-                  ],
-                  "path": [
-                    "tracking",
-                    "alerts"
-                  ]
-                }
-              },
-              "response": []
-            },
-            {
-              "name": "Cancellation",
-              "request": {
-                "auth": {
-                  "type": "bearer",
-                  "bearer": [
-                    {
-                      "key": "token",
-                      "value": "{{token}}",
-                      "type": "string"
-                    }
-                  ]
-                },
-                "method": "POST",
-                "header": [
-                  {
-                    "key": "Content-Type",
-                    "value": "application/json"
-                  },
-                  {
-                    "key": "X-Tenant-Slug",
-                    "value": "{{tenant_slug}}"
-                  }
-                ],
-                "body": {
-                  "mode": "raw",
-                  "raw": "{\n    \"route_id\": \"{{route_id}}\",\n    \"vehicle_id\": \"{{vehicle_id}}\",\n    \"alert_type\": \"cancellation\",\n    \"title\": \"Ruta cancelada\",\n    \"message\": \"La ruta ha sido cancelada debido a condiciones climáticas adversas. Se reprogramará para mañana.\",\n    \"severity\": \"high\"\n}",
-                  "options": {
-                    "raw": {
-                      "language": "json"
-                    }
-                  }
-                },
-                "url": {
-                  "raw": "{{base_url}}/tracking/alerts",
-                  "host": [
-                    "{{base_url}}"
-                  ],
-                  "path": [
-                    "tracking",
-                    "alerts"
-                  ]
-                }
-              },
-              "response": []
-            },
-            {
-              "name": "Emergency",
-              "request": {
-                "auth": {
-                  "type": "bearer",
-                  "bearer": [
-                    {
-                      "key": "token",
-                      "value": "{{token}}",
-                      "type": "string"
-                    }
-                  ]
-                },
-                "method": "POST",
-                "header": [
-                  {
-                    "key": "Content-Type",
-                    "value": "application/json"
-                  },
-                  {
-                    "key": "X-Tenant-Slug",
-                    "value": "{{tenant_slug}}"
-                  }
-                ],
-                "body": {
-                  "mode": "raw",
-                  "raw": "{\n    \"route_id\": \"{{route_id}}\",\n    \"vehicle_id\": \"{{vehicle_id}}\",\n    \"alert_type\": \"emergency\",\n    \"title\": \"Emergencia en ruta\",\n    \"message\": \"Emergencia médica reportada. Se ha contactado a servicios de emergencia.\",\n    \"severity\": \"critical\"\n}",
-                  "options": {
-                    "raw": {
-                      "language": "json"
-                    }
-                  }
-                },
-                "url": {
-                  "raw": "{{base_url}}/tracking/alerts",
-                  "host": [
-                    "{{base_url}}"
-                  ],
-                  "path": [
-                    "tracking",
-                    "alerts"
-                  ]
+                  "raw": "{{base_url}}/tracking/vehicles/{{vehicle_id}}",
+                  "host": ["{{base_url}}"],
+                  "path": ["tracking", "vehicles", "{{vehicle_id}}"]
                 }
               },
               "response": []
@@ -2774,100 +2221,6 @@
           ]
         }
       ]
-    }
-  ],
-  "event": [
-    {
-      "listen": "prerequest",
-      "script": {
-        "type": "text/javascript",
-        "exec": [
-          "// Auto-refresh token on 401",
-          "const token = pm.environment.get(\"token\");",
-          "if (!token && !pm.request.url.path.join(\"/\").includes(\"auth\")) {",
-          "    console.warn(\"⚠️ No token found. Please run Auth > Login first.\");",
-          "}"
-        ]
-      }
-    },
-    {
-      "listen": "test",
-      "script": {
-        "type": "text/javascript",
-        "exec": [
-          "// Global test: Auto-refresh on 401",
-          "if (pm.response.code === 401 && pm.info.requestName !== 'Login' && pm.info.requestName !== 'Refresh Token') {",
-          "    console.log(\"🔄 Token expired, attempting auto-refresh...\");",
-          "    const refreshToken = pm.environment.get(\"refresh_token\");",
-          "    if (refreshToken) {",
-          "        pm.sendRequest({",
-          "            url: pm.environment.get(\"base_url\") + \"/auth/refresh_token\",",
-          "            method: 'POST',",
-          "            header: {'Content-Type': 'application/json'},",
-          "            body: {",
-          "                mode: 'raw',",
-          "                raw: JSON.stringify({refresh_token: refreshToken})",
-          "            }",
-          "        }, (err, res) => {",
-          "            if (!err && res.code === 200) {",
-          "                const newToken = res.json().access_token;",
-          "                pm.environment.set(\"token\", newToken);",
-          "                console.log(\"✅ Token refreshed - retry your request\");",
-          "            } else {",
-          "                console.error(\"❌ Token refresh failed - please login again\");",
-          "            }",
-          "        });",
-          "    }",
-          "}"
-        ]
-      }
-    }
-  ],
-  "variable": [
-    {
-      "key": "base_url",
-      "value": "http://localhost:8080/api/v1",
-      "type": "string"
-    },
-    {
-      "key": "token",
-      "value": "",
-      "type": "string"
-    },
-    {
-      "key": "refresh_token",
-      "value": "",
-      "type": "string"
-    },
-    {
-      "key": "user_id",
-      "value": "",
-      "type": "string"
-    },
-    {
-      "key": "tenant_slug",
-      "value": "acme6",
-      "type": "string"
-    },
-    {
-      "key": "company_id",
-      "value": "",
-      "type": "string"
-    },
-    {
-      "key": "vehicle_id",
-      "value": "",
-      "type": "string"
-    },
-    {
-      "key": "route_id",
-      "value": "",
-      "type": "string"
-    },
-    {
-      "key": "rider_id",
-      "value": "",
-      "type": "string"
     }
   ]
 }

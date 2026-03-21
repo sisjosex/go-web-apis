@@ -1,5 +1,5 @@
-.PHONY: help swagger build run-platform run-tenant \
-        dev-platform dev-tenant \
+.PHONY: help swagger build run \
+        dev \
         migrate migrate-list tenant-list tenant-migrate \
         test test-auth test-users test-core test-tenancy test-tracking test-inventory test-sales test-purchasing test-all \
         db-reset docker-up docker-down clean
@@ -30,12 +30,10 @@ help:
 	@echo "  make build            - Build server binary"
 	@echo ""
 	@echo "🚀 RUN  (compiled binary)"
-	@echo "  make run-platform     - Platform server (port 8080, uses .env.platform)"
-	@echo "  make run-tenant       - Tenant server   (port 8081, uses .env.tenant)"
+	@echo "  make run              - Start server (port 8080)"
 	@echo ""
-	@echo "💻 DEV  (go run, hot-reload with air if installed)"
-	@echo "  make dev-platform     - Platform in dev mode"
-	@echo "  make dev-tenant       - Tenant in dev mode"
+	@echo "💻 DEV"
+	@echo "  make dev              - Start development server"
 	@echo ""
 	@echo "🧪 TESTS"
 	@echo "  make test             - Reset DB + run main test suite"
@@ -104,34 +102,16 @@ build:
 # ════════════════════════════════════════════════════════════════
 # RUN (compiled)
 # ════════════════════════════════════════════════════════════════
-run-platform: build
-	@echo "🚀 Platform → http://localhost:8080  |  Swagger → http://localhost:8080/swagger/index.html"
-	./$(BINARY) -mode=platform
-
-run-tenant: build
-	@echo "🚀 Tenant   → http://localhost:8081  |  Swagger → http://localhost:8081/swagger/index.html"
-	./$(BINARY) -mode=tenant
+run: build
+	@echo "🚀 Server → http://localhost:8080  |  Swagger → http://localhost:8080/swagger/index.html"
+	./$(BINARY)
 
 # ════════════════════════════════════════════════════════════════
-# DEV (go run, with optional air hot-reload)
+# DEV
 # ════════════════════════════════════════════════════════════════
-dev-platform:
-	@echo "💻 Platform dev mode → http://localhost:8080"
-	@if command -v air > /dev/null 2>&1; then \
-		air -c .air.toml; \
-	else \
-		echo "⚠️  air not installed (go install github.com/cosmtrek/air@latest). Running without hot-reload..."; \
-		go run ./cmd/server -mode=platform; \
-	fi
-
-dev-tenant:
-	@echo "💻 Tenant dev mode → http://localhost:8081"
-	@if command -v air > /dev/null 2>&1; then \
-		air -c .air.toml; \
-	else \
-		echo "⚠️  air not installed (go install github.com/cosmtrek/air@latest). Running without hot-reload..."; \
-		go run ./cmd/server -mode=tenant; \
-	fi
+dev:
+	@echo "💻 Dev mode → http://localhost:8080"
+	go run ./cmd/server
 
 # ════════════════════════════════════════════════════════════════
 # TESTS
