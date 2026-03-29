@@ -386,8 +386,8 @@ func (ctrl *CategoryController) AssignProductToCategory(c *gin.Context) {
 		return
 	}
 
-	productID := c.Param("productId")
-	categoryID := c.Param("id")
+	productID := c.Param("id")
+	categoryID := c.Param("category_id")
 
 	err = ctrl.categoryService.AssignProductToCategory(c.Request.Context(), tenantID, productID, categoryID)
 	if err != nil {
@@ -422,8 +422,8 @@ func (ctrl *CategoryController) RemoveProductFromCategory(c *gin.Context) {
 		return
 	}
 
-	productID := c.Param("productId")
-	categoryID := c.Param("id")
+	productID := c.Param("id")
+	categoryID := c.Param("category_id")
 
 	err = ctrl.categoryService.RemoveProductFromCategory(c.Request.Context(), tenantID, productID, categoryID)
 	if err != nil {

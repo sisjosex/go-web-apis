@@ -1,0 +1,1 @@
+DROP FUNCTION IF EXISTS inventory.sp_add_product_media(UUID, UUID, UUID, VARCHAR, TEXT, VARCHAR, BOOLEAN, INT);

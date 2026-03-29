@@ -129,6 +129,76 @@ func (ctrl *ProductController) GetProductBySkU(c *gin.Context) {
 	c.JSON(http.StatusOK, product)
 }
 
+// AddProductMedia godoc
+// @Summary Add media to a product or variant option
+// @Tags inventory
+// @Accept json
+// @Produce json
+// @Param id path string true "Product ID"
+// @Param request body models.AddProductMediaDto true "Media data"
+// @Success 201 {object} models.AddProductMediaResponse
+// @Router /api/v1/inventory/products/:id/media [post]
+func (ctrl *ProductController) AddProductMedia(c *gin.Context) {
+	tenantIDRaw, exists := c.Get("tenant_id")
+	if !exists || tenantIDRaw == nil {
+		c.JSON(http.StatusUnauthorized, coreErrors.BuildErrorSingle(c, "auth.invalid-tenant"))
+		return
+	}
+	tenantID, err := uuid.Parse(tenantIDRaw.(string))
+	if err != nil {
+		c.JSON(http.StatusUnauthorized, coreErrors.BuildErrorSingle(c, "auth.invalid-tenant"))
+		return
+	}
+
+	productID := c.Param("id")
+
+	var dto models.AddProductMediaDto
+	if err := c.ShouldBindJSON(&dto); err != nil {
+		c.JSON(http.StatusBadRequest, coreErrors.BuildErrorDetail(c, "validation.invalid", err.Error()))
+		return
+	}
+
+	result, err := ctrl.productService.AddProductMedia(c.Request.Context(), tenantID, productID, dto)
+	if err != nil {
+		status := utils.GetHTTPStatusFromError(err)
+		c.JSON(status, coreErrors.BuildError(c, err))
+		return
+	}
+
+	c.JSON(http.StatusCreated, result)
+}
+
+// RemoveProductMedia godoc
+// @Summary Remove a media item from a product
+// @Tags inventory
+// @Produce json
+// @Param id path string true "Product ID"
+// @Param media_id path string true "Media ID"
+// @Success 200 {object} map[string]string
+// @Router /api/v1/inventory/products/:id/media/:media_id [delete]
+func (ctrl *ProductController) RemoveProductMedia(c *gin.Context) {
+	tenantIDRaw, exists := c.Get("tenant_id")
+	if !exists || tenantIDRaw == nil {
+		c.JSON(http.StatusUnauthorized, coreErrors.BuildErrorSingle(c, "auth.invalid-tenant"))
+		return
+	}
+	tenantID, err := uuid.Parse(tenantIDRaw.(string))
+	if err != nil {
+		c.JSON(http.StatusUnauthorized, coreErrors.BuildErrorSingle(c, "auth.invalid-tenant"))
+		return
+	}
+
+	mediaID := c.Param("media_id")
+
+	if err := ctrl.productService.RemoveProductMedia(c.Request.Context(), tenantID, mediaID); err != nil {
+		status := utils.GetHTTPStatusFromError(err)
+		c.JSON(status, coreErrors.BuildError(c, err))
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"message": "Media removed successfully"})
+}
+
 // ListProducts godoc
 // @Summary List all products
 // @Description Retrieve a paginated list of active products

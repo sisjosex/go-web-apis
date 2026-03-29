@@ -47,7 +47,7 @@ func (ctrl *StockController) UpdateReorderLevel(c *gin.Context) {
 		return
 	}
 
-	productID := c.Param("product_id")
+	productID := c.Param("id")
 	var dto models.UpdateReorderLevelDto
 
 	if err := c.ShouldBindJSON(&dto); err != nil {

@@ -64,3 +64,11 @@ func (s *ProductService) GetProductBySkU(ctx context.Context, tenantID uuid.UUID
 func (s *ProductService) ListProducts(ctx context.Context, tenantID uuid.UUID, limit, offset int) ([]models.Product, error) {
 	return s.repository.ListProducts(ctx, tenantID, limit, offset)
 }
+
+func (s *ProductService) AddProductMedia(ctx context.Context, tenantID uuid.UUID, productID string, dto models.AddProductMediaDto) (*models.AddProductMediaResponse, error) {
+	return s.repository.AddProductMedia(ctx, tenantID, productID, dto)
+}
+
+func (s *ProductService) RemoveProductMedia(ctx context.Context, tenantID uuid.UUID, mediaID string) error {
+	return s.repository.RemoveProductMedia(ctx, tenantID, mediaID)
+}

@@ -53,6 +53,18 @@
       "description": "Auto-set on product create"
     },
     {
+      "key": "media_id",
+      "value": "",
+      "type": "string",
+      "description": "Auto-set on add product media"
+    },
+    {
+      "key": "variant_option_id",
+      "value": "",
+      "type": "string",
+      "description": "ID of a variant option (from GET product response → variants[].options[].id)"
+    },
+    {
       "key": "batch_id",
       "value": "",
       "type": "string",
@@ -814,6 +826,95 @@
                   "raw": "{{base_url}}/inventory/products/sku/PROD-001",
                   "host": ["{{base_url}}"],
                   "path": ["inventory", "products", "sku", "PROD-001"]
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "Add Media to Product",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "exec": [
+                      "const jsonData = pm.response.json();",
+                      "if ((pm.response.code === 200 || pm.response.code === 201) && jsonData.media_id) {",
+                      "    pm.environment.set('media_id', jsonData.media_id);",
+                      "    console.log('\\u2705 media_id saved:', jsonData.media_id);",
+                      "}"
+                    ],
+                    "type": "text/javascript"
+                  }
+                }
+              ],
+              "request": {
+                "method": "POST",
+                "header": [
+                  { "key": "Content-Type", "value": "application/json" },
+                  { "key": "X-Tenant-Slug", "value": "{{tenant_slug}}" }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n    \"media_type\": \"image\",\n    \"url\": \"https://cdn.example.com/products/tshirt-main.jpg\",\n    \"alt_text\": \"Classic T-Shirt front view\",\n    \"is_primary\": true,\n    \"sort_order\": 0\n}",
+                  "options": { "raw": { "language": "json" } }
+                },
+                "url": {
+                  "raw": "{{base_url}}/inventory/products/{{product_id}}/media",
+                  "host": ["{{base_url}}"],
+                  "path": ["inventory", "products", "{{product_id}}", "media"]
+                },
+                "description": "Add a product-level image or video. Leave `variant_option_id` out (or null) for general product media. Set `variant_option_id` to link media to a specific variant (e.g., red shirt photo)."
+              },
+              "response": []
+            },
+            {
+              "name": "Add Media to Variant Option",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "exec": [
+                      "const jsonData = pm.response.json();",
+                      "if ((pm.response.code === 200 || pm.response.code === 201) && jsonData.media_id) {",
+                      "    pm.environment.set('media_id', jsonData.media_id);",
+                      "    console.log('\\u2705 media_id saved:', jsonData.media_id);",
+                      "}"
+                    ],
+                    "type": "text/javascript"
+                  }
+                }
+              ],
+              "request": {
+                "method": "POST",
+                "header": [
+                  { "key": "Content-Type", "value": "application/json" },
+                  { "key": "X-Tenant-Slug", "value": "{{tenant_slug}}" }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n    \"variant_option_id\": \"{{variant_option_id}}\",\n    \"media_type\": \"image\",\n    \"url\": \"https://cdn.example.com/products/tshirt-red.jpg\",\n    \"alt_text\": \"T-Shirt in Red\",\n    \"is_primary\": true,\n    \"sort_order\": 0\n}",
+                  "options": { "raw": { "language": "json" } }
+                },
+                "url": {
+                  "raw": "{{base_url}}/inventory/products/{{product_id}}/media",
+                  "host": ["{{base_url}}"],
+                  "path": ["inventory", "products", "{{product_id}}", "media"]
+                },
+                "description": "Link an image to a specific variant option (e.g., red shirt photo → option 'Red'). Get the variant_option_id from the GET product response under variants[].options[].id"
+              },
+              "response": []
+            },
+            {
+              "name": "Delete Product Media",
+              "request": {
+                "method": "DELETE",
+                "header": [
+                  { "key": "X-Tenant-Slug", "value": "{{tenant_slug}}" }
+                ],
+                "url": {
+                  "raw": "{{base_url}}/inventory/products/{{product_id}}/media/{{media_id}}",
+                  "host": ["{{base_url}}"],
+                  "path": ["inventory", "products", "{{product_id}}", "media", "{{media_id}}"]
                 }
               },
               "response": []

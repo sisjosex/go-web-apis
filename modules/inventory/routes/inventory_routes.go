@@ -44,6 +44,10 @@ func RegisterInventoryRoutes(
 	api.GET("/products/:id", productController.GetProduct)
 	api.GET("/products/sku/:sku", productController.GetProductBySkU)
 
+	// Product media
+	api.POST("/products/:id/media", productController.AddProductMedia)
+	api.DELETE("/products/:id/media/:media_id", productController.RemoveProductMedia)
+
 	// Movements
 	api.POST("/movements", movementController.RecordMovement)
 	api.GET("/movements/:id", movementController.GetMovement)
@@ -52,7 +56,7 @@ func RegisterInventoryRoutes(
 	// Stock Management
 	api.POST("/reserve", stockController.ReserveStock)
 	api.POST("/release-reserved", stockController.ReleaseReservedStock)
-	api.PATCH("/products/:product_id/reorder-level", stockController.UpdateReorderLevel)
+	api.PATCH("/products/:id/reorder-level", stockController.UpdateReorderLevel)
 
 	// Categories
 	api.GET("/categories/search", categoryController.SearchCategories)
@@ -64,8 +68,8 @@ func RegisterInventoryRoutes(
 	api.DELETE("/categories/:id", categoryController.DeleteCategory)
 
 	// Product-Category mapping
-	api.POST("/products/:productId/categories/:id", categoryController.AssignProductToCategory)
-	api.DELETE("/products/:productId/categories/:id", categoryController.RemoveProductFromCategory)
+	api.POST("/products/:id/categories/:category_id", categoryController.AssignProductToCategory)
+	api.DELETE("/products/:id/categories/:category_id", categoryController.RemoveProductFromCategory)
 
 	// Batches routes (integrated into inventory)
 	// Public batch routes

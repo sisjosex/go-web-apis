@@ -79,20 +79,27 @@ func (r *ProductRepository) GetProduct(ctx context.Context, tenantID uuid.UUID, 
 
 func (r *ProductRepository) GetProductWithVariants(ctx context.Context, tenantID uuid.UUID, productID string) (*models.ProductDetail, error) {
 	var p models.ProductDetail
-	var variantsJSON []byte
+	var mediaJSON, variantsJSON []byte
 
 	err := r.dbService.QueryRow(
 		ctx,
-		`SELECT id, sku, name, description, base_price, has_variants, status, created_at, variants
+		`SELECT id, sku, name, description, base_price, has_variants, status, created_at, media, variants
 		 FROM inventory.sp_get_product_with_variants($1, $2)`,
 		tenantID, productID,
-	).Scan(&p.ID, &p.SKU, &p.Name, &p.Description, &p.BasePrice, &p.HasVariants, &p.Status, &p.CreatedAt, &variantsJSON)
+	).Scan(&p.ID, &p.SKU, &p.Name, &p.Description, &p.BasePrice, &p.HasVariants, &p.Status, &p.CreatedAt, &mediaJSON, &variantsJSON)
 
 	if err != nil {
 		if r.logger != nil {
 			r.logger.Printf("❌ Error getting product with variants: %v", err)
 		}
 		return nil, err
+	}
+
+	p.Media = []models.ProductMedia{}
+	if len(mediaJSON) > 0 {
+		if err := json.Unmarshal(mediaJSON, &p.Media); err != nil {
+			return nil, err
+		}
 	}
 
 	p.Variants = []models.VariantGroup{}
@@ -106,18 +113,18 @@ func (r *ProductRepository) GetProductWithVariants(ctx context.Context, tenantID
 }
 
 func (r *ProductRepository) GetProductBySkU(ctx context.Context, tenantID uuid.UUID, sku string) (*models.ProductDetail, error) {
-	var product models.Product
-	var variantsJSON []byte
+	var p models.ProductDetail
+	var mediaJSON, variantsJSON []byte
 
 	err := r.dbService.QueryRow(
 		ctx,
-		`SELECT id, sku, name, description, base_price, has_variants, status, created_at, variants
+		`SELECT id, sku, name, description, base_price, has_variants, status, created_at, media, variants
 		 FROM inventory.sp_get_product_with_variants(
 		     $1,
 		     (SELECT id FROM inventory.products WHERE tenant_id = $1 AND sku = $2 AND status = 'active' LIMIT 1)
 		 )`,
 		tenantID, sku,
-	).Scan(&product.ID, &product.SKU, &product.Name, &product.Description, &product.BasePrice, &product.HasVariants, &product.Status, &product.CreatedAt, &variantsJSON)
+	).Scan(&p.ID, &p.SKU, &p.Name, &p.Description, &p.BasePrice, &p.HasVariants, &p.Status, &p.CreatedAt, &mediaJSON, &variantsJSON)
 
 	if err != nil {
 		if r.logger != nil {
@@ -126,25 +133,60 @@ func (r *ProductRepository) GetProductBySkU(ctx context.Context, tenantID uuid.U
 		return nil, err
 	}
 
-	detail := &models.ProductDetail{
-		ID:          product.ID,
-		SKU:         product.SKU,
-		Name:        product.Name,
-		Description: product.Description,
-		BasePrice:   product.BasePrice,
-		HasVariants: product.HasVariants,
-		Status:      product.Status,
-		CreatedAt:   product.CreatedAt,
-		Variants:    []models.VariantGroup{},
-	}
-
-	if len(variantsJSON) > 0 {
-		if err := json.Unmarshal(variantsJSON, &detail.Variants); err != nil {
+	p.Media = []models.ProductMedia{}
+	if len(mediaJSON) > 0 {
+		if err := json.Unmarshal(mediaJSON, &p.Media); err != nil {
 			return nil, err
 		}
 	}
 
-	return detail, nil
+	p.Variants = []models.VariantGroup{}
+	if len(variantsJSON) > 0 {
+		if err := json.Unmarshal(variantsJSON, &p.Variants); err != nil {
+			return nil, err
+		}
+	}
+
+	return &p, nil
+}
+
+func (r *ProductRepository) AddProductMedia(ctx context.Context, tenantID uuid.UUID, productID string, dto models.AddProductMediaDto) (*models.AddProductMediaResponse, error) {
+	var mediaID, message string
+
+	err := r.dbService.QueryRow(
+		ctx,
+		`SELECT CAST(media_id AS VARCHAR), message
+		 FROM inventory.sp_add_product_media($1, $2, $3, $4, $5, $6, $7, $8)`,
+		tenantID, productID, dto.VariantOptionID, dto.MediaType, dto.URL, dto.AltText, dto.IsPrimary, dto.SortOrder,
+	).Scan(&mediaID, &message)
+
+	if err != nil {
+		if r.logger != nil {
+			r.logger.Printf("❌ Error adding product media: %v", err)
+		}
+		return nil, err
+	}
+
+	return &models.AddProductMediaResponse{MediaID: mediaID, Message: message}, nil
+}
+
+func (r *ProductRepository) RemoveProductMedia(ctx context.Context, tenantID uuid.UUID, mediaID string) error {
+	var message string
+
+	err := r.dbService.QueryRow(
+		ctx,
+		`SELECT message FROM inventory.sp_remove_product_media($1, $2)`,
+		tenantID, mediaID,
+	).Scan(&message)
+
+	if err != nil {
+		if r.logger != nil {
+			r.logger.Printf("❌ Error removing product media: %v", err)
+		}
+		return err
+	}
+
+	return nil
 }
 
 func (r *ProductRepository) ListProducts(ctx context.Context, tenantID uuid.UUID, limit, offset int) ([]models.Product, error) {

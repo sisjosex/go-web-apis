@@ -69,12 +69,22 @@ type Product struct {
 	CreatedAt   time.Time `db:"created_at" json:"created_at"`
 }
 
+type ProductMedia struct {
+	ID        string  `json:"id"`
+	MediaType string  `json:"media_type"`
+	URL       string  `json:"url"`
+	AltText   *string `json:"alt_text"`
+	IsPrimary bool    `json:"is_primary"`
+	SortOrder int     `json:"sort_order"`
+}
+
 type VariantOption struct {
-	ID            string  `json:"id"`
-	Name          string  `json:"name"`
-	PriceModifier float64 `json:"price_modifier"`
-	IsAvailable   bool    `json:"is_available"`
-	SortOrder     int     `json:"sort_order"`
+	ID            string         `json:"id"`
+	Name          string         `json:"name"`
+	PriceModifier float64        `json:"price_modifier"`
+	IsAvailable   bool           `json:"is_available"`
+	SortOrder     int            `json:"sort_order"`
+	Media         []ProductMedia `json:"media"`
 }
 
 type VariantGroup struct {
@@ -94,7 +104,22 @@ type ProductDetail struct {
 	HasVariants bool           `json:"has_variants"`
 	Status      string         `json:"status"`
 	CreatedAt   time.Time      `json:"created_at"`
+	Media       []ProductMedia `json:"media"`
 	Variants    []VariantGroup `json:"variants"`
+}
+
+type AddProductMediaDto struct {
+	VariantOptionID *string `json:"variant_option_id"`
+	MediaType       string  `json:"media_type" binding:"required,oneof=image video"`
+	URL             string  `json:"url" binding:"required"`
+	AltText         *string `json:"alt_text"`
+	IsPrimary       bool    `json:"is_primary"`
+	SortOrder       int     `json:"sort_order"`
+}
+
+type AddProductMediaResponse struct {
+	MediaID string `json:"media_id"`
+	Message string `json:"message"`
 }
 
 type ProductStock struct {
