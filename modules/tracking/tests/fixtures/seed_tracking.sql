@@ -12,10 +12,11 @@ DELETE FROM tracking.transport_companies;
 -- COMPANIES
 -- ================================================================
 INSERT INTO tracking.transport_companies (
-    id, name, email, phone, address, city, country, registration_number, status, created_at, updated_at
+    id, tenant_id, name, email, phone, address, city, country, registration_number, status, created_at, updated_at
 ) VALUES
 (
     'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa'::uuid,
+    '00000000-0000-0000-0000-000000000001'::uuid,
     'Main Test Transit',
     'main@test.local',
     '+1234567890',
@@ -29,6 +30,7 @@ INSERT INTO tracking.transport_companies (
 ),
 (
     'bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb'::uuid,
+    '00000000-0000-0000-0000-000000000001'::uuid,
     'Secondary Test Transit',
     'secondary@test.local',
     '+0987654321',

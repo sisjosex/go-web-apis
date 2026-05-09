@@ -1,7 +1,7 @@
 .PHONY: help swagger build run \
         dev \
         migrate migrate-list tenant-list tenant-migrate \
-        test test-auth test-users test-core test-tenancy test-tracking test-inventory test-sales test-purchasing test-all \
+        test test-auth test-users test-core test-tenancy test-tracking test-inventory test-sales test-purchasing test-billing test-all \
         db-reset docker-up docker-down clean
 
 # Build output
@@ -43,6 +43,7 @@ help:
 	@echo "  make test-inventory   - Inventory module"
 	@echo "  make test-sales       - Sales module"
 	@echo "  make test-purchasing  - Purchasing module"
+	@echo "  make test-billing     - Billing module"
 	@echo "  make test-tracking    - Tracking module"
 	@echo "  make test-users       - Users module"
 	@echo "  make test-core        - Core module"
@@ -116,7 +117,7 @@ dev:
 # ════════════════════════════════════════════════════════════════
 # TESTS
 # ════════════════════════════════════════════════════════════════
-TEST_FLAGS := -tags=integration $(GOFLAGS) -timeout=120s
+TEST_FLAGS := -tags=integration $(GOFLAGS) -timeout=120s -p 1
 
 test: db-reset
 	go test $(TEST_FLAGS) \
@@ -138,7 +139,8 @@ test-all: db-reset
 		./modules/tracking/tests \
 		./modules/inventory/tests \
 		./modules/sales/tests \
-		./modules/purchasing/tests
+		./modules/purchasing/tests \
+		./modules/billing/tests
 	@echo "✅ All tests done"
 
 test-auth: db-reset
@@ -164,6 +166,9 @@ test-sales: db-reset
 
 test-purchasing: db-reset
 	go test $(TEST_FLAGS) ./modules/purchasing/tests
+
+test-billing: db-reset
+	go test $(TEST_FLAGS) ./modules/billing/tests
 
 # ════════════════════════════════════════════════════════════════
 # DATABASE

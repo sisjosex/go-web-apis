@@ -20,6 +20,7 @@ type CoreConfig struct {
 	AppPort string
 
 	// Frontend
+	AppName     string // Display name used in emails and UI
 	FrontendURL string // Used for email links and CORS
 
 	// Logging
@@ -60,6 +61,8 @@ func LoadCoreConfig() *CoreConfig {
 		AppHost: utils.GetEnv("APP_HOST", "127.0.0.1"),
 		AppPort: utils.GetEnv("APP_PORT", "8080"),
 
+		// App identity
+		AppName: utils.GetEnv("APP_NAME", "Platform"),
 		// Frontend URL (for email links and redirects)
 		FrontendURL: utils.GetEnv("FRONTEND_URL", "http://localhost:3000"),
 

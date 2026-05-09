@@ -3,50 +3,83 @@ package routes
 import (
 	"josex/web/modules/purchasing/controllers"
 	"josex/web/modules/purchasing/interfaces"
+	purchasingPerms "josex/web/modules/purchasing/permissions"
+	tenancyMW "josex/web/modules/tenancy/middleware"
 
 	"github.com/gin-gonic/gin"
 )
 
-// RegisterPurchasingRoutes registers all purchasing routes
-func RegisterPurchasingRoutes(router *gin.Engine, authMiddleware gin.HandlerFunc, service interfaces.PurchasingService) {
+// RegisterPurchasingRoutes registers all purchasing routes with auth, tenant, and permission middleware.
+func RegisterPurchasingRoutes(
+	apiV1 *gin.RouterGroup,
+	service interfaces.PurchasingService,
+	authMiddleware gin.HandlerFunc,
+	tenantMiddleware gin.HandlerFunc,
+) {
 	ctrl := controllers.NewPurchasingController(service)
 
-	// All purchasing routes require authentication
-	routeGroup := router.Group("/api/v1/purchasing")
-	routeGroup.Use(authMiddleware)
+	r := apiV1.Group("/purchasing", authMiddleware, tenantMiddleware)
 
-	// Supplier routes
-	routeGroup.POST("/suppliers", ctrl.CreateSupplier)
-	routeGroup.GET("/suppliers", ctrl.ListSuppliers)
-	routeGroup.GET("/suppliers/:id", ctrl.GetSupplier)
+	// Suppliers
+	r.GET("/suppliers", ctrl.ListSuppliers)
+	r.GET("/suppliers/:id", ctrl.GetSupplier)
+	r.POST("/suppliers",
+		tenancyMW.RequirePermission(purchasingPerms.SuppliersWrite),
+		ctrl.CreateSupplier)
 
-	// Purchase Order routes
-	routeGroup.POST("/purchase-orders", ctrl.CreatePurchaseOrder)
-	routeGroup.GET("/purchase-orders", ctrl.ListPurchaseOrders)
-	routeGroup.GET("/purchase-orders/:id", ctrl.GetPurchaseOrder)
-	routeGroup.PATCH("/purchase-orders/:id/approve", ctrl.ApprovePurchaseOrder)
-	routeGroup.PATCH("/purchase-orders/:id/receive", ctrl.ReceivePurchaseOrder)
+	// Purchase Orders
+	r.GET("/purchase-orders", ctrl.ListPurchaseOrders)
+	r.GET("/purchase-orders/:id", ctrl.GetPurchaseOrder)
+	r.POST("/purchase-orders",
+		tenancyMW.RequirePermission(purchasingPerms.OrdersCreate),
+		ctrl.CreatePurchaseOrder)
+	r.PATCH("/purchase-orders/:id/approve",
+		tenancyMW.RequirePermission(purchasingPerms.OrdersApprove),
+		ctrl.ApprovePurchaseOrder)
+	r.PATCH("/purchase-orders/:id/receive",
+		tenancyMW.RequirePermission(purchasingPerms.OrdersReceive),
+		ctrl.ReceivePurchaseOrder)
 
 	// Purchase Order Items
-	routeGroup.POST("/purchase-orders/:id/items", ctrl.AddPurchaseOrderItem)
+	r.POST("/purchase-orders/:id/items",
+		tenancyMW.RequirePermission(purchasingPerms.OrdersCreate),
+		ctrl.AddPurchaseOrderItem)
 
 	// Purchase Order Invoices
-	routeGroup.POST("/purchase-orders/:id/invoices", ctrl.AddInvoice)
+	r.POST("/purchase-orders/:id/invoices",
+		tenancyMW.RequirePermission(purchasingPerms.InvoicesManage),
+		ctrl.AddInvoice)
 
 	// Reports
-	routeGroup.GET("/pending-payments", ctrl.GetPendingPayments)
+	r.GET("/pending-payments",
+		tenancyMW.RequirePermission(purchasingPerms.ReportsRead),
+		ctrl.GetPendingPayments)
+	r.GET("/price-comparison",
+		tenancyMW.RequirePermission(purchasingPerms.ReportsRead),
+		ctrl.GetPriceComparison)
 
-	// Phase 2A: Price Comparison
-	routeGroup.GET("/price-comparison", ctrl.GetPriceComparison)
+	// FIFO Batches
+	r.GET("/batches",
+		tenancyMW.RequirePermission(purchasingPerms.BatchesRead),
+		ctrl.GetProductBatches)
+	r.GET("/batches/oldest",
+		tenancyMW.RequirePermission(purchasingPerms.BatchesRead),
+		ctrl.GetOldestBatchForSale)
+	r.POST("/batches",
+		tenancyMW.RequirePermission(purchasingPerms.BatchesCreate),
+		ctrl.CreateProductBatch)
 
-	// Phase 2A: FIFO Batch Tracking
-	routeGroup.POST("/batches", ctrl.CreateProductBatch)
-	routeGroup.GET("/batches", ctrl.GetProductBatches)
-	routeGroup.GET("/batches/oldest", ctrl.GetOldestBatchForSale)
-
-	// Phase 2A: Request for Quote (RFQ)
-	routeGroup.POST("/rfq", ctrl.CreateRFQ)
-	routeGroup.GET("/rfq/:rfq_id/responses", ctrl.GetRFQResponses)
-	routeGroup.GET("/rfq/:rfq_id/comparison", ctrl.GetRFQComparison)
-	routeGroup.PATCH("/rfq/:rfq_id/responses/:response_id/select", ctrl.SelectRFQResponse)
+	// RFQ
+	r.GET("/rfq/:rfq_id/responses",
+		tenancyMW.RequirePermission(purchasingPerms.RFQRead),
+		ctrl.GetRFQResponses)
+	r.GET("/rfq/:rfq_id/comparison",
+		tenancyMW.RequirePermission(purchasingPerms.RFQRead),
+		ctrl.GetRFQComparison)
+	r.POST("/rfq",
+		tenancyMW.RequirePermission(purchasingPerms.RFQManage),
+		ctrl.CreateRFQ)
+	r.PATCH("/rfq/:rfq_id/responses/:response_id/select",
+		tenancyMW.RequirePermission(purchasingPerms.RFQManage),
+		ctrl.SelectRFQResponse)
 }

@@ -185,6 +185,13 @@ func (s *tenantService) CountUserOwnedTenants(ctx context.Context, userID uuid.U
 	return s.tenantRepository.CountUserOwnedTenants(ctx, userID)
 }
 
+// GetTenantEnabledModuleCodes returns a map of enabled module codes for a tenant.
+// The tenantService delegates to the moduleRepository when available; this stub
+// returns an empty map and is overridden by LoadTenantModules middleware.
+func (s *tenantService) GetTenantEnabledModuleCodes(ctx context.Context, tenantID uuid.UUID) (map[string]bool, error) {
+	return make(map[string]bool), nil
+}
+
 // RunTenantMigrations runs migrations on a specific tenant's database
 func (s *tenantService) RunTenantMigrations(ctx context.Context, tenantSlug string) error {
 	// Get tenant details

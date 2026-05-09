@@ -282,13 +282,52 @@ func (uc *AuthController) Register(ctx *gin.Context) {
 		return
 	}
 
-	user, err := uc.authService.InsertUser(newUser)
-	if err != nil {
+	if _, err := uc.authService.InsertUser(newUser); err != nil {
 		ctx.JSON(http.StatusBadRequest, coreErrors.BuildError(ctx, err))
 		return
 	}
 
-	ctx.JSON(http.StatusOK, user)
+	// Auto-login: create a session immediately so the client receives tokens
+	// and can proceed to onboarding without a separate login step.
+	userAgent := ctx.GetHeader("User-Agent")
+	var deviceInfo, deviceOs, browser string
+	if uc.parser != nil {
+		client := uc.parser.Parse(userAgent)
+		deviceInfo = strings.TrimSpace(client.Device.Family)
+		deviceOs = strings.TrimSpace(client.Os.Family + " " + client.Os.Major)
+		browser = strings.TrimSpace(client.UserAgent.Family + " " + client.UserAgent.Major)
+	}
+
+	sessionUser, err := uc.authService.LoginUser(authModels.LoginUserDto{
+		Email:      newUser.Email,
+		Password:   newUser.Password,
+		IpAddress:  utils.GetClientIp(ctx),
+		DeviceInfo: deviceInfo,
+		DeviceOs:   deviceOs,
+		Browser:    browser,
+		UserAgent:  userAgent,
+	})
+	if err != nil {
+		ctx.JSON(http.StatusInternalServerError, coreErrors.BuildError(ctx, err))
+		return
+	}
+
+	accessToken, err := uc.jwtService.GenerateAccessToken(sessionUser.UserId, sessionUser.SessionId, sessionUser.SystemRole)
+	if err != nil {
+		ctx.JSON(http.StatusInternalServerError, coreErrors.BuildError(ctx, err))
+		return
+	}
+
+	refreshToken, err := uc.jwtService.GenerateRefreshToken(sessionUser.UserId, sessionUser.SessionId, sessionUser.SystemRole)
+	if err != nil {
+		ctx.JSON(http.StatusInternalServerError, coreErrors.BuildError(ctx, err))
+		return
+	}
+
+	ctx.JSON(http.StatusOK, &authModels.LoginSuccessResponse{
+		AccessToken:  accessToken,
+		RefreshToken: refreshToken,
+	})
 }
 
 // Logout godoc
@@ -441,12 +480,21 @@ func (uc *AuthController) GenerateEmailVerificationToken(ctx *gin.Context) {
 
 	// Send verification email
 	coreConf := config.ModularAppConfig.Core
+	lang := ctx.GetString("lang")
 	emailData := map[string]string{
-		"VerificationURL": coreConf.FrontendURL + "/confirm_email?token=" + token.Token.String(),
+		"VerificationURL": coreConf.FrontendURL + "/confirm-email?token=" + token.Token.String(),
+		"Title":           utils.GetTranslation(lang, "verify-email.email.title"),
+		"Greeting":        utils.GetTranslation(lang, "verify-email.email.greeting"),
+		"Description":     utils.GetTranslation(lang, "verify-email.email.description"),
+		"ButtonText":      utils.GetTranslation(lang, "verify-email.email.button-text"),
+		"IgnoreText":      utils.GetTranslation(lang, "verify-email.email.ignore-text"),
+		"SignOff":         utils.GetTranslation(lang, "verify-email.email.sign-off"),
+		"AutomatedNote":   utils.GetTranslation(lang, "verify-email.email.automated-note"),
 	}
+	subject := utils.GetTranslation(lang, "verify-email.email.subject")
 
 	templatePath := coreServices.GetTemplatePath("auth", "verify-email.html")
-	err = uc.emailService.SendEmail(*verifyEmailRequest.Email, "Verifica tu cuenta", templatePath, emailData)
+	err = uc.emailService.SendEmail(*verifyEmailRequest.Email, subject, templatePath, emailData)
 	if err != nil {
 		ctx.JSON(http.StatusBadRequest, coreErrors.BuildErrorDetail(ctx, authErrors.UserChangeEmailSendingError, err.Error()))
 		tx.Rollback(ctx)
@@ -565,12 +613,21 @@ func (uc *AuthController) GeneratePasswordResetToken(ctx *gin.Context) {
 
 	// Send password reset email
 	coreConf := config.ModularAppConfig.Core
+	lang := ctx.GetString("lang")
 	emailData := map[string]string{
-		"PasswordResetURL": coreConf.FrontendURL + "/reset_password?token=" + token.Token.String(),
+		"PasswordResetURL": coreConf.FrontendURL + "/reset-password?token=" + token.Token.String(),
+		"Title":            utils.GetTranslation(lang, "password-reset.email.title"),
+		"Greeting":         utils.GetTranslation(lang, "password-reset.email.greeting"),
+		"Description":      utils.GetTranslation(lang, "password-reset.email.description"),
+		"ButtonText":       utils.GetTranslation(lang, "password-reset.email.button-text"),
+		"IgnoreText":       utils.GetTranslation(lang, "password-reset.email.ignore-text"),
+		"SignOff":          utils.GetTranslation(lang, "password-reset.email.sign-off"),
+		"AutomatedNote":    utils.GetTranslation(lang, "password-reset.email.automated-note"),
 	}
+	subject := utils.GetTranslation(lang, "password-reset.email.subject")
 
 	templatePath := coreServices.GetTemplatePath("auth", "password-reset.html")
-	err = uc.emailService.SendEmail(*passwordResetRequestDto.Email, "Restablece tu contraseña", templatePath, emailData)
+	err = uc.emailService.SendEmail(*passwordResetRequestDto.Email, subject, templatePath, emailData)
 	if err != nil {
 		ctx.JSON(http.StatusBadRequest, coreErrors.BuildErrorDetail(ctx, authErrors.UserForgorPasswordEmailSendingError, err.Error()))
 		tx.Rollback(ctx)
@@ -584,6 +641,33 @@ func (uc *AuthController) GeneratePasswordResetToken(ctx *gin.Context) {
 	}
 
 	ctx.JSON(http.StatusOK, token)
+}
+
+// ValidateResetToken godoc
+// @Summary Validate password reset token
+// @Description Check whether a password reset token is still valid (not used, not expired)
+// @Tags Auth
+// @Produce json
+// @Param token query string true "Reset token"
+// @Success 200 {object} bool
+// @Failure 400 {object} errors.ErrorResponse
+// @Failure 410 {object} errors.ErrorResponse
+// @Router /auth/password/reset [get]
+func (uc *AuthController) ValidateResetToken(ctx *gin.Context) {
+	var dto authModels.ValidateResetTokenDto
+
+	if err := ctx.ShouldBindQuery(&dto); err != nil {
+		ctx.JSON(http.StatusBadRequest, coreErrors.BuildErrorDetail(ctx, authErrors.UserPasswordResetError, utils.ExtractValidationError(ctx, err)))
+		return
+	}
+
+	valid, err := uc.authService.ValidateResetToken(dto)
+	if err != nil {
+		ctx.JSON(http.StatusGone, coreErrors.BuildErrorSingle(ctx, authErrors.UserPasswordResetTokenInvalid))
+		return
+	}
+
+	ctx.JSON(http.StatusOK, valid)
 }
 
 // ResetPasswordWithToken godoc

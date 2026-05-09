@@ -3,28 +3,30 @@ package routes
 import (
 	authMiddleware "josex/web/modules/auth/middleware"
 	"josex/web/modules/auth/services"
-	coreMiddleware "josex/web/modules/core/middleware"
+	tenancyMW "josex/web/modules/tenancy/middleware"
 	"josex/web/modules/users/controllers"
 
 	"github.com/gin-gonic/gin"
 )
 
-// RegisterUserRoutes registra todas las rutas del módulo de usuarios (admin)
+// RegisterUserRoutes registers user management routes scoped to a tenant.
+// Callers must pass the tenant middleware (TenantMiddlewareFromHeader when tenancy
+// is enabled, or a no-op handler otherwise).
 func RegisterUserRoutes(
 	router *gin.RouterGroup,
 	userController *controllers.UserController,
 	jwtService services.JWTService,
+	tenantMiddleware gin.HandlerFunc,
 ) {
-	// Todas las rutas de usuarios requieren autenticación Y rol de admin o super_admin
 	userRoutes := router.Group("/users")
 	userRoutes.Use(authMiddleware.AuthMiddleware(jwtService))
-	userRoutes.Use(coreMiddleware.RequireSystemRole("admin", "super_admin")) // 🔒 PROTECTED
+	userRoutes.Use(tenantMiddleware)
+	userRoutes.Use(tenancyMW.RequireTenantRole("owner", "admin", "super_admin"))
 	{
-		// CRUD operations (admin/super_admin only)
-		userRoutes.GET("", userController.ListUsers)             // List all users
-		userRoutes.POST("", userController.Create)               // Create new user
-		userRoutes.GET("/:id", userController.GetUserById)       // Get user by ID
-		userRoutes.PUT("/:id", userController.Update)            // Update user
-		userRoutes.DELETE("/:id", userController.SoftDeleteUser) // Soft delete user
+		userRoutes.GET("", userController.ListUsers)
+		userRoutes.POST("", userController.Create)
+		userRoutes.GET("/:id", userController.GetUserById)
+		userRoutes.PUT("/:id", userController.Update)
+		userRoutes.DELETE("/:id", userController.SoftDeleteUser)
 	}
 }

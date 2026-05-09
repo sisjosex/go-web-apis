@@ -527,6 +527,29 @@ p_email := $1
 	return PasswordResetWithToken, nil
 }
 
+func (r *authRepository) ValidateResetToken(dto authModels.ValidateResetTokenDto) (*bool, error) {
+	valid := false
+
+	query := `
+SELECT * FROM auth.sp_validate_reset_token(
+p_token := $1
+)
+`
+
+	row := r.dbService.QueryRow(context.Background(), query, dto.Token)
+
+	err := row.Scan(&valid)
+	if err != nil {
+		var pgErr *pgconn.PgError
+		if errors.As(err, &pgErr) {
+			return nil, pgErr
+		}
+		return nil, err
+	}
+
+	return &valid, nil
+}
+
 func (r *authRepository) ResetPasswordWithToken(passwordResetWithTokenDto authModels.PasswordResetWithTokenDto) (*bool, error) {
 	ResetPassword := false
 
@@ -538,7 +561,7 @@ p_new_password := $2
 `
 
 	params := []interface{}{
-		passwordResetWithTokenDto.Token,
+		passwordResetWithTokenDto.Token.String(),
 		passwordResetWithTokenDto.PasswordNew,
 	}
 

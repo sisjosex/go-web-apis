@@ -11,7 +11,7 @@ type CreateUserDto struct {
 	FirstName         string               `json:"first_name" binding:"required"`
 	LastName          string               `json:"last_name" binding:"required"`
 	Email             string               `form:"email" binding:"required,email-valid" conform:"trim,lowercase"`
-	Password          string               `json:"password" binding:"required"`
+	Password          string               `json:"password"`
 	Phone             string               `json:"phone"`
 	Birthday          *coreModels.DateOnly `json:"birthday" time_format:"2006-01-02"`
 	ProfilePictureUrl string               `json:"profile_picture_url"`
@@ -38,12 +38,14 @@ type UpdateUserDto struct {
 
 // UserListQuery represents query parameters for listing users
 type UserListQuery struct {
-	Page   int    `form:"page" json:"page" binding:"omitempty,min=1"`                                       // Page number (default: 1)
-	Limit  int    `form:"limit" json:"limit" binding:"omitempty,min=1,max=100"`                             // Items per page (default: 10, max: 100)
-	Search string `form:"search" json:"search"`                                                             // Search in name/email
-	Status string `form:"status" json:"status" binding:"omitempty,oneof=active inactive expired"`           // Filter by status
-	Sort   string `form:"sort" json:"sort" binding:"omitempty,oneof=created_at email first_name last_name"` // Sort field
-	Order  string `form:"order" json:"order" binding:"omitempty,oneof=asc desc"`                            // Sort order (asc/desc)
+	Page          int        `form:"page" json:"page" binding:"omitempty,min=1"`
+	Limit         int        `form:"limit" json:"limit" binding:"omitempty,min=1,max=100"`
+	Search        string     `form:"search" json:"search"`
+	Status        string     `form:"status" json:"status" binding:"omitempty,oneof=active inactive expired"`
+	Sort          string     `form:"sort" json:"sort" binding:"omitempty,oneof=created_at email first_name last_name"`
+	Order         string     `form:"order" json:"order" binding:"omitempty,oneof=asc desc"`
+	TenantID      uuid.UUID  `json:"-"` // Set server-side from tenancy middleware; not exposed to clients
+	ExcludeUserID *uuid.UUID `json:"-"` // Set server-side from JWT; not exposed to clients
 }
 
 // UserListResponse represents paginated user list response

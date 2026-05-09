@@ -37,7 +37,8 @@ func RegisterTenantRoutes(
 		tenantRoutes.POST("/self-service", tenantController.CreateTenantSelfService)
 
 		// Get user's accessible tenants
-		tenantRoutes.GET("/my-tenants", tenantController.GetUserTenants)
+		tenantRoutes.GET("/me", tenantController.GetUserTenants)
+		tenantRoutes.GET("/my-tenants", tenantController.GetUserTenants) // kept for backward compatibility
 
 		// ========================================
 		// Tenant-Scoped Routes (require tenant access)

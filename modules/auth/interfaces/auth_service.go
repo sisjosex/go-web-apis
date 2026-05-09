@@ -35,5 +35,6 @@ type AuthService interface {
 	// Password management
 	ChangePassword(changePasswordDto authModels.ChangePasswordDto) (*bool, error)
 	GeneratePasswordResetToken(passwordResetRequestDto authModels.PasswordResetRequestDto, tx pgx.Tx) (*authModels.PasswordResetTokenRequestDto, error)
+	ValidateResetToken(dto authModels.ValidateResetTokenDto) (*bool, error)
 	ResetPasswordWithToken(passwordResetWithTokenDto authModels.PasswordResetWithTokenDto) (*bool, error)
 }

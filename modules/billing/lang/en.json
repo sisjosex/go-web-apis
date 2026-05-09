@@ -1,0 +1,10 @@
+{
+  "billing.validation-failed": "Validation failed",
+  "billing.subscription.not-found": "Subscription not found",
+  "billing.subscription.invalid-plan": "Invalid subscription plan",
+  "billing.subscription.invalid-status": "Invalid subscription status",
+  "billing.subscription.limit-reached": "Subscription limit reached",
+  "billing.payment.subscription-not-found": "Subscription not found for this user",
+  "billing.payment.create-failed": "Failed to record payment",
+  "billing.payment.list-failed": "Failed to retrieve payment history"
+}

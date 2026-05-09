@@ -23,6 +23,7 @@ const (
 	// Password management
 	UserChangePasswordError             = "user.change-password.failed"
 	UserPasswordResetError              = "user.password-reset.failed"
+	UserPasswordResetTokenInvalid       = "reset-password.token-invalid"
 	UserForgorPasswordEmailSendingError = "user.forgot-password.sending-email-failed"
 
 	// Token errors

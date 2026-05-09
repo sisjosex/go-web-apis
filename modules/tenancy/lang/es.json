@@ -27,5 +27,7 @@
   "tenant.database-url.not-allowed": "No se permiten URLs de base de datos personalizadas. Contacte al administrador.",
   "tenant.limit-reached": "Has alcanzado el límite de tenants de tu plan de suscripción. Actualiza para crear más.",
   "tenant.self-service-disabled": "La creación automática de tenants está deshabilitada. Contacte al administrador.",
-  "multitenancy.disabled": "La funcionalidad de multitenancy no está habilitada en este servidor"
+  "multitenancy.disabled": "La funcionalidad de multitenancy no está habilitada en este servidor",
+  "tenant.permission.denied": "No tienes permiso para realizar esta acción",
+  "tenant.permission.code-required": "El código de permiso es requerido"
 }

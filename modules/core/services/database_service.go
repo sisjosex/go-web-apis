@@ -62,6 +62,8 @@ func (ds *databaseService) InitDatabase(ctx context.Context) {
 		pool, err := connectDatabase(ctx, dataBaseUrl, coreConf.DatabasePoolSize, "josex_primary")
 		if err != nil {
 			log.Printf("Failed to connect to database: %v", err)
+			time.Sleep(retryInterval)
+			continue
 		}
 
 		ds.pool = pool

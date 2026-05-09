@@ -21,6 +21,28 @@
   "return.not-found": "Return request not found",
   "return.invalid-status": "Invalid return status",
   "product-batch.not-found": "Product batch not found",
-  "batch.insufficient-quantity": "Insufficient quantity in batch"
-}
+  "batch.insufficient-quantity": "Insufficient quantity in batch",
 
+  "permission.sales.customers-read": "View customers",
+  "permission.sales.customers-read.description": "List and view customer details",
+  "permission.sales.customers-write": "Create/edit customers",
+  "permission.sales.customers-write.description": "Create and update customers",
+  "permission.sales.customers-delete": "Delete customers",
+  "permission.sales.customers-delete.description": "Permanently delete customers",
+  "permission.sales.orders-read": "View orders",
+  "permission.sales.orders-read.description": "List and view sales orders",
+  "permission.sales.orders-create": "Create orders",
+  "permission.sales.orders-create.description": "Create new sales orders",
+  "permission.sales.orders-manage": "Manage orders",
+  "permission.sales.orders-manage.description": "Update, complete, cancel orders and add items",
+  "permission.sales.returns-read": "View returns",
+  "permission.sales.returns-read.description": "List and view return requests",
+  "permission.sales.returns-manage": "Manage returns",
+  "permission.sales.returns-manage.description": "Create and approve return requests",
+  "permission.sales.payments-read": "View payments",
+  "permission.sales.payments-read.description": "List and view payment records",
+  "permission.sales.payments-create": "Record payments",
+  "permission.sales.payments-create.description": "Register new payments",
+  "permission.sales.reports-read": "View sales reports",
+  "permission.sales.reports-read.description": "Access sales reports and analytics"
+}

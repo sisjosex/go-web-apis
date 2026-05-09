@@ -40,7 +40,16 @@ INSERT INTO tenancy.tenant_users (tenant_id, user_id, role, is_active)
 SELECT
     '00000000-0000-0000-0000-000000000001',
     u.id,
-    'member',
+    'admin',
     true
 FROM auth.users u
 WHERE u.email = 'admin@test.local';
+
+-- Enable all relevant modules for the test tenant
+INSERT INTO tenancy.tenant_modules (tenant_id, module_code, is_enabled)
+VALUES
+    ('00000000-0000-0000-0000-000000000001', 'tracking', true),
+    ('00000000-0000-0000-0000-000000000001', 'inventory', true),
+    ('00000000-0000-0000-0000-000000000001', 'sales', true),
+    ('00000000-0000-0000-0000-000000000001', 'purchasing', true)
+ON CONFLICT (tenant_id, module_code) DO NOTHING;

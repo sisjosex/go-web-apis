@@ -121,6 +121,11 @@ type PasswordResetWithTokenDto struct {
 	PasswordNew string    `json:"password_new" binding:"required"`
 }
 
+// ValidateResetTokenDto to validate a password reset token (query param)
+type ValidateResetTokenDto struct {
+	Token string `form:"token" binding:"required"`
+}
+
 // GetProfileDto for profile retrieval
 type GetProfileDto struct {
 	ID uuid.UUID `json:"id" binding:"uuidv4"`

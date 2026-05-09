@@ -3,8 +3,10 @@ package routes
 import (
 	coreServices "josex/web/modules/core/services"
 	"josex/web/modules/inventory/controllers"
+	inventoryPerms "josex/web/modules/inventory/permissions"
 	"josex/web/modules/inventory/repositories"
 	inventoryServices "josex/web/modules/inventory/services"
+	tenancyMW "josex/web/modules/tenancy/middleware"
 
 	"github.com/gin-gonic/gin"
 )
@@ -39,43 +41,68 @@ func RegisterInventoryRoutes(
 	api := router.Group("/inventory", authMiddleware, tenantMiddleware)
 
 	// Products
-	api.POST("/products", productController.CreateProductWithVariants)
 	api.GET("/products", productController.ListProducts)
 	api.GET("/products/:id", productController.GetProduct)
 	api.GET("/products/sku/:sku", productController.GetProductBySkU)
+	api.POST("/products",
+		tenancyMW.RequirePermission(inventoryPerms.ProductsWrite),
+		productController.CreateProductWithVariants)
 
 	// Product media
-	api.POST("/products/:id/media", productController.AddProductMedia)
-	api.DELETE("/products/:id/media/:media_id", productController.RemoveProductMedia)
+	api.POST("/products/:id/media",
+		tenancyMW.RequirePermission(inventoryPerms.ProductsWrite),
+		productController.AddProductMedia)
+	api.DELETE("/products/:id/media/:media_id",
+		tenancyMW.RequirePermission(inventoryPerms.ProductsDelete),
+		productController.RemoveProductMedia)
 
 	// Movements
-	api.POST("/movements", movementController.RecordMovement)
 	api.GET("/movements/:id", movementController.GetMovement)
 	api.GET("/stock/:product_id", movementController.GetProductStock)
+	api.POST("/movements",
+		tenancyMW.RequirePermission(inventoryPerms.StockAdjust),
+		movementController.RecordMovement)
 
 	// Stock Management
-	api.POST("/reserve", stockController.ReserveStock)
-	api.POST("/release-reserved", stockController.ReleaseReservedStock)
-	api.PATCH("/products/:id/reorder-level", stockController.UpdateReorderLevel)
+	api.POST("/reserve",
+		tenancyMW.RequirePermission(inventoryPerms.StockReserve),
+		stockController.ReserveStock)
+	api.POST("/release-reserved",
+		tenancyMW.RequirePermission(inventoryPerms.StockReserve),
+		stockController.ReleaseReservedStock)
+	api.PATCH("/products/:id/reorder-level",
+		tenancyMW.RequirePermission(inventoryPerms.StockAdjust),
+		stockController.UpdateReorderLevel)
 
 	// Categories
 	api.GET("/categories/search", categoryController.SearchCategories)
 	api.GET("/categories/:id/products", categoryController.GetProductsByCategory)
-	api.POST("/categories", categoryController.CreateCategory)
 	api.GET("/categories", categoryController.ListCategories)
 	api.GET("/categories/:id", categoryController.GetCategory)
-	api.PUT("/categories/:id", categoryController.UpdateCategory)
-	api.DELETE("/categories/:id", categoryController.DeleteCategory)
+	api.POST("/categories",
+		tenancyMW.RequirePermission(inventoryPerms.CategoriesManage),
+		categoryController.CreateCategory)
+	api.PUT("/categories/:id",
+		tenancyMW.RequirePermission(inventoryPerms.CategoriesManage),
+		categoryController.UpdateCategory)
+	api.DELETE("/categories/:id",
+		tenancyMW.RequirePermission(inventoryPerms.CategoriesManage),
+		categoryController.DeleteCategory)
 
 	// Product-Category mapping
-	api.POST("/products/:id/categories/:category_id", categoryController.AssignProductToCategory)
-	api.DELETE("/products/:id/categories/:category_id", categoryController.RemoveProductFromCategory)
+	api.POST("/products/:id/categories/:category_id",
+		tenancyMW.RequirePermission(inventoryPerms.CategoriesManage),
+		categoryController.AssignProductToCategory)
+	api.DELETE("/products/:id/categories/:category_id",
+		tenancyMW.RequirePermission(inventoryPerms.CategoriesManage),
+		categoryController.RemoveProductFromCategory)
 
-	// Batches routes (integrated into inventory)
-	// Public batch routes
-	api.POST("/batches", batchController.CreateBatch)
+	// Batches
 	api.GET("/batches/:id", batchController.GetBatch)
 	api.GET("/batches/product/:productId", batchController.ListBatchesByProduct)
 	api.GET("/batches/product/:productId/oldest", batchController.GetOldestBatchForSale)
 	api.GET("/batches/expiring", batchController.GetExpiringBatches)
+	api.POST("/batches",
+		tenancyMW.RequirePermission(inventoryPerms.BatchesManage),
+		batchController.CreateBatch)
 }

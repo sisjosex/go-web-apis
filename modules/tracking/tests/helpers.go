@@ -48,11 +48,12 @@ const (
 // TEST SETUP HELPER
 // ============================================================================
 
-// SetupTrackingTest initializes test environment with auth and fixtures
+// SetupTrackingTest initializes test environment with auth and tenant context.
+// Uses admin@test.local which has the "admin" tenant role and bypasses permission checks.
 func SetupTrackingTest(t *testing.T) *testhelpers.ApiTestHelper {
 	helper := testhelpers.SetupApiTest(t)
-	// Auto-login as admin
 	helper.Login("admin@test.local", "Admin123!")
+	helper.SetTenantSlug("test-company")
 	return helper
 }
 

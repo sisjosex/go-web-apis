@@ -134,11 +134,46 @@ p_website_url := $13
 	return user, nil
 }
 
-func (r *userRepository) ListUsers() ([]coreModels.User, error) {
+func (r *userRepository) ListUsers(query userModels.UserListQuery) (*userModels.UserListResponse, error) {
 	ctx := context.Background()
-	query := `SELECT * FROM users.sp_list_users()`
 
-	rows, err := r.dbService.Query(ctx, query)
+	page := query.Page
+	if page < 1 {
+		page = 1
+	}
+	limit := query.Limit
+	if limit < 1 {
+		limit = 10
+	}
+
+	var searchVal, statusVal, sortVal, orderVal *string
+	if query.Search != "" {
+		searchVal = &query.Search
+	}
+	if query.Status != "" {
+		statusVal = &query.Status
+	}
+	if query.Sort != "" {
+		sortVal = &query.Sort
+	}
+	if query.Order != "" {
+		orderVal = &query.Order
+	}
+
+	sqlQuery := `
+        SELECT * FROM users.sp_list_users(
+            p_tenant_id       := $1,
+            p_page            := $2,
+            p_limit           := $3,
+            p_search          := $4,
+            p_status          := $5,
+            p_sort            := $6,
+            p_order           := $7,
+            p_exclude_user_id := $8
+        )
+    `
+
+	rows, err := r.dbService.Query(ctx, sqlQuery, query.TenantID, page, limit, searchVal, statusVal, sortVal, orderVal, query.ExcludeUserID)
 	if err != nil {
 		var pgErr *pgconn.PgError
 		if errors.As(err, &pgErr) {
@@ -149,9 +184,9 @@ func (r *userRepository) ListUsers() ([]coreModels.User, error) {
 	defer rows.Close()
 
 	var users []coreModels.User
+	var totalCount int64
 	for rows.Next() {
 		var user coreModels.User
-		var totalCount int64 // Variable temporal para el total_count que devuelve el SP
 		err := rows.Scan(
 			&user.ID,
 			&user.FirstName,
@@ -162,7 +197,10 @@ func (r *userRepository) ListUsers() ([]coreModels.User, error) {
 			&user.ProfilePictureUrl,
 			&user.Bio,
 			&user.WebsiteUrl,
-			&totalCount, // Escanear el total_count pero no lo usamos en esta versi�n simple
+			&user.IsActive,
+			&user.CreatedAt,
+			&user.ExpirationDate,
+			&totalCount,
 		)
 		if err != nil {
 			return nil, err
@@ -174,7 +212,22 @@ func (r *userRepository) ListUsers() ([]coreModels.User, error) {
 		return nil, err
 	}
 
-	return users, nil
+	if users == nil {
+		users = []coreModels.User{}
+	}
+
+	totalPages := 0
+	if limit > 0 && totalCount > 0 {
+		totalPages = int((totalCount + int64(limit) - 1) / int64(limit))
+	}
+
+	return &userModels.UserListResponse{
+		Users:      users,
+		Total:      totalCount,
+		Page:       page,
+		Limit:      limit,
+		TotalPages: totalPages,
+	}, nil
 }
 
 func (r *userRepository) GetUserById(userID uuid.UUID) (*coreModels.User, error) {
@@ -203,6 +256,22 @@ func (r *userRepository) GetUserById(userID uuid.UUID) (*coreModels.User, error)
 	}
 
 	return &user, nil
+}
+
+func (r *userRepository) AssignToTenant(tenantID, requesterID, userID uuid.UUID, role string) error {
+	ctx := context.Background()
+	query := `SELECT * FROM tenancy.sp_add_user_to_tenant($1, $2, $3, $4)`
+
+	rows, err := r.dbService.Query(ctx, query, tenantID, requesterID, userID, role)
+	if err != nil {
+		var pgErr *pgconn.PgError
+		if errors.As(err, &pgErr) {
+			return pgErr
+		}
+		return err
+	}
+	rows.Close()
+	return nil
 }
 
 func (r *userRepository) SoftDeleteUser(userID uuid.UUID) error {

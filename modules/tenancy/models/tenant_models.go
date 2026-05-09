@@ -95,13 +95,30 @@ type UserTenantResponse struct {
 
 // TenantAccessInfo - stored in context by middleware
 type TenantAccessInfo struct {
-	TenantID     uuid.UUID `json:"tenant_id"`
-	Slug         string    `json:"slug"`
-	Name         string    `json:"name"`
-	DatabaseURL  *string   `json:"database_url,omitempty"`
-	SchemaName   string    `json:"schema_name"`
-	IsActive     bool      `json:"is_active"`
-	IsSuspended  bool      `json:"is_suspended"`
-	UserRole     string    `json:"user_role"`
-	UserIsActive bool      `json:"user_is_active"`
+	TenantID       uuid.UUID       `json:"tenant_id"`
+	Slug           string          `json:"slug"`
+	Name           string          `json:"name"`
+	DatabaseURL    *string         `json:"database_url,omitempty"`
+	SchemaName     string          `json:"schema_name"`
+	IsActive       bool            `json:"is_active"`
+	IsSuspended    bool            `json:"is_suspended"`
+	UserRole       string          `json:"user_role"`
+	UserIsActive   bool            `json:"user_is_active"`
+	Permissions    map[string]bool `json:"-"`
+	EnabledModules map[string]bool `json:"-"`
+}
+
+// HasPermission returns true if the user has the given permission.
+// owner, admin, and super_admin bypass all permission checks.
+func (t *TenantAccessInfo) HasPermission(perm string) bool {
+	switch t.UserRole {
+	case "owner", "admin", "super_admin":
+		return true
+	}
+	return t.Permissions[perm]
+}
+
+// HasModule returns true if the given module is enabled for the tenant.
+func (t *TenantAccessInfo) HasModule(code string) bool {
+	return t.EnabledModules[code]
 }

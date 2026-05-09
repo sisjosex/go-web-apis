@@ -42,3 +42,17 @@ const (
 const (
 	MultitenancyDisabled = "multitenancy.disabled"
 )
+
+// Permission errors
+const (
+	PermissionDenied       = "tenant.permission.denied"
+	PermissionCodeRequired = "tenant.permission.code-required"
+)
+
+// Module errors
+const (
+	ModuleNotFound     = "tenant.module.not-found"
+	ModuleNotEnabled   = "tenant.module.not-enabled"
+	ModuleCodeRequired = "tenant.module.code-required"
+	ModuleUpdateFailed = "tenant.module.update-failed"
+)

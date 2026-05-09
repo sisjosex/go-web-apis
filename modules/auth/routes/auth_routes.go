@@ -32,8 +32,9 @@ func RegisterAuthRoutes(
 		// Email verification (public - requires token in body)
 		authRoutes.PUT("/email/verification", authController.ConfirmEmailAddress)
 
-		// Password reset (public - requires token in body)
+		// Password reset (public - requires token in body/query)
 		authRoutes.POST("/password/reset", authController.GeneratePasswordResetToken)
+		authRoutes.GET("/password/reset", authController.ValidateResetToken)
 		authRoutes.PUT("/password/reset", authController.ResetPasswordWithToken)
 
 		// ========================================

@@ -50,8 +50,8 @@ func TestRegisterSuccess(t *testing.T) {
 	var response map[string]interface{}
 	json.Unmarshal(w.Body.Bytes(), &response)
 
-	assert.NotNil(t, response["id"])
-	assert.Equal(t, "newuser@test.com", response["email"])
+	assert.NotNil(t, response["access_token"])
+	assert.NotNil(t, response["refresh_token"])
 }
 
 func TestRegisterMissingEmail(t *testing.T) {
@@ -629,6 +629,90 @@ func TestResetPasswordWithTokenSuccess(t *testing.T) {
 		fmt.Sprintf("Expected 200 or 400, got %d: %s", w.Code, w.Body.String()))
 }
 
+// TestValidateResetTokenSuccess tests that a freshly generated token is valid
+func TestValidateResetTokenSuccess(t *testing.T) {
+	helper := testhelpers.SetupApiTest(t)
+	defer helper.Close()
+
+	testEmail := "validate-token-" + uuid.New().String() + "@test.com"
+	helper.Register(testEmail, "$Password2025", "Validate", "Token")
+
+	// Generate a reset token
+	genBody := map[string]interface{}{"email": testEmail}
+	genW := helper.DoRequest("POST", "/auth/password/reset", genBody, map[string]string{})
+	if genW.Code != http.StatusOK {
+		t.Skipf("POST /auth/password/reset returned %d — skipping validate test", genW.Code)
+	}
+
+	var genResp map[string]interface{}
+	err := json.Unmarshal(genW.Body.Bytes(), &genResp)
+	assert.NoError(t, err)
+	token, ok := genResp["token"].(string)
+	assert.True(t, ok && token != "", "Expected non-empty token in response")
+
+	// Validate the freshly generated token
+	w := helper.DoRequest("GET", "/auth/password/reset?token="+token, nil, map[string]string{})
+	assert.Equal(t, http.StatusOK, w.Code, fmt.Sprintf("Expected 200, got %d: %s", w.Code, w.Body.String()))
+	t.Logf("✅ Valid reset token accepted")
+}
+
+// TestValidateResetTokenInvalid tests that a non-existent token returns 410
+func TestValidateResetTokenInvalid(t *testing.T) {
+	helper := testhelpers.SetupApiTest(t)
+	defer helper.Close()
+
+	w := helper.DoRequest("GET", "/auth/password/reset?token="+uuid.New().String(), nil, map[string]string{})
+	assert.Equal(t, http.StatusGone, w.Code, fmt.Sprintf("Expected 410 Gone, got %d: %s", w.Code, w.Body.String()))
+	t.Logf("✅ Invalid token correctly rejected with 410")
+}
+
+// TestValidateResetTokenMissing tests that an absent token param returns 400
+func TestValidateResetTokenMissing(t *testing.T) {
+	helper := testhelpers.SetupApiTest(t)
+	defer helper.Close()
+
+	w := helper.DoRequest("GET", "/auth/password/reset", nil, map[string]string{})
+	assert.Equal(t, http.StatusBadRequest, w.Code, fmt.Sprintf("Expected 400, got %d: %s", w.Code, w.Body.String()))
+	t.Logf("✅ Missing token param correctly rejected with 400")
+}
+
+// TestValidateResetTokenUsed tests that a token becomes invalid after use
+func TestValidateResetTokenUsed(t *testing.T) {
+	helper := testhelpers.SetupApiTest(t)
+	defer helper.Close()
+
+	testEmail := "used-token-" + uuid.New().String() + "@test.com"
+	helper.Register(testEmail, "$Password2025", "Used", "Token")
+
+	// Generate reset token
+	genBody := map[string]interface{}{"email": testEmail}
+	genW := helper.DoRequest("POST", "/auth/password/reset", genBody, map[string]string{})
+	if genW.Code != http.StatusOK {
+		t.Skipf("POST /auth/password/reset returned %d — skipping used-token test", genW.Code)
+	}
+
+	var genResp map[string]interface{}
+	err := json.Unmarshal(genW.Body.Bytes(), &genResp)
+	assert.NoError(t, err)
+	token, ok := genResp["token"].(string)
+	assert.True(t, ok && token != "", "Expected non-empty token in response")
+
+	// Consume the token
+	resetBody := map[string]interface{}{
+		"token":        token,
+		"password_new": "$NewPassword2025",
+	}
+	resetW := helper.DoRequest("PUT", "/auth/password/reset", resetBody, map[string]string{})
+	if resetW.Code != http.StatusOK {
+		t.Skipf("PUT /auth/password/reset returned %d — cannot verify used-token state", resetW.Code)
+	}
+
+	// Token should now be invalid
+	w := helper.DoRequest("GET", "/auth/password/reset?token="+token, nil, map[string]string{})
+	assert.Equal(t, http.StatusGone, w.Code, fmt.Sprintf("Expected 410 Gone for used token, got %d: %s", w.Code, w.Body.String()))
+	t.Logf("✅ Used token correctly rejected with 410")
+}
+
 // ============================================================================
 // SESSION MANAGEMENT TESTS
 // ============================================================================
@@ -797,4 +881,72 @@ func TestOtpWhatsAppRequestSuccess(t *testing.T) {
 	assert.True(t, w.Code == http.StatusOK || w.Code == http.StatusCreated ||
 		w.Code == http.StatusServiceUnavailable || w.Code == http.StatusBadRequest,
 		fmt.Sprintf("Got status %d: %s", w.Code, w.Body.String()))
+}
+
+// ============================================================================
+// Edge Case Tests
+// ============================================================================
+
+// TestRefreshToken_AfterLogout - refresh token should be invalid after logout
+func TestRefreshToken_AfterLogout(t *testing.T) {
+	helper := testhelpers.SetupApiTest(t)
+	defer helper.Close()
+
+	email := fmt.Sprintf("logout-refresh-%s@test.com", uuid.New().String()[:8])
+	helper.Register(email, "$Password2025", "Logout", "Refresh")
+	loginResp, err := helper.Login(email, "$Password2025")
+	if err != nil {
+		t.Fatalf("login failed: %v", err)
+	}
+
+	refreshToken, ok := loginResp["refresh_token"].(string)
+	if !ok || refreshToken == "" {
+		t.Fatal("no refresh_token in login response")
+	}
+
+	// Logout — this invalidates the session
+	w := helper.DoRequest("POST", "/auth/logout", nil, map[string]string{})
+	assert.Equal(t, http.StatusOK, w.Code, "logout should succeed")
+
+	// Attempt to use the old refresh token — session is gone, must return 401
+	w = helper.DoRequest("POST", "/auth/refresh_token",
+		map[string]interface{}{"refresh_token": refreshToken},
+		map[string]string{},
+	)
+	assert.Equal(t, http.StatusUnauthorized, w.Code,
+		"refresh token after logout should return 401, got %d: %s", w.Code, w.Body.String())
+	t.Logf("✅ Refresh token rejected after logout")
+}
+
+// TestRefreshToken_MalformedToken - completely garbled token returns 401
+func TestRefreshToken_MalformedToken(t *testing.T) {
+	helper := testhelpers.SetupApiTest(t)
+	defer helper.Close()
+
+	w := helper.DoRequest("POST", "/auth/refresh_token",
+		map[string]interface{}{"refresh_token": "not.a.valid.jwt.token.at.all"},
+		map[string]string{},
+	)
+	assert.Equal(t, http.StatusUnauthorized, w.Code,
+		"malformed refresh token should return 401, got %d: %s", w.Code, w.Body.String())
+	t.Logf("✅ Malformed refresh token returns 401")
+}
+
+// TestChangePassword_MissingFields - missing required fields returns 400
+func TestChangePassword_MissingFields(t *testing.T) {
+	helper := testhelpers.SetupApiTest(t)
+	defer helper.Close()
+
+	email := fmt.Sprintf("chgpwd-%s@test.com", uuid.New().String()[:8])
+	helper.Register(email, "$Password2025", "Change", "Password")
+	helper.Login(email, "$Password2025")
+
+	// Missing password_new
+	w := helper.DoRequest("PUT", "/auth/password",
+		map[string]interface{}{"password_current": "$Password2025"},
+		map[string]string{},
+	)
+	assert.Equal(t, http.StatusBadRequest, w.Code,
+		"missing password_new should return 400, got %d: %s", w.Code, w.Body.String())
+	t.Logf("✅ ChangePassword with missing fields returns 400")
 }

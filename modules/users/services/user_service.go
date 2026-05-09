@@ -24,8 +24,8 @@ func (s *userService) UpdateUser(userDTO userModels.UpdateUserDto) (*coreModels.
 	return s.userRepository.UpdateUser(userDTO)
 }
 
-func (s *userService) ListUsers() ([]coreModels.User, error) {
-	return s.userRepository.ListUsers()
+func (s *userService) ListUsers(query userModels.UserListQuery) (*userModels.UserListResponse, error) {
+	return s.userRepository.ListUsers(query)
 }
 
 func (s *userService) GetUserById(userID uuid.UUID) (*coreModels.User, error) {
@@ -34,4 +34,8 @@ func (s *userService) GetUserById(userID uuid.UUID) (*coreModels.User, error) {
 
 func (s *userService) SoftDeleteUser(userID uuid.UUID) error {
 	return s.userRepository.SoftDeleteUser(userID)
+}
+
+func (s *userService) AssignToTenant(tenantID, requesterID, userID uuid.UUID, role string) error {
+	return s.userRepository.AssignToTenant(tenantID, requesterID, userID, role)
 }

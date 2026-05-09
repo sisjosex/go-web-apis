@@ -52,6 +52,9 @@ func (m *mockTenantService) CountUserOwnedTenants(_ context.Context, _ uuid.UUID
 func (m *mockTenantService) RunTenantMigrations(_ context.Context, _ string) error {
 	return nil
 }
+func (m *mockTenantService) GetTenantEnabledModuleCodes(_ context.Context, _ uuid.UUID) (map[string]bool, error) {
+	return make(map[string]bool), nil
+}
 
 func init() {
 	// Load .env.test so JWT_SECRET_KEY and TENANCY_ENABLED are available

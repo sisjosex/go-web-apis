@@ -36,4 +36,7 @@ type TenantService interface {
 
 	// Run migrations on a tenant's database (admin only)
 	RunTenantMigrations(ctx context.Context, tenantSlug string) error
+
+	// GetTenantEnabledModuleCodes returns a map of module codes enabled for a tenant
+	GetTenantEnabledModuleCodes(ctx context.Context, tenantID uuid.UUID) (map[string]bool, error)
 }

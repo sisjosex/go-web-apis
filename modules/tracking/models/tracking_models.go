@@ -9,6 +9,7 @@ import (
 // TransportCompany represents a school, corporate, or transport provider
 type TransportCompany struct {
 	ID                 uuid.UUID `json:"id"`
+	TenantID           uuid.UUID `json:"tenant_id"`
 	Name               string    `json:"name"`
 	Email              *string   `json:"email"`
 	Phone              *string   `json:"phone"`

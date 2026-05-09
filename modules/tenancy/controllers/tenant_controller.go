@@ -4,6 +4,7 @@ import (
 	"net/http"
 
 	"josex/web/config"
+	billingInterfaces "josex/web/modules/billing/interfaces"
 	coreErrors "josex/web/modules/core/errors"
 	"josex/web/modules/core/utils"
 	tenancyErrors "josex/web/modules/tenancy/errors"
@@ -15,13 +16,15 @@ import (
 )
 
 type TenantController struct {
-	tenantService interfaces.TenantService
+	tenantService  interfaces.TenantService
+	billingService billingInterfaces.BillingService
 }
 
 // NewTenantController creates a new instance of TenantController
-func NewTenantController(tenantService interfaces.TenantService) *TenantController {
+func NewTenantController(tenantService interfaces.TenantService, billingService billingInterfaces.BillingService) *TenantController {
 	return &TenantController{
-		tenantService: tenantService,
+		tenantService:  tenantService,
+		billingService: billingService,
 	}
 }
 
@@ -121,10 +124,6 @@ func (tc *TenantController) CreateTenantSelfService(c *gin.Context) {
 
 	// Super admins can create unlimited tenants
 	if systemRole != "super_admin" {
-		// Get subscription plan from JWT context
-		// Note: In a real system, you'd query the database for the latest plan
-		// For now, we'll use a simplified approach assuming plan is in user record
-
 		// Count current owned tenants
 		count, err := tc.tenantService.CountUserOwnedTenants(c.Request.Context(), userID)
 		if err != nil {
@@ -132,11 +131,13 @@ func (tc *TenantController) CreateTenantSelfService(c *gin.Context) {
 			return
 		}
 
-		// Determine limit based on plan (simplified - in production query from user record)
-		limit := tenancyConf.FreePlanLimit // Default to free plan
-
-		// Check if limit reached
-		if limit > 0 && count >= limit {
+		// Check limit against the user's active subscription plan
+		limitReached, err := tc.billingService.IsLimitReached(c.Request.Context(), userID, "tenants", count)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, coreErrors.BuildError(c, err))
+			return
+		}
+		if limitReached {
 			c.JSON(http.StatusForbidden, coreErrors.BuildErrorSingle(c, tenancyErrors.TenantLimitReached))
 			return
 		}

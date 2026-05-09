@@ -15,6 +15,51 @@ import (
 	"github.com/google/uuid"
 )
 
+// LoadTenantModules enriches the TenantAccessInfo with enabled module codes.
+// Must be placed after TenantMiddleware or TenantMiddlewareFromHeader.
+func LoadTenantModules(moduleService interfaces.ModuleService) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		tenantAccess, exists := c.Get("tenant_access")
+		if !exists {
+			c.Next()
+			return
+		}
+		ta, ok := tenantAccess.(*models.TenantAccessInfo)
+		if !ok {
+			c.Next()
+			return
+		}
+
+		codes, err := moduleService.GetTenantEnabledModuleCodes(c.Request.Context(), ta.TenantID)
+		if err == nil {
+			ta.EnabledModules = codes
+			c.Set("tenant_access", ta)
+		}
+
+		c.Next()
+	}
+}
+
+// RequireModule checks that the current tenant has the specified module enabled.
+// Must be placed after TenantMiddleware or TenantMiddlewareFromHeader.
+func RequireModule(moduleCode string) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		tenantAccess, exists := c.Get("tenant_access")
+		if !exists {
+			c.JSON(http.StatusUnauthorized, coreErrors.BuildErrorSingle(c, tenancyErrors.TenantUserUnauthorized))
+			c.Abort()
+			return
+		}
+		ta, ok := tenantAccess.(*models.TenantAccessInfo)
+		if !ok || !ta.HasModule(moduleCode) {
+			c.JSON(http.StatusForbidden, coreErrors.BuildErrorSingle(c, tenancyErrors.ModuleNotEnabled))
+			c.Abort()
+			return
+		}
+		c.Next()
+	}
+}
+
 // TenantMiddleware validates tenant access and injects tenant context
 // This middleware should be applied AFTER AuthMiddleware
 func TenantMiddleware(tenantService interfaces.TenantService) gin.HandlerFunc {
@@ -72,12 +117,13 @@ func TenantMiddleware(tenantService interfaces.TenantService) gin.HandlerFunc {
 			return
 		}
 
-		// Store tenant access info in gin context for controllers
+		// Store tenant access info in gin context for controllers and RequirePermission
 		c.Set("tenant_id", tenantAccess.TenantID.String())
 		c.Set("tenant_slug", tenantAccess.Slug)
 		c.Set("tenant_database_url", tenantAccess.DatabaseURL)
 		c.Set("tenant_schema_name", tenantAccess.SchemaName)
 		c.Set("tenant_user_role", tenantAccess.UserRole)
+		c.Set("tenant_access", tenantAccess)
 
 		// Also inject database URL into the standard request context so
 		// DatabaseService.resolvePool can pick it up automatically
@@ -150,6 +196,7 @@ func TenantMiddlewareFromHeader(tenantService interfaces.TenantService) gin.Hand
 				IsSuspended:  tenant.IsSuspended,
 				UserRole:     "super_admin",
 				UserIsActive: true,
+				Permissions:  make(map[string]bool),
 			}
 		} else {
 			// Regular users must be members of the tenant
@@ -175,12 +222,13 @@ func TenantMiddlewareFromHeader(tenantService interfaces.TenantService) gin.Hand
 			return
 		}
 
-		// Inject tenant context for controllers and downstream middleware
+		// Inject tenant context for controllers, downstream middleware, and RequirePermission
 		c.Set("tenant_id", tenantAccess.TenantID.String())
 		c.Set("tenant_slug", tenantAccess.Slug)
 		c.Set("tenant_database_url", tenantAccess.DatabaseURL)
 		c.Set("tenant_schema_name", tenantAccess.SchemaName)
 		c.Set("tenant_user_role", tenantAccess.UserRole)
+		c.Set("tenant_access", tenantAccess)
 
 		// Inject DB URL into request context so DatabaseService.resolvePool picks it up
 		if tenantAccess.DatabaseURL != nil && *tenantAccess.DatabaseURL != "" {

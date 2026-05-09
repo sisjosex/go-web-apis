@@ -1,6 +1,7 @@
 package controllers
 
 import (
+	goerrors "errors"
 	"net/http"
 	"strconv"
 
@@ -11,6 +12,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5/pgconn"
 )
 
 // PurchasingController handles HTTP requests for purchasing operations
@@ -152,6 +154,14 @@ func (ctrl *PurchasingController) CreatePurchaseOrder(c *gin.Context) {
 
 	po, err := ctrl.service.CreatePurchaseOrder(c.Request.Context(), tenantID, supplierUUID, dto.ExpectedDeliveryDate, dto.Notes, userUUID)
 	if err != nil {
+		var pgErr *pgconn.PgError
+		if goerrors.As(err, &pgErr) {
+			switch pgErr.Message {
+			case errors.SupplierNotFound:
+				c.JSON(http.StatusNotFound, coreErrors.BuildErrorSingle(c, errors.SupplierNotFound))
+				return
+			}
+		}
 		c.JSON(http.StatusInternalServerError, coreErrors.BuildError(c, err))
 		return
 	}

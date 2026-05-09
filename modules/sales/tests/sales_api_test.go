@@ -4,9 +4,11 @@
 package sales_test
 
 import (
+	"encoding/json"
 	"fmt"
 	"net/http"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 
@@ -136,4 +138,131 @@ func TestGetSalesOrder_RequiresAuth(t *testing.T) {
 
 	// Should require authentication
 	assert.Equal(t, http.StatusUnauthorized, w.Code)
+}
+
+// ============================================================================
+// Edge Case Tests — Authenticated
+// ============================================================================
+
+// SetupSalesAuthTest logs in as admin with tenant context for sales module.
+func SetupSalesAuthTest(t *testing.T) *coreTestHelpers.ApiTestHelper {
+	t.Helper()
+	helper := coreTestHelpers.SetupApiTest(t)
+	_, err := helper.Login("admin@test.local", "Admin123!")
+	if err != nil {
+		t.Fatalf("sales test login failed: %v", err)
+	}
+	helper.SetTenantSlug("test-company")
+	return helper
+}
+
+// TestCreateCustomer_MissingName - name is required → 400
+func TestCreateCustomer_MissingName(t *testing.T) {
+	helper := SetupSalesAuthTest(t)
+	defer helper.Close()
+
+	body := map[string]interface{}{
+		"email":        "noname@example.com",
+		"phone_number": "1234567890",
+	}
+
+	w := helper.DoRequest("POST", "/sales/customers", body, map[string]string{})
+
+	assert.Equal(t, http.StatusBadRequest, w.Code,
+		"Missing name should return 400, got %d: %s", w.Code, w.Body.String())
+	t.Logf("✅ Sales: CreateCustomer without name returns 400")
+}
+
+// TestCreateCustomer_MissingEmail - email is required → 400
+func TestCreateCustomer_MissingEmail(t *testing.T) {
+	helper := SetupSalesAuthTest(t)
+	defer helper.Close()
+
+	body := map[string]interface{}{
+		"name":         "No Email Customer",
+		"phone_number": "1234567890",
+	}
+
+	w := helper.DoRequest("POST", "/sales/customers", body, map[string]string{})
+
+	assert.Equal(t, http.StatusBadRequest, w.Code,
+		"Missing email should return 400, got %d: %s", w.Code, w.Body.String())
+	t.Logf("✅ Sales: CreateCustomer without email returns 400")
+}
+
+// TestCreateCustomer_DuplicateEmail - creating same email twice → 409
+func TestCreateCustomer_DuplicateEmail(t *testing.T) {
+	helper := SetupSalesAuthTest(t)
+	defer helper.Close()
+
+	email := fmt.Sprintf("dup-customer-%d@example.com", uniqueTimestamp())
+	body := map[string]interface{}{
+		"name":  "First Customer",
+		"email": email,
+	}
+
+	// Create first customer
+	w := helper.DoRequest("POST", "/sales/customers", body, map[string]string{})
+	if w.Code != http.StatusCreated && w.Code != http.StatusOK {
+		t.Skipf("Could not create first customer (status %d); skipping duplicate test", w.Code)
+		return
+	}
+
+	// Try duplicate
+	body["name"] = "Second Customer"
+	w = helper.DoRequest("POST", "/sales/customers", body, map[string]string{})
+
+	// SP raises customer.already-exists → 409 Conflict
+	assert.Equal(t, http.StatusConflict, w.Code,
+		"Duplicate email should return 409, got %d: %s", w.Code, w.Body.String())
+	t.Logf("✅ Sales: CreateCustomer duplicate email returns 409")
+}
+
+// TestCompleteOrder_NoItems - completing an order with no items → 400
+func TestCompleteOrder_NoItems(t *testing.T) {
+	helper := SetupSalesAuthTest(t)
+	defer helper.Close()
+
+	// First create a customer
+	email := fmt.Sprintf("order-noitems-%d@example.com", uniqueTimestamp())
+	customerBody := map[string]interface{}{
+		"name":  "No Items Customer",
+		"email": email,
+	}
+	w := helper.DoRequest("POST", "/sales/customers", customerBody, map[string]string{})
+	if w.Code != http.StatusCreated && w.Code != http.StatusOK {
+		t.Skipf("Could not create customer (status %d); skipping test", w.Code)
+		return
+	}
+
+	var customer map[string]interface{}
+	json.Unmarshal(w.Body.Bytes(), &customer)
+	customerID, _ := customer["id"].(string)
+
+	// Create empty order
+	orderBody := map[string]interface{}{
+		"customer_id": customerID,
+	}
+	w = helper.DoRequest("POST", "/sales/orders", orderBody, map[string]string{})
+	if w.Code != http.StatusCreated && w.Code != http.StatusOK {
+		t.Skipf("Could not create order (status %d); skipping test", w.Code)
+		return
+	}
+
+	var order map[string]interface{}
+	json.Unmarshal(w.Body.Bytes(), &order)
+	orderID, _ := order["id"].(string)
+
+	// Try to complete the empty order
+	w = helper.DoRequest("PATCH", fmt.Sprintf("/sales/orders/%s/complete", orderID), nil, map[string]string{})
+
+	// SP raises sales.order.no-items → controller returns 400
+	assert.True(t, w.Code == http.StatusBadRequest || w.Code == http.StatusUnprocessableEntity,
+		"Completing empty order should return 400, got %d: %s", w.Code, w.Body.String())
+	t.Logf("✅ Sales: CompleteOrder with no items returns %d", w.Code)
+}
+
+// uniqueTimestamp returns a nanosecond timestamp for unique test data.
+func uniqueTimestamp() int64 {
+	return time.Now().UnixNano()
 }

@@ -19,5 +19,26 @@
   "category.parent-not-found": "Parent category not found",
   "category.circular-hierarchy": "Circular hierarchy is not allowed",
   "category.has-products": "Cannot delete category with products assigned",
-  "product.already-in-category": "Product is already assigned to this category"
+  "product.already-in-category": "Product is already assigned to this category",
+
+  "permission.inventory.products-read": "View products",
+  "permission.inventory.products-read.description": "List and view product details",
+  "permission.inventory.products-write": "Create/edit products",
+  "permission.inventory.products-write.description": "Create and update products and variants",
+  "permission.inventory.products-delete": "Delete products",
+  "permission.inventory.products-delete.description": "Permanently delete products",
+  "permission.inventory.categories-read": "View categories",
+  "permission.inventory.categories-read.description": "List and view categories",
+  "permission.inventory.categories-manage": "Manage categories",
+  "permission.inventory.categories-manage.description": "Create, update, and delete categories",
+  "permission.inventory.stock-read": "View stock",
+  "permission.inventory.stock-read.description": "View stock levels and movements",
+  "permission.inventory.stock-adjust": "Adjust stock",
+  "permission.inventory.stock-adjust.description": "Record stock movements and adjust levels",
+  "permission.inventory.stock-reserve": "Reserve/release stock",
+  "permission.inventory.stock-reserve.description": "Reserve and release stock for orders",
+  "permission.inventory.batches-read": "View batches",
+  "permission.inventory.batches-read.description": "List and view inventory batches",
+  "permission.inventory.batches-manage": "Manage batches",
+  "permission.inventory.batches-manage.description": "Create and manage inventory batches"
 }

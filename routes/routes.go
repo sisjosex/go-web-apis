@@ -7,17 +7,22 @@ import (
 	authRepos "josex/web/modules/auth/repositories"
 	authRoutes "josex/web/modules/auth/routes"
 	authServices "josex/web/modules/auth/services"
+	billingControllers "josex/web/modules/billing/controllers"
+	billingRepos "josex/web/modules/billing/repositories"
+	billingRoutes "josex/web/modules/billing/routes"
+	billingServices "josex/web/modules/billing/services"
 	coreMiddleware "josex/web/modules/core/middleware"
 	coreServices "josex/web/modules/core/services"
 	inventoryRoutes "josex/web/modules/inventory/routes"
-	purchasingControllers "josex/web/modules/purchasing/controllers"
 	purchasingRepos "josex/web/modules/purchasing/repositories"
+	purchasingRoutes "josex/web/modules/purchasing/routes"
 	purchasingServices "josex/web/modules/purchasing/services"
 	salesControllers "josex/web/modules/sales/controllers"
 	salesRepos "josex/web/modules/sales/repositories"
 	salesRoutes "josex/web/modules/sales/routes"
 	salesServices "josex/web/modules/sales/services"
 	tenancyControllers "josex/web/modules/tenancy/controllers"
+	tenancyInterfaces "josex/web/modules/tenancy/interfaces"
 	tenancyMW "josex/web/modules/tenancy/middleware"
 	tenancyRepos "josex/web/modules/tenancy/repositories"
 	tenancyRoutes "josex/web/modules/tenancy/routes"
@@ -34,10 +39,16 @@ import (
 	"time"
 
 	_ "josex/web/docs"
+	_ "josex/web/modules/inventory"
+	_ "josex/web/modules/purchasing"
+	_ "josex/web/modules/sales"
+	_ "josex/web/modules/tracking"
+	_ "josex/web/modules/users"
 	coreValidators "josex/web/modules/core/validators"
 
 	"github.com/didip/tollbooth/v7"
 	"github.com/didip/tollbooth_gin"
+	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
 	swaggerFiles "github.com/swaggo/files"
 	ginSwagger "github.com/swaggo/gin-swagger"
@@ -75,10 +86,25 @@ func SetupRoutes(r *gin.Engine, dbService coreServices.DatabaseService) {
 	userRepository := userRepos.NewUserRepository(dbService)
 	userService := userServices.NewUserService(userRepository)
 
+	// Billing module (always initialized — plan info is needed cross-module)
+	billingRepository := billingRepos.NewBillingRepository(dbService)
+	billingService := billingServices.NewBillingService(billingRepository)
+	billingController := billingControllers.NewBillingController(billingService)
+
 	// Controllers
 	authController := authControllers.NewAuthController(authService, jwtService, emailService, parser, dbService)
 	sessionController := authControllers.NewSessionController(authService)
-	userController := userControllers.NewUserController(userService)
+	userController := userControllers.NewUserController(userService, emailService)
+
+	// CORS — must be registered before the rate limiter so preflight OPTIONS
+	// requests are handled before they hit the limiter.
+	r.Use(cors.New(cors.Config{
+		AllowOrigins:     config.ModularAppConfig.Core.AllowedOrigins,
+		AllowMethods:     []string{"GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"},
+		AllowHeaders:     []string{"Origin", "Content-Type", "Authorization", "Accept-Language", "X-Tenant-Slug"},
+		AllowCredentials: true,
+		MaxAge:           12 * time.Hour,
+	}))
 
 	// Limitador de solicitudes
 	limiter := tollbooth.NewLimiter(10, nil)         // 10 req/segundo
@@ -95,7 +121,10 @@ func SetupRoutes(r *gin.Engine, dbService coreServices.DatabaseService) {
 		// Register module routes
 		authRoutes.RegisterAuthRoutes(apiV1, authController, sessionController, jwtService)
 		authRoutes.RegisterOtpRoutes(apiV1, dbService, authConf, jwtService)
-		userRoutes.RegisterUserRoutes(apiV1, userController, jwtService)
+
+		// Billing module — always enabled, user-scoped (no tenant required)
+		billingRoutes.RegisterBillingRoutes(apiV1, billingController, authMW.AuthMiddleware(jwtService), jwtService)
+		log.Println("✅ Billing module routes registered")
 
 		// Get config
 		coreConf := config.ModularAppConfig.Core
@@ -108,18 +137,33 @@ func SetupRoutes(r *gin.Engine, dbService coreServices.DatabaseService) {
 		tenantMiddleware := gin.HandlerFunc(func(c *gin.Context) { c.Next() })
 
 		// Initialize tenancy services (needed for other modules)
+		var moduleService tenancyInterfaces.ModuleService
 		if coreConf.IsModuleEnabled("tenancy") && tenancyConf != nil && tenancyConf.Enabled {
 			tenantRepository := tenancyRepos.NewTenantRepository(dbService)
 			tenantService := tenancyServices.NewTenantService(tenantRepository, dbService)
-			tenantController := tenancyControllers.NewTenantController(tenantService)
+			tenantController := tenancyControllers.NewTenantController(tenantService, billingService)
 
-			// Register tenant routes
+			permissionRepository := tenancyRepos.NewPermissionRepository(dbService)
+			permissionService := tenancyServices.NewPermissionService(permissionRepository)
+			permissionController := tenancyControllers.NewPermissionController(permissionService)
+
+			moduleRepository := tenancyRepos.NewModuleRepository(dbService)
+			moduleSvc := tenancyServices.NewModuleService(moduleRepository)
+			moduleController := tenancyControllers.NewModuleController(moduleSvc)
+			moduleService = moduleSvc
+
+			// Register tenant, permission and module routes
 			tenancyRoutes.RegisterTenantRoutes(apiV1, tenantController, tenantService, jwtService)
+			tenancyRoutes.RegisterPermissionRoutes(apiV1, permissionController, tenantService, jwtService)
+			tenancyRoutes.RegisterModuleRoutes(apiV1, moduleController, tenantService, moduleSvc, jwtService)
 
 			// Override tenant middleware with real implementation
 			// TenantMiddlewareFromHeader always requires X-Tenant-Slug;
 			// super_admin can switch to any tenant, regular users must be members.
 			tenantMiddleware = tenancyMW.TenantMiddlewareFromHeader(tenantService)
+
+			// Users module — tenant-scoped: requires X-Tenant-Slug + owner/admin role
+			userRoutes.RegisterUserRoutes(apiV1, userController, jwtService, tenantMiddleware)
 
 			// Platform routes — cross-tenant, super_admin only, no tenant scope
 			platform := apiV1.Group("/platform")
@@ -137,8 +181,24 @@ func SetupRoutes(r *gin.Engine, dbService coreServices.DatabaseService) {
 			trackingService := trackingServices.NewTrackingService(trackingRepository)
 			trackingController := trackingControllers.NewTrackingController(trackingService)
 
+			// Build a composite tenant+module middleware chain for tracking
+			trackingTenantMiddleware := tenantMiddleware
+			if moduleService != nil {
+				trackingTenantMiddleware = gin.HandlerFunc(func(c *gin.Context) {
+					tenantMiddleware(c)
+					if c.IsAborted() {
+						return
+					}
+					tenancyMW.LoadTenantModules(moduleService)(c)
+					if c.IsAborted() {
+						return
+					}
+					tenancyMW.RequireModule("tracking")(c)
+				})
+			}
+
 			// Register tracking routes with tenant middleware and JWT service for auth
-			trackingRoutes.RegisterTrackingRoutes(r, trackingController, tenantMiddleware, jwtService)
+			trackingRoutes.RegisterTrackingRoutes(r, trackingController, trackingTenantMiddleware, jwtService)
 			log.Println("✅ Tracking module enabled and routes registered")
 		}
 
@@ -167,37 +227,9 @@ func SetupRoutes(r *gin.Engine, dbService coreServices.DatabaseService) {
 
 		// Purchasing module (if enabled)
 		if coreConf.IsModuleEnabled("purchasing") {
-			// Initialize purchasing services
 			purchasingRepository := purchasingRepos.NewPurchasingRepository(dbService)
 			purchasingService := purchasingServices.NewPurchasingService(purchasingRepository)
-
-			// Use apiV1 router with auth + tenant middleware
-			purchasingRouteGroup := apiV1.Group("/purchasing")
-			purchasingRouteGroup.Use(authMiddleware, tenantMiddleware)
-
-			purchasingCtrl := purchasingControllers.NewPurchasingController(purchasingService)
-
-			// Supplier routes
-			purchasingRouteGroup.POST("/suppliers", purchasingCtrl.CreateSupplier)
-			purchasingRouteGroup.GET("/suppliers", purchasingCtrl.ListSuppliers)
-			purchasingRouteGroup.GET("/suppliers/:id", purchasingCtrl.GetSupplier)
-
-			// Purchase Order routes
-			purchasingRouteGroup.POST("/purchase-orders", purchasingCtrl.CreatePurchaseOrder)
-			purchasingRouteGroup.GET("/purchase-orders", purchasingCtrl.ListPurchaseOrders)
-			purchasingRouteGroup.GET("/purchase-orders/:id", purchasingCtrl.GetPurchaseOrder)
-			purchasingRouteGroup.PATCH("/purchase-orders/:id/approve", purchasingCtrl.ApprovePurchaseOrder)
-			purchasingRouteGroup.PATCH("/purchase-orders/:id/receive", purchasingCtrl.ReceivePurchaseOrder)
-
-			// Purchase Order Items
-			purchasingRouteGroup.POST("/purchase-orders/:id/items", purchasingCtrl.AddPurchaseOrderItem)
-
-			// Purchase Order Invoices
-			purchasingRouteGroup.POST("/purchase-orders/:id/invoices", purchasingCtrl.AddInvoice)
-
-			// Reports
-			purchasingRouteGroup.GET("/pending-payments", purchasingCtrl.GetPendingPayments)
-
+			purchasingRoutes.RegisterPurchasingRoutes(apiV1, purchasingService, authMiddleware, tenantMiddleware)
 			log.Println("✅ Purchasing module enabled and routes registered")
 		}
 	}

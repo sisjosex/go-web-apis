@@ -21,6 +21,28 @@
   "return.not-found": "Solicitud de devolución no encontrada",
   "return.invalid-status": "Estado de devolución inválido",
   "product-batch.not-found": "Lote de producto no encontrado",
-  "batch.insufficient-quantity": "Cantidad insuficiente en el lote"
-}
+  "batch.insufficient-quantity": "Cantidad insuficiente en el lote",
 
+  "permission.sales.customers-read": "Ver clientes",
+  "permission.sales.customers-read.description": "Listar y ver detalles de clientes",
+  "permission.sales.customers-write": "Crear/editar clientes",
+  "permission.sales.customers-write.description": "Crear y actualizar clientes",
+  "permission.sales.customers-delete": "Eliminar clientes",
+  "permission.sales.customers-delete.description": "Eliminar clientes permanentemente",
+  "permission.sales.orders-read": "Ver órdenes",
+  "permission.sales.orders-read.description": "Listar y ver órdenes de venta",
+  "permission.sales.orders-create": "Crear órdenes",
+  "permission.sales.orders-create.description": "Crear nuevas órdenes de venta",
+  "permission.sales.orders-manage": "Gestionar órdenes",
+  "permission.sales.orders-manage.description": "Actualizar, completar, cancelar órdenes y agregar items",
+  "permission.sales.returns-read": "Ver devoluciones",
+  "permission.sales.returns-read.description": "Listar y ver solicitudes de devolución",
+  "permission.sales.returns-manage": "Gestionar devoluciones",
+  "permission.sales.returns-manage.description": "Crear y aprobar solicitudes de devolución",
+  "permission.sales.payments-read": "Ver pagos",
+  "permission.sales.payments-read.description": "Listar y ver registros de pago",
+  "permission.sales.payments-create": "Registrar pagos",
+  "permission.sales.payments-create.description": "Registrar nuevos pagos",
+  "permission.sales.reports-read": "Ver reportes de ventas",
+  "permission.sales.reports-read.description": "Acceder a reportes y analíticas de ventas"
+}

@@ -1,8 +1,11 @@
 package controllers
 
 import (
+	"errors"
+	"fmt"
 	"josex/web/config"
 	coreErrors "josex/web/modules/core/errors"
+	coreServices "josex/web/modules/core/services"
 	"josex/web/modules/core/utils"
 	usersErrors "josex/web/modules/users/errors"
 	userInterfaces "josex/web/modules/users/interfaces"
@@ -12,15 +15,18 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5/pgconn"
 )
 
 type UserController struct {
-	userService userInterfaces.UserService
+	userService  userInterfaces.UserService
+	emailService coreServices.EmailService
 }
 
-func NewUserController(userService userInterfaces.UserService) *UserController {
+func NewUserController(userService userInterfaces.UserService, emailService coreServices.EmailService) *UserController {
 	return &UserController{
-		userService: userService,
+		userService:  userService,
+		emailService: emailService,
 	}
 }
 
@@ -32,16 +38,63 @@ func (uc *UserController) Create(ctx *gin.Context) {
 		return
 	}
 
-	// Generate password if empty
-	if newUser.Password == "" {
-		newUser.Password = utils.GenerateRandomPassword()
+	// Generate a secure temporary password when the admin left it blank
+	tempPassword := newUser.Password
+	if tempPassword == "" {
+		tempPassword = utils.GenerateRandomPassword()
+		newUser.Password = tempPassword
 	}
 
 	user, err := uc.userService.InsertUser(newUser)
 	if err != nil {
+		var pgErr *pgconn.PgError
+		if errors.As(err, &pgErr) && pgErr.Message == "user.create.email.already-exists" {
+			ctx.JSON(http.StatusConflict, coreErrors.BuildErrorSingle(ctx, usersErrors.UserEmailAlreadyInUse))
+			return
+		}
 		ctx.JSON(http.StatusBadRequest, coreErrors.BuildError(ctx, err))
 		return
 	}
+
+	// If operating inside a tenant context, add the new user as a member of that tenant
+	if tenantIDStr, ok := ctx.Get("tenant_id"); ok {
+		if tenantID, err := uuid.Parse(tenantIDStr.(string)); err == nil {
+			if requesterIDStr, ok := ctx.Get("user_id"); ok {
+				if requesterID, err := uuid.Parse(requesterIDStr.(string)); err == nil {
+					if newUserID, err := uuid.Parse(user.ID); err == nil {
+						_ = uc.userService.AssignToTenant(tenantID, requesterID, newUserID, "member")
+					}
+				}
+			}
+		}
+	}
+
+	// Send invitation email (fire-and-forget — don't fail the request if email fails)
+	appConf := config.ModularAppConfig.Core
+	go func() {
+		templatePath := coreServices.GetTemplatePath("users", "user-invitation.html")
+		firstName := ""
+		if user.FirstName != nil {
+			firstName = *user.FirstName
+		}
+		email := ""
+		if user.Email != nil {
+			email = *user.Email
+		}
+		data := map[string]string{
+			"Title":              fmt.Sprintf("Welcome to %s", appConf.AppName),
+			"Greeting":           fmt.Sprintf("Welcome, %s!", firstName),
+			"Description":        fmt.Sprintf("Your account has been created on %s. Use the credentials below to sign in.", appConf.AppName),
+			"Email":              email,
+			"TempPassword":       tempPassword,
+			"ChangePasswordNote": "For security, please change your password after your first login.",
+			"LoginURL":           fmt.Sprintf("%s/login", appConf.FrontendURL),
+			"ButtonText":         "Sign in now",
+			"SignOff":            fmt.Sprintf("The %s team", appConf.AppName),
+			"AutomatedNote":      "This is an automated message. Please do not reply.",
+		}
+		_ = uc.emailService.SendEmail(email, fmt.Sprintf("Your %s account is ready", appConf.AppName), templatePath, data)
+	}()
 
 	ctx.JSON(http.StatusOK, user)
 }
@@ -108,13 +161,36 @@ func (uc *UserController) ListUsers(c *gin.Context) {
 		limit = usersConfig.MaxPageSize
 	}
 
-	users, err := uc.userService.ListUsers()
+	query := userModels.UserListQuery{
+		Page:   page,
+		Limit:  limit,
+		Search: c.Query("search"),
+		Status: c.Query("status"),
+		Sort:   c.Query("sort"),
+		Order:  c.Query("order"),
+	}
+
+	// Scope results to the current tenant (set by tenancy middleware)
+	if tenantIDStr, ok := c.Get("tenant_id"); ok {
+		if tid, err := uuid.Parse(tenantIDStr.(string)); err == nil {
+			query.TenantID = tid
+		}
+	}
+
+	// Exclude the calling user from their own results
+	if userIDStr, ok := c.Get("user_id"); ok {
+		if uid, err := uuid.Parse(userIDStr.(string)); err == nil {
+			query.ExcludeUserID = &uid
+		}
+	}
+
+	response, err := uc.userService.ListUsers(query)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, coreErrors.BuildError(c, err))
 		return
 	}
 
-	c.JSON(http.StatusOK, users)
+	c.JSON(http.StatusOK, response)
 }
 
 // GetUserById godoc

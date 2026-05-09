@@ -9,6 +9,7 @@ import (
 	"os"
 	"time"
 
+	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
 )
 
@@ -41,6 +42,15 @@ func (ws *WebServerService) setupServer() {
 
 	// Configurar proxies de confianza
 	ws.Server.SetTrustedProxies([]string{"127.0.0.1"})
+
+	// CORS — origins via ALLOWED_ORIGINS env var (default: http://localhost:3000)
+	ws.Server.Use(cors.New(cors.Config{
+		AllowOrigins:     coreConf.AllowedOrigins,
+		AllowMethods:     []string{"GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"},
+		AllowHeaders:     []string{"Origin", "Content-Type", "Authorization", "Accept-Language", "X-Tenant-Slug"},
+		ExposeHeaders:    []string{"Content-Length"},
+		AllowCredentials: true,
+	}))
 }
 
 func (ws *WebServerService) setupRoutes() {

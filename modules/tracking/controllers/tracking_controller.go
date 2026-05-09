@@ -27,15 +27,10 @@ func NewTrackingController(trackingService interfaces.TrackingService) *Tracking
 }
 
 // getTenantID extracts tenant_id from context if multitenancy is enabled
-// Returns nil if:
-// - Multitenancy is disabled (single-database mode)
-// - User is super_admin operating in global scope
-// Returns error only for actual context/parsing errors
 func (ctrl *TrackingController) getTenantID(c *gin.Context) (*uuid.UUID, error) {
 	coreConf := config.ModularAppConfig.Core
 	tenancyConf := config.ModularAppConfig.Tenancy
 
-	// If multitenancy is disabled, no tenant validation needed
 	if !coreConf.IsModuleEnabled("tenancy") || tenancyConf == nil || !tenancyConf.Enabled {
 		return nil, nil
 	}
@@ -45,17 +40,14 @@ func (ctrl *TrackingController) getTenantID(c *gin.Context) (*uuid.UUID, error) 
 		return nil, errors.New("tenant_id not found in context")
 	}
 
-	// If nil, user is operating in global scope (super_admin without tenant)
 	if tenantIDVal == nil {
 		return nil, nil
 	}
 
-	// Try to parse as uuid.UUID
 	if tenantID, ok := tenantIDVal.(uuid.UUID); ok {
 		return &tenantID, nil
 	}
 
-	// If it's a string (shouldn't happen but be defensive)
 	if str, ok := tenantIDVal.(string); ok && str != "" {
 		parsed, err := uuid.Parse(str)
 		if err != nil {
@@ -64,8 +56,21 @@ func (ctrl *TrackingController) getTenantID(c *gin.Context) (*uuid.UUID, error) 
 		return &parsed, nil
 	}
 
-	// Empty or invalid
 	return nil, nil
+}
+
+// requireTenantID extracts tenant_id and returns 403 if not present
+func (ctrl *TrackingController) requireTenantID(c *gin.Context) (uuid.UUID, bool) {
+	tenantID, err := ctrl.getTenantID(c)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, coreErrors.BuildError(c, err))
+		return uuid.Nil, false
+	}
+	if tenantID == nil {
+		c.JSON(http.StatusForbidden, coreErrors.BuildErrorSingle(c, trackingErrors.TenantRequired))
+		return uuid.Nil, false
+	}
+	return *tenantID, true
 }
 
 // UpdateVehicleLocation godoc
@@ -114,6 +119,7 @@ func (ctrl *TrackingController) UpdateVehicleLocation(c *gin.Context) {
 // @Tags Tracking - Locations
 // @Accept json
 // @Produce json
+// @Security BearerAuth
 // @Param id path string true "Vehicle ID (UUID)"
 // @Success 200 {object} models.CurrentLocationResponse
 // @Failure 400 {object} errors.ErrorResponse
@@ -170,7 +176,6 @@ func (ctrl *TrackingController) RecordRideEvent(c *gin.Context) {
 
 	conform.Strings(&dto)
 
-	// Get user ID from context (set by auth middleware)
 	userID, exists := c.Get("user_id")
 	var createdBy *uuid.UUID
 	if exists {
@@ -212,6 +217,11 @@ func (ctrl *TrackingController) RecordRideEvent(c *gin.Context) {
 // @Failure 500 {object} errors.ErrorResponse
 // @Router /tracking/routes/{route_id}/status [get]
 func (ctrl *TrackingController) GetRouteRealtimeStatus(c *gin.Context) {
+	tenantID, ok := ctrl.requireTenantID(c)
+	if !ok {
+		return
+	}
+
 	routeIDStr := c.Param("route_id")
 	routeID, err := uuid.Parse(routeIDStr)
 	if err != nil {
@@ -219,7 +229,7 @@ func (ctrl *TrackingController) GetRouteRealtimeStatus(c *gin.Context) {
 		return
 	}
 
-	response, err := ctrl.trackingService.GetRouteRealtimeStatus(c.Request.Context(), routeID)
+	response, err := ctrl.trackingService.GetRouteRealtimeStatus(c.Request.Context(), tenantID, routeID)
 	if err != nil {
 		if trackingErr, ok := err.(*trackingErrors.TrackingError); ok {
 			switch trackingErr.Code {
@@ -252,6 +262,11 @@ func (ctrl *TrackingController) GetRouteRealtimeStatus(c *gin.Context) {
 // @Failure 500 {object} errors.ErrorResponse
 // @Router /tracking/riders/{rider_id}/status [get]
 func (ctrl *TrackingController) GetRiderStatus(c *gin.Context) {
+	tenantID, ok := ctrl.requireTenantID(c)
+	if !ok {
+		return
+	}
+
 	riderIDStr := c.Param("rider_id")
 	riderID, err := uuid.Parse(riderIDStr)
 	if err != nil {
@@ -259,7 +274,7 @@ func (ctrl *TrackingController) GetRiderStatus(c *gin.Context) {
 		return
 	}
 
-	response, err := ctrl.trackingService.GetRiderStatus(c.Request.Context(), riderID)
+	response, err := ctrl.trackingService.GetRiderStatus(c.Request.Context(), tenantID, riderID)
 	if err != nil {
 		if trackingErr, ok := err.(*trackingErrors.TrackingError); ok {
 			switch trackingErr.Code {
@@ -292,6 +307,11 @@ func (ctrl *TrackingController) GetRiderStatus(c *gin.Context) {
 // @Failure 500 {object} errors.ErrorResponse
 // @Router /tracking/alerts [post]
 func (ctrl *TrackingController) CreateRouteAlert(c *gin.Context) {
+	tenantID, ok := ctrl.requireTenantID(c)
+	if !ok {
+		return
+	}
+
 	var dto models.CreateAlertDto
 
 	if err := c.ShouldBindJSON(&dto); err != nil {
@@ -301,7 +321,6 @@ func (ctrl *TrackingController) CreateRouteAlert(c *gin.Context) {
 
 	conform.Strings(&dto)
 
-	// Get user ID from context (set by auth middleware)
 	userID, exists := c.Get("user_id")
 	var createdBy *uuid.UUID
 	if exists {
@@ -310,7 +329,7 @@ func (ctrl *TrackingController) CreateRouteAlert(c *gin.Context) {
 		}
 	}
 
-	response, err := ctrl.trackingService.CreateRouteAlert(c.Request.Context(), &dto, createdBy)
+	response, err := ctrl.trackingService.CreateRouteAlert(c.Request.Context(), tenantID, &dto, createdBy)
 	if err != nil {
 		if trackingErr, ok := err.(*trackingErrors.TrackingError); ok {
 			switch trackingErr.Code {
@@ -343,6 +362,11 @@ func (ctrl *TrackingController) CreateRouteAlert(c *gin.Context) {
 // @Failure 500 {object} errors.ErrorResponse
 // @Router /tracking/companies [post]
 func (ctrl *TrackingController) CreateCompany(c *gin.Context) {
+	tenantID, ok := ctrl.requireTenantID(c)
+	if !ok {
+		return
+	}
+
 	var dto models.CreateCompanyDto
 	if err := c.ShouldBindJSON(&dto); err != nil {
 		c.JSON(http.StatusBadRequest, coreErrors.BuildErrorDetail(c, trackingErrors.CompanyCreateFailed, utils.ExtractValidationError(c, err)))
@@ -350,7 +374,7 @@ func (ctrl *TrackingController) CreateCompany(c *gin.Context) {
 	}
 	conform.Strings(&dto)
 
-	company, err := ctrl.trackingService.CreateCompany(c, &dto)
+	company, err := ctrl.trackingService.CreateCompany(c.Request.Context(), tenantID, &dto)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, coreErrors.BuildError(c, err))
 		return
@@ -373,6 +397,11 @@ func (ctrl *TrackingController) CreateCompany(c *gin.Context) {
 // @Failure 500 {object} errors.ErrorResponse
 // @Router /tracking/companies/{id} [patch]
 func (ctrl *TrackingController) UpdateCompany(c *gin.Context) {
+	tenantID, ok := ctrl.requireTenantID(c)
+	if !ok {
+		return
+	}
+
 	companyID, err := uuid.Parse(c.Param("company_id"))
 	if err != nil {
 		c.JSON(http.StatusBadRequest, coreErrors.BuildErrorSingle(c, coreErrors.InvalidUUID))
@@ -385,7 +414,7 @@ func (ctrl *TrackingController) UpdateCompany(c *gin.Context) {
 	}
 	conform.Strings(&dto)
 
-	company, err := ctrl.trackingService.UpdateCompany(c.Request.Context(), companyID, &dto)
+	company, err := ctrl.trackingService.UpdateCompany(c.Request.Context(), tenantID, companyID, &dto)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, coreErrors.BuildError(c, err))
 		return
@@ -395,7 +424,7 @@ func (ctrl *TrackingController) UpdateCompany(c *gin.Context) {
 
 // ListCompanies godoc
 // @Summary List transport companies
-// @Description Get all companies accessible to the tenant (owned or client access)
+// @Description Get all companies owned by the current tenant
 // @Tags Tracking - Companies
 // @Produce json
 // @Security BearerAuth
@@ -403,6 +432,11 @@ func (ctrl *TrackingController) UpdateCompany(c *gin.Context) {
 // @Failure 500 {object} errors.ErrorResponse
 // @Router /tracking/companies [get]
 func (ctrl *TrackingController) ListCompanies(c *gin.Context) {
+	tenantID, ok := ctrl.requireTenantID(c)
+	if !ok {
+		return
+	}
+
 	var registrationNumber *string
 	var status *string
 
@@ -413,7 +447,7 @@ func (ctrl *TrackingController) ListCompanies(c *gin.Context) {
 		status = &st
 	}
 
-	companies, err := ctrl.trackingService.ListCompanies(c.Request.Context(), registrationNumber, status)
+	companies, err := ctrl.trackingService.ListCompanies(c.Request.Context(), tenantID, registrationNumber, status)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, coreErrors.BuildError(c, err))
 		return
@@ -434,13 +468,18 @@ func (ctrl *TrackingController) ListCompanies(c *gin.Context) {
 // @Failure 500 {object} errors.ErrorResponse
 // @Router /tracking/companies/{id} [get]
 func (ctrl *TrackingController) GetCompany(c *gin.Context) {
+	tenantID, ok := ctrl.requireTenantID(c)
+	if !ok {
+		return
+	}
+
 	companyID, err := uuid.Parse(c.Param("company_id"))
 	if err != nil {
 		c.JSON(http.StatusBadRequest, coreErrors.BuildErrorSingle(c, coreErrors.InvalidUUID))
 		return
 	}
 
-	company, err := ctrl.trackingService.GetCompany(c.Request.Context(), companyID)
+	company, err := ctrl.trackingService.GetCompany(c.Request.Context(), tenantID, companyID)
 	if err != nil {
 		var trackingErr *trackingErrors.TrackingError
 		if errors.As(err, &trackingErr) && trackingErr.Code == trackingErrors.CompanyNotFound {
@@ -465,18 +504,29 @@ func (ctrl *TrackingController) GetCompany(c *gin.Context) {
 // @Failure 500 {object} errors.ErrorResponse
 // @Router /tracking/companies/{id} [delete]
 func (ctrl *TrackingController) DeleteCompany(c *gin.Context) {
+	tenantID, ok := ctrl.requireTenantID(c)
+	if !ok {
+		return
+	}
+
 	companyID, err := uuid.Parse(c.Param("company_id"))
 	if err != nil {
 		c.JSON(http.StatusBadRequest, coreErrors.BuildErrorSingle(c, coreErrors.InvalidUUID))
 		return
 	}
 
-	err = ctrl.trackingService.DeleteCompany(c.Request.Context(), companyID)
+	err = ctrl.trackingService.DeleteCompany(c.Request.Context(), tenantID, companyID)
 	if err != nil {
 		var trackingErr *trackingErrors.TrackingError
-		if errors.As(err, &trackingErr) && trackingErr.Code == trackingErrors.CompanyNotFound {
-			c.JSON(http.StatusNotFound, coreErrors.BuildError(c, err))
-			return
+		if errors.As(err, &trackingErr) {
+			switch trackingErr.Code {
+			case trackingErrors.CompanyNotFound:
+				c.JSON(http.StatusNotFound, coreErrors.BuildErrorSingle(c, trackingErr.Code))
+				return
+			case trackingErrors.CompanyHasVehicles:
+				c.JSON(http.StatusConflict, coreErrors.BuildErrorSingle(c, trackingErr.Code))
+				return
+			}
 		}
 		c.JSON(http.StatusInternalServerError, coreErrors.BuildError(c, err))
 		return
@@ -499,13 +549,18 @@ func (ctrl *TrackingController) DeleteCompany(c *gin.Context) {
 // @Failure 500 {object} errors.ErrorResponse
 // @Router /tracking/vehicles [post]
 func (ctrl *TrackingController) CreateVehicle(c *gin.Context) {
+	tenantID, ok := ctrl.requireTenantID(c)
+	if !ok {
+		return
+	}
+
 	var dto models.CreateVehicleDto
 	if err := c.ShouldBindJSON(&dto); err != nil {
 		c.JSON(http.StatusBadRequest, coreErrors.BuildErrorDetail(c, trackingErrors.VehicleCreateFailed, utils.ExtractValidationError(c, err)))
 		return
 	}
 	conform.Strings(&dto)
-	vehicle, err := ctrl.trackingService.CreateVehicle(c.Request.Context(), &dto)
+	vehicle, err := ctrl.trackingService.CreateVehicle(c.Request.Context(), tenantID, &dto)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, coreErrors.BuildError(c, err))
 		return
@@ -528,6 +583,11 @@ func (ctrl *TrackingController) CreateVehicle(c *gin.Context) {
 // @Failure 500 {object} errors.ErrorResponse
 // @Router /tracking/vehicles/{id} [patch]
 func (ctrl *TrackingController) UpdateVehicle(c *gin.Context) {
+	tenantID, ok := ctrl.requireTenantID(c)
+	if !ok {
+		return
+	}
+
 	vehicleID, err := uuid.Parse(c.Param("vehicle_id"))
 	if err != nil {
 		c.JSON(http.StatusBadRequest, coreErrors.BuildErrorSingle(c, coreErrors.InvalidUUID))
@@ -539,7 +599,7 @@ func (ctrl *TrackingController) UpdateVehicle(c *gin.Context) {
 		return
 	}
 	conform.Strings(&dto)
-	vehicle, err := ctrl.trackingService.UpdateVehicle(c.Request.Context(), vehicleID, &dto)
+	vehicle, err := ctrl.trackingService.UpdateVehicle(c.Request.Context(), tenantID, vehicleID, &dto)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, coreErrors.BuildError(c, err))
 		return
@@ -549,7 +609,7 @@ func (ctrl *TrackingController) UpdateVehicle(c *gin.Context) {
 
 // ListVehicles godoc
 // @Summary List vehicles
-// @Description Get all vehicles for a company
+// @Description Get all vehicles for a company (scoped to current tenant)
 // @Tags Tracking - Vehicles
 // @Produce json
 // @Security BearerAuth
@@ -559,12 +619,17 @@ func (ctrl *TrackingController) UpdateVehicle(c *gin.Context) {
 // @Failure 500 {object} errors.ErrorResponse
 // @Router /tracking/vehicles [get]
 func (ctrl *TrackingController) ListVehicles(c *gin.Context) {
+	tenantID, ok := ctrl.requireTenantID(c)
+	if !ok {
+		return
+	}
+
 	companyID, err := uuid.Parse(c.Query("company_id"))
 	if err != nil {
 		c.JSON(http.StatusBadRequest, coreErrors.BuildErrorSingle(c, coreErrors.InvalidUUID))
 		return
 	}
-	vehicles, err := ctrl.trackingService.ListVehicles(c.Request.Context(), &companyID, nil, nil)
+	vehicles, err := ctrl.trackingService.ListVehicles(c.Request.Context(), tenantID, &companyID, nil, nil)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, coreErrors.BuildError(c, err))
 		return
@@ -585,12 +650,17 @@ func (ctrl *TrackingController) ListVehicles(c *gin.Context) {
 // @Failure 500 {object} errors.ErrorResponse
 // @Router /tracking/vehicles/{id} [get]
 func (ctrl *TrackingController) GetVehicle(c *gin.Context) {
+	tenantID, ok := ctrl.requireTenantID(c)
+	if !ok {
+		return
+	}
+
 	vehicleID, err := uuid.Parse(c.Param("vehicle_id"))
 	if err != nil {
 		c.JSON(http.StatusBadRequest, coreErrors.BuildErrorSingle(c, coreErrors.InvalidUUID))
 		return
 	}
-	vehicle, err := ctrl.trackingService.GetVehicle(c.Request.Context(), vehicleID)
+	vehicle, err := ctrl.trackingService.GetVehicle(c.Request.Context(), tenantID, vehicleID)
 	if err != nil {
 		var trackingErr *trackingErrors.TrackingError
 		if errors.As(err, &trackingErr) && trackingErr.Code == trackingErrors.VehicleNotFound {
@@ -615,12 +685,17 @@ func (ctrl *TrackingController) GetVehicle(c *gin.Context) {
 // @Failure 500 {object} errors.ErrorResponse
 // @Router /tracking/vehicles/{id} [delete]
 func (ctrl *TrackingController) DeleteVehicle(c *gin.Context) {
+	tenantID, ok := ctrl.requireTenantID(c)
+	if !ok {
+		return
+	}
+
 	vehicleID, err := uuid.Parse(c.Param("vehicle_id"))
 	if err != nil {
 		c.JSON(http.StatusBadRequest, coreErrors.BuildErrorSingle(c, coreErrors.InvalidUUID))
 		return
 	}
-	err = ctrl.trackingService.DeleteVehicle(c.Request.Context(), vehicleID)
+	err = ctrl.trackingService.DeleteVehicle(c.Request.Context(), tenantID, vehicleID)
 	if err != nil {
 		var trackingErr *trackingErrors.TrackingError
 		if errors.As(err, &trackingErr) && trackingErr.Code == trackingErrors.VehicleNotFound {
@@ -648,13 +723,18 @@ func (ctrl *TrackingController) DeleteVehicle(c *gin.Context) {
 // @Failure 500 {object} errors.ErrorResponse
 // @Router /tracking/routes [post]
 func (ctrl *TrackingController) CreateRoute(c *gin.Context) {
+	tenantID, ok := ctrl.requireTenantID(c)
+	if !ok {
+		return
+	}
+
 	var dto models.CreateRouteDto
 	if err := c.ShouldBindJSON(&dto); err != nil {
 		c.JSON(http.StatusBadRequest, coreErrors.BuildErrorDetail(c, trackingErrors.RouteCreateFailed, utils.ExtractValidationError(c, err)))
 		return
 	}
 	conform.Strings(&dto)
-	route, err := ctrl.trackingService.CreateRoute(c.Request.Context(), &dto)
+	route, err := ctrl.trackingService.CreateRoute(c.Request.Context(), tenantID, &dto)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, coreErrors.BuildError(c, err))
 		return
@@ -677,6 +757,11 @@ func (ctrl *TrackingController) CreateRoute(c *gin.Context) {
 // @Failure 500 {object} errors.ErrorResponse
 // @Router /tracking/routes/{id} [patch]
 func (ctrl *TrackingController) UpdateRoute(c *gin.Context) {
+	tenantID, ok := ctrl.requireTenantID(c)
+	if !ok {
+		return
+	}
+
 	routeID, err := uuid.Parse(c.Param("route_id"))
 	if err != nil {
 		c.JSON(http.StatusBadRequest, coreErrors.BuildErrorSingle(c, coreErrors.InvalidUUID))
@@ -688,7 +773,7 @@ func (ctrl *TrackingController) UpdateRoute(c *gin.Context) {
 		return
 	}
 	conform.Strings(&dto)
-	route, err := ctrl.trackingService.UpdateRoute(c.Request.Context(), routeID, &dto)
+	route, err := ctrl.trackingService.UpdateRoute(c.Request.Context(), tenantID, routeID, &dto)
 	if err != nil {
 		var trackingErr *trackingErrors.TrackingError
 		if errors.As(err, &trackingErr) && trackingErr.Code == trackingErrors.RouteNotFound {
@@ -703,7 +788,7 @@ func (ctrl *TrackingController) UpdateRoute(c *gin.Context) {
 
 // ListRoutes godoc
 // @Summary List routes
-// @Description Get all routes for a company
+// @Description Get all routes for a company (scoped to current tenant)
 // @Tags Tracking - Routes
 // @Produce json
 // @Security BearerAuth
@@ -713,12 +798,17 @@ func (ctrl *TrackingController) UpdateRoute(c *gin.Context) {
 // @Failure 500 {object} errors.ErrorResponse
 // @Router /tracking/routes [get]
 func (ctrl *TrackingController) ListRoutes(c *gin.Context) {
+	tenantID, ok := ctrl.requireTenantID(c)
+	if !ok {
+		return
+	}
+
 	companyID, err := uuid.Parse(c.Query("company_id"))
 	if err != nil {
 		c.JSON(http.StatusBadRequest, coreErrors.BuildErrorSingle(c, coreErrors.InvalidUUID))
 		return
 	}
-	routes, err := ctrl.trackingService.ListRoutes(c.Request.Context(), &companyID, nil)
+	routes, err := ctrl.trackingService.ListRoutes(c.Request.Context(), tenantID, &companyID, nil)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, coreErrors.BuildError(c, err))
 		return
@@ -739,12 +829,17 @@ func (ctrl *TrackingController) ListRoutes(c *gin.Context) {
 // @Failure 500 {object} errors.ErrorResponse
 // @Router /tracking/routes/{id} [get]
 func (ctrl *TrackingController) GetRoute(c *gin.Context) {
+	tenantID, ok := ctrl.requireTenantID(c)
+	if !ok {
+		return
+	}
+
 	routeID, err := uuid.Parse(c.Param("route_id"))
 	if err != nil {
 		c.JSON(http.StatusBadRequest, coreErrors.BuildErrorSingle(c, coreErrors.InvalidUUID))
 		return
 	}
-	route, err := ctrl.trackingService.GetRoute(c.Request.Context(), routeID)
+	route, err := ctrl.trackingService.GetRoute(c.Request.Context(), tenantID, routeID)
 	if err != nil {
 		var trackingErr *trackingErrors.TrackingError
 		if errors.As(err, &trackingErr) && trackingErr.Code == trackingErrors.RouteNotFound {
@@ -769,12 +864,17 @@ func (ctrl *TrackingController) GetRoute(c *gin.Context) {
 // @Failure 500 {object} errors.ErrorResponse
 // @Router /tracking/routes/{id} [delete]
 func (ctrl *TrackingController) DeleteRoute(c *gin.Context) {
+	tenantID, ok := ctrl.requireTenantID(c)
+	if !ok {
+		return
+	}
+
 	routeID, err := uuid.Parse(c.Param("route_id"))
 	if err != nil {
 		c.JSON(http.StatusBadRequest, coreErrors.BuildErrorSingle(c, coreErrors.InvalidUUID))
 		return
 	}
-	err = ctrl.trackingService.DeleteRoute(c.Request.Context(), routeID)
+	err = ctrl.trackingService.DeleteRoute(c.Request.Context(), tenantID, routeID)
 	if err != nil {
 		var trackingErr *trackingErrors.TrackingError
 		if errors.As(err, &trackingErr) && trackingErr.Code == trackingErrors.RouteNotFound {
@@ -802,13 +902,18 @@ func (ctrl *TrackingController) DeleteRoute(c *gin.Context) {
 // @Failure 500 {object} errors.ErrorResponse
 // @Router /tracking/route-stops [post]
 func (ctrl *TrackingController) CreateRouteStop(c *gin.Context) {
+	tenantID, ok := ctrl.requireTenantID(c)
+	if !ok {
+		return
+	}
+
 	var dto models.CreateRouteStopDto
 	if err := c.ShouldBindJSON(&dto); err != nil {
 		c.JSON(http.StatusBadRequest, coreErrors.BuildErrorDetail(c, trackingErrors.RouteStopCreateFailed, utils.ExtractValidationError(c, err)))
 		return
 	}
 	conform.Strings(&dto)
-	stop, err := ctrl.trackingService.CreateRouteStop(c.Request.Context(), &dto)
+	stop, err := ctrl.trackingService.CreateRouteStop(c.Request.Context(), tenantID, &dto)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, coreErrors.BuildError(c, err))
 		return
@@ -828,12 +933,17 @@ func (ctrl *TrackingController) CreateRouteStop(c *gin.Context) {
 // @Failure 500 {object} errors.ErrorResponse
 // @Router /tracking/routes/{route_id}/stops [get]
 func (ctrl *TrackingController) ListRouteStops(c *gin.Context) {
+	tenantID, ok := ctrl.requireTenantID(c)
+	if !ok {
+		return
+	}
+
 	routeID, err := uuid.Parse(c.Param("route_id"))
 	if err != nil {
 		c.JSON(http.StatusBadRequest, coreErrors.BuildErrorSingle(c, coreErrors.InvalidUUID))
 		return
 	}
-	stops, err := ctrl.trackingService.ListRouteStops(c.Request.Context(), routeID)
+	stops, err := ctrl.trackingService.ListRouteStops(c.Request.Context(), tenantID, routeID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, coreErrors.BuildError(c, err))
 		return
@@ -853,12 +963,17 @@ func (ctrl *TrackingController) ListRouteStops(c *gin.Context) {
 // @Failure 500 {object} errors.ErrorResponse
 // @Router /tracking/route-stops/{id} [delete]
 func (ctrl *TrackingController) DeleteRouteStop(c *gin.Context) {
+	tenantID, ok := ctrl.requireTenantID(c)
+	if !ok {
+		return
+	}
+
 	stopID, err := uuid.Parse(c.Param("stop_id"))
 	if err != nil {
 		c.JSON(http.StatusBadRequest, coreErrors.BuildErrorSingle(c, coreErrors.InvalidUUID))
 		return
 	}
-	err = ctrl.trackingService.DeleteRouteStop(c.Request.Context(), stopID)
+	err = ctrl.trackingService.DeleteRouteStop(c.Request.Context(), tenantID, stopID)
 	if err != nil {
 		var trackingErr *trackingErrors.TrackingError
 		if errors.As(err, &trackingErr) && trackingErr.Code == trackingErrors.RouteStopNotFound {
@@ -886,13 +1001,18 @@ func (ctrl *TrackingController) DeleteRouteStop(c *gin.Context) {
 // @Failure 500 {object} errors.ErrorResponse
 // @Router /tracking/riders [post]
 func (ctrl *TrackingController) CreateRider(c *gin.Context) {
+	tenantID, ok := ctrl.requireTenantID(c)
+	if !ok {
+		return
+	}
+
 	var dto models.CreateRiderDto
 	if err := c.ShouldBindJSON(&dto); err != nil {
 		c.JSON(http.StatusBadRequest, coreErrors.BuildErrorDetail(c, trackingErrors.RiderCreateFailed, utils.ExtractValidationError(c, err)))
 		return
 	}
 	conform.Strings(&dto)
-	rider, err := ctrl.trackingService.CreateRider(c.Request.Context(), &dto)
+	rider, err := ctrl.trackingService.CreateRider(c.Request.Context(), tenantID, &dto)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, coreErrors.BuildError(c, err))
 		return
@@ -915,6 +1035,11 @@ func (ctrl *TrackingController) CreateRider(c *gin.Context) {
 // @Failure 500 {object} errors.ErrorResponse
 // @Router /tracking/riders/{id} [patch]
 func (ctrl *TrackingController) UpdateRider(c *gin.Context) {
+	tenantID, ok := ctrl.requireTenantID(c)
+	if !ok {
+		return
+	}
+
 	riderID, err := uuid.Parse(c.Param("rider_id"))
 	if err != nil {
 		c.JSON(http.StatusBadRequest, coreErrors.BuildErrorSingle(c, coreErrors.InvalidUUID))
@@ -926,7 +1051,7 @@ func (ctrl *TrackingController) UpdateRider(c *gin.Context) {
 		return
 	}
 	conform.Strings(&dto)
-	rider, err := ctrl.trackingService.UpdateRider(c.Request.Context(), riderID, &dto)
+	rider, err := ctrl.trackingService.UpdateRider(c.Request.Context(), tenantID, riderID, &dto)
 	if err != nil {
 		var trackingErr *trackingErrors.TrackingError
 		if errors.As(err, &trackingErr) && trackingErr.Code == trackingErrors.RiderNotFound {
@@ -941,7 +1066,7 @@ func (ctrl *TrackingController) UpdateRider(c *gin.Context) {
 
 // ListRiders godoc
 // @Summary List riders
-// @Description Get all riders for a company
+// @Description Get all riders for a company (scoped to current tenant)
 // @Tags Tracking - Riders
 // @Produce json
 // @Security BearerAuth
@@ -951,12 +1076,17 @@ func (ctrl *TrackingController) UpdateRider(c *gin.Context) {
 // @Failure 500 {object} errors.ErrorResponse
 // @Router /tracking/companies/{company_id}/riders [get]
 func (ctrl *TrackingController) ListRiders(c *gin.Context) {
+	tenantID, ok := ctrl.requireTenantID(c)
+	if !ok {
+		return
+	}
+
 	companyID, err := uuid.Parse(c.Param("company_id"))
 	if err != nil {
 		c.JSON(http.StatusBadRequest, coreErrors.BuildErrorSingle(c, coreErrors.InvalidUUID))
 		return
 	}
-	riders, err := ctrl.trackingService.ListRiders(c.Request.Context(), &companyID, nil, nil, nil)
+	riders, err := ctrl.trackingService.ListRiders(c.Request.Context(), tenantID, &companyID, nil, nil, nil)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, coreErrors.BuildError(c, err))
 		return
@@ -966,7 +1096,7 @@ func (ctrl *TrackingController) ListRiders(c *gin.Context) {
 
 // GetRider godoc
 // @Summary Get rider by ID
-// @Description Get a single rider by ID (supports guardian access)
+// @Description Get a single rider by ID
 // @Tags Tracking - Riders
 // @Produce json
 // @Security BearerAuth
@@ -977,12 +1107,17 @@ func (ctrl *TrackingController) ListRiders(c *gin.Context) {
 // @Failure 500 {object} errors.ErrorResponse
 // @Router /tracking/riders/{id} [get]
 func (ctrl *TrackingController) GetRider(c *gin.Context) {
+	tenantID, ok := ctrl.requireTenantID(c)
+	if !ok {
+		return
+	}
+
 	riderID, err := uuid.Parse(c.Param("rider_id"))
 	if err != nil {
 		c.JSON(http.StatusBadRequest, coreErrors.BuildErrorSingle(c, coreErrors.InvalidUUID))
 		return
 	}
-	rider, err := ctrl.trackingService.GetRider(c.Request.Context(), riderID, nil)
+	rider, err := ctrl.trackingService.GetRider(c.Request.Context(), tenantID, riderID, nil)
 	if err != nil {
 		var trackingErr *trackingErrors.TrackingError
 		if errors.As(err, &trackingErr) && trackingErr.Code == trackingErrors.RiderNotFound {
@@ -1007,12 +1142,17 @@ func (ctrl *TrackingController) GetRider(c *gin.Context) {
 // @Failure 500 {object} errors.ErrorResponse
 // @Router /tracking/riders/{id} [delete]
 func (ctrl *TrackingController) DeleteRider(c *gin.Context) {
+	tenantID, ok := ctrl.requireTenantID(c)
+	if !ok {
+		return
+	}
+
 	riderID, err := uuid.Parse(c.Param("rider_id"))
 	if err != nil {
 		c.JSON(http.StatusBadRequest, coreErrors.BuildErrorSingle(c, coreErrors.InvalidUUID))
 		return
 	}
-	err = ctrl.trackingService.DeleteRider(c.Request.Context(), riderID)
+	err = ctrl.trackingService.DeleteRider(c.Request.Context(), tenantID, riderID)
 	if err != nil {
 		var trackingErr *trackingErrors.TrackingError
 		if errors.As(err, &trackingErr) && trackingErr.Code == trackingErrors.RiderNotFound {
@@ -1040,13 +1180,29 @@ func (ctrl *TrackingController) DeleteRider(c *gin.Context) {
 // @Failure 500 {object} errors.ErrorResponse
 // @Router /tracking/assignments [post]
 func (ctrl *TrackingController) AssignRider(c *gin.Context) {
+	tenantID, ok := ctrl.requireTenantID(c)
+	if !ok {
+		return
+	}
+
 	var dto models.AssignRiderDto
 	if err := c.ShouldBindJSON(&dto); err != nil {
 		c.JSON(http.StatusBadRequest, coreErrors.BuildErrorDetail(c, trackingErrors.AssignmentCreateFailed, utils.ExtractValidationError(c, err)))
 		return
 	}
-	assignment, err := ctrl.trackingService.AssignRider(c.Request.Context(), &dto)
+	assignment, err := ctrl.trackingService.AssignRider(c.Request.Context(), tenantID, &dto)
 	if err != nil {
+		var trackingErr *trackingErrors.TrackingError
+		if errors.As(err, &trackingErr) {
+			switch trackingErr.Code {
+			case trackingErrors.RiderNotFound, trackingErrors.RouteNotFound:
+				c.JSON(http.StatusNotFound, coreErrors.BuildErrorSingle(c, trackingErr.Code))
+				return
+			case trackingErrors.AssignmentAlreadyExists:
+				c.JSON(http.StatusConflict, coreErrors.BuildErrorSingle(c, trackingErr.Code))
+				return
+			}
+		}
 		c.JSON(http.StatusInternalServerError, coreErrors.BuildError(c, err))
 		return
 	}
@@ -1065,12 +1221,17 @@ func (ctrl *TrackingController) AssignRider(c *gin.Context) {
 // @Failure 500 {object} errors.ErrorResponse
 // @Router /tracking/assignments/{id} [delete]
 func (ctrl *TrackingController) UnassignRider(c *gin.Context) {
+	tenantID, ok := ctrl.requireTenantID(c)
+	if !ok {
+		return
+	}
+
 	assignmentID, err := uuid.Parse(c.Param("assignment_id"))
 	if err != nil {
 		c.JSON(http.StatusBadRequest, coreErrors.BuildErrorSingle(c, coreErrors.InvalidUUID))
 		return
 	}
-	err = ctrl.trackingService.UnassignRider(c.Request.Context(), assignmentID)
+	err = ctrl.trackingService.UnassignRider(c.Request.Context(), tenantID, assignmentID)
 	if err != nil {
 		var trackingErr *trackingErrors.TrackingError
 		if errors.As(err, &trackingErr) && trackingErr.Code == trackingErrors.AssignmentNotFound {
@@ -1097,11 +1258,15 @@ func (ctrl *TrackingController) UnassignRider(c *gin.Context) {
 // @Failure 500 {object} errors.ErrorResponse
 // @Router /tracking/assignments [get]
 func (ctrl *TrackingController) ListRiderAssignments(c *gin.Context) {
+	tenantID, ok := ctrl.requireTenantID(c)
+	if !ok {
+		return
+	}
+
 	var riderID *uuid.UUID
 	var routeID *uuid.UUID
 	var isActive *bool
 
-	// Parse optional rider_id
 	if riderIDStr := c.Query("rider_id"); riderIDStr != "" {
 		parsed, err := uuid.Parse(riderIDStr)
 		if err != nil {
@@ -1111,7 +1276,6 @@ func (ctrl *TrackingController) ListRiderAssignments(c *gin.Context) {
 		riderID = &parsed
 	}
 
-	// Parse optional route_id
 	if routeIDStr := c.Query("route_id"); routeIDStr != "" {
 		parsed, err := uuid.Parse(routeIDStr)
 		if err != nil {
@@ -1121,13 +1285,12 @@ func (ctrl *TrackingController) ListRiderAssignments(c *gin.Context) {
 		routeID = &parsed
 	}
 
-	// Parse optional is_active
 	if isActiveStr := c.Query("is_active"); isActiveStr != "" {
 		active := isActiveStr == "true"
 		isActive = &active
 	}
 
-	assignments, err := ctrl.trackingService.ListRiderAssignments(c.Request.Context(), riderID, routeID, isActive)
+	assignments, err := ctrl.trackingService.ListRiderAssignments(c.Request.Context(), tenantID, riderID, routeID, isActive)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, coreErrors.BuildError(c, err))
 		return
@@ -1151,6 +1314,11 @@ func (ctrl *TrackingController) ListRiderAssignments(c *gin.Context) {
 // @Failure 500 {object} errors.ErrorResponse
 // @Router /tracking/companies/{company_id}/clients [post]
 func (ctrl *TrackingController) GrantClientAccess(c *gin.Context) {
+	tenantID, ok := ctrl.requireTenantID(c)
+	if !ok {
+		return
+	}
+
 	companyID, err := uuid.Parse(c.Param("company_id"))
 	if err != nil {
 		c.JSON(http.StatusBadRequest, coreErrors.BuildErrorSingle(c, coreErrors.InvalidUUID))
@@ -1166,12 +1334,9 @@ func (ctrl *TrackingController) GrantClientAccess(c *gin.Context) {
 	conform.Strings(&dto)
 
 	userID := c.GetString("user_id")
-	tenantID := c.GetString("tenant_id")
-
 	userUUID, _ := uuid.Parse(userID)
-	tenantUUID, _ := uuid.Parse(tenantID)
 
-	access, err := ctrl.trackingService.GrantClientAccess(c.Request.Context(), companyID, &dto, userUUID, tenantUUID)
+	access, err := ctrl.trackingService.GrantClientAccess(c.Request.Context(), tenantID, companyID, &dto, userUUID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, coreErrors.BuildError(c, err))
 		return
@@ -1193,6 +1358,11 @@ func (ctrl *TrackingController) GrantClientAccess(c *gin.Context) {
 // @Failure 500 {object} errors.ErrorResponse
 // @Router /tracking/companies/{company_id}/clients/{client_tenant_id} [delete]
 func (ctrl *TrackingController) RevokeClientAccess(c *gin.Context) {
+	tenantID, ok := ctrl.requireTenantID(c)
+	if !ok {
+		return
+	}
+
 	companyID, err := uuid.Parse(c.Param("company_id"))
 	if err != nil {
 		c.JSON(http.StatusBadRequest, coreErrors.BuildErrorSingle(c, coreErrors.InvalidUUID))
@@ -1206,12 +1376,9 @@ func (ctrl *TrackingController) RevokeClientAccess(c *gin.Context) {
 	}
 
 	userID := c.GetString("user_id")
-	tenantID := c.GetString("tenant_id")
-
 	userUUID, _ := uuid.Parse(userID)
-	tenantUUID, _ := uuid.Parse(tenantID)
 
-	err = ctrl.trackingService.RevokeClientAccess(c.Request.Context(), companyID, clientTenantID, userUUID, tenantUUID)
+	err = ctrl.trackingService.RevokeClientAccess(c.Request.Context(), tenantID, companyID, clientTenantID, userUUID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, coreErrors.BuildError(c, err))
 		return
@@ -1232,16 +1399,18 @@ func (ctrl *TrackingController) RevokeClientAccess(c *gin.Context) {
 // @Failure 500 {object} errors.ErrorResponse
 // @Router /tracking/companies/{company_id}/clients [get]
 func (ctrl *TrackingController) ListCompanyClients(c *gin.Context) {
+	tenantID, ok := ctrl.requireTenantID(c)
+	if !ok {
+		return
+	}
+
 	companyID, err := uuid.Parse(c.Param("company_id"))
 	if err != nil {
 		c.JSON(http.StatusBadRequest, coreErrors.BuildErrorSingle(c, coreErrors.InvalidUUID))
 		return
 	}
 
-	tenantID := c.GetString("tenant_id")
-	tenantUUID, _ := uuid.Parse(tenantID)
-
-	clients, err := ctrl.trackingService.ListCompanyClients(c.Request.Context(), companyID, tenantUUID)
+	clients, err := ctrl.trackingService.ListCompanyClients(c.Request.Context(), tenantID, companyID)
 	if err != nil {
 		var trackingErr *trackingErrors.TrackingError
 		if errors.As(err, &trackingErr) {

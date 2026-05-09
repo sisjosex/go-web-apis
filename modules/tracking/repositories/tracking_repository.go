@@ -2,6 +2,7 @@ package repositories
 
 import (
 	"context"
+	"errors"
 	"strings"
 	"time"
 
@@ -10,6 +11,7 @@ import (
 	"josex/web/modules/tracking/models"
 
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5/pgconn"
 )
 
 type TrackingRepository struct {
@@ -163,7 +165,6 @@ func (r *TrackingRepository) RecordRideEvent(ctx context.Context, dto *models.Re
 		}
 	}
 
-	// TODO: Get rider name from riders table
 	riderName := ""
 
 	return &models.EventRecordedResponse{
@@ -177,7 +178,7 @@ func (r *TrackingRepository) RecordRideEvent(ctx context.Context, dto *models.Re
 }
 
 // GetRouteRealtimeStatus gets comprehensive route status
-func (r *TrackingRepository) GetRouteRealtimeStatus(ctx context.Context, routeID uuid.UUID) (*models.RouteRealtimeStatusResponse, error) {
+func (r *TrackingRepository) GetRouteRealtimeStatus(ctx context.Context, tenantID uuid.UUID, routeID uuid.UUID) (*models.RouteRealtimeStatusResponse, error) {
 	var retRouteID uuid.UUID
 	var routeName string
 	var vehicleID *uuid.UUID
@@ -189,7 +190,8 @@ func (r *TrackingRepository) GetRouteRealtimeStatus(ctx context.Context, routeID
 
 	err := r.dbService.QueryRow(
 		ctx,
-		`SELECT * FROM tracking.sp_get_route_realtime_status($1)`,
+		`SELECT * FROM tracking.sp_get_route_realtime_status($1, $2)`,
+		tenantID,
 		routeID,
 	).Scan(
 		&retRouteID,
@@ -231,7 +233,7 @@ func (r *TrackingRepository) GetRouteRealtimeStatus(ctx context.Context, routeID
 }
 
 // GetRiderStatus gets rider status for guardian view
-func (r *TrackingRepository) GetRiderStatus(ctx context.Context, riderID uuid.UUID) (*models.RiderStatusResponse, error) {
+func (r *TrackingRepository) GetRiderStatus(ctx context.Context, tenantID uuid.UUID, riderID uuid.UUID) (*models.RiderStatusResponse, error) {
 	var retRiderID uuid.UUID
 	var riderName string
 	var routeID *uuid.UUID
@@ -252,7 +254,8 @@ func (r *TrackingRepository) GetRiderStatus(ctx context.Context, riderID uuid.UU
 
 	err := r.dbService.QueryRow(
 		ctx,
-		`SELECT * FROM tracking.sp_get_rider_status($1)`,
+		`SELECT * FROM tracking.sp_get_rider_status($1, $2)`,
+		tenantID,
 		riderID,
 	).Scan(
 		&retRiderID,
@@ -308,7 +311,7 @@ func (r *TrackingRepository) GetRiderStatus(ctx context.Context, riderID uuid.UU
 }
 
 // CreateRouteAlert creates a route delay/breakdown alert
-func (r *TrackingRepository) CreateRouteAlert(ctx context.Context, dto *models.CreateAlertDto, createdBy *uuid.UUID) (*models.AlertCreatedResponse, error) {
+func (r *TrackingRepository) CreateRouteAlert(ctx context.Context, tenantID uuid.UUID, dto *models.CreateAlertDto, createdBy *uuid.UUID) (*models.AlertCreatedResponse, error) {
 	severity := "medium"
 	if dto.Severity != "" {
 		severity = dto.Severity
@@ -328,7 +331,8 @@ func (r *TrackingRepository) CreateRouteAlert(ctx context.Context, dto *models.C
 
 	err := r.dbService.QueryRow(
 		ctx,
-		`SELECT * FROM tracking.sp_create_route_alert($1::UUID, $2::UUID, $3::VARCHAR(50), $4::VARCHAR(255), $5::TEXT, $6::VARCHAR(50), $7::INTEGER, $8::UUID)`,
+		`SELECT * FROM tracking.sp_create_route_alert($1::UUID, $2::UUID, $3::UUID, $4::VARCHAR(50), $5::VARCHAR(255), $6::TEXT, $7::VARCHAR(50), $8::INTEGER, $9::UUID)`,
+		tenantID,
 		dto.RouteID,
 		dto.VehicleID,
 		dto.AlertType,
@@ -363,39 +367,38 @@ func (r *TrackingRepository) CreateRouteAlert(ctx context.Context, dto *models.C
 
 // ==================== COMPANIES CRUD ====================
 
-func (r *TrackingRepository) CreateCompany(ctx context.Context, dto *models.CreateCompanyDto) (*models.TransportCompany, error) {
+func (r *TrackingRepository) CreateCompany(ctx context.Context, tenantID uuid.UUID, dto *models.CreateCompanyDto) (*models.TransportCompany, error) {
 	var company models.TransportCompany
 
-	// Auto-generate registration number if not provided
 	registrationNumber := strings.TrimSpace(dto.RegistrationNumber)
 	if registrationNumber == "" {
 		registrationNumber = "REG-" + uuid.New().String()[:12]
 	}
 
 	err := r.dbService.QueryRow(ctx,
-		`SELECT * FROM tracking.sp_create_company($1, $2, $3, $4, $5, $6, $7, $8)`,
-		dto.Name, dto.Email, dto.Phone, dto.Address, dto.City, dto.Country, registrationNumber, dto.Status,
-	).Scan(&company.ID, &company.Name, &company.Email, &company.Phone, &company.Address, &company.City, &company.Country, &company.RegistrationNumber, &company.Status, &company.CreatedAt, &company.UpdatedAt)
+		`SELECT * FROM tracking.sp_create_company($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
+		tenantID, dto.Name, dto.Email, dto.Phone, dto.Address, dto.City, dto.Country, registrationNumber, dto.Status,
+	).Scan(&company.ID, &company.TenantID, &company.Name, &company.Email, &company.Phone, &company.Address, &company.City, &company.Country, &company.RegistrationNumber, &company.Status, &company.CreatedAt, &company.UpdatedAt)
 	if err != nil {
 		return nil, &trackingErrors.TrackingError{Code: trackingErrors.CompanyCreateFailed, Err: err}
 	}
 	return &company, nil
 }
 
-func (r *TrackingRepository) UpdateCompany(ctx context.Context, companyID uuid.UUID, dto *models.UpdateCompanyDto) (*models.TransportCompany, error) {
+func (r *TrackingRepository) UpdateCompany(ctx context.Context, tenantID uuid.UUID, companyID uuid.UUID, dto *models.UpdateCompanyDto) (*models.TransportCompany, error) {
 	var company models.TransportCompany
 	err := r.dbService.QueryRow(ctx,
-		`SELECT * FROM tracking.sp_update_company($1, $2, $3, $4, $5, $6, $7)`,
-		companyID, dto.Name, dto.Email, dto.Phone, dto.Address, dto.City, dto.Country,
-	).Scan(&company.ID, &company.Name, &company.Email, &company.Phone, &company.Address, &company.City, &company.Country, &company.RegistrationNumber, &company.Status, &company.CreatedAt, &company.UpdatedAt)
+		`SELECT * FROM tracking.sp_update_company($1, $2, $3, $4, $5, $6, $7, $8)`,
+		tenantID, companyID, dto.Name, dto.Email, dto.Phone, dto.Address, dto.City, dto.Country,
+	).Scan(&company.ID, &company.TenantID, &company.Name, &company.Email, &company.Phone, &company.Address, &company.City, &company.Country, &company.RegistrationNumber, &company.Status, &company.CreatedAt, &company.UpdatedAt)
 	if err != nil {
 		return nil, &trackingErrors.TrackingError{Code: trackingErrors.CompanyUpdateFailed, Err: err}
 	}
 	return &company, nil
 }
 
-func (r *TrackingRepository) ListCompanies(ctx context.Context, registrationNumber *string, status *string) ([]*models.TransportCompany, error) {
-	rows, err := r.dbService.Query(ctx, `SELECT * FROM tracking.sp_list_companies($1::VARCHAR(255), $2::VARCHAR(50))`, registrationNumber, status)
+func (r *TrackingRepository) ListCompanies(ctx context.Context, tenantID uuid.UUID, registrationNumber *string, status *string) ([]*models.TransportCompany, error) {
+	rows, err := r.dbService.Query(ctx, `SELECT * FROM tracking.sp_list_companies($1::UUID, $2::VARCHAR(255), $3::VARCHAR(50))`, tenantID, registrationNumber, status)
 	if err != nil {
 		return nil, &trackingErrors.TrackingError{Code: trackingErrors.CompanyListFailed, Err: err}
 	}
@@ -403,7 +406,7 @@ func (r *TrackingRepository) ListCompanies(ctx context.Context, registrationNumb
 	var companies []*models.TransportCompany
 	for rows.Next() {
 		var c models.TransportCompany
-		if err := rows.Scan(&c.ID, &c.Name, &c.Email, &c.Phone, &c.Address, &c.City, &c.Country, &c.RegistrationNumber, &c.Status, &c.CreatedAt, &c.UpdatedAt); err != nil {
+		if err := rows.Scan(&c.ID, &c.TenantID, &c.Name, &c.Email, &c.Phone, &c.Address, &c.City, &c.Country, &c.RegistrationNumber, &c.Status, &c.CreatedAt, &c.UpdatedAt); err != nil {
 			return nil, err
 		}
 		companies = append(companies, &c)
@@ -411,30 +414,43 @@ func (r *TrackingRepository) ListCompanies(ctx context.Context, registrationNumb
 	return companies, nil
 }
 
-func (r *TrackingRepository) GetCompany(ctx context.Context, companyID uuid.UUID) (*models.TransportCompany, error) {
+func (r *TrackingRepository) GetCompany(ctx context.Context, tenantID uuid.UUID, companyID uuid.UUID) (*models.TransportCompany, error) {
 	var company models.TransportCompany
-	err := r.dbService.QueryRow(ctx, `SELECT * FROM tracking.sp_get_company($1)`, companyID).Scan(&company.ID, &company.Name, &company.Email, &company.Phone, &company.Address, &company.City, &company.Country, &company.RegistrationNumber, &company.Status, &company.CreatedAt, &company.UpdatedAt)
+	err := r.dbService.QueryRow(ctx, `SELECT * FROM tracking.sp_get_company($1, $2)`, tenantID, companyID).Scan(
+		&company.ID, &company.TenantID, &company.Name, &company.Email, &company.Phone, &company.Address, &company.City, &company.Country, &company.RegistrationNumber, &company.Status, &company.CreatedAt, &company.UpdatedAt)
 	if err != nil {
 		return nil, &trackingErrors.TrackingError{Code: trackingErrors.CompanyNotFound, Err: err}
 	}
 	return &company, nil
 }
 
-func (r *TrackingRepository) DeleteCompany(ctx context.Context, companyID uuid.UUID) error {
+func (r *TrackingRepository) DeleteCompany(ctx context.Context, tenantID uuid.UUID, companyID uuid.UUID) error {
 	var deleted bool
-	err := r.dbService.QueryRow(ctx, `SELECT tracking.sp_delete_company($1)`, companyID).Scan(&deleted)
-	if err != nil || !deleted {
+	err := r.dbService.QueryRow(ctx, `SELECT tracking.sp_delete_company($1, $2)`, tenantID, companyID).Scan(&deleted)
+	if err != nil {
+		var pgErr *pgconn.PgError
+		if errors.As(err, &pgErr) {
+			switch pgErr.Message {
+			case "company.not-found":
+				return &trackingErrors.TrackingError{Code: trackingErrors.CompanyNotFound, Err: pgErr}
+			case "company.has-vehicles":
+				return &trackingErrors.TrackingError{Code: trackingErrors.CompanyHasVehicles, Err: pgErr}
+			}
+		}
 		return &trackingErrors.TrackingError{Code: trackingErrors.CompanyDeleteFailed, Err: err}
+	}
+	if !deleted {
+		return &trackingErrors.TrackingError{Code: trackingErrors.CompanyDeleteFailed}
 	}
 	return nil
 }
 
 // ==================== VEHICLES CRUD ====================
 
-func (r *TrackingRepository) CreateVehicle(ctx context.Context, dto *models.CreateVehicleDto) (*models.Vehicle, error) {
+func (r *TrackingRepository) CreateVehicle(ctx context.Context, tenantID uuid.UUID, dto *models.CreateVehicleDto) (*models.Vehicle, error) {
 	var v models.Vehicle
-	err := r.dbService.QueryRow(ctx, `SELECT * FROM tracking.sp_create_vehicle($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
-		dto.CompanyID, dto.PlateNumber, dto.VehicleType, dto.Brand, dto.Model, dto.Year, dto.Capacity, dto.GPSDeviceID, dto.Status,
+	err := r.dbService.QueryRow(ctx, `SELECT * FROM tracking.sp_create_vehicle($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`,
+		tenantID, dto.CompanyID, dto.PlateNumber, dto.VehicleType, dto.Brand, dto.Model, dto.Year, dto.Capacity, dto.GPSDeviceID, dto.Status,
 	).Scan(&v.ID, &v.CompanyID, &v.PlateNumber, &v.VehicleType, &v.Brand, &v.Model, &v.Year, &v.Capacity, &v.GPSDeviceID, &v.Status, &v.CreatedAt, &v.UpdatedAt)
 	if err != nil {
 		return nil, &trackingErrors.TrackingError{Code: trackingErrors.VehicleCreateFailed, Err: err}
@@ -442,10 +458,10 @@ func (r *TrackingRepository) CreateVehicle(ctx context.Context, dto *models.Crea
 	return &v, nil
 }
 
-func (r *TrackingRepository) UpdateVehicle(ctx context.Context, vehicleID uuid.UUID, dto *models.UpdateVehicleDto) (*models.Vehicle, error) {
+func (r *TrackingRepository) UpdateVehicle(ctx context.Context, tenantID uuid.UUID, vehicleID uuid.UUID, dto *models.UpdateVehicleDto) (*models.Vehicle, error) {
 	var v models.Vehicle
-	err := r.dbService.QueryRow(ctx, `SELECT * FROM tracking.sp_update_vehicle($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
-		vehicleID, dto.PlateNumber, nil, dto.Brand, dto.Model, dto.Year, dto.Capacity, dto.GPSDeviceID, dto.Status,
+	err := r.dbService.QueryRow(ctx, `SELECT * FROM tracking.sp_update_vehicle($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`,
+		tenantID, vehicleID, dto.PlateNumber, nil, dto.Brand, dto.Model, dto.Year, dto.Capacity, dto.GPSDeviceID, dto.Status,
 	).Scan(&v.ID, &v.CompanyID, &v.PlateNumber, &v.VehicleType, &v.Brand, &v.Model, &v.Year, &v.Capacity, &v.GPSDeviceID, &v.Status, &v.CreatedAt, &v.UpdatedAt)
 	if err != nil {
 		return nil, &trackingErrors.TrackingError{Code: trackingErrors.VehicleUpdateFailed, Err: err}
@@ -453,8 +469,8 @@ func (r *TrackingRepository) UpdateVehicle(ctx context.Context, vehicleID uuid.U
 	return &v, nil
 }
 
-func (r *TrackingRepository) ListVehicles(ctx context.Context, companyID *uuid.UUID, vehicleType *string, status *string) ([]*models.Vehicle, error) {
-	rows, err := r.dbService.Query(ctx, `SELECT * FROM tracking.sp_list_vehicles($1::UUID, $2::VARCHAR(50), $3::VARCHAR(50))`, companyID, vehicleType, status)
+func (r *TrackingRepository) ListVehicles(ctx context.Context, tenantID uuid.UUID, companyID *uuid.UUID, vehicleType *string, status *string) ([]*models.Vehicle, error) {
+	rows, err := r.dbService.Query(ctx, `SELECT * FROM tracking.sp_list_vehicles($1::UUID, $2::UUID, $3::VARCHAR(50), $4::VARCHAR(50))`, tenantID, companyID, vehicleType, status)
 	if err != nil {
 		return nil, &trackingErrors.TrackingError{Code: trackingErrors.VehicleListFailed, Err: err}
 	}
@@ -470,18 +486,19 @@ func (r *TrackingRepository) ListVehicles(ctx context.Context, companyID *uuid.U
 	return vehicles, nil
 }
 
-func (r *TrackingRepository) GetVehicle(ctx context.Context, vehicleID uuid.UUID) (*models.Vehicle, error) {
+func (r *TrackingRepository) GetVehicle(ctx context.Context, tenantID uuid.UUID, vehicleID uuid.UUID) (*models.Vehicle, error) {
 	var v models.Vehicle
-	err := r.dbService.QueryRow(ctx, `SELECT * FROM tracking.sp_get_vehicle($1)`, vehicleID).Scan(&v.ID, &v.CompanyID, &v.PlateNumber, &v.VehicleType, &v.Brand, &v.Model, &v.Year, &v.Capacity, &v.GPSDeviceID, &v.Status, &v.CreatedAt, &v.UpdatedAt)
+	err := r.dbService.QueryRow(ctx, `SELECT * FROM tracking.sp_get_vehicle($1, $2)`, tenantID, vehicleID).Scan(
+		&v.ID, &v.CompanyID, &v.PlateNumber, &v.VehicleType, &v.Brand, &v.Model, &v.Year, &v.Capacity, &v.GPSDeviceID, &v.Status, &v.CreatedAt, &v.UpdatedAt)
 	if err != nil {
 		return nil, &trackingErrors.TrackingError{Code: trackingErrors.VehicleNotFound, Err: err}
 	}
 	return &v, nil
 }
 
-func (r *TrackingRepository) DeleteVehicle(ctx context.Context, vehicleID uuid.UUID) error {
+func (r *TrackingRepository) DeleteVehicle(ctx context.Context, tenantID uuid.UUID, vehicleID uuid.UUID) error {
 	var deleted bool
-	err := r.dbService.QueryRow(ctx, `SELECT tracking.sp_delete_vehicle($1)`, vehicleID).Scan(&deleted)
+	err := r.dbService.QueryRow(ctx, `SELECT tracking.sp_delete_vehicle($1, $2)`, tenantID, vehicleID).Scan(&deleted)
 	if err != nil || !deleted {
 		return &trackingErrors.TrackingError{Code: trackingErrors.VehicleDeleteFailed, Err: err}
 	}
@@ -490,10 +507,10 @@ func (r *TrackingRepository) DeleteVehicle(ctx context.Context, vehicleID uuid.U
 
 // ==================== ROUTES CRUD ====================
 
-func (r *TrackingRepository) CreateRoute(ctx context.Context, dto *models.CreateRouteDto) (*models.Route, error) {
+func (r *TrackingRepository) CreateRoute(ctx context.Context, tenantID uuid.UUID, dto *models.CreateRouteDto) (*models.Route, error) {
 	var rt models.Route
-	err := r.dbService.QueryRow(ctx, `SELECT * FROM tracking.sp_create_route($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)`,
-		dto.CompanyID, dto.RouteName, dto.OriginAddress, dto.DestinationAddress, dto.RouteCode, dto.VehicleID,
+	err := r.dbService.QueryRow(ctx, `SELECT * FROM tracking.sp_create_route($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)`,
+		tenantID, dto.CompanyID, dto.RouteName, dto.OriginAddress, dto.DestinationAddress, dto.RouteCode, dto.VehicleID,
 		dto.OriginLat, dto.OriginLng, dto.DestinationLat, dto.DestinationLng, dto.ScheduleType,
 		dto.ScheduledStartTime, dto.ScheduledEndTime, dto.EstimatedDurationMinutes,
 	).Scan(&rt.ID, &rt.CompanyID, &rt.VehicleID, &rt.RouteName, &rt.RouteCode, &rt.OriginAddress, &rt.OriginLat, &rt.OriginLng, &rt.DestinationAddress, &rt.DestinationLat, &rt.DestinationLng, &rt.ScheduleType, &rt.ScheduledStartTime, &rt.ScheduledEndTime, &rt.EstimatedDurationMinutes, &rt.IsActive, &rt.CreatedAt, &rt.UpdatedAt)
@@ -503,10 +520,10 @@ func (r *TrackingRepository) CreateRoute(ctx context.Context, dto *models.Create
 	return &rt, nil
 }
 
-func (r *TrackingRepository) UpdateRoute(ctx context.Context, routeID uuid.UUID, dto *models.UpdateRouteDto) (*models.Route, error) {
+func (r *TrackingRepository) UpdateRoute(ctx context.Context, tenantID uuid.UUID, routeID uuid.UUID, dto *models.UpdateRouteDto) (*models.Route, error) {
 	var rt models.Route
-	err := r.dbService.QueryRow(ctx, `SELECT * FROM tracking.sp_update_route($1, $2, $3, $4)`,
-		routeID, dto.RouteName, dto.VehicleID, dto.IsActive,
+	err := r.dbService.QueryRow(ctx, `SELECT * FROM tracking.sp_update_route($1, $2, $3, $4, $5)`,
+		tenantID, routeID, dto.RouteName, dto.VehicleID, dto.IsActive,
 	).Scan(&rt.ID, &rt.CompanyID, &rt.VehicleID, &rt.RouteName, &rt.RouteCode, &rt.OriginAddress, &rt.OriginLat, &rt.OriginLng, &rt.DestinationAddress, &rt.DestinationLat, &rt.DestinationLng, &rt.ScheduleType, &rt.ScheduledStartTime, &rt.ScheduledEndTime, &rt.EstimatedDurationMinutes, &rt.IsActive, &rt.CreatedAt, &rt.UpdatedAt)
 	if err != nil {
 		return nil, &trackingErrors.TrackingError{Code: trackingErrors.RouteUpdateFailed, Err: err}
@@ -514,8 +531,8 @@ func (r *TrackingRepository) UpdateRoute(ctx context.Context, routeID uuid.UUID,
 	return &rt, nil
 }
 
-func (r *TrackingRepository) ListRoutes(ctx context.Context, companyID *uuid.UUID, isActive *bool) ([]*models.Route, error) {
-	rows, err := r.dbService.Query(ctx, `SELECT * FROM tracking.sp_list_routes($1::UUID, $2::BOOLEAN)`, companyID, isActive)
+func (r *TrackingRepository) ListRoutes(ctx context.Context, tenantID uuid.UUID, companyID *uuid.UUID, isActive *bool) ([]*models.Route, error) {
+	rows, err := r.dbService.Query(ctx, `SELECT * FROM tracking.sp_list_routes($1::UUID, $2::UUID, $3::BOOLEAN)`, tenantID, companyID, isActive)
 	if err != nil {
 		return nil, &trackingErrors.TrackingError{Code: trackingErrors.RouteListFailed, Err: err}
 	}
@@ -531,18 +548,19 @@ func (r *TrackingRepository) ListRoutes(ctx context.Context, companyID *uuid.UUI
 	return routes, nil
 }
 
-func (r *TrackingRepository) GetRoute(ctx context.Context, routeID uuid.UUID) (*models.Route, error) {
+func (r *TrackingRepository) GetRoute(ctx context.Context, tenantID uuid.UUID, routeID uuid.UUID) (*models.Route, error) {
 	var rt models.Route
-	err := r.dbService.QueryRow(ctx, `SELECT * FROM tracking.sp_get_route($1)`, routeID).Scan(&rt.ID, &rt.CompanyID, &rt.VehicleID, &rt.RouteName, &rt.RouteCode, &rt.OriginAddress, &rt.OriginLat, &rt.OriginLng, &rt.DestinationAddress, &rt.DestinationLat, &rt.DestinationLng, &rt.ScheduleType, &rt.ScheduledStartTime, &rt.ScheduledEndTime, &rt.EstimatedDurationMinutes, &rt.IsActive, &rt.CreatedAt, &rt.UpdatedAt)
+	err := r.dbService.QueryRow(ctx, `SELECT * FROM tracking.sp_get_route($1, $2)`, tenantID, routeID).Scan(
+		&rt.ID, &rt.CompanyID, &rt.VehicleID, &rt.RouteName, &rt.RouteCode, &rt.OriginAddress, &rt.OriginLat, &rt.OriginLng, &rt.DestinationAddress, &rt.DestinationLat, &rt.DestinationLng, &rt.ScheduleType, &rt.ScheduledStartTime, &rt.ScheduledEndTime, &rt.EstimatedDurationMinutes, &rt.IsActive, &rt.CreatedAt, &rt.UpdatedAt)
 	if err != nil {
 		return nil, &trackingErrors.TrackingError{Code: trackingErrors.RouteNotFound, Err: err}
 	}
 	return &rt, nil
 }
 
-func (r *TrackingRepository) DeleteRoute(ctx context.Context, routeID uuid.UUID) error {
+func (r *TrackingRepository) DeleteRoute(ctx context.Context, tenantID uuid.UUID, routeID uuid.UUID) error {
 	var deleted bool
-	err := r.dbService.QueryRow(ctx, `SELECT tracking.sp_delete_route($1)`, routeID).Scan(&deleted)
+	err := r.dbService.QueryRow(ctx, `SELECT tracking.sp_delete_route($1, $2)`, tenantID, routeID).Scan(&deleted)
 	if err != nil || !deleted {
 		return &trackingErrors.TrackingError{Code: trackingErrors.RouteDeleteFailed, Err: err}
 	}
@@ -551,10 +569,10 @@ func (r *TrackingRepository) DeleteRoute(ctx context.Context, routeID uuid.UUID)
 
 // ==================== ROUTE STOPS CRUD ====================
 
-func (r *TrackingRepository) CreateRouteStop(ctx context.Context, dto *models.CreateRouteStopDto) (*models.RouteStop, error) {
+func (r *TrackingRepository) CreateRouteStop(ctx context.Context, tenantID uuid.UUID, dto *models.CreateRouteStopDto) (*models.RouteStop, error) {
 	var stop models.RouteStop
-	err := r.dbService.QueryRow(ctx, `SELECT * FROM tracking.sp_create_route_stop($1, $2, $3, $4, $5, $6, $7)`,
-		dto.RouteID, dto.StopName, dto.StopAddress, dto.Latitude, dto.Longitude, dto.SequenceOrder, dto.ScheduledTime,
+	err := r.dbService.QueryRow(ctx, `SELECT * FROM tracking.sp_create_route_stop($1, $2, $3, $4, $5, $6, $7, $8)`,
+		tenantID, dto.RouteID, dto.StopName, dto.StopAddress, dto.Latitude, dto.Longitude, dto.SequenceOrder, dto.ScheduledTime,
 	).Scan(&stop.ID, &stop.RouteID, &stop.StopName, &stop.Address, &stop.Latitude, &stop.Longitude, &stop.StopOrder, &stop.ScheduledArrivalOffsetMinutes, &stop.CreatedAt, &stop.UpdatedAt)
 	if err != nil {
 		return nil, &trackingErrors.TrackingError{Code: trackingErrors.RouteStopCreateFailed, Err: err}
@@ -562,8 +580,8 @@ func (r *TrackingRepository) CreateRouteStop(ctx context.Context, dto *models.Cr
 	return &stop, nil
 }
 
-func (r *TrackingRepository) ListRouteStops(ctx context.Context, routeID uuid.UUID) ([]*models.RouteStop, error) {
-	rows, err := r.dbService.Query(ctx, `SELECT * FROM tracking.sp_list_route_stops($1)`, routeID)
+func (r *TrackingRepository) ListRouteStops(ctx context.Context, tenantID uuid.UUID, routeID uuid.UUID) ([]*models.RouteStop, error) {
+	rows, err := r.dbService.Query(ctx, `SELECT * FROM tracking.sp_list_route_stops($1, $2)`, tenantID, routeID)
 	if err != nil {
 		return nil, &trackingErrors.TrackingError{Code: trackingErrors.RouteStopListFailed, Err: err}
 	}
@@ -579,9 +597,9 @@ func (r *TrackingRepository) ListRouteStops(ctx context.Context, routeID uuid.UU
 	return stops, nil
 }
 
-func (r *TrackingRepository) DeleteRouteStop(ctx context.Context, stopID uuid.UUID) error {
+func (r *TrackingRepository) DeleteRouteStop(ctx context.Context, tenantID uuid.UUID, stopID uuid.UUID) error {
 	var deleted bool
-	err := r.dbService.QueryRow(ctx, `SELECT tracking.sp_delete_route_stop($1)`, stopID).Scan(&deleted)
+	err := r.dbService.QueryRow(ctx, `SELECT tracking.sp_delete_route_stop($1, $2)`, tenantID, stopID).Scan(&deleted)
 	if err != nil || !deleted {
 		return &trackingErrors.TrackingError{Code: trackingErrors.RouteStopDeleteFailed, Err: err}
 	}
@@ -590,10 +608,10 @@ func (r *TrackingRepository) DeleteRouteStop(ctx context.Context, stopID uuid.UU
 
 // ==================== RIDERS CRUD ====================
 
-func (r *TrackingRepository) CreateRider(ctx context.Context, dto *models.CreateRiderDto) (*models.Rider, error) {
+func (r *TrackingRepository) CreateRider(ctx context.Context, tenantID uuid.UUID, dto *models.CreateRiderDto) (*models.Rider, error) {
 	var rider models.Rider
-	err := r.dbService.QueryRow(ctx, `SELECT * FROM tracking.sp_create_rider($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)`,
-		dto.CompanyID, dto.RiderType, dto.FirstName, dto.LastName, dto.IdentificationNumber,
+	err := r.dbService.QueryRow(ctx, `SELECT * FROM tracking.sp_create_rider($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)`,
+		tenantID, dto.CompanyID, dto.RiderType, dto.FirstName, dto.LastName, dto.IdentificationNumber,
 		dto.Phone, dto.Email, dto.EmergencyContactName, dto.EmergencyContactPhone,
 		dto.GuardianUserID, dto.GuardianName, dto.GuardianPhone, dto.GuardianEmail, dto.Address,
 	).Scan(&rider.ID, &rider.CompanyID, &rider.RiderType, &rider.FirstName, &rider.LastName,
@@ -606,10 +624,10 @@ func (r *TrackingRepository) CreateRider(ctx context.Context, dto *models.Create
 	return &rider, nil
 }
 
-func (r *TrackingRepository) UpdateRider(ctx context.Context, riderID uuid.UUID, dto *models.UpdateRiderDto) (*models.Rider, error) {
+func (r *TrackingRepository) UpdateRider(ctx context.Context, tenantID uuid.UUID, riderID uuid.UUID, dto *models.UpdateRiderDto) (*models.Rider, error) {
 	var rider models.Rider
-	err := r.dbService.QueryRow(ctx, `SELECT * FROM tracking.sp_update_rider($1, $2::VARCHAR(50), $3::VARCHAR(255), $4::VARCHAR(255), $5::VARCHAR(50), $6::UUID, $7::VARCHAR(255), $8::VARCHAR(50), $9::VARCHAR(255), $10::VARCHAR(500), $11::BOOLEAN)`,
-		riderID, dto.Phone, dto.Email, dto.EmergencyContactName, dto.EmergencyContactPhone,
+	err := r.dbService.QueryRow(ctx, `SELECT * FROM tracking.sp_update_rider($1, $2, $3::VARCHAR(50), $4::VARCHAR(255), $5::VARCHAR(255), $6::VARCHAR(50), $7::UUID, $8::VARCHAR(255), $9::VARCHAR(50), $10::VARCHAR(255), $11::VARCHAR(500), $12::BOOLEAN)`,
+		tenantID, riderID, dto.Phone, dto.Email, dto.EmergencyContactName, dto.EmergencyContactPhone,
 		dto.GuardianUserID, dto.GuardianName, dto.GuardianPhone, dto.GuardianEmail,
 		dto.Address, dto.IsActive,
 	).Scan(&rider.ID, &rider.CompanyID, &rider.RiderType, &rider.FirstName, &rider.LastName,
@@ -622,8 +640,8 @@ func (r *TrackingRepository) UpdateRider(ctx context.Context, riderID uuid.UUID,
 	return &rider, nil
 }
 
-func (r *TrackingRepository) ListRiders(ctx context.Context, companyID *uuid.UUID, guardianUserID *uuid.UUID, riderType *string, isActive *bool) ([]*models.Rider, error) {
-	rows, err := r.dbService.Query(ctx, `SELECT * FROM tracking.sp_list_riders($1::UUID, $2::UUID, $3::VARCHAR(50), $4::BOOLEAN)`, companyID, guardianUserID, riderType, isActive)
+func (r *TrackingRepository) ListRiders(ctx context.Context, tenantID uuid.UUID, companyID *uuid.UUID, guardianUserID *uuid.UUID, riderType *string, isActive *bool) ([]*models.Rider, error) {
+	rows, err := r.dbService.Query(ctx, `SELECT * FROM tracking.sp_list_riders($1::UUID, $2::UUID, $3::UUID, $4::VARCHAR(50), $5::BOOLEAN)`, tenantID, companyID, guardianUserID, riderType, isActive)
 	if err != nil {
 		return nil, &trackingErrors.TrackingError{Code: trackingErrors.RiderListFailed, Err: err}
 	}
@@ -642,9 +660,9 @@ func (r *TrackingRepository) ListRiders(ctx context.Context, companyID *uuid.UUI
 	return riders, nil
 }
 
-func (r *TrackingRepository) GetRider(ctx context.Context, riderID uuid.UUID, guardianUserID *uuid.UUID) (*models.Rider, error) {
+func (r *TrackingRepository) GetRider(ctx context.Context, tenantID uuid.UUID, riderID uuid.UUID, guardianUserID *uuid.UUID) (*models.Rider, error) {
 	var rider models.Rider
-	err := r.dbService.QueryRow(ctx, `SELECT * FROM tracking.sp_get_rider($1::UUID, $2::UUID)`, riderID, guardianUserID).Scan(
+	err := r.dbService.QueryRow(ctx, `SELECT * FROM tracking.sp_get_rider($1::UUID, $2::UUID, $3::UUID)`, tenantID, riderID, guardianUserID).Scan(
 		&rider.ID, &rider.CompanyID, &rider.RiderType, &rider.FirstName, &rider.LastName,
 		&rider.IdentificationNumber, &rider.Phone, &rider.Email, &rider.EmergencyContactName,
 		&rider.EmergencyContactPhone, &rider.GuardianUserID, &rider.GuardianName, &rider.GuardianPhone,
@@ -655,9 +673,9 @@ func (r *TrackingRepository) GetRider(ctx context.Context, riderID uuid.UUID, gu
 	return &rider, nil
 }
 
-func (r *TrackingRepository) DeleteRider(ctx context.Context, riderID uuid.UUID) error {
+func (r *TrackingRepository) DeleteRider(ctx context.Context, tenantID uuid.UUID, riderID uuid.UUID) error {
 	var deleted bool
-	err := r.dbService.QueryRow(ctx, `SELECT tracking.sp_delete_rider($1)`, riderID).Scan(&deleted)
+	err := r.dbService.QueryRow(ctx, `SELECT tracking.sp_delete_rider($1, $2)`, tenantID, riderID).Scan(&deleted)
 	if err != nil || !deleted {
 		return &trackingErrors.TrackingError{Code: trackingErrors.RiderDeleteFailed, Err: err}
 	}
@@ -666,13 +684,24 @@ func (r *TrackingRepository) DeleteRider(ctx context.Context, riderID uuid.UUID)
 
 // ==================== ASSIGNMENTS CRUD ====================
 
-func (r *TrackingRepository) AssignRider(ctx context.Context, dto *models.AssignRiderDto) (*models.RiderAssignment, error) {
+func (r *TrackingRepository) AssignRider(ctx context.Context, tenantID uuid.UUID, dto *models.AssignRiderDto) (*models.RiderAssignment, error) {
 	var assignment models.RiderAssignment
 	var status string
-	err := r.dbService.QueryRow(ctx, `SELECT * FROM tracking.sp_assign_rider($1::UUID, $2::UUID, $3::UUID, $4::UUID, $5::VARCHAR(50))`,
-		dto.RiderID, dto.RouteID, dto.PickupStopID, dto.DropoffStopID, "active",
+	err := r.dbService.QueryRow(ctx, `SELECT * FROM tracking.sp_assign_rider($1::UUID, $2::UUID, $3::UUID, $4::UUID, $5::UUID, $6::VARCHAR(50))`,
+		tenantID, dto.RiderID, dto.RouteID, dto.PickupStopID, dto.DropoffStopID, "active",
 	).Scan(&assignment.ID, &assignment.RiderID, &assignment.RouteID, &assignment.PickupStopID, &assignment.DropoffStopID, &status, &assignment.CreatedAt, &assignment.UpdatedAt)
 	if err != nil {
+		var pgErr *pgconn.PgError
+		if errors.As(err, &pgErr) {
+			switch pgErr.Message {
+			case "rider.not-found":
+				return nil, &trackingErrors.TrackingError{Code: trackingErrors.RiderNotFound, Err: pgErr}
+			case "route.not-found":
+				return nil, &trackingErrors.TrackingError{Code: trackingErrors.RouteNotFound, Err: pgErr}
+			case "assignment.already-exists":
+				return nil, &trackingErrors.TrackingError{Code: trackingErrors.AssignmentAlreadyExists, Err: pgErr}
+			}
+		}
 		return nil, &trackingErrors.TrackingError{Code: trackingErrors.AssignmentCreateFailed, Err: err}
 	}
 	assignment.IsActive = (status == "active")
@@ -680,17 +709,17 @@ func (r *TrackingRepository) AssignRider(ctx context.Context, dto *models.Assign
 	return &assignment, nil
 }
 
-func (r *TrackingRepository) UnassignRider(ctx context.Context, assignmentID uuid.UUID) error {
+func (r *TrackingRepository) UnassignRider(ctx context.Context, tenantID uuid.UUID, assignmentID uuid.UUID) error {
 	var deleted bool
-	err := r.dbService.QueryRow(ctx, `SELECT tracking.sp_unassign_rider($1)`, assignmentID).Scan(&deleted)
+	err := r.dbService.QueryRow(ctx, `SELECT tracking.sp_unassign_rider($1, $2)`, tenantID, assignmentID).Scan(&deleted)
 	if err != nil || !deleted {
 		return &trackingErrors.TrackingError{Code: trackingErrors.AssignmentDeleteFailed, Err: err}
 	}
 	return nil
 }
 
-func (r *TrackingRepository) ListRiderAssignments(ctx context.Context, riderID *uuid.UUID, routeID *uuid.UUID, isActive *bool) ([]*models.RiderAssignment, error) {
-	rows, err := r.dbService.Query(ctx, `SELECT * FROM tracking.sp_list_rider_assignments($1::UUID, $2::UUID, $3::BOOLEAN)`, riderID, routeID, isActive)
+func (r *TrackingRepository) ListRiderAssignments(ctx context.Context, tenantID uuid.UUID, riderID *uuid.UUID, routeID *uuid.UUID, isActive *bool) ([]*models.RiderAssignment, error) {
+	rows, err := r.dbService.Query(ctx, `SELECT * FROM tracking.sp_list_rider_assignments($1::UUID, $2::UUID, $3::UUID, $4::BOOLEAN)`, tenantID, riderID, routeID, isActive)
 	if err != nil {
 		return nil, &trackingErrors.TrackingError{Code: trackingErrors.AssignmentListFailed, Err: err}
 	}
@@ -711,8 +740,7 @@ func (r *TrackingRepository) ListRiderAssignments(ctx context.Context, riderID *
 
 // === Client Access Management ===
 
-// GrantClientAccess grants read/write access to a client tenant for a company
-func (r *TrackingRepository) GrantClientAccess(ctx context.Context, companyID uuid.UUID, dto *models.GrantClientAccessDto, grantedBy uuid.UUID, userTenantID uuid.UUID) (*models.CompanyClientAccess, error) {
+func (r *TrackingRepository) GrantClientAccess(ctx context.Context, tenantID uuid.UUID, companyID uuid.UUID, dto *models.GrantClientAccessDto, grantedBy uuid.UUID) (*models.CompanyClientAccess, error) {
 	accessLevel := "read_only"
 	if dto.AccessLevel != "" {
 		accessLevel = dto.AccessLevel
@@ -722,12 +750,12 @@ func (r *TrackingRepository) GrantClientAccess(ctx context.Context, companyID uu
 	err := r.dbService.QueryRow(
 		ctx,
 		`SELECT * FROM tracking.sp_grant_client_access($1, $2, $3, $4, $5, $6)`,
+		tenantID,
 		companyID,
 		dto.ClientTenantID,
 		accessLevel,
 		grantedBy,
 		dto.Notes,
-		userTenantID,
 	).Scan(
 		&access.ID,
 		&access.CompanyID,
@@ -746,15 +774,14 @@ func (r *TrackingRepository) GrantClientAccess(ctx context.Context, companyID uu
 	return &access, nil
 }
 
-// RevokeClientAccess revokes access for a client tenant
-func (r *TrackingRepository) RevokeClientAccess(ctx context.Context, companyID uuid.UUID, clientTenantID uuid.UUID, revokedBy uuid.UUID, userTenantID uuid.UUID) error {
+func (r *TrackingRepository) RevokeClientAccess(ctx context.Context, tenantID uuid.UUID, companyID uuid.UUID, clientTenantID uuid.UUID, revokedBy uuid.UUID) error {
 	_, err := r.dbService.Execute(
 		ctx,
 		`SELECT tracking.sp_revoke_client_access($1, $2, $3, $4)`,
+		tenantID,
 		companyID,
 		clientTenantID,
 		revokedBy,
-		userTenantID,
 	)
 
 	if err != nil {
@@ -764,13 +791,12 @@ func (r *TrackingRepository) RevokeClientAccess(ctx context.Context, companyID u
 	return nil
 }
 
-// ListCompanyClients lists all clients with access to a company
-func (r *TrackingRepository) ListCompanyClients(ctx context.Context, companyID uuid.UUID, userTenantID uuid.UUID) ([]*models.CompanyClientAccess, error) {
+func (r *TrackingRepository) ListCompanyClients(ctx context.Context, tenantID uuid.UUID, companyID uuid.UUID) ([]*models.CompanyClientAccess, error) {
 	rows, err := r.dbService.Query(
 		ctx,
 		`SELECT * FROM tracking.sp_list_company_clients($1, $2)`,
+		tenantID,
 		companyID,
-		userTenantID,
 	)
 
 	if err != nil {
@@ -778,7 +804,7 @@ func (r *TrackingRepository) ListCompanyClients(ctx context.Context, companyID u
 	}
 	defer rows.Close()
 
-	var clients []*models.CompanyClientAccess = make([]*models.CompanyClientAccess, 0)
+	var clients []*models.CompanyClientAccess
 	for rows.Next() {
 		var access models.CompanyClientAccess
 		if err := rows.Scan(
@@ -797,6 +823,10 @@ func (r *TrackingRepository) ListCompanyClients(ctx context.Context, companyID u
 			return nil, err
 		}
 		clients = append(clients, &access)
+	}
+
+	if clients == nil {
+		clients = make([]*models.CompanyClientAccess, 0)
 	}
 
 	return clients, nil

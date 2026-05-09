@@ -4,6 +4,7 @@ import (
 	"sync"
 
 	authConfig "josex/web/modules/auth/config"
+	billingConfig "josex/web/modules/billing/config"
 	coreConfig "josex/web/modules/core/config"
 	"josex/web/modules/core/utils"
 	inventoryConfig "josex/web/modules/inventory/config"
@@ -19,6 +20,7 @@ type ModularConfig struct {
 	Core       *coreConfig.CoreConfig
 	Auth       *authConfig.AuthConfig
 	Users      *usersConfig.UsersConfig
+	Billing    *billingConfig.BillingConfig
 	Tenancy    *tenancyConfig.TenancyConfig
 	Tracking   *trackingConfig.TrackingConfig
 	Inventory  *inventoryConfig.InventoryConfig
@@ -43,6 +45,7 @@ func GetConfig() *ModularConfig {
 			Core:       coreConfig.LoadCoreConfig(),
 			Auth:       authConfig.LoadAuthConfig(),
 			Users:      usersConfig.LoadUsersConfig(),
+			Billing:    billingConfig.LoadBillingConfig(),
 			Tenancy:    tenancyConfig.LoadTenancyConfig(),
 			Tracking:   trackingConfig.LoadTrackingConfig(),
 			Inventory:  inventoryConfig.LoadInventoryConfig(),

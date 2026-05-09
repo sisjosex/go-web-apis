@@ -1,0 +1,10 @@
+{
+  "billing.validation-failed": "Error de validación",
+  "billing.subscription.not-found": "Suscripción no encontrada",
+  "billing.subscription.invalid-plan": "Plan de suscripción inválido",
+  "billing.subscription.invalid-status": "Estado de suscripción inválido",
+  "billing.subscription.limit-reached": "Límite de suscripción alcanzado",
+  "billing.payment.subscription-not-found": "Suscripción no encontrada para este usuario",
+  "billing.payment.create-failed": "Error al registrar el pago",
+  "billing.payment.list-failed": "Error al obtener el historial de pagos"
+}

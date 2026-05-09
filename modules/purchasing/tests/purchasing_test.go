@@ -4,10 +4,12 @@
 package purchasing_test
 
 import (
+	"fmt"
 	"net/http"
 	"testing"
 
 	coreTestHelpers "josex/web/modules/core/testhelpers"
+	"github.com/stretchr/testify/assert"
 )
 
 func init() {
@@ -295,4 +297,72 @@ func TestPhase2AComplete(t *testing.T) {
 	t.Logf("")
 	t.Logf("════════════════════════════════════════════════════════════════")
 	t.Logf("")
+}
+
+// ============================================================================
+// Edge Case Tests
+// ============================================================================
+
+// SetupPurchasingTest logs in as admin and sets the test tenant context.
+func SetupPurchasingTest(t *testing.T) *coreTestHelpers.ApiTestHelper {
+	t.Helper()
+	helper := coreTestHelpers.SetupApiTest(t)
+	_, err := helper.Login("admin@test.local", "Admin123!")
+	if err != nil {
+		t.Fatalf("purchasing test login failed: %v", err)
+	}
+	helper.SetTenantSlug("test-company")
+	return helper
+}
+
+// TestCreateSupplier_MissingName - supplier name is required → 400
+func TestCreateSupplier_MissingName(t *testing.T) {
+	helper := SetupPurchasingTest(t)
+	defer helper.Close()
+
+	body := map[string]interface{}{
+		"contact_person": "John Doe",
+		"email":          "supplier-noname@test.com",
+		"phone":          "+506 2222 3333",
+	}
+
+	w := helper.DoRequest("POST", "/purchasing/suppliers", body, map[string]string{})
+
+	assert.Equal(t, http.StatusBadRequest, w.Code,
+		"Missing supplier name should return 400, got %d: %s", w.Code, w.Body.String())
+	t.Logf("✅ Purchasing: CreateSupplier without name returns 400")
+}
+
+// TestApprovePurchaseOrder_NotFound - approving non-existent PO returns 400
+func TestApprovePurchaseOrder_NotFound(t *testing.T) {
+	helper := SetupPurchasingTest(t)
+	defer helper.Close()
+
+	nonExistentID := "00000000-0000-0000-0000-000000000000"
+	w := helper.DoRequest("PATCH",
+		fmt.Sprintf("/purchasing/purchase-orders/%s/approve", nonExistentID),
+		nil, map[string]string{})
+
+	// SP raises po.not-found → controller returns 400
+	assert.True(t, w.Code == http.StatusBadRequest || w.Code == http.StatusNotFound || w.Code == http.StatusForbidden,
+		"Approving non-existent PO should return 400/404/403, got %d: %s", w.Code, w.Body.String())
+	t.Logf("✅ Purchasing: ApprovePurchaseOrder non-existent returns %d", w.Code)
+}
+
+// TestCreatePurchaseOrder_InvalidSupplier - PO with non-existent supplier returns error
+func TestCreatePurchaseOrder_InvalidSupplier(t *testing.T) {
+	helper := SetupPurchasingTest(t)
+	defer helper.Close()
+
+	body := map[string]interface{}{
+		"supplier_id":            "00000000-0000-0000-0000-000000000000",
+		"expected_delivery_date": "2027-01-01",
+	}
+
+	w := helper.DoRequest("POST", "/purchasing/purchase-orders", body, map[string]string{})
+
+	// SP validates supplier exists; returns 400 for not-found supplier
+	assert.True(t, w.Code == http.StatusBadRequest || w.Code == http.StatusNotFound || w.Code == http.StatusForbidden,
+		"PO with invalid supplier should return 400/404/403, got %d: %s", w.Code, w.Body.String())
+	t.Logf("✅ Purchasing: CreatePurchaseOrder with invalid supplier returns %d", w.Code)
 }

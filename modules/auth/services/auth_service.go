@@ -73,6 +73,10 @@ func (s *authService) GeneratePasswordResetToken(passwordResetDto authModels.Pas
 	return s.authRepository.GeneratePasswordResetToken(passwordResetDto, tx)
 }
 
+func (s *authService) ValidateResetToken(dto authModels.ValidateResetTokenDto) (*bool, error) {
+	return s.authRepository.ValidateResetToken(dto)
+}
+
 func (s *authService) ResetPasswordWithToken(passwordResetWithTokenDto authModels.PasswordResetWithTokenDto) (*bool, error) {
 	return s.authRepository.ResetPasswordWithToken(passwordResetWithTokenDto)
 }

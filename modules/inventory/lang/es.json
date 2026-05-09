@@ -19,5 +19,26 @@
   "category.parent-not-found": "Categoría padre no encontrada",
   "category.circular-hierarchy": "No se permite jerarquía circular",
   "category.has-products": "No se puede eliminar una categoría que tiene productos asignados",
-  "product.already-in-category": "El producto ya está asignado a esta categoría"
+  "product.already-in-category": "El producto ya está asignado a esta categoría",
+
+  "permission.inventory.products-read": "Ver productos",
+  "permission.inventory.products-read.description": "Listar y ver detalles de productos",
+  "permission.inventory.products-write": "Crear/editar productos",
+  "permission.inventory.products-write.description": "Crear y actualizar productos y variantes",
+  "permission.inventory.products-delete": "Eliminar productos",
+  "permission.inventory.products-delete.description": "Eliminar productos permanentemente",
+  "permission.inventory.categories-read": "Ver categorías",
+  "permission.inventory.categories-read.description": "Listar y ver categorías",
+  "permission.inventory.categories-manage": "Gestionar categorías",
+  "permission.inventory.categories-manage.description": "Crear, actualizar y eliminar categorías",
+  "permission.inventory.stock-read": "Ver stock",
+  "permission.inventory.stock-read.description": "Ver niveles de stock y movimientos",
+  "permission.inventory.stock-adjust": "Ajustar stock",
+  "permission.inventory.stock-adjust.description": "Registrar movimientos de stock y ajustar niveles",
+  "permission.inventory.stock-reserve": "Reservar/liberar stock",
+  "permission.inventory.stock-reserve.description": "Reservar y liberar stock para órdenes",
+  "permission.inventory.batches-read": "Ver lotes",
+  "permission.inventory.batches-read.description": "Listar y ver lotes de inventario",
+  "permission.inventory.batches-manage": "Gestionar lotes",
+  "permission.inventory.batches-manage.description": "Crear y gestionar lotes de inventario"
 }

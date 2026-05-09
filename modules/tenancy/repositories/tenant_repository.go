@@ -127,6 +127,7 @@ func (r *tenantRepository) VerifyUserTenantAccess(ctx context.Context, userID uu
 
 	row := r.dbService.QueryRow(ctx, query, userID, slug)
 
+	var permCodes []string
 	err := row.Scan(
 		&accessInfo.TenantID,
 		&accessInfo.Slug,
@@ -137,6 +138,7 @@ func (r *tenantRepository) VerifyUserTenantAccess(ctx context.Context, userID uu
 		&accessInfo.IsSuspended,
 		&accessInfo.UserRole,
 		&accessInfo.UserIsActive,
+		&permCodes,
 	)
 
 	if err != nil {
@@ -145,6 +147,11 @@ func (r *tenantRepository) VerifyUserTenantAccess(ctx context.Context, userID uu
 			return nil, pgErr
 		}
 		return nil, err
+	}
+
+	accessInfo.Permissions = make(map[string]bool, len(permCodes))
+	for _, code := range permCodes {
+		accessInfo.Permissions[code] = true
 	}
 
 	return accessInfo, nil
