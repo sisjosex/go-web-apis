@@ -11,7 +11,7 @@ type CreateProductDto struct {
 	Name        string      `json:"name" binding:"required"`
 	Description *string     `json:"description"`
 	BasePrice   float64     `json:"base_price" binding:"required,gt=0"`
-	Variants    interface{} `json:"variants"`
+	Variants    any `json:"variants"`
 }
 
 type RecordMovementDto struct {
@@ -54,6 +54,16 @@ type StockReservationResponse struct {
 	AvailableQuantity float64 `json:"available_quantity"`
 	Status            string  `json:"status"`
 	Message           string  `json:"message"`
+}
+
+type ReserveStockDto struct {
+	ProductID string  `json:"product_id" binding:"required"`
+	Quantity  float64 `json:"quantity" binding:"required,gt=0"`
+}
+
+type ReleaseReservedStockDto struct {
+	ProductID string  `json:"product_id" binding:"required"`
+	Quantity  float64 `json:"quantity" binding:"required,gt=0"`
 }
 
 // Domain Models

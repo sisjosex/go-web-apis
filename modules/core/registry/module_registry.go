@@ -11,9 +11,11 @@ type ModuleDescriptor struct {
 	Name        string   `json:"name"`
 	Description string   `json:"description"`
 	Icon        string   `json:"icon"`
-	Category    string   `json:"category"` // "operations", "commerce", "analytics"
+	Route       string   `json:"route"`      // frontend route path, e.g. "/tracking"
+	Category    string   `json:"category"`   // "operations", "commerce", "analytics"
 	Features    []string `json:"features"`
 	IsDefault   bool     `json:"is_default"` // auto-enabled on new tenants
+	AdminOnly   bool     `json:"admin_only"` // only visible to admin/owner roles
 }
 
 var (

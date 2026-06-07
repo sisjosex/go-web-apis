@@ -15,4 +15,5 @@ type User struct {
 	IsActive          *bool      `json:"is_active"`
 	CreatedAt         *time.Time `json:"created_at"`
 	ExpirationDate    *DateOnly  `json:"expiration_date"`
+	TenantRole        *string    `json:"tenant_role,omitempty"`
 }

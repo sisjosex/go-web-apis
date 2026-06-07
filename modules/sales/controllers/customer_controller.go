@@ -3,22 +3,22 @@ package controllers
 import (
 	"net/http"
 
-	coreErrors "josex/web/modules/core/errors"
-	"josex/web/modules/sales/models"
-	"josex/web/modules/sales/services"
-	"josex/web/modules/sales/utils"
-
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
+
+	coreErrors "josex/web/modules/core/errors"
+	"josex/web/modules/sales/interfaces"
+	"josex/web/modules/sales/models"
+	"josex/web/modules/sales/utils"
 )
 
 // CustomerController handles customer HTTP requests
 type CustomerController struct {
-	service *services.CustomerService
+	service interfaces.CustomerService
 }
 
 // NewCustomerController creates a new customer controller
-func NewCustomerController(service *services.CustomerService) *CustomerController {
+func NewCustomerController(service interfaces.CustomerService) *CustomerController {
 	return &CustomerController{
 		service: service,
 	}

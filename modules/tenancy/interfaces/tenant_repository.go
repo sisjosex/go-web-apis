@@ -36,4 +36,7 @@ type TenantRepository interface {
 
 	// List all tenants with custom database URLs (for CLI migrations)
 	ListTenantsWithCustomDB(ctx context.Context) ([]*models.Tenant, error)
+
+	// Update a user's role within a tenant
+	UpdateUserRole(ctx context.Context, tenantID uuid.UUID, requesterUserID uuid.UUID, userID uuid.UUID, role string) error
 }

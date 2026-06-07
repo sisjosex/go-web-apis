@@ -121,6 +121,8 @@ p_website_url := $13
 		&user.ProfilePictureUrl,
 		&user.Bio,
 		&user.WebsiteUrl,
+		&user.IsActive,
+		&user.ExpirationDate,
 	)
 
 	if err != nil {
@@ -201,6 +203,7 @@ func (r *userRepository) ListUsers(query userModels.UserListQuery) (*userModels.
 			&user.CreatedAt,
 			&user.ExpirationDate,
 			&totalCount,
+			&user.TenantRole,
 		)
 		if err != nil {
 			return nil, err
@@ -256,6 +259,27 @@ func (r *userRepository) GetUserById(userID uuid.UUID) (*coreModels.User, error)
 	}
 
 	return &user, nil
+}
+
+func (r *userRepository) GetStats(tenantID uuid.UUID, excludeUserID *uuid.UUID) (*userModels.UserStatsResponse, error) {
+	ctx := context.Background()
+	query := `SELECT * FROM users.sp_get_user_stats(p_tenant_id := $1, p_exclude_user_id := $2)`
+
+	stats := &userModels.UserStatsResponse{}
+	err := r.dbService.QueryRow(ctx, query, tenantID, excludeUserID).Scan(
+		&stats.Total,
+		&stats.Active,
+		&stats.Inactive,
+		&stats.Expired,
+	)
+	if err != nil {
+		var pgErr *pgconn.PgError
+		if errors.As(err, &pgErr) {
+			return nil, pgErr
+		}
+		return nil, err
+	}
+	return stats, nil
 }
 
 func (r *userRepository) AssignToTenant(tenantID, requesterID, userID uuid.UUID, role string) error {

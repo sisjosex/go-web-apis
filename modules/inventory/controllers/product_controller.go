@@ -1,23 +1,26 @@
 package controllers
 
 import (
+	"errors"
 	"net/http"
 	"strconv"
 
-	coreErrors "josex/web/modules/core/errors"
-	"josex/web/modules/inventory/models"
-	"josex/web/modules/inventory/services"
-	"josex/web/modules/inventory/utils"
-
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
+
+	coreErrors "josex/web/modules/core/errors"
+	inventoryErrors "josex/web/modules/inventory/errors"
+	inventoryInterfaces "josex/web/modules/inventory/interfaces"
+	"josex/web/modules/inventory/models"
 )
 
 type ProductController struct {
-	productService *services.ProductService
+	productService inventoryInterfaces.ProductService
 }
 
-func NewProductController(productService *services.ProductService) *ProductController {
+func NewProductController(productService inventoryInterfaces.ProductService) *ProductController {
 	return &ProductController{
 		productService: productService,
 	}
@@ -55,8 +58,15 @@ func (ctrl *ProductController) CreateProductWithVariants(c *gin.Context) {
 
 	product, err := ctrl.productService.CreateProductWithVariants(c.Request.Context(), tenantID, dto)
 	if err != nil {
-		status := utils.GetHTTPStatusFromError(err)
-		c.JSON(status, coreErrors.BuildError(c, err))
+		var pgErr *pgconn.PgError
+		if errors.As(err, &pgErr) {
+			switch pgErr.Message {
+			case inventoryErrors.ProductSkuAlreadyExists:
+				c.JSON(http.StatusConflict, coreErrors.BuildErrorSingle(c, inventoryErrors.ProductSkuAlreadyExists))
+				return
+			}
+		}
+		c.JSON(http.StatusInternalServerError, coreErrors.BuildError(c, err))
 		return
 	}
 
@@ -88,8 +98,19 @@ func (ctrl *ProductController) GetProduct(c *gin.Context) {
 
 	product, err := ctrl.productService.GetProduct(c.Request.Context(), tenantID, productID)
 	if err != nil {
-		status := utils.GetHTTPStatusFromError(err)
-		c.JSON(status, coreErrors.BuildError(c, err))
+		var pgErr *pgconn.PgError
+		if errors.As(err, &pgErr) {
+			switch pgErr.Message {
+			case inventoryErrors.ProductNotFound:
+				c.JSON(http.StatusNotFound, coreErrors.BuildErrorSingle(c, inventoryErrors.ProductNotFound))
+				return
+			}
+		}
+		if errors.Is(err, pgx.ErrNoRows) {
+			c.JSON(http.StatusNotFound, coreErrors.BuildErrorSingle(c, inventoryErrors.ProductNotFound))
+			return
+		}
+		c.JSON(http.StatusInternalServerError, coreErrors.BuildError(c, err))
 		return
 	}
 
@@ -121,8 +142,15 @@ func (ctrl *ProductController) GetProductBySkU(c *gin.Context) {
 
 	product, err := ctrl.productService.GetProductBySkU(c.Request.Context(), tenantID, sku)
 	if err != nil {
-		status := utils.GetHTTPStatusFromError(err)
-		c.JSON(status, coreErrors.BuildError(c, err))
+		var pgErr *pgconn.PgError
+		if errors.As(err, &pgErr) {
+			switch pgErr.Message {
+			case inventoryErrors.ProductNotFound:
+				c.JSON(http.StatusNotFound, coreErrors.BuildErrorSingle(c, inventoryErrors.ProductNotFound))
+				return
+			}
+		}
+		c.JSON(http.StatusInternalServerError, coreErrors.BuildError(c, err))
 		return
 	}
 
@@ -160,8 +188,15 @@ func (ctrl *ProductController) AddProductMedia(c *gin.Context) {
 
 	result, err := ctrl.productService.AddProductMedia(c.Request.Context(), tenantID, productID, dto)
 	if err != nil {
-		status := utils.GetHTTPStatusFromError(err)
-		c.JSON(status, coreErrors.BuildError(c, err))
+		var pgErr *pgconn.PgError
+		if errors.As(err, &pgErr) {
+			switch pgErr.Message {
+			case inventoryErrors.ProductNotFound:
+				c.JSON(http.StatusNotFound, coreErrors.BuildErrorSingle(c, inventoryErrors.ProductNotFound))
+				return
+			}
+		}
+		c.JSON(http.StatusInternalServerError, coreErrors.BuildError(c, err))
 		return
 	}
 
@@ -191,8 +226,15 @@ func (ctrl *ProductController) RemoveProductMedia(c *gin.Context) {
 	mediaID := c.Param("media_id")
 
 	if err := ctrl.productService.RemoveProductMedia(c.Request.Context(), tenantID, mediaID); err != nil {
-		status := utils.GetHTTPStatusFromError(err)
-		c.JSON(status, coreErrors.BuildError(c, err))
+		var pgErr *pgconn.PgError
+		if errors.As(err, &pgErr) {
+			switch pgErr.Message {
+			case inventoryErrors.ProductNotFound:
+				c.JSON(http.StatusNotFound, coreErrors.BuildErrorSingle(c, inventoryErrors.ProductNotFound))
+				return
+			}
+		}
+		c.JSON(http.StatusInternalServerError, coreErrors.BuildError(c, err))
 		return
 	}
 

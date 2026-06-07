@@ -6,8 +6,9 @@ import (
 	"strconv"
 
 	coreErrors "josex/web/modules/core/errors"
-	"josex/web/modules/purchasing/errors"
-	"josex/web/modules/purchasing/interfaces"
+	"josex/web/modules/core/utils"
+	purchasingErrors "josex/web/modules/purchasing/errors"
+	purchasingInterfaces "josex/web/modules/purchasing/interfaces"
 	"josex/web/modules/purchasing/models"
 
 	"github.com/gin-gonic/gin"
@@ -17,11 +18,11 @@ import (
 
 // PurchasingController handles HTTP requests for purchasing operations
 type PurchasingController struct {
-	service interfaces.PurchasingService
+	service purchasingInterfaces.PurchasingService
 }
 
 // NewPurchasingController creates a new instance
-func NewPurchasingController(service interfaces.PurchasingService) *PurchasingController {
+func NewPurchasingController(service purchasingInterfaces.PurchasingService) *PurchasingController {
 	return &PurchasingController{
 		service: service,
 	}
@@ -43,7 +44,7 @@ func (ctrl *PurchasingController) CreateSupplier(c *gin.Context) {
 
 	var dto models.CreateSupplierRequestDto
 	if err := c.ShouldBindJSON(&dto); err != nil {
-		c.JSON(http.StatusBadRequest, coreErrors.BuildErrorDetail(c, err.Error(), err))
+		c.JSON(http.StatusBadRequest, coreErrors.BuildErrorDetail(c, purchasingErrors.SupplierValidationFailed, utils.ExtractValidationError(c, err)))
 		return
 	}
 
@@ -81,7 +82,15 @@ func (ctrl *PurchasingController) GetSupplier(c *gin.Context) {
 
 	supplier, err := ctrl.service.GetSupplier(c.Request.Context(), tenantID, supplierID)
 	if err != nil {
-		c.JSON(http.StatusNotFound, coreErrors.BuildErrorSingle(c, errors.SupplierNotFound))
+		var pgErr *pgconn.PgError
+		if goerrors.As(err, &pgErr) {
+			switch pgErr.Message {
+			case purchasingErrors.SupplierNotFound:
+				c.JSON(http.StatusNotFound, coreErrors.BuildErrorSingle(c, purchasingErrors.SupplierNotFound))
+				return
+			}
+		}
+		c.JSON(http.StatusInternalServerError, coreErrors.BuildError(c, err))
 		return
 	}
 
@@ -144,21 +153,29 @@ func (ctrl *PurchasingController) CreatePurchaseOrder(c *gin.Context) {
 
 	var dto models.CreatePurchaseOrderRequestDto
 	if err := c.ShouldBindJSON(&dto); err != nil {
-		c.JSON(http.StatusBadRequest, coreErrors.BuildErrorDetail(c, err.Error(), err))
+		c.JSON(http.StatusBadRequest, coreErrors.BuildErrorDetail(c, purchasingErrors.POValidationFailed, utils.ExtractValidationError(c, err)))
 		return
 	}
 
 	userID := c.GetString("user_id")
-	userUUID, _ := uuid.Parse(userID)
-	supplierUUID, _ := uuid.Parse(dto.SupplierID)
+	userUUID, err := uuid.Parse(userID)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, coreErrors.BuildErrorSingle(c, coreErrors.InvalidUUID))
+		return
+	}
+	supplierUUID, err := uuid.Parse(dto.SupplierID)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, coreErrors.BuildErrorSingle(c, coreErrors.InvalidUUID))
+		return
+	}
 
 	po, err := ctrl.service.CreatePurchaseOrder(c.Request.Context(), tenantID, supplierUUID, dto.ExpectedDeliveryDate, dto.Notes, userUUID)
 	if err != nil {
 		var pgErr *pgconn.PgError
 		if goerrors.As(err, &pgErr) {
 			switch pgErr.Message {
-			case errors.SupplierNotFound:
-				c.JSON(http.StatusNotFound, coreErrors.BuildErrorSingle(c, errors.SupplierNotFound))
+			case purchasingErrors.SupplierNotFound:
+				c.JSON(http.StatusNotFound, coreErrors.BuildErrorSingle(c, purchasingErrors.SupplierNotFound))
 				return
 			}
 		}
@@ -197,7 +214,15 @@ func (ctrl *PurchasingController) GetPurchaseOrder(c *gin.Context) {
 
 	po, err := ctrl.service.GetPurchaseOrder(c.Request.Context(), tenantID, poID)
 	if err != nil {
-		c.JSON(http.StatusNotFound, coreErrors.BuildErrorSingle(c, errors.PONotFound))
+		var pgErr *pgconn.PgError
+		if goerrors.As(err, &pgErr) {
+			switch pgErr.Message {
+			case purchasingErrors.PONotFound:
+				c.JSON(http.StatusNotFound, coreErrors.BuildErrorSingle(c, purchasingErrors.PONotFound))
+				return
+			}
+		}
+		c.JSON(http.StatusInternalServerError, coreErrors.BuildError(c, err))
 		return
 	}
 
@@ -268,11 +293,15 @@ func (ctrl *PurchasingController) AddPurchaseOrderItem(c *gin.Context) {
 
 	var dto models.AddPurchaseOrderItemRequestDto
 	if err := c.ShouldBindJSON(&dto); err != nil {
-		c.JSON(http.StatusBadRequest, coreErrors.BuildErrorDetail(c, err.Error(), err))
+		c.JSON(http.StatusBadRequest, coreErrors.BuildErrorDetail(c, purchasingErrors.POItemValidationFailed, utils.ExtractValidationError(c, err)))
 		return
 	}
 
-	productUUID, _ := uuid.Parse(dto.ProductID)
+	productUUID, err := uuid.Parse(dto.ProductID)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, coreErrors.BuildErrorSingle(c, coreErrors.InvalidUUID))
+		return
+	}
 
 	item, err := ctrl.service.AddItemToPurchaseOrder(c.Request.Context(), tenantID, poID, productUUID, dto.Quantity, dto.UnitCost)
 	if err != nil {
@@ -312,7 +341,18 @@ func (ctrl *PurchasingController) ApprovePurchaseOrder(c *gin.Context) {
 
 	po, err := ctrl.service.ApprovePurchaseOrder(c.Request.Context(), tenantID, poID)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, coreErrors.BuildError(c, err))
+		var pgErr *pgconn.PgError
+		if goerrors.As(err, &pgErr) {
+			switch pgErr.Message {
+			case purchasingErrors.PONotFound:
+				c.JSON(http.StatusNotFound, coreErrors.BuildErrorSingle(c, purchasingErrors.PONotFound))
+				return
+			case purchasingErrors.POCannotApprove:
+				c.JSON(http.StatusConflict, coreErrors.BuildErrorSingle(c, purchasingErrors.POCannotApprove))
+				return
+			}
+		}
+		c.JSON(http.StatusInternalServerError, coreErrors.BuildError(c, err))
 		return
 	}
 
@@ -346,7 +386,7 @@ func (ctrl *PurchasingController) ReceivePurchaseOrder(c *gin.Context) {
 
 	var dto models.ReceivePurchaseOrderRequestDto
 	if err := c.ShouldBindJSON(&dto); err != nil {
-		c.JSON(http.StatusBadRequest, coreErrors.BuildErrorDetail(c, err.Error(), err))
+		c.JSON(http.StatusBadRequest, coreErrors.BuildErrorDetail(c, purchasingErrors.POReceiveValidation, utils.ExtractValidationError(c, err)))
 		return
 	}
 
@@ -390,7 +430,7 @@ func (ctrl *PurchasingController) AddInvoice(c *gin.Context) {
 
 	var dto models.AddInvoiceRequestDto
 	if err := c.ShouldBindJSON(&dto); err != nil {
-		c.JSON(http.StatusBadRequest, coreErrors.BuildErrorDetail(c, err.Error(), err))
+		c.JSON(http.StatusBadRequest, coreErrors.BuildErrorDetail(c, purchasingErrors.InvoiceValidationFailed, utils.ExtractValidationError(c, err)))
 		return
 	}
 
@@ -443,7 +483,7 @@ func (ctrl *PurchasingController) GetPriceComparison(c *gin.Context) {
 
 	productID := c.Query("product_id")
 	if productID == "" {
-		c.JSON(http.StatusBadRequest, coreErrors.BuildErrorSingle(c, errors.InvalidProductID))
+		c.JSON(http.StatusBadRequest, coreErrors.BuildErrorSingle(c, purchasingErrors.InvalidProductID))
 		return
 	}
 
@@ -484,7 +524,7 @@ func (ctrl *PurchasingController) CreateProductBatch(c *gin.Context) {
 
 	var batch models.ProductBatch
 	if err := c.ShouldBindJSON(&batch); err != nil {
-		c.JSON(http.StatusBadRequest, coreErrors.BuildErrorDetail(c, err.Error(), err))
+		c.JSON(http.StatusBadRequest, coreErrors.BuildErrorDetail(c, purchasingErrors.BatchValidationFailed, utils.ExtractValidationError(c, err)))
 		return
 	}
 
@@ -511,7 +551,7 @@ func (ctrl *PurchasingController) GetProductBatches(c *gin.Context) {
 
 	productID := c.Query("product_id")
 	if productID == "" {
-		c.JSON(http.StatusBadRequest, coreErrors.BuildErrorSingle(c, errors.InvalidProductID))
+		c.JSON(http.StatusBadRequest, coreErrors.BuildErrorSingle(c, purchasingErrors.InvalidProductID))
 		return
 	}
 
@@ -548,7 +588,7 @@ func (ctrl *PurchasingController) GetOldestBatchForSale(c *gin.Context) {
 
 	productID := c.Query("product_id")
 	if productID == "" {
-		c.JSON(http.StatusBadRequest, coreErrors.BuildErrorSingle(c, errors.InvalidProductID))
+		c.JSON(http.StatusBadRequest, coreErrors.BuildErrorSingle(c, purchasingErrors.InvalidProductID))
 		return
 	}
 
@@ -560,7 +600,15 @@ func (ctrl *PurchasingController) GetOldestBatchForSale(c *gin.Context) {
 
 	batch, err := ctrl.service.GetOldestBatchForSale(c.Request.Context(), tenantID, productUUID)
 	if err != nil {
-		c.JSON(http.StatusNotFound, coreErrors.BuildError(c, err))
+		var pgErr *pgconn.PgError
+		if goerrors.As(err, &pgErr) {
+			switch pgErr.Message {
+			case purchasingErrors.BatchNotFound:
+				c.JSON(http.StatusNotFound, coreErrors.BuildErrorSingle(c, purchasingErrors.BatchNotFound))
+				return
+			}
+		}
+		c.JSON(http.StatusInternalServerError, coreErrors.BuildError(c, err))
 		return
 	}
 
@@ -583,7 +631,7 @@ func (ctrl *PurchasingController) CreateRFQ(c *gin.Context) {
 
 	var dto models.CreateRFQRequestDto
 	if err := c.ShouldBindJSON(&dto); err != nil {
-		c.JSON(http.StatusBadRequest, coreErrors.BuildErrorDetail(c, err.Error(), err))
+		c.JSON(http.StatusBadRequest, coreErrors.BuildErrorDetail(c, purchasingErrors.RFQValidationFailed, utils.ExtractValidationError(c, err)))
 		return
 	}
 
@@ -600,7 +648,7 @@ func (ctrl *PurchasingController) CreateRFQ(c *gin.Context) {
 	for _, itemReq := range dto.Items {
 		productUUID, err := uuid.Parse(itemReq.ProductID)
 		if err != nil {
-			c.JSON(http.StatusBadRequest, coreErrors.BuildErrorSingle(c, errors.InvalidProductID))
+			c.JSON(http.StatusBadRequest, coreErrors.BuildErrorSingle(c, purchasingErrors.InvalidProductID))
 			return
 		}
 

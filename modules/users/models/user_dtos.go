@@ -62,3 +62,11 @@ type SoftDeleteUserDto struct {
 	ID     string `json:"id" binding:"required,uuidv4"`
 	Reason string `json:"reason" binding:"omitempty,max=500"` // Optional deletion reason
 }
+
+// UserStatsResponse represents user count statistics for a tenant
+type UserStatsResponse struct {
+	Total    int64 `json:"total"`
+	Active   int64 `json:"active"`
+	Inactive int64 `json:"inactive"`
+	Expired  int64 `json:"expired"`
+}

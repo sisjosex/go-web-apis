@@ -73,7 +73,7 @@ func (r *OtpRepository) VerifyOtp(
 		)
 	`
 
-	params := []interface{}{
+	params := []any{
 		dto.Destination,
 		dto.OtpCode,
 		dto.Channel,
@@ -106,8 +106,8 @@ func (r *OtpRepository) VerifyOtp(
 	}
 
 	token.SessionId = sessionId
-	token.UserId = *userId
 	if userId != nil {
+		token.UserId = *userId
 		token.SystemRole = systemRole
 		token.SubscriptionPlan = subscriptionPlan
 	}

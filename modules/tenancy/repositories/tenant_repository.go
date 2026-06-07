@@ -356,3 +356,27 @@ func (r *tenantRepository) ListTenantsWithCustomDB(ctx context.Context) ([]*mode
 
 	return tenants, nil
 }
+
+// UpdateUserRole updates a user's role within a tenant
+func (r *tenantRepository) UpdateUserRole(ctx context.Context, tenantID uuid.UUID, requesterUserID uuid.UUID, userID uuid.UUID, role string) error {
+	query := `
+		SELECT * FROM tenancy.sp_update_user_role(
+			p_tenant_id         := $1,
+			p_requester_user_id := $2,
+			p_user_id           := $3,
+			p_role              := $4
+		)
+	`
+
+	rows, err := r.dbService.Query(ctx, query, tenantID, requesterUserID, userID, role)
+	if err != nil {
+		var pgErr *pgconn.PgError
+		if errors.As(err, &pgErr) {
+			return pgErr
+		}
+		return err
+	}
+	rows.Close()
+
+	return nil
+}

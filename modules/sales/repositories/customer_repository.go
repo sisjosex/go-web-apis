@@ -2,11 +2,13 @@ package repositories
 
 import (
 	"context"
+	"errors"
 
 	coreServices "josex/web/modules/core/services"
 	"josex/web/modules/sales/models"
 
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5/pgconn"
 )
 
 // CustomerRepository implements customer data operations
@@ -49,7 +51,14 @@ func (r *CustomerRepository) CreateCustomer(ctx context.Context, tenantID uuid.U
 		&customer.CreatedAt,
 		&customer.UpdatedAt,
 	)
-	return customer, err
+	if err != nil {
+		var pgErr *pgconn.PgError
+		if errors.As(err, &pgErr) {
+			return nil, pgErr
+		}
+		return nil, err
+	}
+	return customer, nil
 }
 
 // GetCustomerByID retrieves a customer by ID
@@ -73,7 +82,14 @@ func (r *CustomerRepository) GetCustomerByID(ctx context.Context, tenantID uuid.
 		&customer.CreatedAt,
 		&customer.UpdatedAt,
 	)
-	return customer, err
+	if err != nil {
+		var pgErr *pgconn.PgError
+		if errors.As(err, &pgErr) {
+			return nil, pgErr
+		}
+		return nil, err
+	}
+	return customer, nil
 }
 
 // GetAllCustomers retrieves all customers
@@ -84,21 +100,30 @@ func (r *CustomerRepository) GetAllCustomers(ctx context.Context, tenantID uuid.
 		tenantID, limit, offset,
 	)
 	if err != nil {
-		return customers, err
+		var pgErr *pgconn.PgError
+		if errors.As(err, &pgErr) {
+			return nil, pgErr
+		}
+		return nil, err
 	}
 	defer rows.Close()
 
 	for rows.Next() {
 		var c models.Customer
-		err := rows.Scan(
+		if err := rows.Scan(
 			&c.ID, &c.Name, &c.Email, &c.PhoneNumber,
 			&c.Address, &c.City, &c.State, &c.PostalCode, &c.Country,
 			&c.Status, &c.CreatedAt, &c.UpdatedAt,
-		)
-		if err != nil {
-			continue
+		); err != nil {
+			return nil, err
 		}
 		customers = append(customers, c)
+	}
+	if err = rows.Err(); err != nil {
+		return nil, err
+	}
+	if customers == nil {
+		customers = []models.Customer{}
 	}
 	return customers, nil
 }
@@ -122,7 +147,14 @@ func (r *CustomerRepository) UpdateCustomer(ctx context.Context, tenantID uuid.U
 		&customer.Address, &customer.City, &customer.State, &customer.PostalCode, &customer.Country,
 		&customer.Status, &customer.CreatedAt, &customer.UpdatedAt,
 	)
-	return customer, err
+	if err != nil {
+		var pgErr *pgconn.PgError
+		if errors.As(err, &pgErr) {
+			return nil, pgErr
+		}
+		return nil, err
+	}
+	return customer, nil
 }
 
 // DeleteCustomer deletes a customer
@@ -143,5 +175,12 @@ func (r *CustomerRepository) GetCustomerByEmail(ctx context.Context, tenantID uu
 		&customer.Address, &customer.City, &customer.State, &customer.PostalCode, &customer.Country,
 		&customer.Status, &customer.CreatedAt, &customer.UpdatedAt,
 	)
-	return customer, err
+	if err != nil {
+		var pgErr *pgconn.PgError
+		if errors.As(err, &pgErr) {
+			return nil, pgErr
+		}
+		return nil, err
+	}
+	return customer, nil
 }

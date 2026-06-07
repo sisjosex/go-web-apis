@@ -39,4 +39,7 @@ type TenantService interface {
 
 	// GetTenantEnabledModuleCodes returns a map of module codes enabled for a tenant
 	GetTenantEnabledModuleCodes(ctx context.Context, tenantID uuid.UUID) (map[string]bool, error)
+
+	// Update a user's role within a tenant
+	UpdateUserRole(ctx context.Context, tenantID uuid.UUID, requesterUserID uuid.UUID, userID uuid.UUID, role string) error
 }

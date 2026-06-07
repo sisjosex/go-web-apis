@@ -7,7 +7,8 @@ func init() {
 		Code:        "tracking",
 		Name:        "Fleet Tracking",
 		Description: "Real-time GPS tracking, route management and driver assignments.",
-		Icon:        "map",
+		Icon:        "map-pin",
+		Route:       "/tracking",
 		Category:    "operations",
 		Features: []string{
 			"Real-time GPS location",

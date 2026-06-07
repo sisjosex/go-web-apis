@@ -8,6 +8,7 @@ func init() {
 		Name:        "Users & Access",
 		Description: "Manage team members, roles, and access permissions for your workspace.",
 		Icon:        "people",
+		Route:       "/users",
 		Category:    "administration",
 		Features: []string{
 			"User management",
@@ -16,5 +17,6 @@ func init() {
 			"Audit log",
 		},
 		IsDefault: true,
+		AdminOnly:  true,
 	})
 }

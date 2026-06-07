@@ -215,3 +215,8 @@ func (s *tenantService) RunTenantMigrations(ctx context.Context, tenantSlug stri
 	log.Printf("✅ Migrations completed successfully for tenant '%s'", tenantSlug)
 	return nil
 }
+
+// UpdateUserRole updates a user's role within a tenant
+func (s *tenantService) UpdateUserRole(ctx context.Context, tenantID uuid.UUID, requesterUserID uuid.UUID, userID uuid.UUID, role string) error {
+	return s.tenantRepository.UpdateUserRole(ctx, tenantID, requesterUserID, userID, role)
+}

@@ -2,13 +2,13 @@ package services
 
 import (
 	"context"
+	"time"
+
+	"github.com/google/uuid"
 
 	coreModels "josex/web/modules/core/models"
 	"josex/web/modules/sales/interfaces"
 	"josex/web/modules/sales/models"
-	"time"
-
-	"github.com/google/uuid"
 )
 
 // SalesOrderService handles sales order business logic

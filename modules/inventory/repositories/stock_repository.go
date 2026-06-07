@@ -2,12 +2,14 @@ package repositories
 
 import (
 	"context"
+	"errors"
 	"log"
 
 	coreServices "josex/web/modules/core/services"
 	"josex/web/modules/inventory/models"
 
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5/pgconn"
 )
 
 type StockRepository struct {
@@ -39,6 +41,10 @@ func (r *StockRepository) ReserveStock(ctx context.Context, tenantID uuid.UUID, 
 		if r.logger != nil {
 			r.logger.Printf("❌ Error reserving stock: %v", err)
 		}
+		var pgErr *pgconn.PgError
+		if errors.As(err, &pgErr) {
+			return nil, pgErr
+		}
 		return nil, err
 	}
 
@@ -62,6 +68,10 @@ func (r *StockRepository) ReleaseReservedStock(ctx context.Context, tenantID uui
 		if r.logger != nil {
 			r.logger.Printf("❌ Error releasing reserved stock: %v", err)
 		}
+		var pgErr *pgconn.PgError
+		if errors.As(err, &pgErr) {
+			return nil, pgErr
+		}
 		return nil, err
 	}
 
@@ -84,6 +94,10 @@ func (r *StockRepository) UpdateReorderLevel(ctx context.Context, tenantID uuid.
 	if err != nil {
 		if r.logger != nil {
 			r.logger.Printf("❌ Error updating reorder level: %v", err)
+		}
+		var pgErr *pgconn.PgError
+		if errors.As(err, &pgErr) {
+			return nil, pgErr
 		}
 		return nil, err
 	}

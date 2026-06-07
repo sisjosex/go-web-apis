@@ -3,6 +3,13 @@ package controllers
 import (
 	"errors"
 	"fmt"
+	"net/http"
+	"strconv"
+
+	"github.com/gin-gonic/gin"
+	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5/pgconn"
+
 	"josex/web/config"
 	coreErrors "josex/web/modules/core/errors"
 	coreServices "josex/web/modules/core/services"
@@ -10,12 +17,6 @@ import (
 	usersErrors "josex/web/modules/users/errors"
 	userInterfaces "josex/web/modules/users/interfaces"
 	userModels "josex/web/modules/users/models"
-	"net/http"
-	"strconv"
-
-	"github.com/gin-gonic/gin"
-	"github.com/google/uuid"
-	"github.com/jackc/pgx/v5/pgconn"
 )
 
 type UserController struct {
@@ -30,11 +31,11 @@ func NewUserController(userService userInterfaces.UserService, emailService core
 	}
 }
 
-func (uc *UserController) Create(ctx *gin.Context) {
+func (uc *UserController) Create(c *gin.Context) {
 	var newUser userModels.CreateUserDto
 
-	if err := ctx.ShouldBindJSON(&newUser); err != nil {
-		ctx.JSON(http.StatusBadRequest, coreErrors.BuildErrorDetail(ctx, usersErrors.UserValidationFailed, utils.ExtractValidationError(ctx, err)))
+	if err := c.ShouldBindJSON(&newUser); err != nil {
+		c.JSON(http.StatusBadRequest, coreErrors.BuildErrorDetail(c, usersErrors.UserValidationFailed, utils.ExtractValidationError(c, err)))
 		return
 	}
 
@@ -49,17 +50,17 @@ func (uc *UserController) Create(ctx *gin.Context) {
 	if err != nil {
 		var pgErr *pgconn.PgError
 		if errors.As(err, &pgErr) && pgErr.Message == "user.create.email.already-exists" {
-			ctx.JSON(http.StatusConflict, coreErrors.BuildErrorSingle(ctx, usersErrors.UserEmailAlreadyInUse))
+			c.JSON(http.StatusConflict, coreErrors.BuildErrorSingle(c, usersErrors.UserEmailAlreadyInUse))
 			return
 		}
-		ctx.JSON(http.StatusBadRequest, coreErrors.BuildError(ctx, err))
+		c.JSON(http.StatusBadRequest, coreErrors.BuildError(c, err))
 		return
 	}
 
 	// If operating inside a tenant context, add the new user as a member of that tenant
-	if tenantIDStr, ok := ctx.Get("tenant_id"); ok {
+	if tenantIDStr, ok := c.Get("tenant_id"); ok {
 		if tenantID, err := uuid.Parse(tenantIDStr.(string)); err == nil {
-			if requesterIDStr, ok := ctx.Get("user_id"); ok {
+			if requesterIDStr, ok := c.Get("user_id"); ok {
 				if requesterID, err := uuid.Parse(requesterIDStr.(string)); err == nil {
 					if newUserID, err := uuid.Parse(user.ID); err == nil {
 						_ = uc.userService.AssignToTenant(tenantID, requesterID, newUserID, "member")
@@ -96,31 +97,31 @@ func (uc *UserController) Create(ctx *gin.Context) {
 		_ = uc.emailService.SendEmail(email, fmt.Sprintf("Your %s account is ready", appConf.AppName), templatePath, data)
 	}()
 
-	ctx.JSON(http.StatusOK, user)
+	c.JSON(http.StatusCreated, user)
 }
 
-func (uc *UserController) Update(ctx *gin.Context) {
+func (uc *UserController) Update(c *gin.Context) {
 	var updateUser userModels.UpdateUserDto
-	id, err := uuid.Parse(ctx.Param("id"))
+	id, err := uuid.Parse(c.Param("id"))
 	if err != nil {
-		ctx.JSON(http.StatusBadRequest, coreErrors.BuildError(ctx, err))
+		c.JSON(http.StatusBadRequest, coreErrors.BuildError(c, err))
 		return
 	}
 
 	updateUser.ID = id
 
-	if err := ctx.ShouldBindJSON(&updateUser); err != nil {
-		ctx.JSON(http.StatusBadRequest, coreErrors.BuildErrorDetail(ctx, usersErrors.UserValidationFailed, utils.ExtractValidationError(ctx, err)))
+	if err := c.ShouldBindJSON(&updateUser); err != nil {
+		c.JSON(http.StatusBadRequest, coreErrors.BuildErrorDetail(c, usersErrors.UserValidationFailed, utils.ExtractValidationError(c, err)))
 		return
 	}
 
 	user, err := uc.userService.UpdateUser(updateUser)
 	if err != nil {
-		ctx.JSON(http.StatusBadRequest, coreErrors.BuildErrorDetail(ctx, usersErrors.UserUpdateFailed, err.Error()))
+		c.JSON(http.StatusBadRequest, coreErrors.BuildErrorDetail(c, usersErrors.UserUpdateFailed, err.Error()))
 		return
 	}
 
-	ctx.JSON(http.StatusOK, user)
+	c.JSON(http.StatusOK, user)
 }
 
 // ListUsers godoc
@@ -141,6 +142,30 @@ func (uc *UserController) Update(ctx *gin.Context) {
 // @Failure 401 {object} errors.ErrorResponse
 // @Router /users [get]
 // @Security ApiKeyAuth
+func (uc *UserController) GetStats(c *gin.Context) {
+	var tenantID uuid.UUID
+	if tenantIDStr, ok := c.Get("tenant_id"); ok {
+		if tid, err := uuid.Parse(tenantIDStr.(string)); err == nil {
+			tenantID = tid
+		}
+	}
+
+	var excludeUserID *uuid.UUID
+	if userIDStr, ok := c.Get("user_id"); ok {
+		if uid, err := uuid.Parse(userIDStr.(string)); err == nil {
+			excludeUserID = &uid
+		}
+	}
+
+	stats, err := uc.userService.GetStats(tenantID, excludeUserID)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, coreErrors.BuildError(c, err))
+		return
+	}
+
+	c.JSON(http.StatusOK, stats)
+}
+
 func (uc *UserController) ListUsers(c *gin.Context) {
 	usersConfig := config.ModularAppConfig.Users
 

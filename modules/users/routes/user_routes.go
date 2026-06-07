@@ -24,6 +24,7 @@ func RegisterUserRoutes(
 	userRoutes.Use(tenancyMW.RequireTenantRole("owner", "admin", "super_admin"))
 	{
 		userRoutes.GET("", userController.ListUsers)
+		userRoutes.GET("/stats", userController.GetStats)
 		userRoutes.POST("", userController.Create)
 		userRoutes.GET("/:id", userController.GetUserById)
 		userRoutes.PUT("/:id", userController.Update)

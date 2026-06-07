@@ -2,12 +2,14 @@ package repositories
 
 import (
 	"context"
+	"errors"
 	"log"
 
 	"josex/web/modules/core/services"
 	"josex/web/modules/inventory/models"
 
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5/pgconn"
 )
 
 type CategoryRepository struct {
@@ -53,6 +55,10 @@ func (r *CategoryRepository) CreateCategory(ctx context.Context, tenantID uuid.U
 		if r.logger != nil {
 			r.logger.Printf("❌ Error creating category: %v", err)
 		}
+		var pgErr *pgconn.PgError
+		if errors.As(err, &pgErr) {
+			return nil, pgErr
+		}
 		return nil, err
 	}
 
@@ -92,6 +98,10 @@ func (r *CategoryRepository) UpdateCategory(ctx context.Context, tenantID uuid.U
 		if r.logger != nil {
 			r.logger.Printf("❌ Error updating category: %v", err)
 		}
+		var pgErr *pgconn.PgError
+		if errors.As(err, &pgErr) {
+			return nil, pgErr
+		}
 		return nil, err
 	}
 
@@ -121,6 +131,10 @@ func (r *CategoryRepository) DeleteCategory(ctx context.Context, tenantID uuid.U
 	if err != nil {
 		if r.logger != nil {
 			r.logger.Printf("❌ Error deleting category: %v", err)
+		}
+		var pgErr *pgconn.PgError
+		if errors.As(err, &pgErr) {
+			return false, pgErr
 		}
 		return false, err
 	}
@@ -154,6 +168,10 @@ func (r *CategoryRepository) GetCategory(ctx context.Context, tenantID uuid.UUID
 		if r.logger != nil {
 			r.logger.Printf("❌ Error getting category: %v", err)
 		}
+		var pgErr *pgconn.PgError
+		if errors.As(err, &pgErr) {
+			return nil, pgErr
+		}
 		return nil, err
 	}
 
@@ -182,20 +200,29 @@ func (r *CategoryRepository) ListCategories(ctx context.Context, tenantID uuid.U
 		if r.logger != nil {
 			r.logger.Printf("❌ Error listing categories: %v", err)
 		}
-		return categories, err
+		var pgErr *pgconn.PgError
+		if errors.As(err, &pgErr) {
+			return nil, pgErr
+		}
+		return nil, err
 	}
 	defer rows.Close()
 
 	for rows.Next() {
 		var category models.Category
-		err := rows.Scan(
+		if err := rows.Scan(
 			&category.ID, &category.ParentID, &category.Name, &category.Slug, &category.Description,
 			&category.IconURL, &category.DisplayOrder, &category.IsActive, &category.ProductCount, &category.CreatedAt,
-		)
-		if err != nil {
-			continue
+		); err != nil {
+			return nil, err
 		}
 		categories = append(categories, category)
+	}
+	if err = rows.Err(); err != nil {
+		return nil, err
+	}
+	if categories == nil {
+		categories = []models.Category{}
 	}
 
 	return categories, nil
@@ -214,20 +241,29 @@ func (r *CategoryRepository) SearchCategories(ctx context.Context, tenantID uuid
 		if r.logger != nil {
 			r.logger.Printf("❌ Error searching categories: %v", err)
 		}
-		return categories, err
+		var pgErr *pgconn.PgError
+		if errors.As(err, &pgErr) {
+			return nil, pgErr
+		}
+		return nil, err
 	}
 	defer rows.Close()
 
 	for rows.Next() {
 		var category models.Category
-		err := rows.Scan(
+		if err := rows.Scan(
 			&category.ID, &category.ParentID, &category.Name, &category.Slug, &category.Description,
 			&category.IconURL, &category.DisplayOrder, &category.IsActive, &category.ProductCount,
-		)
-		if err != nil {
-			continue
+		); err != nil {
+			return nil, err
 		}
 		categories = append(categories, category)
+	}
+	if err = rows.Err(); err != nil {
+		return nil, err
+	}
+	if categories == nil {
+		categories = []models.Category{}
 	}
 
 	return categories, nil
@@ -258,6 +294,10 @@ func (r *CategoryRepository) AssignProductToCategory(ctx context.Context, tenant
 	if err != nil {
 		if r.logger != nil {
 			r.logger.Printf("❌ Error assigning product to category: %v", err)
+		}
+		var pgErr *pgconn.PgError
+		if errors.As(err, &pgErr) {
+			return pgErr
 		}
 		return err
 	}
@@ -293,6 +333,10 @@ func (r *CategoryRepository) RemoveProductFromCategory(ctx context.Context, tena
 		if r.logger != nil {
 			r.logger.Printf("❌ Error removing product from category: %v", err)
 		}
+		var pgErr *pgconn.PgError
+		if errors.As(err, &pgErr) {
+			return pgErr
+		}
 		return err
 	}
 
@@ -319,22 +363,28 @@ func (r *CategoryRepository) GetProductsByCategory(ctx context.Context, tenantID
 		if r.logger != nil {
 			r.logger.Printf("❌ Error getting products by category: %v", err)
 		}
-		return products, err
+		var pgErr *pgconn.PgError
+		if errors.As(err, &pgErr) {
+			return nil, pgErr
+		}
+		return nil, err
 	}
 	defer rows.Close()
 
 	for rows.Next() {
 		var product models.GetProductsByCategoryResponse
-		err := rows.Scan(
+		if err := rows.Scan(
 			&product.ID, &product.Name, &product.SKU, &product.Description, &product.BasePrice, &product.Status,
-		)
-		if err != nil {
-			if r.logger != nil {
-				r.logger.Printf("❌ Error scanning product: %v", err)
-			}
-			continue
+		); err != nil {
+			return nil, err
 		}
 		products = append(products, product)
+	}
+	if err = rows.Err(); err != nil {
+		return nil, err
+	}
+	if products == nil {
+		products = []models.GetProductsByCategoryResponse{}
 	}
 
 	if r.logger != nil {
@@ -362,6 +412,10 @@ func (r *CategoryRepository) GetCategoryProductCount(ctx context.Context, tenant
 	if err != nil {
 		if r.logger != nil {
 			r.logger.Printf("❌ Error getting category product count: %v", err)
+		}
+		var pgErr *pgconn.PgError
+		if errors.As(err, &pgErr) {
+			return 0, pgErr
 		}
 		return 0, err
 	}

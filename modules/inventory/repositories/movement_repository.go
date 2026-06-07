@@ -2,12 +2,14 @@ package repositories
 
 import (
 	"context"
+	"errors"
 	"log"
 
 	"josex/web/modules/core/services"
 	"josex/web/modules/inventory/models"
 
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5/pgconn"
 )
 
 type MovementRepository struct {
@@ -36,7 +38,7 @@ func (r *MovementRepository) RecordMovement(
 	var message string
 
 	// Handle nil or empty createdBy
-	var createdByParam interface{}
+	var createdByParam any
 	if createdBy == nil || *createdBy == "" {
 		createdByParam = nil
 	} else {
@@ -53,6 +55,10 @@ func (r *MovementRepository) RecordMovement(
 	if err != nil {
 		if r.logger != nil {
 			r.logger.Printf("❌ Error recording movement: %v", err)
+		}
+		var pgErr *pgconn.PgError
+		if errors.As(err, &pgErr) {
+			return nil, pgErr
 		}
 		return nil, err
 	}
@@ -81,6 +87,10 @@ func (r *MovementRepository) GetMovement(ctx context.Context, tenantID uuid.UUID
 		if r.logger != nil {
 			r.logger.Printf("❌ Error getting movement: %v", err)
 		}
+		var pgErr *pgconn.PgError
+		if errors.As(err, &pgErr) {
+			return nil, pgErr
+		}
 		return nil, err
 	}
 
@@ -100,6 +110,10 @@ func (r *MovementRepository) GetProductStock(ctx context.Context, tenantID uuid.
 	if err != nil {
 		if r.logger != nil {
 			r.logger.Printf("❌ Error getting product stock: %v", err)
+		}
+		var pgErr *pgconn.PgError
+		if errors.As(err, &pgErr) {
+			return nil, pgErr
 		}
 		return nil, err
 	}

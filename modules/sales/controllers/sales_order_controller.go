@@ -4,23 +4,23 @@ import (
 	"net/http"
 	"strconv"
 
-	coreErrors "josex/web/modules/core/errors"
-	coreModels "josex/web/modules/core/models"
-	"josex/web/modules/sales/models"
-	"josex/web/modules/sales/services"
-	"josex/web/modules/sales/utils"
-
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
+
+	coreErrors "josex/web/modules/core/errors"
+	coreModels "josex/web/modules/core/models"
+	"josex/web/modules/sales/interfaces"
+	"josex/web/modules/sales/models"
+	"josex/web/modules/sales/utils"
 )
 
 // SalesOrderController handles sales order HTTP requests
 type SalesOrderController struct {
-	service *services.SalesOrderService
+	service interfaces.SalesOrderService
 }
 
 // NewSalesOrderController creates a new sales order controller
-func NewSalesOrderController(service *services.SalesOrderService) *SalesOrderController {
+func NewSalesOrderController(service interfaces.SalesOrderService) *SalesOrderController {
 	return &SalesOrderController{
 		service: service,
 	}
@@ -218,7 +218,7 @@ func (ctrl *SalesOrderController) AddOrderItem(c *gin.Context) {
 		return
 	}
 
-	orderId, err := uuid.Parse(c.Param("id"))
+	orderID, err := uuid.Parse(c.Param("id"))
 	if err != nil {
 		c.JSON(http.StatusBadRequest, coreErrors.BuildErrorSingle(c, "validation.invalid-uuid"))
 		return
@@ -230,7 +230,7 @@ func (ctrl *SalesOrderController) AddOrderItem(c *gin.Context) {
 		return
 	}
 
-	item, err := ctrl.service.AddOrderItemWithBatch(c.Request.Context(), tenantID, orderId, dto.ProductID, dto.Quantity, dto.UnitPrice)
+	item, err := ctrl.service.AddOrderItemWithBatch(c.Request.Context(), tenantID, orderID, dto.ProductID, dto.Quantity, dto.UnitPrice)
 	if err != nil {
 		status := utils.GetHTTPStatusFromError(err)
 		c.JSON(status, coreErrors.BuildError(c, err))
@@ -262,13 +262,13 @@ func (ctrl *SalesOrderController) CompleteOrder(c *gin.Context) {
 		return
 	}
 
-	orderId, err := uuid.Parse(c.Param("id"))
+	orderID, err := uuid.Parse(c.Param("id"))
 	if err != nil {
 		c.JSON(http.StatusBadRequest, coreErrors.BuildErrorSingle(c, "validation.invalid-uuid"))
 		return
 	}
 
-	order, err := ctrl.service.CompleteOrder(c.Request.Context(), tenantID, orderId)
+	order, err := ctrl.service.CompleteOrder(c.Request.Context(), tenantID, orderID)
 	if err != nil {
 		status := utils.GetHTTPStatusFromError(err)
 		c.JSON(status, coreErrors.BuildError(c, err))
@@ -302,13 +302,13 @@ func (ctrl *SalesOrderController) CancelOrder(c *gin.Context) {
 		return
 	}
 
-	orderId, err := uuid.Parse(c.Param("id"))
+	orderID, err := uuid.Parse(c.Param("id"))
 	if err != nil {
 		c.JSON(http.StatusBadRequest, coreErrors.BuildErrorSingle(c, "validation.invalid-uuid"))
 		return
 	}
 
-	order, err := ctrl.service.CancelOrder(c.Request.Context(), tenantID, orderId)
+	order, err := ctrl.service.CancelOrder(c.Request.Context(), tenantID, orderID)
 	if err != nil {
 		status := utils.GetHTTPStatusFromError(err)
 		c.JSON(status, coreErrors.BuildError(c, err))
@@ -338,13 +338,13 @@ func (ctrl *SalesOrderController) GetOrderWithBatches(c *gin.Context) {
 		return
 	}
 
-	orderId, err := uuid.Parse(c.Param("id"))
+	orderID, err := uuid.Parse(c.Param("id"))
 	if err != nil {
 		c.JSON(http.StatusBadRequest, coreErrors.BuildErrorSingle(c, "validation.invalid-uuid"))
 		return
 	}
 
-	order, err := ctrl.service.GetOrderWithBatches(c.Request.Context(), tenantID, orderId)
+	order, err := ctrl.service.GetOrderWithBatches(c.Request.Context(), tenantID, orderID)
 	if err != nil {
 		status := utils.GetHTTPStatusFromError(err)
 		c.JSON(status, coreErrors.BuildError(c, err))
@@ -470,13 +470,13 @@ func (ctrl *SalesOrderController) ApproveReturn(c *gin.Context) {
 		return
 	}
 
-	returnId, err := uuid.Parse(c.Param("id"))
+	returnID, err := uuid.Parse(c.Param("id"))
 	if err != nil {
 		c.JSON(http.StatusBadRequest, coreErrors.BuildErrorSingle(c, "validation.invalid-uuid"))
 		return
 	}
 
-	ret, err := ctrl.service.ApproveReturn(c.Request.Context(), tenantID, returnId)
+	ret, err := ctrl.service.ApproveReturn(c.Request.Context(), tenantID, returnID)
 	if err != nil {
 		status := utils.GetHTTPStatusFromError(err)
 		c.JSON(status, coreErrors.BuildError(c, err))
@@ -506,19 +506,19 @@ func (ctrl *SalesOrderController) GetReturns(c *gin.Context) {
 		return
 	}
 
-	orderIdStr := c.Query("order_id")
-	if orderIdStr == "" {
+	orderIDStr := c.Query("order_id")
+	if orderIDStr == "" {
 		c.JSON(http.StatusBadRequest, coreErrors.BuildErrorDetail(c, "validation.failed", "order_id is required"))
 		return
 	}
 
-	orderId, err := uuid.Parse(orderIdStr)
+	orderID, err := uuid.Parse(orderIDStr)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, coreErrors.BuildErrorSingle(c, "validation.invalid-uuid"))
 		return
 	}
 
-	returns, err := ctrl.service.GetReturnsByOrder(c.Request.Context(), tenantID, orderId)
+	returns, err := ctrl.service.GetReturnsByOrder(c.Request.Context(), tenantID, orderID)
 	if err != nil {
 		status := utils.GetHTTPStatusFromError(err)
 		c.JSON(status, coreErrors.BuildError(c, err))
@@ -586,19 +586,19 @@ func (ctrl *SalesOrderController) GetPayments(c *gin.Context) {
 		return
 	}
 
-	orderIdStr := c.Query("order_id")
-	if orderIdStr == "" {
+	orderIDStr := c.Query("order_id")
+	if orderIDStr == "" {
 		c.JSON(http.StatusBadRequest, coreErrors.BuildErrorDetail(c, "validation.failed", "order_id is required"))
 		return
 	}
 
-	orderId, err := uuid.Parse(orderIdStr)
+	orderID, err := uuid.Parse(orderIDStr)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, coreErrors.BuildErrorSingle(c, "validation.invalid-uuid"))
 		return
 	}
 
-	payments, err := ctrl.service.GetPayments(c.Request.Context(), tenantID, orderId)
+	payments, err := ctrl.service.GetPayments(c.Request.Context(), tenantID, orderID)
 	if err != nil {
 		status := utils.GetHTTPStatusFromError(err)
 		c.JSON(status, coreErrors.BuildError(c, err))

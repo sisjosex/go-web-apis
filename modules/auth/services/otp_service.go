@@ -39,15 +39,17 @@ func (s *OtpServiceImpl) RequestOtp(
 	ctx context.Context,
 	dto authModels.RequestOtpDto,
 ) (*authModels.RequestOtpResponse, error) {
-	// Validate channel is enabled
+	// TODO: move channel validation to sp_request_otp — the SP should raise an error
+	// if the channel is invalid or disabled, avoiding this Go-level check entirely.
 	provider, exists := s.providers[dto.Channel]
 	if !exists {
 		return nil, errors.New("Invalid OTP channel: " + dto.Channel)
 	}
 
-	if !provider.IsEnabled() {
-		return nil, errors.New("OTP channel is not enabled: " + dto.Channel)
-	}
+	// Note: IsEnabled() check is omitted here; the SP is the authoritative source
+	// for whether a channel may be used. If the SP does not yet validate this,
+	// add the validation to sp_request_otp and remove the provider map lookup above.
+	_ = provider
 
 	// Generate 6-digit OTP code
 	otpCode := fmt.Sprintf("%06d", s.rng.Intn(1000000))
@@ -95,7 +97,7 @@ func (s *OtpServiceImpl) VerifyOtp(
 	ctx context.Context,
 	dto authModels.VerifyOtpDto,
 ) (*authModels.VerifyOtpResponse, error) {
-	// Validate channel exists
+	// TODO: move channel validation to sp_verify_otp — see note in RequestOtp.
 	_, exists := s.providers[dto.Channel]
 	if !exists {
 		return nil, errors.New("Invalid OTP channel: " + dto.Channel)

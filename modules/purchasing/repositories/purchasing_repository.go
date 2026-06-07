@@ -2,12 +2,13 @@ package repositories
 
 import (
 	"context"
-	"fmt"
+	"errors"
 
 	"josex/web/modules/core/services"
 	"josex/web/modules/purchasing/models"
 
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5/pgconn"
 )
 
 // PurchasingRepository handles all purchasing data operations
@@ -27,48 +28,61 @@ func NewPurchasingRepository(dbService services.DatabaseService) *PurchasingRepo
 // CreateSupplier inserts a new supplier
 func (r *PurchasingRepository) CreateSupplier(ctx context.Context, tenantID uuid.UUID, dto *models.CreateSupplierRequestDto) (*models.Supplier, error) {
 	supplier := &models.Supplier{}
-
-	row := r.dbService.QueryRow(ctx,
+	if err := r.dbService.QueryRow(ctx,
 		`SELECT * FROM purchasing.sp_create_supplier($1, $2, $3, $4, $5, $6, $7)`,
 		tenantID, dto.Name, dto.ContactPerson, dto.Email, dto.Phone, dto.Address, dto.PaymentTerms,
-	)
-
-	err := row.Scan(&supplier.ID, &supplier.Name, &supplier.ContactPerson, &supplier.Email,
-		&supplier.Phone, &supplier.Address, &supplier.PaymentTerms, &supplier.IsActive, &supplier.CreatedAt, &supplier.UpdatedAt)
-
-	return supplier, err
+	).Scan(
+		&supplier.ID, &supplier.Name, &supplier.ContactPerson, &supplier.Email,
+		&supplier.Phone, &supplier.Address, &supplier.PaymentTerms, &supplier.IsActive,
+		&supplier.CreatedAt, &supplier.UpdatedAt,
+	); err != nil {
+		var pgErr *pgconn.PgError
+		if errors.As(err, &pgErr) {
+			return nil, pgErr
+		}
+		return nil, err
+	}
+	return supplier, nil
 }
 
-// GetSupplier retrieves a single supplier
+// GetSupplier retrieves a single supplier by ID
 func (r *PurchasingRepository) GetSupplier(ctx context.Context, tenantID uuid.UUID, supplierID uuid.UUID) (*models.Supplier, error) {
 	supplier := &models.Supplier{}
-
-	row := r.dbService.QueryRow(ctx,
-		`SELECT id, name, contact_person, email, phone, address, payment_terms, is_active, created_at, updated_at
-		 FROM purchasing.suppliers
-		 WHERE id = $1 AND tenant_id = $2`,
+	if err := r.dbService.QueryRow(ctx,
+		`SELECT * FROM purchasing.sp_get_supplier($1, $2)`,
 		supplierID, tenantID,
-	)
-
-	err := row.Scan(&supplier.ID, &supplier.Name, &supplier.ContactPerson, &supplier.Email,
-		&supplier.Phone, &supplier.Address, &supplier.PaymentTerms, &supplier.IsActive, &supplier.CreatedAt, &supplier.UpdatedAt)
-
-	return supplier, err
+	).Scan(
+		&supplier.ID, &supplier.Name, &supplier.ContactPerson, &supplier.Email,
+		&supplier.Phone, &supplier.Address, &supplier.PaymentTerms, &supplier.IsActive,
+		&supplier.CreatedAt, &supplier.UpdatedAt,
+	); err != nil {
+		var pgErr *pgconn.PgError
+		if errors.As(err, &pgErr) {
+			return nil, pgErr
+		}
+		return nil, err
+	}
+	return supplier, nil
 }
 
 // UpdateSupplier updates supplier information
 func (r *PurchasingRepository) UpdateSupplier(ctx context.Context, tenantID uuid.UUID, supplierID uuid.UUID, dto *models.UpdateSupplierRequestDto) (*models.Supplier, error) {
 	supplier := &models.Supplier{}
-
-	row := r.dbService.QueryRow(ctx,
+	if err := r.dbService.QueryRow(ctx,
 		`SELECT * FROM purchasing.sp_update_supplier($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
 		tenantID, supplierID, dto.Name, dto.ContactPerson, dto.Email, dto.Phone, dto.Address, dto.PaymentTerms, dto.IsActive,
-	)
-
-	err := row.Scan(&supplier.ID, &supplier.Name, &supplier.ContactPerson, &supplier.Email,
-		&supplier.Phone, &supplier.Address, &supplier.PaymentTerms, &supplier.IsActive, &supplier.CreatedAt, &supplier.UpdatedAt)
-
-	return supplier, err
+	).Scan(
+		&supplier.ID, &supplier.Name, &supplier.ContactPerson, &supplier.Email,
+		&supplier.Phone, &supplier.Address, &supplier.PaymentTerms, &supplier.IsActive,
+		&supplier.CreatedAt, &supplier.UpdatedAt,
+	); err != nil {
+		var pgErr *pgconn.PgError
+		if errors.As(err, &pgErr) {
+			return nil, pgErr
+		}
+		return nil, err
+	}
+	return supplier, nil
 }
 
 // ListSuppliers retrieves paginated suppliers
@@ -81,40 +95,54 @@ func (r *PurchasingRepository) ListSuppliers(ctx context.Context, tenantID uuid.
 		tenantID, pageSize, offset,
 	)
 	if err != nil {
-		return suppliers, 0, err
+		var pgErr *pgconn.PgError
+		if errors.As(err, &pgErr) {
+			return nil, 0, pgErr
+		}
+		return nil, 0, err
 	}
 	defer rows.Close()
 
 	for rows.Next() {
 		supplier := models.Supplier{}
-		err := rows.Scan(&supplier.ID, &supplier.Name, &supplier.ContactPerson, &supplier.Email,
-			&supplier.Phone, &supplier.Address, &supplier.PaymentTerms, &supplier.IsActive, &supplier.CreatedAt, &supplier.UpdatedAt)
-		if err != nil {
-			return suppliers, 0, err
+		if err := rows.Scan(
+			&supplier.ID, &supplier.Name, &supplier.ContactPerson, &supplier.Email,
+			&supplier.Phone, &supplier.Address, &supplier.PaymentTerms, &supplier.IsActive,
+			&supplier.CreatedAt, &supplier.UpdatedAt,
+		); err != nil {
+			return nil, 0, err
 		}
 		suppliers = append(suppliers, supplier)
 	}
+	if err = rows.Err(); err != nil {
+		return nil, 0, err
+	}
 
-	// Get total count
 	var totalCount int
-	countRow := r.dbService.QueryRow(ctx,
+	if err := r.dbService.QueryRow(ctx,
 		`SELECT total_count FROM purchasing.sp_get_suppliers_count($1)`,
 		tenantID,
-	)
-	err = countRow.Scan(&totalCount)
+	).Scan(&totalCount); err != nil {
+		return nil, 0, err
+	}
 
-	return suppliers, totalCount, err
+	return suppliers, totalCount, nil
 }
 
 // DeleteSupplier soft deletes a supplier
 func (r *PurchasingRepository) DeleteSupplier(ctx context.Context, tenantID uuid.UUID, supplierID uuid.UUID) error {
 	var deleted bool
-	err := r.dbService.QueryRow(ctx,
+	if err := r.dbService.QueryRow(ctx,
 		`SELECT deleted FROM purchasing.sp_delete_supplier($1, $2)`,
-		tenantID,
-		supplierID,
-	).Scan(&deleted)
-	return err
+		tenantID, supplierID,
+	).Scan(&deleted); err != nil {
+		var pgErr *pgconn.PgError
+		if errors.As(err, &pgErr) {
+			return pgErr
+		}
+		return err
+	}
+	return nil
 }
 
 // ========== PURCHASE ORDER OPERATIONS ==========
@@ -122,41 +150,45 @@ func (r *PurchasingRepository) DeleteSupplier(ctx context.Context, tenantID uuid
 // CreatePurchaseOrder inserts a new purchase order
 func (r *PurchasingRepository) CreatePurchaseOrder(ctx context.Context, tenantID uuid.UUID, supplierID uuid.UUID, expectedDelivery *string, notes *string, createdBy uuid.UUID) (*models.PurchaseOrder, error) {
 	po := &models.PurchaseOrder{}
-
-	row := r.dbService.QueryRow(ctx,
+	if err := r.dbService.QueryRow(ctx,
 		`SELECT * FROM purchasing.sp_create_purchase_order($1, $2, $3::DATE, $4, $5)`,
 		tenantID, supplierID, expectedDelivery, notes, createdBy,
-	)
-
-	err := row.Scan(&po.ID, &po.PONumber, &po.SupplierID, &po.Status, &po.TotalAmount, &po.ExpectedDeliveryDate, &po.Notes)
-
-	return po, err
+	).Scan(
+		&po.ID, &po.PONumber, &po.SupplierID, &po.Status,
+		&po.TotalAmount, &po.ExpectedDeliveryDate, &po.Notes,
+	); err != nil {
+		var pgErr *pgconn.PgError
+		if errors.As(err, &pgErr) {
+			return nil, pgErr
+		}
+		return nil, err
+	}
+	return po, nil
 }
 
-// GetPurchaseOrder retrieves a single PO with items
+// GetPurchaseOrder retrieves a single PO with its items
 func (r *PurchasingRepository) GetPurchaseOrder(ctx context.Context, tenantID uuid.UUID, poID uuid.UUID) (*models.PurchaseOrder, error) {
 	po := &models.PurchaseOrder{}
-
-	row := r.dbService.QueryRow(ctx,
-		`SELECT id, supplier_id, po_number, status, order_date, expected_delivery_date,
-		        total_amount, paid_amount, notes, created_by, created_at, updated_at
-		 FROM purchasing.purchase_orders
-		 WHERE id = $1 AND tenant_id = $2`,
+	if err := r.dbService.QueryRow(ctx,
+		`SELECT * FROM purchasing.sp_get_purchase_order($1, $2)`,
 		poID, tenantID,
-	)
-
-	err := row.Scan(&po.ID, &po.SupplierID, &po.PONumber, &po.Status, &po.OrderDate,
-		&po.ExpectedDeliveryDate, &po.TotalAmount, &po.PaidAmount, &po.Notes, &po.CreatedBy, &po.CreatedAt, &po.UpdatedAt)
-
-	if err != nil {
-		return po, err
+	).Scan(
+		&po.ID, &po.SupplierID, &po.PONumber, &po.Status, &po.OrderDate,
+		&po.ExpectedDeliveryDate, &po.TotalAmount, &po.PaidAmount, &po.Notes,
+		&po.CreatedBy, &po.CreatedAt, &po.UpdatedAt,
+	); err != nil {
+		var pgErr *pgconn.PgError
+		if errors.As(err, &pgErr) {
+			return nil, pgErr
+		}
+		return nil, err
 	}
 
-	// Get items
 	items, err := r.GetPurchaseOrderItems(ctx, tenantID, poID)
-	if err == nil {
-		po.Items = items
+	if err != nil {
+		return nil, err
 	}
+	po.Items = items
 
 	return po, nil
 }
@@ -171,45 +203,54 @@ func (r *PurchasingRepository) ListPurchaseOrders(ctx context.Context, tenantID 
 		tenantID, status, pageSize, offset,
 	)
 	if err != nil {
-		return pos, 0, err
+		var pgErr *pgconn.PgError
+		if errors.As(err, &pgErr) {
+			return nil, 0, pgErr
+		}
+		return nil, 0, err
 	}
 	defer rows.Close()
 
 	for rows.Next() {
 		po := models.PurchaseOrder{}
-		err := rows.Scan(&po.ID, &po.SupplierID, &po.PONumber, &po.Status, &po.OrderDate,
-			&po.ExpectedDeliveryDate, &po.TotalAmount, &po.PaidAmount, &po.Notes, &po.CreatedBy, &po.CreatedAt, &po.UpdatedAt)
-		if err != nil {
-			return pos, 0, err
+		if err := rows.Scan(
+			&po.ID, &po.SupplierID, &po.PONumber, &po.Status, &po.OrderDate,
+			&po.ExpectedDeliveryDate, &po.TotalAmount, &po.PaidAmount, &po.Notes,
+			&po.CreatedBy, &po.CreatedAt, &po.UpdatedAt,
+		); err != nil {
+			return nil, 0, err
 		}
 		pos = append(pos, po)
 	}
+	if err = rows.Err(); err != nil {
+		return nil, 0, err
+	}
 
-	// Get total count
-	countRow := r.dbService.QueryRow(ctx,
-		`SELECT total_count FROM purchasing.sp_get_purchase_orders_count($1, $2)`,
-		tenantID,
-		status,
-	)
 	var totalCount int
-	err = countRow.Scan(&totalCount)
+	if err := r.dbService.QueryRow(ctx,
+		`SELECT total_count FROM purchasing.sp_get_purchase_orders_count($1, $2)`,
+		tenantID, status,
+	).Scan(&totalCount); err != nil {
+		return nil, 0, err
+	}
 
-	return pos, totalCount, err
+	return pos, totalCount, nil
 }
 
 // ApprovePurchaseOrder changes PO status to approved
 func (r *PurchasingRepository) ApprovePurchaseOrder(ctx context.Context, tenantID uuid.UUID, poID uuid.UUID) (*models.PurchaseOrder, error) {
 	po := &models.PurchaseOrder{}
-
-	row := r.dbService.QueryRow(ctx,
+	if err := r.dbService.QueryRow(ctx,
 		`SELECT * FROM purchasing.sp_approve_purchase_order($1, $2)`,
-		tenantID,
-		poID,
-	)
-
-	err := row.Scan(&po.ID, &po.Status, &po.TotalAmount, &po.Notes)
-
-	return po, err
+		tenantID, poID,
+	).Scan(&po.ID, &po.Status, &po.TotalAmount, &po.Notes); err != nil {
+		var pgErr *pgconn.PgError
+		if errors.As(err, &pgErr) {
+			return nil, pgErr
+		}
+		return nil, err
+	}
+	return po, nil
 }
 
 // ========== PO ITEM OPERATIONS ==========
@@ -218,15 +259,20 @@ func (r *PurchasingRepository) ApprovePurchaseOrder(ctx context.Context, tenantI
 func (r *PurchasingRepository) AddPurchaseOrderItem(ctx context.Context, tenantID uuid.UUID, poID, productID uuid.UUID, quantity int, unitCost float64) (*models.PurchaseOrderItem, error) {
 	item := &models.PurchaseOrderItem{}
 	var message string
-
-	row := r.dbService.QueryRow(ctx,
+	if err := r.dbService.QueryRow(ctx,
 		`SELECT * FROM purchasing.sp_add_purchase_order_item($1, $2, $3, $4, $5)`,
 		tenantID, poID, productID, quantity, unitCost,
-	)
-
-	err := row.Scan(&item.ID, &item.PurchaseOrderID, &item.ProductID, &item.Quantity, &item.UnitCost, &item.LineTotal, &message)
-
-	return item, err
+	).Scan(
+		&item.ID, &item.PurchaseOrderID, &item.ProductID, &item.Quantity,
+		&item.UnitCost, &item.LineTotal, &message,
+	); err != nil {
+		var pgErr *pgconn.PgError
+		if errors.As(err, &pgErr) {
+			return nil, pgErr
+		}
+		return nil, err
+	}
+	return item, nil
 }
 
 // GetPurchaseOrderItems retrieves all items for a PO
@@ -235,22 +281,29 @@ func (r *PurchasingRepository) GetPurchaseOrderItems(ctx context.Context, tenant
 
 	rows, err := r.dbService.Query(ctx,
 		`SELECT * FROM purchasing.sp_get_purchase_order_items($1, $2)`,
-		tenantID,
-		poID,
+		tenantID, poID,
 	)
 	if err != nil {
-		return items, err
+		var pgErr *pgconn.PgError
+		if errors.As(err, &pgErr) {
+			return nil, pgErr
+		}
+		return nil, err
 	}
 	defer rows.Close()
 
 	for rows.Next() {
 		item := models.PurchaseOrderItem{}
-		err := rows.Scan(&item.ID, &item.PurchaseOrderID, &item.ProductID, &item.Quantity, &item.UnitCost,
-			&item.LineTotal, &item.ReceivedQuantity, &item.Status, &item.CreatedAt, &item.UpdatedAt)
-		if err != nil {
-			return items, err
+		if err := rows.Scan(
+			&item.ID, &item.PurchaseOrderID, &item.ProductID, &item.Quantity, &item.UnitCost,
+			&item.LineTotal, &item.ReceivedQuantity, &item.Status, &item.CreatedAt, &item.UpdatedAt,
+		); err != nil {
+			return nil, err
 		}
 		items = append(items, item)
+	}
+	if err = rows.Err(); err != nil {
+		return nil, err
 	}
 
 	return items, nil
@@ -261,15 +314,20 @@ func (r *PurchasingRepository) GetPurchaseOrderItems(ctx context.Context, tenant
 // ReceivePurchaseOrder records receipt of goods
 func (r *PurchasingRepository) ReceivePurchaseOrder(ctx context.Context, tenantID uuid.UUID, poID uuid.UUID, receivedBy *uuid.UUID, notes *string) (*models.PurchaseOrderReceipt, error) {
 	receipt := &models.PurchaseOrderReceipt{}
-
-	row := r.dbService.QueryRow(ctx,
+	if err := r.dbService.QueryRow(ctx,
 		`SELECT * FROM purchasing.sp_receive_purchase_order_items($1, $2, CURRENT_TIMESTAMP, $3, $4)`,
 		tenantID, poID, receivedBy, notes,
-	)
-
-	err := row.Scan(&receipt.ID, &receipt.PurchaseOrderID, &receipt.ReceiptNumber, &receipt.ReceivedBy, &receipt.Notes, &receipt.CreatedAt)
-
-	return receipt, err
+	).Scan(
+		&receipt.ID, &receipt.PurchaseOrderID, &receipt.ReceiptNumber,
+		&receipt.ReceivedBy, &receipt.Notes, &receipt.CreatedAt,
+	); err != nil {
+		var pgErr *pgconn.PgError
+		if errors.As(err, &pgErr) {
+			return nil, pgErr
+		}
+		return nil, err
+	}
+	return receipt, nil
 }
 
 // ========== PO INVOICE OPERATIONS ==========
@@ -277,16 +335,21 @@ func (r *PurchasingRepository) ReceivePurchaseOrder(ctx context.Context, tenantI
 // AddInvoice adds a supplier invoice to a PO
 func (r *PurchasingRepository) AddInvoice(ctx context.Context, tenantID uuid.UUID, poID uuid.UUID, dto *models.AddInvoiceRequestDto) (*models.PurchaseOrderInvoice, error) {
 	invoice := &models.PurchaseOrderInvoice{}
-
-	row := r.dbService.QueryRow(ctx,
+	if err := r.dbService.QueryRow(ctx,
 		`SELECT * FROM purchasing.sp_add_invoice($1, $2, $3, $4, $5, $6, $7)`,
 		tenantID, poID, dto.InvoiceNumber, dto.InvoiceDate, dto.InvoiceAmount, dto.TaxAmount, dto.DueDate,
-	)
-
-	err := row.Scan(&invoice.ID, &invoice.PurchaseOrderID, &invoice.InvoiceNumber, &invoice.InvoiceDate,
-		&invoice.InvoiceAmount, &invoice.TaxAmount, &invoice.DueDate, &invoice.Status, &invoice.CreatedAt, &invoice.UpdatedAt)
-
-	return invoice, err
+	).Scan(
+		&invoice.ID, &invoice.PurchaseOrderID, &invoice.InvoiceNumber, &invoice.InvoiceDate,
+		&invoice.InvoiceAmount, &invoice.TaxAmount, &invoice.DueDate, &invoice.Status,
+		&invoice.CreatedAt, &invoice.UpdatedAt,
+	); err != nil {
+		var pgErr *pgconn.PgError
+		if errors.As(err, &pgErr) {
+			return nil, pgErr
+		}
+		return nil, err
+	}
+	return invoice, nil
 }
 
 // GetInvoices retrieves all invoices for a PO
@@ -295,22 +358,30 @@ func (r *PurchasingRepository) GetInvoices(ctx context.Context, tenantID uuid.UU
 
 	rows, err := r.dbService.Query(ctx,
 		`SELECT * FROM purchasing.sp_get_invoices($1, $2)`,
-		tenantID,
-		poID,
+		tenantID, poID,
 	)
 	if err != nil {
-		return invoices, err
+		var pgErr *pgconn.PgError
+		if errors.As(err, &pgErr) {
+			return nil, pgErr
+		}
+		return nil, err
 	}
 	defer rows.Close()
 
 	for rows.Next() {
 		inv := models.PurchaseOrderInvoice{}
-		err := rows.Scan(&inv.ID, &inv.PurchaseOrderID, &inv.InvoiceNumber, &inv.InvoiceDate,
-			&inv.InvoiceAmount, &inv.TaxAmount, &inv.DueDate, &inv.Status, &inv.CreatedAt, &inv.UpdatedAt)
-		if err != nil {
-			return invoices, err
+		if err := rows.Scan(
+			&inv.ID, &inv.PurchaseOrderID, &inv.InvoiceNumber, &inv.InvoiceDate,
+			&inv.InvoiceAmount, &inv.TaxAmount, &inv.DueDate, &inv.Status,
+			&inv.CreatedAt, &inv.UpdatedAt,
+		); err != nil {
+			return nil, err
 		}
 		invoices = append(invoices, inv)
+	}
+	if err = rows.Err(); err != nil {
+		return nil, err
 	}
 
 	return invoices, nil
@@ -319,17 +390,21 @@ func (r *PurchasingRepository) GetInvoices(ctx context.Context, tenantID uuid.UU
 // MarkInvoiceAsPaid updates invoice status
 func (r *PurchasingRepository) MarkInvoiceAsPaid(ctx context.Context, tenantID uuid.UUID, invoiceID uuid.UUID) (*models.PurchaseOrderInvoice, error) {
 	invoice := &models.PurchaseOrderInvoice{}
-
-	row := r.dbService.QueryRow(ctx,
+	if err := r.dbService.QueryRow(ctx,
 		`SELECT * FROM purchasing.sp_mark_invoice_as_paid($1, $2)`,
-		tenantID,
-		invoiceID,
-	)
-
-	err := row.Scan(&invoice.ID, &invoice.PurchaseOrderID, &invoice.InvoiceNumber, &invoice.InvoiceDate,
-		&invoice.InvoiceAmount, &invoice.TaxAmount, &invoice.DueDate, &invoice.Status, &invoice.CreatedAt, &invoice.UpdatedAt)
-
-	return invoice, err
+		tenantID, invoiceID,
+	).Scan(
+		&invoice.ID, &invoice.PurchaseOrderID, &invoice.InvoiceNumber, &invoice.InvoiceDate,
+		&invoice.InvoiceAmount, &invoice.TaxAmount, &invoice.DueDate, &invoice.Status,
+		&invoice.CreatedAt, &invoice.UpdatedAt,
+	); err != nil {
+		var pgErr *pgconn.PgError
+		if errors.As(err, &pgErr) {
+			return nil, pgErr
+		}
+		return nil, err
+	}
+	return invoice, nil
 }
 
 // ========== REPORTS ==========
@@ -343,18 +418,27 @@ func (r *PurchasingRepository) GetPendingPayments(ctx context.Context, tenantID 
 		tenantID,
 	)
 	if err != nil {
-		return pos, err
+		var pgErr *pgconn.PgError
+		if errors.As(err, &pgErr) {
+			return nil, pgErr
+		}
+		return nil, err
 	}
 	defer rows.Close()
 
 	for rows.Next() {
 		po := models.PurchaseOrder{}
-		err := rows.Scan(&po.ID, &po.SupplierID, &po.PONumber, &po.Status, &po.OrderDate,
-			&po.ExpectedDeliveryDate, &po.TotalAmount, &po.PaidAmount, &po.Notes, &po.CreatedBy, &po.CreatedAt, &po.UpdatedAt)
-		if err != nil {
-			return pos, err
+		if err := rows.Scan(
+			&po.ID, &po.SupplierID, &po.PONumber, &po.Status, &po.OrderDate,
+			&po.ExpectedDeliveryDate, &po.TotalAmount, &po.PaidAmount, &po.Notes,
+			&po.CreatedBy, &po.CreatedAt, &po.UpdatedAt,
+		); err != nil {
+			return nil, err
 		}
 		pos = append(pos, po)
+	}
+	if err = rows.Err(); err != nil {
+		return nil, err
 	}
 
 	return pos, nil
@@ -367,32 +451,30 @@ func (r *PurchasingRepository) GetPriceComparison(ctx context.Context, tenantID 
 	comparisons := []models.PriceComparison{}
 
 	rows, err := r.dbService.Query(ctx,
-		`SELECT
-			sr.product_id,
-			sr.supplier_id,
-			s.name,
-			sr.unit_cost,
-			sr.payment_terms,
-			sr.last_price_date,
-			COALESCE(AVG(sr.unit_cost) OVER (PARTITION BY sr.product_id), sr.unit_cost) as average_cost
-		 FROM purchasing.supplier_rates sr
-		 JOIN purchasing.suppliers s ON sr.supplier_id = s.id
-		 WHERE sr.product_id = $1 AND s.tenant_id = $2
-		 ORDER BY sr.unit_cost ASC`,
+		`SELECT * FROM purchasing.sp_get_price_comparison($1, $2)`,
 		productID, tenantID,
 	)
 	if err != nil {
-		return comparisons, err
+		var pgErr *pgconn.PgError
+		if errors.As(err, &pgErr) {
+			return nil, pgErr
+		}
+		return nil, err
 	}
 	defer rows.Close()
 
 	for rows.Next() {
 		pc := models.PriceComparison{}
-		err := rows.Scan(&pc.ProductID, &pc.SupplierID, &pc.SupplierName, &pc.UnitCost, &pc.PaymentTerms, &pc.LastPurchaseAt, &pc.AverageCost)
-		if err != nil {
-			return comparisons, err
+		if err := rows.Scan(
+			&pc.ProductID, &pc.SupplierID, &pc.SupplierName,
+			&pc.UnitCost, &pc.PaymentTerms, &pc.LastPurchaseAt, &pc.AverageCost,
+		); err != nil {
+			return nil, err
 		}
 		comparisons = append(comparisons, pc)
+	}
+	if err = rows.Err(); err != nil {
+		return nil, err
 	}
 
 	return comparisons, nil
@@ -401,21 +483,21 @@ func (r *PurchasingRepository) GetPriceComparison(ctx context.Context, tenantID 
 // GetBestSupplierForProduct returns the supplier with lowest unit cost for a product
 func (r *PurchasingRepository) GetBestSupplierForProduct(ctx context.Context, tenantID uuid.UUID, productID uuid.UUID) (*models.Supplier, error) {
 	supplier := &models.Supplier{}
-
-	row := r.dbService.QueryRow(ctx,
-		`SELECT s.id, s.name, s.contact_person, s.email, s.phone, s.address, s.payment_terms, s.is_active, s.created_at, s.updated_at
-		 FROM purchasing.suppliers s
-		 JOIN purchasing.supplier_rates sr ON s.id = sr.supplier_id
-		 WHERE sr.product_id = $1 AND s.tenant_id = $2
-		 ORDER BY sr.unit_cost ASC
-		 LIMIT 1`,
+	if err := r.dbService.QueryRow(ctx,
+		`SELECT * FROM purchasing.sp_get_best_supplier_for_product($1, $2)`,
 		productID, tenantID,
-	)
-
-	err := row.Scan(&supplier.ID, &supplier.Name, &supplier.ContactPerson, &supplier.Email,
-		&supplier.Phone, &supplier.Address, &supplier.PaymentTerms, &supplier.IsActive, &supplier.CreatedAt, &supplier.UpdatedAt)
-
-	return supplier, err
+	).Scan(
+		&supplier.ID, &supplier.Name, &supplier.ContactPerson, &supplier.Email,
+		&supplier.Phone, &supplier.Address, &supplier.PaymentTerms, &supplier.IsActive,
+		&supplier.CreatedAt, &supplier.UpdatedAt,
+	); err != nil {
+		var pgErr *pgconn.PgError
+		if errors.As(err, &pgErr) {
+			return nil, pgErr
+		}
+		return nil, err
+	}
+	return supplier, nil
 }
 
 // ========== PHASE 2A: FIFO BATCH TRACKING ==========
@@ -423,16 +505,22 @@ func (r *PurchasingRepository) GetBestSupplierForProduct(ctx context.Context, te
 // CreateProductBatch records a new product batch for inventory tracking
 func (r *PurchasingRepository) CreateProductBatch(ctx context.Context, tenantID uuid.UUID, batch *models.ProductBatch) (*models.ProductBatch, error) {
 	newBatch := &models.ProductBatch{}
-
-	row := r.dbService.QueryRow(ctx,
+	if err := r.dbService.QueryRow(ctx,
 		`SELECT * FROM purchasing.sp_create_product_batch($1, $2, $3, $4, $5, $6, $7, $8)`,
-		tenantID, batch.ProductID, batch.BatchNumber, batch.Quantity, batch.UnitCost, batch.ReceiptDate, batch.ExpirationDate, batch.Status,
-	)
-
-	err := row.Scan(&newBatch.ID, &newBatch.ProductID, &newBatch.BatchNumber, &newBatch.Quantity,
-		&newBatch.UnitCost, &newBatch.ReceiptDate, &newBatch.ExpirationDate, &newBatch.Status, &newBatch.CreatedAt, &newBatch.UpdatedAt)
-
-	return newBatch, err
+		tenantID, batch.ProductID, batch.BatchNumber, batch.Quantity, batch.UnitCost,
+		batch.ReceiptDate, batch.ExpirationDate, batch.Status,
+	).Scan(
+		&newBatch.ID, &newBatch.ProductID, &newBatch.BatchNumber, &newBatch.Quantity,
+		&newBatch.UnitCost, &newBatch.ReceiptDate, &newBatch.ExpirationDate,
+		&newBatch.Status, &newBatch.CreatedAt, &newBatch.UpdatedAt,
+	); err != nil {
+		var pgErr *pgconn.PgError
+		if errors.As(err, &pgErr) {
+			return nil, pgErr
+		}
+		return nil, err
+	}
+	return newBatch, nil
 }
 
 // GetProductBatches retrieves all batches for a product ordered by receipt date (oldest first)
@@ -441,22 +529,30 @@ func (r *PurchasingRepository) GetProductBatches(ctx context.Context, tenantID u
 
 	rows, err := r.dbService.Query(ctx,
 		`SELECT * FROM purchasing.sp_get_product_batches($1, $2)`,
-		tenantID,
-		productID,
+		tenantID, productID,
 	)
 	if err != nil {
-		return batches, err
+		var pgErr *pgconn.PgError
+		if errors.As(err, &pgErr) {
+			return nil, pgErr
+		}
+		return nil, err
 	}
 	defer rows.Close()
 
 	for rows.Next() {
 		batch := models.ProductBatch{}
-		err := rows.Scan(&batch.ID, &batch.ProductID, &batch.BatchNumber, &batch.Quantity,
-			&batch.UnitCost, &batch.ReceiptDate, &batch.ExpirationDate, &batch.Status, &batch.CreatedAt, &batch.UpdatedAt)
-		if err != nil {
-			return batches, err
+		if err := rows.Scan(
+			&batch.ID, &batch.ProductID, &batch.BatchNumber, &batch.Quantity,
+			&batch.UnitCost, &batch.ReceiptDate, &batch.ExpirationDate,
+			&batch.Status, &batch.CreatedAt, &batch.UpdatedAt,
+		); err != nil {
+			return nil, err
 		}
 		batches = append(batches, batch)
+	}
+	if err = rows.Err(); err != nil {
+		return nil, err
 	}
 
 	return batches, nil
@@ -465,121 +561,153 @@ func (r *PurchasingRepository) GetProductBatches(ctx context.Context, tenantID u
 // GetOldestBatchForSale retrieves the oldest batch with remaining quantity (FIFO principle)
 func (r *PurchasingRepository) GetOldestBatchForSale(ctx context.Context, tenantID uuid.UUID, productID uuid.UUID) (*models.ProductBatch, error) {
 	batch := &models.ProductBatch{}
-
-	row := r.dbService.QueryRow(ctx,
+	if err := r.dbService.QueryRow(ctx,
 		`SELECT * FROM purchasing.sp_get_oldest_batch_for_sale($1, $2)`,
-		tenantID,
-		productID,
-	)
-
-	err := row.Scan(&batch.ID, &batch.ProductID, &batch.BatchNumber, &batch.Quantity,
-		&batch.UnitCost, &batch.ReceiptDate, &batch.ExpirationDate, &batch.Status, &batch.CreatedAt, &batch.UpdatedAt)
-
-	return batch, err
+		tenantID, productID,
+	).Scan(
+		&batch.ID, &batch.ProductID, &batch.BatchNumber, &batch.Quantity,
+		&batch.UnitCost, &batch.ReceiptDate, &batch.ExpirationDate,
+		&batch.Status, &batch.CreatedAt, &batch.UpdatedAt,
+	); err != nil {
+		var pgErr *pgconn.PgError
+		if errors.As(err, &pgErr) {
+			return nil, pgErr
+		}
+		return nil, err
+	}
+	return batch, nil
 }
 
 // ========== PHASE 2A: RFQ (REQUEST FOR QUOTE) ==========
 
-// CreateRFQ creates a new Request for Quote
+// CreateRFQ inserts a new request for quote
 func (r *PurchasingRepository) CreateRFQ(ctx context.Context, tenantID uuid.UUID, rfq *models.RequestForQuote) (*models.RequestForQuote, error) {
-	newRFQ := &models.RequestForQuote{}
-
-	row := r.dbService.QueryRow(ctx,
+	result := &models.RequestForQuote{}
+	if err := r.dbService.QueryRow(ctx,
 		`SELECT * FROM purchasing.sp_create_rfq($1, $2, $3)`,
 		tenantID, rfq.RFQNumber, rfq.Status,
-	)
-
-	err := row.Scan(&newRFQ.ID, &newRFQ.RFQNumber, &newRFQ.Status, &newRFQ.CreatedAt, &newRFQ.UpdatedAt)
-
-	return newRFQ, err
+	).Scan(
+		&result.ID, &result.RFQNumber, &result.Status,
+		&result.CreatedAt, &result.UpdatedAt,
+	); err != nil {
+		var pgErr *pgconn.PgError
+		if errors.As(err, &pgErr) {
+			return nil, pgErr
+		}
+		return nil, err
+	}
+	return result, nil
 }
 
-// GetRFQ retrieves a Request for Quote with all items and responses
+// GetRFQ retrieves a single RFQ by ID
 func (r *PurchasingRepository) GetRFQ(ctx context.Context, tenantID uuid.UUID, rfqID uuid.UUID) (*models.RequestForQuote, error) {
 	rfq := &models.RequestForQuote{}
-
-	row := r.dbService.QueryRow(ctx,
-		`SELECT id, rfq_number, status, created_at, updated_at
-		 FROM purchasing.request_for_quotes
-		 WHERE id = $1 AND tenant_id = $2`,
-		rfqID, tenantID,
-	)
-
-	err := row.Scan(&rfq.ID, &rfq.RFQNumber, &rfq.Status, &rfq.CreatedAt, &rfq.UpdatedAt)
-	if err != nil {
-		return rfq, err
+	if err := r.dbService.QueryRow(ctx,
+		`SELECT * FROM purchasing.sp_get_rfq($1, $2)`,
+		tenantID, rfqID,
+	).Scan(
+		&rfq.ID, &rfq.RFQNumber, &rfq.Status,
+		&rfq.CreatedAt, &rfq.UpdatedAt,
+	); err != nil {
+		var pgErr *pgconn.PgError
+		if errors.As(err, &pgErr) {
+			return nil, pgErr
+		}
+		return nil, err
 	}
 
-	// Get RFQ items
 	items, err := r.GetRFQItems(ctx, tenantID, rfqID)
 	if err != nil {
-		return rfq, err
+		return nil, err
 	}
 	rfq.Items = items
 
-	// Get RFQ responses
 	responses, err := r.GetRFQResponses(ctx, tenantID, rfqID)
 	if err != nil {
-		return rfq, err
+		return nil, err
 	}
 	rfq.Responses = responses
 
 	return rfq, nil
 }
 
-// GetRFQItems retrieves all line items for an RFQ
+// GetRFQItems retrieves all items for an RFQ
 func (r *PurchasingRepository) GetRFQItems(ctx context.Context, tenantID uuid.UUID, rfqID uuid.UUID) ([]models.RFQItem, error) {
 	items := []models.RFQItem{}
 
 	rows, err := r.dbService.Query(ctx,
 		`SELECT * FROM purchasing.sp_get_rfq_items($1, $2)`,
-		tenantID,
-		rfqID,
+		tenantID, rfqID,
 	)
 	if err != nil {
-		return items, err
+		var pgErr *pgconn.PgError
+		if errors.As(err, &pgErr) {
+			return nil, pgErr
+		}
+		return nil, err
 	}
 	defer rows.Close()
 
 	for rows.Next() {
 		item := models.RFQItem{}
-		err := rows.Scan(&item.ID, &item.RFQID, &item.ProductID, &item.Quantity, &item.Description, &item.CreatedAt)
-		if err != nil {
-			return items, err
+		var quantity float64
+		if err := rows.Scan(
+			&item.ID, &item.RFQID, &item.ProductID,
+			&quantity, &item.Description, &item.CreatedAt,
+		); err != nil {
+			return nil, err
 		}
+		item.Quantity = int(quantity)
 		items = append(items, item)
+	}
+	if err = rows.Err(); err != nil {
+		return nil, err
 	}
 
 	return items, nil
 }
 
-// AddRFQItem adds a line item to an RFQ
+// AddRFQItem adds an item to an RFQ
 func (r *PurchasingRepository) AddRFQItem(ctx context.Context, tenantID uuid.UUID, rfqID uuid.UUID, item *models.RFQItem) (*models.RFQItem, error) {
-	newItem := &models.RFQItem{}
-
-	row := r.dbService.QueryRow(ctx,
+	result := &models.RFQItem{}
+	var quantity float64
+	if err := r.dbService.QueryRow(ctx,
 		`SELECT * FROM purchasing.sp_add_rfq_item($1, $2, $3, $4, $5)`,
 		tenantID, rfqID, item.ProductID, item.Quantity, item.Description,
-	)
-
-	err := row.Scan(&newItem.ID, &newItem.RFQID, &newItem.ProductID, &newItem.Quantity, &newItem.Description, &newItem.CreatedAt)
-
-	return newItem, err
+	).Scan(
+		&result.ID, &result.RFQID, &result.ProductID,
+		&quantity, &result.Description, &result.CreatedAt,
+	); err != nil {
+		var pgErr *pgconn.PgError
+		if errors.As(err, &pgErr) {
+			return nil, pgErr
+		}
+		return nil, err
+	}
+	result.Quantity = int(quantity)
+	return result, nil
 }
 
-// AddRFQResponse records a supplier's quote response
+// AddRFQResponse adds a supplier response to an RFQ
 func (r *PurchasingRepository) AddRFQResponse(ctx context.Context, tenantID uuid.UUID, response *models.RFQResponse) (*models.RFQResponse, error) {
-	newResponse := &models.RFQResponse{}
-
-	row := r.dbService.QueryRow(ctx,
+	result := &models.RFQResponse{}
+	var paymentTerms string
+	if err := r.dbService.QueryRow(ctx,
 		`SELECT * FROM purchasing.sp_add_rfq_response($1, $2, $3, $4, $5, $6, $7)`,
-		tenantID, response.RFQID, response.SupplierID, response.TotalPrice, response.DeliveryDays, response.PaymentTerms, response.Notes,
-	)
-
-	err := row.Scan(&newResponse.ID, &newResponse.RFQID, &newResponse.SupplierID, &newResponse.TotalPrice,
-		&newResponse.DeliveryDays, &newResponse.PaymentTerms, &newResponse.Notes, &newResponse.CreatedAt, &newResponse.UpdatedAt)
-
-	return newResponse, err
+		tenantID, response.RFQID, response.SupplierID, response.TotalPrice,
+		response.DeliveryDays, response.PaymentTerms, response.Notes,
+	).Scan(
+		&result.ID, &result.RFQID, &result.SupplierID, &result.TotalPrice,
+		&result.DeliveryDays, &paymentTerms, &result.Notes,
+		&result.CreatedAt, &result.UpdatedAt,
+	); err != nil {
+		var pgErr *pgconn.PgError
+		if errors.As(err, &pgErr) {
+			return nil, pgErr
+		}
+		return nil, err
+	}
+	return result, nil
 }
 
 // GetRFQResponses retrieves all supplier responses for an RFQ
@@ -588,61 +716,67 @@ func (r *PurchasingRepository) GetRFQResponses(ctx context.Context, tenantID uui
 
 	rows, err := r.dbService.Query(ctx,
 		`SELECT * FROM purchasing.sp_get_rfq_responses($1, $2)`,
-		tenantID,
-		rfqID,
+		tenantID, rfqID,
 	)
 	if err != nil {
-		return responses, err
+		var pgErr *pgconn.PgError
+		if errors.As(err, &pgErr) {
+			return nil, pgErr
+		}
+		return nil, err
 	}
 	defer rows.Close()
 
 	for rows.Next() {
 		resp := models.RFQResponse{}
-		err := rows.Scan(&resp.ID, &resp.RFQID, &resp.SupplierID, &resp.TotalPrice, &resp.DeliveryDays,
-			&resp.PaymentTerms, &resp.Notes, &resp.CreatedAt, &resp.UpdatedAt)
-		if err != nil {
-			return responses, err
+		var paymentTerms string
+		if err := rows.Scan(
+			&resp.ID, &resp.RFQID, &resp.SupplierID, &resp.TotalPrice,
+			&resp.DeliveryDays, &paymentTerms, &resp.Notes,
+			&resp.CreatedAt, &resp.UpdatedAt,
+		); err != nil {
+			return nil, err
 		}
 		responses = append(responses, resp)
+	}
+	if err = rows.Err(); err != nil {
+		return nil, err
 	}
 
 	return responses, nil
 }
 
-// SelectBestRFQResponse marks the chosen supplier response and closes the RFQ
-func (r *PurchasingRepository) SelectBestRFQResponse(ctx context.Context, tenantID uuid.UUID, rfqID, responseID uuid.UUID) error {
+// SelectBestRFQResponse closes an RFQ by selecting the winning response
+func (r *PurchasingRepository) SelectBestRFQResponse(ctx context.Context, tenantID uuid.UUID, rfqID, _ uuid.UUID) error {
 	var updated bool
-	err := r.dbService.QueryRow(ctx,
-		`SELECT status_updated FROM purchasing.sp_select_best_rfq_response($1, $2)`,
-		tenantID,
-		rfqID,
-	).Scan(&updated)
-	return err
+	if err := r.dbService.QueryRow(ctx,
+		`SELECT * FROM purchasing.sp_select_best_rfq_response($1, $2)`,
+		tenantID, rfqID,
+	).Scan(&updated); err != nil {
+		var pgErr *pgconn.PgError
+		if errors.As(err, &pgErr) {
+			return pgErr
+		}
+		return err
+	}
+	return nil
 }
 
-// GetRFQComparison aggregates all RFQ responses for side-by-side comparison
-func (r *PurchasingRepository) GetRFQComparison(ctx context.Context, tenantID uuid.UUID, rfqID uuid.UUID) (map[string]interface{}, error) {
-	comparison := map[string]interface{}{}
-
-	rfq, err := r.GetRFQ(ctx, tenantID, rfqID)
+// GetRFQComparison builds a comparison map of supplier responses for an RFQ
+func (r *PurchasingRepository) GetRFQComparison(ctx context.Context, tenantID uuid.UUID, rfqID uuid.UUID) (map[string]any, error) {
+	items, err := r.GetRFQItems(ctx, tenantID, rfqID)
 	if err != nil {
-		return comparison, err
+		return nil, err
 	}
 
-	comparison["rfq_number"] = rfq.RFQNumber
-	comparison["items_count"] = len(rfq.Items)
-	comparison["responses"] = []map[string]interface{}{}
-
-	for _, resp := range rfq.Responses {
-		respMap := map[string]interface{}{
-			"supplier_id":    resp.SupplierID.String(),
-			"total_price":    resp.TotalPrice,
-			"delivery_days":  resp.DeliveryDays,
-			"payment_terms":  resp.PaymentTerms,
-			"price_per_item": fmt.Sprintf("%.2f", resp.TotalPrice/float64(len(rfq.Items))),
-		}
-		comparison["responses"] = append(comparison["responses"].([]map[string]interface{}), respMap)
+	responses, err := r.GetRFQResponses(ctx, tenantID, rfqID)
+	if err != nil {
+		return nil, err
 	}
 
-	return comparison, nil
+	return map[string]any{
+		"rfq_id":    rfqID,
+		"items":     items,
+		"responses": responses,
+	}, nil
 }

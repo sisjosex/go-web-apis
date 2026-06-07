@@ -7,7 +7,8 @@ func init() {
 		Code:        "inventory",
 		Name:        "Inventory",
 		Description: "Stock management, warehouses and product catalog.",
-		Icon:        "archive",
+		Icon:        "package",
+		Route:       "/inventory",
 		Category:    "operations",
 		Features: []string{
 			"Product catalog",

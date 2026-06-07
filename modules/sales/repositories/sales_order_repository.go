@@ -2,12 +2,14 @@ package repositories
 
 import (
 	"context"
+	"errors"
 	"time"
 
 	coreServices "josex/web/modules/core/services"
 	"josex/web/modules/sales/models"
 
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5/pgconn"
 )
 
 // SalesOrderRepository implements sales order data operations
@@ -38,7 +40,14 @@ func (r *SalesOrderRepository) CreateSalesOrder(ctx context.Context, tenantID uu
 		&order.DiscountAmount, &order.ShippingAddress, &order.Notes,
 		&order.CreatedAt, &order.UpdatedAt,
 	)
-	return order, err
+	if err != nil {
+		var pgErr *pgconn.PgError
+		if errors.As(err, &pgErr) {
+			return nil, pgErr
+		}
+		return nil, err
+	}
+	return order, nil
 }
 
 // GetSalesOrderByID retrieves a sales order by ID
@@ -54,7 +63,14 @@ func (r *SalesOrderRepository) GetSalesOrderByID(ctx context.Context, tenantID u
 		&order.DiscountAmount, &order.ShippingAddress, &order.Notes,
 		&order.CreatedAt, &order.UpdatedAt,
 	)
-	return order, err
+	if err != nil {
+		var pgErr *pgconn.PgError
+		if errors.As(err, &pgErr) {
+			return nil, pgErr
+		}
+		return nil, err
+	}
+	return order, nil
 }
 
 // GetAllSalesOrders retrieves all sales orders
@@ -65,22 +81,31 @@ func (r *SalesOrderRepository) GetAllSalesOrders(ctx context.Context, tenantID u
 		tenantID, limit, offset,
 	)
 	if err != nil {
-		return orders, err
+		var pgErr *pgconn.PgError
+		if errors.As(err, &pgErr) {
+			return nil, pgErr
+		}
+		return nil, err
 	}
 	defer rows.Close()
 
 	for rows.Next() {
 		var o models.SalesOrder
-		err := rows.Scan(
+		if err := rows.Scan(
 			&o.ID, &o.CustomerID, &o.OrderNumber,
 			&o.Status, &o.SubTotal, &o.TaxAmount, &o.Total,
 			&o.DiscountAmount, &o.ShippingAddress, &o.Notes,
 			&o.CreatedAt, &o.UpdatedAt,
-		)
-		if err != nil {
-			continue
+		); err != nil {
+			return nil, err
 		}
 		orders = append(orders, o)
+	}
+	if err = rows.Err(); err != nil {
+		return nil, err
+	}
+	if orders == nil {
+		orders = []models.SalesOrder{}
 	}
 	return orders, nil
 }
@@ -97,7 +122,14 @@ func (r *SalesOrderRepository) UpdateSalesOrder(ctx context.Context, tenantID uu
 		&order.DiscountAmount, &order.ShippingAddress, &order.Notes,
 		&order.CreatedAt, &order.UpdatedAt,
 	)
-	return order, err
+	if err != nil {
+		var pgErr *pgconn.PgError
+		if errors.As(err, &pgErr) {
+			return nil, pgErr
+		}
+		return nil, err
+	}
+	return order, nil
 }
 
 // GetSalesOrdersByCustomer retrieves all orders for a customer
@@ -109,22 +141,31 @@ func (r *SalesOrderRepository) GetSalesOrdersByCustomer(ctx context.Context, ten
 		customerID,
 	)
 	if err != nil {
-		return orders, err
+		var pgErr *pgconn.PgError
+		if errors.As(err, &pgErr) {
+			return nil, pgErr
+		}
+		return nil, err
 	}
 	defer rows.Close()
 
 	for rows.Next() {
 		var o models.SalesOrder
-		err := rows.Scan(
+		if err := rows.Scan(
 			&o.ID, &o.CustomerID, &o.OrderNumber,
 			&o.Status, &o.SubTotal, &o.TaxAmount, &o.Total,
 			&o.DiscountAmount, &o.ShippingAddress, &o.Notes,
 			&o.CreatedAt, &o.UpdatedAt,
-		)
-		if err != nil {
-			continue
+		); err != nil {
+			return nil, err
 		}
 		orders = append(orders, o)
+	}
+	if err = rows.Err(); err != nil {
+		return nil, err
+	}
+	if orders == nil {
+		orders = []models.SalesOrder{}
 	}
 	return orders, nil
 }
@@ -142,45 +183,68 @@ func (r *SalesOrderRepository) GetSalesOrderByOrderNumber(ctx context.Context, t
 		&order.DiscountAmount, &order.ShippingAddress, &order.Notes,
 		&order.CreatedAt, &order.UpdatedAt,
 	)
-	return order, err
+	if err != nil {
+		var pgErr *pgconn.PgError
+		if errors.As(err, &pgErr) {
+			return nil, pgErr
+		}
+		return nil, err
+	}
+	return order, nil
 }
 
 // AddOrderItem adds an item to an order
 func (r *SalesOrderRepository) AddOrderItem(ctx context.Context, tenantID uuid.UUID, orderID uuid.UUID, dto *models.CreateOrderItemRequestDto) (*models.OrderItem, error) {
 	item := &models.OrderItem{}
 	err := r.dbService.QueryRow(ctx,
-		`CALL sales.sp_add_order_item($1, $2, $3, $4)`,
+		`SELECT * FROM sales.sp_add_order_item($1, $2, $3, $4)`,
 		tenantID, orderID, dto.ProductID, dto.Quantity,
 	).Scan(
 		&item.ID, &item.OrderID, &item.ProductID, &item.ProductSku,
 		&item.ProductName, &item.Quantity, &item.UnitPrice, &item.LineTotal, &item.CreatedAt,
 	)
-	return item, err
+	if err != nil {
+		var pgErr *pgconn.PgError
+		if errors.As(err, &pgErr) {
+			return nil, pgErr
+		}
+		return nil, err
+	}
+	return item, nil
 }
 
 // GetOrderItems retrieves all items for an order
 func (r *SalesOrderRepository) GetOrderItems(ctx context.Context, tenantID uuid.UUID, orderID uuid.UUID) ([]models.OrderItem, error) {
 	var items []models.OrderItem
 	rows, err := r.dbService.Query(ctx,
-		`CALL sales.sp_get_order_items($1, $2)`,
+		`SELECT * FROM sales.sp_get_order_items($1, $2)`,
 		tenantID,
 		orderID,
 	)
 	if err != nil {
-		return items, err
+		var pgErr *pgconn.PgError
+		if errors.As(err, &pgErr) {
+			return nil, pgErr
+		}
+		return nil, err
 	}
 	defer rows.Close()
 
 	for rows.Next() {
 		var item models.OrderItem
-		err := rows.Scan(
+		if err := rows.Scan(
 			&item.ID, &item.OrderID, &item.ProductID, &item.ProductSku,
 			&item.ProductName, &item.Quantity, &item.UnitPrice, &item.LineTotal, &item.CreatedAt,
-		)
-		if err != nil {
-			continue
+		); err != nil {
+			return nil, err
 		}
 		items = append(items, item)
+	}
+	if err = rows.Err(); err != nil {
+		return nil, err
+	}
+	if items == nil {
+		items = []models.OrderItem{}
 	}
 	return items, nil
 }
@@ -201,6 +265,10 @@ func (r *SalesOrderRepository) AddOrderItemWithBatch(ctx context.Context, tenant
 		&item.ProductName, &item.Quantity, &item.UnitPrice, &item.LineTotal, &item.CreatedAt,
 	)
 	if err != nil {
+		var pgErr *pgconn.PgError
+		if errors.As(err, &pgErr) {
+			return nil, pgErr
+		}
 		return nil, err
 	}
 	return &item, nil
@@ -222,6 +290,10 @@ func (r *SalesOrderRepository) CompleteOrder(ctx context.Context, tenantID uuid.
 		&order.ShippingAddress, &order.Notes, &order.CreatedAt, &order.UpdatedAt,
 	)
 	if err != nil {
+		var pgErr *pgconn.PgError
+		if errors.As(err, &pgErr) {
+			return nil, pgErr
+		}
 		return nil, err
 	}
 	return &order, nil
@@ -245,6 +317,10 @@ func (r *SalesOrderRepository) CancelOrder(ctx context.Context, tenantID uuid.UU
 		&order.ShippingAddress, &order.Notes, &order.CreatedAt, &order.UpdatedAt,
 	)
 	if err != nil {
+		var pgErr *pgconn.PgError
+		if errors.As(err, &pgErr) {
+			return nil, pgErr
+		}
 		return nil, err
 	}
 	return &order, nil
@@ -266,6 +342,10 @@ func (r *SalesOrderRepository) GetOrderWithBatches(ctx context.Context, tenantID
 		&order.ItemCount, &order.BatchCount, &order.CreatedAt, &order.UpdatedAt,
 	)
 	if err != nil {
+		var pgErr *pgconn.PgError
+		if errors.As(err, &pgErr) {
+			return nil, pgErr
+		}
 		return nil, err
 	}
 	return &order, nil
@@ -279,17 +359,26 @@ func (r *SalesOrderRepository) GetSalesReport(ctx context.Context, tenantID uuid
 		tenantID, startDate, endDate,
 	)
 	if err != nil {
-		return reports, err
+		var pgErr *pgconn.PgError
+		if errors.As(err, &pgErr) {
+			return nil, pgErr
+		}
+		return nil, err
 	}
 	defer rows.Close()
 
 	for rows.Next() {
 		var report models.SalesReport
-		err := rows.Scan(&report.MetricName, &report.MetricValue, &report.MetricType)
-		if err != nil {
-			continue
+		if err := rows.Scan(&report.MetricName, &report.MetricValue, &report.MetricType); err != nil {
+			return nil, err
 		}
 		reports = append(reports, report)
+	}
+	if err = rows.Err(); err != nil {
+		return nil, err
+	}
+	if reports == nil {
+		reports = []models.SalesReport{}
 	}
 	return reports, nil
 }
@@ -310,6 +399,10 @@ func (r *SalesOrderRepository) CreateReturn(ctx context.Context, tenantID uuid.U
 		&ret.Reason, &ret.Status, &ret.CreatedAt, &ret.UpdatedAt,
 	)
 	if err != nil {
+		var pgErr *pgconn.PgError
+		if errors.As(err, &pgErr) {
+			return nil, pgErr
+		}
 		return nil, err
 	}
 	return &ret, nil
@@ -330,6 +423,10 @@ func (r *SalesOrderRepository) ApproveReturn(ctx context.Context, tenantID uuid.
 		&ret.Reason, &ret.Status, &ret.CreatedAt, &ret.UpdatedAt,
 	)
 	if err != nil {
+		var pgErr *pgconn.PgError
+		if errors.As(err, &pgErr) {
+			return nil, pgErr
+		}
 		return nil, err
 	}
 	return &ret, nil
@@ -350,6 +447,10 @@ func (r *SalesOrderRepository) GetReturn(ctx context.Context, tenantID uuid.UUID
 		&ret.Reason, &ret.Status, &ret.CreatedAt, &ret.UpdatedAt,
 	)
 	if err != nil {
+		var pgErr *pgconn.PgError
+		if errors.As(err, &pgErr) {
+			return nil, pgErr
+		}
 		return nil, err
 	}
 	return &ret, nil
@@ -365,20 +466,29 @@ func (r *SalesOrderRepository) GetReturnsByOrder(ctx context.Context, tenantID u
 		orderID,
 	)
 	if err != nil {
-		return returns, err
+		var pgErr *pgconn.PgError
+		if errors.As(err, &pgErr) {
+			return nil, pgErr
+		}
+		return nil, err
 	}
 	defer rows.Close()
 
 	for rows.Next() {
 		var ret models.Return
-		err := rows.Scan(
+		if err := rows.Scan(
 			&ret.ID, &ret.OrderID, &ret.CustomerID, &ret.ReturnNumber, &ret.TotalAmount,
 			&ret.Reason, &ret.Status, &ret.CreatedAt, &ret.UpdatedAt,
-		)
-		if err != nil {
-			continue
+		); err != nil {
+			return nil, err
 		}
 		returns = append(returns, ret)
+	}
+	if err = rows.Err(); err != nil {
+		return nil, err
+	}
+	if returns == nil {
+		returns = []models.Return{}
 	}
 	return returns, nil
 }
@@ -397,6 +507,10 @@ func (r *SalesOrderRepository) CreatePayment(ctx context.Context, tenantID uuid.
 		&payment.Status, &payment.ReferenceNumber, &payment.Notes, &payment.CreatedAt, &payment.UpdatedAt,
 	)
 	if err != nil {
+		var pgErr *pgconn.PgError
+		if errors.As(err, &pgErr) {
+			return nil, pgErr
+		}
 		return nil, err
 	}
 	return &payment, nil
@@ -412,20 +526,29 @@ func (r *SalesOrderRepository) GetPayments(ctx context.Context, tenantID uuid.UU
 		orderID,
 	)
 	if err != nil {
-		return payments, err
+		var pgErr *pgconn.PgError
+		if errors.As(err, &pgErr) {
+			return nil, pgErr
+		}
+		return nil, err
 	}
 	defer rows.Close()
 
 	for rows.Next() {
 		var payment models.Payment
-		err := rows.Scan(
+		if err := rows.Scan(
 			&payment.ID, &payment.OrderID, &payment.CustomerID, &payment.Amount, &payment.PaymentMethod,
 			&payment.Status, &payment.ReferenceNumber, &payment.Notes, &payment.CreatedAt, &payment.UpdatedAt,
-		)
-		if err != nil {
-			continue
+		); err != nil {
+			return nil, err
 		}
 		payments = append(payments, payment)
+	}
+	if err = rows.Err(); err != nil {
+		return nil, err
+	}
+	if payments == nil {
+		payments = []models.Payment{}
 	}
 	return payments, nil
 }
@@ -445,6 +568,10 @@ func (r *SalesOrderRepository) GetPaymentByID(ctx context.Context, tenantID uuid
 		&payment.Status, &payment.ReferenceNumber, &payment.Notes, &payment.CreatedAt, &payment.UpdatedAt,
 	)
 	if err != nil {
+		var pgErr *pgconn.PgError
+		if errors.As(err, &pgErr) {
+			return nil, pgErr
+		}
 		return nil, err
 	}
 	return &payment, nil

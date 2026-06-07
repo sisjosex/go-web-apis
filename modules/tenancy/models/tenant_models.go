@@ -82,6 +82,11 @@ type RemoveUserFromTenantDto struct {
 	UserID uuid.UUID `json:"user_id" binding:"required,uuidv4"`
 }
 
+// UpdateUserRoleDto for updating a user's role within a tenant
+type UpdateUserRoleDto struct {
+	Role string `json:"role" binding:"required,oneof=owner admin member" conform:"trim,lowercase"`
+}
+
 // UserTenantResponse - tenant info for user's accessible tenants
 type UserTenantResponse struct {
 	TenantID    uuid.UUID `json:"tenant_id"`

@@ -1,6 +1,7 @@
 package controllers
 
 import (
+	"errors"
 	"net/http"
 
 	"josex/web/config"
@@ -13,6 +14,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5/pgconn"
 )
 
 type TenantController struct {
@@ -348,6 +350,83 @@ func (tc *TenantController) RemoveUserFromTenant(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, gin.H{"message": "User removed from tenant successfully"})
+}
+
+// UpdateUserRole godoc
+// @Summary Update a user's role in the tenant (owner/admin only)
+// @Description Change the role of a tenant member. Only owner can assign the owner role.
+// @Tags Tenants
+// @Accept json
+// @Produce json
+// @Param tenant_slug path string true "Tenant slug"
+// @Param user_id path string true "User ID"
+// @Param request body models.UpdateUserRoleDto true "New role"
+// @Success 204
+// @Failure 400 {object} errors.ErrorResponse
+// @Failure 403 {object} errors.ErrorResponse
+// @Router /tenants/{tenant_slug}/users/{user_id}/role [patch]
+// @Security ApiKeyAuth
+func (tc *TenantController) UpdateUserRole(c *gin.Context) {
+	tenantIDStr, exists := c.Get("tenant_id")
+	if !exists {
+		c.JSON(http.StatusUnauthorized, coreErrors.BuildErrorSingle(c, tenancyErrors.TenantUserUnauthorized))
+		return
+	}
+
+	tenantID, err := uuid.Parse(tenantIDStr.(string))
+	if err != nil {
+		c.JSON(http.StatusBadRequest, coreErrors.BuildError(c, err))
+		return
+	}
+
+	requesterIDStr, exists := c.Get("user_id")
+	if !exists {
+		c.JSON(http.StatusUnauthorized, coreErrors.BuildErrorSingle(c, tenancyErrors.TenantUserUnauthorized))
+		return
+	}
+
+	requesterID, err := uuid.Parse(requesterIDStr.(string))
+	if err != nil {
+		c.JSON(http.StatusBadRequest, coreErrors.BuildError(c, err))
+		return
+	}
+
+	userID, err := uuid.Parse(c.Param("user_id"))
+	if err != nil {
+		c.JSON(http.StatusBadRequest, coreErrors.BuildErrorSingle(c, coreErrors.InvalidUUID))
+		return
+	}
+
+	var dto models.UpdateUserRoleDto
+	if err := c.ShouldBindJSON(&dto); err != nil {
+		c.JSON(http.StatusBadRequest, coreErrors.BuildErrorDetail(c, tenancyErrors.TenantUserUpdateFailed, utils.ExtractValidationError(c, err)))
+		return
+	}
+
+	err = tc.tenantService.UpdateUserRole(c.Request.Context(), tenantID, requesterID, userID, dto.Role)
+	if err != nil {
+		var pgErr *pgconn.PgError
+		if errors.As(err, &pgErr) {
+			switch pgErr.Message {
+			case "tenant.user.not-found":
+				c.JSON(http.StatusNotFound, coreErrors.BuildErrorSingle(c, tenancyErrors.TenantUserNotFound))
+				return
+			case "tenant.user.invalid-role":
+				c.JSON(http.StatusBadRequest, coreErrors.BuildErrorSingle(c, tenancyErrors.TenantUserInvalidRole))
+				return
+			case "tenant.user.not-authorized", "tenant.user.insufficient-permissions":
+				c.JSON(http.StatusForbidden, coreErrors.BuildErrorSingle(c, tenancyErrors.TenantUserInsufficientPermissions))
+				return
+			case "tenant.user.cannot-change-own-role":
+				c.JSON(http.StatusBadRequest, coreErrors.BuildErrorSingle(c, tenancyErrors.TenantUserUpdateFailed))
+				return
+			}
+		}
+		c.JSON(http.StatusInternalServerError, coreErrors.BuildError(c, err))
+		return
+	}
+
+	c.Status(http.StatusNoContent)
 }
 
 // RunTenantMigrations godoc

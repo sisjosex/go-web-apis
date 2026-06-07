@@ -56,6 +56,7 @@ func RegisterTenantRoutes(
 				adminRoutes.PATCH("", tenantController.UpdateTenant)
 				adminRoutes.POST("/users", tenantController.AddUserToTenant)
 				adminRoutes.DELETE("/users/:user_id", tenantController.RemoveUserFromTenant)
+				adminRoutes.PATCH("/users/:user_id/role", tenantController.UpdateUserRole)
 			}
 
 			// Run migrations on tenant database (super_admin only)

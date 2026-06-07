@@ -1,0 +1,18 @@
+package interfaces
+
+import (
+	"context"
+
+	"josex/web/modules/inventory/models"
+
+	"github.com/google/uuid"
+)
+
+type ProductService interface {
+	CreateProductWithVariants(ctx context.Context, tenantID uuid.UUID, dto models.CreateProductDto) (*models.CreateProductResponse, error)
+	GetProduct(ctx context.Context, tenantID uuid.UUID, productID string) (*models.ProductDetail, error)
+	GetProductBySkU(ctx context.Context, tenantID uuid.UUID, sku string) (*models.ProductDetail, error)
+	ListProducts(ctx context.Context, tenantID uuid.UUID, limit, offset int) ([]models.Product, error)
+	AddProductMedia(ctx context.Context, tenantID uuid.UUID, productID string, dto models.AddProductMediaDto) (*models.AddProductMediaResponse, error)
+	RemoveProductMedia(ctx context.Context, tenantID uuid.UUID, mediaID string) error
+}

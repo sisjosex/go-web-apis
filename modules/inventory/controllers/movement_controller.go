@@ -1,22 +1,24 @@
 package controllers
 
 import (
+	"errors"
 	"net/http"
-
-	coreErrors "josex/web/modules/core/errors"
-	"josex/web/modules/inventory/models"
-	"josex/web/modules/inventory/services"
-	"josex/web/modules/inventory/utils"
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5/pgconn"
+
+	coreErrors "josex/web/modules/core/errors"
+	inventoryErrors "josex/web/modules/inventory/errors"
+	inventoryInterfaces "josex/web/modules/inventory/interfaces"
+	"josex/web/modules/inventory/models"
 )
 
 type MovementController struct {
-	movementService *services.MovementService
+	movementService inventoryInterfaces.MovementService
 }
 
-func NewMovementController(movementService *services.MovementService) *MovementController {
+func NewMovementController(movementService inventoryInterfaces.MovementService) *MovementController {
 	return &MovementController{
 		movementService: movementService,
 	}
@@ -56,8 +58,21 @@ func (ctrl *MovementController) RecordMovement(c *gin.Context) {
 	userID := c.GetString("user_id")
 	movement, err := ctrl.movementService.RecordMovement(c.Request.Context(), tenantID, dto, &userID)
 	if err != nil {
-		status := utils.GetHTTPStatusFromError(err)
-		c.JSON(status, coreErrors.BuildError(c, err))
+		var pgErr *pgconn.PgError
+		if errors.As(err, &pgErr) {
+			switch pgErr.Message {
+			case inventoryErrors.ProductNotFound:
+				c.JSON(http.StatusNotFound, coreErrors.BuildErrorSingle(c, inventoryErrors.ProductNotFound))
+				return
+			case inventoryErrors.InsufficientStock:
+				c.JSON(http.StatusConflict, coreErrors.BuildErrorSingle(c, inventoryErrors.InsufficientStock))
+				return
+			case inventoryErrors.InvalidMovementType:
+				c.JSON(http.StatusBadRequest, coreErrors.BuildErrorSingle(c, inventoryErrors.InvalidMovementType))
+				return
+			}
+		}
+		c.JSON(http.StatusInternalServerError, coreErrors.BuildError(c, err))
 		return
 	}
 
@@ -89,8 +104,15 @@ func (ctrl *MovementController) GetMovement(c *gin.Context) {
 
 	movement, err := ctrl.movementService.GetMovement(c.Request.Context(), tenantID, movementID)
 	if err != nil {
-		status := utils.GetHTTPStatusFromError(err)
-		c.JSON(status, coreErrors.BuildError(c, err))
+		var pgErr *pgconn.PgError
+		if errors.As(err, &pgErr) {
+			switch pgErr.Message {
+			case inventoryErrors.MovementNotFound:
+				c.JSON(http.StatusNotFound, coreErrors.BuildErrorSingle(c, inventoryErrors.MovementNotFound))
+				return
+			}
+		}
+		c.JSON(http.StatusInternalServerError, coreErrors.BuildError(c, err))
 		return
 	}
 
@@ -122,8 +144,15 @@ func (ctrl *MovementController) GetProductStock(c *gin.Context) {
 
 	stock, err := ctrl.movementService.GetProductStock(c.Request.Context(), tenantID, productID)
 	if err != nil {
-		status := utils.GetHTTPStatusFromError(err)
-		c.JSON(status, coreErrors.BuildError(c, err))
+		var pgErr *pgconn.PgError
+		if errors.As(err, &pgErr) {
+			switch pgErr.Message {
+			case inventoryErrors.ProductNotFound:
+				c.JSON(http.StatusNotFound, coreErrors.BuildErrorSingle(c, inventoryErrors.ProductNotFound))
+				return
+			}
+		}
+		c.JSON(http.StatusInternalServerError, coreErrors.BuildError(c, err))
 		return
 	}
 

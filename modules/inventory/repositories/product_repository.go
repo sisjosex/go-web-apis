@@ -3,12 +3,14 @@ package repositories
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"log"
 
 	"josex/web/modules/core/services"
 	"josex/web/modules/inventory/models"
 
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5/pgconn"
 )
 
 type ProductRepository struct {
@@ -43,6 +45,10 @@ func (r *ProductRepository) CreateProductWithVariants(
 		if r.logger != nil {
 			r.logger.Printf("❌ Error creating product: %v", err)
 		}
+		var pgErr *pgconn.PgError
+		if errors.As(err, &pgErr) {
+			return nil, pgErr
+		}
 		return nil, err
 	}
 
@@ -71,6 +77,10 @@ func (r *ProductRepository) GetProduct(ctx context.Context, tenantID uuid.UUID, 
 		if r.logger != nil {
 			r.logger.Printf("❌ Error getting product: %v", err)
 		}
+		var pgErr *pgconn.PgError
+		if errors.As(err, &pgErr) {
+			return nil, pgErr
+		}
 		return nil, err
 	}
 
@@ -91,6 +101,10 @@ func (r *ProductRepository) GetProductWithVariants(ctx context.Context, tenantID
 	if err != nil {
 		if r.logger != nil {
 			r.logger.Printf("❌ Error getting product with variants: %v", err)
+		}
+		var pgErr *pgconn.PgError
+		if errors.As(err, &pgErr) {
+			return nil, pgErr
 		}
 		return nil, err
 	}
@@ -130,6 +144,10 @@ func (r *ProductRepository) GetProductBySkU(ctx context.Context, tenantID uuid.U
 		if r.logger != nil {
 			r.logger.Printf("❌ Error getting product by SKU: %v", err)
 		}
+		var pgErr *pgconn.PgError
+		if errors.As(err, &pgErr) {
+			return nil, pgErr
+		}
 		return nil, err
 	}
 
@@ -164,6 +182,10 @@ func (r *ProductRepository) AddProductMedia(ctx context.Context, tenantID uuid.U
 		if r.logger != nil {
 			r.logger.Printf("❌ Error adding product media: %v", err)
 		}
+		var pgErr *pgconn.PgError
+		if errors.As(err, &pgErr) {
+			return nil, pgErr
+		}
 		return nil, err
 	}
 
@@ -183,6 +205,10 @@ func (r *ProductRepository) RemoveProductMedia(ctx context.Context, tenantID uui
 		if r.logger != nil {
 			r.logger.Printf("❌ Error removing product media: %v", err)
 		}
+		var pgErr *pgconn.PgError
+		if errors.As(err, &pgErr) {
+			return pgErr
+		}
 		return err
 	}
 
@@ -200,6 +226,10 @@ func (r *ProductRepository) ListProducts(ctx context.Context, tenantID uuid.UUID
 		if r.logger != nil {
 			r.logger.Printf("❌ Error listing products: %v", err)
 		}
+		var pgErr *pgconn.PgError
+		if errors.As(err, &pgErr) {
+			return nil, pgErr
+		}
 		return nil, err
 	}
 	defer rows.Close()
@@ -208,12 +238,15 @@ func (r *ProductRepository) ListProducts(ctx context.Context, tenantID uuid.UUID
 	for rows.Next() {
 		var p models.Product
 		if err := rows.Scan(&p.ID, &p.SKU, &p.Name, &p.Description, &p.BasePrice, &p.HasVariants, &p.Status, &p.CreatedAt); err != nil {
-			if r.logger != nil {
-				r.logger.Printf("❌ Error scanning product: %v", err)
-			}
-			continue
+			return nil, err
 		}
 		products = append(products, p)
+	}
+	if err = rows.Err(); err != nil {
+		return nil, err
+	}
+	if products == nil {
+		products = []models.Product{}
 	}
 
 	return products, nil

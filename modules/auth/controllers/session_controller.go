@@ -1,12 +1,13 @@
 package controllers
 
 import (
-	authInterfaces "josex/web/modules/auth/interfaces"
-	coreErrors "josex/web/modules/core/errors"
 	"net/http"
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
+
+	authInterfaces "josex/web/modules/auth/interfaces"
+	coreErrors "josex/web/modules/core/errors"
 )
 
 type SessionController struct {
@@ -41,7 +42,7 @@ func (sc *SessionController) GetActiveSessions(c *gin.Context) {
 
 	sessions, err := sc.authService.GetUserSessions(userID)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, coreErrors.BuildError(c, err))
+		c.JSON(http.StatusInternalServerError, coreErrors.BuildError(c, err))
 		return
 	}
 
@@ -78,7 +79,7 @@ func (sc *SessionController) LogoutSession(c *gin.Context) {
 
 	err = sc.authService.LogoutSession(userID, sessionID)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, coreErrors.BuildError(c, err))
+		c.JSON(http.StatusInternalServerError, coreErrors.BuildError(c, err))
 		return
 	}
 
@@ -117,7 +118,7 @@ func (sc *SessionController) LogoutAllSessions(c *gin.Context) {
 
 	count, err := sc.authService.LogoutAllSessions(userID, currentSessionID)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, coreErrors.BuildError(c, err))
+		c.JSON(http.StatusInternalServerError, coreErrors.BuildError(c, err))
 		return
 	}
 

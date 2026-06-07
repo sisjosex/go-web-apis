@@ -1,23 +1,24 @@
 package controllers
 
 import (
-	"fmt"
+	"errors"
 	"net/http"
-
-	coreErrors "josex/web/modules/core/errors"
-	"josex/web/modules/inventory/models"
-	"josex/web/modules/inventory/services"
-	"josex/web/modules/inventory/utils"
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5/pgconn"
+
+	coreErrors "josex/web/modules/core/errors"
+	inventoryErrors "josex/web/modules/inventory/errors"
+	inventoryInterfaces "josex/web/modules/inventory/interfaces"
+	"josex/web/modules/inventory/models"
 )
 
 type StockController struct {
-	stockService *services.StockService
+	stockService inventoryInterfaces.StockService
 }
 
-func NewStockController(stockService *services.StockService) *StockController {
+func NewStockController(stockService inventoryInterfaces.StockService) *StockController {
 	return &StockController{
 		stockService: stockService,
 	}
@@ -58,8 +59,15 @@ func (ctrl *StockController) UpdateReorderLevel(c *gin.Context) {
 	userID := c.GetString("user_id")
 	result, err := ctrl.stockService.UpdateReorderLevel(c.Request.Context(), tenantID, productID, dto.ReorderLevel, &userID)
 	if err != nil {
-		status := utils.GetHTTPStatusFromError(err)
-		c.JSON(status, coreErrors.BuildError(c, err))
+		var pgErr *pgconn.PgError
+		if errors.As(err, &pgErr) {
+			switch pgErr.Message {
+			case inventoryErrors.ProductNotFound:
+				c.JSON(http.StatusNotFound, coreErrors.BuildErrorSingle(c, inventoryErrors.ProductNotFound))
+				return
+			}
+		}
+		c.JSON(http.StatusInternalServerError, coreErrors.BuildError(c, err))
 		return
 	}
 
@@ -72,11 +80,11 @@ func (ctrl *StockController) UpdateReorderLevel(c *gin.Context) {
 // @Tags inventory
 // @Accept json
 // @Produce json
-// @Param request body map[string]interface{} true "Reserve request"
+// @Param request body models.ReserveStockDto true "Reserve request"
 // @Success 200 {object} models.StockReservationResponse
-// @Failure 400 {object} map[string]interface{}
-// @Failure 404 {object} map[string]interface{}
-// @Failure 409 {object} map[string]interface{}
+// @Failure 400 {object} map[string]string
+// @Failure 404 {object} map[string]string
+// @Failure 409 {object} map[string]string
 // @Router /api/v1/inventory/reserve [post]
 func (ctrl *StockController) ReserveStock(c *gin.Context) {
 	tenantIDRaw, exists := c.Get("tenant_id")
@@ -90,41 +98,26 @@ func (ctrl *StockController) ReserveStock(c *gin.Context) {
 		return
 	}
 
-	var body map[string]interface{}
-	if err := c.ShouldBindJSON(&body); err != nil {
-		c.JSON(http.StatusBadRequest, coreErrors.BuildErrorDetail(c, "validation.invalid", err.Error()))
+	var dto models.ReserveStockDto
+	if err := c.ShouldBindJSON(&dto); err != nil {
+		c.JSON(http.StatusBadRequest, coreErrors.BuildErrorDetail(c, inventoryErrors.InsufficientStock, err.Error()))
 		return
 	}
 
-	// Extract and validate fields
-	productIDVal, ok := body["product_id"]
-	if !ok {
-		c.JSON(http.StatusBadRequest, coreErrors.BuildErrorDetail(c, "validation.required", "product_id is required"))
-		return
-	}
-
-	quantityVal, ok := body["quantity"]
-	if !ok {
-		c.JSON(http.StatusBadRequest, coreErrors.BuildErrorDetail(c, "validation.required", "quantity is required"))
-		return
-	}
-
-	productID := fmt.Sprintf("%v", productIDVal)
-	quantity, ok := quantityVal.(float64)
-	if !ok {
-		c.JSON(http.StatusBadRequest, coreErrors.BuildErrorDetail(c, "validation.invalid", "quantity must be a number"))
-		return
-	}
-
-	if quantity <= 0 {
-		c.JSON(http.StatusBadRequest, coreErrors.BuildErrorDetail(c, "validation.invalid", "quantity must be greater than 0"))
-		return
-	}
-
-	result, err := ctrl.stockService.ReserveStock(c.Request.Context(), tenantID, productID, quantity)
+	result, err := ctrl.stockService.ReserveStock(c.Request.Context(), tenantID, dto.ProductID, dto.Quantity)
 	if err != nil {
-		status := utils.GetHTTPStatusFromError(err)
-		c.JSON(status, coreErrors.BuildError(c, err))
+		var pgErr *pgconn.PgError
+		if errors.As(err, &pgErr) {
+			switch pgErr.Message {
+			case inventoryErrors.ProductNotFound:
+				c.JSON(http.StatusNotFound, coreErrors.BuildErrorSingle(c, inventoryErrors.ProductNotFound))
+				return
+			case inventoryErrors.InsufficientStock:
+				c.JSON(http.StatusConflict, coreErrors.BuildErrorSingle(c, inventoryErrors.InsufficientStock))
+				return
+			}
+		}
+		c.JSON(http.StatusInternalServerError, coreErrors.BuildError(c, err))
 		return
 	}
 
@@ -137,10 +130,10 @@ func (ctrl *StockController) ReserveStock(c *gin.Context) {
 // @Tags inventory
 // @Accept json
 // @Produce json
-// @Param request body map[string]interface{} true "Release request"
+// @Param request body models.ReleaseReservedStockDto true "Release request"
 // @Success 200 {object} models.StockReservationResponse
-// @Failure 400 {object} map[string]interface{}
-// @Failure 404 {object} map[string]interface{}
+// @Failure 400 {object} map[string]string
+// @Failure 404 {object} map[string]string
 // @Router /api/v1/inventory/release-reserved [post]
 func (ctrl *StockController) ReleaseReservedStock(c *gin.Context) {
 	tenantIDRaw, exists := c.Get("tenant_id")
@@ -154,41 +147,23 @@ func (ctrl *StockController) ReleaseReservedStock(c *gin.Context) {
 		return
 	}
 
-	var body map[string]interface{}
-	if err := c.ShouldBindJSON(&body); err != nil {
-		c.JSON(http.StatusBadRequest, coreErrors.BuildErrorDetail(c, "validation.invalid", err.Error()))
+	var dto models.ReleaseReservedStockDto
+	if err := c.ShouldBindJSON(&dto); err != nil {
+		c.JSON(http.StatusBadRequest, coreErrors.BuildErrorDetail(c, inventoryErrors.InsufficientStock, err.Error()))
 		return
 	}
 
-	// Extract and validate fields
-	productIDVal, ok := body["product_id"]
-	if !ok {
-		c.JSON(http.StatusBadRequest, coreErrors.BuildErrorDetail(c, "validation.required", "product_id is required"))
-		return
-	}
-
-	quantityVal, ok := body["quantity"]
-	if !ok {
-		c.JSON(http.StatusBadRequest, coreErrors.BuildErrorDetail(c, "validation.required", "quantity is required"))
-		return
-	}
-
-	productID := fmt.Sprintf("%v", productIDVal)
-	quantity, ok := quantityVal.(float64)
-	if !ok {
-		c.JSON(http.StatusBadRequest, coreErrors.BuildErrorDetail(c, "validation.invalid", "quantity must be a number"))
-		return
-	}
-
-	if quantity <= 0 {
-		c.JSON(http.StatusBadRequest, coreErrors.BuildErrorDetail(c, "validation.invalid", "quantity must be greater than 0"))
-		return
-	}
-
-	result, err := ctrl.stockService.ReleaseReservedStock(c.Request.Context(), tenantID, productID, quantity)
+	result, err := ctrl.stockService.ReleaseReservedStock(c.Request.Context(), tenantID, dto.ProductID, dto.Quantity)
 	if err != nil {
-		status := utils.GetHTTPStatusFromError(err)
-		c.JSON(status, coreErrors.BuildError(c, err))
+		var pgErr *pgconn.PgError
+		if errors.As(err, &pgErr) {
+			switch pgErr.Message {
+			case inventoryErrors.ProductNotFound:
+				c.JSON(http.StatusNotFound, coreErrors.BuildErrorSingle(c, inventoryErrors.ProductNotFound))
+				return
+			}
+		}
+		c.JSON(http.StatusInternalServerError, coreErrors.BuildError(c, err))
 		return
 	}
 

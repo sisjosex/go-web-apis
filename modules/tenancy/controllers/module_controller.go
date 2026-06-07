@@ -64,8 +64,10 @@ func (mc *ModuleController) GetTenantModules(c *gin.Context) {
 		Name        string   `json:"name,omitempty"`
 		Description string   `json:"description,omitempty"`
 		Icon        string   `json:"icon,omitempty"`
+		Route       string   `json:"route,omitempty"`
 		Category    string   `json:"category,omitempty"`
 		Features    []string `json:"features,omitempty"`
+		AdminOnly   bool     `json:"admin_only,omitempty"`
 	}
 
 	result := make([]EnrichedModule, 0, len(tenantModules))
@@ -82,8 +84,10 @@ func (mc *ModuleController) GetTenantModules(c *gin.Context) {
 			em.Name = desc.Name
 			em.Description = desc.Description
 			em.Icon = desc.Icon
+			em.Route = desc.Route
 			em.Category = desc.Category
 			em.Features = desc.Features
+			em.AdminOnly = desc.AdminOnly
 		}
 		result = append(result, em)
 	}

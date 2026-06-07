@@ -1,25 +1,26 @@
 package controllers
 
 import (
+	"errors"
 	"net/http"
 	"strconv"
 
+	"github.com/gin-gonic/gin"
+	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
+
 	coreErrors "josex/web/modules/core/errors"
 	inventoryErrors "josex/web/modules/inventory/errors"
+	inventoryInterfaces "josex/web/modules/inventory/interfaces"
 	"josex/web/modules/inventory/models"
-	"josex/web/modules/inventory/services"
-	"josex/web/modules/inventory/utils"
-
-	"github.com/google/uuid"
-
-	"github.com/gin-gonic/gin"
 )
 
 type CategoryController struct {
-	categoryService *services.CategoryService
+	categoryService inventoryInterfaces.CategoryService
 }
 
-func NewCategoryController(categoryService *services.CategoryService) *CategoryController {
+func NewCategoryController(categoryService inventoryInterfaces.CategoryService) *CategoryController {
 	return &CategoryController{
 		categoryService: categoryService,
 	}
@@ -57,8 +58,18 @@ func (ctrl *CategoryController) CreateCategory(c *gin.Context) {
 
 	category, err := ctrl.categoryService.CreateCategory(c.Request.Context(), tenantID, &dto)
 	if err != nil {
-		status := utils.GetHTTPStatusFromError(err)
-		c.JSON(status, coreErrors.BuildError(c, err))
+		var pgErr *pgconn.PgError
+		if errors.As(err, &pgErr) {
+			switch pgErr.Message {
+			case inventoryErrors.CategorySlugAlreadyExists:
+				c.JSON(http.StatusConflict, coreErrors.BuildErrorSingle(c, inventoryErrors.CategorySlugAlreadyExists))
+				return
+			case inventoryErrors.CategoryParentNotFound:
+				c.JSON(http.StatusNotFound, coreErrors.BuildErrorSingle(c, inventoryErrors.CategoryParentNotFound))
+				return
+			}
+		}
+		c.JSON(http.StatusInternalServerError, coreErrors.BuildError(c, err))
 		return
 	}
 
@@ -113,8 +124,21 @@ func (ctrl *CategoryController) UpdateCategory(c *gin.Context) {
 
 	category, err := ctrl.categoryService.UpdateCategory(c.Request.Context(), tenantID, categoryID, &dto)
 	if err != nil {
-		status := utils.GetHTTPStatusFromError(err)
-		c.JSON(status, coreErrors.BuildError(c, err))
+		var pgErr *pgconn.PgError
+		if errors.As(err, &pgErr) {
+			switch pgErr.Message {
+			case inventoryErrors.CategoryNotFound:
+				c.JSON(http.StatusNotFound, coreErrors.BuildErrorSingle(c, inventoryErrors.CategoryNotFound))
+				return
+			case inventoryErrors.CategorySlugAlreadyExists:
+				c.JSON(http.StatusConflict, coreErrors.BuildErrorSingle(c, inventoryErrors.CategorySlugAlreadyExists))
+				return
+			case inventoryErrors.CategoryCircularHierarchy:
+				c.JSON(http.StatusBadRequest, coreErrors.BuildErrorSingle(c, inventoryErrors.CategoryCircularHierarchy))
+				return
+			}
+		}
+		c.JSON(http.StatusInternalServerError, coreErrors.BuildError(c, err))
 		return
 	}
 
@@ -161,8 +185,18 @@ func (ctrl *CategoryController) DeleteCategory(c *gin.Context) {
 
 	_, err = ctrl.categoryService.DeleteCategory(c.Request.Context(), tenantID, categoryID)
 	if err != nil {
-		status := utils.GetHTTPStatusFromError(err)
-		c.JSON(status, coreErrors.BuildError(c, err))
+		var pgErr *pgconn.PgError
+		if errors.As(err, &pgErr) {
+			switch pgErr.Message {
+			case inventoryErrors.CategoryNotFound:
+				c.JSON(http.StatusNotFound, coreErrors.BuildErrorSingle(c, inventoryErrors.CategoryNotFound))
+				return
+			case inventoryErrors.CategoryHasProducts:
+				c.JSON(http.StatusBadRequest, coreErrors.BuildErrorSingle(c, inventoryErrors.CategoryHasProducts))
+				return
+			}
+		}
+		c.JSON(http.StatusInternalServerError, coreErrors.BuildError(c, err))
 		return
 	}
 
@@ -194,8 +228,19 @@ func (ctrl *CategoryController) GetCategory(c *gin.Context) {
 
 	category, err := ctrl.categoryService.GetCategory(c.Request.Context(), tenantID, categoryID)
 	if err != nil {
-		status := utils.GetHTTPStatusFromError(err)
-		c.JSON(status, coreErrors.BuildError(c, err))
+		var pgErr *pgconn.PgError
+		if errors.As(err, &pgErr) {
+			switch pgErr.Message {
+			case inventoryErrors.CategoryNotFound:
+				c.JSON(http.StatusNotFound, coreErrors.BuildErrorSingle(c, inventoryErrors.CategoryNotFound))
+				return
+			}
+		}
+		if errors.Is(err, pgx.ErrNoRows) {
+			c.JSON(http.StatusNotFound, coreErrors.BuildErrorSingle(c, inventoryErrors.CategoryNotFound))
+			return
+		}
+		c.JSON(http.StatusInternalServerError, coreErrors.BuildError(c, err))
 		return
 	}
 
@@ -268,8 +313,7 @@ func (ctrl *CategoryController) ListCategories(c *gin.Context) {
 
 	categories, err := ctrl.categoryService.ListCategories(c.Request.Context(), tenantID, parentIDPtr, isActive, limit, offset)
 	if err != nil {
-		status := utils.GetHTTPStatusFromError(err)
-		c.JSON(status, coreErrors.BuildError(c, err))
+		c.JSON(http.StatusInternalServerError, coreErrors.BuildError(c, err))
 		return
 	}
 
@@ -338,8 +382,7 @@ func (ctrl *CategoryController) SearchCategories(c *gin.Context) {
 
 	categories, err := ctrl.categoryService.SearchCategories(c.Request.Context(), tenantID, searchTerm, isActive, limit)
 	if err != nil {
-		status := utils.GetHTTPStatusFromError(err)
-		c.JSON(status, coreErrors.BuildError(c, err))
+		c.JSON(http.StatusInternalServerError, coreErrors.BuildError(c, err))
 		return
 	}
 
@@ -391,8 +434,21 @@ func (ctrl *CategoryController) AssignProductToCategory(c *gin.Context) {
 
 	err = ctrl.categoryService.AssignProductToCategory(c.Request.Context(), tenantID, productID, categoryID)
 	if err != nil {
-		status := utils.GetHTTPStatusFromError(err)
-		c.JSON(status, coreErrors.BuildError(c, err))
+		var pgErr *pgconn.PgError
+		if errors.As(err, &pgErr) {
+			switch pgErr.Message {
+			case inventoryErrors.CategoryNotFound:
+				c.JSON(http.StatusNotFound, coreErrors.BuildErrorSingle(c, inventoryErrors.CategoryNotFound))
+				return
+			case inventoryErrors.ProductNotFound:
+				c.JSON(http.StatusNotFound, coreErrors.BuildErrorSingle(c, inventoryErrors.ProductNotFound))
+				return
+			case inventoryErrors.ProductAlreadyInCategory:
+				c.JSON(http.StatusConflict, coreErrors.BuildErrorSingle(c, inventoryErrors.ProductAlreadyInCategory))
+				return
+			}
+		}
+		c.JSON(http.StatusInternalServerError, coreErrors.BuildError(c, err))
 		return
 	}
 
@@ -427,8 +483,18 @@ func (ctrl *CategoryController) RemoveProductFromCategory(c *gin.Context) {
 
 	err = ctrl.categoryService.RemoveProductFromCategory(c.Request.Context(), tenantID, productID, categoryID)
 	if err != nil {
-		status := utils.GetHTTPStatusFromError(err)
-		c.JSON(status, coreErrors.BuildError(c, err))
+		var pgErr *pgconn.PgError
+		if errors.As(err, &pgErr) {
+			switch pgErr.Message {
+			case inventoryErrors.CategoryNotFound:
+				c.JSON(http.StatusNotFound, coreErrors.BuildErrorSingle(c, inventoryErrors.CategoryNotFound))
+				return
+			case inventoryErrors.ProductNotFound:
+				c.JSON(http.StatusNotFound, coreErrors.BuildErrorSingle(c, inventoryErrors.ProductNotFound))
+				return
+			}
+		}
+		c.JSON(http.StatusInternalServerError, coreErrors.BuildError(c, err))
 		return
 	}
 
@@ -478,8 +544,15 @@ func (ctrl *CategoryController) GetProductsByCategory(c *gin.Context) {
 
 	products, err := ctrl.categoryService.GetProductsByCategory(c.Request.Context(), tenantID, categoryID, limit, offset)
 	if err != nil {
-		status := utils.GetHTTPStatusFromError(err)
-		c.JSON(status, coreErrors.BuildError(c, err))
+		var pgErr *pgconn.PgError
+		if errors.As(err, &pgErr) {
+			switch pgErr.Message {
+			case inventoryErrors.CategoryNotFound:
+				c.JSON(http.StatusNotFound, coreErrors.BuildErrorSingle(c, inventoryErrors.CategoryNotFound))
+				return
+			}
+		}
+		c.JSON(http.StatusInternalServerError, coreErrors.BuildError(c, err))
 		return
 	}
 
@@ -502,23 +575,3 @@ func uuidPtrToStringPtr(id *uuid.UUID) *string {
 	return nil
 }
 
-// Error mapping utility for categories
-func mapCategoryError(err error) (int, string) {
-	errStr := err.Error()
-	switch errStr {
-	case inventoryErrors.CategoryNotFound:
-		return http.StatusNotFound, inventoryErrors.CategoryNotFound
-	case inventoryErrors.ProductNotFound:
-		return http.StatusNotFound, inventoryErrors.ProductNotFound
-	case inventoryErrors.CategorySlugAlreadyExists:
-		return http.StatusConflict, inventoryErrors.CategorySlugAlreadyExists
-	case inventoryErrors.CategoryCircularHierarchy:
-		return http.StatusBadRequest, inventoryErrors.CategoryCircularHierarchy
-	case inventoryErrors.CategoryHasProducts:
-		return http.StatusBadRequest, inventoryErrors.CategoryHasProducts
-	case inventoryErrors.ProductAlreadyInCategory:
-		return http.StatusConflict, inventoryErrors.ProductAlreadyInCategory
-	default:
-		return http.StatusInternalServerError, ""
-	}
-}

@@ -36,6 +36,10 @@ func (s *userService) SoftDeleteUser(userID uuid.UUID) error {
 	return s.userRepository.SoftDeleteUser(userID)
 }
 
+func (s *userService) GetStats(tenantID uuid.UUID, excludeUserID *uuid.UUID) (*userModels.UserStatsResponse, error) {
+	return s.userRepository.GetStats(tenantID, excludeUserID)
+}
+
 func (s *userService) AssignToTenant(tenantID, requesterID, userID uuid.UUID, role string) error {
 	return s.userRepository.AssignToTenant(tenantID, requesterID, userID, role)
 }
