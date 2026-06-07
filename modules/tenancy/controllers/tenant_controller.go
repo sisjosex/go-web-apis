@@ -38,7 +38,7 @@ func NewTenantController(tenantService interfaces.TenantService, billingService 
 // @Produce json
 // @Param request body models.CreateTenantDto true "Tenant data"
 // @Success 201 {object} models.TenantDetailResponse
-// @Failure 400 {object} errors.ErrorResponse
+// @Failure 400 {object} coreErrors.ErrorResponse
 // @Router /tenants [post]
 // @Security ApiKeyAuth
 func (tc *TenantController) CreateTenant(c *gin.Context) {
@@ -86,8 +86,8 @@ func (tc *TenantController) CreateTenant(c *gin.Context) {
 // @Produce json
 // @Param request body models.CreateTenantDto true "Tenant data"
 // @Success 201 {object} models.TenantDetailResponse
-// @Failure 400 {object} errors.ErrorResponse
-// @Failure 403 {object} errors.ErrorResponse
+// @Failure 400 {object} coreErrors.ErrorResponse
+// @Failure 403 {object} coreErrors.ErrorResponse
 // @Router /tenants/self-service [post]
 // @Security ApiKeyAuth
 func (tc *TenantController) CreateTenantSelfService(c *gin.Context) {
@@ -173,7 +173,7 @@ func (tc *TenantController) CreateTenantSelfService(c *gin.Context) {
 // @Tags Tenants
 // @Produce json
 // @Success 200 {array} models.UserTenantResponse
-// @Failure 401 {object} errors.ErrorResponse
+// @Failure 401 {object} coreErrors.ErrorResponse
 // @Router /tenants/my-tenants [get]
 // @Security ApiKeyAuth
 func (tc *TenantController) GetUserTenants(c *gin.Context) {
@@ -214,7 +214,7 @@ func (tc *TenantController) GetUserTenants(c *gin.Context) {
 // @Param tenant_slug path string true "Tenant slug"
 // @Param request body models.UpdateTenantDto true "Updated tenant data"
 // @Success 200 {object} models.TenantDetailResponse
-// @Failure 400 {object} errors.ErrorResponse
+// @Failure 400 {object} coreErrors.ErrorResponse
 // @Router /tenants/{tenant_slug} [patch]
 // @Security ApiKeyAuth
 func (tc *TenantController) UpdateTenant(c *gin.Context) {
@@ -254,7 +254,7 @@ func (tc *TenantController) UpdateTenant(c *gin.Context) {
 // @Param tenant_slug path string true "Tenant slug"
 // @Param request body models.AddUserToTenantDto true "User and role data"
 // @Success 200 {object} map[string]string
-// @Failure 400 {object} errors.ErrorResponse
+// @Failure 400 {object} coreErrors.ErrorResponse
 // @Router /tenants/{tenant_slug}/users [post]
 // @Security ApiKeyAuth
 func (tc *TenantController) AddUserToTenant(c *gin.Context) {
@@ -307,7 +307,7 @@ func (tc *TenantController) AddUserToTenant(c *gin.Context) {
 // @Param tenant_slug path string true "Tenant slug"
 // @Param user_id path string true "User ID"
 // @Success 200 {object} map[string]string
-// @Failure 400 {object} errors.ErrorResponse
+// @Failure 400 {object} coreErrors.ErrorResponse
 // @Router /tenants/{tenant_slug}/users/{user_id} [delete]
 // @Security ApiKeyAuth
 func (tc *TenantController) RemoveUserFromTenant(c *gin.Context) {
@@ -362,8 +362,8 @@ func (tc *TenantController) RemoveUserFromTenant(c *gin.Context) {
 // @Param user_id path string true "User ID"
 // @Param request body models.UpdateUserRoleDto true "New role"
 // @Success 204
-// @Failure 400 {object} errors.ErrorResponse
-// @Failure 403 {object} errors.ErrorResponse
+// @Failure 400 {object} coreErrors.ErrorResponse
+// @Failure 403 {object} coreErrors.ErrorResponse
 // @Router /tenants/{tenant_slug}/users/{user_id}/role [patch]
 // @Security ApiKeyAuth
 func (tc *TenantController) UpdateUserRole(c *gin.Context) {
@@ -436,9 +436,9 @@ func (tc *TenantController) UpdateUserRole(c *gin.Context) {
 // @Produce json
 // @Param tenant_slug path string true "Tenant slug"
 // @Success 200 {object} map[string]string
-// @Failure 400 {object} errors.ErrorResponse
-// @Failure 403 {object} errors.ErrorResponse
-// @Failure 404 {object} errors.ErrorResponse
+// @Failure 400 {object} coreErrors.ErrorResponse
+// @Failure 403 {object} coreErrors.ErrorResponse
+// @Failure 404 {object} coreErrors.ErrorResponse
 // @Router /tenants/{tenant_slug}/migrate [post]
 // @Security ApiKeyAuth
 func (tc *TenantController) RunTenantMigrations(c *gin.Context) {

@@ -31,8 +31,8 @@ func NewBillingController(billingService billingInterfaces.BillingService) *Bill
 // @Tags Billing
 // @Produce json
 // @Param Authorization header string true "Bearer Token"
-// @Success 200 {object} models.PlanInfo
-// @Failure 401 {object} errors.ErrorResponse
+// @Success 200 {object} billingModels.PlanInfo
+// @Failure 401 {object} coreErrors.ErrorResponse
 // @Router /billing/plan [get]
 // @Security ApiKeyAuth
 func (ctrl *BillingController) GetPlanInfo(c *gin.Context) {
@@ -57,8 +57,8 @@ func (ctrl *BillingController) GetPlanInfo(c *gin.Context) {
 // @Tags Billing
 // @Produce json
 // @Param Authorization header string true "Bearer Token"
-// @Success 200 {object} models.Subscription
-// @Failure 401 {object} errors.ErrorResponse
+// @Success 200 {object} billingModels.Subscription
+// @Failure 401 {object} coreErrors.ErrorResponse
 // @Router /billing/subscription [get]
 // @Security ApiKeyAuth
 func (ctrl *BillingController) GetSubscription(c *gin.Context) {
@@ -89,10 +89,10 @@ func (ctrl *BillingController) GetSubscription(c *gin.Context) {
 // @Accept json
 // @Produce json
 // @Param Authorization header string true "Bearer Token"
-// @Param request body models.UpsertSubscriptionDto true "Subscription details"
-// @Success 200 {object} models.Subscription
-// @Failure 400 {object} errors.ErrorResponse
-// @Failure 401 {object} errors.ErrorResponse
+// @Param request body billingModels.UpsertSubscriptionDto true "Subscription details"
+// @Success 200 {object} billingModels.Subscription
+// @Failure 400 {object} coreErrors.ErrorResponse
+// @Failure 401 {object} coreErrors.ErrorResponse
 // @Router /billing/subscription [put]
 // @Security ApiKeyAuth
 func (ctrl *BillingController) UpsertSubscription(c *gin.Context) {
@@ -124,10 +124,10 @@ func (ctrl *BillingController) UpsertSubscription(c *gin.Context) {
 // @Accept json
 // @Produce json
 // @Param Authorization header string true "Bearer Token"
-// @Param request body models.RecordPaymentDto true "Payment details"
-// @Success 201 {object} models.Payment
-// @Failure 400 {object} errors.ErrorResponse
-// @Failure 401 {object} errors.ErrorResponse
+// @Param request body billingModels.RecordPaymentDto true "Payment details"
+// @Success 201 {object} billingModels.Payment
+// @Failure 400 {object} coreErrors.ErrorResponse
+// @Failure 401 {object} coreErrors.ErrorResponse
 // @Router /billing/payments [post]
 // @Security ApiKeyAuth
 func (ctrl *BillingController) RecordPayment(c *gin.Context) {
@@ -160,8 +160,8 @@ func (ctrl *BillingController) RecordPayment(c *gin.Context) {
 // @Param Authorization header string true "Bearer Token"
 // @Param page  query int false "Page number (default: 1)"
 // @Param limit query int false "Items per page"
-// @Success 200 {object} models.PaymentListResponse
-// @Failure 401 {object} errors.ErrorResponse
+// @Success 200 {object} billingModels.PaymentListResponse
+// @Failure 401 {object} coreErrors.ErrorResponse
 // @Router /billing/payments [get]
 // @Security ApiKeyAuth
 func (ctrl *BillingController) ListPayments(c *gin.Context) {

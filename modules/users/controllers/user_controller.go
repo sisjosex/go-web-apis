@@ -12,12 +12,16 @@ import (
 
 	"josex/web/config"
 	coreErrors "josex/web/modules/core/errors"
+	coreModels "josex/web/modules/core/models"
 	coreServices "josex/web/modules/core/services"
 	"josex/web/modules/core/utils"
 	usersErrors "josex/web/modules/users/errors"
 	userInterfaces "josex/web/modules/users/interfaces"
 	userModels "josex/web/modules/users/models"
 )
+
+// Ensure coreModels is used (for Swagger annotations)
+var _ coreModels.User
 
 type UserController struct {
 	userService  userInterfaces.UserService
@@ -137,9 +141,9 @@ func (uc *UserController) Update(c *gin.Context) {
 // @Param status query string false "Filter by status" Enums(active, inactive, expired)
 // @Param sort query string false "Sort field (default: created_at)" Enums(created_at, email, first_name, last_name)
 // @Param order query string false "Sort order (default: desc)" Enums(asc, desc)
-// @Success 200 {object} models.UserListResponse
-// @Failure 400 {object} errors.ErrorResponse
-// @Failure 401 {object} errors.ErrorResponse
+// @Success 200 {object} userModels.UserListResponse
+// @Failure 400 {object} coreErrors.ErrorResponse
+// @Failure 401 {object} coreErrors.ErrorResponse
 // @Router /users [get]
 // @Security ApiKeyAuth
 func (uc *UserController) GetStats(c *gin.Context) {
@@ -226,10 +230,10 @@ func (uc *UserController) ListUsers(c *gin.Context) {
 // @Produce  json
 // @Param Authorization header string true "Bearer Token"
 // @Param id path string true "User ID (UUID)"
-// @Success 200 {object} models.User
-// @Failure 400 {object} errors.ErrorResponse
-// @Failure 401 {object} errors.ErrorResponse
-// @Failure 404 {object} errors.ErrorResponse
+// @Success 200 {object} coreModels.User
+// @Failure 400 {object} coreErrors.ErrorResponse
+// @Failure 401 {object} coreErrors.ErrorResponse
+// @Failure 404 {object} coreErrors.ErrorResponse
 // @Router /users/{id} [get]
 // @Security ApiKeyAuth
 func (uc *UserController) GetUserById(c *gin.Context) {
@@ -257,12 +261,12 @@ func (uc *UserController) GetUserById(c *gin.Context) {
 // @Produce  json
 // @Param Authorization header string true "Bearer Token"
 // @Param id path string true "User ID (UUID)"
-// @Param request body models.SoftDeleteUserDto false "Deletion details"
+// @Param request body userModels.SoftDeleteUserDto false "Deletion details"
 // @Success 200 {object} map[string]bool
-// @Failure 400 {object} errors.ErrorResponse
-// @Failure 401 {object} errors.ErrorResponse
-// @Failure 403 {object} errors.ErrorResponse "User deletion is disabled"
-// @Failure 404 {object} errors.ErrorResponse
+// @Failure 400 {object} coreErrors.ErrorResponse
+// @Failure 401 {object} coreErrors.ErrorResponse
+// @Failure 403 {object} coreErrors.ErrorResponse "User deletion is disabled"
+// @Failure 404 {object} coreErrors.ErrorResponse
 // @Router /users/{id} [delete]
 // @Security ApiKeyAuth
 func (uc *UserController) SoftDeleteUser(c *gin.Context) {

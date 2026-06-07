@@ -81,9 +81,9 @@ func (ctrl *TrackingController) requireTenantID(c *gin.Context) (uuid.UUID, bool
 // @Produce json
 // @Param location body models.UpdateLocationDto true "GPS location data"
 // @Success 200 {object} models.CurrentLocationResponse
-// @Failure 400 {object} errors.ErrorResponse
-// @Failure 404 {object} errors.ErrorResponse
-// @Failure 500 {object} errors.ErrorResponse
+// @Failure 400 {object} coreErrors.ErrorResponse
+// @Failure 404 {object} coreErrors.ErrorResponse
+// @Failure 500 {object} coreErrors.ErrorResponse
 // @Router /tracking/locations [post]
 func (ctrl *TrackingController) UpdateVehicleLocation(c *gin.Context) {
 	var dto models.UpdateLocationDto
@@ -122,9 +122,9 @@ func (ctrl *TrackingController) UpdateVehicleLocation(c *gin.Context) {
 // @Security BearerAuth
 // @Param id path string true "Vehicle ID (UUID)"
 // @Success 200 {object} models.CurrentLocationResponse
-// @Failure 400 {object} errors.ErrorResponse
-// @Failure 404 {object} errors.ErrorResponse
-// @Failure 500 {object} errors.ErrorResponse
+// @Failure 400 {object} coreErrors.ErrorResponse
+// @Failure 404 {object} coreErrors.ErrorResponse
+// @Failure 500 {object} coreErrors.ErrorResponse
 // @Router /tracking/vehicles/{id}/location [get]
 func (ctrl *TrackingController) GetVehicleCurrentLocation(c *gin.Context) {
 	vehicleIDStr := c.Param("vehicle_id")
@@ -161,10 +161,10 @@ func (ctrl *TrackingController) GetVehicleCurrentLocation(c *gin.Context) {
 // @Security BearerAuth
 // @Param event body models.RecordEventDto true "Ride event data"
 // @Success 201 {object} models.EventRecordedResponse
-// @Failure 400 {object} errors.ErrorResponse
-// @Failure 401 {object} errors.ErrorResponse
-// @Failure 404 {object} errors.ErrorResponse
-// @Failure 500 {object} errors.ErrorResponse
+// @Failure 400 {object} coreErrors.ErrorResponse
+// @Failure 401 {object} coreErrors.ErrorResponse
+// @Failure 404 {object} coreErrors.ErrorResponse
+// @Failure 500 {object} coreErrors.ErrorResponse
 // @Router /tracking/events [post]
 func (ctrl *TrackingController) RecordRideEvent(c *gin.Context) {
 	var dto models.RecordEventDto
@@ -211,10 +211,10 @@ func (ctrl *TrackingController) RecordRideEvent(c *gin.Context) {
 // @Security BearerAuth
 // @Param route_id path string true "Route ID (UUID)"
 // @Success 200 {object} models.RouteRealtimeStatusResponse
-// @Failure 400 {object} errors.ErrorResponse
-// @Failure 401 {object} errors.ErrorResponse
-// @Failure 404 {object} errors.ErrorResponse
-// @Failure 500 {object} errors.ErrorResponse
+// @Failure 400 {object} coreErrors.ErrorResponse
+// @Failure 401 {object} coreErrors.ErrorResponse
+// @Failure 404 {object} coreErrors.ErrorResponse
+// @Failure 500 {object} coreErrors.ErrorResponse
 // @Router /tracking/routes/{route_id}/status [get]
 func (ctrl *TrackingController) GetRouteRealtimeStatus(c *gin.Context) {
 	tenantID, ok := ctrl.requireTenantID(c)
@@ -256,10 +256,10 @@ func (ctrl *TrackingController) GetRouteRealtimeStatus(c *gin.Context) {
 // @Security BearerAuth
 // @Param rider_id path string true "Rider ID (UUID)"
 // @Success 200 {object} models.RiderStatusResponse
-// @Failure 400 {object} errors.ErrorResponse
-// @Failure 401 {object} errors.ErrorResponse
-// @Failure 404 {object} errors.ErrorResponse
-// @Failure 500 {object} errors.ErrorResponse
+// @Failure 400 {object} coreErrors.ErrorResponse
+// @Failure 401 {object} coreErrors.ErrorResponse
+// @Failure 404 {object} coreErrors.ErrorResponse
+// @Failure 500 {object} coreErrors.ErrorResponse
 // @Router /tracking/riders/{rider_id}/status [get]
 func (ctrl *TrackingController) GetRiderStatus(c *gin.Context) {
 	tenantID, ok := ctrl.requireTenantID(c)
@@ -301,10 +301,10 @@ func (ctrl *TrackingController) GetRiderStatus(c *gin.Context) {
 // @Security BearerAuth
 // @Param alert body models.CreateAlertDto true "Alert data"
 // @Success 201 {object} models.AlertCreatedResponse
-// @Failure 400 {object} errors.ErrorResponse
-// @Failure 401 {object} errors.ErrorResponse
-// @Failure 404 {object} errors.ErrorResponse
-// @Failure 500 {object} errors.ErrorResponse
+// @Failure 400 {object} coreErrors.ErrorResponse
+// @Failure 401 {object} coreErrors.ErrorResponse
+// @Failure 404 {object} coreErrors.ErrorResponse
+// @Failure 500 {object} coreErrors.ErrorResponse
 // @Router /tracking/alerts [post]
 func (ctrl *TrackingController) CreateRouteAlert(c *gin.Context) {
 	tenantID, ok := ctrl.requireTenantID(c)
@@ -358,8 +358,8 @@ func (ctrl *TrackingController) CreateRouteAlert(c *gin.Context) {
 // @Security BearerAuth
 // @Param company body models.CreateCompanyDto true "Company data"
 // @Success 201 {object} models.TransportCompany
-// @Failure 400 {object} errors.ErrorResponse
-// @Failure 500 {object} errors.ErrorResponse
+// @Failure 400 {object} coreErrors.ErrorResponse
+// @Failure 500 {object} coreErrors.ErrorResponse
 // @Router /tracking/companies [post]
 func (ctrl *TrackingController) CreateCompany(c *gin.Context) {
 	tenantID, ok := ctrl.requireTenantID(c)
@@ -392,9 +392,9 @@ func (ctrl *TrackingController) CreateCompany(c *gin.Context) {
 // @Param id path string true "Company ID (UUID)"
 // @Param company body models.UpdateCompanyDto true "Updated company data"
 // @Success 200 {object} models.TransportCompany
-// @Failure 400 {object} errors.ErrorResponse
-// @Failure 404 {object} errors.ErrorResponse
-// @Failure 500 {object} errors.ErrorResponse
+// @Failure 400 {object} coreErrors.ErrorResponse
+// @Failure 404 {object} coreErrors.ErrorResponse
+// @Failure 500 {object} coreErrors.ErrorResponse
 // @Router /tracking/companies/{id} [patch]
 func (ctrl *TrackingController) UpdateCompany(c *gin.Context) {
 	tenantID, ok := ctrl.requireTenantID(c)
@@ -429,7 +429,7 @@ func (ctrl *TrackingController) UpdateCompany(c *gin.Context) {
 // @Produce json
 // @Security BearerAuth
 // @Success 200 {array} models.TransportCompany
-// @Failure 500 {object} errors.ErrorResponse
+// @Failure 500 {object} coreErrors.ErrorResponse
 // @Router /tracking/companies [get]
 func (ctrl *TrackingController) ListCompanies(c *gin.Context) {
 	tenantID, ok := ctrl.requireTenantID(c)
@@ -463,9 +463,9 @@ func (ctrl *TrackingController) ListCompanies(c *gin.Context) {
 // @Security BearerAuth
 // @Param id path string true "Company ID (UUID)"
 // @Success 200 {object} models.TransportCompany
-// @Failure 400 {object} errors.ErrorResponse
-// @Failure 404 {object} errors.ErrorResponse
-// @Failure 500 {object} errors.ErrorResponse
+// @Failure 400 {object} coreErrors.ErrorResponse
+// @Failure 404 {object} coreErrors.ErrorResponse
+// @Failure 500 {object} coreErrors.ErrorResponse
 // @Router /tracking/companies/{id} [get]
 func (ctrl *TrackingController) GetCompany(c *gin.Context) {
 	tenantID, ok := ctrl.requireTenantID(c)
@@ -499,9 +499,9 @@ func (ctrl *TrackingController) GetCompany(c *gin.Context) {
 // @Security BearerAuth
 // @Param id path string true "Company ID (UUID)"
 // @Success 204 "No Content"
-// @Failure 400 {object} errors.ErrorResponse
-// @Failure 404 {object} errors.ErrorResponse
-// @Failure 500 {object} errors.ErrorResponse
+// @Failure 400 {object} coreErrors.ErrorResponse
+// @Failure 404 {object} coreErrors.ErrorResponse
+// @Failure 500 {object} coreErrors.ErrorResponse
 // @Router /tracking/companies/{id} [delete]
 func (ctrl *TrackingController) DeleteCompany(c *gin.Context) {
 	tenantID, ok := ctrl.requireTenantID(c)
@@ -545,8 +545,8 @@ func (ctrl *TrackingController) DeleteCompany(c *gin.Context) {
 // @Security BearerAuth
 // @Param vehicle body models.CreateVehicleDto true "Vehicle data"
 // @Success 201 {object} models.Vehicle
-// @Failure 400 {object} errors.ErrorResponse
-// @Failure 500 {object} errors.ErrorResponse
+// @Failure 400 {object} coreErrors.ErrorResponse
+// @Failure 500 {object} coreErrors.ErrorResponse
 // @Router /tracking/vehicles [post]
 func (ctrl *TrackingController) CreateVehicle(c *gin.Context) {
 	tenantID, ok := ctrl.requireTenantID(c)
@@ -578,9 +578,9 @@ func (ctrl *TrackingController) CreateVehicle(c *gin.Context) {
 // @Param id path string true "Vehicle ID (UUID)"
 // @Param vehicle body models.UpdateVehicleDto true "Updated vehicle data"
 // @Success 200 {object} models.Vehicle
-// @Failure 400 {object} errors.ErrorResponse
-// @Failure 404 {object} errors.ErrorResponse
-// @Failure 500 {object} errors.ErrorResponse
+// @Failure 400 {object} coreErrors.ErrorResponse
+// @Failure 404 {object} coreErrors.ErrorResponse
+// @Failure 500 {object} coreErrors.ErrorResponse
 // @Router /tracking/vehicles/{id} [patch]
 func (ctrl *TrackingController) UpdateVehicle(c *gin.Context) {
 	tenantID, ok := ctrl.requireTenantID(c)
@@ -615,8 +615,8 @@ func (ctrl *TrackingController) UpdateVehicle(c *gin.Context) {
 // @Security BearerAuth
 // @Param company_id query string true "Company ID (UUID)"
 // @Success 200 {array} models.Vehicle
-// @Failure 400 {object} errors.ErrorResponse
-// @Failure 500 {object} errors.ErrorResponse
+// @Failure 400 {object} coreErrors.ErrorResponse
+// @Failure 500 {object} coreErrors.ErrorResponse
 // @Router /tracking/vehicles [get]
 func (ctrl *TrackingController) ListVehicles(c *gin.Context) {
 	tenantID, ok := ctrl.requireTenantID(c)
@@ -645,9 +645,9 @@ func (ctrl *TrackingController) ListVehicles(c *gin.Context) {
 // @Security BearerAuth
 // @Param id path string true "Vehicle ID (UUID)"
 // @Success 200 {object} models.Vehicle
-// @Failure 400 {object} errors.ErrorResponse
-// @Failure 404 {object} errors.ErrorResponse
-// @Failure 500 {object} errors.ErrorResponse
+// @Failure 400 {object} coreErrors.ErrorResponse
+// @Failure 404 {object} coreErrors.ErrorResponse
+// @Failure 500 {object} coreErrors.ErrorResponse
 // @Router /tracking/vehicles/{id} [get]
 func (ctrl *TrackingController) GetVehicle(c *gin.Context) {
 	tenantID, ok := ctrl.requireTenantID(c)
@@ -680,9 +680,9 @@ func (ctrl *TrackingController) GetVehicle(c *gin.Context) {
 // @Security BearerAuth
 // @Param id path string true "Vehicle ID (UUID)"
 // @Success 204 "No Content"
-// @Failure 400 {object} errors.ErrorResponse
-// @Failure 404 {object} errors.ErrorResponse
-// @Failure 500 {object} errors.ErrorResponse
+// @Failure 400 {object} coreErrors.ErrorResponse
+// @Failure 404 {object} coreErrors.ErrorResponse
+// @Failure 500 {object} coreErrors.ErrorResponse
 // @Router /tracking/vehicles/{id} [delete]
 func (ctrl *TrackingController) DeleteVehicle(c *gin.Context) {
 	tenantID, ok := ctrl.requireTenantID(c)
@@ -719,8 +719,8 @@ func (ctrl *TrackingController) DeleteVehicle(c *gin.Context) {
 // @Security BearerAuth
 // @Param route body models.CreateRouteDto true "Route data"
 // @Success 201 {object} models.Route
-// @Failure 400 {object} errors.ErrorResponse
-// @Failure 500 {object} errors.ErrorResponse
+// @Failure 400 {object} coreErrors.ErrorResponse
+// @Failure 500 {object} coreErrors.ErrorResponse
 // @Router /tracking/routes [post]
 func (ctrl *TrackingController) CreateRoute(c *gin.Context) {
 	tenantID, ok := ctrl.requireTenantID(c)
@@ -752,9 +752,9 @@ func (ctrl *TrackingController) CreateRoute(c *gin.Context) {
 // @Param id path string true "Route ID (UUID)"
 // @Param route body models.UpdateRouteDto true "Updated route data"
 // @Success 200 {object} models.Route
-// @Failure 400 {object} errors.ErrorResponse
-// @Failure 404 {object} errors.ErrorResponse
-// @Failure 500 {object} errors.ErrorResponse
+// @Failure 400 {object} coreErrors.ErrorResponse
+// @Failure 404 {object} coreErrors.ErrorResponse
+// @Failure 500 {object} coreErrors.ErrorResponse
 // @Router /tracking/routes/{id} [patch]
 func (ctrl *TrackingController) UpdateRoute(c *gin.Context) {
 	tenantID, ok := ctrl.requireTenantID(c)
@@ -794,8 +794,8 @@ func (ctrl *TrackingController) UpdateRoute(c *gin.Context) {
 // @Security BearerAuth
 // @Param company_id query string true "Company ID (UUID)"
 // @Success 200 {array} models.Route
-// @Failure 400 {object} errors.ErrorResponse
-// @Failure 500 {object} errors.ErrorResponse
+// @Failure 400 {object} coreErrors.ErrorResponse
+// @Failure 500 {object} coreErrors.ErrorResponse
 // @Router /tracking/routes [get]
 func (ctrl *TrackingController) ListRoutes(c *gin.Context) {
 	tenantID, ok := ctrl.requireTenantID(c)
@@ -824,9 +824,9 @@ func (ctrl *TrackingController) ListRoutes(c *gin.Context) {
 // @Security BearerAuth
 // @Param id path string true "Route ID (UUID)"
 // @Success 200 {object} models.Route
-// @Failure 400 {object} errors.ErrorResponse
-// @Failure 404 {object} errors.ErrorResponse
-// @Failure 500 {object} errors.ErrorResponse
+// @Failure 400 {object} coreErrors.ErrorResponse
+// @Failure 404 {object} coreErrors.ErrorResponse
+// @Failure 500 {object} coreErrors.ErrorResponse
 // @Router /tracking/routes/{id} [get]
 func (ctrl *TrackingController) GetRoute(c *gin.Context) {
 	tenantID, ok := ctrl.requireTenantID(c)
@@ -859,9 +859,9 @@ func (ctrl *TrackingController) GetRoute(c *gin.Context) {
 // @Security BearerAuth
 // @Param id path string true "Route ID (UUID)"
 // @Success 204 "No Content"
-// @Failure 400 {object} errors.ErrorResponse
-// @Failure 404 {object} errors.ErrorResponse
-// @Failure 500 {object} errors.ErrorResponse
+// @Failure 400 {object} coreErrors.ErrorResponse
+// @Failure 404 {object} coreErrors.ErrorResponse
+// @Failure 500 {object} coreErrors.ErrorResponse
 // @Router /tracking/routes/{id} [delete]
 func (ctrl *TrackingController) DeleteRoute(c *gin.Context) {
 	tenantID, ok := ctrl.requireTenantID(c)
@@ -898,8 +898,8 @@ func (ctrl *TrackingController) DeleteRoute(c *gin.Context) {
 // @Security BearerAuth
 // @Param stop body models.CreateRouteStopDto true "Route stop data"
 // @Success 201 {object} models.RouteStop
-// @Failure 400 {object} errors.ErrorResponse
-// @Failure 500 {object} errors.ErrorResponse
+// @Failure 400 {object} coreErrors.ErrorResponse
+// @Failure 500 {object} coreErrors.ErrorResponse
 // @Router /tracking/route-stops [post]
 func (ctrl *TrackingController) CreateRouteStop(c *gin.Context) {
 	tenantID, ok := ctrl.requireTenantID(c)
@@ -929,8 +929,8 @@ func (ctrl *TrackingController) CreateRouteStop(c *gin.Context) {
 // @Security BearerAuth
 // @Param route_id path string true "Route ID (UUID)"
 // @Success 200 {array} models.RouteStop
-// @Failure 400 {object} errors.ErrorResponse
-// @Failure 500 {object} errors.ErrorResponse
+// @Failure 400 {object} coreErrors.ErrorResponse
+// @Failure 500 {object} coreErrors.ErrorResponse
 // @Router /tracking/routes/{route_id}/stops [get]
 func (ctrl *TrackingController) ListRouteStops(c *gin.Context) {
 	tenantID, ok := ctrl.requireTenantID(c)
@@ -958,9 +958,9 @@ func (ctrl *TrackingController) ListRouteStops(c *gin.Context) {
 // @Security BearerAuth
 // @Param id path string true "Route Stop ID (UUID)"
 // @Success 204 "No Content"
-// @Failure 400 {object} errors.ErrorResponse
-// @Failure 404 {object} errors.ErrorResponse
-// @Failure 500 {object} errors.ErrorResponse
+// @Failure 400 {object} coreErrors.ErrorResponse
+// @Failure 404 {object} coreErrors.ErrorResponse
+// @Failure 500 {object} coreErrors.ErrorResponse
 // @Router /tracking/route-stops/{id} [delete]
 func (ctrl *TrackingController) DeleteRouteStop(c *gin.Context) {
 	tenantID, ok := ctrl.requireTenantID(c)
@@ -997,8 +997,8 @@ func (ctrl *TrackingController) DeleteRouteStop(c *gin.Context) {
 // @Security BearerAuth
 // @Param rider body models.CreateRiderDto true "Rider data"
 // @Success 201 {object} models.Rider
-// @Failure 400 {object} errors.ErrorResponse
-// @Failure 500 {object} errors.ErrorResponse
+// @Failure 400 {object} coreErrors.ErrorResponse
+// @Failure 500 {object} coreErrors.ErrorResponse
 // @Router /tracking/riders [post]
 func (ctrl *TrackingController) CreateRider(c *gin.Context) {
 	tenantID, ok := ctrl.requireTenantID(c)
@@ -1030,9 +1030,9 @@ func (ctrl *TrackingController) CreateRider(c *gin.Context) {
 // @Param id path string true "Rider ID (UUID)"
 // @Param rider body models.UpdateRiderDto true "Updated rider data"
 // @Success 200 {object} models.Rider
-// @Failure 400 {object} errors.ErrorResponse
-// @Failure 404 {object} errors.ErrorResponse
-// @Failure 500 {object} errors.ErrorResponse
+// @Failure 400 {object} coreErrors.ErrorResponse
+// @Failure 404 {object} coreErrors.ErrorResponse
+// @Failure 500 {object} coreErrors.ErrorResponse
 // @Router /tracking/riders/{id} [patch]
 func (ctrl *TrackingController) UpdateRider(c *gin.Context) {
 	tenantID, ok := ctrl.requireTenantID(c)
@@ -1072,8 +1072,8 @@ func (ctrl *TrackingController) UpdateRider(c *gin.Context) {
 // @Security BearerAuth
 // @Param company_id path string true "Company ID (UUID)"
 // @Success 200 {array} models.Rider
-// @Failure 400 {object} errors.ErrorResponse
-// @Failure 500 {object} errors.ErrorResponse
+// @Failure 400 {object} coreErrors.ErrorResponse
+// @Failure 500 {object} coreErrors.ErrorResponse
 // @Router /tracking/companies/{company_id}/riders [get]
 func (ctrl *TrackingController) ListRiders(c *gin.Context) {
 	tenantID, ok := ctrl.requireTenantID(c)
@@ -1102,9 +1102,9 @@ func (ctrl *TrackingController) ListRiders(c *gin.Context) {
 // @Security BearerAuth
 // @Param id path string true "Rider ID (UUID)"
 // @Success 200 {object} models.Rider
-// @Failure 400 {object} errors.ErrorResponse
-// @Failure 404 {object} errors.ErrorResponse
-// @Failure 500 {object} errors.ErrorResponse
+// @Failure 400 {object} coreErrors.ErrorResponse
+// @Failure 404 {object} coreErrors.ErrorResponse
+// @Failure 500 {object} coreErrors.ErrorResponse
 // @Router /tracking/riders/{id} [get]
 func (ctrl *TrackingController) GetRider(c *gin.Context) {
 	tenantID, ok := ctrl.requireTenantID(c)
@@ -1137,9 +1137,9 @@ func (ctrl *TrackingController) GetRider(c *gin.Context) {
 // @Security BearerAuth
 // @Param id path string true "Rider ID (UUID)"
 // @Success 204 "No Content"
-// @Failure 400 {object} errors.ErrorResponse
-// @Failure 404 {object} errors.ErrorResponse
-// @Failure 500 {object} errors.ErrorResponse
+// @Failure 400 {object} coreErrors.ErrorResponse
+// @Failure 404 {object} coreErrors.ErrorResponse
+// @Failure 500 {object} coreErrors.ErrorResponse
 // @Router /tracking/riders/{id} [delete]
 func (ctrl *TrackingController) DeleteRider(c *gin.Context) {
 	tenantID, ok := ctrl.requireTenantID(c)
@@ -1176,8 +1176,8 @@ func (ctrl *TrackingController) DeleteRider(c *gin.Context) {
 // @Security BearerAuth
 // @Param assignment body models.AssignRiderDto true "Assignment data"
 // @Success 201 {object} models.RiderAssignment
-// @Failure 400 {object} errors.ErrorResponse
-// @Failure 500 {object} errors.ErrorResponse
+// @Failure 400 {object} coreErrors.ErrorResponse
+// @Failure 500 {object} coreErrors.ErrorResponse
 // @Router /tracking/assignments [post]
 func (ctrl *TrackingController) AssignRider(c *gin.Context) {
 	tenantID, ok := ctrl.requireTenantID(c)
@@ -1216,9 +1216,9 @@ func (ctrl *TrackingController) AssignRider(c *gin.Context) {
 // @Security BearerAuth
 // @Param id path string true "Assignment ID (UUID)"
 // @Success 204 "No Content"
-// @Failure 400 {object} errors.ErrorResponse
-// @Failure 404 {object} errors.ErrorResponse
-// @Failure 500 {object} errors.ErrorResponse
+// @Failure 400 {object} coreErrors.ErrorResponse
+// @Failure 404 {object} coreErrors.ErrorResponse
+// @Failure 500 {object} coreErrors.ErrorResponse
 // @Router /tracking/assignments/{id} [delete]
 func (ctrl *TrackingController) UnassignRider(c *gin.Context) {
 	tenantID, ok := ctrl.requireTenantID(c)
@@ -1254,8 +1254,8 @@ func (ctrl *TrackingController) UnassignRider(c *gin.Context) {
 // @Param route_id query string false "Route ID (UUID)"
 // @Param is_active query boolean false "Filter by active status"
 // @Success 200 {array} models.RiderAssignment
-// @Failure 400 {object} errors.ErrorResponse
-// @Failure 500 {object} errors.ErrorResponse
+// @Failure 400 {object} coreErrors.ErrorResponse
+// @Failure 500 {object} coreErrors.ErrorResponse
 // @Router /tracking/assignments [get]
 func (ctrl *TrackingController) ListRiderAssignments(c *gin.Context) {
 	tenantID, ok := ctrl.requireTenantID(c)
@@ -1309,9 +1309,9 @@ func (ctrl *TrackingController) ListRiderAssignments(c *gin.Context) {
 // @Param company_id path string true "Company UUID"
 // @Param request body models.GrantClientAccessDto true "Client access data"
 // @Success 200 {object} models.CompanyClientAccess
-// @Failure 400 {object} errors.ErrorResponse
-// @Failure 404 {object} errors.ErrorResponse
-// @Failure 500 {object} errors.ErrorResponse
+// @Failure 400 {object} coreErrors.ErrorResponse
+// @Failure 404 {object} coreErrors.ErrorResponse
+// @Failure 500 {object} coreErrors.ErrorResponse
 // @Router /tracking/companies/{company_id}/clients [post]
 func (ctrl *TrackingController) GrantClientAccess(c *gin.Context) {
 	tenantID, ok := ctrl.requireTenantID(c)
@@ -1353,9 +1353,9 @@ func (ctrl *TrackingController) GrantClientAccess(c *gin.Context) {
 // @Param company_id path string true "Company UUID"
 // @Param client_tenant_id path string true "Client Tenant UUID"
 // @Success 204
-// @Failure 400 {object} errors.ErrorResponse
-// @Failure 404 {object} errors.ErrorResponse
-// @Failure 500 {object} errors.ErrorResponse
+// @Failure 400 {object} coreErrors.ErrorResponse
+// @Failure 404 {object} coreErrors.ErrorResponse
+// @Failure 500 {object} coreErrors.ErrorResponse
 // @Router /tracking/companies/{company_id}/clients/{client_tenant_id} [delete]
 func (ctrl *TrackingController) RevokeClientAccess(c *gin.Context) {
 	tenantID, ok := ctrl.requireTenantID(c)
@@ -1394,9 +1394,9 @@ func (ctrl *TrackingController) RevokeClientAccess(c *gin.Context) {
 // @Produce json
 // @Param company_id path string true "Company UUID"
 // @Success 200 {array} models.CompanyClientAccess
-// @Failure 400 {object} errors.ErrorResponse
-// @Failure 404 {object} errors.ErrorResponse
-// @Failure 500 {object} errors.ErrorResponse
+// @Failure 400 {object} coreErrors.ErrorResponse
+// @Failure 404 {object} coreErrors.ErrorResponse
+// @Failure 500 {object} coreErrors.ErrorResponse
 // @Router /tracking/companies/{company_id}/clients [get]
 func (ctrl *TrackingController) ListCompanyClients(c *gin.Context) {
 	tenantID, ok := ctrl.requireTenantID(c)

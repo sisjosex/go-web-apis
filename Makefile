@@ -86,8 +86,8 @@ tenant-migrate:
 swagger:
 	@echo "🔄 Generating Swagger documentation..."
 	@if command -v swag > /dev/null 2>&1; then \
-		swag init -g cmd/server/main.go -d . -o docs --parseInternal --parseDepth 3 2>&1 | grep -v "warning" || true; \
-		[ -f docs/swagger.json ] && echo "✅ Swagger docs generated → http://localhost:8080/swagger/index.html"; \
+		swag init -g cmd/server/main.go -d . --parseDependency --parseInternal --parseDepth 5 -o docs 2>&1 | grep -v "warning\|ParseComment"; \
+		[ -f docs/swagger.json ] && echo "✅ Swagger docs generated → http://localhost:8080/swagger/index.html" || echo "❌ docs/swagger.json not generated"; \
 	else \
 		echo "❌ swag not installed. Run: go install github.com/swaggo/swag/cmd/swag@latest"; \
 	fi

@@ -7,8 +7,12 @@ import (
 	"github.com/google/uuid"
 
 	authInterfaces "josex/web/modules/auth/interfaces"
+	authModels "josex/web/modules/auth/models"
 	coreErrors "josex/web/modules/core/errors"
 )
+
+// Ensure authModels is used (for Swagger annotations)
+var _ authModels.UserSession
 
 type SessionController struct {
 	authService authInterfaces.AuthService
@@ -27,9 +31,9 @@ func NewSessionController(authService authInterfaces.AuthService) *SessionContro
 // @Accept  json
 // @Produce  json
 // @Param Authorization header string true "Bearer Token"
-// @Success 200 {array} models.UserSession
-// @Failure 400 {object} errors.ErrorResponse
-// @Failure 401 {object} errors.ErrorResponse
+// @Success 200 {array} authModels.UserSession
+// @Failure 400 {object} coreErrors.ErrorResponse
+// @Failure 401 {object} coreErrors.ErrorResponse
 // @Router /auth/sessions [get]
 // @Security ApiKeyAuth
 func (sc *SessionController) GetActiveSessions(c *gin.Context) {
@@ -58,8 +62,8 @@ func (sc *SessionController) GetActiveSessions(c *gin.Context) {
 // @Param Authorization header string true "Bearer Token"
 // @Param id path string true "Session ID (UUID)"
 // @Success 200 {object} map[string]bool
-// @Failure 400 {object} errors.ErrorResponse
-// @Failure 401 {object} errors.ErrorResponse
+// @Failure 400 {object} coreErrors.ErrorResponse
+// @Failure 401 {object} coreErrors.ErrorResponse
 // @Router /auth/sessions/{id} [delete]
 // @Security ApiKeyAuth
 func (sc *SessionController) LogoutSession(c *gin.Context) {
@@ -94,8 +98,8 @@ func (sc *SessionController) LogoutSession(c *gin.Context) {
 // @Produce  json
 // @Param Authorization header string true "Bearer Token"
 // @Success 200 {object} map[string]int
-// @Failure 400 {object} errors.ErrorResponse
-// @Failure 401 {object} errors.ErrorResponse
+// @Failure 400 {object} coreErrors.ErrorResponse
+// @Failure 401 {object} coreErrors.ErrorResponse
 // @Router /auth/sessions [delete]
 // @Security ApiKeyAuth
 func (sc *SessionController) LogoutAllSessions(c *gin.Context) {

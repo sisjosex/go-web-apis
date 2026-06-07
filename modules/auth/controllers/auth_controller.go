@@ -54,7 +54,7 @@ func NewAuthController(
 // @Produce  json
 // @Param request body authModels.LoginUserRequestDto true "Datos de usuario"
 // @Success 200 {object} authModels.LoginSuccessResponse
-// @Failure 400 {object} errors.ErrorResponse
+// @Failure 400 {object} coreErrors.ErrorResponse
 // @Router /auth/login [post]
 // @Security ApiKeyAuth
 func (uc *AuthController) Login(c *gin.Context) {
@@ -127,7 +127,7 @@ func (uc *AuthController) Login(c *gin.Context) {
 // @Produce  json
 // @Param request body authModels.LoginExternalRequestDto true "Datos de usuario"
 // @Success 200 {object} authModels.LoginSuccessResponse
-// @Failure 400 {object} errors.ErrorResponse
+// @Failure 400 {object} coreErrors.ErrorResponse
 // @Router /auth/login/facebook [post]
 // @Security ApiKeyAuth
 func (uc *AuthController) LoginFacebook(c *gin.Context) {
@@ -200,8 +200,8 @@ func (uc *AuthController) LoginFacebook(c *gin.Context) {
 // @Produce  json
 // @Param request body authModels.RefreshTokenRequestDto true "Refresh token"
 // @Success 200 {object} authModels.RefreshTokenResponse
-// @Failure 400 {object} errors.ErrorResponse
-// @Failure 401 {object} errors.ErrorResponse
+// @Failure 400 {object} coreErrors.ErrorResponse
+// @Failure 401 {object} coreErrors.ErrorResponse
 // @Router /auth/token/refresh [post]
 // @Security ApiKeyAuth
 func (uc *AuthController) RefreshToken(c *gin.Context) {
@@ -271,7 +271,7 @@ func (uc *AuthController) RefreshToken(c *gin.Context) {
 // @Produce  json
 // @Param request body authModels.CreateUserDto true "User"
 // @Success 200 {object} coreModels.User
-// @Failure 400 {object} errors.ErrorResponse
+// @Failure 400 {object} coreErrors.ErrorResponse
 // @Router /auth/register [post]
 // @Security ApiKeyAuth
 func (uc *AuthController) Register(ctx *gin.Context) {
@@ -338,7 +338,7 @@ func (uc *AuthController) Register(ctx *gin.Context) {
 // @Produce  json
 // @Param Authorization header string true "Bearer Token"
 // @Success 200 {object} bool
-// @Failure 400 {object} errors.ErrorResponse
+// @Failure 400 {object} coreErrors.ErrorResponse
 // @Router /auth/logout [post]
 // @Security ApiKeyAuth
 func (uc *AuthController) Logout(c *gin.Context) {
@@ -376,7 +376,7 @@ func (uc *AuthController) Logout(c *gin.Context) {
 // @Produce  json
 // @Param Authorization header string true "Bearer Token"
 // @Success 200 {object} coreModels.User
-// @Failure 400 {object} errors.ErrorResponse
+// @Failure 400 {object} coreErrors.ErrorResponse
 // @Router /auth/profile [get]
 // @Security ApiKeyAuth
 func (uc *AuthController) GetProfile(ctx *gin.Context) {
@@ -406,7 +406,7 @@ func (uc *AuthController) GetProfile(ctx *gin.Context) {
 // @Param Authorization header string true "Bearer Token"
 // @Param request body authModels.UpdateProfileDto true "Profile data"
 // @Success 200 {object} coreModels.User
-// @Failure 400 {object} errors.ErrorResponse
+// @Failure 400 {object} coreErrors.ErrorResponse
 // @Router /auth/profile [patch]
 // @Security ApiKeyAuth
 func (uc *AuthController) UpdateProfile(ctx *gin.Context) {
@@ -441,7 +441,7 @@ func (uc *AuthController) UpdateProfile(ctx *gin.Context) {
 // @Param Authorization header string true "Bearer Token"
 // @Param request body authModels.VerifyEmailRequestDto false "Email data"
 // @Success 200 {object} authModels.VerifyEmailToken
-// @Failure 400 {object} errors.ErrorResponse
+// @Failure 400 {object} coreErrors.ErrorResponse
 // @Router /auth/email/verification [post]
 // @Security ApiKeyAuth
 func (uc *AuthController) GenerateEmailVerificationToken(ctx *gin.Context) {
@@ -518,7 +518,7 @@ func (uc *AuthController) GenerateEmailVerificationToken(ctx *gin.Context) {
 // @Produce  json
 // @Param request body authModels.VerifyEmailToken true "Verification token"
 // @Success 200 {object} bool
-// @Failure 400 {object} errors.ErrorResponse
+// @Failure 400 {object} coreErrors.ErrorResponse
 // @Router /auth/email/verification [put]
 // @Security ApiKeyAuth
 func (uc *AuthController) ConfirmEmailAddress(ctx *gin.Context) {
@@ -547,7 +547,7 @@ func (uc *AuthController) ConfirmEmailAddress(ctx *gin.Context) {
 // @Param Authorization header string true "Bearer Token"
 // @Param request body authModels.ChangePasswordRequestDto true "Password data"
 // @Success 200 {object} bool
-// @Failure 400 {object} errors.ErrorResponse
+// @Failure 400 {object} coreErrors.ErrorResponse
 // @Router /auth/password [put]
 // @Security ApiKeyAuth
 func (uc *AuthController) ChangePassword(ctx *gin.Context) {
@@ -587,7 +587,7 @@ func (uc *AuthController) ChangePassword(ctx *gin.Context) {
 // @Produce  json
 // @Param request body authModels.PasswordResetRequestDto true "Account data"
 // @Success 200 {object} authModels.PasswordResetTokenRequestDto
-// @Failure 400 {object} errors.ErrorResponse
+// @Failure 400 {object} coreErrors.ErrorResponse
 // @Router /auth/password/reset [post]
 // @Security ApiKeyAuth
 func (uc *AuthController) GeneratePasswordResetToken(ctx *gin.Context) {
@@ -650,8 +650,8 @@ func (uc *AuthController) GeneratePasswordResetToken(ctx *gin.Context) {
 // @Produce json
 // @Param token query string true "Reset token"
 // @Success 200 {object} bool
-// @Failure 400 {object} errors.ErrorResponse
-// @Failure 410 {object} errors.ErrorResponse
+// @Failure 400 {object} coreErrors.ErrorResponse
+// @Failure 410 {object} coreErrors.ErrorResponse
 // @Router /auth/password/reset [get]
 func (uc *AuthController) ValidateResetToken(ctx *gin.Context) {
 	var dto authModels.ValidateResetTokenDto
@@ -678,7 +678,7 @@ func (uc *AuthController) ValidateResetToken(ctx *gin.Context) {
 // @Produce  json
 // @Param request body authModels.PasswordResetWithTokenDto true "Reset data"
 // @Success 200 {object} bool
-// @Failure 400 {object} errors.ErrorResponse
+// @Failure 400 {object} coreErrors.ErrorResponse
 // @Router /auth/password/reset [put]
 // @Security ApiKeyAuth
 func (uc *AuthController) ResetPasswordWithToken(ctx *gin.Context) {

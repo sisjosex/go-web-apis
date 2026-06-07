@@ -15,6 +15,967 @@ const docTemplate = `{
     "host": "{{.Host}}",
     "basePath": "{{.BasePath}}",
     "paths": {
+        "/api/v1/inventory/categories": {
+            "get": {
+                "description": "Retrieve a paginated list of product categories (optionally filtered by parent)",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "inventory-categories"
+                ],
+                "summary": "List product categories",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Parent category ID",
+                        "name": "parent_id",
+                        "in": "query"
+                    },
+                    {
+                        "type": "boolean",
+                        "description": "Filter by active status",
+                        "name": "is_active",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "default": 1,
+                        "description": "Page number",
+                        "name": "page",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "default": 20,
+                        "description": "Items per page",
+                        "name": "limit",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/josex_web_modules_inventory_models.ListCategoriesResponse"
+                        }
+                    }
+                }
+            },
+            "post": {
+                "description": "Create a new product category with hierarchical support",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "inventory-categories"
+                ],
+                "summary": "Create a new product category",
+                "parameters": [
+                    {
+                        "description": "Category creation request",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/josex_web_modules_inventory_models.CreateCategoryDto"
+                        }
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "Created",
+                        "schema": {
+                            "$ref": "#/definitions/josex_web_modules_inventory_models.CategoryResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "409": {
+                        "description": "Conflict",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/inventory/categories/:id": {
+            "get": {
+                "description": "Retrieve a single product category by ID with product count",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "inventory-categories"
+                ],
+                "summary": "Get a product category",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Category ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/josex_web_modules_inventory_models.CategoryResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    }
+                }
+            },
+            "put": {
+                "description": "Update an existing product category",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "inventory-categories"
+                ],
+                "summary": "Update a product category",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Category ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Category update request",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/josex_web_modules_inventory_models.UpdateCategoryDto"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/josex_web_modules_inventory_models.CategoryResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    }
+                }
+            },
+            "delete": {
+                "description": "Soft delete a product category (cannot have products assigned)",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "inventory-categories"
+                ],
+                "summary": "Delete a product category",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Category ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/inventory/categories/:id/products": {
+            "get": {
+                "description": "Retrieve all products assigned to a specific category",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "inventory-categories"
+                ],
+                "summary": "Get products in category",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Category ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "integer",
+                        "default": 1,
+                        "description": "Page number",
+                        "name": "page",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "default": 20,
+                        "description": "Items per page",
+                        "name": "limit",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "array",
+                            "items": {
+                                "$ref": "#/definitions/josex_web_modules_inventory_models.GetProductsByCategoryResponse"
+                            }
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/inventory/categories/search": {
+            "get": {
+                "description": "Search categories by name, slug, or description",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "inventory-categories"
+                ],
+                "summary": "Search product categories",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Search term",
+                        "name": "search_term",
+                        "in": "query",
+                        "required": true
+                    },
+                    {
+                        "type": "boolean",
+                        "description": "Filter by active status",
+                        "name": "is_active",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "default": 50,
+                        "description": "Results limit",
+                        "name": "limit",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "array",
+                            "items": {
+                                "$ref": "#/definitions/josex_web_modules_inventory_models.CategoryResponse"
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/inventory/movements": {
+            "post": {
+                "description": "Record a stock movement (purchase, sale, adjustment, etc.)",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "inventory"
+                ],
+                "summary": "Record an inventory movement",
+                "parameters": [
+                    {
+                        "description": "Movement request",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/josex_web_modules_inventory_models.RecordMovementDto"
+                        }
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "Created",
+                        "schema": {
+                            "$ref": "#/definitions/josex_web_modules_inventory_models.RecordMovementResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "409": {
+                        "description": "Conflict",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/inventory/movements/:id": {
+            "get": {
+                "description": "Retrieve a specific inventory movement",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "inventory"
+                ],
+                "summary": "Get movement by ID",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Movement ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/josex_web_modules_inventory_models.InventoryMovement"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/inventory/products": {
+            "get": {
+                "description": "Retrieve a paginated list of active products",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "inventory"
+                ],
+                "summary": "List all products",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "Limit (default 20)",
+                        "name": "limit",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "Offset (default 0)",
+                        "name": "offset",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "array",
+                            "items": {
+                                "$ref": "#/definitions/josex_web_modules_inventory_models.Product"
+                            }
+                        }
+                    }
+                }
+            },
+            "post": {
+                "description": "Create a new product with optional variants (groups and options)",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "inventory"
+                ],
+                "summary": "Create a product with variants",
+                "parameters": [
+                    {
+                        "description": "Product creation request",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/josex_web_modules_inventory_models.CreateProductDto"
+                        }
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "Created",
+                        "schema": {
+                            "$ref": "#/definitions/josex_web_modules_inventory_models.CreateProductResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "409": {
+                        "description": "Conflict",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/inventory/products/:id": {
+            "get": {
+                "description": "Retrieve a product with all its details",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "inventory"
+                ],
+                "summary": "Get product by ID",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Product ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/josex_web_modules_inventory_models.ProductDetail"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/inventory/products/:id/media": {
+            "post": {
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "inventory"
+                ],
+                "summary": "Add media to a product or variant option",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Product ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Media data",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/josex_web_modules_inventory_models.AddProductMediaDto"
+                        }
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "Created",
+                        "schema": {
+                            "$ref": "#/definitions/josex_web_modules_inventory_models.AddProductMediaResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/inventory/products/:id/media/:media_id": {
+            "delete": {
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "inventory"
+                ],
+                "summary": "Remove a media item from a product",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Product ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Media ID",
+                        "name": "media_id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/inventory/products/:productId/categories/:id": {
+            "post": {
+                "description": "Assign a product to a category",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "inventory-categories"
+                ],
+                "summary": "Assign product to category",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Product ID",
+                        "name": "productId",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Category ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "Created",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "409": {
+                        "description": "Conflict",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    }
+                }
+            },
+            "delete": {
+                "description": "Remove a product from a category",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "inventory-categories"
+                ],
+                "summary": "Remove product from category",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Product ID",
+                        "name": "productId",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Category ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/inventory/products/:product_id/reorder-level": {
+            "patch": {
+                "description": "Update the minimum stock level for a product",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "inventory"
+                ],
+                "summary": "Update product reorder level",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Product ID",
+                        "name": "product_id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Reorder level request",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/josex_web_modules_inventory_models.UpdateReorderLevelDto"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/josex_web_modules_inventory_models.UpdateReorderLevelResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/inventory/products/sku/:sku": {
+            "get": {
+                "description": "Retrieve a product by its SKU code",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "inventory"
+                ],
+                "summary": "Get product by SKU",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Product SKU",
+                        "name": "sku",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/josex_web_modules_inventory_models.ProductDetail"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/inventory/release-reserved": {
+            "post": {
+                "description": "Release inventory when a sales order is cancelled",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "inventory"
+                ],
+                "summary": "Release reserved stock",
+                "parameters": [
+                    {
+                        "description": "Release request",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/josex_web_modules_inventory_models.ReleaseReservedStockDto"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/josex_web_modules_inventory_models.StockReservationResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/inventory/reserve": {
+            "post": {
+                "description": "Reserve inventory when a sales order is created",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "inventory"
+                ],
+                "summary": "Reserve stock for a sales order",
+                "parameters": [
+                    {
+                        "description": "Reserve request",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/josex_web_modules_inventory_models.ReserveStockDto"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/josex_web_modules_inventory_models.StockReservationResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "409": {
+                        "description": "Conflict",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/inventory/stock/:product_id": {
+            "get": {
+                "description": "Retrieve current stock level for a product",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "inventory"
+                ],
+                "summary": "Get current product stock",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Product ID",
+                        "name": "product_id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/josex_web_modules_inventory_models.ProductStock"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    }
+                }
+            }
+        },
         "/auth/email/verification": {
             "put": {
                 "security": [
@@ -40,7 +1001,7 @@ const docTemplate = `{
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/models.VerifyEmailToken"
+                            "$ref": "#/definitions/josex_web_modules_auth_models.VerifyEmailToken"
                         }
                     }
                 ],
@@ -54,7 +1015,7 @@ const docTemplate = `{
                     "400": {
                         "description": "Bad Request",
                         "schema": {
-                            "$ref": "#/definitions/errors.ErrorResponse"
+                            "$ref": "#/definitions/josex_web_modules_core_errors.ErrorResponse"
                         }
                     }
                 }
@@ -89,7 +1050,7 @@ const docTemplate = `{
                         "name": "request",
                         "in": "body",
                         "schema": {
-                            "$ref": "#/definitions/models.VerifyEmailRequestDto"
+                            "$ref": "#/definitions/josex_web_modules_auth_models.VerifyEmailRequestDto"
                         }
                     }
                 ],
@@ -97,13 +1058,13 @@ const docTemplate = `{
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/models.VerifyEmailToken"
+                            "$ref": "#/definitions/josex_web_modules_auth_models.VerifyEmailToken"
                         }
                     },
                     "400": {
                         "description": "Bad Request",
                         "schema": {
-                            "$ref": "#/definitions/errors.ErrorResponse"
+                            "$ref": "#/definitions/josex_web_modules_core_errors.ErrorResponse"
                         }
                     }
                 }
@@ -134,7 +1095,7 @@ const docTemplate = `{
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/models.LoginUserRequestDto"
+                            "$ref": "#/definitions/josex_web_modules_auth_models.LoginUserRequestDto"
                         }
                     }
                 ],
@@ -142,13 +1103,13 @@ const docTemplate = `{
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/models.LoginSuccessResponse"
+                            "$ref": "#/definitions/josex_web_modules_auth_models.LoginSuccessResponse"
                         }
                     },
                     "400": {
                         "description": "Bad Request",
                         "schema": {
-                            "$ref": "#/definitions/errors.ErrorResponse"
+                            "$ref": "#/definitions/josex_web_modules_core_errors.ErrorResponse"
                         }
                     }
                 }
@@ -179,7 +1140,7 @@ const docTemplate = `{
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/models.LoginExternalRequestDto"
+                            "$ref": "#/definitions/josex_web_modules_auth_models.LoginExternalRequestDto"
                         }
                     }
                 ],
@@ -187,13 +1148,13 @@ const docTemplate = `{
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/models.LoginSuccessResponse"
+                            "$ref": "#/definitions/josex_web_modules_auth_models.LoginSuccessResponse"
                         }
                     },
                     "400": {
                         "description": "Bad Request",
                         "schema": {
-                            "$ref": "#/definitions/errors.ErrorResponse"
+                            "$ref": "#/definitions/josex_web_modules_core_errors.ErrorResponse"
                         }
                     }
                 }
@@ -236,7 +1197,187 @@ const docTemplate = `{
                     "400": {
                         "description": "Bad Request",
                         "schema": {
-                            "$ref": "#/definitions/errors.ErrorResponse"
+                            "$ref": "#/definitions/josex_web_modules_core_errors.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/auth/otp/email/request": {
+            "post": {
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Auth - OTP"
+                ],
+                "summary": "Request OTP via Email",
+                "parameters": [
+                    {
+                        "description": "Request OTP",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/josex_web_modules_auth_models.RequestOtpRequestDto"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/josex_web_modules_auth_models.RequestOtpResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Validation error or channel disabled",
+                        "schema": {
+                            "type": "object"
+                        }
+                    },
+                    "500": {
+                        "description": "Server error",
+                        "schema": {
+                            "type": "object"
+                        }
+                    }
+                }
+            }
+        },
+        "/auth/otp/sms/request": {
+            "post": {
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Auth - OTP"
+                ],
+                "summary": "Request OTP via SMS",
+                "parameters": [
+                    {
+                        "description": "Request OTP",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/josex_web_modules_auth_models.RequestOtpRequestDto"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/josex_web_modules_auth_models.RequestOtpResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Validation error or channel disabled",
+                        "schema": {
+                            "type": "object"
+                        }
+                    },
+                    "500": {
+                        "description": "Server error",
+                        "schema": {
+                            "type": "object"
+                        }
+                    }
+                }
+            }
+        },
+        "/auth/otp/verify": {
+            "post": {
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Auth - OTP"
+                ],
+                "summary": "Verify OTP code",
+                "parameters": [
+                    {
+                        "description": "Verify OTP",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/josex_web_modules_auth_models.VerifyOtpRequestDto"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/josex_web_modules_auth_models.VerifyOtpResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid or expired OTP",
+                        "schema": {
+                            "type": "object"
+                        }
+                    },
+                    "500": {
+                        "description": "Server error",
+                        "schema": {
+                            "type": "object"
+                        }
+                    }
+                }
+            }
+        },
+        "/auth/otp/whatsapp/request": {
+            "post": {
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Auth - OTP"
+                ],
+                "summary": "Request OTP via WhatsApp",
+                "parameters": [
+                    {
+                        "description": "Request OTP",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/josex_web_modules_auth_models.RequestOtpRequestDto"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/josex_web_modules_auth_models.RequestOtpResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Validation error or channel disabled",
+                        "schema": {
+                            "type": "object"
+                        }
+                    },
+                    "500": {
+                        "description": "Server error",
+                        "schema": {
+                            "type": "object"
                         }
                     }
                 }
@@ -274,7 +1415,7 @@ const docTemplate = `{
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/models.ChangePasswordRequestDto"
+                            "$ref": "#/definitions/josex_web_modules_auth_models.ChangePasswordRequestDto"
                         }
                     }
                 ],
@@ -288,13 +1429,52 @@ const docTemplate = `{
                     "400": {
                         "description": "Bad Request",
                         "schema": {
-                            "$ref": "#/definitions/errors.ErrorResponse"
+                            "$ref": "#/definitions/josex_web_modules_core_errors.ErrorResponse"
                         }
                     }
                 }
             }
         },
         "/auth/password/reset": {
+            "get": {
+                "description": "Check whether a password reset token is still valid (not used, not expired)",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Auth"
+                ],
+                "summary": "Validate password reset token",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Reset token",
+                        "name": "token",
+                        "in": "query",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "boolean"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/josex_web_modules_core_errors.ErrorResponse"
+                        }
+                    },
+                    "410": {
+                        "description": "Gone",
+                        "schema": {
+                            "$ref": "#/definitions/josex_web_modules_core_errors.ErrorResponse"
+                        }
+                    }
+                }
+            },
             "put": {
                 "security": [
                     {
@@ -319,7 +1499,7 @@ const docTemplate = `{
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/models.PasswordResetWithTokenDto"
+                            "$ref": "#/definitions/josex_web_modules_auth_models.PasswordResetWithTokenDto"
                         }
                     }
                 ],
@@ -333,7 +1513,7 @@ const docTemplate = `{
                     "400": {
                         "description": "Bad Request",
                         "schema": {
-                            "$ref": "#/definitions/errors.ErrorResponse"
+                            "$ref": "#/definitions/josex_web_modules_core_errors.ErrorResponse"
                         }
                     }
                 }
@@ -362,7 +1542,7 @@ const docTemplate = `{
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/models.PasswordResetRequestDto"
+                            "$ref": "#/definitions/josex_web_modules_auth_models.PasswordResetRequestDto"
                         }
                     }
                 ],
@@ -370,13 +1550,13 @@ const docTemplate = `{
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/models.PasswordResetTokenRequestDto"
+                            "$ref": "#/definitions/josex_web_modules_auth_models.PasswordResetTokenRequestDto"
                         }
                     },
                     "400": {
                         "description": "Bad Request",
                         "schema": {
-                            "$ref": "#/definitions/errors.ErrorResponse"
+                            "$ref": "#/definitions/josex_web_modules_core_errors.ErrorResponse"
                         }
                     }
                 }
@@ -413,13 +1593,13 @@ const docTemplate = `{
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/models.User"
+                            "$ref": "#/definitions/josex_web_modules_core_models.User"
                         }
                     },
                     "400": {
                         "description": "Bad Request",
                         "schema": {
-                            "$ref": "#/definitions/errors.ErrorResponse"
+                            "$ref": "#/definitions/josex_web_modules_core_errors.ErrorResponse"
                         }
                     }
                 }
@@ -455,7 +1635,7 @@ const docTemplate = `{
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/models.UpdateProfileDto"
+                            "$ref": "#/definitions/josex_web_modules_auth_models.UpdateProfileDto"
                         }
                     }
                 ],
@@ -463,13 +1643,13 @@ const docTemplate = `{
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/models.User"
+                            "$ref": "#/definitions/josex_web_modules_core_models.User"
                         }
                     },
                     "400": {
                         "description": "Bad Request",
                         "schema": {
-                            "$ref": "#/definitions/errors.ErrorResponse"
+                            "$ref": "#/definitions/josex_web_modules_core_errors.ErrorResponse"
                         }
                     }
                 }
@@ -508,13 +1688,13 @@ const docTemplate = `{
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/models.User"
+                            "$ref": "#/definitions/josex_web_modules_core_models.User"
                         }
                     },
                     "400": {
                         "description": "Bad Request",
                         "schema": {
-                            "$ref": "#/definitions/errors.ErrorResponse"
+                            "$ref": "#/definitions/josex_web_modules_core_errors.ErrorResponse"
                         }
                     }
                 }
@@ -553,20 +1733,20 @@ const docTemplate = `{
                         "schema": {
                             "type": "array",
                             "items": {
-                                "$ref": "#/definitions/models.UserSession"
+                                "$ref": "#/definitions/josex_web_modules_auth_models.UserSession"
                             }
                         }
                     },
                     "400": {
                         "description": "Bad Request",
                         "schema": {
-                            "$ref": "#/definitions/errors.ErrorResponse"
+                            "$ref": "#/definitions/josex_web_modules_core_errors.ErrorResponse"
                         }
                     },
                     "401": {
                         "description": "Unauthorized",
                         "schema": {
-                            "$ref": "#/definitions/errors.ErrorResponse"
+                            "$ref": "#/definitions/josex_web_modules_core_errors.ErrorResponse"
                         }
                     }
                 }
@@ -610,13 +1790,13 @@ const docTemplate = `{
                     "400": {
                         "description": "Bad Request",
                         "schema": {
-                            "$ref": "#/definitions/errors.ErrorResponse"
+                            "$ref": "#/definitions/josex_web_modules_core_errors.ErrorResponse"
                         }
                     },
                     "401": {
                         "description": "Unauthorized",
                         "schema": {
-                            "$ref": "#/definitions/errors.ErrorResponse"
+                            "$ref": "#/definitions/josex_web_modules_core_errors.ErrorResponse"
                         }
                     }
                 }
@@ -669,13 +1849,13 @@ const docTemplate = `{
                     "400": {
                         "description": "Bad Request",
                         "schema": {
-                            "$ref": "#/definitions/errors.ErrorResponse"
+                            "$ref": "#/definitions/josex_web_modules_core_errors.ErrorResponse"
                         }
                     },
                     "401": {
                         "description": "Unauthorized",
                         "schema": {
-                            "$ref": "#/definitions/errors.ErrorResponse"
+                            "$ref": "#/definitions/josex_web_modules_core_errors.ErrorResponse"
                         }
                     }
                 }
@@ -706,7 +1886,7 @@ const docTemplate = `{
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/models.RefreshTokenRequestDto"
+                            "$ref": "#/definitions/josex_web_modules_auth_models.RefreshTokenRequestDto"
                         }
                     }
                 ],
@@ -714,19 +1894,1218 @@ const docTemplate = `{
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/models.RefreshTokenResponse"
+                            "$ref": "#/definitions/josex_web_modules_auth_models.RefreshTokenResponse"
                         }
                     },
                     "400": {
                         "description": "Bad Request",
                         "schema": {
-                            "$ref": "#/definitions/errors.ErrorResponse"
+                            "$ref": "#/definitions/josex_web_modules_core_errors.ErrorResponse"
                         }
                     },
                     "401": {
                         "description": "Unauthorized",
                         "schema": {
-                            "$ref": "#/definitions/errors.ErrorResponse"
+                            "$ref": "#/definitions/josex_web_modules_core_errors.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/batches": {
+            "post": {
+                "description": "Create a new inventory batch with lot number and expiry date",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Batches"
+                ],
+                "summary": "Create a new batch for a product",
+                "parameters": [
+                    {
+                        "description": "Batch data",
+                        "name": "batch",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/josex_web_modules_inventory_models.CreateBatchDto"
+                        }
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "Created",
+                        "schema": {
+                            "$ref": "#/definitions/josex_web_modules_inventory_models.BatchResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid request",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "404": {
+                        "description": "Product not found",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    }
+                }
+            }
+        },
+        "/batches/expiring": {
+            "get": {
+                "description": "Get all batches that will expire within the specified warning days",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Batches"
+                ],
+                "summary": "Get all batches expiring soon",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "Number of days to check for expiry (default: 30)",
+                        "name": "warningDays",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "array",
+                            "items": {
+                                "$ref": "#/definitions/josex_web_modules_inventory_models.BatchResponse"
+                            }
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid request",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    }
+                }
+            }
+        },
+        "/batches/{id}": {
+            "get": {
+                "description": "Get detailed information about a specific batch",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Batches"
+                ],
+                "summary": "Get batch details",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Batch ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/josex_web_modules_inventory_models.BatchResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Batch not found",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    }
+                }
+            }
+        },
+        "/billing/payments": {
+            "get": {
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Returns paginated payment history for the authenticated user.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Billing"
+                ],
+                "summary": "List payment history",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Bearer Token",
+                        "name": "Authorization",
+                        "in": "header",
+                        "required": true
+                    },
+                    {
+                        "type": "integer",
+                        "description": "Page number (default: 1)",
+                        "name": "page",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "Items per page",
+                        "name": "limit",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/josex_web_modules_billing_models.PaymentListResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/josex_web_modules_core_errors.ErrorResponse"
+                        }
+                    }
+                }
+            },
+            "post": {
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Records a payment against an active subscription.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Billing"
+                ],
+                "summary": "Record a payment",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Bearer Token",
+                        "name": "Authorization",
+                        "in": "header",
+                        "required": true
+                    },
+                    {
+                        "description": "Payment details",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/josex_web_modules_billing_models.RecordPaymentDto"
+                        }
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "Created",
+                        "schema": {
+                            "$ref": "#/definitions/josex_web_modules_billing_models.Payment"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/josex_web_modules_core_errors.ErrorResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/josex_web_modules_core_errors.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/billing/plan": {
+            "get": {
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Returns the authenticated user's active plan, subscription status, expiry date, and all feature limits.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Billing"
+                ],
+                "summary": "Get current plan info and feature limits",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Bearer Token",
+                        "name": "Authorization",
+                        "in": "header",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/josex_web_modules_billing_models.PlanInfo"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/josex_web_modules_core_errors.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/billing/subscription": {
+            "get": {
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Returns the authenticated user's active subscription, or null if none.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Billing"
+                ],
+                "summary": "Get current subscription",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Bearer Token",
+                        "name": "Authorization",
+                        "in": "header",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/josex_web_modules_billing_models.Subscription"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/josex_web_modules_core_errors.ErrorResponse"
+                        }
+                    }
+                }
+            },
+            "put": {
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Creates a new subscription or upgrades the existing one. Cancels the old subscription when switching plans.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Billing"
+                ],
+                "summary": "Create or upgrade a subscription",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Bearer Token",
+                        "name": "Authorization",
+                        "in": "header",
+                        "required": true
+                    },
+                    {
+                        "description": "Subscription details",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/josex_web_modules_billing_models.UpsertSubscriptionDto"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/josex_web_modules_billing_models.Subscription"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/josex_web_modules_core_errors.ErrorResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/josex_web_modules_core_errors.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/products/{productId}/batches": {
+            "get": {
+                "description": "Get all batches for a specific product, ordered by expiry date (FIFO)",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Batches"
+                ],
+                "summary": "List all batches for a product",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Product ID",
+                        "name": "productId",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "boolean",
+                        "description": "Only active batches (default: true)",
+                        "name": "onlyActive",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/josex_web_modules_inventory_models.ListBatchesResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid request",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    }
+                }
+            }
+        },
+        "/products/{productId}/batches/oldest": {
+            "get": {
+                "description": "Get the oldest active batch for a product, used for FIFO sales",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Batches"
+                ],
+                "summary": "Get oldest batch for sale (FIFO)",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Product ID",
+                        "name": "productId",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/josex_web_modules_inventory_models.BatchResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "No active batches found",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    }
+                }
+            }
+        },
+        "/sales/customers": {
+            "post": {
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Sales - Customers"
+                ],
+                "summary": "Create a new customer",
+                "parameters": [
+                    {
+                        "description": "Customer data",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/josex_web_modules_sales_models.CreateCustomerRequestDto"
+                        }
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "Created",
+                        "schema": {
+                            "$ref": "#/definitions/josex_web_modules_sales_models.Customer"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/josex_web_modules_core_errors.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/sales/customers/{id}": {
+            "get": {
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Sales - Customers"
+                ],
+                "summary": "Get a customer by ID",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Customer ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/josex_web_modules_sales_models.Customer"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/josex_web_modules_core_errors.ErrorResponse"
+                        }
+                    }
+                }
+            },
+            "delete": {
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Sales - Customers"
+                ],
+                "summary": "Delete a customer",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Customer ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "204": {
+                        "description": "No Content"
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/josex_web_modules_core_errors.ErrorResponse"
+                        }
+                    }
+                }
+            },
+            "patch": {
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Sales - Customers"
+                ],
+                "summary": "Update a customer",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Customer ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Updated customer data",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/josex_web_modules_sales_models.UpdateCustomerRequestDto"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/josex_web_modules_sales_models.Customer"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/josex_web_modules_core_errors.ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/josex_web_modules_core_errors.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/sales/orders": {
+            "get": {
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Sales - Orders"
+                ],
+                "summary": "List sales orders for tenant",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "Limit (default 20)",
+                        "name": "limit",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "Offset (default 0)",
+                        "name": "offset",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "array",
+                            "items": {
+                                "$ref": "#/definitions/josex_web_modules_sales_models.SalesOrder"
+                            }
+                        }
+                    }
+                }
+            },
+            "post": {
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Sales - Orders"
+                ],
+                "summary": "Create a new sales order",
+                "parameters": [
+                    {
+                        "description": "Order data",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/josex_web_modules_sales_models.CreateSalesOrderRequestDto"
+                        }
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "Created",
+                        "schema": {
+                            "$ref": "#/definitions/josex_web_modules_sales_models.SalesOrder"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/josex_web_modules_core_errors.ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/josex_web_modules_core_errors.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/sales/orders/{id}": {
+            "get": {
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Sales - Orders"
+                ],
+                "summary": "Get a sales order by ID",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Order ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/josex_web_modules_sales_models.SalesOrder"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/josex_web_modules_core_errors.ErrorResponse"
+                        }
+                    }
+                }
+            },
+            "patch": {
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Sales - Orders"
+                ],
+                "summary": "Update a sales order",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Order ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Updated order data",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/josex_web_modules_sales_models.UpdateSalesOrderRequestDto"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/josex_web_modules_sales_models.SalesOrder"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/josex_web_modules_core_errors.ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/josex_web_modules_core_errors.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/sales/orders/{id}/cancel": {
+            "patch": {
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Sales - Orders"
+                ],
+                "summary": "Cancel a sales order and release batch assignments",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Order ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/josex_web_modules_sales_models.SalesOrder"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/josex_web_modules_core_errors.ErrorResponse"
+                        }
+                    },
+                    "409": {
+                        "description": "Conflict",
+                        "schema": {
+                            "$ref": "#/definitions/josex_web_modules_core_errors.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/sales/orders/{id}/complete": {
+            "patch": {
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Sales - Orders"
+                ],
+                "summary": "Complete a sales order and consume inventory",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Order ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/josex_web_modules_sales_models.SalesOrder"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/josex_web_modules_core_errors.ErrorResponse"
+                        }
+                    },
+                    "409": {
+                        "description": "Conflict",
+                        "schema": {
+                            "$ref": "#/definitions/josex_web_modules_core_errors.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/sales/orders/{id}/items": {
+            "post": {
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Sales - Orders"
+                ],
+                "summary": "Add an item to an order with batch assignment",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Order ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Item data",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/josex_web_modules_sales_models.AddOrderItemRequestDto"
+                        }
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "Created",
+                        "schema": {
+                            "$ref": "#/definitions/josex_web_modules_sales_models.OrderItem"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/josex_web_modules_core_errors.ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/josex_web_modules_core_errors.ErrorResponse"
+                        }
+                    },
+                    "409": {
+                        "description": "Conflict",
+                        "schema": {
+                            "$ref": "#/definitions/josex_web_modules_core_errors.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/sales/orders/{id}/with-batches": {
+            "get": {
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Sales - Orders"
+                ],
+                "summary": "Get order details with batch assignments",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Order ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/josex_web_modules_sales_models.OrderWithBatches"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/josex_web_modules_core_errors.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/sales/payments": {
+            "get": {
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Sales - Payments"
+                ],
+                "summary": "Get payments for an order",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Order ID",
+                        "name": "order_id",
+                        "in": "query",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "array",
+                            "items": {
+                                "$ref": "#/definitions/josex_web_modules_sales_models.Payment"
+                            }
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/josex_web_modules_core_errors.ErrorResponse"
+                        }
+                    }
+                }
+            },
+            "post": {
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Sales - Payments"
+                ],
+                "summary": "Create a payment record for an order",
+                "parameters": [
+                    {
+                        "description": "Payment data",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/josex_web_modules_sales_models.CreatePaymentRequestDto"
+                        }
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "Created",
+                        "schema": {
+                            "$ref": "#/definitions/josex_web_modules_sales_models.Payment"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/josex_web_modules_core_errors.ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/josex_web_modules_core_errors.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/sales/reports/sales": {
+            "get": {
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Sales - Reports"
+                ],
+                "summary": "Get sales report for date range",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Start date (YYYY-MM-DD)",
+                        "name": "start_date",
+                        "in": "query",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "End date (YYYY-MM-DD)",
+                        "name": "end_date",
+                        "in": "query",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/josex_web_modules_sales_models.SalesReportResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/josex_web_modules_core_errors.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/sales/returns": {
+            "get": {
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Sales - Returns"
+                ],
+                "summary": "Get returns for an order",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Order ID",
+                        "name": "order_id",
+                        "in": "query",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "array",
+                            "items": {
+                                "$ref": "#/definitions/josex_web_modules_sales_models.Return"
+                            }
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/josex_web_modules_core_errors.ErrorResponse"
+                        }
+                    }
+                }
+            },
+            "post": {
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Sales - Returns"
+                ],
+                "summary": "Create a return request for a completed order",
+                "parameters": [
+                    {
+                        "description": "Return data",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/josex_web_modules_sales_models.CreateReturnRequestDto"
+                        }
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "Created",
+                        "schema": {
+                            "$ref": "#/definitions/josex_web_modules_sales_models.Return"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/josex_web_modules_core_errors.ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/josex_web_modules_core_errors.ErrorResponse"
+                        }
+                    },
+                    "409": {
+                        "description": "Conflict",
+                        "schema": {
+                            "$ref": "#/definitions/josex_web_modules_core_errors.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/sales/returns/{id}/approve": {
+            "patch": {
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Sales - Returns"
+                ],
+                "summary": "Approve a return request and restore inventory",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Return ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/josex_web_modules_sales_models.Return"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/josex_web_modules_core_errors.ErrorResponse"
+                        }
+                    },
+                    "409": {
+                        "description": "Conflict",
+                        "schema": {
+                            "$ref": "#/definitions/josex_web_modules_core_errors.ErrorResponse"
                         }
                     }
                 }
@@ -757,7 +3136,7 @@ const docTemplate = `{
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/models.CreateTenantDto"
+                            "$ref": "#/definitions/josex_web_modules_tenancy_models.CreateTenantDto"
                         }
                     }
                 ],
@@ -765,13 +3144,13 @@ const docTemplate = `{
                     "201": {
                         "description": "Created",
                         "schema": {
-                            "$ref": "#/definitions/models.TenantDetailResponse"
+                            "$ref": "#/definitions/josex_web_modules_tenancy_models.TenantDetailResponse"
                         }
                     },
                     "400": {
                         "description": "Bad Request",
                         "schema": {
-                            "$ref": "#/definitions/errors.ErrorResponse"
+                            "$ref": "#/definitions/josex_web_modules_core_errors.ErrorResponse"
                         }
                     }
                 }
@@ -798,14 +3177,14 @@ const docTemplate = `{
                         "schema": {
                             "type": "array",
                             "items": {
-                                "$ref": "#/definitions/models.UserTenantResponse"
+                                "$ref": "#/definitions/josex_web_modules_tenancy_models.UserTenantResponse"
                             }
                         }
                     },
                     "401": {
                         "description": "Unauthorized",
                         "schema": {
-                            "$ref": "#/definitions/errors.ErrorResponse"
+                            "$ref": "#/definitions/josex_web_modules_core_errors.ErrorResponse"
                         }
                     }
                 }
@@ -836,7 +3215,7 @@ const docTemplate = `{
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/models.CreateTenantDto"
+                            "$ref": "#/definitions/josex_web_modules_tenancy_models.CreateTenantDto"
                         }
                     }
                 ],
@@ -844,19 +3223,19 @@ const docTemplate = `{
                     "201": {
                         "description": "Created",
                         "schema": {
-                            "$ref": "#/definitions/models.TenantDetailResponse"
+                            "$ref": "#/definitions/josex_web_modules_tenancy_models.TenantDetailResponse"
                         }
                     },
                     "400": {
                         "description": "Bad Request",
                         "schema": {
-                            "$ref": "#/definitions/errors.ErrorResponse"
+                            "$ref": "#/definitions/josex_web_modules_core_errors.ErrorResponse"
                         }
                     },
                     "403": {
                         "description": "Forbidden",
                         "schema": {
-                            "$ref": "#/definitions/errors.ErrorResponse"
+                            "$ref": "#/definitions/josex_web_modules_core_errors.ErrorResponse"
                         }
                     }
                 }
@@ -894,7 +3273,7 @@ const docTemplate = `{
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/models.UpdateTenantDto"
+                            "$ref": "#/definitions/josex_web_modules_tenancy_models.UpdateTenantDto"
                         }
                     }
                 ],
@@ -902,13 +3281,13 @@ const docTemplate = `{
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/models.TenantDetailResponse"
+                            "$ref": "#/definitions/josex_web_modules_tenancy_models.TenantDetailResponse"
                         }
                     },
                     "400": {
                         "description": "Bad Request",
                         "schema": {
-                            "$ref": "#/definitions/errors.ErrorResponse"
+                            "$ref": "#/definitions/josex_web_modules_core_errors.ErrorResponse"
                         }
                     }
                 }
@@ -951,19 +3330,19 @@ const docTemplate = `{
                     "400": {
                         "description": "Bad Request",
                         "schema": {
-                            "$ref": "#/definitions/errors.ErrorResponse"
+                            "$ref": "#/definitions/josex_web_modules_core_errors.ErrorResponse"
                         }
                     },
                     "403": {
                         "description": "Forbidden",
                         "schema": {
-                            "$ref": "#/definitions/errors.ErrorResponse"
+                            "$ref": "#/definitions/josex_web_modules_core_errors.ErrorResponse"
                         }
                     },
                     "404": {
                         "description": "Not Found",
                         "schema": {
-                            "$ref": "#/definitions/errors.ErrorResponse"
+                            "$ref": "#/definitions/josex_web_modules_core_errors.ErrorResponse"
                         }
                     }
                 }
@@ -1001,7 +3380,7 @@ const docTemplate = `{
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/models.AddUserToTenantDto"
+                            "$ref": "#/definitions/josex_web_modules_tenancy_models.AddUserToTenantDto"
                         }
                     }
                 ],
@@ -1018,7 +3397,7 @@ const docTemplate = `{
                     "400": {
                         "description": "Bad Request",
                         "schema": {
-                            "$ref": "#/definitions/errors.ErrorResponse"
+                            "$ref": "#/definitions/josex_web_modules_core_errors.ErrorResponse"
                         }
                     }
                 }
@@ -1071,7 +3450,69 @@ const docTemplate = `{
                     "400": {
                         "description": "Bad Request",
                         "schema": {
-                            "$ref": "#/definitions/errors.ErrorResponse"
+                            "$ref": "#/definitions/josex_web_modules_core_errors.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/tenants/{tenant_slug}/users/{user_id}/role": {
+            "patch": {
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Change the role of a tenant member. Only owner can assign the owner role.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Tenants"
+                ],
+                "summary": "Update a user's role in the tenant (owner/admin only)",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Tenant slug",
+                        "name": "tenant_slug",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "User ID",
+                        "name": "user_id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "New role",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/josex_web_modules_tenancy_models.UpdateUserRoleDto"
+                        }
+                    }
+                ],
+                "responses": {
+                    "204": {
+                        "description": "No Content"
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/josex_web_modules_core_errors.ErrorResponse"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/josex_web_modules_core_errors.ErrorResponse"
                         }
                     }
                 }
@@ -1102,7 +3543,7 @@ const docTemplate = `{
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/models.CreateAlertDto"
+                            "$ref": "#/definitions/josex_web_modules_tracking_models.CreateAlertDto"
                         }
                     }
                 ],
@@ -1110,31 +3551,31 @@ const docTemplate = `{
                     "201": {
                         "description": "Created",
                         "schema": {
-                            "$ref": "#/definitions/models.AlertCreatedResponse"
+                            "$ref": "#/definitions/josex_web_modules_tracking_models.AlertCreatedResponse"
                         }
                     },
                     "400": {
                         "description": "Bad Request",
                         "schema": {
-                            "$ref": "#/definitions/errors.ErrorResponse"
+                            "$ref": "#/definitions/josex_web_modules_core_errors.ErrorResponse"
                         }
                     },
                     "401": {
                         "description": "Unauthorized",
                         "schema": {
-                            "$ref": "#/definitions/errors.ErrorResponse"
+                            "$ref": "#/definitions/josex_web_modules_core_errors.ErrorResponse"
                         }
                     },
                     "404": {
                         "description": "Not Found",
                         "schema": {
-                            "$ref": "#/definitions/errors.ErrorResponse"
+                            "$ref": "#/definitions/josex_web_modules_core_errors.ErrorResponse"
                         }
                     },
                     "500": {
                         "description": "Internal Server Error",
                         "schema": {
-                            "$ref": "#/definitions/errors.ErrorResponse"
+                            "$ref": "#/definitions/josex_web_modules_core_errors.ErrorResponse"
                         }
                     }
                 }
@@ -1147,7 +3588,7 @@ const docTemplate = `{
                         "BearerAuth": []
                     }
                 ],
-                "description": "Get all route assignments for a rider",
+                "description": "Get all route assignments (filter by rider_id, route_id, or is_active)",
                 "produces": [
                     "application/json"
                 ],
@@ -1160,8 +3601,19 @@ const docTemplate = `{
                         "type": "string",
                         "description": "Rider ID (UUID)",
                         "name": "rider_id",
-                        "in": "query",
-                        "required": true
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Route ID (UUID)",
+                        "name": "route_id",
+                        "in": "query"
+                    },
+                    {
+                        "type": "boolean",
+                        "description": "Filter by active status",
+                        "name": "is_active",
+                        "in": "query"
                     }
                 ],
                 "responses": {
@@ -1170,20 +3622,20 @@ const docTemplate = `{
                         "schema": {
                             "type": "array",
                             "items": {
-                                "$ref": "#/definitions/models.RiderAssignment"
+                                "$ref": "#/definitions/josex_web_modules_tracking_models.RiderAssignment"
                             }
                         }
                     },
                     "400": {
                         "description": "Bad Request",
                         "schema": {
-                            "$ref": "#/definitions/errors.ErrorResponse"
+                            "$ref": "#/definitions/josex_web_modules_core_errors.ErrorResponse"
                         }
                     },
                     "500": {
                         "description": "Internal Server Error",
                         "schema": {
-                            "$ref": "#/definitions/errors.ErrorResponse"
+                            "$ref": "#/definitions/josex_web_modules_core_errors.ErrorResponse"
                         }
                     }
                 }
@@ -1212,7 +3664,7 @@ const docTemplate = `{
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/models.AssignRiderDto"
+                            "$ref": "#/definitions/josex_web_modules_tracking_models.AssignRiderDto"
                         }
                     }
                 ],
@@ -1220,19 +3672,19 @@ const docTemplate = `{
                     "201": {
                         "description": "Created",
                         "schema": {
-                            "$ref": "#/definitions/models.RiderAssignment"
+                            "$ref": "#/definitions/josex_web_modules_tracking_models.RiderAssignment"
                         }
                     },
                     "400": {
                         "description": "Bad Request",
                         "schema": {
-                            "$ref": "#/definitions/errors.ErrorResponse"
+                            "$ref": "#/definitions/josex_web_modules_core_errors.ErrorResponse"
                         }
                     },
                     "500": {
                         "description": "Internal Server Error",
                         "schema": {
-                            "$ref": "#/definitions/errors.ErrorResponse"
+                            "$ref": "#/definitions/josex_web_modules_core_errors.ErrorResponse"
                         }
                     }
                 }
@@ -1266,19 +3718,19 @@ const docTemplate = `{
                     "400": {
                         "description": "Bad Request",
                         "schema": {
-                            "$ref": "#/definitions/errors.ErrorResponse"
+                            "$ref": "#/definitions/josex_web_modules_core_errors.ErrorResponse"
                         }
                     },
                     "404": {
                         "description": "Not Found",
                         "schema": {
-                            "$ref": "#/definitions/errors.ErrorResponse"
+                            "$ref": "#/definitions/josex_web_modules_core_errors.ErrorResponse"
                         }
                     },
                     "500": {
                         "description": "Internal Server Error",
                         "schema": {
-                            "$ref": "#/definitions/errors.ErrorResponse"
+                            "$ref": "#/definitions/josex_web_modules_core_errors.ErrorResponse"
                         }
                     }
                 }
@@ -1291,7 +3743,7 @@ const docTemplate = `{
                         "BearerAuth": []
                     }
                 ],
-                "description": "Get all companies accessible to the tenant (owned or client access)",
+                "description": "Get all companies owned by the current tenant",
                 "produces": [
                     "application/json"
                 ],
@@ -1305,14 +3757,14 @@ const docTemplate = `{
                         "schema": {
                             "type": "array",
                             "items": {
-                                "$ref": "#/definitions/models.TransportCompany"
+                                "$ref": "#/definitions/josex_web_modules_tracking_models.TransportCompany"
                             }
                         }
                     },
                     "500": {
                         "description": "Internal Server Error",
                         "schema": {
-                            "$ref": "#/definitions/errors.ErrorResponse"
+                            "$ref": "#/definitions/josex_web_modules_core_errors.ErrorResponse"
                         }
                     }
                 }
@@ -1341,7 +3793,7 @@ const docTemplate = `{
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/models.CreateCompanyDto"
+                            "$ref": "#/definitions/josex_web_modules_tracking_models.CreateCompanyDto"
                         }
                     }
                 ],
@@ -1349,19 +3801,19 @@ const docTemplate = `{
                     "201": {
                         "description": "Created",
                         "schema": {
-                            "$ref": "#/definitions/models.TransportCompany"
+                            "$ref": "#/definitions/josex_web_modules_tracking_models.TransportCompany"
                         }
                     },
                     "400": {
                         "description": "Bad Request",
                         "schema": {
-                            "$ref": "#/definitions/errors.ErrorResponse"
+                            "$ref": "#/definitions/josex_web_modules_core_errors.ErrorResponse"
                         }
                     },
                     "500": {
                         "description": "Internal Server Error",
                         "schema": {
-                            "$ref": "#/definitions/errors.ErrorResponse"
+                            "$ref": "#/definitions/josex_web_modules_core_errors.ErrorResponse"
                         }
                     }
                 }
@@ -1392,26 +3844,26 @@ const docTemplate = `{
                         "schema": {
                             "type": "array",
                             "items": {
-                                "$ref": "#/definitions/models.CompanyClientAccess"
+                                "$ref": "#/definitions/josex_web_modules_tracking_models.CompanyClientAccess"
                             }
                         }
                     },
                     "400": {
                         "description": "Bad Request",
                         "schema": {
-                            "$ref": "#/definitions/errors.ErrorResponse"
+                            "$ref": "#/definitions/josex_web_modules_core_errors.ErrorResponse"
                         }
                     },
                     "404": {
                         "description": "Not Found",
                         "schema": {
-                            "$ref": "#/definitions/errors.ErrorResponse"
+                            "$ref": "#/definitions/josex_web_modules_core_errors.ErrorResponse"
                         }
                     },
                     "500": {
                         "description": "Internal Server Error",
                         "schema": {
-                            "$ref": "#/definitions/errors.ErrorResponse"
+                            "$ref": "#/definitions/josex_web_modules_core_errors.ErrorResponse"
                         }
                     }
                 }
@@ -1442,7 +3894,7 @@ const docTemplate = `{
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/models.GrantClientAccessDto"
+                            "$ref": "#/definitions/josex_web_modules_tracking_models.GrantClientAccessDto"
                         }
                     }
                 ],
@@ -1450,25 +3902,25 @@ const docTemplate = `{
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/models.CompanyClientAccess"
+                            "$ref": "#/definitions/josex_web_modules_tracking_models.CompanyClientAccess"
                         }
                     },
                     "400": {
                         "description": "Bad Request",
                         "schema": {
-                            "$ref": "#/definitions/errors.ErrorResponse"
+                            "$ref": "#/definitions/josex_web_modules_core_errors.ErrorResponse"
                         }
                     },
                     "404": {
                         "description": "Not Found",
                         "schema": {
-                            "$ref": "#/definitions/errors.ErrorResponse"
+                            "$ref": "#/definitions/josex_web_modules_core_errors.ErrorResponse"
                         }
                     },
                     "500": {
                         "description": "Internal Server Error",
                         "schema": {
-                            "$ref": "#/definitions/errors.ErrorResponse"
+                            "$ref": "#/definitions/josex_web_modules_core_errors.ErrorResponse"
                         }
                     }
                 }
@@ -1507,19 +3959,68 @@ const docTemplate = `{
                     "400": {
                         "description": "Bad Request",
                         "schema": {
-                            "$ref": "#/definitions/errors.ErrorResponse"
+                            "$ref": "#/definitions/josex_web_modules_core_errors.ErrorResponse"
                         }
                     },
                     "404": {
                         "description": "Not Found",
                         "schema": {
-                            "$ref": "#/definitions/errors.ErrorResponse"
+                            "$ref": "#/definitions/josex_web_modules_core_errors.ErrorResponse"
                         }
                     },
                     "500": {
                         "description": "Internal Server Error",
                         "schema": {
-                            "$ref": "#/definitions/errors.ErrorResponse"
+                            "$ref": "#/definitions/josex_web_modules_core_errors.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/tracking/companies/{company_id}/riders": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Get all riders for a company (scoped to current tenant)",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Tracking - Riders"
+                ],
+                "summary": "List riders",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Company ID (UUID)",
+                        "name": "company_id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "array",
+                            "items": {
+                                "$ref": "#/definitions/josex_web_modules_tracking_models.Rider"
+                            }
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/josex_web_modules_core_errors.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/josex_web_modules_core_errors.ErrorResponse"
                         }
                     }
                 }
@@ -1553,25 +4054,25 @@ const docTemplate = `{
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/models.TransportCompany"
+                            "$ref": "#/definitions/josex_web_modules_tracking_models.TransportCompany"
                         }
                     },
                     "400": {
                         "description": "Bad Request",
                         "schema": {
-                            "$ref": "#/definitions/errors.ErrorResponse"
+                            "$ref": "#/definitions/josex_web_modules_core_errors.ErrorResponse"
                         }
                     },
                     "404": {
                         "description": "Not Found",
                         "schema": {
-                            "$ref": "#/definitions/errors.ErrorResponse"
+                            "$ref": "#/definitions/josex_web_modules_core_errors.ErrorResponse"
                         }
                     },
                     "500": {
                         "description": "Internal Server Error",
                         "schema": {
-                            "$ref": "#/definitions/errors.ErrorResponse"
+                            "$ref": "#/definitions/josex_web_modules_core_errors.ErrorResponse"
                         }
                     }
                 }
@@ -1603,19 +4104,19 @@ const docTemplate = `{
                     "400": {
                         "description": "Bad Request",
                         "schema": {
-                            "$ref": "#/definitions/errors.ErrorResponse"
+                            "$ref": "#/definitions/josex_web_modules_core_errors.ErrorResponse"
                         }
                     },
                     "404": {
                         "description": "Not Found",
                         "schema": {
-                            "$ref": "#/definitions/errors.ErrorResponse"
+                            "$ref": "#/definitions/josex_web_modules_core_errors.ErrorResponse"
                         }
                     },
                     "500": {
                         "description": "Internal Server Error",
                         "schema": {
-                            "$ref": "#/definitions/errors.ErrorResponse"
+                            "$ref": "#/definitions/josex_web_modules_core_errors.ErrorResponse"
                         }
                     }
                 }
@@ -1651,7 +4152,7 @@ const docTemplate = `{
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/models.UpdateCompanyDto"
+                            "$ref": "#/definitions/josex_web_modules_tracking_models.UpdateCompanyDto"
                         }
                     }
                 ],
@@ -1659,25 +4160,25 @@ const docTemplate = `{
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/models.TransportCompany"
+                            "$ref": "#/definitions/josex_web_modules_tracking_models.TransportCompany"
                         }
                     },
                     "400": {
                         "description": "Bad Request",
                         "schema": {
-                            "$ref": "#/definitions/errors.ErrorResponse"
+                            "$ref": "#/definitions/josex_web_modules_core_errors.ErrorResponse"
                         }
                     },
                     "404": {
                         "description": "Not Found",
                         "schema": {
-                            "$ref": "#/definitions/errors.ErrorResponse"
+                            "$ref": "#/definitions/josex_web_modules_core_errors.ErrorResponse"
                         }
                     },
                     "500": {
                         "description": "Internal Server Error",
                         "schema": {
-                            "$ref": "#/definitions/errors.ErrorResponse"
+                            "$ref": "#/definitions/josex_web_modules_core_errors.ErrorResponse"
                         }
                     }
                 }
@@ -1708,7 +4209,7 @@ const docTemplate = `{
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/models.RecordEventDto"
+                            "$ref": "#/definitions/josex_web_modules_tracking_models.RecordEventDto"
                         }
                     }
                 ],
@@ -1716,31 +4217,31 @@ const docTemplate = `{
                     "201": {
                         "description": "Created",
                         "schema": {
-                            "$ref": "#/definitions/models.EventRecordedResponse"
+                            "$ref": "#/definitions/josex_web_modules_tracking_models.EventRecordedResponse"
                         }
                     },
                     "400": {
                         "description": "Bad Request",
                         "schema": {
-                            "$ref": "#/definitions/errors.ErrorResponse"
+                            "$ref": "#/definitions/josex_web_modules_core_errors.ErrorResponse"
                         }
                     },
                     "401": {
                         "description": "Unauthorized",
                         "schema": {
-                            "$ref": "#/definitions/errors.ErrorResponse"
+                            "$ref": "#/definitions/josex_web_modules_core_errors.ErrorResponse"
                         }
                     },
                     "404": {
                         "description": "Not Found",
                         "schema": {
-                            "$ref": "#/definitions/errors.ErrorResponse"
+                            "$ref": "#/definitions/josex_web_modules_core_errors.ErrorResponse"
                         }
                     },
                     "500": {
                         "description": "Internal Server Error",
                         "schema": {
-                            "$ref": "#/definitions/errors.ErrorResponse"
+                            "$ref": "#/definitions/josex_web_modules_core_errors.ErrorResponse"
                         }
                     }
                 }
@@ -1766,7 +4267,7 @@ const docTemplate = `{
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/models.UpdateLocationDto"
+                            "$ref": "#/definitions/josex_web_modules_tracking_models.UpdateLocationDto"
                         }
                     }
                 ],
@@ -1774,78 +4275,31 @@ const docTemplate = `{
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/models.CurrentLocationResponse"
+                            "$ref": "#/definitions/josex_web_modules_tracking_models.CurrentLocationResponse"
                         }
                     },
                     "400": {
                         "description": "Bad Request",
                         "schema": {
-                            "$ref": "#/definitions/errors.ErrorResponse"
+                            "$ref": "#/definitions/josex_web_modules_core_errors.ErrorResponse"
                         }
                     },
                     "404": {
                         "description": "Not Found",
                         "schema": {
-                            "$ref": "#/definitions/errors.ErrorResponse"
+                            "$ref": "#/definitions/josex_web_modules_core_errors.ErrorResponse"
                         }
                     },
                     "500": {
                         "description": "Internal Server Error",
                         "schema": {
-                            "$ref": "#/definitions/errors.ErrorResponse"
+                            "$ref": "#/definitions/josex_web_modules_core_errors.ErrorResponse"
                         }
                     }
                 }
             }
         },
         "/tracking/riders": {
-            "get": {
-                "security": [
-                    {
-                        "BearerAuth": []
-                    }
-                ],
-                "description": "Get all riders for a company",
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "Tracking - Riders"
-                ],
-                "summary": "List riders",
-                "parameters": [
-                    {
-                        "type": "string",
-                        "description": "Company ID (UUID)",
-                        "name": "company_id",
-                        "in": "query",
-                        "required": true
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "type": "array",
-                            "items": {
-                                "$ref": "#/definitions/models.Rider"
-                            }
-                        }
-                    },
-                    "400": {
-                        "description": "Bad Request",
-                        "schema": {
-                            "$ref": "#/definitions/errors.ErrorResponse"
-                        }
-                    },
-                    "500": {
-                        "description": "Internal Server Error",
-                        "schema": {
-                            "$ref": "#/definitions/errors.ErrorResponse"
-                        }
-                    }
-                }
-            },
             "post": {
                 "security": [
                     {
@@ -1870,7 +4324,7 @@ const docTemplate = `{
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/models.CreateRiderDto"
+                            "$ref": "#/definitions/josex_web_modules_tracking_models.CreateRiderDto"
                         }
                     }
                 ],
@@ -1878,19 +4332,19 @@ const docTemplate = `{
                     "201": {
                         "description": "Created",
                         "schema": {
-                            "$ref": "#/definitions/models.Rider"
+                            "$ref": "#/definitions/josex_web_modules_tracking_models.Rider"
                         }
                     },
                     "400": {
                         "description": "Bad Request",
                         "schema": {
-                            "$ref": "#/definitions/errors.ErrorResponse"
+                            "$ref": "#/definitions/josex_web_modules_core_errors.ErrorResponse"
                         }
                     },
                     "500": {
                         "description": "Internal Server Error",
                         "schema": {
-                            "$ref": "#/definitions/errors.ErrorResponse"
+                            "$ref": "#/definitions/josex_web_modules_core_errors.ErrorResponse"
                         }
                     }
                 }
@@ -1903,7 +4357,7 @@ const docTemplate = `{
                         "BearerAuth": []
                     }
                 ],
-                "description": "Get a single rider by ID (supports guardian access)",
+                "description": "Get a single rider by ID",
                 "produces": [
                     "application/json"
                 ],
@@ -1924,25 +4378,25 @@ const docTemplate = `{
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/models.Rider"
+                            "$ref": "#/definitions/josex_web_modules_tracking_models.Rider"
                         }
                     },
                     "400": {
                         "description": "Bad Request",
                         "schema": {
-                            "$ref": "#/definitions/errors.ErrorResponse"
+                            "$ref": "#/definitions/josex_web_modules_core_errors.ErrorResponse"
                         }
                     },
                     "404": {
                         "description": "Not Found",
                         "schema": {
-                            "$ref": "#/definitions/errors.ErrorResponse"
+                            "$ref": "#/definitions/josex_web_modules_core_errors.ErrorResponse"
                         }
                     },
                     "500": {
                         "description": "Internal Server Error",
                         "schema": {
-                            "$ref": "#/definitions/errors.ErrorResponse"
+                            "$ref": "#/definitions/josex_web_modules_core_errors.ErrorResponse"
                         }
                     }
                 }
@@ -1974,19 +4428,19 @@ const docTemplate = `{
                     "400": {
                         "description": "Bad Request",
                         "schema": {
-                            "$ref": "#/definitions/errors.ErrorResponse"
+                            "$ref": "#/definitions/josex_web_modules_core_errors.ErrorResponse"
                         }
                     },
                     "404": {
                         "description": "Not Found",
                         "schema": {
-                            "$ref": "#/definitions/errors.ErrorResponse"
+                            "$ref": "#/definitions/josex_web_modules_core_errors.ErrorResponse"
                         }
                     },
                     "500": {
                         "description": "Internal Server Error",
                         "schema": {
-                            "$ref": "#/definitions/errors.ErrorResponse"
+                            "$ref": "#/definitions/josex_web_modules_core_errors.ErrorResponse"
                         }
                     }
                 }
@@ -2022,7 +4476,7 @@ const docTemplate = `{
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/models.UpdateRiderDto"
+                            "$ref": "#/definitions/josex_web_modules_tracking_models.UpdateRiderDto"
                         }
                     }
                 ],
@@ -2030,25 +4484,25 @@ const docTemplate = `{
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/models.Rider"
+                            "$ref": "#/definitions/josex_web_modules_tracking_models.Rider"
                         }
                     },
                     "400": {
                         "description": "Bad Request",
                         "schema": {
-                            "$ref": "#/definitions/errors.ErrorResponse"
+                            "$ref": "#/definitions/josex_web_modules_core_errors.ErrorResponse"
                         }
                     },
                     "404": {
                         "description": "Not Found",
                         "schema": {
-                            "$ref": "#/definitions/errors.ErrorResponse"
+                            "$ref": "#/definitions/josex_web_modules_core_errors.ErrorResponse"
                         }
                     },
                     "500": {
                         "description": "Internal Server Error",
                         "schema": {
-                            "$ref": "#/definitions/errors.ErrorResponse"
+                            "$ref": "#/definitions/josex_web_modules_core_errors.ErrorResponse"
                         }
                     }
                 }
@@ -2085,31 +4539,31 @@ const docTemplate = `{
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/models.RiderStatusResponse"
+                            "$ref": "#/definitions/josex_web_modules_tracking_models.RiderStatusResponse"
                         }
                     },
                     "400": {
                         "description": "Bad Request",
                         "schema": {
-                            "$ref": "#/definitions/errors.ErrorResponse"
+                            "$ref": "#/definitions/josex_web_modules_core_errors.ErrorResponse"
                         }
                     },
                     "401": {
                         "description": "Unauthorized",
                         "schema": {
-                            "$ref": "#/definitions/errors.ErrorResponse"
+                            "$ref": "#/definitions/josex_web_modules_core_errors.ErrorResponse"
                         }
                     },
                     "404": {
                         "description": "Not Found",
                         "schema": {
-                            "$ref": "#/definitions/errors.ErrorResponse"
+                            "$ref": "#/definitions/josex_web_modules_core_errors.ErrorResponse"
                         }
                     },
                     "500": {
                         "description": "Internal Server Error",
                         "schema": {
-                            "$ref": "#/definitions/errors.ErrorResponse"
+                            "$ref": "#/definitions/josex_web_modules_core_errors.ErrorResponse"
                         }
                     }
                 }
@@ -2140,7 +4594,7 @@ const docTemplate = `{
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/models.CreateRouteStopDto"
+                            "$ref": "#/definitions/josex_web_modules_tracking_models.CreateRouteStopDto"
                         }
                     }
                 ],
@@ -2148,19 +4602,19 @@ const docTemplate = `{
                     "201": {
                         "description": "Created",
                         "schema": {
-                            "$ref": "#/definitions/models.RouteStop"
+                            "$ref": "#/definitions/josex_web_modules_tracking_models.RouteStop"
                         }
                     },
                     "400": {
                         "description": "Bad Request",
                         "schema": {
-                            "$ref": "#/definitions/errors.ErrorResponse"
+                            "$ref": "#/definitions/josex_web_modules_core_errors.ErrorResponse"
                         }
                     },
                     "500": {
                         "description": "Internal Server Error",
                         "schema": {
-                            "$ref": "#/definitions/errors.ErrorResponse"
+                            "$ref": "#/definitions/josex_web_modules_core_errors.ErrorResponse"
                         }
                     }
                 }
@@ -2194,19 +4648,19 @@ const docTemplate = `{
                     "400": {
                         "description": "Bad Request",
                         "schema": {
-                            "$ref": "#/definitions/errors.ErrorResponse"
+                            "$ref": "#/definitions/josex_web_modules_core_errors.ErrorResponse"
                         }
                     },
                     "404": {
                         "description": "Not Found",
                         "schema": {
-                            "$ref": "#/definitions/errors.ErrorResponse"
+                            "$ref": "#/definitions/josex_web_modules_core_errors.ErrorResponse"
                         }
                     },
                     "500": {
                         "description": "Internal Server Error",
                         "schema": {
-                            "$ref": "#/definitions/errors.ErrorResponse"
+                            "$ref": "#/definitions/josex_web_modules_core_errors.ErrorResponse"
                         }
                     }
                 }
@@ -2219,7 +4673,7 @@ const docTemplate = `{
                         "BearerAuth": []
                     }
                 ],
-                "description": "Get all routes for a company",
+                "description": "Get all routes for a company (scoped to current tenant)",
                 "produces": [
                     "application/json"
                 ],
@@ -2242,20 +4696,20 @@ const docTemplate = `{
                         "schema": {
                             "type": "array",
                             "items": {
-                                "$ref": "#/definitions/models.Route"
+                                "$ref": "#/definitions/josex_web_modules_tracking_models.Route"
                             }
                         }
                     },
                     "400": {
                         "description": "Bad Request",
                         "schema": {
-                            "$ref": "#/definitions/errors.ErrorResponse"
+                            "$ref": "#/definitions/josex_web_modules_core_errors.ErrorResponse"
                         }
                     },
                     "500": {
                         "description": "Internal Server Error",
                         "schema": {
-                            "$ref": "#/definitions/errors.ErrorResponse"
+                            "$ref": "#/definitions/josex_web_modules_core_errors.ErrorResponse"
                         }
                     }
                 }
@@ -2284,7 +4738,7 @@ const docTemplate = `{
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/models.CreateRouteDto"
+                            "$ref": "#/definitions/josex_web_modules_tracking_models.CreateRouteDto"
                         }
                     }
                 ],
@@ -2292,19 +4746,19 @@ const docTemplate = `{
                     "201": {
                         "description": "Created",
                         "schema": {
-                            "$ref": "#/definitions/models.Route"
+                            "$ref": "#/definitions/josex_web_modules_tracking_models.Route"
                         }
                     },
                     "400": {
                         "description": "Bad Request",
                         "schema": {
-                            "$ref": "#/definitions/errors.ErrorResponse"
+                            "$ref": "#/definitions/josex_web_modules_core_errors.ErrorResponse"
                         }
                     },
                     "500": {
                         "description": "Internal Server Error",
                         "schema": {
-                            "$ref": "#/definitions/errors.ErrorResponse"
+                            "$ref": "#/definitions/josex_web_modules_core_errors.ErrorResponse"
                         }
                     }
                 }
@@ -2338,25 +4792,25 @@ const docTemplate = `{
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/models.Route"
+                            "$ref": "#/definitions/josex_web_modules_tracking_models.Route"
                         }
                     },
                     "400": {
                         "description": "Bad Request",
                         "schema": {
-                            "$ref": "#/definitions/errors.ErrorResponse"
+                            "$ref": "#/definitions/josex_web_modules_core_errors.ErrorResponse"
                         }
                     },
                     "404": {
                         "description": "Not Found",
                         "schema": {
-                            "$ref": "#/definitions/errors.ErrorResponse"
+                            "$ref": "#/definitions/josex_web_modules_core_errors.ErrorResponse"
                         }
                     },
                     "500": {
                         "description": "Internal Server Error",
                         "schema": {
-                            "$ref": "#/definitions/errors.ErrorResponse"
+                            "$ref": "#/definitions/josex_web_modules_core_errors.ErrorResponse"
                         }
                     }
                 }
@@ -2388,19 +4842,19 @@ const docTemplate = `{
                     "400": {
                         "description": "Bad Request",
                         "schema": {
-                            "$ref": "#/definitions/errors.ErrorResponse"
+                            "$ref": "#/definitions/josex_web_modules_core_errors.ErrorResponse"
                         }
                     },
                     "404": {
                         "description": "Not Found",
                         "schema": {
-                            "$ref": "#/definitions/errors.ErrorResponse"
+                            "$ref": "#/definitions/josex_web_modules_core_errors.ErrorResponse"
                         }
                     },
                     "500": {
                         "description": "Internal Server Error",
                         "schema": {
-                            "$ref": "#/definitions/errors.ErrorResponse"
+                            "$ref": "#/definitions/josex_web_modules_core_errors.ErrorResponse"
                         }
                     }
                 }
@@ -2436,7 +4890,7 @@ const docTemplate = `{
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/models.UpdateRouteDto"
+                            "$ref": "#/definitions/josex_web_modules_tracking_models.UpdateRouteDto"
                         }
                     }
                 ],
@@ -2444,25 +4898,25 @@ const docTemplate = `{
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/models.Route"
+                            "$ref": "#/definitions/josex_web_modules_tracking_models.Route"
                         }
                     },
                     "400": {
                         "description": "Bad Request",
                         "schema": {
-                            "$ref": "#/definitions/errors.ErrorResponse"
+                            "$ref": "#/definitions/josex_web_modules_core_errors.ErrorResponse"
                         }
                     },
                     "404": {
                         "description": "Not Found",
                         "schema": {
-                            "$ref": "#/definitions/errors.ErrorResponse"
+                            "$ref": "#/definitions/josex_web_modules_core_errors.ErrorResponse"
                         }
                     },
                     "500": {
                         "description": "Internal Server Error",
                         "schema": {
-                            "$ref": "#/definitions/errors.ErrorResponse"
+                            "$ref": "#/definitions/josex_web_modules_core_errors.ErrorResponse"
                         }
                     }
                 }
@@ -2499,31 +4953,31 @@ const docTemplate = `{
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/models.RouteRealtimeStatusResponse"
+                            "$ref": "#/definitions/josex_web_modules_tracking_models.RouteRealtimeStatusResponse"
                         }
                     },
                     "400": {
                         "description": "Bad Request",
                         "schema": {
-                            "$ref": "#/definitions/errors.ErrorResponse"
+                            "$ref": "#/definitions/josex_web_modules_core_errors.ErrorResponse"
                         }
                     },
                     "401": {
                         "description": "Unauthorized",
                         "schema": {
-                            "$ref": "#/definitions/errors.ErrorResponse"
+                            "$ref": "#/definitions/josex_web_modules_core_errors.ErrorResponse"
                         }
                     },
                     "404": {
                         "description": "Not Found",
                         "schema": {
-                            "$ref": "#/definitions/errors.ErrorResponse"
+                            "$ref": "#/definitions/josex_web_modules_core_errors.ErrorResponse"
                         }
                     },
                     "500": {
                         "description": "Internal Server Error",
                         "schema": {
-                            "$ref": "#/definitions/errors.ErrorResponse"
+                            "$ref": "#/definitions/josex_web_modules_core_errors.ErrorResponse"
                         }
                     }
                 }
@@ -2559,20 +5013,20 @@ const docTemplate = `{
                         "schema": {
                             "type": "array",
                             "items": {
-                                "$ref": "#/definitions/models.RouteStop"
+                                "$ref": "#/definitions/josex_web_modules_tracking_models.RouteStop"
                             }
                         }
                     },
                     "400": {
                         "description": "Bad Request",
                         "schema": {
-                            "$ref": "#/definitions/errors.ErrorResponse"
+                            "$ref": "#/definitions/josex_web_modules_core_errors.ErrorResponse"
                         }
                     },
                     "500": {
                         "description": "Internal Server Error",
                         "schema": {
-                            "$ref": "#/definitions/errors.ErrorResponse"
+                            "$ref": "#/definitions/josex_web_modules_core_errors.ErrorResponse"
                         }
                     }
                 }
@@ -2585,7 +5039,7 @@ const docTemplate = `{
                         "BearerAuth": []
                     }
                 ],
-                "description": "Get all vehicles for a company",
+                "description": "Get all vehicles for a company (scoped to current tenant)",
                 "produces": [
                     "application/json"
                 ],
@@ -2608,20 +5062,20 @@ const docTemplate = `{
                         "schema": {
                             "type": "array",
                             "items": {
-                                "$ref": "#/definitions/models.Vehicle"
+                                "$ref": "#/definitions/josex_web_modules_tracking_models.Vehicle"
                             }
                         }
                     },
                     "400": {
                         "description": "Bad Request",
                         "schema": {
-                            "$ref": "#/definitions/errors.ErrorResponse"
+                            "$ref": "#/definitions/josex_web_modules_core_errors.ErrorResponse"
                         }
                     },
                     "500": {
                         "description": "Internal Server Error",
                         "schema": {
-                            "$ref": "#/definitions/errors.ErrorResponse"
+                            "$ref": "#/definitions/josex_web_modules_core_errors.ErrorResponse"
                         }
                     }
                 }
@@ -2650,7 +5104,7 @@ const docTemplate = `{
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/models.CreateVehicleDto"
+                            "$ref": "#/definitions/josex_web_modules_tracking_models.CreateVehicleDto"
                         }
                     }
                 ],
@@ -2658,19 +5112,19 @@ const docTemplate = `{
                     "201": {
                         "description": "Created",
                         "schema": {
-                            "$ref": "#/definitions/models.Vehicle"
+                            "$ref": "#/definitions/josex_web_modules_tracking_models.Vehicle"
                         }
                     },
                     "400": {
                         "description": "Bad Request",
                         "schema": {
-                            "$ref": "#/definitions/errors.ErrorResponse"
+                            "$ref": "#/definitions/josex_web_modules_core_errors.ErrorResponse"
                         }
                     },
                     "500": {
                         "description": "Internal Server Error",
                         "schema": {
-                            "$ref": "#/definitions/errors.ErrorResponse"
+                            "$ref": "#/definitions/josex_web_modules_core_errors.ErrorResponse"
                         }
                     }
                 }
@@ -2704,25 +5158,25 @@ const docTemplate = `{
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/models.Vehicle"
+                            "$ref": "#/definitions/josex_web_modules_tracking_models.Vehicle"
                         }
                     },
                     "400": {
                         "description": "Bad Request",
                         "schema": {
-                            "$ref": "#/definitions/errors.ErrorResponse"
+                            "$ref": "#/definitions/josex_web_modules_core_errors.ErrorResponse"
                         }
                     },
                     "404": {
                         "description": "Not Found",
                         "schema": {
-                            "$ref": "#/definitions/errors.ErrorResponse"
+                            "$ref": "#/definitions/josex_web_modules_core_errors.ErrorResponse"
                         }
                     },
                     "500": {
                         "description": "Internal Server Error",
                         "schema": {
-                            "$ref": "#/definitions/errors.ErrorResponse"
+                            "$ref": "#/definitions/josex_web_modules_core_errors.ErrorResponse"
                         }
                     }
                 }
@@ -2754,19 +5208,19 @@ const docTemplate = `{
                     "400": {
                         "description": "Bad Request",
                         "schema": {
-                            "$ref": "#/definitions/errors.ErrorResponse"
+                            "$ref": "#/definitions/josex_web_modules_core_errors.ErrorResponse"
                         }
                     },
                     "404": {
                         "description": "Not Found",
                         "schema": {
-                            "$ref": "#/definitions/errors.ErrorResponse"
+                            "$ref": "#/definitions/josex_web_modules_core_errors.ErrorResponse"
                         }
                     },
                     "500": {
                         "description": "Internal Server Error",
                         "schema": {
-                            "$ref": "#/definitions/errors.ErrorResponse"
+                            "$ref": "#/definitions/josex_web_modules_core_errors.ErrorResponse"
                         }
                     }
                 }
@@ -2802,7 +5256,7 @@ const docTemplate = `{
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/models.UpdateVehicleDto"
+                            "$ref": "#/definitions/josex_web_modules_tracking_models.UpdateVehicleDto"
                         }
                     }
                 ],
@@ -2810,25 +5264,25 @@ const docTemplate = `{
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/models.Vehicle"
+                            "$ref": "#/definitions/josex_web_modules_tracking_models.Vehicle"
                         }
                     },
                     "400": {
                         "description": "Bad Request",
                         "schema": {
-                            "$ref": "#/definitions/errors.ErrorResponse"
+                            "$ref": "#/definitions/josex_web_modules_core_errors.ErrorResponse"
                         }
                     },
                     "404": {
                         "description": "Not Found",
                         "schema": {
-                            "$ref": "#/definitions/errors.ErrorResponse"
+                            "$ref": "#/definitions/josex_web_modules_core_errors.ErrorResponse"
                         }
                     },
                     "500": {
                         "description": "Internal Server Error",
                         "schema": {
-                            "$ref": "#/definitions/errors.ErrorResponse"
+                            "$ref": "#/definitions/josex_web_modules_core_errors.ErrorResponse"
                         }
                     }
                 }
@@ -2836,6 +5290,11 @@ const docTemplate = `{
         },
         "/tracking/vehicles/{id}/location": {
             "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
                 "description": "Retrieve the most recent GPS location for a vehicle",
                 "consumes": [
                     "application/json"
@@ -2860,25 +5319,25 @@ const docTemplate = `{
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/models.CurrentLocationResponse"
+                            "$ref": "#/definitions/josex_web_modules_tracking_models.CurrentLocationResponse"
                         }
                     },
                     "400": {
                         "description": "Bad Request",
                         "schema": {
-                            "$ref": "#/definitions/errors.ErrorResponse"
+                            "$ref": "#/definitions/josex_web_modules_core_errors.ErrorResponse"
                         }
                     },
                     "404": {
                         "description": "Not Found",
                         "schema": {
-                            "$ref": "#/definitions/errors.ErrorResponse"
+                            "$ref": "#/definitions/josex_web_modules_core_errors.ErrorResponse"
                         }
                     },
                     "500": {
                         "description": "Internal Server Error",
                         "schema": {
-                            "$ref": "#/definitions/errors.ErrorResponse"
+                            "$ref": "#/definitions/josex_web_modules_core_errors.ErrorResponse"
                         }
                     }
                 }
@@ -2969,19 +5428,19 @@ const docTemplate = `{
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/models.UserListResponse"
+                            "$ref": "#/definitions/josex_web_modules_users_models.UserListResponse"
                         }
                     },
                     "400": {
                         "description": "Bad Request",
                         "schema": {
-                            "$ref": "#/definitions/errors.ErrorResponse"
+                            "$ref": "#/definitions/josex_web_modules_core_errors.ErrorResponse"
                         }
                     },
                     "401": {
                         "description": "Unauthorized",
                         "schema": {
-                            "$ref": "#/definitions/errors.ErrorResponse"
+                            "$ref": "#/definitions/josex_web_modules_core_errors.ErrorResponse"
                         }
                     }
                 }
@@ -3025,25 +5484,25 @@ const docTemplate = `{
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/models.User"
+                            "$ref": "#/definitions/josex_web_modules_core_models.User"
                         }
                     },
                     "400": {
                         "description": "Bad Request",
                         "schema": {
-                            "$ref": "#/definitions/errors.ErrorResponse"
+                            "$ref": "#/definitions/josex_web_modules_core_errors.ErrorResponse"
                         }
                     },
                     "401": {
                         "description": "Unauthorized",
                         "schema": {
-                            "$ref": "#/definitions/errors.ErrorResponse"
+                            "$ref": "#/definitions/josex_web_modules_core_errors.ErrorResponse"
                         }
                     },
                     "404": {
                         "description": "Not Found",
                         "schema": {
-                            "$ref": "#/definitions/errors.ErrorResponse"
+                            "$ref": "#/definitions/josex_web_modules_core_errors.ErrorResponse"
                         }
                     }
                 }
@@ -3085,7 +5544,7 @@ const docTemplate = `{
                         "name": "request",
                         "in": "body",
                         "schema": {
-                            "$ref": "#/definitions/models.SoftDeleteUserDto"
+                            "$ref": "#/definitions/josex_web_modules_users_models.SoftDeleteUserDto"
                         }
                     }
                 ],
@@ -3102,25 +5561,25 @@ const docTemplate = `{
                     "400": {
                         "description": "Bad Request",
                         "schema": {
-                            "$ref": "#/definitions/errors.ErrorResponse"
+                            "$ref": "#/definitions/josex_web_modules_core_errors.ErrorResponse"
                         }
                     },
                     "401": {
                         "description": "Unauthorized",
                         "schema": {
-                            "$ref": "#/definitions/errors.ErrorResponse"
+                            "$ref": "#/definitions/josex_web_modules_core_errors.ErrorResponse"
                         }
                     },
                     "403": {
                         "description": "User deletion is disabled",
                         "schema": {
-                            "$ref": "#/definitions/errors.ErrorResponse"
+                            "$ref": "#/definitions/josex_web_modules_core_errors.ErrorResponse"
                         }
                     },
                     "404": {
                         "description": "Not Found",
                         "schema": {
-                            "$ref": "#/definitions/errors.ErrorResponse"
+                            "$ref": "#/definitions/josex_web_modules_core_errors.ErrorResponse"
                         }
                     }
                 }
@@ -3128,21 +5587,18 @@ const docTemplate = `{
         }
     },
     "definitions": {
-        "errors.ErrorResponse": {
+        "josex_web_modules_auth_models.ChangePasswordRequestDto": {
             "type": "object",
+            "required": [
+                "password_current",
+                "password_new"
+            ],
             "properties": {
-                "code": {
-                    "description": "Error code\nexample: 400",
+                "password_current": {
                     "type": "string"
                 },
-                "detail": {
-                    "description": "Error details\nexample: {\"email\": \"Invalid email format\"}"
-                },
-                "error": {
-                    "description": "Error message\nexample: Bad Request"
-                },
-                "message": {
-                    "description": "Translated error message"
+                "password_new": {
+                    "type": "string"
                 }
             }
         },
@@ -3184,7 +5640,1696 @@ const docTemplate = `{
                 }
             }
         },
-        "models.AddUserToTenantDto": {
+        "josex_web_modules_auth_models.LoginExternalRequestDto": {
+            "type": "object",
+            "required": [
+                "auth_provider_id",
+                "email"
+            ],
+            "properties": {
+                "auth_provider_id": {
+                    "type": "string"
+                },
+                "birthday": {
+                    "type": "string"
+                },
+                "device_id": {
+                    "type": "string"
+                },
+                "email": {
+                    "type": "string"
+                },
+                "first_name": {
+                    "type": "string"
+                },
+                "last_name": {
+                    "type": "string"
+                },
+                "phone": {
+                    "type": "string"
+                }
+            }
+        },
+        "josex_web_modules_auth_models.LoginSuccessResponse": {
+            "type": "object",
+            "properties": {
+                "access_token": {
+                    "description": "JWT token",
+                    "type": "string"
+                },
+                "refresh_token": {
+                    "description": "JWT token",
+                    "type": "string"
+                }
+            }
+        },
+        "josex_web_modules_auth_models.LoginUserRequestDto": {
+            "type": "object",
+            "required": [
+                "email",
+                "password"
+            ],
+            "properties": {
+                "device_id": {
+                    "type": "string"
+                },
+                "email": {
+                    "type": "string"
+                },
+                "password": {
+                    "type": "string"
+                }
+            }
+        },
+        "josex_web_modules_auth_models.PasswordResetRequestDto": {
+            "type": "object",
+            "required": [
+                "email"
+            ],
+            "properties": {
+                "email": {
+                    "type": "string"
+                }
+            }
+        },
+        "josex_web_modules_auth_models.PasswordResetTokenRequestDto": {
+            "type": "object",
+            "required": [
+                "token"
+            ],
+            "properties": {
+                "token": {
+                    "type": "string"
+                }
+            }
+        },
+        "josex_web_modules_auth_models.PasswordResetWithTokenDto": {
+            "type": "object",
+            "required": [
+                "password_new",
+                "token"
+            ],
+            "properties": {
+                "password_new": {
+                    "type": "string"
+                },
+                "token": {
+                    "type": "string"
+                }
+            }
+        },
+        "josex_web_modules_auth_models.RefreshTokenRequestDto": {
+            "type": "object",
+            "properties": {
+                "refresh_token": {
+                    "description": "JWT token",
+                    "type": "string"
+                }
+            }
+        },
+        "josex_web_modules_auth_models.RefreshTokenResponse": {
+            "type": "object",
+            "properties": {
+                "access_token": {
+                    "description": "JWT token",
+                    "type": "string"
+                }
+            }
+        },
+        "josex_web_modules_auth_models.RequestOtpRequestDto": {
+            "type": "object",
+            "required": [
+                "channel",
+                "destination"
+            ],
+            "properties": {
+                "channel": {
+                    "description": "whatsapp, sms, email",
+                    "type": "string"
+                },
+                "destination": {
+                    "description": "phone or email",
+                    "type": "string"
+                },
+                "device_id": {
+                    "type": "string"
+                }
+            }
+        },
+        "josex_web_modules_auth_models.RequestOtpResponse": {
+            "type": "object",
+            "properties": {
+                "channel": {
+                    "type": "string"
+                },
+                "destination": {
+                    "description": "masked for security (e.g., \"+12345****90\")",
+                    "type": "string"
+                },
+                "expires_at": {
+                    "type": "string"
+                },
+                "message": {
+                    "type": "string"
+                },
+                "otp_id": {
+                    "type": "string"
+                }
+            }
+        },
+        "josex_web_modules_auth_models.UpdateProfileDto": {
+            "type": "object",
+            "properties": {
+                "bio": {
+                    "type": "string"
+                },
+                "birthday": {
+                    "type": "string"
+                },
+                "first_name": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "string"
+                },
+                "last_name": {
+                    "type": "string"
+                },
+                "password_current": {
+                    "type": "string"
+                },
+                "password_new": {
+                    "type": "string"
+                },
+                "phone": {
+                    "type": "string"
+                },
+                "profile_picture_url": {
+                    "type": "string"
+                },
+                "website_url": {
+                    "type": "string"
+                }
+            }
+        },
+        "josex_web_modules_auth_models.UserSession": {
+            "type": "object",
+            "properties": {
+                "browser": {
+                    "type": "string"
+                },
+                "device_id": {
+                    "type": "string"
+                },
+                "device_os": {
+                    "type": "string"
+                },
+                "ip_address": {
+                    "type": "string"
+                },
+                "is_active": {
+                    "type": "boolean"
+                },
+                "last_active": {
+                    "type": "string"
+                },
+                "login_time": {
+                    "type": "string"
+                },
+                "logout_time": {
+                    "type": "string"
+                },
+                "session_id": {
+                    "type": "string"
+                },
+                "user_id": {
+                    "type": "string"
+                }
+            }
+        },
+        "josex_web_modules_auth_models.VerifyEmailRequestDto": {
+            "type": "object",
+            "properties": {
+                "email": {
+                    "type": "string"
+                }
+            }
+        },
+        "josex_web_modules_auth_models.VerifyEmailToken": {
+            "type": "object",
+            "required": [
+                "token"
+            ],
+            "properties": {
+                "token": {
+                    "type": "string"
+                }
+            }
+        },
+        "josex_web_modules_auth_models.VerifyOtpRequestDto": {
+            "type": "object",
+            "required": [
+                "channel",
+                "destination",
+                "otp_code"
+            ],
+            "properties": {
+                "channel": {
+                    "type": "string"
+                },
+                "destination": {
+                    "type": "string"
+                },
+                "device_id": {
+                    "type": "string"
+                },
+                "otp_code": {
+                    "description": "Exactly 6 digits",
+                    "type": "string"
+                }
+            }
+        },
+        "josex_web_modules_auth_models.VerifyOtpResponse": {
+            "type": "object",
+            "properties": {
+                "access_token": {
+                    "description": "JWT access token",
+                    "type": "string"
+                },
+                "refresh_token": {
+                    "description": "JWT refresh token",
+                    "type": "string"
+                }
+            }
+        },
+        "josex_web_modules_billing_models.Payment": {
+            "type": "object",
+            "properties": {
+                "amount": {
+                    "type": "number"
+                },
+                "created_at": {
+                    "type": "string"
+                },
+                "currency": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "string"
+                },
+                "paid_at": {
+                    "type": "string"
+                },
+                "period_end": {
+                    "type": "string"
+                },
+                "period_start": {
+                    "type": "string"
+                },
+                "provider": {
+                    "type": "string"
+                },
+                "provider_payment_id": {
+                    "type": "string"
+                },
+                "status": {
+                    "type": "string"
+                },
+                "subscription_id": {
+                    "type": "string"
+                }
+            }
+        },
+        "josex_web_modules_billing_models.PaymentListResponse": {
+            "type": "object",
+            "properties": {
+                "data": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/josex_web_modules_billing_models.Payment"
+                    }
+                },
+                "limit": {
+                    "type": "integer"
+                },
+                "page": {
+                    "type": "integer"
+                },
+                "total_count": {
+                    "type": "integer"
+                }
+            }
+        },
+        "josex_web_modules_billing_models.PlanInfo": {
+            "type": "object",
+            "properties": {
+                "expires_at": {
+                    "type": "string"
+                },
+                "is_active": {
+                    "type": "boolean"
+                },
+                "is_expired": {
+                    "type": "boolean"
+                },
+                "limits": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/josex_web_modules_billing_models.PlanLimit"
+                    }
+                },
+                "plan": {
+                    "type": "string"
+                },
+                "status": {
+                    "type": "string"
+                }
+            }
+        },
+        "josex_web_modules_billing_models.PlanLimit": {
+            "type": "object",
+            "properties": {
+                "feature": {
+                    "type": "string"
+                },
+                "limit_value": {
+                    "description": "-1 = unlimited",
+                    "type": "integer"
+                }
+            }
+        },
+        "josex_web_modules_billing_models.RecordPaymentDto": {
+            "type": "object",
+            "required": [
+                "amount",
+                "subscription_id"
+            ],
+            "properties": {
+                "amount": {
+                    "type": "number"
+                },
+                "currency": {
+                    "type": "string"
+                },
+                "period_end": {
+                    "type": "string"
+                },
+                "period_start": {
+                    "type": "string"
+                },
+                "provider": {
+                    "type": "string"
+                },
+                "provider_payment_id": {
+                    "type": "string"
+                },
+                "status": {
+                    "type": "string",
+                    "enum": [
+                        "pending",
+                        "completed",
+                        "failed",
+                        "refunded"
+                    ]
+                },
+                "subscription_id": {
+                    "type": "string"
+                }
+            }
+        },
+        "josex_web_modules_billing_models.Subscription": {
+            "type": "object",
+            "properties": {
+                "canceled_at": {
+                    "type": "string"
+                },
+                "created_at": {
+                    "type": "string"
+                },
+                "expires_at": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "string"
+                },
+                "plan": {
+                    "description": "free | pro | enterprise",
+                    "type": "string"
+                },
+                "started_at": {
+                    "type": "string"
+                },
+                "status": {
+                    "description": "active | expired | canceled | trial",
+                    "type": "string"
+                },
+                "stripe_customer_id": {
+                    "type": "string"
+                },
+                "stripe_sub_id": {
+                    "type": "string"
+                },
+                "updated_at": {
+                    "type": "string"
+                },
+                "user_id": {
+                    "type": "string"
+                }
+            }
+        },
+        "josex_web_modules_billing_models.UpsertSubscriptionDto": {
+            "type": "object",
+            "required": [
+                "plan"
+            ],
+            "properties": {
+                "expires_at": {
+                    "type": "string"
+                },
+                "plan": {
+                    "type": "string",
+                    "enum": [
+                        "free",
+                        "pro",
+                        "enterprise"
+                    ]
+                },
+                "status": {
+                    "type": "string",
+                    "enum": [
+                        "active",
+                        "expired",
+                        "canceled",
+                        "trial"
+                    ]
+                },
+                "stripe_customer_id": {
+                    "type": "string"
+                },
+                "stripe_sub_id": {
+                    "type": "string"
+                }
+            }
+        },
+        "josex_web_modules_core_errors.ErrorResponse": {
+            "type": "object",
+            "properties": {
+                "code": {
+                    "description": "Error code\nexample: 400",
+                    "type": "string"
+                },
+                "detail": {
+                    "description": "Error details\nexample: {\"email\": \"Invalid email format\"}"
+                },
+                "error": {
+                    "description": "Error message\nexample: Bad Request"
+                },
+                "message": {
+                    "description": "Translated error message"
+                }
+            }
+        },
+        "josex_web_modules_core_models.User": {
+            "type": "object",
+            "required": [
+                "email",
+                "first_name",
+                "id",
+                "last_name"
+            ],
+            "properties": {
+                "bio": {
+                    "type": "string"
+                },
+                "birthday": {
+                    "type": "string"
+                },
+                "created_at": {
+                    "type": "string"
+                },
+                "email": {
+                    "type": "string"
+                },
+                "expiration_date": {
+                    "type": "string"
+                },
+                "first_name": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "string"
+                },
+                "is_active": {
+                    "type": "boolean"
+                },
+                "last_name": {
+                    "type": "string"
+                },
+                "phone": {
+                    "type": "string"
+                },
+                "profile_picture_url": {
+                    "type": "string"
+                },
+                "tenant_role": {
+                    "type": "string"
+                },
+                "website_url": {
+                    "type": "string"
+                }
+            }
+        },
+        "josex_web_modules_inventory_models.AddProductMediaDto": {
+            "type": "object",
+            "required": [
+                "media_type",
+                "url"
+            ],
+            "properties": {
+                "alt_text": {
+                    "type": "string"
+                },
+                "is_primary": {
+                    "type": "boolean"
+                },
+                "media_type": {
+                    "type": "string",
+                    "enum": [
+                        "image",
+                        "video"
+                    ]
+                },
+                "sort_order": {
+                    "type": "integer"
+                },
+                "url": {
+                    "type": "string"
+                },
+                "variant_option_id": {
+                    "type": "string"
+                }
+            }
+        },
+        "josex_web_modules_inventory_models.AddProductMediaResponse": {
+            "type": "object",
+            "properties": {
+                "media_id": {
+                    "type": "string"
+                },
+                "message": {
+                    "type": "string"
+                }
+            }
+        },
+        "josex_web_modules_inventory_models.BatchResponse": {
+            "type": "object",
+            "properties": {
+                "current_quantity": {
+                    "type": "number"
+                },
+                "days_to_expiry": {
+                    "type": "integer"
+                },
+                "expiry_date": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "string"
+                },
+                "initial_quantity": {
+                    "type": "number"
+                },
+                "lot_number": {
+                    "type": "string"
+                },
+                "message": {
+                    "type": "string"
+                },
+                "product_id": {
+                    "type": "string"
+                },
+                "purchase_date": {
+                    "type": "string"
+                },
+                "status": {
+                    "type": "string"
+                },
+                "unit_cost": {
+                    "type": "number"
+                }
+            }
+        },
+        "josex_web_modules_inventory_models.CategoryResponse": {
+            "type": "object",
+            "properties": {
+                "created_at": {
+                    "type": "string"
+                },
+                "description": {
+                    "type": "string"
+                },
+                "display_order": {
+                    "type": "integer"
+                },
+                "icon_url": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "string"
+                },
+                "is_active": {
+                    "type": "boolean"
+                },
+                "name": {
+                    "type": "string"
+                },
+                "parent_id": {
+                    "type": "string"
+                },
+                "product_count": {
+                    "type": "integer"
+                },
+                "slug": {
+                    "type": "string"
+                },
+                "updated_at": {
+                    "type": "string"
+                }
+            }
+        },
+        "josex_web_modules_inventory_models.CreateBatchDto": {
+            "type": "object",
+            "required": [
+                "expiry_date",
+                "initial_quantity",
+                "lot_number",
+                "product_id",
+                "purchase_date",
+                "unit_cost"
+            ],
+            "properties": {
+                "expiry_date": {
+                    "type": "string"
+                },
+                "initial_quantity": {
+                    "type": "number"
+                },
+                "lot_number": {
+                    "type": "string",
+                    "maxLength": 100,
+                    "minLength": 1
+                },
+                "product_id": {
+                    "type": "string"
+                },
+                "purchase_date": {
+                    "type": "string"
+                },
+                "unit_cost": {
+                    "type": "number"
+                }
+            }
+        },
+        "josex_web_modules_inventory_models.CreateCategoryDto": {
+            "type": "object",
+            "required": [
+                "name",
+                "slug"
+            ],
+            "properties": {
+                "description": {
+                    "type": "string"
+                },
+                "display_order": {
+                    "type": "integer"
+                },
+                "icon_url": {
+                    "type": "string"
+                },
+                "name": {
+                    "type": "string"
+                },
+                "parent_id": {
+                    "type": "string"
+                },
+                "slug": {
+                    "type": "string"
+                }
+            }
+        },
+        "josex_web_modules_inventory_models.CreateProductDto": {
+            "type": "object",
+            "required": [
+                "base_price",
+                "name",
+                "sku"
+            ],
+            "properties": {
+                "base_price": {
+                    "type": "number"
+                },
+                "description": {
+                    "type": "string"
+                },
+                "name": {
+                    "type": "string"
+                },
+                "sku": {
+                    "type": "string"
+                },
+                "variants": {}
+            }
+        },
+        "josex_web_modules_inventory_models.CreateProductResponse": {
+            "type": "object",
+            "properties": {
+                "message": {
+                    "type": "string"
+                },
+                "name": {
+                    "type": "string"
+                },
+                "product_id": {
+                    "type": "string"
+                },
+                "sku": {
+                    "type": "string"
+                }
+            }
+        },
+        "josex_web_modules_inventory_models.GetProductsByCategoryResponse": {
+            "type": "object",
+            "properties": {
+                "base_price": {
+                    "type": "number"
+                },
+                "description": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "string"
+                },
+                "name": {
+                    "type": "string"
+                },
+                "sku": {
+                    "type": "string"
+                },
+                "status": {
+                    "type": "string"
+                }
+            }
+        },
+        "josex_web_modules_inventory_models.InventoryMovement": {
+            "type": "object",
+            "properties": {
+                "created_at": {
+                    "type": "string"
+                },
+                "created_by": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "string"
+                },
+                "movement_type": {
+                    "type": "string"
+                },
+                "notes": {
+                    "type": "string"
+                },
+                "product_id": {
+                    "type": "string"
+                },
+                "quantity": {
+                    "type": "number"
+                },
+                "reference_id": {
+                    "type": "string"
+                },
+                "reference_type": {
+                    "type": "string"
+                },
+                "unit_cost": {
+                    "type": "number"
+                }
+            }
+        },
+        "josex_web_modules_inventory_models.ListBatchesResponse": {
+            "type": "object",
+            "properties": {
+                "batches": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/josex_web_modules_inventory_models.BatchResponse"
+                    }
+                },
+                "count": {
+                    "type": "integer"
+                },
+                "message": {
+                    "type": "string"
+                }
+            }
+        },
+        "josex_web_modules_inventory_models.ListCategoriesResponse": {
+            "type": "object",
+            "properties": {
+                "categories": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/josex_web_modules_inventory_models.CategoryResponse"
+                    }
+                },
+                "total": {
+                    "type": "integer"
+                }
+            }
+        },
+        "josex_web_modules_inventory_models.Product": {
+            "type": "object",
+            "properties": {
+                "base_price": {
+                    "type": "number"
+                },
+                "created_at": {
+                    "type": "string"
+                },
+                "description": {
+                    "type": "string"
+                },
+                "has_variants": {
+                    "type": "boolean"
+                },
+                "id": {
+                    "type": "string"
+                },
+                "name": {
+                    "type": "string"
+                },
+                "sku": {
+                    "type": "string"
+                },
+                "status": {
+                    "type": "string"
+                }
+            }
+        },
+        "josex_web_modules_inventory_models.ProductDetail": {
+            "type": "object",
+            "properties": {
+                "base_price": {
+                    "type": "number"
+                },
+                "created_at": {
+                    "type": "string"
+                },
+                "description": {
+                    "type": "string"
+                },
+                "has_variants": {
+                    "type": "boolean"
+                },
+                "id": {
+                    "type": "string"
+                },
+                "media": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/josex_web_modules_inventory_models.ProductMedia"
+                    }
+                },
+                "name": {
+                    "type": "string"
+                },
+                "sku": {
+                    "type": "string"
+                },
+                "status": {
+                    "type": "string"
+                },
+                "variants": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/josex_web_modules_inventory_models.VariantGroup"
+                    }
+                }
+            }
+        },
+        "josex_web_modules_inventory_models.ProductMedia": {
+            "type": "object",
+            "properties": {
+                "alt_text": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "string"
+                },
+                "is_primary": {
+                    "type": "boolean"
+                },
+                "media_type": {
+                    "type": "string"
+                },
+                "sort_order": {
+                    "type": "integer"
+                },
+                "url": {
+                    "type": "string"
+                }
+            }
+        },
+        "josex_web_modules_inventory_models.ProductStock": {
+            "type": "object",
+            "properties": {
+                "available_quantity": {
+                    "type": "number"
+                },
+                "current_quantity": {
+                    "type": "number"
+                },
+                "last_updated_at": {
+                    "type": "string"
+                },
+                "reorder_level": {
+                    "type": "number"
+                },
+                "reserved_quantity": {
+                    "type": "number"
+                },
+                "status": {
+                    "description": "ok, low, critical, out_of_stock",
+                    "type": "string"
+                }
+            }
+        },
+        "josex_web_modules_inventory_models.RecordMovementDto": {
+            "type": "object",
+            "required": [
+                "movement_type",
+                "product_id",
+                "quantity"
+            ],
+            "properties": {
+                "movement_type": {
+                    "type": "string"
+                },
+                "notes": {
+                    "type": "string"
+                },
+                "product_id": {
+                    "type": "string"
+                },
+                "quantity": {
+                    "type": "number"
+                },
+                "reference_id": {
+                    "type": "string"
+                },
+                "reference_type": {
+                    "type": "string"
+                },
+                "unit_cost": {
+                    "type": "number"
+                }
+            }
+        },
+        "josex_web_modules_inventory_models.RecordMovementResponse": {
+            "type": "object",
+            "properties": {
+                "message": {
+                    "type": "string"
+                },
+                "movement_id": {
+                    "type": "string"
+                },
+                "new_stock_quantity": {
+                    "type": "number"
+                }
+            }
+        },
+        "josex_web_modules_inventory_models.ReleaseReservedStockDto": {
+            "type": "object",
+            "required": [
+                "product_id",
+                "quantity"
+            ],
+            "properties": {
+                "product_id": {
+                    "type": "string"
+                },
+                "quantity": {
+                    "type": "number"
+                }
+            }
+        },
+        "josex_web_modules_inventory_models.ReserveStockDto": {
+            "type": "object",
+            "required": [
+                "product_id",
+                "quantity"
+            ],
+            "properties": {
+                "product_id": {
+                    "type": "string"
+                },
+                "quantity": {
+                    "type": "number"
+                }
+            }
+        },
+        "josex_web_modules_inventory_models.StockReservationResponse": {
+            "type": "object",
+            "properties": {
+                "available_quantity": {
+                    "type": "number"
+                },
+                "message": {
+                    "type": "string"
+                },
+                "reserved_quantity": {
+                    "type": "number"
+                },
+                "status": {
+                    "type": "string"
+                }
+            }
+        },
+        "josex_web_modules_inventory_models.UpdateCategoryDto": {
+            "type": "object",
+            "properties": {
+                "description": {
+                    "type": "string"
+                },
+                "display_order": {
+                    "type": "integer"
+                },
+                "icon_url": {
+                    "type": "string"
+                },
+                "is_active": {
+                    "type": "boolean"
+                },
+                "name": {
+                    "type": "string"
+                },
+                "parent_id": {
+                    "type": "string"
+                },
+                "slug": {
+                    "type": "string"
+                }
+            }
+        },
+        "josex_web_modules_inventory_models.UpdateReorderLevelDto": {
+            "type": "object",
+            "required": [
+                "reorder_level"
+            ],
+            "properties": {
+                "reorder_level": {
+                    "type": "number",
+                    "minimum": 0
+                }
+            }
+        },
+        "josex_web_modules_inventory_models.UpdateReorderLevelResponse": {
+            "type": "object",
+            "properties": {
+                "current_quantity": {
+                    "type": "number"
+                },
+                "message": {
+                    "type": "string"
+                },
+                "product_id": {
+                    "type": "string"
+                },
+                "reorder_level": {
+                    "type": "number"
+                },
+                "status": {
+                    "type": "string"
+                }
+            }
+        },
+        "josex_web_modules_inventory_models.VariantGroup": {
+            "type": "object",
+            "properties": {
+                "group_type": {
+                    "type": "string"
+                },
+                "is_required": {
+                    "type": "boolean"
+                },
+                "max_selections": {
+                    "type": "integer"
+                },
+                "options": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/josex_web_modules_inventory_models.VariantOption"
+                    }
+                },
+                "sort_order": {
+                    "type": "integer"
+                }
+            }
+        },
+        "josex_web_modules_inventory_models.VariantOption": {
+            "type": "object",
+            "properties": {
+                "id": {
+                    "type": "string"
+                },
+                "is_available": {
+                    "type": "boolean"
+                },
+                "media": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/josex_web_modules_inventory_models.ProductMedia"
+                    }
+                },
+                "name": {
+                    "type": "string"
+                },
+                "price_modifier": {
+                    "type": "number"
+                },
+                "sort_order": {
+                    "type": "integer"
+                }
+            }
+        },
+        "josex_web_modules_sales_models.AddOrderItemRequestDto": {
+            "type": "object",
+            "required": [
+                "product_id",
+                "quantity",
+                "unit_price"
+            ],
+            "properties": {
+                "product_id": {
+                    "type": "string"
+                },
+                "quantity": {
+                    "type": "number"
+                },
+                "unit_price": {
+                    "type": "number",
+                    "minimum": 0
+                }
+            }
+        },
+        "josex_web_modules_sales_models.CreateCustomerRequestDto": {
+            "type": "object",
+            "required": [
+                "address",
+                "city",
+                "country",
+                "email",
+                "name",
+                "phone_number",
+                "postal_code",
+                "state"
+            ],
+            "properties": {
+                "address": {
+                    "type": "string",
+                    "maxLength": 500,
+                    "minLength": 5
+                },
+                "city": {
+                    "type": "string",
+                    "maxLength": 100,
+                    "minLength": 2
+                },
+                "country": {
+                    "type": "string",
+                    "maxLength": 100,
+                    "minLength": 2
+                },
+                "email": {
+                    "type": "string"
+                },
+                "name": {
+                    "type": "string",
+                    "maxLength": 255,
+                    "minLength": 2
+                },
+                "phone_number": {
+                    "type": "string",
+                    "maxLength": 20,
+                    "minLength": 7
+                },
+                "postal_code": {
+                    "type": "string",
+                    "maxLength": 20,
+                    "minLength": 3
+                },
+                "state": {
+                    "type": "string",
+                    "maxLength": 100,
+                    "minLength": 2
+                }
+            }
+        },
+        "josex_web_modules_sales_models.CreateOrderItemRequestDto": {
+            "type": "object",
+            "required": [
+                "product_id",
+                "quantity"
+            ],
+            "properties": {
+                "product_id": {
+                    "type": "string"
+                },
+                "quantity": {
+                    "type": "integer",
+                    "maximum": 9999,
+                    "minimum": 1
+                }
+            }
+        },
+        "josex_web_modules_sales_models.CreatePaymentRequestDto": {
+            "type": "object",
+            "required": [
+                "amount",
+                "order_id",
+                "payment_method"
+            ],
+            "properties": {
+                "amount": {
+                    "type": "number"
+                },
+                "notes": {
+                    "type": "string"
+                },
+                "order_id": {
+                    "type": "string"
+                },
+                "payment_method": {
+                    "type": "string",
+                    "enum": [
+                        "cash",
+                        "card",
+                        "bank_transfer",
+                        "check",
+                        "other"
+                    ]
+                },
+                "reference_number": {
+                    "type": "string"
+                }
+            }
+        },
+        "josex_web_modules_sales_models.CreateReturnRequestDto": {
+            "type": "object",
+            "required": [
+                "order_id",
+                "reason"
+            ],
+            "properties": {
+                "order_id": {
+                    "type": "string"
+                },
+                "reason": {
+                    "type": "string",
+                    "maxLength": 255,
+                    "minLength": 1
+                }
+            }
+        },
+        "josex_web_modules_sales_models.CreateSalesOrderRequestDto": {
+            "type": "object",
+            "required": [
+                "customer_id",
+                "items",
+                "shipping_address"
+            ],
+            "properties": {
+                "customer_id": {
+                    "type": "string"
+                },
+                "discount_amount": {
+                    "type": "number",
+                    "minimum": 0
+                },
+                "items": {
+                    "type": "array",
+                    "minItems": 1,
+                    "items": {
+                        "$ref": "#/definitions/josex_web_modules_sales_models.CreateOrderItemRequestDto"
+                    }
+                },
+                "notes": {
+                    "type": "string",
+                    "maxLength": 1000
+                },
+                "shipping_address": {
+                    "type": "string",
+                    "maxLength": 500,
+                    "minLength": 5
+                }
+            }
+        },
+        "josex_web_modules_sales_models.Customer": {
+            "type": "object",
+            "properties": {
+                "address": {
+                    "type": "string"
+                },
+                "city": {
+                    "type": "string"
+                },
+                "country": {
+                    "type": "string"
+                },
+                "created_at": {
+                    "type": "string"
+                },
+                "email": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "string"
+                },
+                "name": {
+                    "type": "string"
+                },
+                "phone_number": {
+                    "type": "string"
+                },
+                "postal_code": {
+                    "type": "string"
+                },
+                "state": {
+                    "type": "string"
+                },
+                "status": {
+                    "description": "active, inactive, blocked",
+                    "type": "string"
+                },
+                "updated_at": {
+                    "type": "string"
+                }
+            }
+        },
+        "josex_web_modules_sales_models.OrderItem": {
+            "type": "object",
+            "properties": {
+                "created_at": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "string"
+                },
+                "line_total": {
+                    "type": "number"
+                },
+                "order_id": {
+                    "type": "string"
+                },
+                "product_id": {
+                    "type": "string"
+                },
+                "product_name": {
+                    "type": "string"
+                },
+                "product_sku": {
+                    "type": "string"
+                },
+                "quantity": {
+                    "type": "integer"
+                },
+                "unit_price": {
+                    "type": "number"
+                }
+            }
+        },
+        "josex_web_modules_sales_models.OrderWithBatches": {
+            "type": "object",
+            "properties": {
+                "batch_count": {
+                    "type": "integer"
+                },
+                "created_at": {
+                    "type": "string"
+                },
+                "customer_id": {
+                    "type": "string"
+                },
+                "customer_name": {
+                    "type": "string"
+                },
+                "discount_amount": {
+                    "type": "number"
+                },
+                "item_count": {
+                    "type": "integer"
+                },
+                "order_id": {
+                    "type": "string"
+                },
+                "order_number": {
+                    "type": "string"
+                },
+                "shipping_address": {
+                    "type": "string"
+                },
+                "status": {
+                    "type": "string"
+                },
+                "sub_total": {
+                    "type": "number"
+                },
+                "tax_amount": {
+                    "type": "number"
+                },
+                "total": {
+                    "type": "number"
+                },
+                "updated_at": {
+                    "type": "string"
+                }
+            }
+        },
+        "josex_web_modules_sales_models.Payment": {
+            "type": "object",
+            "properties": {
+                "amount": {
+                    "type": "number"
+                },
+                "created_at": {
+                    "type": "string"
+                },
+                "customer_id": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "string"
+                },
+                "notes": {
+                    "type": "string"
+                },
+                "order_id": {
+                    "type": "string"
+                },
+                "payment_method": {
+                    "description": "cash, card, bank_transfer, check, other",
+                    "type": "string"
+                },
+                "reference_number": {
+                    "type": "string"
+                },
+                "status": {
+                    "description": "pending, completed, failed, refunded",
+                    "type": "string"
+                },
+                "updated_at": {
+                    "type": "string"
+                }
+            }
+        },
+        "josex_web_modules_sales_models.Return": {
+            "type": "object",
+            "properties": {
+                "created_at": {
+                    "type": "string"
+                },
+                "customer_id": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "string"
+                },
+                "order_id": {
+                    "type": "string"
+                },
+                "reason": {
+                    "type": "string"
+                },
+                "return_number": {
+                    "type": "string"
+                },
+                "status": {
+                    "description": "pending, approved, rejected, completed",
+                    "type": "string"
+                },
+                "total_amount": {
+                    "type": "number"
+                },
+                "updated_at": {
+                    "type": "string"
+                }
+            }
+        },
+        "josex_web_modules_sales_models.SalesOrder": {
+            "type": "object",
+            "properties": {
+                "created_at": {
+                    "type": "string"
+                },
+                "customer_id": {
+                    "type": "string"
+                },
+                "discount_amount": {
+                    "type": "number"
+                },
+                "id": {
+                    "type": "string"
+                },
+                "items": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/josex_web_modules_sales_models.OrderItem"
+                    }
+                },
+                "notes": {
+                    "type": "string"
+                },
+                "order_number": {
+                    "type": "string"
+                },
+                "shipping_address": {
+                    "type": "string"
+                },
+                "status": {
+                    "description": "pending, confirmed, shipped, delivered, cancelled",
+                    "type": "string"
+                },
+                "sub_total": {
+                    "type": "number"
+                },
+                "tax_amount": {
+                    "type": "number"
+                },
+                "total": {
+                    "type": "number"
+                },
+                "updated_at": {
+                    "type": "string"
+                }
+            }
+        },
+        "josex_web_modules_sales_models.SalesReport": {
+            "type": "object",
+            "properties": {
+                "metric_name": {
+                    "type": "string"
+                },
+                "metric_type": {
+                    "description": "count, currency, percentage",
+                    "type": "string"
+                },
+                "metric_value": {
+                    "type": "number"
+                }
+            }
+        },
+        "josex_web_modules_sales_models.SalesReportResponse": {
+            "type": "object",
+            "properties": {
+                "end_date": {
+                    "type": "string"
+                },
+                "message": {
+                    "type": "string"
+                },
+                "metrics": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/josex_web_modules_sales_models.SalesReport"
+                    }
+                },
+                "start_date": {
+                    "type": "string"
+                }
+            }
+        },
+        "josex_web_modules_sales_models.UpdateCustomerRequestDto": {
+            "type": "object",
+            "properties": {
+                "address": {
+                    "type": "string",
+                    "maxLength": 500,
+                    "minLength": 5
+                },
+                "city": {
+                    "type": "string",
+                    "maxLength": 100,
+                    "minLength": 2
+                },
+                "country": {
+                    "type": "string",
+                    "maxLength": 100,
+                    "minLength": 2
+                },
+                "name": {
+                    "type": "string",
+                    "maxLength": 255,
+                    "minLength": 2
+                },
+                "phone_number": {
+                    "type": "string",
+                    "maxLength": 20,
+                    "minLength": 7
+                },
+                "postal_code": {
+                    "type": "string",
+                    "maxLength": 20,
+                    "minLength": 3
+                },
+                "state": {
+                    "type": "string",
+                    "maxLength": 100,
+                    "minLength": 2
+                }
+            }
+        },
+        "josex_web_modules_sales_models.UpdateSalesOrderRequestDto": {
+            "type": "object",
+            "properties": {
+                "discount_amount": {
+                    "type": "number",
+                    "minimum": 0
+                },
+                "notes": {
+                    "type": "string",
+                    "maxLength": 1000
+                },
+                "shipping_address": {
+                    "type": "string",
+                    "maxLength": 500,
+                    "minLength": 5
+                },
+                "status": {
+                    "type": "string"
+                }
+            }
+        },
+        "josex_web_modules_tenancy_models.AddUserToTenantDto": {
             "type": "object",
             "required": [
                 "role",
@@ -3199,16 +7344,136 @@ const docTemplate = `{
                 }
             }
         },
-        "models.AlertCreatedResponse": {
+        "josex_web_modules_tenancy_models.CreateTenantDto": {
+            "type": "object",
+            "required": [
+                "name",
+                "slug"
+            ],
+            "properties": {
+                "database_url": {
+                    "type": "string"
+                },
+                "name": {
+                    "type": "string"
+                },
+                "schema_name": {
+                    "type": "string"
+                },
+                "settings": {
+                    "description": "JSONB as string",
+                    "type": "string"
+                },
+                "slug": {
+                    "type": "string"
+                }
+            }
+        },
+        "josex_web_modules_tenancy_models.TenantDetailResponse": {
             "type": "object",
             "properties": {
-                "affected_riders": {
-                    "type": "integer"
+                "created_at": {
+                    "type": "string"
                 },
+                "id": {
+                    "type": "string"
+                },
+                "is_active": {
+                    "type": "boolean"
+                },
+                "is_suspended": {
+                    "type": "boolean"
+                },
+                "name": {
+                    "type": "string"
+                },
+                "schema_name": {
+                    "type": "string"
+                },
+                "settings": {
+                    "type": "string"
+                },
+                "slug": {
+                    "type": "string"
+                },
+                "updated_at": {
+                    "type": "string"
+                }
+            }
+        },
+        "josex_web_modules_tenancy_models.UpdateTenantDto": {
+            "type": "object",
+            "properties": {
+                "database_url": {
+                    "type": "string"
+                },
+                "name": {
+                    "type": "string"
+                },
+                "schema_name": {
+                    "type": "string"
+                },
+                "settings": {
+                    "description": "JSONB as string",
+                    "type": "string"
+                }
+            }
+        },
+        "josex_web_modules_tenancy_models.UpdateUserRoleDto": {
+            "type": "object",
+            "required": [
+                "role"
+            ],
+            "properties": {
+                "role": {
+                    "type": "string",
+                    "enum": [
+                        "owner",
+                        "admin",
+                        "member"
+                    ]
+                }
+            }
+        },
+        "josex_web_modules_tenancy_models.UserTenantResponse": {
+            "type": "object",
+            "properties": {
+                "is_active": {
+                    "type": "boolean"
+                },
+                "is_suspended": {
+                    "type": "boolean"
+                },
+                "joined_at": {
+                    "type": "string"
+                },
+                "name": {
+                    "type": "string"
+                },
+                "slug": {
+                    "type": "string"
+                },
+                "tenant_id": {
+                    "type": "string"
+                },
+                "user_role": {
+                    "type": "string"
+                }
+            }
+        },
+        "josex_web_modules_tracking_models.AlertCreatedResponse": {
+            "type": "object",
+            "properties": {
                 "alert_id": {
                     "type": "string"
                 },
                 "alert_type": {
+                    "type": "string"
+                },
+                "created_at": {
+                    "type": "string"
+                },
+                "created_by": {
                     "type": "string"
                 },
                 "estimated_delay_minutes": {
@@ -3220,18 +7485,21 @@ const docTemplate = `{
                 "route_id": {
                     "type": "string"
                 },
-                "route_name": {
+                "severity": {
                     "type": "string"
                 },
-                "severity": {
+                "status": {
                     "type": "string"
                 },
                 "title": {
                     "type": "string"
+                },
+                "vehicle_id": {
+                    "type": "string"
                 }
             }
         },
-        "models.AssignRiderDto": {
+        "josex_web_modules_tracking_models.AssignRiderDto": {
             "type": "object",
             "required": [
                 "rider_id",
@@ -3252,22 +7520,7 @@ const docTemplate = `{
                 }
             }
         },
-        "models.ChangePasswordRequestDto": {
-            "type": "object",
-            "required": [
-                "password_current",
-                "password_new"
-            ],
-            "properties": {
-                "password_current": {
-                    "type": "string"
-                },
-                "password_new": {
-                    "type": "string"
-                }
-            }
-        },
-        "models.CompanyClientAccess": {
+        "josex_web_modules_tracking_models.CompanyClientAccess": {
             "type": "object",
             "properties": {
                 "access_level": {
@@ -3307,7 +7560,7 @@ const docTemplate = `{
                 }
             }
         },
-        "models.CreateAlertDto": {
+        "josex_web_modules_tracking_models.CreateAlertDto": {
             "type": "object",
             "required": [
                 "alert_type",
@@ -3322,7 +7575,8 @@ const docTemplate = `{
                         "delay",
                         "breakdown",
                         "traffic",
-                        "cancelled",
+                        "cancellation",
+                        "emergency",
                         "other"
                     ]
                 },
@@ -3358,44 +7612,53 @@ const docTemplate = `{
                 }
             }
         },
-        "models.CreateCompanyDto": {
+        "josex_web_modules_tracking_models.CreateCompanyDto": {
             "type": "object",
             "required": [
-                "company_type",
-                "name"
+                "address",
+                "name",
+                "phone"
             ],
             "properties": {
                 "address": {
                     "type": "string",
                     "maxLength": 500
                 },
-                "company_type": {
+                "city": {
                     "type": "string",
-                    "enum": [
-                        "school",
-                        "corporate",
-                        "transport_provider"
-                    ]
+                    "maxLength": 100
                 },
-                "contact_email": {
+                "country": {
+                    "type": "string",
+                    "maxLength": 100
+                },
+                "email": {
                     "type": "string"
-                },
-                "contact_name": {
-                    "type": "string",
-                    "maxLength": 255
-                },
-                "contact_phone": {
-                    "type": "string",
-                    "maxLength": 50
                 },
                 "name": {
                     "type": "string",
                     "maxLength": 255,
                     "minLength": 3
+                },
+                "phone": {
+                    "type": "string",
+                    "maxLength": 20
+                },
+                "registration_number": {
+                    "type": "string",
+                    "maxLength": 100
+                },
+                "status": {
+                    "type": "string",
+                    "enum": [
+                        "active",
+                        "inactive",
+                        "suspended"
+                    ]
                 }
             }
         },
-        "models.CreateRiderDto": {
+        "josex_web_modules_tracking_models.CreateRiderDto": {
             "type": "object",
             "required": [
                 "company_id",
@@ -3463,7 +7726,7 @@ const docTemplate = `{
                 }
             }
         },
-        "models.CreateRouteDto": {
+        "josex_web_modules_tracking_models.CreateRouteDto": {
             "type": "object",
             "required": [
                 "company_id",
@@ -3540,7 +7803,7 @@ const docTemplate = `{
                 }
             }
         },
-        "models.CreateRouteStopDto": {
+        "josex_web_modules_tracking_models.CreateRouteStopDto": {
             "type": "object",
             "required": [
                 "latitude",
@@ -3584,37 +7847,13 @@ const docTemplate = `{
                 }
             }
         },
-        "models.CreateTenantDto": {
-            "type": "object",
-            "required": [
-                "name",
-                "slug"
-            ],
-            "properties": {
-                "database_url": {
-                    "type": "string"
-                },
-                "name": {
-                    "type": "string"
-                },
-                "schema_name": {
-                    "type": "string"
-                },
-                "settings": {
-                    "description": "JSONB as string",
-                    "type": "string"
-                },
-                "slug": {
-                    "type": "string"
-                }
-            }
-        },
-        "models.CreateVehicleDto": {
+        "josex_web_modules_tracking_models.CreateVehicleDto": {
             "type": "object",
             "required": [
                 "capacity",
                 "company_id",
                 "plate_number",
+                "status",
                 "vehicle_type"
             ],
             "properties": {
@@ -3630,6 +7869,10 @@ const docTemplate = `{
                 "company_id": {
                     "type": "string"
                 },
+                "gps_device_id": {
+                    "type": "string",
+                    "maxLength": 100
+                },
                 "model": {
                     "type": "string",
                     "maxLength": 100
@@ -3639,6 +7882,14 @@ const docTemplate = `{
                     "maxLength": 50,
                     "minLength": 3
                 },
+                "status": {
+                    "type": "string",
+                    "enum": [
+                        "active",
+                        "inactive",
+                        "maintenance"
+                    ]
+                },
                 "vehicle_type": {
                     "type": "string",
                     "enum": [
@@ -3647,10 +7898,6 @@ const docTemplate = `{
                         "car"
                     ]
                 },
-                "vin": {
-                    "type": "string",
-                    "maxLength": 100
-                },
                 "year": {
                     "type": "integer",
                     "maximum": 2100,
@@ -3658,7 +7905,7 @@ const docTemplate = `{
                 }
             }
         },
-        "models.CurrentLocationResponse": {
+        "josex_web_modules_tracking_models.CurrentLocationResponse": {
             "type": "object",
             "properties": {
                 "age_seconds": {
@@ -3688,7 +7935,7 @@ const docTemplate = `{
                 }
             }
         },
-        "models.EventRecordedResponse": {
+        "josex_web_modules_tracking_models.EventRecordedResponse": {
             "type": "object",
             "properties": {
                 "event_id": {
@@ -3711,7 +7958,7 @@ const docTemplate = `{
                 }
             }
         },
-        "models.GrantClientAccessDto": {
+        "josex_web_modules_tracking_models.GrantClientAccessDto": {
             "type": "object",
             "required": [
                 "client_tenant_id"
@@ -3733,104 +7980,7 @@ const docTemplate = `{
                 }
             }
         },
-        "models.LoginExternalRequestDto": {
-            "type": "object",
-            "required": [
-                "auth_provider_id"
-            ],
-            "properties": {
-                "auth_provider_id": {
-                    "type": "string"
-                },
-                "birthday": {
-                    "type": "string"
-                },
-                "device_id": {
-                    "type": "string"
-                },
-                "email": {
-                    "type": "string"
-                },
-                "first_name": {
-                    "type": "string"
-                },
-                "last_name": {
-                    "type": "string"
-                },
-                "phone": {
-                    "type": "string"
-                }
-            }
-        },
-        "models.LoginSuccessResponse": {
-            "type": "object",
-            "properties": {
-                "access_token": {
-                    "description": "JWT token",
-                    "type": "string"
-                },
-                "refresh_token": {
-                    "description": "JWT token",
-                    "type": "string"
-                }
-            }
-        },
-        "models.LoginUserRequestDto": {
-            "type": "object",
-            "required": [
-                "email",
-                "password"
-            ],
-            "properties": {
-                "device_id": {
-                    "type": "string"
-                },
-                "email": {
-                    "type": "string"
-                },
-                "password": {
-                    "type": "string"
-                }
-            }
-        },
-        "models.PasswordResetRequestDto": {
-            "type": "object",
-            "required": [
-                "email"
-            ],
-            "properties": {
-                "email": {
-                    "type": "string"
-                }
-            }
-        },
-        "models.PasswordResetTokenRequestDto": {
-            "type": "object",
-            "required": [
-                "token"
-            ],
-            "properties": {
-                "token": {
-                    "type": "string"
-                }
-            }
-        },
-        "models.PasswordResetWithTokenDto": {
-            "type": "object",
-            "required": [
-                "password_new",
-                "token"
-            ],
-            "properties": {
-                "password_new": {
-                    "type": "string"
-                },
-                "token": {
-                    "type": "string"
-                }
-            }
-        },
-        "models.RecordEventDto": {
+        "josex_web_modules_tracking_models.RecordEventDto": {
             "type": "object",
             "required": [
                 "event_type",
@@ -3842,9 +7992,10 @@ const docTemplate = `{
                 "event_type": {
                     "type": "string",
                     "enum": [
-                        "boarded",
-                        "arrived_destination",
-                        "no_show"
+                        "check_in",
+                        "checkout",
+                        "no_show",
+                        "emergency"
                     ]
                 },
                 "latitude": {
@@ -3875,25 +8026,7 @@ const docTemplate = `{
                 }
             }
         },
-        "models.RefreshTokenRequestDto": {
-            "type": "object",
-            "properties": {
-                "refresh_token": {
-                    "description": "JWT token",
-                    "type": "string"
-                }
-            }
-        },
-        "models.RefreshTokenResponse": {
-            "type": "object",
-            "properties": {
-                "access_token": {
-                    "description": "JWT token",
-                    "type": "string"
-                }
-            }
-        },
-        "models.Rider": {
+        "josex_web_modules_tracking_models.Rider": {
             "type": "object",
             "properties": {
                 "address": {
@@ -3945,7 +8078,7 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "rider_type": {
-                    "description": "student, employee",
+                    "description": "student, employee (nullable as it's not persisted)",
                     "type": "string"
                 },
                 "updated_at": {
@@ -3953,7 +8086,7 @@ const docTemplate = `{
                 }
             }
         },
-        "models.RiderAssignment": {
+        "josex_web_modules_tracking_models.RiderAssignment": {
             "type": "object",
             "properties": {
                 "assigned_at": {
@@ -3988,13 +8121,16 @@ const docTemplate = `{
                 }
             }
         },
-        "models.RiderStatusResponse": {
+        "josex_web_modules_tracking_models.RiderStatusResponse": {
             "type": "object",
             "properties": {
                 "active_alerts": {
                     "type": "integer"
                 },
                 "driver_name": {
+                    "type": "string"
+                },
+                "last_event_notes": {
                     "type": "string"
                 },
                 "last_event_stop": {
@@ -4044,7 +8180,7 @@ const docTemplate = `{
                 }
             }
         },
-        "models.Route": {
+        "josex_web_modules_tracking_models.Route": {
             "type": "object",
             "properties": {
                 "company_id": {
@@ -4104,7 +8240,7 @@ const docTemplate = `{
                 }
             }
         },
-        "models.RouteRealtimeStatusResponse": {
+        "josex_web_modules_tracking_models.RouteRealtimeStatusResponse": {
             "type": "object",
             "properties": {
                 "active_alerts": {
@@ -4151,7 +8287,7 @@ const docTemplate = `{
                 }
             }
         },
-        "models.RouteStop": {
+        "josex_web_modules_tracking_models.RouteStop": {
             "type": "object",
             "properties": {
                 "address": {
@@ -4189,87 +8325,37 @@ const docTemplate = `{
                 }
             }
         },
-        "models.SoftDeleteUserDto": {
-            "type": "object",
-            "required": [
-                "id"
-            ],
-            "properties": {
-                "id": {
-                    "type": "string"
-                },
-                "reason": {
-                    "description": "Optional deletion reason",
-                    "type": "string",
-                    "maxLength": 500
-                }
-            }
-        },
-        "models.TenantDetailResponse": {
-            "type": "object",
-            "properties": {
-                "created_at": {
-                    "type": "string"
-                },
-                "id": {
-                    "type": "string"
-                },
-                "is_active": {
-                    "type": "boolean"
-                },
-                "is_suspended": {
-                    "type": "boolean"
-                },
-                "name": {
-                    "type": "string"
-                },
-                "schema_name": {
-                    "type": "string"
-                },
-                "settings": {
-                    "type": "string"
-                },
-                "slug": {
-                    "type": "string"
-                },
-                "updated_at": {
-                    "type": "string"
-                }
-            }
-        },
-        "models.TransportCompany": {
+        "josex_web_modules_tracking_models.TransportCompany": {
             "type": "object",
             "properties": {
                 "address": {
                     "type": "string"
                 },
-                "client_tenant_id": {
-                    "description": "Tenant that has read-only access",
+                "city": {
                     "type": "string"
                 },
-                "company_type": {
-                    "description": "school, corporate, transport_provider",
-                    "type": "string"
-                },
-                "contact_email": {
-                    "type": "string"
-                },
-                "contact_name": {
-                    "type": "string"
-                },
-                "contact_phone": {
+                "country": {
                     "type": "string"
                 },
                 "created_at": {
                     "type": "string"
                 },
+                "email": {
+                    "type": "string"
+                },
                 "id": {
                     "type": "string"
                 },
-                "is_active": {
-                    "type": "boolean"
-                },
                 "name": {
+                    "type": "string"
+                },
+                "phone": {
+                    "type": "string"
+                },
+                "registration_number": {
+                    "type": "string"
+                },
+                "status": {
                     "type": "string"
                 },
                 "tenant_id": {
@@ -4280,35 +8366,36 @@ const docTemplate = `{
                 }
             }
         },
-        "models.UpdateCompanyDto": {
+        "josex_web_modules_tracking_models.UpdateCompanyDto": {
             "type": "object",
             "properties": {
                 "address": {
                     "type": "string",
                     "maxLength": 500
                 },
-                "contact_email": {
+                "city": {
+                    "type": "string",
+                    "maxLength": 100
+                },
+                "country": {
+                    "type": "string",
+                    "maxLength": 100
+                },
+                "email": {
                     "type": "string"
-                },
-                "contact_name": {
-                    "type": "string",
-                    "maxLength": 255
-                },
-                "contact_phone": {
-                    "type": "string",
-                    "maxLength": 50
-                },
-                "is_active": {
-                    "type": "boolean"
                 },
                 "name": {
                     "type": "string",
                     "maxLength": 255,
                     "minLength": 3
+                },
+                "phone": {
+                    "type": "string",
+                    "maxLength": 20
                 }
             }
         },
-        "models.UpdateLocationDto": {
+        "josex_web_modules_tracking_models.UpdateLocationDto": {
             "type": "object",
             "required": [
                 "latitude",
@@ -4351,42 +8438,7 @@ const docTemplate = `{
                 }
             }
         },
-        "models.UpdateProfileDto": {
-            "type": "object",
-            "properties": {
-                "bio": {
-                    "type": "string"
-                },
-                "birthday": {
-                    "type": "string"
-                },
-                "first_name": {
-                    "type": "string"
-                },
-                "id": {
-                    "type": "string"
-                },
-                "last_name": {
-                    "type": "string"
-                },
-                "password_current": {
-                    "type": "string"
-                },
-                "password_new": {
-                    "type": "string"
-                },
-                "phone": {
-                    "type": "string"
-                },
-                "profile_picture_url": {
-                    "type": "string"
-                },
-                "website_url": {
-                    "type": "string"
-                }
-            }
-        },
-        "models.UpdateRiderDto": {
+        "josex_web_modules_tracking_models.UpdateRiderDto": {
             "type": "object",
             "properties": {
                 "address": {
@@ -4427,7 +8479,7 @@ const docTemplate = `{
                 }
             }
         },
-        "models.UpdateRouteDto": {
+        "josex_web_modules_tracking_models.UpdateRouteDto": {
             "type": "object",
             "properties": {
                 "destination_address": {
@@ -4488,25 +8540,7 @@ const docTemplate = `{
                 }
             }
         },
-        "models.UpdateTenantDto": {
-            "type": "object",
-            "properties": {
-                "database_url": {
-                    "type": "string"
-                },
-                "name": {
-                    "type": "string"
-                },
-                "schema_name": {
-                    "type": "string"
-                },
-                "settings": {
-                    "description": "JSONB as string",
-                    "type": "string"
-                }
-            }
-        },
-        "models.UpdateVehicleDto": {
+        "josex_web_modules_tracking_models.UpdateVehicleDto": {
             "type": "object",
             "properties": {
                 "brand": {
@@ -4518,8 +8552,9 @@ const docTemplate = `{
                     "maximum": 200,
                     "minimum": 1
                 },
-                "is_active": {
-                    "type": "boolean"
+                "gps_device_id": {
+                    "type": "string",
+                    "maxLength": 100
                 },
                 "model": {
                     "type": "string",
@@ -4530,9 +8565,13 @@ const docTemplate = `{
                     "maxLength": 50,
                     "minLength": 3
                 },
-                "vin": {
+                "status": {
                     "type": "string",
-                    "maxLength": 100
+                    "enum": [
+                        "active",
+                        "inactive",
+                        "maintenance"
+                    ]
                 },
                 "year": {
                     "type": "integer",
@@ -4541,45 +8580,66 @@ const docTemplate = `{
                 }
             }
         },
-        "models.User": {
+        "josex_web_modules_tracking_models.Vehicle": {
             "type": "object",
-            "required": [
-                "email",
-                "first_name",
-                "id",
-                "last_name"
-            ],
             "properties": {
-                "bio": {
+                "brand": {
                     "type": "string"
                 },
-                "birthday": {
+                "capacity": {
+                    "type": "integer"
+                },
+                "company_id": {
                     "type": "string"
                 },
-                "email": {
+                "created_at": {
                     "type": "string"
                 },
-                "first_name": {
+                "gps_device_id": {
                     "type": "string"
                 },
                 "id": {
                     "type": "string"
                 },
-                "last_name": {
+                "model": {
                     "type": "string"
                 },
-                "phone": {
+                "plate_number": {
                     "type": "string"
                 },
-                "profile_picture_url": {
+                "status": {
+                    "description": "active, inactive, maintenance",
                     "type": "string"
                 },
-                "website_url": {
+                "updated_at": {
                     "type": "string"
+                },
+                "vehicle_type": {
+                    "description": "bus, van, car",
+                    "type": "string"
+                },
+                "year": {
+                    "type": "integer"
                 }
             }
         },
-        "models.UserListResponse": {
+        "josex_web_modules_users_models.SoftDeleteUserDto": {
+            "type": "object",
+            "required": [
+                "id"
+            ],
+            "properties": {
+                "id": {
+                    "type": "string"
+                },
+                "reason": {
+                    "description": "Optional deletion reason",
+                    "type": "string",
+                    "maxLength": 500
+                }
+            }
+        },
+        "josex_web_modules_users_models.UserListResponse": {
             "type": "object",
             "properties": {
                 "limit": {
@@ -4601,131 +8661,8 @@ const docTemplate = `{
                 "users": {
                     "type": "array",
                     "items": {
-                        "$ref": "#/definitions/models.User"
+                        "$ref": "#/definitions/josex_web_modules_core_models.User"
                     }
-                }
-            }
-        },
-        "models.UserSession": {
-            "type": "object",
-            "properties": {
-                "browser": {
-                    "type": "string"
-                },
-                "device_id": {
-                    "type": "string"
-                },
-                "device_os": {
-                    "type": "string"
-                },
-                "ip_address": {
-                    "type": "string"
-                },
-                "is_active": {
-                    "type": "boolean"
-                },
-                "last_active": {
-                    "type": "string"
-                },
-                "login_time": {
-                    "type": "string"
-                },
-                "logout_time": {
-                    "type": "string"
-                },
-                "session_id": {
-                    "type": "string"
-                },
-                "user_id": {
-                    "type": "string"
-                }
-            }
-        },
-        "models.UserTenantResponse": {
-            "type": "object",
-            "properties": {
-                "is_active": {
-                    "type": "boolean"
-                },
-                "is_suspended": {
-                    "type": "boolean"
-                },
-                "joined_at": {
-                    "type": "string"
-                },
-                "name": {
-                    "type": "string"
-                },
-                "slug": {
-                    "type": "string"
-                },
-                "tenant_id": {
-                    "type": "string"
-                },
-                "user_role": {
-                    "type": "string"
-                }
-            }
-        },
-        "models.Vehicle": {
-            "type": "object",
-            "properties": {
-                "brand": {
-                    "type": "string"
-                },
-                "capacity": {
-                    "type": "integer"
-                },
-                "company_id": {
-                    "type": "string"
-                },
-                "created_at": {
-                    "type": "string"
-                },
-                "id": {
-                    "type": "string"
-                },
-                "is_active": {
-                    "type": "boolean"
-                },
-                "model": {
-                    "type": "string"
-                },
-                "plate_number": {
-                    "type": "string"
-                },
-                "updated_at": {
-                    "type": "string"
-                },
-                "vehicle_type": {
-                    "description": "bus, van, car",
-                    "type": "string"
-                },
-                "vin": {
-                    "description": "Vehicle Identification Number",
-                    "type": "string"
-                },
-                "year": {
-                    "type": "integer"
-                }
-            }
-        },
-        "models.VerifyEmailRequestDto": {
-            "type": "object",
-            "properties": {
-                "email": {
-                    "type": "string"
-                }
-            }
-        },
-        "models.VerifyEmailToken": {
-            "type": "object",
-            "required": [
-                "token"
-            ],
-            "properties": {
-                "token": {
-                    "type": "string"
                 }
             }
         }
@@ -4738,8 +8675,8 @@ var SwaggerInfo = &swag.Spec{
 	Host:             "localhost:8080",
 	BasePath:         "/api/v1",
 	Schemes:          []string{},
-	Title:            "API REST",
-	Description:      "Swagger Documentation for API REST",
+	Title:            "Go Web API",
+	Description:      "Modular API server. Run in platform or tenant mode via -mode flag.",
 	InfoInstanceName: "swagger",
 	SwaggerTemplate:  docTemplate,
 	LeftDelim:        "{{",
