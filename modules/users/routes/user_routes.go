@@ -29,5 +29,6 @@ func RegisterUserRoutes(
 		userRoutes.GET("/:id", userController.GetUserById)
 		userRoutes.PUT("/:id", userController.Update)
 		userRoutes.DELETE("/:id", userController.SoftDeleteUser)
+		userRoutes.POST("/:id/reset-password", userController.ResetPassword)
 	}
 }

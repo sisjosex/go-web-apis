@@ -56,3 +56,12 @@ const (
 	ModuleCodeRequired = "tenant.module.code-required"
 	ModuleUpdateFailed = "tenant.module.update-failed"
 )
+
+// Role errors
+const (
+	RoleNotFound         = "tenant.role.not-found"
+	RoleDuplicateName    = "tenant.role.create.duplicate-name"
+	RoleUpdateSystemRole = "tenant.role.update.system-role"
+	RoleDeleteSystemRole = "tenant.role.delete.system-role"
+	RoleValidationFailed = "tenant.role.validation-failed"
+)

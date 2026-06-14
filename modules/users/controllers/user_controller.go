@@ -303,3 +303,61 @@ func (uc *UserController) SoftDeleteUser(c *gin.Context) {
 		"soft_delete": usersConfig.EnableSoftDelete,
 	})
 }
+
+// ResetPassword godoc
+// @Summary      Trigger a password reset email for a user
+// @Description  Generates a password reset token and sends the reset email to the target user. Always returns 200 to avoid user enumeration.
+// @Tags         Users
+// @Accept       json
+// @Produce      json
+// @Param        Authorization  header  string  true  "Bearer Token"
+// @Param        id             path    string  true  "User UUID"
+// @Success      200
+// @Failure      400  {object}  coreErrors.ErrorResponse
+// @Failure      401  {object}  coreErrors.ErrorResponse
+// @Router       /users/{id}/reset-password [post]
+// @Security     ApiKeyAuth
+func (uc *UserController) ResetPassword(c *gin.Context) {
+	id, err := uuid.Parse(c.Param("id"))
+	if err != nil {
+		c.JSON(http.StatusBadRequest, coreErrors.BuildErrorSingle(c, coreErrors.InvalidUUID))
+		return
+	}
+
+	result, err := uc.userService.ResetPassword(id)
+	if err != nil {
+		var pgErr *pgconn.PgError
+		if errors.As(err, &pgErr) {
+			switch pgErr.Message {
+			case "user.not-found",
+				"password.reset.account-not-exists",
+				"password.reset.token-already-sent":
+				c.JSON(http.StatusOK, nil)
+				return
+			}
+		}
+		c.JSON(http.StatusInternalServerError, coreErrors.BuildError(c, err))
+		return
+	}
+
+	appConf := config.ModularAppConfig.Core
+	lang := c.GetString("lang")
+	emailData := map[string]string{
+		"PasswordResetURL": fmt.Sprintf("%s/reset-password?token=%s", appConf.FrontendURL, result.Token),
+		"Title":            utils.GetTranslation(lang, "password-reset.email.title"),
+		"Greeting":         utils.GetTranslation(lang, "password-reset.email.greeting"),
+		"Description":      utils.GetTranslation(lang, "password-reset.email.description"),
+		"ButtonText":       utils.GetTranslation(lang, "password-reset.email.button-text"),
+		"IgnoreText":       utils.GetTranslation(lang, "password-reset.email.ignore-text"),
+		"SignOff":          utils.GetTranslation(lang, "password-reset.email.sign-off"),
+		"AutomatedNote":    utils.GetTranslation(lang, "password-reset.email.automated-note"),
+	}
+	subject := utils.GetTranslation(lang, "password-reset.email.subject")
+	templatePath := coreServices.GetTemplatePath("auth", "password-reset.html")
+
+	go func() {
+		_ = uc.emailService.SendEmail(result.Email, subject, templatePath, emailData)
+	}()
+
+	c.JSON(http.StatusOK, nil)
+}

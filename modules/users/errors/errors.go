@@ -20,4 +20,7 @@ const (
 	UserDeleteFailed     = "user.delete.failed"
 	UserAlreadyDeleted   = "user.already-deleted"
 	UserDeleteNotAllowed = "user.delete.not-allowed"
+
+	// Password reset (admin-triggered)
+	UserResetPasswordFailed = "user.reset-password.failed"
 )

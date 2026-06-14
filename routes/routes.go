@@ -147,14 +147,19 @@ func SetupRoutes(r *gin.Engine, dbService coreServices.DatabaseService) {
 			permissionService := tenancyServices.NewPermissionService(permissionRepository)
 			permissionController := tenancyControllers.NewPermissionController(permissionService)
 
+			roleRepository := tenancyRepos.NewRoleRepository(dbService)
+			roleService := tenancyServices.NewRoleService(roleRepository)
+			roleController := tenancyControllers.NewRoleController(roleService)
+
 			moduleRepository := tenancyRepos.NewModuleRepository(dbService)
 			moduleSvc := tenancyServices.NewModuleService(moduleRepository)
 			moduleController := tenancyControllers.NewModuleController(moduleSvc)
 			moduleService = moduleSvc
 
-			// Register tenant, permission and module routes
+			// Register tenant, permission, role and module routes
 			tenancyRoutes.RegisterTenantRoutes(apiV1, tenantController, tenantService, jwtService)
 			tenancyRoutes.RegisterPermissionRoutes(apiV1, permissionController, tenantService, jwtService)
+			tenancyRoutes.RegisterRoleRoutes(apiV1, roleController, tenantService, jwtService)
 			tenancyRoutes.RegisterModuleRoutes(apiV1, moduleController, tenantService, moduleSvc, jwtService)
 
 			// Override tenant middleware with real implementation

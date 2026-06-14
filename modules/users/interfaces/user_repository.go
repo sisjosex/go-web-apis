@@ -16,4 +16,5 @@ type UserRepository interface {
 	GetStats(tenantID uuid.UUID, excludeUserID *uuid.UUID) (*userModels.UserStatsResponse, error)
 	SoftDeleteUser(userID uuid.UUID) error
 	AssignToTenant(tenantID, requesterID, userID uuid.UUID, role string) error
+	ResetPasswordToken(userID uuid.UUID) (*userModels.ResetPasswordResult, error)
 }

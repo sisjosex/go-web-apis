@@ -314,3 +314,32 @@ func (r *userRepository) SoftDeleteUser(userID uuid.UUID) error {
 
 	return nil
 }
+
+func (r *userRepository) ResetPasswordToken(userID uuid.UUID) (*userModels.ResetPasswordResult, error) {
+	user, err := r.GetUserById(userID)
+	if err != nil {
+		return nil, err
+	}
+
+	email := ""
+	if user.Email != nil {
+		email = *user.Email
+	}
+
+	var token string
+	row := r.dbService.QueryRow(context.Background(), `
+		SELECT auth.sp_generate_password_reset_token(
+			p_email := $1
+		)
+	`, email)
+
+	if err := row.Scan(&token); err != nil {
+		var pgErr *pgconn.PgError
+		if errors.As(err, &pgErr) {
+			return nil, pgErr
+		}
+		return nil, err
+	}
+
+	return &userModels.ResetPasswordResult{Email: email, Token: token}, nil
+}

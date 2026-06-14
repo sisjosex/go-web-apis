@@ -70,3 +70,9 @@ type UserStatsResponse struct {
 	Inactive int64 `json:"inactive"`
 	Expired  int64 `json:"expired"`
 }
+
+// ResetPasswordResult carries the data needed to send a password reset email
+type ResetPasswordResult struct {
+	Email string
+	Token string
+}

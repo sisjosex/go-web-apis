@@ -43,3 +43,7 @@ func (s *userService) GetStats(tenantID uuid.UUID, excludeUserID *uuid.UUID) (*u
 func (s *userService) AssignToTenant(tenantID, requesterID, userID uuid.UUID, role string) error {
 	return s.userRepository.AssignToTenant(tenantID, requesterID, userID, role)
 }
+
+func (s *userService) ResetPassword(userID uuid.UUID) (*userModels.ResetPasswordResult, error) {
+	return s.userRepository.ResetPasswordToken(userID)
+}
