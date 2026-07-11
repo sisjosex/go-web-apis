@@ -15,6 +15,7 @@ import (
 func RegisterUserRoutes(
 	router *gin.RouterGroup,
 	userController *controllers.UserController,
+	userAuditController *controllers.UserAuditController,
 	jwtService services.JWTService,
 	tenantMiddleware gin.HandlerFunc,
 ) {
@@ -25,6 +26,7 @@ func RegisterUserRoutes(
 	{
 		userRoutes.GET("", userController.ListUsers)
 		userRoutes.GET("/stats", userController.GetStats)
+		userRoutes.GET("/audit", userAuditController.ListAudit)
 		userRoutes.POST("", userController.Create)
 		userRoutes.GET("/:id", userController.GetUserById)
 		userRoutes.PUT("/:id", userController.Update)

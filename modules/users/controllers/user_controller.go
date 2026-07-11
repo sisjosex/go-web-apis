@@ -24,14 +24,16 @@ import (
 var _ coreModels.User
 
 type UserController struct {
-	userService  userInterfaces.UserService
-	emailService coreServices.EmailService
+	userService      userInterfaces.UserService
+	emailService     coreServices.EmailService
+	userAuditService userInterfaces.UserAuditService
 }
 
-func NewUserController(userService userInterfaces.UserService, emailService coreServices.EmailService) *UserController {
+func NewUserController(userService userInterfaces.UserService, emailService coreServices.EmailService, userAuditService userInterfaces.UserAuditService) *UserController {
 	return &UserController{
-		userService:  userService,
-		emailService: emailService,
+		userService:      userService,
+		emailService:     emailService,
+		userAuditService: userAuditService,
 	}
 }
 
@@ -71,6 +73,21 @@ func (uc *UserController) Create(c *gin.Context) {
 					}
 				}
 			}
+
+			var performedByPtr *uuid.UUID
+			if userIDStr, ok := c.Get("user_id"); ok {
+				if uid, err := uuid.Parse(userIDStr.(string)); err == nil {
+					performedByPtr = &uid
+				}
+			}
+			var targetIDPtr *uuid.UUID
+			if newUserID, err := uuid.Parse(user.ID); err == nil {
+				targetIDPtr = &newUserID
+			}
+			auditSvc := uc.userAuditService
+			go func() {
+				_ = auditSvc.Record(tenantID, "user.created", targetIDPtr, performedByPtr, nil, "user")
+			}()
 		}
 	}
 
@@ -117,6 +134,19 @@ func (uc *UserController) Update(c *gin.Context) {
 	if err := c.ShouldBindJSON(&updateUser); err != nil {
 		c.JSON(http.StatusBadRequest, coreErrors.BuildErrorDetail(c, usersErrors.UserValidationFailed, utils.ExtractValidationError(c, err)))
 		return
+	}
+
+	// Pass tenant and performer to the repository so the AFTER UPDATE trigger
+	// can record the field-level diff atomically within the same transaction.
+	if tenantIDStr, ok := c.Get("tenant_id"); ok {
+		if tenantID, err := uuid.Parse(tenantIDStr.(string)); err == nil {
+			updateUser.TenantID = tenantID
+		}
+	}
+	if userIDStr, ok := c.Get("user_id"); ok {
+		if uid, err := uuid.Parse(userIDStr.(string)); err == nil {
+			updateUser.PerformedBy = &uid
+		}
 	}
 
 	user, err := uc.userService.UpdateUser(updateUser)
@@ -298,6 +328,22 @@ func (uc *UserController) SoftDeleteUser(c *gin.Context) {
 		return
 	}
 
+	if tenantIDStr, ok := c.Get("tenant_id"); ok {
+		if tenantID, err := uuid.Parse(tenantIDStr.(string)); err == nil {
+			var performedByPtr *uuid.UUID
+			if userIDStr, ok := c.Get("user_id"); ok {
+				if uid, err := uuid.Parse(userIDStr.(string)); err == nil {
+					performedByPtr = &uid
+				}
+			}
+			targetID := userID
+			auditSvc := uc.userAuditService
+			go func() {
+				_ = auditSvc.Record(tenantID, "user.deleted", &targetID, performedByPtr, nil, "user")
+			}()
+		}
+	}
+
 	c.JSON(http.StatusOK, gin.H{
 		"success":     true,
 		"soft_delete": usersConfig.EnableSoftDelete,
@@ -338,6 +384,22 @@ func (uc *UserController) ResetPassword(c *gin.Context) {
 		}
 		c.JSON(http.StatusInternalServerError, coreErrors.BuildError(c, err))
 		return
+	}
+
+	if tenantIDStr, ok := c.Get("tenant_id"); ok {
+		if tenantID, err := uuid.Parse(tenantIDStr.(string)); err == nil {
+			var performedByPtr *uuid.UUID
+			if userIDStr, ok := c.Get("user_id"); ok {
+				if uid, err := uuid.Parse(userIDStr.(string)); err == nil {
+					performedByPtr = &uid
+				}
+			}
+			targetID := id
+			auditSvc := uc.userAuditService
+			go func() {
+				_ = auditSvc.Record(tenantID, "user.password-reset", &targetID, performedByPtr, nil, "user")
+			}()
+		}
 	}
 
 	appConf := config.ModularAppConfig.Core

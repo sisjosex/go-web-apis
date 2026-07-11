@@ -1,0 +1,1 @@
+DROP FUNCTION IF EXISTS users.sp_record_user_audit(UUID, VARCHAR, UUID, UUID, JSONB, VARCHAR);

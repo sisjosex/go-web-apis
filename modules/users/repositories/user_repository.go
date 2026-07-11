@@ -36,7 +36,7 @@ p_website_url := $9
 )
     `
 
-	params := []interface{}{
+	params := []any{
 		userDTO.FirstName,
 		userDTO.LastName,
 		userDTO.Phone,
@@ -74,7 +74,31 @@ p_website_url := $9
 }
 
 func (r *userRepository) UpdateUser(userDTO userModels.UpdateUserDto) (*coreModels.User, error) {
-	user := &coreModels.User{}
+	ctx := context.Background()
+
+	tx, err := r.dbService.BeginTransaction(ctx)
+	if err != nil {
+		return nil, err
+	}
+	defer tx.Rollback(ctx)
+
+	// Inject tenant and performer into the transaction so the AFTER UPDATE trigger
+	// can read them via current_setting('app.tenant_id', true) / ('app.performed_by', true).
+	if userDTO.TenantID != (uuid.UUID{}) {
+		performedByStr := ""
+		if userDTO.PerformedBy != nil {
+			performedByStr = userDTO.PerformedBy.String()
+		}
+		_, err = tx.Exec(ctx,
+			"SELECT set_config('app.tenant_id',$1,true), set_config('app.performed_by',$2,true)",
+			userDTO.TenantID.String(),
+			performedByStr,
+		)
+		if err != nil {
+			return nil, err
+		}
+	}
+
 	query := `
         SELECT * FROM users.sp_update_user(
 p_id := $1,
@@ -93,7 +117,7 @@ p_website_url := $13
 )
     `
 
-	params := []interface{}{
+	params := []any{
 		userDTO.ID,
 		userDTO.FirstName,
 		userDTO.LastName,
@@ -109,9 +133,10 @@ p_website_url := $13
 		userDTO.WebsiteUrl,
 	}
 
-	row := r.dbService.QueryRow(context.Background(), query, params...)
+	user := &coreModels.User{}
+	row := tx.QueryRow(ctx, query, params...)
 
-	err := row.Scan(
+	err = row.Scan(
 		&user.ID,
 		&user.FirstName,
 		&user.LastName,
@@ -133,16 +158,17 @@ p_website_url := $13
 		return nil, err
 	}
 
+	if err = tx.Commit(ctx); err != nil {
+		return nil, err
+	}
+
 	return user, nil
 }
 
 func (r *userRepository) ListUsers(query userModels.UserListQuery) (*userModels.UserListResponse, error) {
 	ctx := context.Background()
 
-	page := query.Page
-	if page < 1 {
-		page = 1
-	}
+	page := max(1, query.Page)
 	limit := query.Limit
 	if limit < 1 {
 		limit = 10

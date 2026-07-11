@@ -86,6 +86,11 @@ func SetupRoutes(r *gin.Engine, dbService coreServices.DatabaseService) {
 	userRepository := userRepos.NewUserRepository(dbService)
 	userService := userServices.NewUserService(userRepository)
 
+	// Users audit module
+	userAuditRepository := userRepos.NewUserAuditRepository(dbService)
+	userAuditService := userServices.NewUserAuditService(userAuditRepository)
+	userAuditController := userControllers.NewUserAuditController(userAuditService)
+
 	// Billing module (always initialized — plan info is needed cross-module)
 	billingRepository := billingRepos.NewBillingRepository(dbService)
 	billingService := billingServices.NewBillingService(billingRepository)
@@ -94,7 +99,7 @@ func SetupRoutes(r *gin.Engine, dbService coreServices.DatabaseService) {
 	// Controllers
 	authController := authControllers.NewAuthController(authService, jwtService, emailService, parser, dbService)
 	sessionController := authControllers.NewSessionController(authService)
-	userController := userControllers.NewUserController(userService, emailService)
+	userController := userControllers.NewUserController(userService, emailService, userAuditService)
 
 	// CORS — must be registered before the rate limiter so preflight OPTIONS
 	// requests are handled before they hit the limiter.
@@ -168,7 +173,7 @@ func SetupRoutes(r *gin.Engine, dbService coreServices.DatabaseService) {
 			tenantMiddleware = tenancyMW.TenantMiddlewareFromHeader(tenantService)
 
 			// Users module — tenant-scoped: requires X-Tenant-Slug + owner/admin role
-			userRoutes.RegisterUserRoutes(apiV1, userController, jwtService, tenantMiddleware)
+			userRoutes.RegisterUserRoutes(apiV1, userController, userAuditController, jwtService, tenantMiddleware)
 
 			// Platform routes — cross-tenant, super_admin only, no tenant scope
 			platform := apiV1.Group("/platform")

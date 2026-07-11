@@ -23,4 +23,7 @@ const (
 
 	// Password reset (admin-triggered)
 	UserResetPasswordFailed = "user.reset-password.failed"
+
+	// Audit log
+	UserAuditListFailed = "user.audit.list-failed"
 )

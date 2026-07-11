@@ -34,6 +34,8 @@ type UpdateUserDto struct {
 	ProfilePictureUrl *string              `json:"profile_picture_url"`
 	Bio               *string              `json:"bio"`
 	WebsiteUrl        *string              `json:"website_url"`
+	TenantID          uuid.UUID            `json:"-"` // set server-side from tenancy middleware
+	PerformedBy       *uuid.UUID           `json:"-"` // set server-side from JWT middleware
 }
 
 // UserListQuery represents query parameters for listing users
