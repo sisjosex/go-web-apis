@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"josex/web/modules/auth/services"
 	"josex/web/modules/core/errors"
+	coreModels "josex/web/modules/core/models"
 	"net/http"
 	"strings"
 
@@ -34,7 +35,7 @@ func AuthMiddleware(jwtService services.JWTService) gin.HandlerFunc {
 		if systemRole, ok := claims["system_role"].(string); ok {
 			c.Set("system_role", systemRole)
 		} else {
-			c.Set("system_role", "user") // Default for old tokens
+			c.Set("system_role", coreModels.SystemRoleUser) // Default for old tokens
 		}
 
 		c.Next()

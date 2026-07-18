@@ -6,6 +6,7 @@ import (
 	"josex/web/modules/tenancy/controllers"
 	"josex/web/modules/tenancy/interfaces"
 	tenantMiddleware "josex/web/modules/tenancy/middleware"
+	tenancyModels "josex/web/modules/tenancy/models"
 
 	"github.com/gin-gonic/gin"
 )
@@ -29,7 +30,7 @@ func RegisterRoleRoutes(
 
 		// owner/admin only: create, update, delete roles and manage permissions
 		adminRoutes := tenantRoutes.Group("")
-		adminRoutes.Use(tenantMiddleware.RequireTenantRole("owner", "admin"))
+		adminRoutes.Use(tenantMiddleware.RequireTenantRole(tenancyModels.RoleOwner, tenancyModels.RoleAdmin))
 		{
 			adminRoutes.POST("/roles", roleController.CreateRole)
 			adminRoutes.PATCH("/roles/:role_id", roleController.UpdateRole)

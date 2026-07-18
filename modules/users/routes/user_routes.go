@@ -3,7 +3,9 @@ package routes
 import (
 	authMiddleware "josex/web/modules/auth/middleware"
 	"josex/web/modules/auth/services"
+	coreModels "josex/web/modules/core/models"
 	tenancyMW "josex/web/modules/tenancy/middleware"
+	tenancyModels "josex/web/modules/tenancy/models"
 	"josex/web/modules/users/controllers"
 
 	"github.com/gin-gonic/gin"
@@ -22,7 +24,7 @@ func RegisterUserRoutes(
 	userRoutes := router.Group("/users")
 	userRoutes.Use(authMiddleware.AuthMiddleware(jwtService))
 	userRoutes.Use(tenantMiddleware)
-	userRoutes.Use(tenancyMW.RequireTenantRole("owner", "admin", "super_admin"))
+	userRoutes.Use(tenancyMW.RequireTenantRole(tenancyModels.RoleOwner, tenancyModels.RoleAdmin, coreModels.SystemRoleSuperAdmin))
 	{
 		userRoutes.GET("", userController.ListUsers)
 		userRoutes.GET("/stats", userController.GetStats)

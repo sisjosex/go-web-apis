@@ -6,6 +6,7 @@ import (
 
 	"josex/web/config"
 	coreErrors "josex/web/modules/core/errors"
+	coreModels "josex/web/modules/core/models"
 	coreServices "josex/web/modules/core/services"
 	tenancyErrors "josex/web/modules/tenancy/errors"
 	"josex/web/modules/tenancy/interfaces"
@@ -117,6 +118,11 @@ func TenantMiddleware(tenantService interfaces.TenantService) gin.HandlerFunc {
 			return
 		}
 
+		// A system super_admin bypasses permission checks regardless of tenant role
+		if systemRole, ok := c.Get("system_role"); ok {
+			tenantAccess.IsSuperAdmin = systemRole == coreModels.SystemRoleSuperAdmin
+		}
+
 		// Store tenant access info in gin context for controllers and RequirePermission
 		c.Set("tenant_id", tenantAccess.TenantID.String())
 		c.Set("tenant_slug", tenantAccess.Slug)
@@ -178,7 +184,7 @@ func TenantMiddlewareFromHeader(tenantService interfaces.TenantService) gin.Hand
 
 		var tenantAccess *models.TenantAccessInfo
 
-		if systemRoleStr == "super_admin" {
+		if systemRoleStr == coreModels.SystemRoleSuperAdmin {
 			// super_admin can switch to any tenant — bypass membership check
 			tenant, err := tenantService.GetTenantBySlug(c.Request.Context(), tenantSlug)
 			if err != nil {
@@ -194,7 +200,7 @@ func TenantMiddlewareFromHeader(tenantService interfaces.TenantService) gin.Hand
 				SchemaName:   tenant.SchemaName,
 				IsActive:     tenant.IsActive,
 				IsSuspended:  tenant.IsSuspended,
-				UserRole:     "super_admin",
+				UserRole:     coreModels.SystemRoleSuperAdmin,
 				UserIsActive: true,
 				Permissions:  make(map[string]bool),
 			}
@@ -207,6 +213,9 @@ func TenantMiddlewareFromHeader(tenantService interfaces.TenantService) gin.Hand
 				return
 			}
 		}
+
+		// A system super_admin bypasses permission checks regardless of tenant role
+		tenantAccess.IsSuperAdmin = systemRoleStr == coreModels.SystemRoleSuperAdmin
 
 		// Check if tenant is active
 		if !tenantAccess.IsActive {

@@ -4,9 +4,11 @@ import (
 	authMiddleware "josex/web/modules/auth/middleware"
 	"josex/web/modules/auth/services"
 	coreMiddleware "josex/web/modules/core/middleware"
+	coreModels "josex/web/modules/core/models"
 	"josex/web/modules/tenancy/controllers"
 	"josex/web/modules/tenancy/interfaces"
 	tenantMiddleware "josex/web/modules/tenancy/middleware"
+	tenancyModels "josex/web/modules/tenancy/models"
 
 	"github.com/gin-gonic/gin"
 )
@@ -28,7 +30,7 @@ func RegisterTenantRoutes(
 
 		// Create tenant (super_admin only - full control, custom database_url allowed)
 		adminOnlyRoutes := tenantRoutes.Group("")
-		adminOnlyRoutes.Use(coreMiddleware.RequireSystemRole("super_admin")) // 🔒 PROTECTED
+		adminOnlyRoutes.Use(coreMiddleware.RequireSystemRole(coreModels.SystemRoleSuperAdmin)) // 🔒 PROTECTED
 		{
 			adminOnlyRoutes.POST("", tenantController.CreateTenant)
 		}
@@ -51,7 +53,7 @@ func RegisterTenantRoutes(
 			// tenantScopedRoutes.GET("", tenantController.GetTenantInfo)
 
 			// Update tenant (owner/admin only)
-			adminRoutes := tenantScopedRoutes.Use(tenantMiddleware.RequireTenantRole("owner", "admin"))
+			adminRoutes := tenantScopedRoutes.Use(tenantMiddleware.RequireTenantRole(tenancyModels.RoleOwner, tenancyModels.RoleAdmin))
 			{
 				adminRoutes.PATCH("", tenantController.UpdateTenant)
 				adminRoutes.POST("/users", tenantController.AddUserToTenant)
@@ -60,7 +62,7 @@ func RegisterTenantRoutes(
 			}
 
 			// Run migrations on tenant database (super_admin only)
-			superAdminRoutes := tenantScopedRoutes.Use(coreMiddleware.RequireSystemRole("super_admin"))
+			superAdminRoutes := tenantScopedRoutes.Use(coreMiddleware.RequireSystemRole(coreModels.SystemRoleSuperAdmin))
 			{
 				superAdminRoutes.POST("/migrate", tenantController.RunTenantMigrations)
 			}

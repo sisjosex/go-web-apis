@@ -109,18 +109,16 @@ type TenantAccessInfo struct {
 	IsSuspended    bool            `json:"is_suspended"`
 	UserRole       string          `json:"user_role"`
 	UserIsActive   bool            `json:"user_is_active"`
+	IsSuperAdmin   bool            `json:"-"`
 	Permissions    map[string]bool `json:"-"`
 	EnabledModules map[string]bool `json:"-"`
 }
 
 // HasPermission returns true if the user has the given permission.
-// owner, admin, and super_admin bypass all permission checks.
+// Privileged tenant roles (owner, admin) and system super_admins bypass all
+// permission checks — see IsPrivilegedTenantRole.
 func (t *TenantAccessInfo) HasPermission(perm string) bool {
-	switch t.UserRole {
-	case "owner", "admin", "super_admin":
-		return true
-	}
-	return t.Permissions[perm]
+	return IsPrivilegedTenantRole(t.UserRole) || t.IsSuperAdmin || t.Permissions[perm]
 }
 
 // HasModule returns true if the given module is enabled for the tenant.

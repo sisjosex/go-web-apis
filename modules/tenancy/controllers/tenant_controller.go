@@ -7,6 +7,7 @@ import (
 	"josex/web/config"
 	billingInterfaces "josex/web/modules/billing/interfaces"
 	coreErrors "josex/web/modules/core/errors"
+	coreModels "josex/web/modules/core/models"
 	"josex/web/modules/core/utils"
 	tenancyErrors "josex/web/modules/tenancy/errors"
 	"josex/web/modules/tenancy/interfaces"
@@ -119,13 +120,13 @@ func (tc *TenantController) CreateTenantSelfService(c *gin.Context) {
 
 	// Get system role (super_admin bypasses limits)
 	systemRoleRaw, _ := c.Get("system_role")
-	systemRole := "user"
+	systemRole := coreModels.SystemRoleUser
 	if role, ok := systemRoleRaw.(string); ok {
 		systemRole = role
 	}
 
 	// Super admins can create unlimited tenants
-	if systemRole != "super_admin" {
+	if systemRole != coreModels.SystemRoleSuperAdmin {
 		// Count current owned tenants
 		count, err := tc.tenantService.CountUserOwnedTenants(c.Request.Context(), userID)
 		if err != nil {
@@ -152,7 +153,7 @@ func (tc *TenantController) CreateTenantSelfService(c *gin.Context) {
 	}
 
 	// Self-service users cannot use custom database URLs (security)
-	if systemRole != "super_admin" && dto.DatabaseURL != nil && *dto.DatabaseURL != "" {
+	if systemRole != coreModels.SystemRoleSuperAdmin && dto.DatabaseURL != nil && *dto.DatabaseURL != "" {
 		c.JSON(http.StatusForbidden, coreErrors.BuildErrorSingle(c, "tenant.database-url.not-allowed"))
 		return
 	}
@@ -444,7 +445,7 @@ func (tc *TenantController) UpdateUserRole(c *gin.Context) {
 func (tc *TenantController) RunTenantMigrations(c *gin.Context) {
 	// Check system role (only super_admin or admin)
 	systemRole, exists := c.Get("system_role")
-	if !exists || (systemRole != "super_admin" && systemRole != "admin") {
+	if !exists || (systemRole != coreModels.SystemRoleSuperAdmin && systemRole != models.RoleAdmin) {
 		c.JSON(http.StatusForbidden, coreErrors.BuildErrorSingle(c, tenancyErrors.TenantUserInsufficientPermissions))
 		return
 	}

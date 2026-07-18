@@ -3,9 +3,11 @@ package routes
 import (
 	authMiddleware "josex/web/modules/auth/middleware"
 	"josex/web/modules/auth/services"
+	coreModels "josex/web/modules/core/models"
 	"josex/web/modules/tenancy/controllers"
 	"josex/web/modules/tenancy/interfaces"
 	tenantMiddleware "josex/web/modules/tenancy/middleware"
+	tenancyModels "josex/web/modules/tenancy/models"
 
 	"github.com/gin-gonic/gin"
 )
@@ -31,7 +33,7 @@ func RegisterModuleRoutes(
 
 		// Owner/admin only for mutations
 		adminRoutes := tenantRoutes.Group("")
-		adminRoutes.Use(tenantMiddleware.RequireTenantRole("owner", "admin", "super_admin"))
+		adminRoutes.Use(tenantMiddleware.RequireTenantRole(tenancyModels.RoleOwner, tenancyModels.RoleAdmin, coreModels.SystemRoleSuperAdmin))
 		{
 			// PUT /tenants/:tenant_slug/modules/:module_code
 			adminRoutes.PUT("/:module_code", moduleController.UpsertTenantModule)

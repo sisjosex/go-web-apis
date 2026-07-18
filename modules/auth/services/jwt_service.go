@@ -7,6 +7,8 @@ import (
 
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/google/uuid"
+
+	coreModels "josex/web/modules/core/models"
 )
 
 type JWTService interface {
@@ -139,7 +141,7 @@ func (j *jwtService) RefreshAccessToken(refreshToken string) (*string, error) {
 	}
 
 	// Extract system_role from refresh token (backward compatible)
-	systemRole := "user" // default
+	systemRole := coreModels.SystemRoleUser // default
 	if role, ok := claims["system_role"].(string); ok {
 		systemRole = role
 	}

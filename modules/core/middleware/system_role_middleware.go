@@ -4,6 +4,7 @@ import (
 	"net/http"
 
 	coreErrors "josex/web/modules/core/errors"
+	coreModels "josex/web/modules/core/models"
 
 	"github.com/gin-gonic/gin"
 )
@@ -18,7 +19,7 @@ func RequireSystemRole(allowedRoles ...string) gin.HandlerFunc {
 		if !exists {
 			// If system_role not in context, user has old JWT (before migration)
 			// Default to 'user' role for backward compatibility
-			systemRoleRaw = "user"
+			systemRoleRaw = coreModels.SystemRoleUser
 		}
 
 		systemRole, ok := systemRoleRaw.(string)

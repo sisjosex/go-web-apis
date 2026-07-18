@@ -15,6 +15,7 @@ import (
 	coreModels "josex/web/modules/core/models"
 	coreServices "josex/web/modules/core/services"
 	"josex/web/modules/core/utils"
+	tenancyModels "josex/web/modules/tenancy/models"
 	usersErrors "josex/web/modules/users/errors"
 	userInterfaces "josex/web/modules/users/interfaces"
 	userModels "josex/web/modules/users/models"
@@ -69,7 +70,7 @@ func (uc *UserController) Create(c *gin.Context) {
 			if requesterIDStr, ok := c.Get("user_id"); ok {
 				if requesterID, err := uuid.Parse(requesterIDStr.(string)); err == nil {
 					if newUserID, err := uuid.Parse(user.ID); err == nil {
-						_ = uc.userService.AssignToTenant(tenantID, requesterID, newUserID, "member")
+						_ = uc.userService.AssignToTenant(tenantID, requesterID, newUserID, tenancyModels.RoleMember)
 					}
 				}
 			}

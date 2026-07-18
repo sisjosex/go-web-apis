@@ -12,6 +12,7 @@ import (
 	billingRoutes "josex/web/modules/billing/routes"
 	billingServices "josex/web/modules/billing/services"
 	coreMiddleware "josex/web/modules/core/middleware"
+	coreModels "josex/web/modules/core/models"
 	coreServices "josex/web/modules/core/services"
 	inventoryRoutes "josex/web/modules/inventory/routes"
 	purchasingRepos "josex/web/modules/purchasing/repositories"
@@ -176,7 +177,7 @@ func SetupRoutes(r *gin.Engine, dbService coreServices.DatabaseService) {
 
 			// Platform routes — cross-tenant, super_admin only, no tenant scope
 			platform := apiV1.Group("/platform")
-			platform.Use(authMiddleware, authMW.RequireSystemRole("super_admin"))
+			platform.Use(authMiddleware, authMW.RequireSystemRole(coreModels.SystemRoleSuperAdmin))
 			// Register platform-admin routes here as modules are added:
 			// platformRoutes.RegisterPlatformRoutes(platform, ...)
 
