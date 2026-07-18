@@ -45,8 +45,7 @@ const (
 
 // Permission errors
 const (
-	PermissionDenied       = "tenant.permission.denied"
-	PermissionCodeRequired = "tenant.permission.code-required"
+	PermissionDenied = "tenant.permission.denied"
 )
 
 // Module errors

@@ -148,8 +148,7 @@ func SetupRoutes(r *gin.Engine, dbService coreServices.DatabaseService) {
 			tenantService := tenancyServices.NewTenantService(tenantRepository, dbService)
 			tenantController := tenancyControllers.NewTenantController(tenantService, billingService)
 
-			permissionRepository := tenancyRepos.NewPermissionRepository(dbService)
-			permissionService := tenancyServices.NewPermissionService(permissionRepository)
+			permissionService := tenancyServices.NewPermissionService()
 			permissionController := tenancyControllers.NewPermissionController(permissionService)
 
 			roleRepository := tenancyRepos.NewRoleRepository(dbService)
@@ -163,7 +162,7 @@ func SetupRoutes(r *gin.Engine, dbService coreServices.DatabaseService) {
 
 			// Register tenant, permission, role and module routes
 			tenancyRoutes.RegisterTenantRoutes(apiV1, tenantController, tenantService, jwtService)
-			tenancyRoutes.RegisterPermissionRoutes(apiV1, permissionController, tenantService, jwtService)
+			tenancyRoutes.RegisterPermissionRoutes(apiV1, permissionController, jwtService)
 			tenancyRoutes.RegisterRoleRoutes(apiV1, roleController, tenantService, jwtService)
 			tenancyRoutes.RegisterModuleRoutes(apiV1, moduleController, tenantService, moduleSvc, jwtService)
 
