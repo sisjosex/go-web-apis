@@ -44,8 +44,11 @@ func main() {
 
 	fmt.Printf("🚀 Starting server in %s mode\n", *mode)
 
+	// Initialize the global modular config (reads ENV_FILE) before anything uses it.
+	config.GetConfig()
+
 	languages := []string{"en", "es"}
-	services.LoadAllTranslations(languages, config.GetConfig().Core.EnabledModules)
+	services.LoadAllTranslations(languages)
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()

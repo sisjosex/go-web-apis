@@ -129,7 +129,7 @@ func SetupApiTest(t *testing.T) *ApiTestHelper {
 
 	// Load translations (silent)
 	languages := []string{"en", "es"}
-	coreServices.LoadAllTranslations(languages, globalConfig.Core.EnabledModules)
+	coreServices.LoadAllTranslations(languages)
 
 	// Setup routes (still silenced)
 	routes.SetupRoutes(engine, dbService)

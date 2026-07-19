@@ -137,6 +137,43 @@ func (r *roleRepository) ListRoles(ctx context.Context, tenantID uuid.UUID) ([]*
 	return items, nil
 }
 
+func (r *roleRepository) ListRoleUsers(ctx context.Context, tenantID, roleID uuid.UUID) ([]*models.RoleUser, error) {
+	query := `SELECT * FROM tenancy.sp_list_role_users($1, $2)`
+
+	rows, err := r.dbService.Query(ctx, query, tenantID, roleID)
+	if err != nil {
+		var pgErr *pgconn.PgError
+		if errors.As(err, &pgErr) {
+			return nil, pgErr
+		}
+		return nil, err
+	}
+	defer rows.Close()
+
+	items := make([]*models.RoleUser, 0)
+	for rows.Next() {
+		item := &models.RoleUser{}
+		if err := rows.Scan(
+			&item.UserID,
+			&item.FirstName,
+			&item.LastName,
+			&item.Email,
+			&item.ProfilePictureURL,
+			&item.AssignedBy,
+			&item.AssignedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, item)
+	}
+
+	if err = rows.Err(); err != nil {
+		return nil, err
+	}
+
+	return items, nil
+}
+
 func (r *roleRepository) GetRole(ctx context.Context, tenantID, roleID uuid.UUID) (*models.RoleDetail, error) {
 	query := `SELECT * FROM tenancy.sp_get_role($1, $2)`
 

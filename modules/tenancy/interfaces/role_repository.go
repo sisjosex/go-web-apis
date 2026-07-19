@@ -36,4 +36,7 @@ type RoleRepository interface {
 
 	// ListUserRoles returns all roles assigned to a user within a tenant.
 	ListUserRoles(ctx context.Context, userID, tenantID uuid.UUID) ([]*models.UserRole, error)
+
+	// ListRoleUsers returns the active tenant users assigned to a role.
+	ListRoleUsers(ctx context.Context, tenantID, roleID uuid.UUID) ([]*models.RoleUser, error)
 }

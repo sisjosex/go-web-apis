@@ -487,6 +487,50 @@ func (ctrl *RoleController) ListUserRoles(c *gin.Context) {
 	c.JSON(http.StatusOK, roles)
 }
 
+// ListRoleUsers godoc
+// @Summary      List users assigned to a role
+// @Description  Returns the active tenant members who currently hold a given role
+// @Tags         Roles
+// @Accept       json
+// @Produce      json
+// @Param        Authorization  header  string  true  "Bearer Token"
+// @Param        tenant_slug    path    string  true  "Tenant slug"
+// @Param        role_id        path    string  true  "Role UUID"
+// @Success      200  {array}   models.RoleUser
+// @Failure      400  {object}  errors.ErrorResponse
+// @Failure      401  {object}  errors.ErrorResponse
+// @Failure      404  {object}  errors.ErrorResponse
+// @Router       /tenants/{tenant_slug}/roles/{role_id}/users [get]
+// @Security     ApiKeyAuth
+func (ctrl *RoleController) ListRoleUsers(c *gin.Context) {
+	tenantID, ok := parseTenantID(c)
+	if !ok {
+		return
+	}
+
+	roleID, err := uuid.Parse(c.Param("role_id"))
+	if err != nil {
+		c.JSON(http.StatusBadRequest, coreErrors.BuildErrorSingle(c, coreErrors.InvalidUUID))
+		return
+	}
+
+	members, err := ctrl.roleService.ListRoleUsers(c.Request.Context(), tenantID, roleID)
+	if err != nil {
+		var pgErr *pgconn.PgError
+		if errors.As(err, &pgErr) {
+			switch pgErr.Message {
+			case "tenant.role.not-found":
+				c.JSON(http.StatusNotFound, coreErrors.BuildErrorSingle(c, tenancyErrors.RoleNotFound))
+				return
+			}
+		}
+		c.JSON(http.StatusInternalServerError, coreErrors.BuildError(c, err))
+		return
+	}
+
+	c.JSON(http.StatusOK, members)
+}
+
 // parseTenantID extracts and parses tenant_id from the Gin context (set by tenancy middleware).
 // Writes an error response and returns false on failure.
 func parseTenantID(c *gin.Context) (uuid.UUID, bool) {

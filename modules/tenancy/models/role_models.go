@@ -51,6 +51,17 @@ type UserRole struct {
 	AssignedAt  time.Time `json:"assigned_at"`
 }
 
+// RoleUser is a tenant user assigned to a role, with identity fields for display.
+type RoleUser struct {
+	UserID            uuid.UUID `json:"user_id"`
+	FirstName         *string   `json:"first_name,omitempty"`
+	LastName          *string   `json:"last_name,omitempty"`
+	Email             *string   `json:"email,omitempty"`
+	ProfilePictureURL *string   `json:"profile_picture_url,omitempty"`
+	AssignedBy        uuid.UUID `json:"assigned_by"`
+	AssignedAt        time.Time `json:"assigned_at"`
+}
+
 // CreateRoleDto for creating a custom role.
 type CreateRoleDto struct {
 	Name        string    `json:"name"        binding:"required" conform:"trim"`

@@ -27,6 +27,7 @@ func RegisterRoleRoutes(
 		// Any tenant member can list roles or view a single role
 		tenantRoutes.GET("/roles", roleController.ListRoles)
 		tenantRoutes.GET("/roles/:role_id", roleController.GetRole)
+		tenantRoutes.GET("/roles/:role_id/users", roleController.ListRoleUsers)
 
 		// owner/admin only: create, update, delete roles and manage permissions
 		adminRoutes := tenantRoutes.Group("")

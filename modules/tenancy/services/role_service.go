@@ -53,3 +53,7 @@ func (s *roleService) RevokeUserRole(ctx context.Context, tenantID, requesterID,
 func (s *roleService) ListUserRoles(ctx context.Context, userID, tenantID uuid.UUID) ([]*models.UserRole, error) {
 	return s.repo.ListUserRoles(ctx, userID, tenantID)
 }
+
+func (s *roleService) ListRoleUsers(ctx context.Context, tenantID, roleID uuid.UUID) ([]*models.RoleUser, error) {
+	return s.repo.ListRoleUsers(ctx, tenantID, roleID)
+}
