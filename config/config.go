@@ -7,6 +7,7 @@ import (
 	billingConfig "josex/web/modules/billing/config"
 	coreConfig "josex/web/modules/core/config"
 	"josex/web/modules/core/utils"
+	importConfig "josex/web/modules/import/config"
 	inventoryConfig "josex/web/modules/inventory/config"
 	purchasingConfig "josex/web/modules/purchasing/config"
 	salesConfig "josex/web/modules/sales/config"
@@ -20,6 +21,7 @@ type ModularConfig struct {
 	Core       *coreConfig.CoreConfig
 	Auth       *authConfig.AuthConfig
 	Users      *usersConfig.UsersConfig
+	Import     *importConfig.ImportConfig
 	Billing    *billingConfig.BillingConfig
 	Tenancy    *tenancyConfig.TenancyConfig
 	Tracking   *trackingConfig.TrackingConfig
@@ -45,6 +47,7 @@ func GetConfig() *ModularConfig {
 			Core:       coreConfig.LoadCoreConfig(),
 			Auth:       authConfig.LoadAuthConfig(),
 			Users:      usersConfig.LoadUsersConfig(),
+			Import:     importConfig.LoadImportConfig(),
 			Billing:    billingConfig.LoadBillingConfig(),
 			Tenancy:    tenancyConfig.LoadTenancyConfig(),
 			Tracking:   trackingConfig.LoadTrackingConfig(),

@@ -1,0 +1,10 @@
+{
+  "import.file.required": "A CSV file is required",
+  "import.file.too-large": "The file exceeds the 5 MB limit",
+  "import.file.empty": "The file has no data rows",
+  "import.file.invalid": "The file could not be read as CSV",
+  "import.detect.unknown-format": "The file format was not recognized for any resource",
+  "import.too-many-rows": "The file exceeds the 500-row limit",
+  "import.options.invalid": "The options field is not valid JSON",
+  "import.validation-failed": "Import validation failed"
+}

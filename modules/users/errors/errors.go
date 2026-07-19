@@ -26,4 +26,13 @@ const (
 
 	// Audit log
 	UserAuditListFailed = "user.audit.list-failed"
+
+	// CSV import — per-row validation codes (mapped to the frontend)
+	UserImportFirstNameRequired = "users.import.first-name-required"
+	UserImportLastNameRequired  = "users.import.last-name-required"
+	UserImportEmailRequired     = "users.import.email-required"
+	UserImportEmailInvalid      = "users.import.email-invalid"
+	UserImportEmailDuplicate    = "users.import.email-duplicate"
+	UserImportBirthdayInvalid   = "users.import.birthday-invalid"
+	UserImportCreateFailed      = "users.import.create-failed"
 )

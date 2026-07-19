@@ -22,5 +22,12 @@
   "user.already-deleted": "User has already been deleted",
   "user.delete.not-allowed": "User deletion is disabled by system configuration",
   "user.validation.failed": "User validation failed",
-  "email.validation.already-exists": "Email address already exists"
+  "email.validation.already-exists": "Email address already exists",
+  "users.import.first-name-required": "First name is required",
+  "users.import.last-name-required": "Last name is required",
+  "users.import.email-required": "Email is required",
+  "users.import.email-invalid": "Invalid email format",
+  "users.import.email-duplicate": "A user with this email already exists",
+  "users.import.birthday-invalid": "Birthday is not a valid date (expected YYYY-MM-DD); it was skipped",
+  "users.import.create-failed": "Failed to create user"
 }

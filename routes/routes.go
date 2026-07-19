@@ -14,6 +14,9 @@ import (
 	coreMiddleware "josex/web/modules/core/middleware"
 	coreModels "josex/web/modules/core/models"
 	coreServices "josex/web/modules/core/services"
+	importControllers "josex/web/modules/import/controllers"
+	importRoutes "josex/web/modules/import/routes"
+	importServices "josex/web/modules/import/services"
 	inventoryRoutes "josex/web/modules/inventory/routes"
 	purchasingRepos "josex/web/modules/purchasing/repositories"
 	purchasingRoutes "josex/web/modules/purchasing/routes"
@@ -174,6 +177,14 @@ func SetupRoutes(r *gin.Engine, dbService coreServices.DatabaseService) {
 
 			// Users module — tenant-scoped: requires X-Tenant-Slug + owner/admin role
 			userRoutes.RegisterUserRoutes(apiV1, userController, userAuditController, jwtService, tenantMiddleware)
+
+			// Import module — generic CSV import, tenant-scoped. Descriptors are
+			// registered per resource; only Users is wired in this delivery.
+			importRegistry := importServices.NewRegistry()
+			importRegistry.Register(userServices.NewUsersImportDescriptor(userService, userAuditService, emailService, dbService))
+			importService := importServices.NewImportService(importRegistry)
+			importController := importControllers.NewImportController(importService)
+			importRoutes.RegisterImportRoutes(apiV1, importController, jwtService, tenantMiddleware)
 
 			// Platform routes — cross-tenant, super_admin only, no tenant scope
 			platform := apiV1.Group("/platform")

@@ -22,5 +22,12 @@
   "user.already-deleted": "El usuario ya ha sido eliminado",
   "user.delete.not-allowed": "La eliminación de usuarios está deshabilitada en la configuración del sistema",
   "user.validation.failed": "Validación de usuario fallida",
-  "email.validation.already-exists": "La dirección de correo electrónico ya existe"
+  "email.validation.already-exists": "La dirección de correo electrónico ya existe",
+  "users.import.first-name-required": "El nombre es obligatorio",
+  "users.import.last-name-required": "El apellido es obligatorio",
+  "users.import.email-required": "El correo electrónico es obligatorio",
+  "users.import.email-invalid": "Formato de correo electrónico inválido",
+  "users.import.email-duplicate": "Ya existe un usuario con este correo electrónico",
+  "users.import.birthday-invalid": "La fecha de nacimiento no es válida (se espera AAAA-MM-DD); se omitió",
+  "users.import.create-failed": "Error al crear el usuario"
 }
