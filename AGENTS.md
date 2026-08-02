@@ -13,6 +13,7 @@ This file orients automated coding agents operating in `/api`. Read it fully bef
 - **Scan every column a stored procedure returns**, in the exact declaration order. A column count mismatch is a silent runtime error.
 - **`tenant_id` always comes from `c.Get("tenant_id")`** — never from the request body or path. Tenancy middleware is a security boundary; never skip it on tenant routes.
 - **Never use `CREATE OR REPLACE FUNCTION` when changing a function signature or return type** — use `DROP FUNCTION IF EXISTS` + `CREATE FUNCTION` instead.
+- **Every change ships with its module's tests passing** — `make test-{module}` for each module the change touches, not just `make build`. A new or modified endpoint requires an integration test in `modules/{name}/tests/`; a change that only touches an SP still has to pass the existing ones. "It compiles" is not a verification.
 
 ---
 
@@ -31,12 +32,14 @@ make docker-down           # Stop containers
 make test                  # Reset DB + run main integration test suite
 make test-all              # Reset DB + run all module tests
 make test-auth             # Auth module tests only
+make test-core             # Core module tests only
 make test-users            # Users module tests only
 make test-tenancy          # Tenancy module tests only
 make test-tracking         # Tracking module tests only
 make test-inventory        # Inventory module tests only
 make test-sales            # Sales module tests only
 make test-purchasing       # Purchasing module tests only
+make test-billing          # Billing module tests only
 
 make migrate MODULE=X NAME=Y   # Generate .up.sql + .down.sql migration files
 make migrate-list              # List modules that support migrations
@@ -76,7 +79,8 @@ modules/{name}/
 ├── config/         # Env var loading via core utils
 ├── migrations/     # Schema + sp_*.up.sql / sp_*.down.sql
 ├── lang/           # en.json, es.json
-└── errors/         # Error code constants
+├── errors/         # Error code constants
+└── tests/          # Integration tests + the module's own helpers.go
 ```
 
 Request flow: **Controller → Service → Repository → PostgreSQL SP**
@@ -135,6 +139,36 @@ All module configs are registered in `config/config.go` and accessible via `conf
 - Authentication header: `Authorization: Bearer <jwt>`
 - Tenant header: `X-Tenant-Slug: <slug>`
 - Error format: `BuildErrorSingle` / `BuildErrorDetail` / `BuildError` from `modules/core/errors`
+
+#### List endpoints — there is no uniform contract
+
+**Rule: never assume the pagination shape of an endpoint. Open its controller and read the
+handler before writing any client, service or test against it.** Assuming a shape produces a
+client that compiles, runs, and silently renders an empty list.
+
+Verified 2026-08-01 — treat as a starting point, not as truth:
+
+| Endpoint | Query params | Response body |
+|---|---|---|
+| `GET /users` | `page`, `limit`, `search`, `order` | `{ users, total, page, limit, total_pages }` |
+| `GET /inventory/products` | `limit`, `offset` (default 20, capped 100) | `{ data, limit, offset }` |
+| `GET /inventory/categories` | `page`, `limit` | `{ categories, total }` |
+| `GET /purchasing/suppliers`, `/purchasing/orders` | `page`, `page_size` (capped 100) | `{ <plural>, total_count, page, page_size }` |
+| `GET /sales/orders` | `limit`, `offset` | `{ data }` — **no total** |
+| `GET /sales/customers`, `/tracking/*`, `/inventory/{batches,movements,stock}` | none — filters only | array or `{ data }`, unpaginated |
+
+Two consequences that bite:
+
+- **A list without a total cannot drive a paginator.** `sales/orders` and every unpaginated
+  endpoint above can only offer "load more". Adding a real paginator is API work, not app work.
+- **Search is per-endpoint, not global.** Only `GET /users` (`search`) and
+  `GET /inventory/categories/search` (`search_term`) filter server-side. Anywhere else a search
+  box is either client-side over the page already loaded, or new API work — decide it explicitly,
+  never silently.
+
+**New list endpoints use `page` + `page_size` and return `{ <plural>, total_count, page, page_size }`**
+(the purchasing shape). Do not add a fourth variant. Do not "fix" an existing endpoint to match
+unless the spec says so — its clients depend on the current shape.
 
 ### Database Migrations
 
@@ -348,27 +382,65 @@ Extract SP error code: `fooUtils.ExtractModuleErrorCode(err)`
 
 ### Testing
 
+**Tests are part of the change, not a follow-up.** A module's tests live in
+`modules/{name}/tests/`, package `{name}_test`, and every file — helpers included —
+carries the `integration` build tag.
+
+Each module owns a `tests/helpers.go` that wraps the core helper with the module's own
+setup and cleanup. Use it; do not call `coreTestHelpers.SetupApiTest` directly from a
+module test:
+
 ```go
 //go:build integration
 // +build integration
 
-func TestCreateUser_Success(t *testing.T) {
-    // Arrange
-    api := testhelpers.SetupApiTest(t)
-    token := api.Login("admin@example.com", "password")
+package inventory_test
 
-    // Act
-    resp := api.POST("/api/v1/users", payload, token)
+// tests/helpers.go — one per module
+func SetupInventoryTest(t *testing.T) *coreTestHelpers.ApiTestHelper {
+    helper := coreTestHelpers.SetupApiTest(t)
+    helper.LoginAsSuperAdmin()
+    helper.SetTenantSlug("test-company")
+    return helper
+}
 
-    // Assert
-    assert.Equal(t, 201, resp.StatusCode)
+func CleanInventoryDatabase(helper *coreTestHelpers.ApiTestHelper) error {
+    return helper.CleanDatabaseForSchemas("inventory")   // only this module's schema
+}
+
+// inventory_api_test.go
+func TestCreateProduct_Success(t *testing.T) {
+    api := SetupInventoryTest(t)                          // Arrange
+
+    resp := api.POST("/api/v1/inventory/products", payload)  // Act
+
+    assert.Equal(t, 201, resp.StatusCode)                 // Assert
 }
 ```
 
-- Integration tests only — no mocked DB. Tests hit a real PostgreSQL instance.
-- Build tag `//go:build integration` on every test file.
-- Function names: `Test{Method}_{Scenario}`.
-- Run with `make test` (full reset) or `make test-{module}`.
+Rules:
+
+- Integration only — no mocked DB. Tests hit a real PostgreSQL instance.
+- `//go:build integration` on **every** file in `tests/`, helpers included; without it the
+  file is silently excluded and the module looks green while running nothing.
+- Function names `Test{Method}_{Scenario}`; one scenario per function; AAA with a blank
+  line between the three blocks.
+- Clean only your own schema (`CleanDatabaseForSchemas("<schema>")`). Never wipe `auth` or
+  `tenancy` — other modules' tests share the database.
+- `TEST_FLAGS` is `-tags=integration -timeout=120s -p 1`: packages run **serially** because
+  they share one DB. Do not add parallelism to a module's tests.
+
+**Coverage expected per endpoint** — success, validation failure (400), not found (404),
+and the conflict the SP raises (409) where one exists. `modules/inventory/tests/` is the
+reference: `TestCreateProduct_Success`, `_WithVariants`, `_SKUAlreadyExists`,
+`_InvalidPrice`, `_MissingRequiredFields`.
+
+Run with `make test-{module}` for the modules you touched, or `make test-all`.
+
+**Known blocker:** every `make test-*` depends on `db-reset`, and migrations run in the
+literal order of `ENABLED_MODULES` in `.env.test`, where `users` currently precedes
+`tenancy`. If `db-reset` fails on migration ordering, that is this pre-existing config
+issue — report it, do not work around it by skipping the tests.
 
 ### Adding a New Module
 
@@ -379,7 +451,12 @@ func TestCreateUser_Success(t *testing.T) {
 5. Add `errors/errors.go`.
 6. Implement interfaces → repository → service → controller.
 7. Register routes in `routes/routes.go` gated with `coreConfig.IsModuleEnabled("{name}")`.
-8. Add `{name}` to `ENABLED_MODULES` in the relevant `.env` file.
+8. Add `{name}` to `ENABLED_MODULES` in the relevant `.env` file — **and in `.env.test`**,
+   after every module whose schema the new one references, since that list is the
+   migration order.
+9. Create `tests/helpers.go` (`Setup{Name}Test` + `Clean{Name}Database`) and
+   `tests/{name}_api_test.go` covering each endpoint.
+10. Add a `test-{name}` target to the `Makefile`, next to the existing ones.
 
 ---
 
@@ -391,3 +468,6 @@ func TestCreateUser_Success(t *testing.T) {
 - **Missing table alias**: `SELECT id FROM foo.foos JOIN bar.bars ON ...` → ambiguous column `id` at runtime
 - **Wrong error code format**: Must be `domain.action.error-type` — the frontend matches on this exact string
 - **Skipping tenancy middleware**: Tenant routes without it expose cross-tenant data — never skip it
+- **Missing build tag on a test file**: no `//go:build integration` → the file is excluded, the suite passes, and nothing ran
+- **Cleaning the wrong schema**: `CleanDatabaseForSchemas("auth")` from a module test wipes the fixtures every other module depends on
+- **Shipping on `make build` alone**: compiling proves nothing about the SP the change relies on — run `make test-{module}`
