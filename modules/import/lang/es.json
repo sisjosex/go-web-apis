@@ -1,7 +1,8 @@
 {
   "import.file.required": "Se requiere un archivo CSV",
   "import.file.too-large": "El archivo supera el límite de 5 MB",
-  "import.file.empty": "El archivo no tiene filas de datos",
+  "import.file.empty": "El archivo está vacío",
+  "import.file.no-rows": "El archivo tiene encabezado pero ninguna fila de datos debajo",
   "import.file.invalid": "No se pudo leer el archivo como CSV",
   "import.detect.unknown-format": "No se reconoció el formato del archivo para ningún recurso",
   "import.too-many-rows": "El archivo supera el límite de 500 filas",

@@ -1,7 +1,8 @@
 {
   "import.file.required": "A CSV file is required",
   "import.file.too-large": "The file exceeds the 5 MB limit",
-  "import.file.empty": "The file has no data rows",
+  "import.file.empty": "The file is empty",
+  "import.file.no-rows": "The file has a header but no data rows below it",
   "import.file.invalid": "The file could not be read as CSV",
   "import.detect.unknown-format": "The file format was not recognized for any resource",
   "import.too-many-rows": "The file exceeds the 500-row limit",

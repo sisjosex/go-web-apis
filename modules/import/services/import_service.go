@@ -238,7 +238,7 @@ func parseCSV(data []byte) ([]string, []parsedRow, error) {
 	}
 
 	if len(rows) == 0 {
-		return nil, nil, importErrors.ErrFileEmpty
+		return nil, nil, importErrors.ErrFileNoRows
 	}
 
 	return headers, rows, nil

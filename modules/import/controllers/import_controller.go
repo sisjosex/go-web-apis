@@ -285,6 +285,8 @@ func (ctrl *ImportController) mapError(c *gin.Context, err error) {
 		c.JSON(http.StatusBadRequest, coreErrors.BuildErrorSingle(c, importErrors.ImportTooManyRows))
 	case errors.Is(err, importErrors.ErrFileEmpty):
 		c.JSON(http.StatusBadRequest, coreErrors.BuildErrorSingle(c, importErrors.ImportFileEmpty))
+	case errors.Is(err, importErrors.ErrFileNoRows):
+		c.JSON(http.StatusBadRequest, coreErrors.BuildErrorSingle(c, importErrors.ImportFileNoRows))
 	case errors.Is(err, importErrors.ErrFileInvalid):
 		c.JSON(http.StatusBadRequest, coreErrors.BuildErrorSingle(c, importErrors.ImportFileInvalid))
 	case errors.Is(err, importErrors.ErrFileTooLarge):

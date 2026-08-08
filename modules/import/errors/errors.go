@@ -4,10 +4,12 @@ import "errors"
 
 // Import module error codes. String values follow domain.action.error-type.
 const (
-	// File-level failures (multipart / CSV parsing).
+	// File-level failures (multipart / CSV parsing). Empty and NoRows are distinct:
+	// the first is a file with nothing in it, the second a header with no data below it.
 	ImportFileRequired = "import.file.required"
 	ImportFileTooLarge = "import.file.too-large"
 	ImportFileEmpty    = "import.file.empty"
+	ImportFileNoRows   = "import.file.no-rows"
 	ImportFileInvalid  = "import.file.invalid"
 
 	// Resource detection.
@@ -32,6 +34,7 @@ const (
 // right HTTP status and error code without string matching.
 var (
 	ErrFileEmpty     = errors.New(ImportFileEmpty)
+	ErrFileNoRows    = errors.New(ImportFileNoRows)
 	ErrFileInvalid   = errors.New(ImportFileInvalid)
 	ErrFileTooLarge  = errors.New(ImportFileTooLarge)
 	ErrUnknownFormat = errors.New(ImportDetectUnknownFormat)
