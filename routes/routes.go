@@ -11,6 +11,7 @@ import (
 	billingRepos "josex/web/modules/billing/repositories"
 	billingRoutes "josex/web/modules/billing/routes"
 	billingServices "josex/web/modules/billing/services"
+	coreConfig "josex/web/modules/core/config"
 	coreMiddleware "josex/web/modules/core/middleware"
 	coreModels "josex/web/modules/core/models"
 	coreServices "josex/web/modules/core/services"
@@ -81,6 +82,11 @@ func SetupRoutes(r *gin.Engine, dbService coreServices.DatabaseService) {
 
 	// Core services
 	emailService := coreServices.NewEmailService()
+	mediaService := coreServices.NewMediaService()
+
+	// Stored files (D5): served straight off MEDIA_ROOT, which is why the media
+	// service writes opaque UUID names and never the uploader's own filename.
+	r.Static("/media", coreConfig.MediaRoot())
 
 	// Auth module
 	authRepository := authRepos.NewAuthRepository(dbService)
@@ -181,7 +187,7 @@ func SetupRoutes(r *gin.Engine, dbService coreServices.DatabaseService) {
 			// Import module — generic CSV import, tenant-scoped. Descriptors are
 			// registered per resource; only Users is wired in this delivery.
 			importRegistry := importServices.NewRegistry()
-			importRegistry.Register(userServices.NewUsersImportDescriptor(userService, userAuditService, emailService, dbService))
+			importRegistry.Register(userServices.NewUsersImportDescriptor(userService, userAuditService, emailService, dbService, mediaService))
 			importService := importServices.NewImportService(importRegistry)
 			importController := importControllers.NewImportController(importService)
 			importRoutes.RegisterImportRoutes(apiV1, importController, jwtService, tenantMiddleware)

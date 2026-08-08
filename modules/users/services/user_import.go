@@ -28,6 +28,26 @@ import (
 // with what the stored procedure will accept at process time.
 var emailPattern = regexp.MustCompile(`^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$`)
 
+// websitePattern is the single definition of a valid website_url: it is checked
+// here on import and published on the column spec so the wizard and the admin
+// modal reject exactly the same strings (D3).
+var websitePattern = regexp.MustCompile(`^https?://[^\s/$.?#][^\s]*$`)
+
+// birthdayLayout is the Go layout accepted for the birthday column;
+// birthdayFormat is the same shape written for humans (template placeholder,
+// schema hint), so both sides of the contract move together.
+const (
+	birthdayLayout = "2006-01-02"
+	birthdayFormat = "YYYY-MM-DD"
+
+	// imageNameFormat tells the operator what a profile_picture cell holds: the
+	// bare filename of an entry in the companion archive, not a URL or a path.
+	imageNameFormat = "filename.jpg"
+
+	// avatarsCategory is the media directory imported pictures are written to.
+	avatarsCategory = "avatars"
+)
+
 // usersImportDescriptor is the Users resource plug-in for the generic import
 // engine: header signature, per-row validation/processing, and run recording.
 type usersImportDescriptor struct {
@@ -35,22 +55,26 @@ type usersImportDescriptor struct {
 	auditService userInterfaces.UserAuditService
 	emailService coreServices.EmailService
 	dbService    coreServices.DatabaseService
+	mediaService coreServices.MediaService
 }
 
 // NewUsersImportDescriptor builds the Users import descriptor from existing
 // services, reusing InsertUser/AssignToTenant/Record. dbService is used only for
-// the read-only email-existence preview (no user repository method exposes it).
+// the read-only email-existence preview (no user repository method exposes it);
+// mediaService stores the picture a row names in the companion image archive.
 func NewUsersImportDescriptor(
 	userService userInterfaces.UserService,
 	auditService userInterfaces.UserAuditService,
 	emailService coreServices.EmailService,
 	dbService coreServices.DatabaseService,
+	mediaService coreServices.MediaService,
 ) importInterfaces.ImportDescriptor {
 	return &usersImportDescriptor{
 		userService:  userService,
 		auditService: auditService,
 		emailService: emailService,
 		dbService:    dbService,
+		mediaService: mediaService,
 	}
 }
 
@@ -58,8 +82,20 @@ func (d *usersImportDescriptor) Resource() string {
 	return "users"
 }
 
-func (d *usersImportDescriptor) Columns() []string {
-	return []string{"first_name", "last_name", "email", "phone", "birthday"}
+// Columns is the canonical column order with the type and validation a client
+// needs to edit each cell. The email pattern is the API's own so the wizard
+// rejects exactly what checkFormat would.
+func (d *usersImportDescriptor) Columns() []importModels.ColumnSpec {
+	return []importModels.ColumnSpec{
+		{Key: "first_name", Type: importModels.ColumnTypeText, Required: true},
+		{Key: "last_name", Type: importModels.ColumnTypeText, Required: true},
+		{Key: "email", Type: importModels.ColumnTypeEmail, Required: true, Pattern: emailPattern.String()},
+		{Key: "phone", Type: importModels.ColumnTypePhone},
+		{Key: "birthday", Type: importModels.ColumnTypeDate, Format: birthdayFormat},
+		{Key: "bio", Type: importModels.ColumnTypeText},
+		{Key: "website_url", Type: importModels.ColumnTypeURL, Pattern: websitePattern.String()},
+		{Key: "profile_picture", Type: importModels.ColumnTypeImage, Format: imageNameFormat},
+	}
 }
 
 // Matches recognizes a Users CSV by its header signature: first_name, last_name,
@@ -81,7 +117,7 @@ func (d *usersImportDescriptor) Matches(headers []string) bool {
 
 func (d *usersImportDescriptor) ValidateRow(ctx importModels.ImportContext, line int, row map[string]string) importModels.RowResult {
 	result := importModels.RowResult{Line: line, Data: row}
-	fieldErrors, warnings := d.checkFormat(row)
+	fieldErrors, warnings := d.checkFormat(ctx, row)
 	result.Warnings = warnings
 
 	if len(fieldErrors) > 0 {
@@ -103,7 +139,7 @@ func (d *usersImportDescriptor) ValidateRow(ctx importModels.ImportContext, line
 
 func (d *usersImportDescriptor) ProcessRow(ctx importModels.ImportContext, line int, row map[string]string) importModels.RowResult {
 	result := importModels.RowResult{Line: line, Data: row}
-	fieldErrors, warnings := d.checkFormat(row)
+	fieldErrors, warnings := d.checkFormat(ctx, row)
 	result.Warnings = warnings
 
 	if len(fieldErrors) > 0 {
@@ -112,7 +148,10 @@ func (d *usersImportDescriptor) ProcessRow(ctx importModels.ImportContext, line 
 		return result
 	}
 
-	user, err := d.userService.InsertUser(d.buildDto(row))
+	dto, pictureWarnings := d.buildDto(ctx, row)
+	result.Warnings = append(result.Warnings, pictureWarnings...)
+
+	user, err := d.userService.InsertUser(dto)
 	if err != nil {
 		var pgErr *pgconn.PgError
 		if errors.As(err, &pgErr) && pgErr.Message == "user.create.email.already-exists" {
@@ -151,9 +190,11 @@ func (d *usersImportDescriptor) RecordRun(ctx importModels.ImportContext, meta i
 	_ = d.auditService.Record(ctx.TenantID, "import.performed", nil, ctx.PerformedBy, &metadata, "import")
 }
 
-// checkFormat validates the required fields and email format, and flags an
-// unparseable (but optional) birthday as a non-fatal warning.
-func (d *usersImportDescriptor) checkFormat(row map[string]string) ([]string, []string) {
+// checkFormat validates the required fields and email format, and flags the
+// optional fields it cannot use as non-fatal warnings: an unparseable birthday,
+// a malformed website_url (D3), and a picture named but absent from the archive
+// (D6). In every warning case the row is still created, with the field unset.
+func (d *usersImportDescriptor) checkFormat(ctx importModels.ImportContext, row map[string]string) ([]string, []string) {
 	var fieldErrors []string
 	var warnings []string
 
@@ -172,8 +213,18 @@ func (d *usersImportDescriptor) checkFormat(row map[string]string) ([]string, []
 	}
 
 	if birthday := row["birthday"]; birthday != "" {
-		if _, err := time.Parse("2006-01-02", birthday); err != nil {
+		if _, err := time.Parse(birthdayLayout, birthday); err != nil {
 			warnings = append(warnings, usersErrors.UserImportBirthdayInvalid)
+		}
+	}
+
+	if website := row["website_url"]; website != "" && !websitePattern.MatchString(website) {
+		warnings = append(warnings, usersErrors.UserImportWebsiteInvalid)
+	}
+
+	if picture := row["profile_picture"]; picture != "" {
+		if _, found := ctx.Images.Lookup(picture); !found {
+			warnings = append(warnings, usersErrors.UserImportImageMissing)
 		}
 	}
 
@@ -194,23 +245,60 @@ func (d *usersImportDescriptor) emailExists(email string) bool {
 
 // buildDto maps a CSV row to a CreateUserDto. Imported users get no usable
 // password: a random one is generated so the create SP accepts the row, but it
-// is never exposed — sign-in is via email OTP (D2/D3). An invalid birthday was
-// already surfaced as a warning and is left unset here.
-func (d *usersImportDescriptor) buildDto(row map[string]string) userModels.CreateUserDto {
+// is never exposed — sign-in is via email OTP (D2/D3).
+//
+// Any optional field checkFormat already warned about is simply left unset here:
+// an invalid birthday, a malformed website_url, and a picture the archive does
+// not carry. It returns the extra warnings raised while writing the picture,
+// which is the only step that can fail after validation passed.
+func (d *usersImportDescriptor) buildDto(ctx importModels.ImportContext, row map[string]string) (userModels.CreateUserDto, []string) {
 	dto := userModels.CreateUserDto{
 		FirstName: row["first_name"],
 		LastName:  row["last_name"],
 		Email:     normalizeEmail(row["email"]),
 		Phone:     row["phone"],
+		Bio:       row["bio"],
 		Password:  coreUtils.GenerateRandomPassword(),
 	}
 	if birthday := row["birthday"]; birthday != "" {
-		if parsed, err := time.Parse("2006-01-02", birthday); err == nil {
+		if parsed, err := time.Parse(birthdayLayout, birthday); err == nil {
 			date := coreModels.DateOnly(parsed)
 			dto.Birthday = &date
 		}
 	}
-	return dto
+	if website := row["website_url"]; website != "" && websitePattern.MatchString(website) {
+		dto.WebsiteUrl = website
+	}
+
+	var warnings []string
+	if url, warning := d.storePicture(ctx, row["profile_picture"]); warning != "" {
+		warnings = append(warnings, warning)
+	} else {
+		dto.ProfilePictureUrl = url
+	}
+
+	return dto, warnings
+}
+
+// storePicture writes the archive entry a row names and returns its public URL.
+// A blank cell, an entry the archive does not carry (already warned by
+// checkFormat), or a missing media service are all "nothing to store" — only a
+// failed write raises a new warning.
+func (d *usersImportDescriptor) storePicture(ctx importModels.ImportContext, filename string) (string, string) {
+	if filename == "" || d.mediaService == nil {
+		return "", ""
+	}
+
+	content, found := ctx.Images.Lookup(filename)
+	if !found {
+		return "", ""
+	}
+
+	url, err := d.mediaService.Save(avatarsCategory, coreServices.MediaFile{Filename: filename, Content: content})
+	if err != nil {
+		return "", usersErrors.UserImportImageInvalid
+	}
+	return url, ""
 }
 
 // assignAndAudit adds the new user to the tenant and records a user.created event.

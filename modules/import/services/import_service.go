@@ -51,9 +51,15 @@ func (s *importService) Template(resource string) ([]byte, error) {
 		return nil, importErrors.ErrUnknownFormat
 	}
 
+	columns := descriptor.Columns()
+	headers := make([]string, len(columns))
+	for i, column := range columns {
+		headers[i] = column.Key
+	}
+
 	var buf bytes.Buffer
 	writer := csv.NewWriter(&buf)
-	if err := writer.Write(descriptor.Columns()); err != nil {
+	if err := writer.Write(headers); err != nil {
 		return nil, err
 	}
 	writer.Flush()
@@ -61,6 +67,27 @@ func (s *importService) Template(resource string) ([]byte, error) {
 		return nil, err
 	}
 	return buf.Bytes(), nil
+}
+
+// Schema returns the resource's typed column specs. Unknown resource yields
+// ErrUnknownFormat.
+func (s *importService) Schema(resource string) (*importModels.SchemaResponse, error) {
+	descriptor, ok := s.registry.Get(resource)
+	if !ok {
+		return nil, importErrors.ErrUnknownFormat
+	}
+
+	return &importModels.SchemaResponse{
+		Resource: descriptor.Resource(),
+		Columns:  descriptor.Columns(),
+	}, nil
+}
+
+// ExtractImages inflates the optional companion image archive. The entry cap is
+// the engine's row limit: an archive can never carry more images than the run
+// can import rows.
+func (s *importService) ExtractImages(archive []byte) (importModels.ImportImages, error) {
+	return extractImages(archive, readLimits().MaxRows)
 }
 
 // parsedRow is one CSV data row paired with its 1-based CSV line number.

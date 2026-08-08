@@ -23,6 +23,7 @@ func RegisterImportRoutes(
 	{
 		importRoutes.GET("/meta", importController.Meta)
 		importRoutes.GET("/template", importController.Template)
+		importRoutes.GET("/schema", importController.Schema)
 		importRoutes.POST("/validate", importController.Validate)
 		importRoutes.POST("", importController.Import)
 	}

@@ -6,5 +6,10 @@
   "import.detect.unknown-format": "No se reconoció el formato del archivo para ningún recurso",
   "import.too-many-rows": "El archivo supera el límite de 500 filas",
   "import.options.invalid": "El campo de opciones no es un JSON válido",
-  "import.validation-failed": "La validación de importación falló"
+  "import.validation-failed": "La validación de importación falló",
+  "import.images.invalid": "No se pudo leer el archivo de imágenes como ZIP",
+  "import.images.too-large": "El archivo de imágenes supera el tamaño permitido",
+  "import.images.too-many-files": "El archivo de imágenes contiene más archivos de los que permite el límite de filas",
+  "import.images.entry-too-large": "Una imagen del archivo supera el tamaño permitido",
+  "import.images.entry-format": "El archivo contiene un elemento con un formato no permitido"
 }

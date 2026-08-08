@@ -34,5 +34,8 @@ const (
 	UserImportEmailInvalid      = "users.import.email-invalid"
 	UserImportEmailDuplicate    = "users.import.email-duplicate"
 	UserImportBirthdayInvalid   = "users.import.birthday-invalid"
+	UserImportWebsiteInvalid    = "users.import.website-invalid"
+	UserImportImageMissing      = "users.import.image-missing"
+	UserImportImageInvalid      = "users.import.image-invalid"
 	UserImportCreateFailed      = "users.import.create-failed"
 )

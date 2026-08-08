@@ -1,7 +1,7 @@
 .PHONY: help swagger build run \
         dev \
         migrate migrate-list tenant-list tenant-migrate \
-        test test-auth test-users test-core test-tenancy test-tracking test-inventory test-sales test-purchasing test-billing test-all \
+        test test-auth test-users test-core test-tenancy test-tracking test-inventory test-sales test-purchasing test-billing test-import test-all \
         db-reset docker-up docker-down clean
 
 # Build output
@@ -47,6 +47,7 @@ help:
 	@echo "  make test-tracking    - Tracking module"
 	@echo "  make test-users       - Users module"
 	@echo "  make test-core        - Core module"
+	@echo "  make test-import      - Import engine (unit, no DB)"
 	@echo ""
 	@echo "🗄️  DATABASE"
 	@echo "  make db-reset         - Drop, recreate, and migrate test database"
@@ -147,7 +148,10 @@ test-auth: db-reset
 	go test $(TEST_FLAGS) ./modules/auth/tests
 
 test-users: db-reset
-	go test $(TEST_FLAGS) ./modules/users/tests
+	go test $(TEST_FLAGS) ./modules/users/tests ./modules/users/services
+
+test-import:
+	go test $(TEST_FLAGS) ./modules/import/services
 
 test-core: db-reset
 	go test $(TEST_FLAGS) ./modules/core/tests ./modules/core/services

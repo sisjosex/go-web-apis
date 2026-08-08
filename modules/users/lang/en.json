@@ -29,5 +29,8 @@
   "users.import.email-invalid": "Invalid email format",
   "users.import.email-duplicate": "A user with this email already exists",
   "users.import.birthday-invalid": "Birthday is not a valid date (expected YYYY-MM-DD); it was skipped",
+  "users.import.website-invalid": "Website is not a valid URL; it was skipped",
+  "users.import.image-missing": "The named picture was not found in the image archive; the user was created without a picture",
+  "users.import.image-invalid": "The picture could not be stored; the user was created without a picture",
   "users.import.create-failed": "Failed to create user"
 }

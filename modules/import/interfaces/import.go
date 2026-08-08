@@ -11,8 +11,9 @@ import (
 type ImportDescriptor interface {
 	// Resource is the stable identifier used in the API (e.g. "users").
 	Resource() string
-	// Columns are the expected headers in canonical order (for docs/templates).
-	Columns() []string
+	// Columns are the expected headers in canonical order, each with the type and
+	// validation the client needs to edit it (templates, docs, and /import/schema).
+	Columns() []importModels.ColumnSpec
 	// Matches reports whether a CSV with these (normalized) headers belongs to
 	// this resource. This is the pluggable, header-signature detection strategy.
 	Matches(headers []string) bool
@@ -45,4 +46,10 @@ type ImportService interface {
 	// Template returns the CSV header row for a resource, built from its
 	// descriptor's Columns() so each resource is a single source of truth.
 	Template(resource string) ([]byte, error)
+	// Schema returns the typed column specs for a resource so a client can render
+	// and validate an editable cell per column without knowing the resource.
+	Schema(resource string) (*importModels.SchemaResponse, error)
+	// ExtractImages safely inflates the optional companion image archive, applying
+	// the configured per-entry, count and total caps.
+	ExtractImages(archive []byte) (importModels.ImportImages, error)
 }

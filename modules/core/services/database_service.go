@@ -71,11 +71,14 @@ func (ds *databaseService) InitDatabase(ctx context.Context) {
 		// Run modular migrations (unless skipped)
 		if skipMigrations {
 			log.Println("⏭️  Skipping migrations (SKIP_MIGRATIONS=true)")
+			LoadSettings(ctx, ds)
 			return
 		}
 
 		if err := ds.runModularMigrations(dataBaseUrl); err == nil {
 			log.Println("✅ All modular migrations completed successfully")
+			// core.settings exists only once migrations have run.
+			LoadSettings(ctx, ds)
 			return
 		} else {
 			log.Printf("Failed to run migrations: %v", err)

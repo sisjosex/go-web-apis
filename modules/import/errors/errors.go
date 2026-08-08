@@ -19,6 +19,13 @@ const (
 	// Options parsing and generic validation.
 	ImportOptionsInvalid   = "import.options.invalid"
 	ImportValidationFailed = "import.validation-failed"
+
+	// Companion image archive.
+	ImportImagesInvalid       = "import.images.invalid"
+	ImportImagesTooLarge      = "import.images.too-large"
+	ImportImagesTooManyFiles  = "import.images.too-many-files"
+	ImportImagesEntryTooLarge = "import.images.entry-too-large"
+	ImportImagesEntryFormat   = "import.images.entry-format"
 )
 
 // Sentinel errors returned by the service so the controller can map them to the
@@ -26,6 +33,13 @@ const (
 var (
 	ErrFileEmpty     = errors.New(ImportFileEmpty)
 	ErrFileInvalid   = errors.New(ImportFileInvalid)
+	ErrFileTooLarge  = errors.New(ImportFileTooLarge)
 	ErrUnknownFormat = errors.New(ImportDetectUnknownFormat)
 	ErrTooManyRows   = errors.New(ImportTooManyRows)
+
+	ErrImagesInvalid       = errors.New(ImportImagesInvalid)
+	ErrImagesTooLarge      = errors.New(ImportImagesTooLarge)
+	ErrImagesTooManyFiles  = errors.New(ImportImagesTooManyFiles)
+	ErrImagesEntryTooLarge = errors.New(ImportImagesEntryTooLarge)
+	ErrImagesEntryFormat   = errors.New(ImportImagesEntryFormat)
 )

@@ -6,5 +6,10 @@
   "import.detect.unknown-format": "The file format was not recognized for any resource",
   "import.too-many-rows": "The file exceeds the 500-row limit",
   "import.options.invalid": "The options field is not valid JSON",
-  "import.validation-failed": "Import validation failed"
+  "import.validation-failed": "Import validation failed",
+  "import.images.invalid": "The image archive could not be read as a ZIP file",
+  "import.images.too-large": "The image archive exceeds the allowed size",
+  "import.images.too-many-files": "The image archive contains more files than the row limit allows",
+  "import.images.entry-too-large": "An image in the archive exceeds the allowed size",
+  "import.images.entry-format": "The archive contains a file whose format is not allowed"
 }

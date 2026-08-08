@@ -1,6 +1,7 @@
 package models
 
 import (
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -19,6 +20,40 @@ const (
 	RowStatusFailed  = "failed"
 	RowStatusSkipped = "skipped"
 )
+
+// ColumnType is the editing/validation type a client applies to one import
+// column. It is deliberately small: the wizard renders one editor per type.
+type ColumnType string
+
+const (
+	ColumnTypeText   ColumnType = "text"
+	ColumnTypeEmail  ColumnType = "email"
+	ColumnTypePhone  ColumnType = "phone"
+	ColumnTypeDate   ColumnType = "date"
+	ColumnTypeNumber ColumnType = "number"
+	ColumnTypeYear   ColumnType = "year"
+	ColumnTypeURL    ColumnType = "url"
+	ColumnTypeImage  ColumnType = "image"
+)
+
+// ColumnSpec describes one import column: its CSV header key, the editor/type
+// the client uses for it, whether the engine rejects a row without it, and an
+// optional resource-supplied pattern for customized validation (D8). Format is
+// a human hint (e.g. "YYYY-MM-DD") the client may show as a placeholder.
+type ColumnSpec struct {
+	Key      string     `json:"key"`
+	Type     ColumnType `json:"type"`
+	Required bool       `json:"required"`
+	Pattern  string     `json:"pattern,omitempty"`
+	Format   string     `json:"format,omitempty"`
+}
+
+// SchemaResponse is the typed column list of one resource, consumed by the
+// wizard to render and validate its editable cells.
+type SchemaResponse struct {
+	Resource string       `json:"resource"`
+	Columns  []ColumnSpec `json:"columns"`
+}
 
 // ImportOptions carries caller-supplied, resource-specific switches parsed from
 // the request's optional `options` JSON field (e.g. Users' send_invitation).
@@ -42,13 +77,30 @@ type ImportLimits struct {
 	MaxRows       int `json:"max_rows"`
 }
 
+// ImportImages holds the inflated companion archive, keyed by the lowercased
+// basename of each entry. A descriptor looks a CSV cell up here; a miss is the
+// descriptor's business (a warning for Users), not the engine's.
+type ImportImages map[string][]byte
+
+// Lookup finds an image by the filename a CSV cell names, matched
+// case-insensitively against the archive's basenames.
+func (i ImportImages) Lookup(filename string) ([]byte, bool) {
+	if len(i) == 0 {
+		return nil, false
+	}
+	content, ok := i[strings.ToLower(strings.TrimSpace(filename))]
+	return content, ok
+}
+
 // ImportContext carries the per-request scope a descriptor needs: the tenant it
-// runs in, the acting user, the request language, and the parsed options.
+// runs in, the acting user, the request language, the parsed options, and the
+// images extracted from the optional companion archive.
 type ImportContext struct {
 	TenantID    uuid.UUID
 	PerformedBy *uuid.UUID
 	Lang        string
 	Options     ImportOptions
+	Images      ImportImages
 }
 
 // RowResult is the per-row outcome of a validate or process run, keyed by the

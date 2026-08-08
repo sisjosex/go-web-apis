@@ -74,6 +74,26 @@ func LoadCoreConfig() *CoreConfig {
 	}
 }
 
+// Settings addressed as core.media.* — see modules/core/utils/settings.go. They
+// resolve per call (database → CORE_MEDIA_* env → default) because the overlay
+// is loaded once the database is up, after this config is built.
+const (
+	settingsModule = "core"
+	sectionMedia   = "media"
+)
+
+// MediaRoot is the directory stored files are written under. It must live
+// outside the build context so an image survives a redeploy.
+func MediaRoot() string {
+	return utils.GetSetting(settingsModule, sectionMedia, "root", "./storage/media")
+}
+
+// MediaPublicBaseURL is the origin prepended to a stored file's path to make the
+// URL persisted on the record (e.g. profile_picture_url).
+func MediaPublicBaseURL() string {
+	return utils.GetSetting(settingsModule, sectionMedia, "public_base_url", "http://localhost:8080")
+}
+
 // IsModuleEnabled checks if a module is enabled
 func (c *CoreConfig) IsModuleEnabled(moduleName string) bool {
 	for _, m := range c.EnabledModules {
