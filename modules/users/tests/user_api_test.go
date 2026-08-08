@@ -10,6 +10,7 @@ import (
 	"testing"
 	"time"
 
+	"josex/web/config"
 	"josex/web/modules/core/testhelpers"
 	"josex/web/modules/users/models"
 
@@ -429,4 +430,63 @@ func TestSoftDeleteUser_Authenticated(t *testing.T) {
 	assert.True(t, w.Code == http.StatusOK || w.Code == http.StatusNoContent || w.Code == http.StatusForbidden,
 		"Soft delete should return 200/204/403, got %d: %s", w.Code, w.Body.String())
 	t.Logf("✅ Users: SoftDeleteUser as super_admin → %d", w.Code)
+}
+
+// TestSoftDeleteUser_PropagatesToAccountAndMembership - soft delete disables the
+// account and deactivates the tenant membership, not only deleted_at.
+// Both assertions go through the API: a disabled account makes sp_login_email
+// answer user.login.account-not-active, and a deactivated membership makes
+// sp_remove_user_from_tenant answer tenant.user.already-removed.
+func TestSoftDeleteUser_PropagatesToAccountAndMembership(t *testing.T) {
+	helper := setupSuperAdmin(t)
+	defer helper.Close()
+
+	// .env.test leaves ALLOW_USER_DELETION unset, so the endpoint answers 403 by
+	// default. Enable it just for this test and restore it afterwards.
+	usersConfig := config.ModularAppConfig.Users
+	previousAllowDeletion := usersConfig.AllowUserDeletion
+	usersConfig.AllowUserDeletion = true
+	defer func() { usersConfig.AllowUserDeletion = previousAllowDeletion }()
+
+	email := fmt.Sprintf("propagate-%d@example.com", time.Now().UnixNano())
+	password := "Propagate1!"
+	tenantHeader := map[string]string{"X-Tenant-Slug": "test-company"}
+	createBody := models.CreateUserDto{
+		FirstName: "Propagate",
+		LastName:  "Target",
+		Email:     email,
+		Password:  password,
+	}
+
+	w := helper.DoRequest("POST", "/users", createBody, tenantHeader)
+	if w.Code != http.StatusOK && w.Code != http.StatusCreated {
+		t.Fatalf("could not create user to delete (status %d): %s", w.Code, w.Body.String())
+	}
+	var created map[string]interface{}
+	json.Unmarshal(w.Body.Bytes(), &created)
+	userID, _ := created["id"].(string)
+	if userID == "" {
+		t.Fatalf("no user id in create response: %s", w.Body.String())
+	}
+
+	w = helper.DoRequest("DELETE", fmt.Sprintf("/users/%s", userID), nil, tenantHeader)
+
+	assert.Equal(t, http.StatusOK, w.Code,
+		"Soft delete should return 200, got %d: %s", w.Code, w.Body.String())
+
+	loginBody := map[string]interface{}{
+		"email":     email,
+		"password":  password,
+		"device_id": "11111111-2222-3333-4444-555555555555",
+	}
+	login := helper.DoRequest("POST", "/auth/login", loginBody, map[string]string{})
+	assert.NotEqual(t, http.StatusOK, login.Code, "deleted user must not be able to log in")
+	assert.Contains(t, login.Body.String(), "user.login.account-not-active",
+		"auth.users.is_active should be FALSE after delete, got: %s", login.Body.String())
+
+	removal := helper.DoRequest("DELETE", fmt.Sprintf("/tenants/test-company/users/%s", userID), nil, tenantHeader)
+	assert.Contains(t, removal.Body.String(), "tenant.user.already-removed",
+		"tenancy.tenant_users membership should be inactive after delete, got %d: %s", removal.Code, removal.Body.String())
+
+	t.Logf("✅ Users: SoftDeleteUser propagates to account and tenant membership")
 }

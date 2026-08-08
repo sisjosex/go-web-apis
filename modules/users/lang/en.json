@@ -21,6 +21,7 @@
   "user.delete.failed": "Failed to delete user",
   "user.already-deleted": "User has already been deleted",
   "user.delete.not-allowed": "User deletion is disabled by system configuration",
+  "user.delete.last-owner": "This user is the only active owner of a tenant and cannot be deleted",
   "user.validation.failed": "User validation failed",
   "email.validation.already-exists": "Email address already exists",
   "users.import.first-name-required": "First name is required",

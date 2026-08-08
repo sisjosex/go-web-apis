@@ -21,6 +21,7 @@
   "user.delete.failed": "Error al eliminar el usuario",
   "user.already-deleted": "El usuario ya ha sido eliminado",
   "user.delete.not-allowed": "La eliminación de usuarios está deshabilitada en la configuración del sistema",
+  "user.delete.last-owner": "Este usuario es el único propietario activo de un tenant y no puede ser eliminado",
   "user.validation.failed": "Validación de usuario fallida",
   "email.validation.already-exists": "La dirección de correo electrónico ya existe",
   "users.import.first-name-required": "El nombre es obligatorio",
