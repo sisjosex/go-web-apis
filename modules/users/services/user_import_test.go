@@ -25,7 +25,9 @@ func newTestDescriptor(t *testing.T) (*usersImportDescriptor, string) {
 	return &usersImportDescriptor{mediaService: coreServices.NewMediaService()}, root
 }
 
-// completeRow is a row filling every column the descriptor declares.
+// completeRow is a row filling every column the descriptor declares except
+// `roles`, whose resolution needs a database — it has its own cases below and an
+// integration test in modules/users/tests.
 func completeRow() map[string]string {
 	return map[string]string{
 		"first_name":      "Ana",
@@ -47,7 +49,7 @@ func TestCheckFormat_CompleteRowHasNoErrorsOrWarnings(t *testing.T) {
 	descriptor, _ := newTestDescriptor(t)
 	ctx := contextWithImages(map[string][]byte{"ana.png": []byte("ana-bytes")})
 
-	fieldErrors, warnings := descriptor.checkFormat(ctx, completeRow())
+	fieldErrors, warnings, _ := descriptor.checkFormat(ctx, completeRow())
 
 	if len(fieldErrors) != 0 {
 		t.Errorf("expected no errors, got %v", fieldErrors)
@@ -105,7 +107,7 @@ func TestBuildDto_BlankOptionalColumnsStayUnset(t *testing.T) {
 		"email":      "ana@example.com",
 	}
 
-	fieldErrors, warnings := descriptor.checkFormat(contextWithImages(nil), row)
+	fieldErrors, warnings, _ := descriptor.checkFormat(contextWithImages(nil), row)
 	dto, pictureWarnings := descriptor.buildDto(contextWithImages(nil), row)
 
 	if len(fieldErrors) != 0 || len(warnings) != 0 || len(pictureWarnings) != 0 {
@@ -124,7 +126,7 @@ func TestCheckFormat_MissingRequiredFieldsAreErrors(t *testing.T) {
 	descriptor, _ := newTestDescriptor(t)
 	row := map[string]string{"first_name": "", "last_name": "", "email": "not-an-email"}
 
-	fieldErrors, _ := descriptor.checkFormat(contextWithImages(nil), row)
+	fieldErrors, _, _ := descriptor.checkFormat(contextWithImages(nil), row)
 
 	for _, expected := range []string{
 		usersErrors.UserImportFirstNameRequired,
@@ -143,7 +145,7 @@ func TestCheckFormat_InvalidWebsiteWarnsAndTheFieldIsDropped(t *testing.T) {
 	row["website_url"] = "ana.example.com" // no scheme
 	row["profile_picture"] = ""
 
-	fieldErrors, warnings := descriptor.checkFormat(contextWithImages(nil), row)
+	fieldErrors, warnings, _ := descriptor.checkFormat(contextWithImages(nil), row)
 	dto, _ := descriptor.buildDto(contextWithImages(nil), row)
 
 	if len(fieldErrors) != 0 {
@@ -166,7 +168,7 @@ func TestCheckFormat_InvalidBirthdayWarnsAndTheFieldIsDropped(t *testing.T) {
 	row["birthday"] = "17/04/1990"
 	row["profile_picture"] = ""
 
-	fieldErrors, warnings := descriptor.checkFormat(contextWithImages(nil), row)
+	fieldErrors, warnings, _ := descriptor.checkFormat(contextWithImages(nil), row)
 	dto, _ := descriptor.buildDto(contextWithImages(nil), row)
 
 	if len(fieldErrors) != 0 {
@@ -185,7 +187,7 @@ func TestCheckFormat_PictureAbsentFromArchiveWarnsAndTheRowIsStillBuilt(t *testi
 	ctx := contextWithImages(map[string][]byte{"someone-else.png": []byte("bytes")})
 	row := completeRow()
 
-	fieldErrors, warnings := descriptor.checkFormat(ctx, row)
+	fieldErrors, warnings, _ := descriptor.checkFormat(ctx, row)
 	dto, pictureWarnings := descriptor.buildDto(ctx, row)
 
 	if len(fieldErrors) != 0 {
@@ -211,7 +213,7 @@ func TestCheckFormat_PictureIsMatchedCaseInsensitively(t *testing.T) {
 	row := completeRow()
 	row["profile_picture"] = " Ana.PNG "
 
-	_, warnings := descriptor.checkFormat(ctx, row)
+	_, warnings, _ := descriptor.checkFormat(ctx, row)
 	dto, _ := descriptor.buildDto(ctx, row)
 
 	if len(warnings) != 0 {
@@ -219,6 +221,84 @@ func TestCheckFormat_PictureIsMatchedCaseInsensitively(t *testing.T) {
 	}
 	if dto.ProfilePictureUrl == "" {
 		t.Error("expected the picture to be stored")
+	}
+}
+
+func TestParseRoleNames_SplitsTrimsAndDeduplicates(t *testing.T) {
+	names := parseRoleNames(" Sales ;; support;SALES;  ")
+
+	expected := []string{"Sales", "support"}
+	if !slices.Equal(names, expected) {
+		t.Errorf("expected %v — trimmed, blanks dropped, first spelling kept — got %v", expected, names)
+	}
+}
+
+func TestParseRoleNames_BlankCellYieldsNothing(t *testing.T) {
+	for _, cell := range []string{"", "   ", ";", " ; ; "} {
+		if names := parseRoleNames(cell); len(names) != 0 {
+			t.Errorf("expected %q to yield no names, got %v", cell, names)
+		}
+	}
+}
+
+// A role this tenant does not have is a field error, not a warning (D3), and the
+// code carries the operator's own spelling so the message can quote it back.
+// newTestDescriptor has no dbService, so every name here is unresolvable — the
+// resolution itself is covered by the integration test.
+func TestCheckFormat_UnresolvableRoleIsAFieldErrorNamingTheRole(t *testing.T) {
+	descriptor, _ := newTestDescriptor(t)
+	row := completeRow()
+	row["profile_picture"] = ""
+	row["roles"] = "SampleRole"
+
+	fieldErrors, warnings, roleIDs := descriptor.checkFormat(contextWithImages(nil), row)
+
+	if !slices.Contains(fieldErrors, usersErrors.UserImportRoleUnknown+errorParamSeparator+"SampleRole") {
+		t.Errorf("expected the code to carry the role name, got %v", fieldErrors)
+	}
+	if len(warnings) != 0 {
+		t.Errorf("an unknown role rejects the row, it does not warn: %v", warnings)
+	}
+	if len(roleIDs) != 0 {
+		t.Errorf("expected no resolved ids, got %v", roleIDs)
+	}
+}
+
+func TestCheckFormat_BlankRolesCellResolvesNothingAndIsClean(t *testing.T) {
+	descriptor, _ := newTestDescriptor(t)
+	row := completeRow()
+	row["profile_picture"] = ""
+	row["roles"] = "  "
+
+	fieldErrors, _, roleIDs := descriptor.checkFormat(contextWithImages(nil), row)
+
+	if len(fieldErrors) != 0 {
+		t.Errorf("a blank roles cell is not an error: %v", fieldErrors)
+	}
+	if len(roleIDs) != 0 {
+		t.Errorf("expected no resolved ids, got %v", roleIDs)
+	}
+}
+
+func TestColumns_RolesIsDeclaredOptionalWithAHint(t *testing.T) {
+	descriptor, _ := newTestDescriptor(t)
+
+	index := slices.IndexFunc(descriptor.Columns(), func(spec importModels.ColumnSpec) bool {
+		return spec.Key == "roles"
+	})
+	if index == -1 {
+		t.Fatalf("expected a roles column in %v", descriptor.Columns())
+	}
+
+	spec := descriptor.Columns()[index]
+	if spec.Required {
+		t.Error("expected roles to be optional")
+	}
+	if spec.Type != importModels.ColumnTypeText {
+		t.Errorf("expected a text column, got %q", spec.Type)
+	}
+	if spec.Format != rolesFormat {
+		t.Errorf("expected the separator hint %q, got %q", rolesFormat, spec.Format)
 	}
 }
 

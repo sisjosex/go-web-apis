@@ -490,3 +490,127 @@ func TestSoftDeleteUser_PropagatesToAccountAndMembership(t *testing.T) {
 
 	t.Logf("✅ Users: SoftDeleteUser propagates to account and tenant membership")
 }
+
+// ============================================================================
+// CSV import — roles column (USERS-010)
+// ============================================================================
+
+// importCSV posts a users CSV to the generic import endpoint and returns the
+// decoded response, failing the test if the endpoint itself rejected the upload.
+func importCSV(t *testing.T, helper *testhelpers.ApiTestHelper, path, csv string) map[string]interface{} {
+	t.Helper()
+
+	w := helper.DoMultipartRequest("POST", path,
+		map[string]string{"resource": "users", "options": `{"send_invitation":false}`},
+		[]testhelpers.MultipartFile{{Field: "file", Filename: "users.csv", Content: []byte(csv)}},
+		map[string]string{"X-Tenant-Slug": "test-company"},
+	)
+	if w.Code != http.StatusOK {
+		t.Fatalf("import returned %d: %s", w.Code, w.Body.String())
+	}
+
+	var decoded map[string]interface{}
+	if err := json.Unmarshal(w.Body.Bytes(), &decoded); err != nil {
+		t.Fatalf("could not decode the import response: %v — %s", err, w.Body.String())
+	}
+	return decoded
+}
+
+// firstRow returns the single row of an import/validate response.
+func firstRow(t *testing.T, response map[string]interface{}) map[string]interface{} {
+	t.Helper()
+
+	rows, ok := response["rows"].([]interface{})
+	if !ok || len(rows) == 0 {
+		t.Fatalf("expected one row in %v", response)
+	}
+	row, ok := rows[0].(map[string]interface{})
+	if !ok {
+		t.Fatalf("expected a row object, got %v", rows[0])
+	}
+	return row
+}
+
+// TestImportUsers_RolesColumnGrantsTheRole - a row naming an existing role lands
+// with that role already assigned, with no follow-up call (AC-1).
+func TestImportUsers_RolesColumnGrantsTheRole(t *testing.T) {
+	helper := setupSuperAdmin(t)
+	defer helper.Close()
+
+	tenantHeader := map[string]string{"X-Tenant-Slug": "test-company"}
+	roleName := fmt.Sprintf("Importers %d", time.Now().UnixNano())
+	roleResp := helper.DoRequest("POST", "/tenants/test-company/roles",
+		map[string]interface{}{"name": roleName}, tenantHeader)
+	if roleResp.Code != http.StatusOK && roleResp.Code != http.StatusCreated {
+		t.Fatalf("could not create the role (status %d): %s", roleResp.Code, roleResp.Body.String())
+	}
+	var role map[string]interface{}
+	json.Unmarshal(roleResp.Body.Bytes(), &role)
+	roleID, _ := role["id"].(string)
+
+	email := fmt.Sprintf("import-roles-%d@example.com", time.Now().UnixNano())
+	csv := fmt.Sprintf("first_name,last_name,email,roles\nRoleful,Importee,%s,%s\n", email, roleName)
+
+	response := importCSV(t, helper, "/import", csv)
+
+	assert.Equal(t, "created", firstRow(t, response)["status"],
+		"the row should be created: %s", response)
+
+	list := helper.DoRequest("GET", "/users?search="+email, nil, tenantHeader)
+	var listed struct {
+		Users []struct{ ID string } `json:"users"`
+	}
+	json.Unmarshal(list.Body.Bytes(), &listed)
+	if len(listed.Users) == 0 {
+		t.Fatalf("the imported user was not found: %s", list.Body.String())
+	}
+
+	roles := helper.DoRequest("GET",
+		fmt.Sprintf("/tenants/test-company/users/%s/roles", listed.Users[0].ID), nil, tenantHeader)
+	assert.Equal(t, http.StatusOK, roles.Code, "listing the user's roles should succeed")
+	assert.Contains(t, roles.Body.String(), roleID,
+		"the imported user should already hold the role: %s", roles.Body.String())
+
+	t.Logf("✅ Users: import grants the roles column")
+}
+
+// TestImportUsers_UnknownRoleRejectsTheRowNamingIt - an unknown role is a field
+// error carrying the name the operator typed, and the user is not created (D3).
+func TestImportUsers_UnknownRoleRejectsTheRowNamingIt(t *testing.T) {
+	helper := setupSuperAdmin(t)
+	defer helper.Close()
+
+	email := fmt.Sprintf("import-badrole-%d@example.com", time.Now().UnixNano())
+	csv := fmt.Sprintf("first_name,last_name,email,roles\nNo,Role,%s,SampleRole\n", email)
+
+	response := importCSV(t, helper, "/import", csv)
+	row := firstRow(t, response)
+
+	assert.Equal(t, "failed", row["status"], "an unknown role rejects the row: %v", row)
+	assert.Contains(t, fmt.Sprint(row["errors"]), "users.import.role-unknown|SampleRole",
+		"the error should name the role the operator typed: %v", row["errors"])
+
+	list := helper.DoRequest("GET", "/users?search="+email, nil,
+		map[string]string{"X-Tenant-Slug": "test-company"})
+	assert.NotContains(t, list.Body.String(), email,
+		"a rejected row must not create the user: %s", list.Body.String())
+
+	t.Logf("✅ Users: import rejects an unknown role and names it")
+}
+
+// TestImportUsers_NoRolesColumnStillImports - the roles column is optional, so a
+// sheet written before this change imports exactly as it did (AC-5).
+func TestImportUsers_NoRolesColumnStillImports(t *testing.T) {
+	helper := setupSuperAdmin(t)
+	defer helper.Close()
+
+	email := fmt.Sprintf("import-noroles-%d@example.com", time.Now().UnixNano())
+	csv := fmt.Sprintf("first_name,last_name,email\nLegacy,Sheet,%s\n", email)
+
+	response := importCSV(t, helper, "/import", csv)
+
+	assert.Equal(t, "created", firstRow(t, response)["status"],
+		"a sheet without the roles column still imports: %s", response)
+
+	t.Logf("✅ Users: a CSV with no roles column is unaffected")
+}

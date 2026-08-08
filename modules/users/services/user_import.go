@@ -46,6 +46,19 @@ const (
 
 	// avatarsCategory is the media directory imported pictures are written to.
 	avatarsCategory = "avatars"
+
+	// roleSeparator splits the roles cell. A semicolon, not a comma, so the cell
+	// survives a hand-edit in a spreadsheet without needing to be quoted.
+	roleSeparator = ";"
+	// rolesFormat is the same shape written for humans (template placeholder,
+	// schema hint), so both sides of the contract move together.
+	rolesFormat = "Sales;Support"
+
+	// errorParamSeparator appends a value to a row error code, for the codes whose
+	// message quotes back what the cell said: "users.import.role-unknown|Sales".
+	// The client splits on it and interpolates the tail; a code without it is
+	// translated as-is, so every existing code is unaffected.
+	errorParamSeparator = "|"
 )
 
 // usersImportDescriptor is the Users resource plug-in for the generic import
@@ -95,6 +108,7 @@ func (d *usersImportDescriptor) Columns() []importModels.ColumnSpec {
 		{Key: "bio", Type: importModels.ColumnTypeText},
 		{Key: "website_url", Type: importModels.ColumnTypeURL, Pattern: websitePattern.String()},
 		{Key: "profile_picture", Type: importModels.ColumnTypeImage, Format: imageNameFormat},
+		{Key: "roles", Type: importModels.ColumnTypeText, Format: rolesFormat},
 	}
 }
 
@@ -117,7 +131,7 @@ func (d *usersImportDescriptor) Matches(headers []string) bool {
 
 func (d *usersImportDescriptor) ValidateRow(ctx importModels.ImportContext, line int, row map[string]string) importModels.RowResult {
 	result := importModels.RowResult{Line: line, Data: row}
-	fieldErrors, warnings := d.checkFormat(ctx, row)
+	fieldErrors, warnings, _ := d.checkFormat(ctx, row)
 	result.Warnings = warnings
 
 	if len(fieldErrors) > 0 {
@@ -139,7 +153,7 @@ func (d *usersImportDescriptor) ValidateRow(ctx importModels.ImportContext, line
 
 func (d *usersImportDescriptor) ProcessRow(ctx importModels.ImportContext, line int, row map[string]string) importModels.RowResult {
 	result := importModels.RowResult{Line: line, Data: row}
-	fieldErrors, warnings := d.checkFormat(ctx, row)
+	fieldErrors, warnings, roleIDs := d.checkFormat(ctx, row)
 	result.Warnings = warnings
 
 	if len(fieldErrors) > 0 {
@@ -164,7 +178,7 @@ func (d *usersImportDescriptor) ProcessRow(ctx importModels.ImportContext, line 
 		return result
 	}
 
-	d.assignAndAudit(ctx, user)
+	result.Warnings = append(result.Warnings, d.assignAndAudit(ctx, user, roleIDs)...)
 	d.sendInvitation(ctx, user)
 
 	result.Status = importModels.RowStatusCreated
@@ -194,7 +208,12 @@ func (d *usersImportDescriptor) RecordRun(ctx importModels.ImportContext, meta i
 // optional fields it cannot use as non-fatal warnings: an unparseable birthday,
 // a malformed website_url (D3), and a picture named but absent from the archive
 // (D6). In every warning case the row is still created, with the field unset.
-func (d *usersImportDescriptor) checkFormat(ctx importModels.ImportContext, row map[string]string) ([]string, []string) {
+//
+// The roles cell is the exception: a name this tenant does not have is a field
+// error, not a warning, so the row is rejected instead of being created with
+// less access than the sheet asked for (USERS-010 D3). It returns the role ids it
+// resolved so ProcessRow grants them without querying again.
+func (d *usersImportDescriptor) checkFormat(ctx importModels.ImportContext, row map[string]string) ([]string, []string, []uuid.UUID) {
 	var fieldErrors []string
 	var warnings []string
 
@@ -228,7 +247,96 @@ func (d *usersImportDescriptor) checkFormat(ctx importModels.ImportContext, row 
 		}
 	}
 
-	return fieldErrors, warnings
+	roleIDs, unknownRoles := d.resolveRoles(ctx.TenantID, parseRoleNames(row["roles"]))
+	for _, name := range unknownRoles {
+		fieldErrors = append(fieldErrors, usersErrors.UserImportRoleUnknown+errorParamSeparator+name)
+	}
+
+	return fieldErrors, warnings, roleIDs
+}
+
+// parseRoleNames splits a roles cell into the distinct names it holds, trimmed
+// and de-duplicated case-insensitively. It keeps the first spelling the operator
+// typed, because that is the spelling an error message quotes back to them.
+func parseRoleNames(cell string) []string {
+	var names []string
+	seen := make(map[string]bool)
+
+	for _, part := range strings.Split(cell, roleSeparator) {
+		name := strings.TrimSpace(part)
+		if name == "" {
+			continue
+		}
+		key := strings.ToLower(name)
+		if seen[key] {
+			continue
+		}
+		seen[key] = true
+		names = append(names, name)
+	}
+
+	return names
+}
+
+// resolveRoles maps role names to their ids within one tenant, matched
+// case-insensitively (tenancy.roles is UNIQUE(tenant_id, name)). It returns the
+// ids it resolved and the names it could not, in the operator's own spelling.
+//
+// The read reaches another module's schema through dbService rather than by
+// importing tenancy's repository. It needs no to_regclass guard: /import only
+// registers inside the tenancy-enabled block, so this code never runs against a
+// database without the schema.
+func (d *usersImportDescriptor) resolveRoles(tenantID uuid.UUID, names []string) ([]uuid.UUID, []string) {
+	if len(names) == 0 {
+		return nil, nil
+	}
+	if d.dbService == nil {
+		return nil, names
+	}
+
+	lowered := make([]string, 0, len(names))
+	for _, name := range names {
+		lowered = append(lowered, strings.ToLower(name))
+	}
+
+	query := `
+        SELECT r.id, LOWER(r.name)
+        FROM tenancy.roles r
+        WHERE r.tenant_id = $1
+          AND LOWER(r.name) = ANY($2)
+    `
+	rows, err := d.dbService.Query(context.Background(), query, tenantID, lowered)
+	if err != nil {
+		return nil, names
+	}
+	defer rows.Close()
+
+	found := make(map[string]uuid.UUID, len(names))
+	for rows.Next() {
+		var id uuid.UUID
+		var name string
+		if err := rows.Scan(&id, &name); err != nil {
+			return nil, names
+		}
+		found[name] = id
+	}
+	if rows.Err() != nil {
+		return nil, names
+	}
+
+	// Walk the requested names, not the map, so the ids keep the sheet's order and
+	// every miss is reported once, spelled as the operator wrote it.
+	var roleIDs []uuid.UUID
+	var unknown []string
+	for _, name := range names {
+		if id, ok := found[strings.ToLower(name)]; ok {
+			roleIDs = append(roleIDs, id)
+			continue
+		}
+		unknown = append(unknown, name)
+	}
+
+	return roleIDs, unknown
 }
 
 // emailExists performs a read-only global existence check matching the uniqueness
@@ -301,14 +409,22 @@ func (d *usersImportDescriptor) storePicture(ctx importModels.ImportContext, fil
 	return url, ""
 }
 
-// assignAndAudit adds the new user to the tenant and records a user.created event.
-func (d *usersImportDescriptor) assignAndAudit(ctx importModels.ImportContext, user *coreModels.User) {
+// assignAndAudit adds the new user to the tenant, grants the roles the row named,
+// and records a user.created event. It returns one warning per role it could not
+// grant — the user exists by then, so a failed grant degrades the row instead of
+// failing it.
+func (d *usersImportDescriptor) assignAndAudit(ctx importModels.ImportContext, user *coreModels.User, roleIDs []uuid.UUID) []string {
 	newUserID, err := uuid.Parse(user.ID)
 	if err != nil {
-		return
+		return nil
 	}
+
+	var warnings []string
 	if ctx.PerformedBy != nil {
 		_ = d.userService.AssignToTenant(ctx.TenantID, *ctx.PerformedBy, newUserID, tenancyModels.RoleMember)
+		// Strictly after the membership: sp_assign_user_role rejects a user who is
+		// not yet an active member of the tenant.
+		warnings = d.grantRoles(ctx, newUserID, roleIDs)
 	}
 
 	auditService := d.auditService
@@ -318,6 +434,31 @@ func (d *usersImportDescriptor) assignAndAudit(ctx importModels.ImportContext, u
 	go func() {
 		_ = auditService.Record(tenantID, "user.created", &targetID, performedBy, nil, "import")
 	}()
+
+	return warnings
+}
+
+// grantRoles assigns each already-resolved role to the new member through
+// tenancy.sp_assign_user_role, which is idempotent and validates that the actor
+// may grant it. A failure here is reported, not swallowed: the row's user is
+// already created, so the operator has to know the grant did not land.
+func (d *usersImportDescriptor) grantRoles(ctx importModels.ImportContext, userID uuid.UUID, roleIDs []uuid.UUID) []string {
+	if len(roleIDs) == 0 || d.dbService == nil || ctx.PerformedBy == nil {
+		return nil
+	}
+
+	query := `SELECT tenancy.sp_assign_user_role($1, $2, $3, $4)`
+
+	var warnings []string
+	for _, roleID := range roleIDs {
+		assigned := false
+		row := d.dbService.QueryRow(context.Background(), query, ctx.TenantID, *ctx.PerformedBy, userID, roleID)
+		if err := row.Scan(&assigned); err != nil || !assigned {
+			warnings = append(warnings, usersErrors.UserImportRoleAssignFailed)
+		}
+	}
+
+	return warnings
 }
 
 // sendInvitation fires the OTP-login invitation email unless the caller disabled

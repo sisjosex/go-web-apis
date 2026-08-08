@@ -33,5 +33,7 @@
   "users.import.website-invalid": "Website is not a valid URL; it was skipped",
   "users.import.image-missing": "The named picture was not found in the image archive; the user was created without a picture",
   "users.import.image-invalid": "The picture could not be stored; the user was created without a picture",
-  "users.import.create-failed": "Failed to create user"
+  "users.import.create-failed": "Failed to create user",
+  "users.import.role-unknown": "This tenant has no role named {value}",
+  "users.import.role-assign-failed": "The user was created but the role could not be granted"
 }

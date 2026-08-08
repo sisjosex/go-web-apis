@@ -33,5 +33,7 @@
   "users.import.website-invalid": "El sitio web no es una URL válida; se omitió",
   "users.import.image-missing": "No se encontró la imagen indicada en el archivo de imágenes; el usuario se creó sin foto",
   "users.import.image-invalid": "No se pudo guardar la imagen; el usuario se creó sin foto",
-  "users.import.create-failed": "Error al crear el usuario"
+  "users.import.create-failed": "Error al crear el usuario",
+  "users.import.role-unknown": "Este tenant no tiene un rol llamado {value}",
+  "users.import.role-assign-failed": "El usuario se creó pero no se pudo asignar el rol"
 }

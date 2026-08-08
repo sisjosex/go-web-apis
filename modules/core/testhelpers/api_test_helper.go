@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"mime/multipart"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -283,6 +284,64 @@ func (h *ApiTestHelper) DoRequest(method, path string, body interface{}, headers
 	}
 
 	// Add tenant slug if set
+	if h.tenantSlug != "" && headers["X-Tenant-Slug"] == "" {
+		req.Header.Set("X-Tenant-Slug", h.tenantSlug)
+	}
+
+	w := httptest.NewRecorder()
+	h.engine.ServeHTTP(w, req)
+
+	return w
+}
+
+// MultipartFile is one file part of a multipart upload: the form field it is
+// posted under, the filename the server sees, and the bytes.
+type MultipartFile struct {
+	Field    string
+	Filename string
+	Content  []byte
+}
+
+// DoMultipartRequest performs a multipart/form-data request, for the endpoints
+// that take an upload instead of a JSON body (e.g. POST /import). Auth and tenant
+// headers are applied exactly as DoRequest applies them; the boundary-carrying
+// Content-Type is set from the writer, so it must not be passed in headers.
+func (h *ApiTestHelper) DoMultipartRequest(
+	method, path string,
+	fields map[string]string,
+	files []MultipartFile,
+	headers map[string]string,
+) *httptest.ResponseRecorder {
+	var body bytes.Buffer
+	writer := multipart.NewWriter(&body)
+
+	for name, value := range fields {
+		_ = writer.WriteField(name, value)
+	}
+	for _, file := range files {
+		part, err := writer.CreateFormFile(file.Field, file.Filename)
+		if err != nil {
+			h.t.Fatalf("failed to build the %q part: %v", file.Field, err)
+		}
+		if _, err := part.Write(file.Content); err != nil {
+			h.t.Fatalf("failed to write the %q part: %v", file.Field, err)
+		}
+	}
+	if err := writer.Close(); err != nil {
+		h.t.Fatalf("failed to close the multipart writer: %v", err)
+	}
+
+	req := httptest.NewRequest(method, h.baseURL+path, &body)
+	req.Header.Set("Content-Type", writer.FormDataContentType())
+	req.Header.Set("Accept-Language", "en")
+
+	for key, value := range headers {
+		req.Header.Set(key, value)
+	}
+
+	if h.token != "" && headers["Authorization"] == "" {
+		req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", h.token))
+	}
 	if h.tenantSlug != "" && headers["X-Tenant-Slug"] == "" {
 		req.Header.Set("X-Tenant-Slug", h.tenantSlug)
 	}

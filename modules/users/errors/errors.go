@@ -39,4 +39,11 @@ const (
 	UserImportImageMissing      = "users.import.image-missing"
 	UserImportImageInvalid      = "users.import.image-invalid"
 	UserImportCreateFailed      = "users.import.create-failed"
+
+	// UserImportRoleUnknown names the offending role, so it travels with a
+	// parameter appended: "users.import.role-unknown|Sales".
+	UserImportRoleUnknown = "users.import.role-unknown"
+	// UserImportRoleAssignFailed is a warning: the user was created, one of the
+	// roles it named could not be granted.
+	UserImportRoleAssignFailed = "users.import.role-assign-failed"
 )
