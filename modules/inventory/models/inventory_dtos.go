@@ -14,6 +14,37 @@ type CreateProductDto struct {
 	Variants    any `json:"variants"`
 }
 
+// UpdateProductDto carries the editable product fields plus, optionally, the
+// whole variant tree. Variants is a pointer so an omitted key (leave the tree
+// alone) stays distinguishable from {"groups": []} (remove every group).
+type UpdateProductDto struct {
+	Name        string                    `json:"name" binding:"required"`
+	Description *string                   `json:"description"`
+	BasePrice   float64                   `json:"base_price" binding:"required,gt=0"`
+	Variants    *UpdateProductVariantsDto `json:"variants"`
+}
+
+type UpdateProductVariantsDto struct {
+	Groups []UpdateVariantGroupDto `json:"groups"`
+}
+
+// UpdateVariantGroupDto and UpdateVariantOptionDto are diffed by ID: a nil ID
+// is an insert, an ID belonging to the product is an update, and anything in
+// the DB missing from the payload is deleted.
+type UpdateVariantGroupDto struct {
+	ID            *string                  `json:"id"`
+	GroupType     string                   `json:"group_type" binding:"required"`
+	IsRequired    bool                     `json:"is_required"`
+	MaxSelections int                      `json:"max_selections"`
+	Options       []UpdateVariantOptionDto `json:"options"`
+}
+
+type UpdateVariantOptionDto struct {
+	ID       *string `json:"id"`
+	Name     string  `json:"name" binding:"required"`
+	Modifier float64 `json:"modifier"`
+}
+
 type RecordMovementDto struct {
 	ProductID     string   `json:"product_id" binding:"required"`
 	MovementType  string   `json:"movement_type" binding:"required"`
@@ -25,6 +56,13 @@ type RecordMovementDto struct {
 }
 
 type CreateProductResponse struct {
+	ProductID string `json:"product_id"`
+	SKU       string `json:"sku"`
+	Name      string `json:"name"`
+	Message   string `json:"message"`
+}
+
+type UpdateProductResponse struct {
 	ProductID string `json:"product_id"`
 	SKU       string `json:"sku"`
 	Name      string `json:"name"`
@@ -98,6 +136,7 @@ type VariantOption struct {
 }
 
 type VariantGroup struct {
+	ID            string          `json:"id"`
 	GroupType     string          `json:"group_type"`
 	IsRequired    bool            `json:"is_required"`
 	MaxSelections int             `json:"max_selections"`

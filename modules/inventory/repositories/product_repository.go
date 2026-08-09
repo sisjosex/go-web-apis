@@ -63,6 +63,45 @@ func (r *ProductRepository) CreateProductWithVariants(
 	}, nil
 }
 
+func (r *ProductRepository) UpdateProductWithVariants(
+	ctx context.Context,
+	tenantID uuid.UUID,
+	productID string,
+	name string,
+	description *string,
+	basePrice float64,
+	variantsJSON *string,
+) (*models.UpdateProductResponse, error) {
+	var respProductID, respSku, respName, message string
+
+	err := r.dbService.QueryRow(
+		ctx,
+		`SELECT CAST(product_id AS VARCHAR), sku, name, message FROM inventory.sp_update_product_with_variants($1, $2, $3, $4, $5, $6::JSONB)`,
+		tenantID, productID, name, description, basePrice, variantsJSON,
+	).Scan(&respProductID, &respSku, &respName, &message)
+
+	if err != nil {
+		if r.logger != nil {
+			r.logger.Printf("❌ Error updating product: %v", err)
+		}
+		var pgErr *pgconn.PgError
+		if errors.As(err, &pgErr) {
+			return nil, pgErr
+		}
+		return nil, err
+	}
+
+	if r.logger != nil {
+		r.logger.Printf("✅ Product updated: ID=%s, SKU=%s, Name=%s", respProductID, respSku, respName)
+	}
+	return &models.UpdateProductResponse{
+		ProductID: respProductID,
+		SKU:       respSku,
+		Name:      respName,
+		Message:   message,
+	}, nil
+}
+
 func (r *ProductRepository) GetProduct(ctx context.Context, tenantID uuid.UUID, productID string) (*models.Product, error) {
 	var product models.Product
 

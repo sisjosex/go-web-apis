@@ -53,6 +53,38 @@ func (s *ProductService) CreateProductWithVariants(
 	)
 }
 
+func (s *ProductService) UpdateProductWithVariants(
+	ctx context.Context,
+	tenantID uuid.UUID,
+	productID string,
+	dto models.UpdateProductDto,
+) (*models.UpdateProductResponse, error) {
+	var variantsJSON *string
+
+	// A nil Variants means "leave the tree alone" — the SP reads NULL as that.
+	if dto.Variants != nil {
+		jsonBytes, err := json.Marshal(dto.Variants)
+		if err != nil {
+			if s.logger != nil {
+				s.logger.Printf("❌ Error marshaling variants: %v", err)
+			}
+			return nil, err
+		}
+		jsonStr := string(jsonBytes)
+		variantsJSON = &jsonStr
+	}
+
+	return s.repository.UpdateProductWithVariants(
+		ctx,
+		tenantID,
+		productID,
+		dto.Name,
+		dto.Description,
+		dto.BasePrice,
+		variantsJSON,
+	)
+}
+
 func (s *ProductService) GetProduct(ctx context.Context, tenantID uuid.UUID, productID string) (*models.ProductDetail, error) {
 	return s.repository.GetProductWithVariants(ctx, tenantID, productID)
 }

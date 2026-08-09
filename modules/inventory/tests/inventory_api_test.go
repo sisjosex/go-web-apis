@@ -143,6 +143,322 @@ func TestCreateProduct_MissingRequiredFields(t *testing.T) {
 }
 
 // ============================================
+// Product Update Tests
+// ============================================
+
+// createProductWithSizeGroup creates a product carrying one "Size" group with
+// "Large" and "Small", and returns its id together with the fetched detail.
+func createProductWithSizeGroup(t *testing.T, helper *testhelpers.ApiTestHelper, sku string) (string, models.ProductDetail) {
+	t.Helper()
+
+	body := models.CreateProductDto{
+		SKU:       sku,
+		Name:      "Latte",
+		BasePrice: 3.50,
+		Variants: map[string]interface{}{
+			"groups": []map[string]interface{}{
+				{
+					"group_type":     "Size",
+					"is_required":    true,
+					"max_selections": 1,
+					"options": []map[string]interface{}{
+						{"name": "Large", "modifier": 0.50},
+						{"name": "Small", "modifier": 0.00},
+					},
+				},
+			},
+		},
+	}
+
+	w := helper.DoRequest("POST", "/inventory/products", body, map[string]string{})
+	if w.Code != http.StatusCreated {
+		t.Fatalf("setup: creating %s failed with %d: %s", sku, w.Code, w.Body.String())
+	}
+
+	var created models.CreateProductResponse
+	json.Unmarshal(w.Body.Bytes(), &created)
+
+	return created.ProductID, fetchProductDetail(t, helper, created.ProductID)
+}
+
+func fetchProductDetail(t *testing.T, helper *testhelpers.ApiTestHelper, productID string) models.ProductDetail {
+	t.Helper()
+
+	w := helper.DoRequest("GET", fmt.Sprintf("/inventory/products/%s", productID), nil, map[string]string{})
+	if w.Code != http.StatusOK {
+		t.Fatalf("fetching product %s failed with %d: %s", productID, w.Code, w.Body.String())
+	}
+
+	var detail models.ProductDetail
+	json.Unmarshal(w.Body.Bytes(), &detail)
+	return detail
+}
+
+func findOption(group models.VariantGroup, name string) (models.VariantOption, bool) {
+	for _, option := range group.Options {
+		if option.Name == name {
+			return option, true
+		}
+	}
+	return models.VariantOption{}, false
+}
+
+func TestUpdateProduct_Success(t *testing.T) {
+	helper := SetupInventoryTest(t)
+	defer helper.Close()
+
+	productID, _ := createProductWithSizeGroup(t, helper, "UPD001")
+
+	body := models.UpdateProductDto{
+		Name:        "Latte Grande",
+		Description: ptrString("Now with more milk"),
+		BasePrice:   4.25,
+	}
+	w := helper.DoRequest("PUT", fmt.Sprintf("/inventory/products/%s", productID), body, map[string]string{})
+	assert.Equal(t, http.StatusOK, w.Code, w.Body.String())
+
+	detail := fetchProductDetail(t, helper, productID)
+	assert.Equal(t, "Latte Grande", detail.Name)
+	assert.Equal(t, "Now with more milk", *detail.Description)
+	assert.Equal(t, 4.25, detail.BasePrice)
+	assert.Equal(t, "UPD001", detail.SKU)
+}
+
+func TestUpdateProduct_RenameGroupAndOption(t *testing.T) {
+	helper := SetupInventoryTest(t)
+	defer helper.Close()
+
+	productID, before := createProductWithSizeGroup(t, helper, "UPD002")
+	group := before.Variants[0]
+	large, found := findOption(group, "Large")
+	assert.True(t, found)
+
+	body := models.UpdateProductDto{
+		Name:      "Latte",
+		BasePrice: 3.50,
+		Variants: &models.UpdateProductVariantsDto{
+			Groups: []models.UpdateVariantGroupDto{
+				{
+					ID:            &group.ID,
+					GroupType:     "Format",
+					IsRequired:    true,
+					MaxSelections: 1,
+					Options: []models.UpdateVariantOptionDto{
+						{ID: &large.ID, Name: "XL", Modifier: 1.25},
+					},
+				},
+			},
+		},
+	}
+	w := helper.DoRequest("PUT", fmt.Sprintf("/inventory/products/%s", productID), body, map[string]string{})
+	assert.Equal(t, http.StatusOK, w.Code, w.Body.String())
+
+	after := fetchProductDetail(t, helper, productID)
+	assert.Len(t, after.Variants, 1)
+	assert.Equal(t, group.ID, after.Variants[0].ID)
+	assert.Equal(t, "Format", after.Variants[0].GroupType)
+	assert.Len(t, after.Variants[0].Options, 1)
+	assert.Equal(t, large.ID, after.Variants[0].Options[0].ID)
+	assert.Equal(t, "XL", after.Variants[0].Options[0].Name)
+	assert.Equal(t, 1.25, after.Variants[0].Options[0].PriceModifier)
+}
+
+func TestUpdateProduct_AddAndDropOption(t *testing.T) {
+	helper := SetupInventoryTest(t)
+	defer helper.Close()
+
+	productID, before := createProductWithSizeGroup(t, helper, "UPD003")
+	group := before.Variants[0]
+	large, _ := findOption(group, "Large")
+
+	// "Small" is absent from the payload, "Medium" is new, and a whole new group appears
+	body := models.UpdateProductDto{
+		Name:      "Latte",
+		BasePrice: 3.50,
+		Variants: &models.UpdateProductVariantsDto{
+			Groups: []models.UpdateVariantGroupDto{
+				{
+					ID:            &group.ID,
+					GroupType:     "Size",
+					IsRequired:    true,
+					MaxSelections: 1,
+					Options: []models.UpdateVariantOptionDto{
+						{ID: &large.ID, Name: "Large", Modifier: 0.50},
+						{Name: "Medium", Modifier: 0.25},
+					},
+				},
+				{
+					GroupType:     "Milk",
+					MaxSelections: 1,
+					Options: []models.UpdateVariantOptionDto{
+						{Name: "Oat", Modifier: 0.60},
+					},
+				},
+			},
+		},
+	}
+	w := helper.DoRequest("PUT", fmt.Sprintf("/inventory/products/%s", productID), body, map[string]string{})
+	assert.Equal(t, http.StatusOK, w.Code, w.Body.String())
+
+	after := fetchProductDetail(t, helper, productID)
+	assert.Len(t, after.Variants, 2)
+
+	var sizeGroup, milkGroup models.VariantGroup
+	for _, g := range after.Variants {
+		if g.GroupType == "Size" {
+			sizeGroup = g
+		}
+		if g.GroupType == "Milk" {
+			milkGroup = g
+		}
+	}
+
+	_, smallStillThere := findOption(sizeGroup, "Small")
+	assert.False(t, smallStillThere, "the dropped option must be gone")
+	_, mediumAdded := findOption(sizeGroup, "Medium")
+	assert.True(t, mediumAdded, "the new option must be there")
+
+	// A group added on edit comes back from the read SP with an id
+	assert.NotEmpty(t, milkGroup.ID)
+	assert.Len(t, milkGroup.Options, 1)
+	assert.NotEmpty(t, milkGroup.Options[0].ID)
+}
+
+func TestUpdateProduct_OptionMediaSurvives(t *testing.T) {
+	helper := SetupInventoryTest(t)
+	defer helper.Close()
+
+	productID, before := createProductWithSizeGroup(t, helper, "UPD004")
+	group := before.Variants[0]
+	large, _ := findOption(group, "Large")
+
+	media := models.AddProductMediaDto{
+		VariantOptionID: &large.ID,
+		MediaType:       "image",
+		URL:             "https://example.test/large.png",
+	}
+	wm := helper.DoRequest("POST", fmt.Sprintf("/inventory/products/%s/media", productID), media, map[string]string{})
+	assert.Equal(t, http.StatusCreated, wm.Code, wm.Body.String())
+
+	// An edit that only bumps the modifier must not touch the option's media
+	body := models.UpdateProductDto{
+		Name:      "Latte",
+		BasePrice: 3.50,
+		Variants: &models.UpdateProductVariantsDto{
+			Groups: []models.UpdateVariantGroupDto{
+				{
+					ID:            &group.ID,
+					GroupType:     "Size",
+					IsRequired:    true,
+					MaxSelections: 1,
+					Options: []models.UpdateVariantOptionDto{
+						{ID: &large.ID, Name: "Large", Modifier: 0.75},
+					},
+				},
+			},
+		},
+	}
+	w := helper.DoRequest("PUT", fmt.Sprintf("/inventory/products/%s", productID), body, map[string]string{})
+	assert.Equal(t, http.StatusOK, w.Code, w.Body.String())
+
+	after := fetchProductDetail(t, helper, productID)
+	kept, found := findOption(after.Variants[0], "Large")
+	assert.True(t, found)
+	assert.Equal(t, large.ID, kept.ID)
+	assert.Len(t, kept.Media, 1, "media attached to a kept option must survive the edit")
+	assert.Equal(t, "https://example.test/large.png", kept.Media[0].URL)
+}
+
+func TestUpdateProduct_VariantsOmittedLeavesTreeIntact(t *testing.T) {
+	helper := SetupInventoryTest(t)
+	defer helper.Close()
+
+	productID, before := createProductWithSizeGroup(t, helper, "UPD005")
+
+	body := models.UpdateProductDto{
+		Name:      "Latte renamed",
+		BasePrice: 9.99,
+	}
+	w := helper.DoRequest("PUT", fmt.Sprintf("/inventory/products/%s", productID), body, map[string]string{})
+	assert.Equal(t, http.StatusOK, w.Code, w.Body.String())
+
+	after := fetchProductDetail(t, helper, productID)
+	assert.Equal(t, "Latte renamed", after.Name)
+	assert.True(t, after.HasVariants)
+	assert.Equal(t, before.Variants, after.Variants, "omitting variants must leave the tree untouched")
+}
+
+func TestUpdateProduct_EmptyGroupsClearsVariants(t *testing.T) {
+	helper := SetupInventoryTest(t)
+	defer helper.Close()
+
+	productID, _ := createProductWithSizeGroup(t, helper, "UPD006")
+
+	body := models.UpdateProductDto{
+		Name:      "Latte",
+		BasePrice: 3.50,
+		Variants:  &models.UpdateProductVariantsDto{Groups: []models.UpdateVariantGroupDto{}},
+	}
+	w := helper.DoRequest("PUT", fmt.Sprintf("/inventory/products/%s", productID), body, map[string]string{})
+	assert.Equal(t, http.StatusOK, w.Code, w.Body.String())
+
+	after := fetchProductDetail(t, helper, productID)
+	assert.False(t, after.HasVariants)
+	assert.Empty(t, after.Variants)
+}
+
+func TestUpdateProduct_NotFound(t *testing.T) {
+	helper := SetupInventoryTest(t)
+	defer helper.Close()
+
+	body := models.UpdateProductDto{Name: "Ghost", BasePrice: 1.00}
+
+	w := helper.DoRequest("PUT", "/inventory/products/00000000-0000-0000-0000-000000000000", body, map[string]string{})
+	assert.Equal(t, http.StatusNotFound, w.Code, w.Body.String())
+}
+
+func TestUpdateProduct_GroupFromAnotherProduct(t *testing.T) {
+	helper := SetupInventoryTest(t)
+	defer helper.Close()
+
+	targetID, _ := createProductWithSizeGroup(t, helper, "UPD007")
+	_, other := createProductWithSizeGroup(t, helper, "UPD008")
+	foreignGroupID := other.Variants[0].ID
+
+	body := models.UpdateProductDto{
+		Name:      "Latte",
+		BasePrice: 3.50,
+		Variants: &models.UpdateProductVariantsDto{
+			Groups: []models.UpdateVariantGroupDto{
+				{ID: &foreignGroupID, GroupType: "Size", MaxSelections: 1},
+			},
+		},
+	}
+	w := helper.DoRequest("PUT", fmt.Sprintf("/inventory/products/%s", targetID), body, map[string]string{})
+	assert.Equal(t, http.StatusBadRequest, w.Code, w.Body.String())
+}
+
+func TestUpdateProduct_DuplicateGroupType(t *testing.T) {
+	helper := SetupInventoryTest(t)
+	defer helper.Close()
+
+	productID, _ := createProductWithSizeGroup(t, helper, "UPD009")
+
+	body := models.UpdateProductDto{
+		Name:      "Latte",
+		BasePrice: 3.50,
+		Variants: &models.UpdateProductVariantsDto{
+			Groups: []models.UpdateVariantGroupDto{
+				{GroupType: "Milk", MaxSelections: 1},
+				{GroupType: "Milk", MaxSelections: 1},
+			},
+		},
+	}
+	w := helper.DoRequest("PUT", fmt.Sprintf("/inventory/products/%s", productID), body, map[string]string{})
+	assert.Equal(t, http.StatusConflict, w.Code, w.Body.String())
+}
+
+// ============================================
 // Product Retrieval Tests
 // ============================================
 

@@ -18,6 +18,16 @@ type ProductRepository interface {
 		variantsJSON *string,
 	) (*models.CreateProductResponse, error)
 
+	UpdateProductWithVariants(
+		ctx context.Context,
+		tenantID uuid.UUID,
+		productID string,
+		name string,
+		description *string,
+		basePrice float64,
+		variantsJSON *string,
+	) (*models.UpdateProductResponse, error)
+
 	GetProduct(ctx context.Context, tenantID uuid.UUID, productID string) (*models.Product, error)
 	GetProductWithVariants(ctx context.Context, tenantID uuid.UUID, productID string) (*models.ProductDetail, error)
 	GetProductBySkU(ctx context.Context, tenantID uuid.UUID, sku string) (*models.ProductDetail, error)

@@ -5,6 +5,12 @@ const (
 	ProductNotFound         = "product.not-found"
 	ProductSkuAlreadyExists = "product.sku.already-exists"
 
+	// Product variants
+	ProductVariantGroupDuplicateType  = "product.variant-group.duplicate-type"
+	ProductVariantOptionDuplicateName = "product.variant-option.duplicate-name"
+	ProductVariantGroupNotInProduct   = "product.variant-group.not-in-product"
+	ProductVariantOptionNotInGroup    = "product.variant-option.not-in-group"
+
 	// Stock
 	InsufficientStock = "inventory.insufficient-stock"
 

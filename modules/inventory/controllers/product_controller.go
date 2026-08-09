@@ -73,6 +73,69 @@ func (ctrl *ProductController) CreateProductWithVariants(c *gin.Context) {
 	c.JSON(http.StatusCreated, product)
 }
 
+// UpdateProductWithVariants godoc
+// @Summary Update a product and its variants
+// @Description Update name, description and base price, and diff the variant tree by id. Omitting "variants" leaves the tree untouched; {"groups": []} removes every group. The SKU is immutable.
+// @Tags inventory
+// @Accept json
+// @Produce json
+// @Param id path string true "Product ID"
+// @Param request body models.UpdateProductDto true "Product update request"
+// @Success 200 {object} models.UpdateProductResponse
+// @Failure 400 {object} map[string]interface{}
+// @Failure 404 {object} map[string]interface{}
+// @Failure 409 {object} map[string]interface{}
+// @Router /api/v1/inventory/products/:id [put]
+func (ctrl *ProductController) UpdateProductWithVariants(c *gin.Context) {
+	tenantIDRaw, exists := c.Get("tenant_id")
+	if !exists || tenantIDRaw == nil {
+		c.JSON(http.StatusUnauthorized, coreErrors.BuildErrorSingle(c, "auth.invalid-tenant"))
+		return
+	}
+	tenantID, err := uuid.Parse(tenantIDRaw.(string))
+	if err != nil {
+		c.JSON(http.StatusUnauthorized, coreErrors.BuildErrorSingle(c, "auth.invalid-tenant"))
+		return
+	}
+
+	productID := c.Param("id")
+
+	var dto models.UpdateProductDto
+
+	if err := c.ShouldBindJSON(&dto); err != nil {
+		c.JSON(http.StatusBadRequest, coreErrors.BuildErrorDetail(c, "validation.invalid", err.Error()))
+		return
+	}
+
+	product, err := ctrl.productService.UpdateProductWithVariants(c.Request.Context(), tenantID, productID, dto)
+	if err != nil {
+		var pgErr *pgconn.PgError
+		if errors.As(err, &pgErr) {
+			switch pgErr.Message {
+			case inventoryErrors.ProductNotFound:
+				c.JSON(http.StatusNotFound, coreErrors.BuildErrorSingle(c, inventoryErrors.ProductNotFound))
+				return
+			case inventoryErrors.ProductVariantGroupDuplicateType:
+				c.JSON(http.StatusConflict, coreErrors.BuildErrorSingle(c, inventoryErrors.ProductVariantGroupDuplicateType))
+				return
+			case inventoryErrors.ProductVariantOptionDuplicateName:
+				c.JSON(http.StatusConflict, coreErrors.BuildErrorSingle(c, inventoryErrors.ProductVariantOptionDuplicateName))
+				return
+			case inventoryErrors.ProductVariantGroupNotInProduct:
+				c.JSON(http.StatusBadRequest, coreErrors.BuildErrorSingle(c, inventoryErrors.ProductVariantGroupNotInProduct))
+				return
+			case inventoryErrors.ProductVariantOptionNotInGroup:
+				c.JSON(http.StatusBadRequest, coreErrors.BuildErrorSingle(c, inventoryErrors.ProductVariantOptionNotInGroup))
+				return
+			}
+		}
+		c.JSON(http.StatusInternalServerError, coreErrors.BuildError(c, err))
+		return
+	}
+
+	c.JSON(http.StatusOK, product)
+}
+
 // GetProduct godoc
 // @Summary Get product by ID
 // @Description Retrieve a product with all its details

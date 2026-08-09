@@ -1,6 +1,10 @@
 {
   "product.not-found": "Product not found",
   "product.sku.already-exists": "Product SKU already exists",
+  "product.variant-group.duplicate-type": "Another variant group already uses this name",
+  "product.variant-option.duplicate-name": "Another option in this group already uses this name",
+  "product.variant-group.not-in-product": "Variant group does not belong to this product",
+  "product.variant-option.not-in-group": "Variant option does not belong to this group",
   "inventory.insufficient-stock": "Insufficient stock",
   "inventory.invalid-movement-type": "Invalid inventory movement type",
   "inventory.movement.not-found": "Movement not found",

@@ -47,6 +47,9 @@ func RegisterInventoryRoutes(
 	api.POST("/products",
 		tenancyMW.RequirePermission(inventoryPerms.ProductsWrite),
 		productController.CreateProductWithVariants)
+	api.PUT("/products/:id",
+		tenancyMW.RequirePermission(inventoryPerms.ProductsWrite),
+		productController.UpdateProductWithVariants)
 
 	// Product media
 	api.POST("/products/:id/media",

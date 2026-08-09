@@ -10,6 +10,7 @@ import (
 
 type ProductService interface {
 	CreateProductWithVariants(ctx context.Context, tenantID uuid.UUID, dto models.CreateProductDto) (*models.CreateProductResponse, error)
+	UpdateProductWithVariants(ctx context.Context, tenantID uuid.UUID, productID string, dto models.UpdateProductDto) (*models.UpdateProductResponse, error)
 	GetProduct(ctx context.Context, tenantID uuid.UUID, productID string) (*models.ProductDetail, error)
 	GetProductBySkU(ctx context.Context, tenantID uuid.UUID, sku string) (*models.ProductDetail, error)
 	ListProducts(ctx context.Context, tenantID uuid.UUID, limit, offset int) ([]models.Product, error)
