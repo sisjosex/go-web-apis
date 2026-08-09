@@ -1848,6 +1848,78 @@ func TestGetProductsByCategory_Success(t *testing.T) {
 	assert.Equal(t, 2, len(resp), "Should return 2 assigned products")
 }
 
+func TestGetCategoriesByProduct_Success(t *testing.T) {
+	helper := SetupInventoryTest(t)
+	defer helper.Close()
+
+	productDto := models.CreateProductDto{
+		SKU:       "CATSOF001-" + uuid.New().String()[:8],
+		Name:      "Product In Two Categories",
+		BasePrice: 15.00,
+	}
+	w1 := helper.DoRequest("POST", "/inventory/products", productDto, map[string]string{})
+	var product models.CreateProductResponse
+	json.Unmarshal(w1.Body.Bytes(), &product)
+
+	categoryIDs := []string{}
+	for i := 1; i <= 2; i++ {
+		catDto := models.CreateCategoryDto{
+			Name:         fmt.Sprintf("Categories Of Product %d", i),
+			Slug:         fmt.Sprintf("cats-of-product-%d-", i) + uuid.New().String()[:8],
+			DisplayOrder: ptrInt(i),
+		}
+		w := helper.DoRequest("POST", "/inventory/categories", catDto, map[string]string{})
+		var category models.CategoryResponse
+		json.Unmarshal(w.Body.Bytes(), &category)
+		categoryIDs = append(categoryIDs, category.ID)
+
+		helper.DoRequest("POST", fmt.Sprintf("/inventory/products/%s/categories/%s", product.ProductID, category.ID), nil, map[string]string{})
+	}
+
+	w2 := helper.DoRequest("GET", fmt.Sprintf("/inventory/products/%s/categories", product.ProductID), nil, map[string]string{})
+
+	assert.Equal(t, http.StatusOK, w2.Code, "Should return 200")
+
+	var resp []models.CategoryResponse
+	err := json.Unmarshal(w2.Body.Bytes(), &resp)
+	assert.NoError(t, err, "Response should be valid JSON")
+	assert.Equal(t, 2, len(resp), "Should return both assigned categories")
+	returnedIDs := []string{resp[0].ID, resp[1].ID}
+	assert.Contains(t, returnedIDs, categoryIDs[0])
+	assert.Contains(t, returnedIDs, categoryIDs[1])
+}
+
+func TestGetCategoriesByProduct_Empty(t *testing.T) {
+	helper := SetupInventoryTest(t)
+	defer helper.Close()
+
+	productDto := models.CreateProductDto{
+		SKU:       "CATSOF002-" + uuid.New().String()[:8],
+		Name:      "Product Without Categories",
+		BasePrice: 25.00,
+	}
+	w1 := helper.DoRequest("POST", "/inventory/products", productDto, map[string]string{})
+	var product models.CreateProductResponse
+	json.Unmarshal(w1.Body.Bytes(), &product)
+
+	w2 := helper.DoRequest("GET", fmt.Sprintf("/inventory/products/%s/categories", product.ProductID), nil, map[string]string{})
+
+	assert.Equal(t, http.StatusOK, w2.Code, "Should return 200")
+	var resp []models.CategoryResponse
+	err := json.Unmarshal(w2.Body.Bytes(), &resp)
+	assert.NoError(t, err, "Response should be valid JSON")
+	assert.Equal(t, 0, len(resp), "Unassigned product should return an empty array")
+}
+
+func TestGetCategoriesByProduct_ProductNotFound(t *testing.T) {
+	helper := SetupInventoryTest(t)
+	defer helper.Close()
+
+	w := helper.DoRequest("GET", "/inventory/products/00000000-0000-0000-0000-000000000000/categories", nil, map[string]string{})
+
+	assert.Equal(t, http.StatusNotFound, w.Code, "Unknown product should return 404")
+}
+
 func TestProductCountAggregation(t *testing.T) {
 	helper := SetupInventoryTest(t)
 	defer helper.Close()
@@ -1895,5 +1967,9 @@ func ptrString(v string) *string {
 }
 
 func ptrBool(v bool) *bool {
+	return &v
+}
+
+func ptrInt(v int) *int {
 	return &v
 }

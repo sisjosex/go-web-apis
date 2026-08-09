@@ -67,6 +67,11 @@ func (s *CategoryService) GetProductsByCategory(ctx context.Context, tenantID uu
 	return s.repository.GetProductsByCategory(ctx, tenantID, categoryID, limit, offset)
 }
 
+// GetCategoriesByProduct gets all categories a product is assigned to
+func (s *CategoryService) GetCategoriesByProduct(ctx context.Context, tenantID uuid.UUID, productID string, limit, offset int) ([]models.Category, error) {
+	return s.repository.GetCategoriesByProduct(ctx, tenantID, productID, limit, offset)
+}
+
 // GetCategoryProductCount gets the count of products in a category
 func (s *CategoryService) GetCategoryProductCount(ctx context.Context, tenantID uuid.UUID, categoryID string) (int64, error) {
 	return s.repository.GetCategoryProductCount(ctx, tenantID, categoryID)

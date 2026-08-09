@@ -393,6 +393,58 @@ func (r *CategoryRepository) GetProductsByCategory(ctx context.Context, tenantID
 	return products, nil
 }
 
+// GetCategoriesByProduct gets all categories a product is assigned to
+func (r *CategoryRepository) GetCategoriesByProduct(ctx context.Context, tenantID uuid.UUID, productID string, limit, offset int) ([]models.Category, error) {
+	var categories []models.Category
+	prodID, err := uuid.Parse(productID)
+	if err != nil {
+		return categories, err
+	}
+
+	rows, err := r.dbService.Query(ctx,
+		`SELECT id, parent_id, name, slug, description, icon_url, display_order, is_active, product_count
+		 FROM inventory.sp_get_categories_by_product($1, $2, $3, $4)`,
+		tenantID, prodID, limit, offset,
+	)
+	if err != nil {
+		if r.logger != nil {
+			r.logger.Printf("❌ Error getting categories by product: %v", err)
+		}
+		var pgErr *pgconn.PgError
+		if errors.As(err, &pgErr) {
+			return nil, pgErr
+		}
+		return nil, err
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		var category models.Category
+		if err := rows.Scan(
+			&category.ID, &category.ParentID, &category.Name, &category.Slug, &category.Description,
+			&category.IconURL, &category.DisplayOrder, &category.IsActive, &category.ProductCount,
+		); err != nil {
+			return nil, err
+		}
+		categories = append(categories, category)
+	}
+	if err = rows.Err(); err != nil {
+		var pgErr *pgconn.PgError
+		if errors.As(err, &pgErr) {
+			return nil, pgErr
+		}
+		return nil, err
+	}
+	if categories == nil {
+		categories = []models.Category{}
+	}
+
+	if r.logger != nil {
+		r.logger.Printf("✓ GetCategoriesByProduct: productID=%s, found=%d categories", productID, len(categories))
+	}
+	return categories, nil
+}
+
 // GetCategoryProductCount gets the count of products in a category
 func (r *CategoryRepository) GetCategoryProductCount(ctx context.Context, tenantID uuid.UUID, categoryID string) (int64, error) {
 	catID, err := uuid.Parse(categoryID)

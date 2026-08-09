@@ -93,6 +93,7 @@ func RegisterInventoryRoutes(
 		categoryController.DeleteCategory)
 
 	// Product-Category mapping
+	api.GET("/products/:id/categories", categoryController.GetCategoriesByProduct)
 	api.POST("/products/:id/categories/:category_id",
 		tenancyMW.RequirePermission(inventoryPerms.CategoriesManage),
 		categoryController.AssignProductToCategory)

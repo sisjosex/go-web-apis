@@ -563,6 +563,79 @@ func (ctrl *CategoryController) GetProductsByCategory(c *gin.Context) {
 	c.JSON(http.StatusOK, products)
 }
 
+// GetCategoriesByProduct godoc
+// @Summary Get categories of a product
+// @Description Retrieve all categories a specific product is assigned to
+// @Tags inventory-categories
+// @Produce json
+// @Param id path string true "Product ID"
+// @Param page query int false "Page number" default(1)
+// @Param limit query int false "Items per page" default(100)
+// @Success 200 {array} models.CategoryResponse
+// @Failure 404 {object} map[string]interface{}
+// @Router /api/v1/inventory/products/:id/categories [get]
+func (ctrl *CategoryController) GetCategoriesByProduct(c *gin.Context) {
+	tenantIDRaw, exists := c.Get("tenant_id")
+	if !exists || tenantIDRaw == nil {
+		c.JSON(http.StatusUnauthorized, coreErrors.BuildErrorSingle(c, "auth.invalid-tenant"))
+		return
+	}
+	tenantID, err := uuid.Parse(tenantIDRaw.(string))
+	if err != nil {
+		c.JSON(http.StatusUnauthorized, coreErrors.BuildErrorSingle(c, "auth.invalid-tenant"))
+		return
+	}
+
+	productID := c.Param("id")
+
+	page := 1
+	if pageStr := c.Query("page"); pageStr != "" {
+		if p, err := strconv.Atoi(pageStr); err == nil && p > 0 {
+			page = p
+		}
+	}
+
+	limit := 100
+	if limitStr := c.Query("limit"); limitStr != "" {
+		if l, err := strconv.Atoi(limitStr); err == nil && l > 0 {
+			limit = l
+		}
+	}
+
+	offset := (page - 1) * limit
+
+	categories, err := ctrl.categoryService.GetCategoriesByProduct(c.Request.Context(), tenantID, productID, limit, offset)
+	if err != nil {
+		var pgErr *pgconn.PgError
+		if errors.As(err, &pgErr) {
+			switch pgErr.Message {
+			case inventoryErrors.ProductNotFound:
+				c.JSON(http.StatusNotFound, coreErrors.BuildErrorSingle(c, inventoryErrors.ProductNotFound))
+				return
+			}
+		}
+		c.JSON(http.StatusInternalServerError, coreErrors.BuildError(c, err))
+		return
+	}
+
+	respCategories := make([]models.CategoryResponse, len(categories))
+	for i, cat := range categories {
+		respCategories[i] = models.CategoryResponse{
+			ID:           cat.ID.String(),
+			ParentID:     uuidPtrToStringPtr(cat.ParentID),
+			Name:         cat.Name,
+			Slug:         cat.Slug,
+			Description:  cat.Description,
+			IconURL:      cat.IconURL,
+			DisplayOrder: cat.DisplayOrder,
+			IsActive:     cat.IsActive,
+			ProductCount: cat.ProductCount,
+		}
+	}
+
+	c.JSON(http.StatusOK, respCategories)
+}
+
 // Helper function to convert optional UUID pointer to string pointer
 func uuidPtrToStringPtr(id *uuid.UUID) *string {
 	if id == nil {

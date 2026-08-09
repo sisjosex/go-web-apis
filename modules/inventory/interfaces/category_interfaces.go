@@ -18,6 +18,7 @@ type CategoryRepository interface {
 	AssignProductToCategory(ctx context.Context, tenantID uuid.UUID, productID, categoryID string) error
 	RemoveProductFromCategory(ctx context.Context, tenantID uuid.UUID, productID, categoryID string) error
 	GetProductsByCategory(ctx context.Context, tenantID uuid.UUID, categoryID string, limit, offset int) ([]models.GetProductsByCategoryResponse, error)
+	GetCategoriesByProduct(ctx context.Context, tenantID uuid.UUID, productID string, limit, offset int) ([]models.Category, error)
 	GetCategoryProductCount(ctx context.Context, tenantID uuid.UUID, categoryID string) (int64, error)
 }
 
@@ -31,5 +32,6 @@ type CategoryService interface {
 	AssignProductToCategory(ctx context.Context, tenantID uuid.UUID, productID, categoryID string) error
 	RemoveProductFromCategory(ctx context.Context, tenantID uuid.UUID, productID, categoryID string) error
 	GetProductsByCategory(ctx context.Context, tenantID uuid.UUID, categoryID string, limit, offset int) ([]models.GetProductsByCategoryResponse, error)
+	GetCategoriesByProduct(ctx context.Context, tenantID uuid.UUID, productID string, limit, offset int) ([]models.Category, error)
 	GetCategoryProductCount(ctx context.Context, tenantID uuid.UUID, categoryID string) (int64, error)
 }
