@@ -31,7 +31,7 @@ type ProductRepository interface {
 	GetProduct(ctx context.Context, tenantID uuid.UUID, productID string) (*models.Product, error)
 	GetProductWithVariants(ctx context.Context, tenantID uuid.UUID, productID string) (*models.ProductDetail, error)
 	GetProductBySkU(ctx context.Context, tenantID uuid.UUID, sku string) (*models.ProductDetail, error)
-	ListProducts(ctx context.Context, tenantID uuid.UUID, limit, offset int) ([]models.Product, error)
+	ListProducts(ctx context.Context, tenantID uuid.UUID, limit, offset int, categoryID *uuid.UUID, search *string) ([]models.Product, error)
 	AddProductMedia(ctx context.Context, tenantID uuid.UUID, productID string, dto models.AddProductMediaDto) (*models.AddProductMediaResponse, error)
 	RemoveProductMedia(ctx context.Context, tenantID uuid.UUID, mediaID string) error
 }

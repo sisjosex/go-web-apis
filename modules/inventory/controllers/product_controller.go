@@ -4,6 +4,7 @@ import (
 	"errors"
 	"net/http"
 	"strconv"
+	"strings"
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
@@ -306,12 +307,15 @@ func (ctrl *ProductController) RemoveProductMedia(c *gin.Context) {
 
 // ListProducts godoc
 // @Summary List all products
-// @Description Retrieve a paginated list of active products
+// @Description Retrieve a paginated list of active products, each with the categories it is filed under. Optionally narrowed to one category and/or a name/SKU search.
 // @Tags inventory
 // @Produce json
 // @Param limit query int false "Limit (default 20)"
 // @Param offset query int false "Offset (default 0)"
+// @Param category_id query string false "Only products assigned to this category"
+// @Param search query string false "Case-insensitive match on name or SKU"
 // @Success 200 {array} models.Product
+// @Failure 400 {object} map[string]interface{}
 // @Router /api/v1/inventory/products [get]
 func (ctrl *ProductController) ListProducts(c *gin.Context) {
 	tenantIDRaw, exists := c.Get("tenant_id")
@@ -335,7 +339,23 @@ func (ctrl *ProductController) ListProducts(c *gin.Context) {
 		limit = 100
 	}
 
-	products, err := ctrl.productService.ListProducts(c.Request.Context(), tenantID, limit, offset)
+	// A malformed category_id is a client error — never a silent unfiltered list.
+	var categoryID *uuid.UUID
+	if raw := c.Query("category_id"); raw != "" {
+		parsed, parseErr := uuid.Parse(raw)
+		if parseErr != nil {
+			c.JSON(http.StatusBadRequest, coreErrors.BuildErrorDetail(c, "validation.invalid", "category_id must be a valid UUID"))
+			return
+		}
+		categoryID = &parsed
+	}
+
+	var search *string
+	if raw := strings.TrimSpace(c.Query("search")); raw != "" {
+		search = &raw
+	}
+
+	products, err := ctrl.productService.ListProducts(c.Request.Context(), tenantID, limit, offset, categoryID, search)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, coreErrors.BuildError(c, err))
 		return

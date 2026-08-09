@@ -93,8 +93,14 @@ func (s *ProductService) GetProductBySkU(ctx context.Context, tenantID uuid.UUID
 	return s.repository.GetProductBySkU(ctx, tenantID, sku)
 }
 
-func (s *ProductService) ListProducts(ctx context.Context, tenantID uuid.UUID, limit, offset int) ([]models.Product, error) {
-	return s.repository.ListProducts(ctx, tenantID, limit, offset)
+func (s *ProductService) ListProducts(
+	ctx context.Context,
+	tenantID uuid.UUID,
+	limit, offset int,
+	categoryID *uuid.UUID,
+	search *string,
+) ([]models.Product, error) {
+	return s.repository.ListProducts(ctx, tenantID, limit, offset, categoryID, search)
 }
 
 func (s *ProductService) AddProductMedia(ctx context.Context, tenantID uuid.UUID, productID string, dto models.AddProductMediaDto) (*models.AddProductMediaResponse, error) {

@@ -254,12 +254,18 @@ func (r *ProductRepository) RemoveProductMedia(ctx context.Context, tenantID uui
 	return nil
 }
 
-func (r *ProductRepository) ListProducts(ctx context.Context, tenantID uuid.UUID, limit, offset int) ([]models.Product, error) {
+func (r *ProductRepository) ListProducts(
+	ctx context.Context,
+	tenantID uuid.UUID,
+	limit, offset int,
+	categoryID *uuid.UUID,
+	search *string,
+) ([]models.Product, error) {
 	rows, err := r.dbService.Query(
 		ctx,
-		`SELECT id, sku, name, description, base_price, has_variants, status, created_at
-		 FROM inventory.sp_list_products($1, $2, $3)`,
-		tenantID, limit, offset,
+		`SELECT id, sku, name, description, base_price, has_variants, status, created_at, categories
+		 FROM inventory.sp_list_products($1, $2, $3, $4::UUID, $5::VARCHAR)`,
+		tenantID, limit, offset, categoryID, search,
 	)
 	if err != nil {
 		if r.logger != nil {
@@ -276,9 +282,18 @@ func (r *ProductRepository) ListProducts(ctx context.Context, tenantID uuid.UUID
 	var products []models.Product
 	for rows.Next() {
 		var p models.Product
-		if err := rows.Scan(&p.ID, &p.SKU, &p.Name, &p.Description, &p.BasePrice, &p.HasVariants, &p.Status, &p.CreatedAt); err != nil {
+		var categoriesJSON []byte
+		if err := rows.Scan(&p.ID, &p.SKU, &p.Name, &p.Description, &p.BasePrice, &p.HasVariants, &p.Status, &p.CreatedAt, &categoriesJSON); err != nil {
 			return nil, err
 		}
+
+		p.Categories = []models.ProductCategoryRef{}
+		if len(categoriesJSON) > 0 {
+			if err := json.Unmarshal(categoriesJSON, &p.Categories); err != nil {
+				return nil, err
+			}
+		}
+
 		products = append(products, p)
 	}
 	if err = rows.Err(); err != nil {

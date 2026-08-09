@@ -541,6 +541,129 @@ func TestListProducts_Success(t *testing.T) {
 }
 
 // ============================================
+// Product List — categories column and filters
+// ============================================
+
+func TestListProducts_RowCarriesItsCategories(t *testing.T) {
+	helper := SetupInventoryTest(t)
+	defer helper.Close()
+
+	suffix := uuid.New().String()[:8]
+	productID := createProductForList(t, helper, "ROWCAT"+suffix, "Row Cat Product")
+	catA := createCategoryForList(t, helper, "Row Cat A", "row-cat-a-"+suffix)
+	catB := createCategoryForList(t, helper, "Row Cat B", "row-cat-b-"+suffix)
+	assignProductToCategory(t, helper, productID, catA)
+	assignProductToCategory(t, helper, productID, catB)
+
+	products := listProducts(t, helper, "?limit=100&search=ROWCAT"+suffix)
+
+	assert.Equal(t, 1, len(products), "search should isolate the product under test")
+	assert.Equal(t, 2, len(products[0].Categories), "a product in two categories lists both")
+	slugs := []string{products[0].Categories[0].Slug, products[0].Categories[1].Slug}
+	assert.Contains(t, slugs, "row-cat-a-"+suffix)
+	assert.Contains(t, slugs, "row-cat-b-"+suffix)
+	assert.NotEmpty(t, products[0].Categories[0].ID)
+	assert.NotEmpty(t, products[0].Categories[0].Name)
+}
+
+func TestListProducts_UncategorisedRowHasEmptyCategories(t *testing.T) {
+	helper := SetupInventoryTest(t)
+	defer helper.Close()
+
+	suffix := uuid.New().String()[:8]
+	createProductForList(t, helper, "NOCAT"+suffix, "No Cat Product")
+
+	products := listProducts(t, helper, "?limit=100&search=NOCAT"+suffix)
+
+	assert.Equal(t, 1, len(products))
+	assert.NotNil(t, products[0].Categories, "categories must be [], never null")
+	assert.Equal(t, 0, len(products[0].Categories))
+}
+
+func TestListProducts_FilterByCategory(t *testing.T) {
+	helper := SetupInventoryTest(t)
+	defer helper.Close()
+
+	suffix := uuid.New().String()[:8]
+	inCategory := createProductForList(t, helper, "FILTIN"+suffix, "Filtered In")
+	alsoIn := createProductForList(t, helper, "FILTIN2"+suffix, "Filtered In Too")
+	createProductForList(t, helper, "FILTOUT"+suffix, "Filtered Out")
+	target := createCategoryForList(t, helper, "Filter Target", "filter-target-"+suffix)
+	other := createCategoryForList(t, helper, "Filter Other", "filter-other-"+suffix)
+	assignProductToCategory(t, helper, inCategory, target)
+	assignProductToCategory(t, helper, inCategory, other)
+	assignProductToCategory(t, helper, alsoIn, target)
+
+	products := listProducts(t, helper, "?limit=100&category_id="+target)
+
+	returnedIDs := []string{}
+	for _, p := range products {
+		returnedIDs = append(returnedIDs, p.ID)
+	}
+	assert.Equal(t, 2, len(products), "only the two assigned products")
+	assert.Contains(t, returnedIDs, inCategory)
+	assert.Contains(t, returnedIDs, alsoIn)
+	for _, p := range products {
+		if p.ID == inCategory {
+			assert.Equal(t, 2, len(p.Categories), "filtering by one category still returns all of a product's categories")
+		}
+	}
+}
+
+func TestListProducts_FilterByUnknownCategoryIsEmpty(t *testing.T) {
+	helper := SetupInventoryTest(t)
+	defer helper.Close()
+
+	createProductForList(t, helper, "UNKCAT"+uuid.New().String()[:8], "Unknown Cat Product")
+
+	w := helper.DoRequest("GET", "/inventory/products?limit=100&category_id="+uuid.New().String(), nil, map[string]string{})
+
+	assert.Equal(t, http.StatusOK, w.Code)
+	var result listProductsResponse
+	err := json.Unmarshal(w.Body.Bytes(), &result)
+	assert.NoError(t, err)
+	assert.NotNil(t, result.Data, "data must be [], never null")
+	assert.Equal(t, 0, len(result.Data))
+}
+
+func TestListProducts_MalformedCategoryIDReturns400(t *testing.T) {
+	helper := SetupInventoryTest(t)
+	defer helper.Close()
+
+	w := helper.DoRequest("GET", "/inventory/products?category_id=not-a-uuid", nil, map[string]string{})
+
+	assert.Equal(t, http.StatusBadRequest, w.Code, "a malformed category_id must not fall through to a full list")
+}
+
+func TestListProducts_SearchMatchesName(t *testing.T) {
+	helper := SetupInventoryTest(t)
+	defer helper.Close()
+
+	suffix := uuid.New().String()[:8]
+	productID := createProductForList(t, helper, "SKUONLY"+suffix, "Zebra"+suffix+"Name")
+
+	// Lowercased on purpose: the match is case-insensitive, and the token lives
+	// only in the name, never in the SKU.
+	products := listProducts(t, helper, "?limit=100&search=zebra"+suffix)
+
+	assert.Equal(t, 1, len(products))
+	assert.Equal(t, productID, products[0].ID)
+}
+
+func TestListProducts_SearchMatchesSku(t *testing.T) {
+	helper := SetupInventoryTest(t)
+	defer helper.Close()
+
+	suffix := uuid.New().String()[:8]
+	productID := createProductForList(t, helper, "SRCHSKU"+suffix, "Nothing Matching Here")
+
+	products := listProducts(t, helper, "?limit=100&search=srchsku"+suffix)
+
+	assert.Equal(t, 1, len(products))
+	assert.Equal(t, productID, products[0].ID)
+}
+
+// ============================================
 // Inventory Movement Tests
 // ============================================
 
@@ -1957,6 +2080,71 @@ func TestProductCountAggregation(t *testing.T) {
 // ============================================
 // Helper Functions
 // ============================================
+
+// listProductsResponse mirrors GET /inventory/products — { data, limit, offset },
+// no total (see AGENTS.md → List endpoints).
+type listProductsResponse struct {
+	Data   []models.Product `json:"data"`
+	Limit  int              `json:"limit"`
+	Offset int              `json:"offset"`
+}
+
+func listProducts(t *testing.T, helper *testhelpers.ApiTestHelper, query string) []models.Product {
+	t.Helper()
+
+	w := helper.DoRequest("GET", "/inventory/products"+query, nil, map[string]string{})
+	if w.Code != http.StatusOK {
+		t.Fatalf("list products %q returned %d: %s", query, w.Code, w.Body.String())
+	}
+
+	var result listProductsResponse
+	if err := json.Unmarshal(w.Body.Bytes(), &result); err != nil {
+		t.Fatalf("list products %q returned invalid JSON: %v — %s", query, err, w.Body.String())
+	}
+	return result.Data
+}
+
+func createProductForList(t *testing.T, helper *testhelpers.ApiTestHelper, sku, name string) string {
+	t.Helper()
+
+	w := helper.DoRequest("POST", "/inventory/products", models.CreateProductDto{
+		SKU:       sku,
+		Name:      name,
+		BasePrice: 12.50,
+	}, map[string]string{})
+	if w.Code != http.StatusCreated {
+		t.Fatalf("create product %q returned %d: %s", sku, w.Code, w.Body.String())
+	}
+
+	var created models.CreateProductResponse
+	json.Unmarshal(w.Body.Bytes(), &created)
+	return created.ProductID
+}
+
+func createCategoryForList(t *testing.T, helper *testhelpers.ApiTestHelper, name, slug string) string {
+	t.Helper()
+
+	w := helper.DoRequest("POST", "/inventory/categories", models.CreateCategoryDto{
+		Name: name,
+		Slug: slug,
+	}, map[string]string{})
+	if w.Code != http.StatusCreated {
+		t.Fatalf("create category %q returned %d: %s", slug, w.Code, w.Body.String())
+	}
+
+	var created models.CategoryResponse
+	json.Unmarshal(w.Body.Bytes(), &created)
+	return created.ID
+}
+
+func assignProductToCategory(t *testing.T, helper *testhelpers.ApiTestHelper, productID, categoryID string) {
+	t.Helper()
+
+	w := helper.DoRequest("POST", fmt.Sprintf("/inventory/products/%s/categories/%s", productID, categoryID), nil, map[string]string{})
+	if w.Code != http.StatusCreated {
+		t.Fatalf("assign product %s to category %s returned %d: %s", productID, categoryID, w.Code, w.Body.String())
+	}
+}
 
 func ptrFloat64(v float64) *float64 {
 	return &v

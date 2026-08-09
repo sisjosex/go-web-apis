@@ -106,15 +106,24 @@ type ReleaseReservedStockDto struct {
 
 // Domain Models
 
+// ProductCategoryRef is the trimmed category shape a product row carries — enough
+// to label and link it, not the whole category.
+type ProductCategoryRef struct {
+	ID   string `json:"id"`
+	Name string `json:"name"`
+	Slug string `json:"slug"`
+}
+
 type Product struct {
-	ID          string    `db:"id" json:"id"`
-	SKU         string    `db:"sku" json:"sku"`
-	Name        string    `db:"name" json:"name"`
-	Description *string   `db:"description" json:"description"`
-	BasePrice   float64   `db:"base_price" json:"base_price"`
-	HasVariants bool      `db:"has_variants" json:"has_variants"`
-	Status      string    `db:"status" json:"status"`
-	CreatedAt   time.Time `db:"created_at" json:"created_at"`
+	ID          string               `db:"id" json:"id"`
+	SKU         string               `db:"sku" json:"sku"`
+	Name        string               `db:"name" json:"name"`
+	Description *string              `db:"description" json:"description"`
+	BasePrice   float64              `db:"base_price" json:"base_price"`
+	HasVariants bool                 `db:"has_variants" json:"has_variants"`
+	Status      string               `db:"status" json:"status"`
+	CreatedAt   time.Time            `db:"created_at" json:"created_at"`
+	Categories  []ProductCategoryRef `json:"categories"`
 }
 
 type ProductMedia struct {
