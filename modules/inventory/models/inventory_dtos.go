@@ -31,12 +31,17 @@ type UpdateProductVariantsDto struct {
 // UpdateVariantGroupDto and UpdateVariantOptionDto are diffed by ID: a nil ID
 // is an insert, an ID belonging to the product is an update, and anything in
 // the DB missing from the payload is deleted.
+// AffectsInventory marks the group as an inventory axis (INV-008): every one of
+// its options multiplies the product's SKUs. Deliberately not a pointer — an
+// omitted key means FALSE, which is what the product form that predates INV-008
+// sends and what the SP reads.
 type UpdateVariantGroupDto struct {
-	ID            *string                  `json:"id"`
-	GroupType     string                   `json:"group_type" binding:"required"`
-	IsRequired    bool                     `json:"is_required"`
-	MaxSelections int                      `json:"max_selections"`
-	Options       []UpdateVariantOptionDto `json:"options"`
+	ID               *string                  `json:"id"`
+	GroupType        string                   `json:"group_type" binding:"required"`
+	IsRequired       bool                     `json:"is_required"`
+	MaxSelections    int                      `json:"max_selections"`
+	AffectsInventory bool                     `json:"affects_inventory"`
+	Options          []UpdateVariantOptionDto `json:"options"`
 }
 
 type UpdateVariantOptionDto struct {
@@ -164,12 +169,13 @@ type VariantOption struct {
 }
 
 type VariantGroup struct {
-	ID            string          `json:"id"`
-	GroupType     string          `json:"group_type"`
-	IsRequired    bool            `json:"is_required"`
-	MaxSelections int             `json:"max_selections"`
-	SortOrder     int             `json:"sort_order"`
-	Options       []VariantOption `json:"options"`
+	ID               string          `json:"id"`
+	GroupType        string          `json:"group_type"`
+	IsRequired       bool            `json:"is_required"`
+	MaxSelections    int             `json:"max_selections"`
+	SortOrder        int             `json:"sort_order"`
+	AffectsInventory bool            `json:"affects_inventory"`
+	Options          []VariantOption `json:"options"`
 }
 
 type ProductDetail struct {
@@ -206,6 +212,82 @@ type ProductStock struct {
 	ReorderLevel      float64   `db:"reorder_level" json:"reorder_level"`
 	Status            string    `db:"status" json:"status"` // ok, low, critical, out_of_stock
 	LastUpdatedAt     time.Time `db:"last_updated_at" json:"last_updated_at"`
+}
+
+// ---------------------------------------------------------------------------
+// SKUs — the sellable combinations (INV-008)
+// ---------------------------------------------------------------------------
+
+// ProductSkuOption is one axis of a combination: which option of which group.
+type ProductSkuOption struct {
+	GroupID    string `json:"group_id"`
+	GroupType  string `json:"group_type"`
+	OptionID   string `json:"option_id"`
+	OptionName string `json:"option_name"`
+}
+
+// ProductSku is one row of the per-SKU stock table. Sellable is INV-008 D6:
+// the SKU can only narrow, never widen, what the product's status allows.
+type ProductSku struct {
+	SkuID             string             `json:"sku_id"`
+	SKU               string             `json:"sku"`
+	CombinationKey    string             `json:"combination_key"`
+	IsDefault         bool               `json:"is_default"`
+	Status            string             `json:"status"`
+	Sellable          bool               `json:"sellable"`
+	PriceModifier     float64            `json:"price_modifier"`
+	Options           []ProductSkuOption `json:"options"`
+	CurrentQuantity   float64            `json:"current_quantity"`
+	ReservedQuantity  float64            `json:"reserved_quantity"`
+	AvailableQuantity float64            `json:"available_quantity"`
+	ReorderLevel      float64            `json:"reorder_level"`
+	StockStatus       string             `json:"stock_status"`
+}
+
+// ListProductSkusQuery binds GET /inventory/products/:id/skus. The default page
+// size is the combination cap, so a plain call returns the whole set.
+type ListProductSkusQuery struct {
+	Page     int `form:"page,default=1" binding:"min=1"`
+	PageSize int `form:"page_size,default=100" binding:"min=1,max=100"`
+}
+
+type ListProductSkusResponse struct {
+	Skus       []ProductSku `json:"skus"`
+	TotalCount int64        `json:"total_count"`
+	Page       int          `json:"page"`
+	PageSize   int          `json:"page_size"`
+}
+
+// GenerateSkusResponse reports what the generator found and what it added. A
+// second run over the same tree returns CreatedCount 0 and is not an error.
+type GenerateSkusResponse struct {
+	ProductID        string `json:"product_id"`
+	AxisCount        int    `json:"axis_count"`
+	CombinationCount int    `json:"combination_count"`
+	CreatedCount     int    `json:"created_count"`
+	ExistingCount    int    `json:"existing_count"`
+	StockByVariant   bool   `json:"stock_by_variant"`
+	Message          string `json:"message"`
+}
+
+// RedistributeStockDto moves the whole default-SKU bucket onto combinations. The
+// amounts must sum to exactly what the bucket holds (INV-008 D4) — the SP checks
+// that, since only it can read the quantity under a lock.
+type RedistributeStockDto struct {
+	Targets []RedistributeTargetDto `json:"targets" binding:"required,min=1,dive"`
+}
+
+type RedistributeTargetDto struct {
+	SkuID    string  `json:"sku_id" binding:"required,uuid"`
+	Quantity float64 `json:"quantity" binding:"required,gt=0"`
+}
+
+type RedistributeStockResponse struct {
+	ProductID     string  `json:"product_id"`
+	DefaultSkuID  string  `json:"default_sku_id"`
+	MovedQuantity float64 `json:"moved_quantity"`
+	TargetCount   int     `json:"target_count"`
+	Message       string  `json:"message"`
 }
 
 type InventoryMovement struct {

@@ -1,6 +1,7 @@
 package routes
 
 import (
+	appConfig "josex/web/config"
 	coreServices "josex/web/modules/core/services"
 	"josex/web/modules/inventory/controllers"
 	inventoryPerms "josex/web/modules/inventory/permissions"
@@ -22,18 +23,21 @@ func RegisterInventoryRoutes(
 	movementRepo := repositories.NewMovementRepository(dbService, nil)
 	stockRepo := repositories.NewStockRepository(dbService, nil)
 	categoryRepo := repositories.NewCategoryRepository(dbService, nil)
+	skuRepo := repositories.NewSkuRepository(dbService, nil)
 
 	// Create services
 	productService := inventoryServices.NewProductService(productRepo, nil)
 	movementService := inventoryServices.NewMovementService(movementRepo, nil)
 	stockService := inventoryServices.NewStockService(stockRepo)
 	categoryService := inventoryServices.NewCategoryService(categoryRepo, nil)
+	skuService := inventoryServices.NewSkuService(skuRepo, appConfig.GetConfig().Inventory, nil)
 
 	// Create controllers
 	productController := controllers.NewProductController(productService)
 	movementController := controllers.NewMovementController(movementService)
 	stockController := controllers.NewStockController(stockService)
 	categoryController := controllers.NewCategoryController(categoryService)
+	skuController := controllers.NewSkuController(skuService)
 	batchRepository := repositories.NewBatchRepository(dbService)
 	batchService := inventoryServices.NewBatchService(batchRepository)
 	batchController := controllers.NewBatchController(batchService)
@@ -50,6 +54,16 @@ func RegisterInventoryRoutes(
 	api.PUT("/products/:id",
 		tenancyMW.RequirePermission(inventoryPerms.ProductsWrite),
 		productController.UpdateProductWithVariants)
+
+	// Product SKUs (sellable combinations). Generation is an explicit call and
+	// never a side-effect of saving the product (INV-008 D2).
+	api.GET("/products/:id/skus", skuController.ListProductSkus)
+	api.POST("/products/:id/skus/generate",
+		tenancyMW.RequirePermission(inventoryPerms.ProductsWrite),
+		skuController.GenerateSkus)
+	api.POST("/products/:id/skus/redistribute",
+		tenancyMW.RequirePermission(inventoryPerms.StockAdjust),
+		skuController.RedistributeStock)
 
 	// Product media
 	api.POST("/products/:id/media",

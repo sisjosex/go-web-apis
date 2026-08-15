@@ -128,6 +128,17 @@ func (ctrl *ProductController) UpdateProductWithVariants(c *gin.Context) {
 			case inventoryErrors.ProductVariantOptionNotInGroup:
 				c.JSON(http.StatusBadRequest, coreErrors.BuildErrorSingle(c, inventoryErrors.ProductVariantOptionNotInGroup))
 				return
+			// INV-008 D3 — an axis edit that would take stock or history down
+			// with it. The SP refuses instead of cascading.
+			case inventoryErrors.SkusAxisHasStock:
+				c.JSON(http.StatusConflict, coreErrors.BuildErrorSingle(c, inventoryErrors.SkusAxisHasStock))
+				return
+			case inventoryErrors.SkusAxisHasHistory:
+				c.JSON(http.StatusConflict, coreErrors.BuildErrorSingle(c, inventoryErrors.SkusAxisHasHistory))
+				return
+			case inventoryErrors.ProductVariantGroupAxisNotSingleChoice:
+				c.JSON(http.StatusBadRequest, coreErrors.BuildErrorSingle(c, inventoryErrors.ProductVariantGroupAxisNotSingleChoice))
+				return
 			}
 		}
 		c.JSON(http.StatusInternalServerError, coreErrors.BuildError(c, err))

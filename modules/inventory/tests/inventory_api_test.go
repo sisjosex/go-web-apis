@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"net/http/httptest"
 	"os"
 	"testing"
 	"time"
@@ -2688,4 +2689,669 @@ func mustQueryRow(t *testing.T, ctx context.Context, tx pgx.Tx, dest *string, sq
 	if err := tx.QueryRow(ctx, sql, args...).Scan(dest); err != nil {
 		t.Fatalf("%s: %v", sql, err)
 	}
+}
+
+// ============================================
+// INV-008 — axes, the generator and redistribution
+// ============================================
+
+// axisSpec is one inventory axis and the option names it offers.
+type axisSpec struct {
+	groupType string
+	options   []string
+}
+
+// createProductWithAxes creates a product and then turns the given groups into
+// inventory axes through the product endpoint — the only writer of the variant
+// tree. It does not generate anything: that is an explicit call (D2).
+func createProductWithAxes(
+	t *testing.T,
+	helper *testhelpers.ApiTestHelper,
+	prefix string,
+	axes []axisSpec,
+) (productID, sku string) {
+	t.Helper()
+
+	productID, sku = createProductForSKU(t, helper, prefix)
+	putAxes(t, helper, productID, axes)
+	return productID, sku
+}
+
+// putAxes rewrites the product's whole variant tree as the given axes. Every
+// group is sent without an id, so the SP inserts them; an axis must be required
+// and single choice, which INV-007's CHECK enforces.
+func putAxes(t *testing.T, helper *testhelpers.ApiTestHelper, productID string, axes []axisSpec) {
+	t.Helper()
+
+	groups := make([]models.UpdateVariantGroupDto, 0, len(axes))
+	for _, axis := range axes {
+		options := make([]models.UpdateVariantOptionDto, 0, len(axis.options))
+		for _, name := range axis.options {
+			options = append(options, models.UpdateVariantOptionDto{Name: name})
+		}
+		groups = append(groups, models.UpdateVariantGroupDto{
+			GroupType:        axis.groupType,
+			IsRequired:       true,
+			MaxSelections:    1,
+			AffectsInventory: true,
+			Options:          options,
+		})
+	}
+
+	w := putProduct(t, helper, productID, &models.UpdateProductVariantsDto{Groups: groups})
+	if w.Code != http.StatusOK {
+		t.Fatalf("setting the axes of %s failed with %d: %s", productID, w.Code, w.Body.String())
+	}
+}
+
+// putProduct sends the product update, carrying whatever variant tree is given.
+func putProduct(
+	t *testing.T,
+	helper *testhelpers.ApiTestHelper,
+	productID string,
+	variants *models.UpdateProductVariantsDto,
+) *httptest.ResponseRecorder {
+	t.Helper()
+
+	return helper.DoRequest("PUT", fmt.Sprintf("/inventory/products/%s", productID),
+		models.UpdateProductDto{
+			Name:      "SKU Invariant Product",
+			BasePrice: 25.00,
+			Variants:  variants,
+		}, map[string]string{})
+}
+
+// currentTree reads the product back and returns its groups with their ids, so
+// a follow-up PUT can drop exactly one of them.
+func currentTree(t *testing.T, helper *testhelpers.ApiTestHelper, productID string) []models.VariantGroup {
+	t.Helper()
+
+	return fetchProductDetail(t, helper, productID).Variants
+}
+
+// treeAsUpdate turns the tree just read into the payload that keeps it as it is.
+func treeAsUpdate(groups []models.VariantGroup) *models.UpdateProductVariantsDto {
+	out := make([]models.UpdateVariantGroupDto, 0, len(groups))
+	for _, g := range groups {
+		id := g.ID
+		options := make([]models.UpdateVariantOptionDto, 0, len(g.Options))
+		for _, o := range g.Options {
+			optionID := o.ID
+			options = append(options, models.UpdateVariantOptionDto{ID: &optionID, Name: o.Name})
+		}
+		out = append(out, models.UpdateVariantGroupDto{
+			ID:               &id,
+			GroupType:        g.GroupType,
+			IsRequired:       g.IsRequired,
+			MaxSelections:    g.MaxSelections,
+			AffectsInventory: g.AffectsInventory,
+			Options:          options,
+		})
+	}
+	return &models.UpdateProductVariantsDto{Groups: out}
+}
+
+func generateSkus(t *testing.T, helper *testhelpers.ApiTestHelper, productID string) *httptest.ResponseRecorder {
+	t.Helper()
+
+	return helper.DoRequest("POST",
+		fmt.Sprintf("/inventory/products/%s/skus/generate", productID), nil, map[string]string{})
+}
+
+func listSkus(t *testing.T, helper *testhelpers.ApiTestHelper, productID string) models.ListProductSkusResponse {
+	t.Helper()
+
+	w := helper.DoRequest("GET",
+		fmt.Sprintf("/inventory/products/%s/skus", productID), nil, map[string]string{})
+	if w.Code != http.StatusOK {
+		t.Fatalf("listing the SKUs of %s failed with %d: %s", productID, w.Code, w.Body.String())
+	}
+
+	var result models.ListProductSkusResponse
+	json.Unmarshal(w.Body.Bytes(), &result)
+	return result
+}
+
+func redistribute(
+	t *testing.T,
+	helper *testhelpers.ApiTestHelper,
+	productID string,
+	targets []models.RedistributeTargetDto,
+) *httptest.ResponseRecorder {
+	t.Helper()
+
+	return helper.DoRequest("POST",
+		fmt.Sprintf("/inventory/products/%s/skus/redistribute", productID),
+		models.RedistributeStockDto{Targets: targets}, map[string]string{})
+}
+
+// purchase puts units on the product's default SKU, which is where every
+// quantity still lands until a redistribution moves it.
+func purchase(t *testing.T, helper *testhelpers.ApiTestHelper, productID string, quantity float64) {
+	t.Helper()
+
+	w := helper.DoRequest("POST", "/inventory/movements", models.RecordMovementDto{
+		ProductID:    productID,
+		MovementType: "PURCHASE",
+		Quantity:     quantity,
+	}, map[string]string{})
+	if w.Code != http.StatusCreated {
+		t.Fatalf("purchasing %v for %s failed with %d: %s", quantity, productID, w.Code, w.Body.String())
+	}
+}
+
+func skuByCode(skus []models.ProductSku, code string) (models.ProductSku, bool) {
+	for _, s := range skus {
+		if s.SKU == code {
+			return s, true
+		}
+	}
+	return models.ProductSku{}, false
+}
+
+func nonDefaultSkus(skus []models.ProductSku) []models.ProductSku {
+	out := []models.ProductSku{}
+	for _, s := range skus {
+		if !s.IsDefault {
+			out = append(out, s)
+		}
+	}
+	return out
+}
+
+func TestGetProduct_VariantTreeCarriesAffectsInventory(t *testing.T) {
+	helper := SetupInventoryTest(t)
+	defer helper.Close()
+
+	productID, _ := createProductWithAxes(t, helper, "AXISFLAG", []axisSpec{
+		{groupType: "size", options: []string{"M", "XL"}},
+	})
+
+	tree := currentTree(t, helper, productID)
+
+	assert.Len(t, tree, 1)
+	assert.True(t, tree[0].AffectsInventory, "the group was saved as an inventory axis")
+}
+
+func TestListProductSkus_PhaseOneProductReturnsOnlyTheDefault(t *testing.T) {
+	helper := SetupInventoryTest(t)
+	defer helper.Close()
+
+	productID, sku := createProductForSKU(t, helper, "SKULISTONE")
+
+	result := listSkus(t, helper, productID)
+
+	assert.Equal(t, int64(1), result.TotalCount, "a product that never had axes has one SKU")
+	assert.Len(t, result.Skus, 1)
+	assert.Equal(t, sku, result.Skus[0].SKU)
+	assert.True(t, result.Skus[0].IsDefault)
+	assert.True(t, result.Skus[0].Sellable, "an active SKU of an active product is sellable (D6)")
+	assert.Empty(t, result.Skus[0].Options)
+}
+
+func TestListProductSkus_ProductNotFound(t *testing.T) {
+	helper := SetupInventoryTest(t)
+	defer helper.Close()
+
+	w := helper.DoRequest("GET",
+		fmt.Sprintf("/inventory/products/%s/skus", uuid.New()), nil, map[string]string{})
+
+	assert.Equal(t, http.StatusNotFound, w.Code, w.Body.String())
+}
+
+func TestListProductSkus_InvalidPageSize(t *testing.T) {
+	helper := SetupInventoryTest(t)
+	defer helper.Close()
+
+	productID, _ := createProductForSKU(t, helper, "SKULISTBAD")
+
+	w := helper.DoRequest("GET",
+		fmt.Sprintf("/inventory/products/%s/skus?page_size=500", productID), nil, map[string]string{})
+
+	assert.Equal(t, http.StatusBadRequest, w.Code, w.Body.String())
+}
+
+func TestGenerateSkus_OneSkuPerCombination(t *testing.T) {
+	helper := SetupInventoryTest(t)
+	defer helper.Close()
+
+	productID, sku := createProductWithAxes(t, helper, "SKUGEN", []axisSpec{
+		{groupType: "size", options: []string{"M", "XL"}},
+		{groupType: "colour", options: []string{"Black", "White"}},
+	})
+
+	w := generateSkus(t, helper, productID)
+	assert.Equal(t, http.StatusCreated, w.Code, w.Body.String())
+
+	var generated models.GenerateSkusResponse
+	json.Unmarshal(w.Body.Bytes(), &generated)
+	assert.Equal(t, 2, generated.AxisCount)
+	assert.Equal(t, 4, generated.CombinationCount)
+	assert.Equal(t, 4, generated.CreatedCount)
+	assert.True(t, generated.StockByVariant)
+
+	result := listSkus(t, helper, productID)
+	assert.Equal(t, int64(5), result.TotalCount, "the four combinations plus the default")
+
+	for _, s := range nonDefaultSkus(result.Skus) {
+		assert.Len(t, s.Options, 2, "%s carries one option per axis", s.SKU)
+		assert.Equal(t, 0.0, s.CurrentQuantity, "%s starts empty", s.SKU)
+		assert.Equal(t, "out_of_stock", s.StockStatus)
+		assert.NotEmpty(t, s.CombinationKey)
+	}
+
+	_, found := skuByCode(result.Skus, sku+"-M-BLACK")
+	assert.True(t, found, "the code is <products.sku>-<option codes> (INV-007 D2b)")
+}
+
+func TestGenerateSkus_LeavesTheDefaultSKUAlone(t *testing.T) {
+	helper := SetupInventoryTest(t)
+	defer helper.Close()
+
+	productID, sku := createProductWithAxes(t, helper, "SKUGENDEF", []axisSpec{
+		{groupType: "size", options: []string{"M", "XL"}},
+	})
+	purchase(t, helper, productID, 9)
+
+	assert.Equal(t, http.StatusCreated, generateSkus(t, helper, productID).Code)
+
+	def, found := skuByCode(listSkus(t, helper, productID).Skus, sku)
+	assert.True(t, found, "the default SKU survives generation")
+	assert.True(t, def.IsDefault, "and is still the default")
+	assert.Equal(t, 9.0, def.CurrentQuantity, "with its quantity intact (INV-007 D4)")
+}
+
+func TestGenerateSkus_SecondRunAddsOnlyTheMissingCombinations(t *testing.T) {
+	helper := SetupInventoryTest(t)
+	defer helper.Close()
+
+	productID, _ := createProductWithAxes(t, helper, "SKUGENAGAIN", []axisSpec{
+		{groupType: "size", options: []string{"M", "XL"}},
+		{groupType: "colour", options: []string{"Black", "White"}},
+	})
+	assert.Equal(t, http.StatusCreated, generateSkus(t, helper, productID).Code)
+
+	second := generateSkus(t, helper, productID)
+	assert.Equal(t, http.StatusCreated, second.Code, second.Body.String())
+
+	var rerun models.GenerateSkusResponse
+	json.Unmarshal(second.Body.Bytes(), &rerun)
+	assert.Equal(t, 0, rerun.CreatedCount, "a second run over the same tree adds nothing")
+	assert.Equal(t, 4, rerun.ExistingCount)
+
+	// a third size, which multiplies out to exactly two missing combinations
+	tree := treeAsUpdate(currentTree(t, helper, productID))
+	for i, g := range tree.Groups {
+		if g.GroupType == "size" {
+			tree.Groups[i].Options = append(tree.Groups[i].Options,
+				models.UpdateVariantOptionDto{Name: "S"})
+		}
+	}
+	assert.Equal(t, http.StatusOK, putProduct(t, helper, productID, tree).Code)
+
+	third := generateSkus(t, helper, productID)
+	assert.Equal(t, http.StatusCreated, third.Code, third.Body.String())
+
+	var grown models.GenerateSkusResponse
+	json.Unmarshal(third.Body.Bytes(), &grown)
+	assert.Equal(t, 6, grown.CombinationCount)
+	assert.Equal(t, 2, grown.CreatedCount, "only the combinations the new option adds")
+	assert.Equal(t, 4, grown.ExistingCount)
+	assert.Equal(t, int64(7), listSkus(t, helper, productID).TotalCount)
+}
+
+func TestGenerateSkus_WithoutAnyAxis(t *testing.T) {
+	helper := SetupInventoryTest(t)
+	defer helper.Close()
+
+	productID, _ := createProductForSKU(t, helper, "SKUGENNOAXIS")
+
+	w := generateSkus(t, helper, productID)
+
+	assert.Equal(t, http.StatusConflict, w.Code, w.Body.String())
+	assert.Equal(t, int64(1), listSkus(t, helper, productID).TotalCount)
+}
+
+func TestGenerateSkus_ProductNotFound(t *testing.T) {
+	helper := SetupInventoryTest(t)
+	defer helper.Close()
+
+	w := helper.DoRequest("POST",
+		fmt.Sprintf("/inventory/products/%s/skus/generate", uuid.New()), nil, map[string]string{})
+
+	assert.Equal(t, http.StatusNotFound, w.Code, w.Body.String())
+}
+
+func TestGenerateSkus_PastTheCombinationCap(t *testing.T) {
+	helper := SetupInventoryTest(t)
+	defer helper.Close()
+
+	// 5 x 5 x 5 = 125, past the 100 INVENTORY_MAX_COMBINATIONS allows
+	five := []string{"A", "B", "C", "D", "E"}
+	productID, _ := createProductWithAxes(t, helper, "SKUGENCAP", []axisSpec{
+		{groupType: "size", options: five},
+		{groupType: "colour", options: five},
+		{groupType: "fit", options: five},
+	})
+
+	w := generateSkus(t, helper, productID)
+
+	assert.Equal(t, http.StatusConflict, w.Code, w.Body.String())
+	assert.Equal(t, int64(1), listSkus(t, helper, productID).TotalCount,
+		"the cap is checked before the first row is written")
+}
+
+func TestGenerateSkus_PastTheAxisCap(t *testing.T) {
+	helper := SetupInventoryTest(t)
+	defer helper.Close()
+
+	productID, _ := createProductWithAxes(t, helper, "SKUGENAXES", []axisSpec{
+		{groupType: "size", options: []string{"M", "XL"}},
+		{groupType: "colour", options: []string{"Black"}},
+		{groupType: "fit", options: []string{"Slim"}},
+		{groupType: "sleeve", options: []string{"Short"}},
+	})
+
+	w := generateSkus(t, helper, productID)
+
+	assert.Equal(t, http.StatusConflict, w.Code, w.Body.String())
+	assert.Equal(t, int64(1), listSkus(t, helper, productID).TotalCount)
+}
+
+func TestGenerateSkus_SetsStockByVariant(t *testing.T) {
+	helper := SetupInventoryTest(t)
+	defer helper.Close()
+
+	productID, _ := createProductWithAxes(t, helper, "SKUGENFLAG", []axisSpec{
+		{groupType: "size", options: []string{"M", "XL"}},
+	})
+	assert.Equal(t, http.StatusCreated, generateSkus(t, helper, productID).Code)
+
+	ctx := context.Background()
+	conn := openInventoryDB(t)
+	defer conn.Close(ctx)
+
+	var stockByVariant bool
+	err := conn.QueryRow(ctx,
+		`SELECT p.stock_by_variant FROM inventory.products p WHERE p.id = $1::uuid`,
+		productID).Scan(&stockByVariant)
+	assert.NoError(t, err)
+	assert.True(t, stockByVariant, "a product with an axis tracks stock per combination")
+
+	// the last axis leaving clears it again
+	assert.Equal(t, http.StatusOK,
+		putProduct(t, helper, productID, &models.UpdateProductVariantsDto{
+			Groups: []models.UpdateVariantGroupDto{},
+		}).Code)
+
+	err = conn.QueryRow(ctx,
+		`SELECT p.stock_by_variant FROM inventory.products p WHERE p.id = $1::uuid`,
+		productID).Scan(&stockByVariant)
+	assert.NoError(t, err)
+	assert.False(t, stockByVariant, "and FALSE once the last axis goes away")
+}
+
+func TestRedistributeStock_MovesTheWholeBucket(t *testing.T) {
+	helper := SetupInventoryTest(t)
+	defer helper.Close()
+
+	productID, sku := createProductWithAxes(t, helper, "SKUREDIST", []axisSpec{
+		{groupType: "size", options: []string{"M", "XL"}},
+	})
+	purchase(t, helper, productID, 3)
+	assert.Equal(t, http.StatusCreated, generateSkus(t, helper, productID).Code)
+
+	before := listSkus(t, helper, productID)
+	m, okM := skuByCode(before.Skus, sku+"-M")
+	xl, okXL := skuByCode(before.Skus, sku+"-XL")
+	assert.True(t, okM && okXL, "both combinations exist before the move")
+
+	w := redistribute(t, helper, productID, []models.RedistributeTargetDto{
+		{SkuID: m.SkuID, Quantity: 2},
+		{SkuID: xl.SkuID, Quantity: 1},
+	})
+	assert.Equal(t, http.StatusOK, w.Code, w.Body.String())
+
+	var moved models.RedistributeStockResponse
+	json.Unmarshal(w.Body.Bytes(), &moved)
+	assert.Equal(t, 3.0, moved.MovedQuantity)
+	assert.Equal(t, 2, moved.TargetCount)
+
+	after := listSkus(t, helper, productID)
+	def, _ := skuByCode(after.Skus, sku)
+	movedM, _ := skuByCode(after.Skus, sku+"-M")
+	movedXL, _ := skuByCode(after.Skus, sku+"-XL")
+	assert.Equal(t, 0.0, def.CurrentQuantity, "the bucket is empty")
+	assert.Equal(t, 2.0, movedM.CurrentQuantity)
+	assert.Equal(t, 1.0, movedXL.CurrentQuantity)
+
+	ctx := context.Background()
+	conn := openInventoryDB(t)
+	defer conn.Close(ctx)
+
+	for _, target := range []string{m.SkuID, xl.SkuID} {
+		var transfers int
+		err := conn.QueryRow(ctx,
+			`SELECT count(*) FROM inventory.inventory_movements im
+			  WHERE im.sku_id = $1::uuid AND im.movement_type = 'TRANSFER'`, target).
+			Scan(&transfers)
+		assert.NoError(t, err)
+		assert.Equal(t, 1, transfers, "one TRANSFER per target (D4)")
+	}
+
+	var ledger float64
+	err := conn.QueryRow(ctx,
+		`SELECT COALESCE(SUM(im.quantity), 0) FROM inventory.inventory_movements im
+		  WHERE im.product_id = $1::uuid`, productID).Scan(&ledger)
+	assert.NoError(t, err)
+	assert.Equal(t, 3.0, ledger, "the ledger still sums to what was purchased")
+}
+
+func TestRedistributeStock_AmountsThatDoNotAddUp(t *testing.T) {
+	helper := SetupInventoryTest(t)
+	defer helper.Close()
+
+	productID, sku := createProductWithAxes(t, helper, "SKUREDISTBAD", []axisSpec{
+		{groupType: "size", options: []string{"M", "XL"}},
+	})
+	purchase(t, helper, productID, 3)
+	assert.Equal(t, http.StatusCreated, generateSkus(t, helper, productID).Code)
+
+	m, _ := skuByCode(listSkus(t, helper, productID).Skus, sku+"-M")
+
+	w := redistribute(t, helper, productID, []models.RedistributeTargetDto{
+		{SkuID: m.SkuID, Quantity: 1},
+	})
+
+	assert.Equal(t, http.StatusBadRequest, w.Code, w.Body.String())
+
+	after := listSkus(t, helper, productID)
+	def, _ := skuByCode(after.Skus, sku)
+	untouched, _ := skuByCode(after.Skus, sku+"-M")
+	assert.Equal(t, 3.0, def.CurrentQuantity, "a mismatched payload moves nothing")
+	assert.Equal(t, 0.0, untouched.CurrentQuantity)
+}
+
+func TestRedistributeStock_UnknownTargetSku(t *testing.T) {
+	helper := SetupInventoryTest(t)
+	defer helper.Close()
+
+	productID, _ := createProductWithAxes(t, helper, "SKUREDISTNF", []axisSpec{
+		{groupType: "size", options: []string{"M", "XL"}},
+	})
+	purchase(t, helper, productID, 3)
+	assert.Equal(t, http.StatusCreated, generateSkus(t, helper, productID).Code)
+
+	w := redistribute(t, helper, productID, []models.RedistributeTargetDto{
+		{SkuID: uuid.New().String(), Quantity: 3},
+	})
+
+	assert.Equal(t, http.StatusNotFound, w.Code, w.Body.String())
+}
+
+func TestRedistributeStock_EmptyPayload(t *testing.T) {
+	helper := SetupInventoryTest(t)
+	defer helper.Close()
+
+	productID, _ := createProductForSKU(t, helper, "SKUREDISTEMPTY")
+
+	w := redistribute(t, helper, productID, []models.RedistributeTargetDto{})
+
+	assert.Equal(t, http.StatusBadRequest, w.Code, w.Body.String())
+}
+
+func TestUpdateProduct_DroppingAnAxisHoldingStock(t *testing.T) {
+	helper := SetupInventoryTest(t)
+	defer helper.Close()
+
+	productID, sku := createProductWithAxes(t, helper, "SKUAXISDROP", []axisSpec{
+		{groupType: "size", options: []string{"M", "XL"}},
+	})
+	purchase(t, helper, productID, 3)
+	assert.Equal(t, http.StatusCreated, generateSkus(t, helper, productID).Code)
+
+	skus := listSkus(t, helper, productID).Skus
+	m, _ := skuByCode(skus, sku+"-M")
+	xl, _ := skuByCode(skus, sku+"-XL")
+	assert.Equal(t, http.StatusOK, redistribute(t, helper, productID,
+		[]models.RedistributeTargetDto{
+			{SkuID: m.SkuID, Quantity: 2},
+			{SkuID: xl.SkuID, Quantity: 1},
+		}).Code)
+
+	w := putProduct(t, helper, productID, &models.UpdateProductVariantsDto{
+		Groups: []models.UpdateVariantGroupDto{},
+	})
+
+	assert.Equal(t, http.StatusConflict, w.Code, w.Body.String())
+	assert.Equal(t, int64(3), listSkus(t, helper, productID).TotalCount,
+		"nothing was deleted while the combinations held units")
+}
+
+func TestUpdateProduct_DroppingAnUntouchedAxis(t *testing.T) {
+	helper := SetupInventoryTest(t)
+	defer helper.Close()
+
+	productID, sku := createProductWithAxes(t, helper, "SKUAXISZERO", []axisSpec{
+		{groupType: "size", options: []string{"M", "XL"}},
+	})
+	purchase(t, helper, productID, 4)
+	assert.Equal(t, http.StatusCreated, generateSkus(t, helper, productID).Code)
+
+	w := putProduct(t, helper, productID, &models.UpdateProductVariantsDto{
+		Groups: []models.UpdateVariantGroupDto{},
+	})
+
+	assert.Equal(t, http.StatusOK, w.Code, w.Body.String())
+
+	after := listSkus(t, helper, productID)
+	assert.Equal(t, int64(1), after.TotalCount, "the empty combinations went with the axis")
+	def, _ := skuByCode(after.Skus, sku)
+	assert.True(t, def.IsDefault)
+	assert.Equal(t, 4.0, def.CurrentQuantity, "the bucket keeps every unit")
+}
+
+func TestUpdateProduct_DroppingOneOptionOfAnAxis(t *testing.T) {
+	helper := SetupInventoryTest(t)
+	defer helper.Close()
+
+	productID, sku := createProductWithAxes(t, helper, "SKUOPTDROP", []axisSpec{
+		{groupType: "size", options: []string{"M", "XL"}},
+	})
+	assert.Equal(t, http.StatusCreated, generateSkus(t, helper, productID).Code)
+
+	tree := treeAsUpdate(currentTree(t, helper, productID))
+	kept := []models.UpdateVariantOptionDto{}
+	for _, o := range tree.Groups[0].Options {
+		if o.Name == "M" {
+			kept = append(kept, o)
+		}
+	}
+	tree.Groups[0].Options = kept
+
+	assert.Equal(t, http.StatusOK, putProduct(t, helper, productID, tree).Code)
+
+	after := listSkus(t, helper, productID)
+	assert.Equal(t, int64(2), after.TotalCount, "the XL combination went with the option")
+	_, stillThere := skuByCode(after.Skus, sku+"-XL")
+	assert.False(t, stillThere)
+	_, keptM := skuByCode(after.Skus, sku+"-M")
+	assert.True(t, keptM)
+}
+
+func TestUpdateProduct_AnAxisMustBeSingleChoice(t *testing.T) {
+	helper := SetupInventoryTest(t)
+	defer helper.Close()
+
+	productID, _ := createProductForSKU(t, helper, "SKUAXISMULTI")
+
+	w := putProduct(t, helper, productID, &models.UpdateProductVariantsDto{
+		Groups: []models.UpdateVariantGroupDto{{
+			GroupType:        "topping",
+			IsRequired:       false,
+			MaxSelections:    3,
+			AffectsInventory: true,
+			Options:          []models.UpdateVariantOptionDto{{Name: "Cheese"}},
+		}},
+	})
+
+	assert.Equal(t, http.StatusBadRequest, w.Code, w.Body.String())
+}
+
+func TestProductSKU_CombinationKeyMustAgreeWithItsOptions(t *testing.T) {
+	inRolledBackTx(t, func(ctx context.Context, tx pgx.Tx) {
+		productID, _ := seedProductWithSKU(t, ctx, tx, fmt.Sprintf("SKUKEY_%d", time.Now().UnixNano()))
+
+		var groupID, optionID, skuID string
+		mustQueryRow(t, ctx, tx, &groupID,
+			`INSERT INTO inventory.product_variant_groups
+			     (product_id, group_type, is_required, max_selections, affects_inventory)
+			 VALUES ($1::uuid, 'size', TRUE, 1, TRUE) RETURNING id`, productID)
+		mustQueryRow(t, ctx, tx, &optionID,
+			`INSERT INTO inventory.product_variant_options (variant_group_id, option_name)
+			 VALUES ($1::uuid, 'XL') RETURNING id`, groupID)
+		mustQueryRow(t, ctx, tx, &skuID,
+			`INSERT INTO inventory.product_skus
+			     (tenant_id, product_id, sku, combination_key, is_default)
+			 SELECT p.tenant_id, p.id, p.sku || '-XL', 'not-the-option-uuid', FALSE
+			 FROM inventory.products p WHERE p.id = $1::uuid RETURNING id`, productID)
+
+		_, err := tx.Exec(ctx,
+			`INSERT INTO inventory.product_sku_options
+			     (sku_id, variant_group_id, option_id, product_id)
+			 VALUES ($1::uuid, $2::uuid, $3::uuid, $4::uuid)`,
+			skuID, groupID, optionID, productID)
+		assert.NoError(t, err, "the check is deferred, so the row itself goes in")
+
+		// Deferred to COMMIT so the generator can write a SKU and its options in
+		// any order; forcing it here is what a COMMIT would do.
+		_, err = tx.Exec(ctx, `SET CONSTRAINTS ALL IMMEDIATE`)
+		assert.Error(t, err, "combination_key must agree with the option rows (INV-007's open invariant)")
+	})
+}
+
+func TestGetProductStock_UnchangedByGeneration(t *testing.T) {
+	helper := SetupInventoryTest(t)
+	defer helper.Close()
+
+	productID, _ := createProductWithAxes(t, helper, "SKUSTOCKSAME", []axisSpec{
+		{groupType: "size", options: []string{"M", "XL"}},
+	})
+	purchase(t, helper, productID, 6)
+
+	before := helper.DoRequest("GET", fmt.Sprintf("/inventory/stock/%s", productID), nil, map[string]string{})
+	assert.Equal(t, http.StatusOK, before.Code)
+	var beforeStock models.ProductStock
+	json.Unmarshal(before.Body.Bytes(), &beforeStock)
+
+	assert.Equal(t, http.StatusCreated, generateSkus(t, helper, productID).Code)
+
+	after := helper.DoRequest("GET", fmt.Sprintf("/inventory/stock/%s", productID), nil, map[string]string{})
+	assert.Equal(t, http.StatusOK, after.Code)
+	var afterStock models.ProductStock
+	json.Unmarshal(after.Body.Bytes(), &afterStock)
+
+	assert.Equal(t, beforeStock.CurrentQuantity, afterStock.CurrentQuantity,
+		"generating empty combinations does not change what the product holds")
+	assert.Equal(t, beforeStock.AvailableQuantity, afterStock.AvailableQuantity)
 }

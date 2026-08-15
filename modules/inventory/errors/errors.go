@@ -11,6 +11,21 @@ const (
 	ProductVariantGroupNotInProduct   = "product.variant-group.not-in-product"
 	ProductVariantOptionNotInGroup    = "product.variant-option.not-in-group"
 
+	// An axis contributes exactly one option to every combination, so INV-007
+	// pinned it to max_selections = 1 and is_required = TRUE.
+	ProductVariantGroupAxisNotSingleChoice = "product.variant-group.axis-not-single-choice"
+
+	// SKUs — the sellable combinations (INV-008)
+	SkuNotFound                = "inventory.sku.not-found"
+	SkuCombinationKeyMismatch  = "inventory.sku.combination-key-mismatch"
+	SkusNoAxes                 = "inventory.skus.no-axes"
+	SkusCapExceeded            = "inventory.skus.cap-exceeded"
+	SkusSkuCollision           = "inventory.skus.sku-collision"
+	SkusAxisHasStock           = "inventory.skus.axis-has-stock"
+	SkusAxisHasHistory         = "inventory.skus.axis-has-history"
+	SkusRedistributionMismatch = "inventory.skus.redistribution-mismatch"
+	SkusRedistributionReserved = "inventory.skus.redistribution-reserved"
+
 	// Stock
 	InsufficientStock = "inventory.insufficient-stock"
 
