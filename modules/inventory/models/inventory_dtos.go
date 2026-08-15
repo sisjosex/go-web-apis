@@ -55,6 +55,25 @@ type RecordMovementDto struct {
 	Notes         *string  `json:"notes"`
 }
 
+// ListMovementsQuery binds GET /inventory/movements. Every filter is optional; the
+// three typed ones are validated here because an unparseable value would otherwise
+// reach Postgres as a failed cast and surface as a 500 instead of a 400.
+type ListMovementsQuery struct {
+	ProductID    *string `form:"product_id" binding:"omitempty,uuid"`
+	MovementType *string `form:"movement_type" binding:"omitempty"`
+	DateFrom     *string `form:"date_from" binding:"omitempty,datetime=2006-01-02"`
+	DateTo       *string `form:"date_to" binding:"omitempty,datetime=2006-01-02"`
+	Page         int     `form:"page,default=1" binding:"min=1"`
+	PageSize     int     `form:"page_size,default=20" binding:"min=1,max=100"`
+}
+
+type ListMovementsResponse struct {
+	Movements  []InventoryMovement `json:"movements"`
+	TotalCount int64               `json:"total_count"`
+	Page       int                 `json:"page"`
+	PageSize   int                 `json:"page_size"`
+}
+
 type CreateProductResponse struct {
 	ProductID string `json:"product_id"`
 	SKU       string `json:"sku"`

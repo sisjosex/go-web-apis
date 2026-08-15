@@ -20,5 +20,6 @@ type MovementRepository interface {
 	) (*models.RecordMovementResponse, error)
 
 	GetMovement(ctx context.Context, tenantID uuid.UUID, movementID string) (*models.InventoryMovement, error)
+	ListMovements(ctx context.Context, tenantID uuid.UUID, query models.ListMovementsQuery) ([]models.InventoryMovement, int64, error)
 	GetProductStock(ctx context.Context, tenantID uuid.UUID, productID string) (*models.ProductStock, error)
 }

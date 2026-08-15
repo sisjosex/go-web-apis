@@ -60,6 +60,7 @@ func RegisterInventoryRoutes(
 		productController.RemoveProductMedia)
 
 	// Movements
+	api.GET("/movements", movementController.ListMovements)
 	api.GET("/movements/:id", movementController.GetMovement)
 	api.GET("/stock/:product_id", movementController.GetProductStock)
 	api.POST("/movements",

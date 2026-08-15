@@ -49,3 +49,21 @@ func (s *MovementService) GetProductStock(ctx context.Context, tenantID uuid.UUI
 func (s *MovementService) GetMovement(ctx context.Context, tenantID uuid.UUID, movementID string) (*models.InventoryMovement, error) {
 	return s.repository.GetMovement(ctx, tenantID, movementID)
 }
+
+func (s *MovementService) ListMovements(
+	ctx context.Context,
+	tenantID uuid.UUID,
+	query models.ListMovementsQuery,
+) (*models.ListMovementsResponse, error) {
+	movements, totalCount, err := s.repository.ListMovements(ctx, tenantID, query)
+	if err != nil {
+		return nil, err
+	}
+
+	return &models.ListMovementsResponse{
+		Movements:  movements,
+		TotalCount: totalCount,
+		Page:       query.Page,
+		PageSize:   query.PageSize,
+	}, nil
+}

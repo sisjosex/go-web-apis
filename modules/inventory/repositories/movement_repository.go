@@ -97,6 +97,60 @@ func (r *MovementRepository) GetMovement(ctx context.Context, tenantID uuid.UUID
 	return &movement, nil
 }
 
+// ListMovements returns one page of the audit trail plus the total the same filters
+// match. total_count comes back on every row, so it is read from whichever row is
+// scanned last and stays 0 when the page is empty.
+func (r *MovementRepository) ListMovements(
+	ctx context.Context,
+	tenantID uuid.UUID,
+	query models.ListMovementsQuery,
+) ([]models.InventoryMovement, int64, error) {
+	rows, err := r.dbService.Query(
+		ctx,
+		`SELECT id, product_id, movement_type, quantity, reference_type, reference_id, unit_cost, notes, created_by, created_at, total_count
+		 FROM inventory.sp_list_movements($1, $2::UUID, $3::VARCHAR, $4::DATE, $5::DATE, $6, $7)`,
+		tenantID, query.ProductID, query.MovementType, query.DateFrom, query.DateTo, query.Page, query.PageSize,
+	)
+	if err != nil {
+		if r.logger != nil {
+			r.logger.Printf("❌ Error listing movements: %v", err)
+		}
+		var pgErr *pgconn.PgError
+		if errors.As(err, &pgErr) {
+			return nil, 0, pgErr
+		}
+		return nil, 0, err
+	}
+	defer rows.Close()
+
+	movements := []models.InventoryMovement{}
+	var totalCount int64
+	for rows.Next() {
+		var m models.InventoryMovement
+		if err := rows.Scan(
+			&m.ID,
+			&m.ProductID,
+			&m.MovementType,
+			&m.Quantity,
+			&m.ReferenceType,
+			&m.ReferenceID,
+			&m.UnitCost,
+			&m.Notes,
+			&m.CreatedBy,
+			&m.CreatedAt,
+			&totalCount,
+		); err != nil {
+			return nil, 0, err
+		}
+		movements = append(movements, m)
+	}
+	if err = rows.Err(); err != nil {
+		return nil, 0, err
+	}
+
+	return movements, totalCount, nil
+}
+
 func (r *MovementRepository) GetProductStock(ctx context.Context, tenantID uuid.UUID, productID string) (*models.ProductStock, error) {
 	var stock models.ProductStock
 

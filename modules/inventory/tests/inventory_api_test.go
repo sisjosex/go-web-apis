@@ -4,9 +4,11 @@
 package inventory_test
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"os"
 	"testing"
 	"time"
 
@@ -14,6 +16,7 @@ import (
 	"josex/web/modules/inventory/models"
 
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5"
 
 	"github.com/stretchr/testify/assert"
 )
@@ -798,6 +801,93 @@ func TestRecordMovement_ProductNotFound(t *testing.T) {
 	}
 	w := helper.DoRequest("POST", "/inventory/movements", moveBody, map[string]string{})
 	assert.Equal(t, http.StatusNotFound, w.Code)
+}
+
+// ============================================
+// Movement List Tests
+// ============================================
+
+func TestListMovements_Success(t *testing.T) {
+	helper := SetupInventoryTest(t)
+	defer helper.Close()
+
+	suffix := uuid.New().String()[:8]
+	productID := createProductForList(t, helper, "MVLIST"+suffix, "Movement List Product")
+	recordMovementForList(t, helper, productID, "PURCHASE", 40.0)
+	recordMovementForList(t, helper, productID, "SALE", 15.0)
+
+	result := listMovements(t, helper, "?product_id="+productID)
+
+	assert.Equal(t, int64(2), result.TotalCount)
+	assert.Equal(t, 2, len(result.Movements))
+	assert.Equal(t, 1, result.Page)
+	assert.Equal(t, 20, result.PageSize)
+	assert.Equal(t, "SALE", result.Movements[0].MovementType, "newest first")
+	assert.Equal(t, "PURCHASE", result.Movements[1].MovementType)
+}
+
+func TestListMovements_FilterByProduct(t *testing.T) {
+	helper := SetupInventoryTest(t)
+	defer helper.Close()
+
+	suffix := uuid.New().String()[:8]
+	wanted := createProductForList(t, helper, "MVWANT"+suffix, "Wanted Product")
+	other := createProductForList(t, helper, "MVOTHER"+suffix, "Other Product")
+	recordMovementForList(t, helper, wanted, "PURCHASE", 10.0)
+	recordMovementForList(t, helper, other, "PURCHASE", 99.0)
+
+	result := listMovements(t, helper, "?product_id="+wanted)
+
+	assert.Equal(t, int64(1), result.TotalCount)
+	assert.Equal(t, 1, len(result.Movements))
+	assert.Equal(t, wanted, result.Movements[0].ProductID)
+	assert.Equal(t, 10.0, result.Movements[0].Quantity)
+}
+
+func TestListMovements_FilterByMovementType(t *testing.T) {
+	helper := SetupInventoryTest(t)
+	defer helper.Close()
+
+	suffix := uuid.New().String()[:8]
+	productID := createProductForList(t, helper, "MVTYPE"+suffix, "Type Filter Product")
+	recordMovementForList(t, helper, productID, "PURCHASE", 60.0)
+	recordMovementForList(t, helper, productID, "ADJUSTMENT", 5.0)
+	recordMovementForList(t, helper, productID, "SALE", 20.0)
+
+	result := listMovements(t, helper, "?product_id="+productID+"&movement_type=ADJUSTMENT")
+
+	assert.Equal(t, int64(1), result.TotalCount)
+	assert.Equal(t, 1, len(result.Movements))
+	assert.Equal(t, "ADJUSTMENT", result.Movements[0].MovementType)
+}
+
+func TestListMovements_PagePastTheEndIsEmpty(t *testing.T) {
+	helper := SetupInventoryTest(t)
+	defer helper.Close()
+
+	suffix := uuid.New().String()[:8]
+	productID := createProductForList(t, helper, "MVPAGE"+suffix, "Paging Product")
+	recordMovementForList(t, helper, productID, "PURCHASE", 30.0)
+	recordMovementForList(t, helper, productID, "SALE", 4.0)
+
+	firstPage := listMovements(t, helper, "?product_id="+productID+"&page=1&page_size=1")
+	assert.Equal(t, int64(2), firstPage.TotalCount)
+	assert.Equal(t, 1, len(firstPage.Movements))
+
+	// Past the end: total_count rides on the rows, so an empty page carries none.
+	pastEnd := listMovements(t, helper, "?product_id="+productID+"&page=99&page_size=1")
+	assert.Equal(t, 0, len(pastEnd.Movements), "movements must be [], never null")
+	assert.Equal(t, 99, pastEnd.Page)
+	assert.Equal(t, 1, pastEnd.PageSize)
+}
+
+func TestListMovements_PageSizeAboveCapReturns400(t *testing.T) {
+	helper := SetupInventoryTest(t)
+	defer helper.Close()
+
+	w := helper.DoRequest("GET", "/inventory/movements?page_size=500", nil, map[string]string{})
+
+	assert.Equal(t, http.StatusBadRequest, w.Code, "page_size is capped at 100")
 }
 
 // ============================================
@@ -2121,6 +2211,34 @@ func createProductForList(t *testing.T, helper *testhelpers.ApiTestHelper, sku, 
 	return created.ProductID
 }
 
+func listMovements(t *testing.T, helper *testhelpers.ApiTestHelper, query string) models.ListMovementsResponse {
+	t.Helper()
+
+	w := helper.DoRequest("GET", "/inventory/movements"+query, nil, map[string]string{})
+	if w.Code != http.StatusOK {
+		t.Fatalf("list movements %q returned %d: %s", query, w.Code, w.Body.String())
+	}
+
+	var result models.ListMovementsResponse
+	if err := json.Unmarshal(w.Body.Bytes(), &result); err != nil {
+		t.Fatalf("list movements %q returned invalid JSON: %v — %s", query, err, w.Body.String())
+	}
+	return result
+}
+
+func recordMovementForList(t *testing.T, helper *testhelpers.ApiTestHelper, productID, movementType string, quantity float64) {
+	t.Helper()
+
+	w := helper.DoRequest("POST", "/inventory/movements", models.RecordMovementDto{
+		ProductID:    productID,
+		MovementType: movementType,
+		Quantity:     quantity,
+	}, map[string]string{})
+	if w.Code != http.StatusCreated {
+		t.Fatalf("record %s movement for %s returned %d: %s", movementType, productID, w.Code, w.Body.String())
+	}
+}
+
 func createCategoryForList(t *testing.T, helper *testhelpers.ApiTestHelper, name, slug string) string {
 	t.Helper()
 
@@ -2160,4 +2278,414 @@ func ptrBool(v bool) *bool {
 
 func ptrInt(v int) *int {
 	return &v
+}
+
+// ============================================
+// INV-007 — Stock per SKU invariants
+// ============================================
+
+// openInventoryDB opens a direct connection to the test database. The INV-007
+// invariants are enforced by the schema itself and no endpoint exposes them, so
+// they have to be asserted against PostgreSQL rather than through the API.
+func openInventoryDB(t *testing.T) *pgx.Conn {
+	t.Helper()
+
+	dsn := os.Getenv("DATABASE_URL")
+	if dsn == "" {
+		t.Skip("DATABASE_URL is not set; skipping the SKU schema invariants")
+	}
+
+	conn, err := pgx.Connect(context.Background(), dsn)
+	if err != nil {
+		t.Fatalf("connecting to the test database: %v", err)
+	}
+	return conn
+}
+
+// inRolledBackTx runs fn inside a transaction that is always rolled back, so a
+// test that deliberately violates a constraint leaves nothing behind.
+func inRolledBackTx(t *testing.T, fn func(ctx context.Context, tx pgx.Tx)) {
+	t.Helper()
+
+	ctx := context.Background()
+	conn := openInventoryDB(t)
+	defer conn.Close(ctx)
+
+	tx, err := conn.Begin(ctx)
+	if err != nil {
+		t.Fatalf("begin transaction: %v", err)
+	}
+	defer tx.Rollback(ctx)
+
+	fn(ctx, tx)
+}
+
+// seedProductWithSKU inserts a product and its default SKU inside tx and
+// returns both ids.
+func seedProductWithSKU(t *testing.T, ctx context.Context, tx pgx.Tx, sku string) (productID, skuID string) {
+	t.Helper()
+
+	tenantID := uuid.New().String()
+	if err := tx.QueryRow(ctx,
+		`INSERT INTO inventory.products (tenant_id, sku, name, base_price)
+		 VALUES ($1::uuid, $2, $3, 10) RETURNING id`,
+		tenantID, sku, "SKU Invariant Product").Scan(&productID); err != nil {
+		t.Fatalf("seed product %q: %v", sku, err)
+	}
+
+	if err := tx.QueryRow(ctx,
+		`INSERT INTO inventory.product_skus
+		     (tenant_id, product_id, sku, combination_key, is_default)
+		 VALUES ($1::uuid, $2::uuid, $3, '', TRUE) RETURNING id`,
+		tenantID, productID, sku).Scan(&skuID); err != nil {
+		t.Fatalf("seed default SKU %q: %v", sku, err)
+	}
+
+	return productID, skuID
+}
+
+// createProductForSKU creates a product through the API and returns its id and sku.
+func createProductForSKU(t *testing.T, helper *testhelpers.ApiTestHelper, prefix string) (string, string) {
+	t.Helper()
+
+	sku := fmt.Sprintf("%s_%d", prefix, time.Now().UnixNano())
+	w := helper.DoRequest("POST", "/inventory/products", models.CreateProductDto{
+		SKU:       sku,
+		Name:      "SKU Invariant Product",
+		BasePrice: 25.00,
+	}, map[string]string{})
+	if w.Code != http.StatusCreated {
+		t.Fatalf("create product %q returned %d: %s", sku, w.Code, w.Body.String())
+	}
+
+	var created models.CreateProductResponse
+	json.Unmarshal(w.Body.Bytes(), &created)
+	return created.ProductID, sku
+}
+
+func TestProductSKU_DefaultSKUCreatedWithTheProduct(t *testing.T) {
+	helper := SetupInventoryTest(t)
+	defer helper.Close()
+
+	productID, sku := createProductForSKU(t, helper, "SKUDEFAULT")
+
+	ctx := context.Background()
+	conn := openInventoryDB(t)
+	defer conn.Close(ctx)
+
+	var count int
+	var gotSKU, combinationKey, status string
+	var isDefault bool
+	err := conn.QueryRow(ctx,
+		`SELECT count(*) OVER (), s.sku, s.combination_key, s.is_default, s.status
+		 FROM inventory.product_skus s
+		 WHERE s.product_id = $1::uuid`, productID).
+		Scan(&count, &gotSKU, &combinationKey, &isDefault, &status)
+
+	assert.NoError(t, err, "a new product must have a SKU row")
+	assert.Equal(t, 1, count, "a product gets exactly one SKU in phase 1")
+	assert.Equal(t, sku, gotSKU, "the default SKU copies products.sku verbatim")
+	assert.Equal(t, "", combinationKey)
+	assert.True(t, isDefault)
+	assert.Equal(t, "active", status)
+}
+
+func TestProductSKU_StockMovementAndBatchHangOffTheDefaultSKU(t *testing.T) {
+	helper := SetupInventoryTest(t)
+	defer helper.Close()
+
+	productID, _ := createProductForSKU(t, helper, "SKUHANG")
+
+	wm := helper.DoRequest("POST", "/inventory/movements", models.RecordMovementDto{
+		ProductID:    productID,
+		MovementType: "PURCHASE",
+		Quantity:     20.0,
+	}, map[string]string{})
+	assert.Equal(t, http.StatusCreated, wm.Code, wm.Body.String())
+
+	wb := helper.DoRequest("POST", "/inventory/batches", map[string]interface{}{
+		"product_id":       productID,
+		"lot_number":       fmt.Sprintf("SKUHANG_%d", time.Now().UnixNano()),
+		"purchase_date":    time.Now().AddDate(0, 0, -1).Format("2006-01-02"),
+		"expiry_date":      time.Now().AddDate(0, 0, 30).Format("2006-01-02"),
+		"unit_cost":        4.00,
+		"initial_quantity": 20.0,
+	}, map[string]string{})
+	assert.Equal(t, http.StatusCreated, wb.Code, wb.Body.String())
+
+	ctx := context.Background()
+	conn := openInventoryDB(t)
+	defer conn.Close(ctx)
+
+	var defaultSKU string
+	if err := conn.QueryRow(ctx,
+		`SELECT s.id FROM inventory.product_skus s
+		 WHERE s.product_id = $1::uuid AND s.is_default`, productID).Scan(&defaultSKU); err != nil {
+		t.Fatalf("reading the default SKU: %v", err)
+	}
+
+	var strays int
+	err := conn.QueryRow(ctx,
+		`SELECT (SELECT count(*) FROM inventory.product_stock ps
+		          WHERE ps.product_id = $1::uuid AND ps.sku_id IS DISTINCT FROM $2::uuid)
+		      + (SELECT count(*) FROM inventory.inventory_movements im
+		          WHERE im.product_id = $1::uuid AND im.sku_id IS DISTINCT FROM $2::uuid)
+		      + (SELECT count(*) FROM inventory.product_batches pb
+		          WHERE pb.product_id = $1::uuid AND pb.sku_id IS DISTINCT FROM $2::uuid)`,
+		productID, defaultSKU).Scan(&strays)
+
+	assert.NoError(t, err)
+	assert.Equal(t, 0, strays, "stock, movements and batches must all point at the default SKU")
+}
+
+func TestProductSKU_StockIsUniquePerSKUNotPerProduct(t *testing.T) {
+	ctx := context.Background()
+	conn := openInventoryDB(t)
+	defer conn.Close(ctx)
+
+	var perSKU, perProduct int
+	err := conn.QueryRow(ctx,
+		`SELECT
+		     count(*) FILTER (WHERE pg_get_constraintdef(c.oid) = 'UNIQUE (sku_id)'),
+		     count(*) FILTER (WHERE pg_get_constraintdef(c.oid) = 'UNIQUE (product_id)')
+		 FROM pg_constraint c
+		 WHERE c.conrelid = 'inventory.product_stock'::regclass AND c.contype = 'u'`).
+		Scan(&perSKU, &perProduct)
+
+	assert.NoError(t, err)
+	assert.Equal(t, 1, perSKU, "product_stock must be unique per SKU")
+	assert.Equal(t, 0, perProduct, "product_stock must no longer be unique per product")
+}
+
+func TestProductSKU_SkuIDIsNotNullOnEveryQuantityTable(t *testing.T) {
+	ctx := context.Background()
+	conn := openInventoryDB(t)
+	defer conn.Close(ctx)
+
+	var nullable int
+	err := conn.QueryRow(ctx,
+		`SELECT count(*) FROM information_schema.columns c
+		 WHERE c.table_schema = 'inventory'
+		   AND c.column_name = 'sku_id'
+		   AND c.table_name IN ('product_stock', 'inventory_movements', 'product_batches')
+		   AND c.is_nullable = 'YES'`).Scan(&nullable)
+
+	assert.NoError(t, err)
+	assert.Equal(t, 0, nullable, "a nullable sku_id would leak into phase 3 forever")
+
+	var declared int
+	err = conn.QueryRow(ctx,
+		`SELECT count(*) FROM information_schema.columns c
+		 WHERE c.table_schema = 'inventory'
+		   AND c.column_name = 'sku_id'
+		   AND c.table_name IN ('product_stock', 'inventory_movements', 'product_batches')`).
+		Scan(&declared)
+
+	assert.NoError(t, err)
+	assert.Equal(t, 3, declared, "all three quantity tables carry sku_id")
+}
+
+func TestProductSKU_RejectsASecondDefaultSKU(t *testing.T) {
+	inRolledBackTx(t, func(ctx context.Context, tx pgx.Tx) {
+		productID, _ := seedProductWithSKU(t, ctx, tx, fmt.Sprintf("SKUDUP_%d", time.Now().UnixNano()))
+
+		_, err := tx.Exec(ctx,
+			`INSERT INTO inventory.product_skus
+			     (tenant_id, product_id, sku, combination_key, is_default)
+			 SELECT p.tenant_id, p.id, p.sku || '-2', 'second', TRUE
+			 FROM inventory.products p WHERE p.id = $1::uuid`, productID)
+
+		assert.Error(t, err, "a product may only have one default SKU")
+	})
+}
+
+func TestProductSKU_RejectsADuplicateCombination(t *testing.T) {
+	inRolledBackTx(t, func(ctx context.Context, tx pgx.Tx) {
+		productID, _ := seedProductWithSKU(t, ctx, tx, fmt.Sprintf("SKUCOMB_%d", time.Now().UnixNano()))
+
+		_, err := tx.Exec(ctx,
+			`INSERT INTO inventory.product_skus
+			     (tenant_id, product_id, sku, combination_key, is_default)
+			 SELECT p.tenant_id, p.id, p.sku || '-2', '', FALSE
+			 FROM inventory.products p WHERE p.id = $1::uuid`, productID)
+
+		assert.Error(t, err, "(product_id, combination_key) must be unique")
+	})
+}
+
+func TestProductSKU_RejectsAStockRowFromAnotherProduct(t *testing.T) {
+	inRolledBackTx(t, func(ctx context.Context, tx pgx.Tx) {
+		stamp := time.Now().UnixNano()
+		productA, _ := seedProductWithSKU(t, ctx, tx, fmt.Sprintf("SKUXA_%d", stamp))
+		_, skuB := seedProductWithSKU(t, ctx, tx, fmt.Sprintf("SKUXB_%d", stamp))
+
+		_, err := tx.Exec(ctx,
+			`INSERT INTO inventory.product_stock (product_id, sku_id, current_quantity)
+			 VALUES ($1::uuid, $2::uuid, 0)`, productA, skuB)
+
+		assert.Error(t, err, "a stock row cannot name a SKU of another product")
+	})
+}
+
+func TestProductSKU_RejectsAnOptionFromAnotherGroup(t *testing.T) {
+	inRolledBackTx(t, func(ctx context.Context, tx pgx.Tx) {
+		productID, skuID := seedProductWithSKU(t, ctx, tx, fmt.Sprintf("SKUOPT_%d", time.Now().UnixNano()))
+
+		var axisGroup, otherGroup, otherOption string
+		mustQueryRow(t, ctx, tx, &axisGroup,
+			`INSERT INTO inventory.product_variant_groups
+			     (product_id, group_type, is_required, max_selections, affects_inventory)
+			 VALUES ($1::uuid, 'size', TRUE, 1, TRUE) RETURNING id`, productID)
+		mustQueryRow(t, ctx, tx, &otherGroup,
+			`INSERT INTO inventory.product_variant_groups
+			     (product_id, group_type, is_required, max_selections, affects_inventory)
+			 VALUES ($1::uuid, 'topping', FALSE, 3, FALSE) RETURNING id`, productID)
+		mustQueryRow(t, ctx, tx, &otherOption,
+			`INSERT INTO inventory.product_variant_options (variant_group_id, option_name)
+			 VALUES ($1::uuid, 'Cheese') RETURNING id`, otherGroup)
+
+		_, err := tx.Exec(ctx,
+			`INSERT INTO inventory.product_sku_options
+			     (sku_id, variant_group_id, option_id, product_id)
+			 VALUES ($1::uuid, $2::uuid, $3::uuid, $4::uuid)`,
+			skuID, axisGroup, otherOption, productID)
+
+		assert.Error(t, err, "an option must belong to the group it is paired with")
+	})
+}
+
+func TestProductSKU_RejectsAGroupFromAnotherProduct(t *testing.T) {
+	inRolledBackTx(t, func(ctx context.Context, tx pgx.Tx) {
+		stamp := time.Now().UnixNano()
+		productA, skuA := seedProductWithSKU(t, ctx, tx, fmt.Sprintf("SKUGRPA_%d", stamp))
+		productB, _ := seedProductWithSKU(t, ctx, tx, fmt.Sprintf("SKUGRPB_%d", stamp))
+
+		var groupB, optionB string
+		mustQueryRow(t, ctx, tx, &groupB,
+			`INSERT INTO inventory.product_variant_groups
+			     (product_id, group_type, is_required, max_selections, affects_inventory)
+			 VALUES ($1::uuid, 'size', TRUE, 1, TRUE) RETURNING id`, productB)
+		mustQueryRow(t, ctx, tx, &optionB,
+			`INSERT INTO inventory.product_variant_options (variant_group_id, option_name)
+			 VALUES ($1::uuid, 'XL') RETURNING id`, groupB)
+
+		_, err := tx.Exec(ctx,
+			`INSERT INTO inventory.product_sku_options
+			     (sku_id, variant_group_id, option_id, product_id)
+			 VALUES ($1::uuid, $2::uuid, $3::uuid, $4::uuid)`,
+			skuA, groupB, optionB, productA)
+
+		assert.Error(t, err, "a group must belong to the SKU's product")
+	})
+}
+
+func TestProductSKU_RejectsAPriceModifierOnAnAxisOption(t *testing.T) {
+	inRolledBackTx(t, func(ctx context.Context, tx pgx.Tx) {
+		productID, _ := seedProductWithSKU(t, ctx, tx, fmt.Sprintf("SKUAXIS_%d", time.Now().UnixNano()))
+
+		var axisGroup, modifierGroup string
+		mustQueryRow(t, ctx, tx, &axisGroup,
+			`INSERT INTO inventory.product_variant_groups
+			     (product_id, group_type, is_required, max_selections, affects_inventory)
+			 VALUES ($1::uuid, 'size', TRUE, 1, TRUE) RETURNING id`, productID)
+		mustQueryRow(t, ctx, tx, &modifierGroup,
+			`INSERT INTO inventory.product_variant_groups
+			     (product_id, group_type, is_required, max_selections, affects_inventory)
+			 VALUES ($1::uuid, 'topping', FALSE, 3, FALSE) RETURNING id`, productID)
+
+		// A savepoint, so the rejection below does not abort the transaction the
+		// second half of this test still needs.
+		sp, err := tx.Begin(ctx)
+		if err != nil {
+			t.Fatalf("savepoint: %v", err)
+		}
+		_, err = sp.Exec(ctx,
+			`INSERT INTO inventory.product_variant_options
+			     (variant_group_id, option_name, price_modifier)
+			 VALUES ($1::uuid, 'XL', 2000)`, axisGroup)
+		assert.Error(t, err, "an axis option may not carry a price modifier: the SKU does")
+		sp.Rollback(ctx)
+
+		_, err = tx.Exec(ctx,
+			`INSERT INTO inventory.product_variant_options
+			     (variant_group_id, option_name, price_modifier)
+			 VALUES ($1::uuid, 'Cheese', 2000)`, modifierGroup)
+		assert.NoError(t, err, "a modifier option keeps its price modifier, exactly as today")
+	})
+}
+
+func TestStockStatus_LadderComesFromFnStockStatus(t *testing.T) {
+	ctx := context.Background()
+	conn := openInventoryDB(t)
+	defer conn.Close(ctx)
+
+	cases := []struct {
+		quantity float64
+		reorder  float64
+		expected string
+	}{
+		{0, 10, "out_of_stock"},
+		{0.01, 10, "critical"},
+		{9.99, 10, "critical"},
+		{10, 10, "low"},
+		{14.99, 10, "low"},
+		{15, 10, "ok"},
+		{1000, 10, "ok"},
+	}
+
+	for _, c := range cases {
+		var status string
+		err := conn.QueryRow(ctx,
+			`SELECT inventory.fn_stock_status($1::DECIMAL, $2::DECIMAL)`, c.quantity, c.reorder).
+			Scan(&status)
+
+		assert.NoError(t, err)
+		assert.Equalf(t, c.expected, status,
+			"fn_stock_status(%v, %v)", c.quantity, c.reorder)
+	}
+}
+
+func TestGetProductStock_KeepsItsShapeAfterTheSKUMove(t *testing.T) {
+	helper := SetupInventoryTest(t)
+	defer helper.Close()
+
+	productID, _ := createProductForSKU(t, helper, "SKUSHAPE")
+
+	wm := helper.DoRequest("POST", "/inventory/movements", models.RecordMovementDto{
+		ProductID:    productID,
+		MovementType: "PURCHASE",
+		Quantity:     60.0,
+	}, map[string]string{})
+	assert.Equal(t, http.StatusCreated, wm.Code, wm.Body.String())
+
+	w := helper.DoRequest("GET", fmt.Sprintf("/inventory/stock/%s", productID), nil, map[string]string{})
+	assert.Equal(t, http.StatusOK, w.Code)
+
+	var raw map[string]interface{}
+	if err := json.Unmarshal(w.Body.Bytes(), &raw); err != nil {
+		t.Fatalf("stock response is not JSON: %v — %s", err, w.Body.String())
+	}
+
+	for _, field := range []string{
+		"current_quantity", "reserved_quantity", "available_quantity",
+		"reorder_level", "status", "last_updated_at",
+	} {
+		assert.Containsf(t, raw, field, "the stock payload lost %q", field)
+	}
+
+	var stock models.ProductStock
+	json.Unmarshal(w.Body.Bytes(), &stock)
+	assert.Equal(t, 60.0, stock.CurrentQuantity)
+	assert.Equal(t, 0.0, stock.ReservedQuantity)
+	assert.Equal(t, 60.0, stock.AvailableQuantity)
+	assert.Equal(t, "ok", stock.Status)
+}
+
+// mustQueryRow runs a single-value query and fails the test if it errors.
+func mustQueryRow(t *testing.T, ctx context.Context, tx pgx.Tx, dest *string, sql string, args ...interface{}) {
+	t.Helper()
+
+	if err := tx.QueryRow(ctx, sql, args...).Scan(dest); err != nil {
+		t.Fatalf("%s: %v", sql, err)
+	}
 }

@@ -119,6 +119,48 @@ func (ctrl *MovementController) GetMovement(c *gin.Context) {
 	c.JSON(http.StatusOK, movement)
 }
 
+// ListMovements godoc
+// @Summary List inventory movements
+// @Description Paginated movement history, optionally filtered by product, type and date range
+// @Tags inventory
+// @Produce json
+// @Param product_id query string false "Product ID"
+// @Param movement_type query string false "Movement type (PURCHASE, SALE, ADJUSTMENT, TRANSFER, RETURN, WASTE, PRODUCTION)"
+// @Param date_from query string false "Inclusive lower bound, YYYY-MM-DD"
+// @Param date_to query string false "Inclusive upper bound, YYYY-MM-DD"
+// @Param page query int false "Page number, 1-based" default(1)
+// @Param page_size query int false "Rows per page, max 100" default(20)
+// @Success 200 {object} models.ListMovementsResponse
+// @Failure 400 {object} map[string]interface{}
+// @Router /api/v1/inventory/movements [get]
+func (ctrl *MovementController) ListMovements(c *gin.Context) {
+	tenantIDRaw, exists := c.Get("tenant_id")
+	if !exists || tenantIDRaw == nil {
+		c.JSON(http.StatusUnauthorized, coreErrors.BuildErrorSingle(c, "auth.invalid-tenant"))
+		return
+	}
+	tenantID, err := uuid.Parse(tenantIDRaw.(string))
+	if err != nil {
+		c.JSON(http.StatusUnauthorized, coreErrors.BuildErrorSingle(c, "auth.invalid-tenant"))
+		return
+	}
+
+	var query models.ListMovementsQuery
+
+	if err := c.ShouldBindQuery(&query); err != nil {
+		c.JSON(http.StatusBadRequest, coreErrors.BuildErrorDetail(c, "validation.invalid", err.Error()))
+		return
+	}
+
+	result, err := ctrl.movementService.ListMovements(c.Request.Context(), tenantID, query)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, coreErrors.BuildError(c, err))
+		return
+	}
+
+	c.JSON(http.StatusOK, result)
+}
+
 // GetProductStock godoc
 // @Summary Get current product stock
 // @Description Retrieve current stock level for a product
