@@ -1,14 +1,17 @@
 package controllers
 
 import (
+	"errors"
 	"net/http"
 	"strconv"
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5/pgconn"
 
 	coreErrors "josex/web/modules/core/errors"
 	coreModels "josex/web/modules/core/models"
+	salesErrors "josex/web/modules/sales/errors"
 	"josex/web/modules/sales/interfaces"
 	"josex/web/modules/sales/models"
 	"josex/web/modules/sales/utils"
@@ -230,8 +233,23 @@ func (ctrl *SalesOrderController) AddOrderItem(c *gin.Context) {
 		return
 	}
 
-	item, err := ctrl.service.AddOrderItemWithBatch(c.Request.Context(), tenantID, orderID, dto.ProductID, dto.Quantity, dto.UnitPrice)
+	item, err := ctrl.service.AddOrderItemWithBatch(c.Request.Context(), tenantID, orderID, dto.ProductID, dto.Quantity, dto.UnitPrice, dto.SkuID)
 	if err != nil {
+		// GetHTTPStatusFromError knows nothing about the INV-010 codes, and
+		// sku-required matches none of its patterns, so it would fall through
+		// to 500 for what is a plain client mistake.
+		var pgErr *pgconn.PgError
+		if errors.As(err, &pgErr) {
+			switch pgErr.Message {
+			case salesErrors.OrderItemSkuRequired:
+				c.JSON(http.StatusBadRequest, coreErrors.BuildErrorSingle(c, salesErrors.OrderItemSkuRequired))
+				return
+			case salesErrors.OrderItemSkuNotFound:
+				c.JSON(http.StatusNotFound, coreErrors.BuildErrorSingle(c, salesErrors.OrderItemSkuNotFound))
+				return
+			}
+		}
+
 		status := utils.GetHTTPStatusFromError(err)
 		c.JSON(status, coreErrors.BuildError(c, err))
 		return

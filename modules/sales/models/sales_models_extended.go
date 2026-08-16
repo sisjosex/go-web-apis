@@ -69,6 +69,10 @@ type AddOrderItemRequestDto struct {
 	ProductID uuid.UUID `json:"product_id" binding:"required,uuidv4"`
 	Quantity  float64   `json:"quantity" binding:"required,gt=0"`
 	UnitPrice float64   `json:"unit_price" binding:"required,gte=0"`
+	// SkuID names the combination to sell. Optional (INV-010 D2): omitted, the SP
+	// resolves the product's default SKU, which is what every pre-INV-010 client
+	// keeps getting. On a stock_by_variant product, omitting it is a 400.
+	SkuID *uuid.UUID `json:"sku_id" binding:"omitempty,uuidv4"`
 }
 
 // SalesReport represents sales metrics

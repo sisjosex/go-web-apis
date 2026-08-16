@@ -196,12 +196,18 @@ func (r *SalesOrderRepository) GetSalesOrderByOrderNumber(ctx context.Context, t
 // AddOrderItem adds an item to an order
 func (r *SalesOrderRepository) AddOrderItem(ctx context.Context, tenantID uuid.UUID, orderID uuid.UUID, dto *models.CreateOrderItemRequestDto) (*models.OrderItem, error) {
 	item := &models.OrderItem{}
+	// p_sku_id is left to its DEFAULT NULL, so the SP resolves the product's
+	// default SKU. CreateOrderItemRequestDto carries no SKU on purpose: its only
+	// other use is CreateSalesOrderRequestDto.Items, which nothing reads.
 	err := r.dbService.QueryRow(ctx,
-		`SELECT * FROM sales.sp_add_order_item($1, $2, $3, $4)`,
+		`SELECT id, order_id, product_id, sku_id, product_sku, sku, product_name,
+		        quantity, unit_price, line_total, created_at
+		 FROM sales.sp_add_order_item($1, $2, $3, $4)`,
 		tenantID, orderID, dto.ProductID, dto.Quantity,
 	).Scan(
-		&item.ID, &item.OrderID, &item.ProductID, &item.ProductSku,
-		&item.ProductName, &item.Quantity, &item.UnitPrice, &item.LineTotal, &item.CreatedAt,
+		&item.ID, &item.OrderID, &item.ProductID, &item.SkuID,
+		&item.ProductSku, &item.Sku, &item.ProductName,
+		&item.Quantity, &item.UnitPrice, &item.LineTotal, &item.CreatedAt,
 	)
 	if err != nil {
 		var pgErr *pgconn.PgError
@@ -217,7 +223,9 @@ func (r *SalesOrderRepository) AddOrderItem(ctx context.Context, tenantID uuid.U
 func (r *SalesOrderRepository) GetOrderItems(ctx context.Context, tenantID uuid.UUID, orderID uuid.UUID) ([]models.OrderItem, error) {
 	var items []models.OrderItem
 	rows, err := r.dbService.Query(ctx,
-		`SELECT * FROM sales.sp_get_order_items($1, $2)`,
+		`SELECT id, order_id, product_id, sku_id, product_sku, sku, product_name,
+		        quantity, unit_price, line_total, created_at
+		 FROM sales.sp_get_order_items($1, $2)`,
 		tenantID,
 		orderID,
 	)
@@ -233,8 +241,9 @@ func (r *SalesOrderRepository) GetOrderItems(ctx context.Context, tenantID uuid.
 	for rows.Next() {
 		var item models.OrderItem
 		if err := rows.Scan(
-			&item.ID, &item.OrderID, &item.ProductID, &item.ProductSku,
-			&item.ProductName, &item.Quantity, &item.UnitPrice, &item.LineTotal, &item.CreatedAt,
+			&item.ID, &item.OrderID, &item.ProductID, &item.SkuID,
+			&item.ProductSku, &item.Sku, &item.ProductName,
+			&item.Quantity, &item.UnitPrice, &item.LineTotal, &item.CreatedAt,
 		); err != nil {
 			return nil, err
 		}
@@ -252,17 +261,23 @@ func (r *SalesOrderRepository) GetOrderItems(ctx context.Context, tenantID uuid.
 // ========== PHASE 1: Batch Assignment & Order Completion ==========
 
 // AddOrderItemWithBatch adds an item to an order with FIFO batch assignment
-func (r *SalesOrderRepository) AddOrderItemWithBatch(ctx context.Context, tenantID uuid.UUID, orderID uuid.UUID, productID uuid.UUID, quantity float64, unitPrice float64) (*models.OrderItem, error) {
+func (r *SalesOrderRepository) AddOrderItemWithBatch(ctx context.Context, tenantID uuid.UUID, orderID uuid.UUID, productID uuid.UUID, quantity float64, unitPrice float64, skuID *uuid.UUID) (*models.OrderItem, error) {
 	var item models.OrderItem
+	// skuID nil sends SQL NULL, which the SP reads as "the product's default SKU"
+	// (INV-010 D2). assigned_batch_id / assigned_from_batch are deliberately not
+	// selected: OrderItem has nowhere to put them and the endpoint documents
+	// itself as returning an order item.
 	row := r.dbService.QueryRow(ctx,
-		`SELECT id, order_id, product_id, product_sku, product_name, quantity, unit_price, line_total, created_at
-		 FROM sales.sp_add_order_item_with_batch($1, $2, $3, $4, $5)`,
-		tenantID, orderID, productID, quantity, unitPrice,
+		`SELECT id, order_id, product_id, sku_id, product_sku, sku, product_name,
+		        quantity, unit_price, line_total, created_at
+		 FROM sales.sp_add_order_item_with_batch($1, $2, $3, $4, $5, $6)`,
+		tenantID, orderID, productID, quantity, unitPrice, skuID,
 	)
 
 	err := row.Scan(
-		&item.ID, &item.OrderID, &item.ProductID, &item.ProductSku,
-		&item.ProductName, &item.Quantity, &item.UnitPrice, &item.LineTotal, &item.CreatedAt,
+		&item.ID, &item.OrderID, &item.ProductID, &item.SkuID,
+		&item.ProductSku, &item.Sku, &item.ProductName,
+		&item.Quantity, &item.UnitPrice, &item.LineTotal, &item.CreatedAt,
 	)
 	if err != nil {
 		var pgErr *pgconn.PgError

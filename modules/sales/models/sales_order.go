@@ -25,10 +25,15 @@ type SalesOrder struct {
 
 // OrderItem represents an item in a sales order
 type OrderItem struct {
-	ID          uuid.UUID `json:"id"`
-	OrderID     uuid.UUID `json:"order_id"`
-	ProductID   uuid.UUID `json:"product_id"`
+	ID        uuid.UUID `json:"id"`
+	OrderID   uuid.UUID `json:"order_id"`
+	ProductID uuid.UUID `json:"product_id"`
+	// SkuID is the sellable combination this line sold; never null since INV-010.
+	SkuID uuid.UUID `json:"sku_id"`
+	// ProductSku is the combination's code as it stood when the line was sold,
+	// Sku the same combination's code as it stands now (INV-010 D4).
 	ProductSku  string    `json:"product_sku"`
+	Sku         string    `json:"sku"`
 	ProductName string    `json:"product_name"`
 	Quantity    int       `json:"quantity"`
 	UnitPrice   float64   `json:"unit_price"`

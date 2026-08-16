@@ -22,6 +22,11 @@ const (
 	OrderItemProductNotFound = "order-item.product-not-found"
 	OrderItemInvalidPrice    = "order-item.invalid-price"
 
+	// SKU errors (INV-010) — the client named no combination on a product whose
+	// stock is tracked per combination, or named one that is not this product's.
+	OrderItemSkuRequired = "sales.order-item.sku-required"
+	OrderItemSkuNotFound = "sales.order-item.sku-not-found"
+
 	// Payment errors
 	PaymentFailed              = "payment.failed"
 	PaymentAlreadyProcessed    = "payment.already-processed"

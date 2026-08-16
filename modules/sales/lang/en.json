@@ -13,6 +13,8 @@
   "order-item.invalid-qty": "Invalid quantity - must be greater than 0",
   "order-item.product-not-found": "Product not found in inventory",
   "order-item.invalid-price": "Invalid unit price",
+  "sales.order-item.sku-required": "This product is sold by variant - choose a combination before adding it to the order",
+  "sales.order-item.sku-not-found": "That combination does not belong to this product",
   "payment.failed": "Payment processing failed",
   "payment.already-processed": "Payment has already been processed for this order",
   "payment.partial-refund-needed": "Partial refund needed for this order",

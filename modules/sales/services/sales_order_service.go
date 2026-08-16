@@ -61,8 +61,8 @@ func (s *SalesOrderService) GetOrderItems(ctx context.Context, tenantID uuid.UUI
 // ========== PHASE 1: Batch Assignment & Order Completion ==========
 
 // AddOrderItemWithBatch adds an item to an order with FIFO batch assignment
-func (s *SalesOrderService) AddOrderItemWithBatch(ctx context.Context, tenantID uuid.UUID, orderID uuid.UUID, productID uuid.UUID, quantity float64, unitPrice float64) (*models.OrderItem, error) {
-	return s.orderRepository.AddOrderItemWithBatch(ctx, tenantID, orderID, productID, quantity, unitPrice)
+func (s *SalesOrderService) AddOrderItemWithBatch(ctx context.Context, tenantID uuid.UUID, orderID uuid.UUID, productID uuid.UUID, quantity float64, unitPrice float64, skuID *uuid.UUID) (*models.OrderItem, error) {
+	return s.orderRepository.AddOrderItemWithBatch(ctx, tenantID, orderID, productID, quantity, unitPrice, skuID)
 }
 
 // CompleteOrder completes an order and consumes inventory from batches
