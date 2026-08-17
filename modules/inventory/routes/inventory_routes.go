@@ -26,7 +26,7 @@ func RegisterInventoryRoutes(
 	skuRepo := repositories.NewSkuRepository(dbService, nil)
 
 	// Create services
-	productService := inventoryServices.NewProductService(productRepo, nil)
+	productService := inventoryServices.NewProductService(productRepo, appConfig.GetConfig().Inventory, nil)
 	movementService := inventoryServices.NewMovementService(movementRepo, nil)
 	stockService := inventoryServices.NewStockService(stockRepo)
 	categoryService := inventoryServices.NewCategoryService(categoryRepo, nil)

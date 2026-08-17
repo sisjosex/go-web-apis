@@ -32,13 +32,14 @@ func (r *ProductRepository) CreateProductWithVariants(
 	description *string,
 	basePrice float64,
 	variantsJSON *string,
+	maxAxes, maxCombinations int,
 ) (*models.CreateProductResponse, error) {
 	var productID, respSku, respName, message string
 
 	err := r.dbService.QueryRow(
 		ctx,
-		`SELECT CAST(product_id AS VARCHAR), sku, name, message FROM inventory.sp_create_product_with_variants($1, $2, $3, $4, $5, $6::JSONB, NULL::UUID)`,
-		tenantID, sku, name, description, basePrice, variantsJSON,
+		`SELECT CAST(product_id AS VARCHAR), sku, name, message FROM inventory.sp_create_product_with_variants($1, $2, $3, $4, $5, $6::JSONB, NULL::UUID, $7, $8)`,
+		tenantID, sku, name, description, basePrice, variantsJSON, maxAxes, maxCombinations,
 	).Scan(&productID, &respSku, &respName, &message)
 
 	if err != nil {

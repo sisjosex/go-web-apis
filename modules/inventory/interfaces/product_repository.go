@@ -9,6 +9,9 @@ import (
 )
 
 type ProductRepository interface {
+	// maxAxes and maxCombinations are the InventoryConfig caps (INV-008 D5). The
+	// create SP generates the combinations of a payload that declares an axis
+	// (INV-012 D2), so it is the create path's turn to enforce them.
 	CreateProductWithVariants(
 		ctx context.Context,
 		tenantID uuid.UUID,
@@ -16,6 +19,7 @@ type ProductRepository interface {
 		description *string,
 		basePrice float64,
 		variantsJSON *string,
+		maxAxes, maxCombinations int,
 	) (*models.CreateProductResponse, error)
 
 	UpdateProductWithVariants(

@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"log"
 
+	inventoryConfig "josex/web/modules/inventory/config"
 	"josex/web/modules/inventory/interfaces"
 	"josex/web/modules/inventory/models"
 
@@ -13,12 +14,18 @@ import (
 
 type ProductService struct {
 	repository interfaces.ProductRepository
+	config     *inventoryConfig.InventoryConfig
 	logger     *log.Logger
 }
 
-func NewProductService(repository interfaces.ProductRepository, logger *log.Logger) *ProductService {
+func NewProductService(
+	repository interfaces.ProductRepository,
+	config *inventoryConfig.InventoryConfig,
+	logger *log.Logger,
+) *ProductService {
 	return &ProductService{
 		repository: repository,
+		config:     config,
 		logger:     logger,
 	}
 }
@@ -42,6 +49,9 @@ func (s *ProductService) CreateProductWithVariants(
 		variantsJSON = &jsonStr
 	}
 
+	// The create SP generates the combinations of a payload that declares an
+	// axis (INV-012 D2), so the caps have to travel with it — the same two
+	// InventoryConfig values SkuService hands the generator directly.
 	return s.repository.CreateProductWithVariants(
 		ctx,
 		tenantID,
@@ -50,6 +60,8 @@ func (s *ProductService) CreateProductWithVariants(
 		dto.Description,
 		dto.BasePrice,
 		variantsJSON,
+		s.config.MaxAxes,
+		s.config.MaxCombinations,
 	)
 }
 

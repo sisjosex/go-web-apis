@@ -65,6 +65,26 @@ func (ctrl *ProductController) CreateProductWithVariants(c *gin.Context) {
 			case inventoryErrors.ProductSkuAlreadyExists:
 				c.JSON(http.StatusConflict, coreErrors.BuildErrorSingle(c, inventoryErrors.ProductSkuAlreadyExists))
 				return
+			// The variant tree can now fail on create for the same reasons it
+			// fails on update; before INV-012 all three arrived here as a 500.
+			case inventoryErrors.ProductVariantGroupDuplicateType:
+				c.JSON(http.StatusConflict, coreErrors.BuildErrorSingle(c, inventoryErrors.ProductVariantGroupDuplicateType))
+				return
+			case inventoryErrors.ProductVariantOptionDuplicateName:
+				c.JSON(http.StatusConflict, coreErrors.BuildErrorSingle(c, inventoryErrors.ProductVariantOptionDuplicateName))
+				return
+			case inventoryErrors.ProductVariantGroupAxisNotSingleChoice:
+				c.JSON(http.StatusBadRequest, coreErrors.BuildErrorSingle(c, inventoryErrors.ProductVariantGroupAxisNotSingleChoice))
+				return
+			// INV-012 D2 — the create SP generates the combinations of a product
+			// that declares an axis, so what the generator refuses now refuses
+			// the creation itself.
+			case inventoryErrors.SkusCapExceeded:
+				c.JSON(http.StatusConflict, coreErrors.BuildErrorSingle(c, inventoryErrors.SkusCapExceeded))
+				return
+			case inventoryErrors.SkusSkuCollision:
+				c.JSON(http.StatusConflict, coreErrors.BuildErrorSingle(c, inventoryErrors.SkusSkuCollision))
+				return
 			}
 		}
 		c.JSON(http.StatusInternalServerError, coreErrors.BuildError(c, err))
