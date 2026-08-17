@@ -17,6 +17,8 @@
   "inventory.skus.redistribution-reserved": "El SKU por defecto tiene unidades reservadas; libéralas antes de redistribuir",
   "inventory.insufficient-stock": "Stock insuficiente",
   "inventory.invalid-movement-type": "Tipo de movimiento de inventario inválido",
+  "inventory.movement.sku-required": "Este producto controla el stock por combinación; el movimiento debe indicar a qué combinación pertenece",
+  "inventory.reserve.sku-required": "Este producto controla el stock por combinación; la reserva debe indicar a qué combinación se aplica",
   "inventory.movement.not-found": "Movimiento no encontrado",
   "batch.lot-number-required": "El número de lote es requerido",
   "batch.expiry-date-must-be-future": "La fecha de vencimiento debe ser en el futuro",

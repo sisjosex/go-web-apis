@@ -31,7 +31,7 @@ func (r *MovementRepository) RecordMovement(
 	quantity float64,
 	referenceType, referenceID *string,
 	unitCost *float64,
-	notes, createdBy *string,
+	notes, createdBy, skuID *string,
 ) (*models.RecordMovementResponse, error) {
 	var movementID string
 	var newStock float64
@@ -45,11 +45,14 @@ func (r *MovementRepository) RecordMovement(
 		createdByParam = *createdBy
 	}
 
+	// p_sku_id is the tenth parameter and the ninth is p_created_by — the SP has
+	// accepted it since INV-007 and nothing ever passed it, so every movement
+	// recorded before INV-011 landed on the product's default SKU.
 	err := r.dbService.QueryRow(
 		ctx,
 		`SELECT movement_id, new_stock_quantity, message
-		 FROM inventory.sp_record_movement($1, $2, $3, $4, $5, $6::UUID, $7::DECIMAL, $8, $9::UUID)`,
-		tenantID, productID, movementType, quantity, referenceType, referenceID, unitCost, notes, createdByParam,
+		 FROM inventory.sp_record_movement($1, $2, $3, $4, $5, $6::UUID, $7::DECIMAL, $8, $9::UUID, $10::UUID)`,
+		tenantID, productID, movementType, quantity, referenceType, referenceID, unitCost, notes, createdByParam, skuID,
 	).Scan(&movementID, &newStock, &message)
 
 	if err != nil {
@@ -107,9 +110,9 @@ func (r *MovementRepository) ListMovements(
 ) ([]models.InventoryMovement, int64, error) {
 	rows, err := r.dbService.Query(
 		ctx,
-		`SELECT id, product_id, movement_type, quantity, reference_type, reference_id, unit_cost, notes, created_by, created_at, total_count
-		 FROM inventory.sp_list_movements($1, $2::UUID, $3::VARCHAR, $4::DATE, $5::DATE, $6, $7)`,
-		tenantID, query.ProductID, query.MovementType, query.DateFrom, query.DateTo, query.Page, query.PageSize,
+		`SELECT id, product_id, movement_type, quantity, reference_type, reference_id, unit_cost, notes, created_by, created_at, sku_id, sku, total_count
+		 FROM inventory.sp_list_movements($1, $2::UUID, $3::VARCHAR, $4::DATE, $5::DATE, $6, $7, $8::UUID)`,
+		tenantID, query.ProductID, query.MovementType, query.DateFrom, query.DateTo, query.Page, query.PageSize, query.SkuID,
 	)
 	if err != nil {
 		if r.logger != nil {
@@ -138,6 +141,8 @@ func (r *MovementRepository) ListMovements(
 			&m.Notes,
 			&m.CreatedBy,
 			&m.CreatedAt,
+			&m.SkuID,
+			&m.SKU,
 			&totalCount,
 		); err != nil {
 			return nil, 0, err

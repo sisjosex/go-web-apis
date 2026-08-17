@@ -50,8 +50,13 @@ type UpdateVariantOptionDto struct {
 	Modifier float64 `json:"modifier"`
 }
 
+// RecordMovementDto binds POST /inventory/movements. SkuID is a pointer because
+// omitting it is meaningful: on a product with no axis it means the product SKU,
+// and on one whose stock lives on combinations the SP refuses it outright
+// (INV-011 D1) rather than filling the unassigned bucket.
 type RecordMovementDto struct {
 	ProductID     string   `json:"product_id" binding:"required"`
+	SkuID         *string  `json:"sku_id" binding:"omitempty,uuid"`
 	MovementType  string   `json:"movement_type" binding:"required"`
 	Quantity      float64  `json:"quantity" binding:"required"`
 	ReferenceType *string  `json:"reference_type"`
@@ -65,6 +70,7 @@ type RecordMovementDto struct {
 // reach Postgres as a failed cast and surface as a 500 instead of a 400.
 type ListMovementsQuery struct {
 	ProductID    *string `form:"product_id" binding:"omitempty,uuid"`
+	SkuID        *string `form:"sku_id" binding:"omitempty,uuid"`
 	MovementType *string `form:"movement_type" binding:"omitempty"`
 	DateFrom     *string `form:"date_from" binding:"omitempty,datetime=2006-01-02"`
 	DateTo       *string `form:"date_to" binding:"omitempty,datetime=2006-01-02"`
@@ -118,13 +124,17 @@ type StockReservationResponse struct {
 	Message           string  `json:"message"`
 }
 
+// SkuID follows the same rule as RecordMovementDto's: optional on a product with
+// no axis, required by the SP on one stocked by combination (INV-011 D1).
 type ReserveStockDto struct {
 	ProductID string  `json:"product_id" binding:"required"`
+	SkuID     *string `json:"sku_id" binding:"omitempty,uuid"`
 	Quantity  float64 `json:"quantity" binding:"required,gt=0"`
 }
 
 type ReleaseReservedStockDto struct {
 	ProductID string  `json:"product_id" binding:"required"`
+	SkuID     *string `json:"sku_id" binding:"omitempty,uuid"`
 	Quantity  float64 `json:"quantity" binding:"required,gt=0"`
 }
 
@@ -301,4 +311,8 @@ type InventoryMovement struct {
 	Notes         *string   `db:"notes" json:"notes"`
 	CreatedBy     *string   `db:"created_by" json:"created_by"`
 	CreatedAt     time.Time `db:"created_at" json:"created_at"`
+	// Which combination moved. Both are nullable: rows written before INV-007
+	// carry no SKU and the trail still has to show them (INV-011 D2).
+	SkuID *string `db:"sku_id" json:"sku_id"`
+	SKU   *string `db:"sku" json:"sku"`
 }

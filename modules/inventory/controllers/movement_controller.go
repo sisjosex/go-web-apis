@@ -64,6 +64,14 @@ func (ctrl *MovementController) RecordMovement(c *gin.Context) {
 			case inventoryErrors.ProductNotFound:
 				c.JSON(http.StatusNotFound, coreErrors.BuildErrorSingle(c, inventoryErrors.ProductNotFound))
 				return
+			case inventoryErrors.SkuNotFound:
+				c.JSON(http.StatusNotFound, coreErrors.BuildErrorSingle(c, inventoryErrors.SkuNotFound))
+				return
+			// INV-011 D1 — a movement on a stock-by-variant product has to name its
+			// combination; falling back to the unassigned bucket is what this refuses.
+			case inventoryErrors.MovementSkuRequired:
+				c.JSON(http.StatusBadRequest, coreErrors.BuildErrorSingle(c, inventoryErrors.MovementSkuRequired))
+				return
 			case inventoryErrors.InsufficientStock:
 				c.JSON(http.StatusConflict, coreErrors.BuildErrorSingle(c, inventoryErrors.InsufficientStock))
 				return

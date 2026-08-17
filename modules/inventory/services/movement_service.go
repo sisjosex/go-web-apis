@@ -39,6 +39,7 @@ func (s *MovementService) RecordMovement(
 		dto.UnitCost,
 		dto.Notes,
 		createdBy,
+		dto.SkuID,
 	)
 }
 

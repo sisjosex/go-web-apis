@@ -17,6 +17,8 @@
   "inventory.skus.redistribution-reserved": "The default SKU has reserved units; release them before redistributing",
   "inventory.insufficient-stock": "Insufficient stock",
   "inventory.invalid-movement-type": "Invalid inventory movement type",
+  "inventory.movement.sku-required": "This product tracks stock by combination; the movement must say which combination it belongs to",
+  "inventory.reserve.sku-required": "This product tracks stock by combination; the reservation must say which combination it applies to",
   "inventory.movement.not-found": "Movement not found",
   "batch.lot-number-required": "Lot number is required",
   "batch.expiry-date-must-be-future": "Expiry date must be in the future",

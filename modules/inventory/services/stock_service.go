@@ -25,11 +25,11 @@ func (s *StockService) UpdateReorderLevel(ctx context.Context, tenantID uuid.UUI
 }
 
 // ReserveStock reserves inventory for a sales order
-func (s *StockService) ReserveStock(ctx context.Context, tenantID uuid.UUID, productID string, quantity float64) (*models.StockReservationResponse, error) {
-	return s.stockRepository.ReserveStock(ctx, tenantID, productID, quantity)
+func (s *StockService) ReserveStock(ctx context.Context, tenantID uuid.UUID, productID string, quantity float64, skuID *string) (*models.StockReservationResponse, error) {
+	return s.stockRepository.ReserveStock(ctx, tenantID, productID, quantity, skuID)
 }
 
 // ReleaseReservedStock releases reserved inventory when order is cancelled
-func (s *StockService) ReleaseReservedStock(ctx context.Context, tenantID uuid.UUID, productID string, quantity float64) (*models.StockReservationResponse, error) {
-	return s.stockRepository.ReleaseReservedStock(ctx, tenantID, productID, quantity)
+func (s *StockService) ReleaseReservedStock(ctx context.Context, tenantID uuid.UUID, productID string, quantity float64, skuID *string) (*models.StockReservationResponse, error) {
+	return s.stockRepository.ReleaseReservedStock(ctx, tenantID, productID, quantity, skuID)
 }

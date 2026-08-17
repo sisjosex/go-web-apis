@@ -33,6 +33,12 @@ const (
 	InvalidMovementType = "inventory.invalid-movement-type"
 	MovementNotFound    = "inventory.movement.not-found"
 
+	// A product whose stock lives on combinations has no product-level quantity to
+	// move or hold: the write must name a SKU instead of defaulting to the
+	// unassigned bucket (INV-011 D1).
+	MovementSkuRequired = "inventory.movement.sku-required"
+	ReserveSkuRequired  = "inventory.reserve.sku-required"
+
 	// Batch creation errors
 	BatchLotNumberRequired          = "batch.lot-number-required"
 	BatchExpiryDateMustBeFuture     = "batch.expiry-date-must-be-future"

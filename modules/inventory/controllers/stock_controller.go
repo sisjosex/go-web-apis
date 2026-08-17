@@ -104,13 +104,21 @@ func (ctrl *StockController) ReserveStock(c *gin.Context) {
 		return
 	}
 
-	result, err := ctrl.stockService.ReserveStock(c.Request.Context(), tenantID, dto.ProductID, dto.Quantity)
+	result, err := ctrl.stockService.ReserveStock(c.Request.Context(), tenantID, dto.ProductID, dto.Quantity, dto.SkuID)
 	if err != nil {
 		var pgErr *pgconn.PgError
 		if errors.As(err, &pgErr) {
 			switch pgErr.Message {
 			case inventoryErrors.ProductNotFound:
 				c.JSON(http.StatusNotFound, coreErrors.BuildErrorSingle(c, inventoryErrors.ProductNotFound))
+				return
+			case inventoryErrors.SkuNotFound:
+				c.JSON(http.StatusNotFound, coreErrors.BuildErrorSingle(c, inventoryErrors.SkuNotFound))
+				return
+			// INV-011 D1 — the client asked to reserve "the product" on a product
+			// whose stock lives on combinations; its arithmetic is wrong, not its state.
+			case inventoryErrors.ReserveSkuRequired:
+				c.JSON(http.StatusBadRequest, coreErrors.BuildErrorSingle(c, inventoryErrors.ReserveSkuRequired))
 				return
 			case inventoryErrors.InsufficientStock:
 				c.JSON(http.StatusConflict, coreErrors.BuildErrorSingle(c, inventoryErrors.InsufficientStock))
@@ -153,13 +161,19 @@ func (ctrl *StockController) ReleaseReservedStock(c *gin.Context) {
 		return
 	}
 
-	result, err := ctrl.stockService.ReleaseReservedStock(c.Request.Context(), tenantID, dto.ProductID, dto.Quantity)
+	result, err := ctrl.stockService.ReleaseReservedStock(c.Request.Context(), tenantID, dto.ProductID, dto.Quantity, dto.SkuID)
 	if err != nil {
 		var pgErr *pgconn.PgError
 		if errors.As(err, &pgErr) {
 			switch pgErr.Message {
 			case inventoryErrors.ProductNotFound:
 				c.JSON(http.StatusNotFound, coreErrors.BuildErrorSingle(c, inventoryErrors.ProductNotFound))
+				return
+			case inventoryErrors.SkuNotFound:
+				c.JSON(http.StatusNotFound, coreErrors.BuildErrorSingle(c, inventoryErrors.SkuNotFound))
+				return
+			case inventoryErrors.ReserveSkuRequired:
+				c.JSON(http.StatusBadRequest, coreErrors.BuildErrorSingle(c, inventoryErrors.ReserveSkuRequired))
 				return
 			}
 		}
