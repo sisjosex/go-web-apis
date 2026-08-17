@@ -724,6 +724,7 @@ func TestRecordMovement_Sale(t *testing.T) {
 		ProductID:    created.ProductID,
 		MovementType: "PURCHASE",
 		Quantity:     50.0,
+		UnitCost:     ptrFloat64(4.00),
 	}
 	helper.DoRequest("POST", "/inventory/movements", purchaseBody, map[string]string{})
 
@@ -731,7 +732,7 @@ func TestRecordMovement_Sale(t *testing.T) {
 	saleBody := models.RecordMovementDto{
 		ProductID:    created.ProductID,
 		MovementType: "SALE",
-		Quantity:     -20.0,
+		Quantity:     20.0,
 	}
 	w2 := helper.DoRequest("POST", "/inventory/movements", saleBody, map[string]string{})
 	assert.Equal(t, http.StatusCreated, w2.Code)
@@ -759,7 +760,7 @@ func TestRecordMovement_InsufficientStock(t *testing.T) {
 	saleBody := models.RecordMovementDto{
 		ProductID:    created.ProductID,
 		MovementType: "SALE",
-		Quantity:     -50.0,
+		Quantity:     50.0,
 	}
 	w2 := helper.DoRequest("POST", "/inventory/movements", saleBody, map[string]string{})
 	assert.Equal(t, http.StatusConflict, w2.Code)
@@ -800,6 +801,7 @@ func TestRecordMovement_ProductNotFound(t *testing.T) {
 		ProductID:    "00000000-0000-0000-0000-000000000000",
 		MovementType: "PURCHASE",
 		Quantity:     10.0,
+		UnitCost:     ptrFloat64(4.00),
 	}
 	w := helper.DoRequest("POST", "/inventory/movements", moveBody, map[string]string{})
 	assert.Equal(t, http.StatusNotFound, w.Code)
@@ -914,6 +916,7 @@ func TestGetProductStock_Success(t *testing.T) {
 		ProductID:    created.ProductID,
 		MovementType: "PURCHASE",
 		Quantity:     75.0,
+		UnitCost:     ptrFloat64(4.00),
 	}
 	helper.DoRequest("POST", "/inventory/movements", moveBody, map[string]string{})
 
@@ -956,6 +959,7 @@ func TestReserveStock_Success(t *testing.T) {
 		ProductID:    created.ProductID,
 		MovementType: "PURCHASE",
 		Quantity:     100.0,
+		UnitCost:     ptrFloat64(4.00),
 	}
 	moveResp := helper.DoRequest("POST", "/inventory/movements", moveBody, map[string]string{})
 	t.Logf("Movement response: status=%d, body=%s", moveResp.Code, moveResp.Body.String())
@@ -1018,6 +1022,7 @@ func TestReserveStock_InsufficientStock(t *testing.T) {
 		ProductID:    created.ProductID,
 		MovementType: "PURCHASE",
 		Quantity:     20.0,
+		UnitCost:     ptrFloat64(4.00),
 	}
 	helper.DoRequest("POST", "/inventory/movements", moveBody, map[string]string{})
 
@@ -1049,6 +1054,7 @@ func TestReleaseReservedStock_Success(t *testing.T) {
 		ProductID:    created.ProductID,
 		MovementType: "PURCHASE",
 		Quantity:     100.0,
+		UnitCost:     ptrFloat64(4.00),
 	}
 	helper.DoRequest("POST", "/inventory/movements", moveBody, map[string]string{})
 
@@ -1110,6 +1116,7 @@ func TestUpdateReorderLevel_Success(t *testing.T) {
 		ProductID:    created.ProductID,
 		MovementType: "PURCHASE",
 		Quantity:     50.0,
+		UnitCost:     ptrFloat64(4.00),
 	}
 	helper.DoRequest("POST", "/inventory/movements", moveBody, map[string]string{})
 
@@ -1166,6 +1173,7 @@ func TestReorderLevel_StatusTransitions(t *testing.T) {
 		ProductID:    created.ProductID,
 		MovementType: "PURCHASE",
 		Quantity:     100.0,
+		UnitCost:     ptrFloat64(4.00),
 	}
 	helper.DoRequest("POST", "/inventory/movements", moveBody, map[string]string{})
 
@@ -1179,7 +1187,7 @@ func TestReorderLevel_StatusTransitions(t *testing.T) {
 	saleBody := models.RecordMovementDto{
 		ProductID:    created.ProductID,
 		MovementType: "SALE",
-		Quantity:     -45.0,
+		Quantity:     45.0,
 	}
 	helper.DoRequest("POST", "/inventory/movements", saleBody, map[string]string{})
 
@@ -1193,7 +1201,7 @@ func TestReorderLevel_StatusTransitions(t *testing.T) {
 	saleBody2 := models.RecordMovementDto{
 		ProductID:    created.ProductID,
 		MovementType: "SALE",
-		Quantity:     -25.0,
+		Quantity:     25.0,
 	}
 	helper.DoRequest("POST", "/inventory/movements", saleBody2, map[string]string{})
 
@@ -1208,7 +1216,7 @@ func TestReorderLevel_StatusTransitions(t *testing.T) {
 	saleBody2b := models.RecordMovementDto{
 		ProductID:    created.ProductID,
 		MovementType: "SALE",
-		Quantity:     -5.0,
+		Quantity:     5.0,
 	}
 	helper.DoRequest("POST", "/inventory/movements", saleBody2b, map[string]string{})
 
@@ -1223,7 +1231,7 @@ func TestReorderLevel_StatusTransitions(t *testing.T) {
 	saleBody2c := models.RecordMovementDto{
 		ProductID:    created.ProductID,
 		MovementType: "SALE",
-		Quantity:     -5.0,
+		Quantity:     5.0,
 	}
 	helper.DoRequest("POST", "/inventory/movements", saleBody2c, map[string]string{})
 
@@ -1238,7 +1246,7 @@ func TestReorderLevel_StatusTransitions(t *testing.T) {
 	saleBody3 := models.RecordMovementDto{
 		ProductID:    created.ProductID,
 		MovementType: "SALE",
-		Quantity:     -5.0,
+		Quantity:     5.0,
 	}
 	helper.DoRequest("POST", "/inventory/movements", saleBody3, map[string]string{})
 
@@ -1252,7 +1260,7 @@ func TestReorderLevel_StatusTransitions(t *testing.T) {
 	saleBody4 := models.RecordMovementDto{
 		ProductID:    created.ProductID,
 		MovementType: "SALE",
-		Quantity:     -15.0,
+		Quantity:     15.0,
 	}
 	helper.DoRequest("POST", "/inventory/movements", saleBody4, map[string]string{})
 
@@ -1285,6 +1293,7 @@ func TestDataConsistency_ReserveAndRelease(t *testing.T) {
 		ProductID:    created.ProductID,
 		MovementType: "PURCHASE",
 		Quantity:     100.0,
+		UnitCost:     ptrFloat64(4.00),
 	}
 	helper.DoRequest("POST", "/inventory/movements", moveBody, map[string]string{})
 
@@ -1331,6 +1340,7 @@ func TestDataConsistency_MultipleReservations(t *testing.T) {
 		ProductID:    created.ProductID,
 		MovementType: "PURCHASE",
 		Quantity:     100.0,
+		UnitCost:     ptrFloat64(4.00),
 	}
 	helper.DoRequest("POST", "/inventory/movements", moveBody, map[string]string{})
 
@@ -2235,6 +2245,8 @@ func recordMovementForList(t *testing.T, helper *testhelpers.ApiTestHelper, prod
 		ProductID:    productID,
 		MovementType: movementType,
 		Quantity:     quantity,
+		UnitCost:     costForType(movementType),
+		Direction:    directionForType(movementType),
 	}, map[string]string{})
 	if w.Code != http.StatusCreated {
 		t.Fatalf("record %s movement for %s returned %d: %s", movementType, productID, w.Code, w.Body.String())
@@ -2268,6 +2280,30 @@ func assignProductToCategory(t *testing.T, helper *testhelpers.ApiTestHelper, pr
 
 func ptrFloat64(v float64) *float64 {
 	return &v
+}
+
+// costForType is the unit cost a movement of this type has to carry. Since
+// INV-013 D3 a PURCHASE or a PRODUCTION without one is a 400, and every other
+// type stores NULL whatever is sent — so the tests that are about something else
+// get a plausible cost from here instead of each restating the rule.
+func costForType(movementType string) *float64 {
+	if movementType == "PURCHASE" || movementType == "PRODUCTION" {
+		return ptrFloat64(4.00)
+	}
+	return nil
+}
+
+// directionForType is the counterpart for the two types that carry no direction
+// of their own (INV-013 D1): a fixture movement has to pick one, and IN is the
+// one that adds stock the rest of the test can then move. Everything else
+// returns nil, because a direction the type already decided is not this helper's
+// to state — the tests that are about that say it themselves.
+func directionForType(movementType string) *string {
+	if movementType == "ADJUSTMENT" || movementType == "TRANSFER" {
+		in := "IN"
+		return &in
+	}
+	return nil
 }
 
 func ptrString(v string) *string {
@@ -2402,6 +2438,7 @@ func TestProductSKU_StockMovementAndBatchHangOffTheDefaultSKU(t *testing.T) {
 		ProductID:    productID,
 		MovementType: "PURCHASE",
 		Quantity:     20.0,
+		UnitCost:     ptrFloat64(4.00),
 	}, map[string]string{})
 	assert.Equal(t, http.StatusCreated, wm.Code, wm.Body.String())
 
@@ -2692,6 +2729,7 @@ func TestGetProductStock_KeepsItsShapeAfterTheSKUMove(t *testing.T) {
 		ProductID:    productID,
 		MovementType: "PURCHASE",
 		Quantity:     60.0,
+		UnitCost:     ptrFloat64(4.00),
 	}, map[string]string{})
 	assert.Equal(t, http.StatusCreated, wm.Code, wm.Body.String())
 
@@ -2878,6 +2916,7 @@ func purchase(t *testing.T, helper *testhelpers.ApiTestHelper, productID string,
 		ProductID:    productID,
 		MovementType: "PURCHASE",
 		Quantity:     quantity,
+		UnitCost:     ptrFloat64(4.00),
 	}, map[string]string{})
 	if w.Code != http.StatusCreated {
 		t.Fatalf("purchasing %v for %s failed with %d: %s", quantity, productID, w.Code, w.Body.String())
@@ -3417,6 +3456,8 @@ func movementWithSku(
 		ProductID:    productID,
 		MovementType: movementType,
 		Quantity:     quantity,
+		UnitCost:     costForType(movementType),
+		Direction:    directionForType(movementType),
 	}
 	if skuID != "" {
 		dto.SkuID = &skuID
@@ -3866,6 +3907,237 @@ func TestCreateProduct_AxisNotSingleChoiceReturnsBadRequest(t *testing.T) {
 			Options:          []models.UpdateVariantOptionDto{{Name: "S"}, {Name: "M"}},
 		}},
 	})
+
+	assert.Equal(t, http.StatusBadRequest, w.Code, w.Body.String())
+}
+
+// ============================================
+// Movement direction and cost (INV-013)
+// ============================================
+
+// directedMovement posts a movement that says which way it goes, or says nothing
+// when direction is "". The cost rides along for the two types that require one,
+// so each test below states only the thing it is about.
+func directedMovement(
+	t *testing.T,
+	helper *testhelpers.ApiTestHelper,
+	productID, movementType string,
+	quantity float64,
+	direction string,
+) *httptest.ResponseRecorder {
+	t.Helper()
+
+	dto := models.RecordMovementDto{
+		ProductID:    productID,
+		MovementType: movementType,
+		Quantity:     quantity,
+		UnitCost:     costForType(movementType),
+	}
+	if direction != "" {
+		dto.Direction = &direction
+	}
+	return helper.DoRequest("POST", "/inventory/movements", dto, map[string]string{})
+}
+
+// stockedProduct is a product with no axes holding `quantity` units — the shape
+// every direction test starts from.
+func stockedProduct(
+	t *testing.T,
+	helper *testhelpers.ApiTestHelper,
+	prefix string,
+	quantity float64,
+) string {
+	t.Helper()
+
+	productID, _ := createProductForSKU(t, helper, prefix)
+	if w := directedMovement(t, helper, productID, "PURCHASE", quantity, ""); w.Code != http.StatusCreated {
+		t.Fatalf("stocking %s returned %d: %s", productID, w.Code, w.Body.String())
+	}
+	return productID
+}
+
+// AC-1 — the defect this spec exists for: a SALE used to add stock.
+func TestRecordMovement_SaleReducesStock(t *testing.T) {
+	helper := SetupInventoryTest(t)
+	defer helper.Close()
+
+	productID := stockedProduct(t, helper, "MVDIRSALE", 10)
+
+	w := directedMovement(t, helper, productID, "SALE", 5, "")
+
+	assert.Equal(t, http.StatusCreated, w.Code, w.Body.String())
+	var recorded models.RecordMovementResponse
+	json.Unmarshal(w.Body.Bytes(), &recorded)
+	assert.Equal(t, 5.0, recorded.NewStockQuantity)
+}
+
+// AC-2 — the oversell guard was unreachable from this path, because a SALE only
+// ever moved the count up.
+func TestRecordMovement_SaleBeyondStockIsRefused(t *testing.T) {
+	helper := SetupInventoryTest(t)
+	defer helper.Close()
+
+	productID := stockedProduct(t, helper, "MVDIROVER", 10)
+
+	w := directedMovement(t, helper, productID, "SALE", 20, "")
+
+	assert.Equal(t, http.StatusConflict, w.Code, w.Body.String())
+	assert.Contains(t, w.Body.String(), inventoryErrors.InsufficientStock)
+}
+
+// AC-3 — WASTE is outbound too, and the old guard only ever looked at SALE.
+func TestRecordMovement_WasteReducesStock(t *testing.T) {
+	helper := SetupInventoryTest(t)
+	defer helper.Close()
+
+	productID := stockedProduct(t, helper, "MVDIRWASTE", 10)
+
+	w := directedMovement(t, helper, productID, "WASTE", 3, "")
+
+	assert.Equal(t, http.StatusCreated, w.Code, w.Body.String())
+	var recorded models.RecordMovementResponse
+	json.Unmarshal(w.Body.Bytes(), &recorded)
+	assert.Equal(t, 7.0, recorded.NewStockQuantity)
+}
+
+// AC-4, from a raw API call — the UI's read-only control is not the enforcement.
+func TestRecordMovement_AdjustmentWithoutDirectionIsRefused(t *testing.T) {
+	helper := SetupInventoryTest(t)
+	defer helper.Close()
+
+	productID := stockedProduct(t, helper, "MVDIRADJ", 10)
+
+	w := directedMovement(t, helper, productID, "ADJUSTMENT", 2, "")
+
+	assert.Equal(t, http.StatusBadRequest, w.Code, w.Body.String())
+	assert.Contains(t, w.Body.String(), inventoryErrors.MovementDirectionRequired)
+}
+
+func TestRecordMovement_AdjustmentOutReducesStock(t *testing.T) {
+	helper := SetupInventoryTest(t)
+	defer helper.Close()
+
+	productID := stockedProduct(t, helper, "MVDIRADJOUT", 10)
+
+	w := directedMovement(t, helper, productID, "ADJUSTMENT", 2, "OUT")
+
+	assert.Equal(t, http.StatusCreated, w.Code, w.Body.String())
+	var recorded models.RecordMovementResponse
+	json.Unmarshal(w.Body.Bytes(), &recorded)
+	assert.Equal(t, 8.0, recorded.NewStockQuantity)
+}
+
+func TestRecordMovement_AdjustmentInRaisesStock(t *testing.T) {
+	helper := SetupInventoryTest(t)
+	defer helper.Close()
+
+	productID := stockedProduct(t, helper, "MVDIRADJIN", 10)
+
+	w := directedMovement(t, helper, productID, "ADJUSTMENT", 2, "IN")
+
+	assert.Equal(t, http.StatusCreated, w.Code, w.Body.String())
+	var recorded models.RecordMovementResponse
+	json.Unmarshal(w.Body.Bytes(), &recorded)
+	assert.Equal(t, 12.0, recorded.NewStockQuantity)
+}
+
+// A type that decides its own direction refuses one that contradicts it, rather
+// than quietly honouring whichever the caller sent.
+func TestRecordMovement_PurchaseOutIsRefused(t *testing.T) {
+	helper := SetupInventoryTest(t)
+	defer helper.Close()
+
+	productID := stockedProduct(t, helper, "MVDIRCONF", 10)
+
+	w := directedMovement(t, helper, productID, "PURCHASE", 1, "OUT")
+
+	assert.Equal(t, http.StatusBadRequest, w.Code, w.Body.String())
+	assert.Contains(t, w.Body.String(), inventoryErrors.MovementDirectionConflict)
+}
+
+// The direction the type already decided is accepted, because the modal shows it
+// as read-only text and sends it straight back.
+func TestRecordMovement_SaleOutIsAccepted(t *testing.T) {
+	helper := SetupInventoryTest(t)
+	defer helper.Close()
+
+	productID := stockedProduct(t, helper, "MVDIRAGREE", 10)
+
+	w := directedMovement(t, helper, productID, "SALE", 4, "OUT")
+
+	assert.Equal(t, http.StatusCreated, w.Code, w.Body.String())
+	var recorded models.RecordMovementResponse
+	json.Unmarshal(w.Body.Bytes(), &recorded)
+	assert.Equal(t, 6.0, recorded.NewStockQuantity)
+}
+
+// AC-5, first half — a purchase with no cost is the incomplete record "optional"
+// used to let in (D3).
+func TestRecordMovement_PurchaseWithoutUnitCostIsRefused(t *testing.T) {
+	helper := SetupInventoryTest(t)
+	defer helper.Close()
+
+	productID, _ := createProductForSKU(t, helper, "MVCOSTREQ")
+
+	w := helper.DoRequest("POST", "/inventory/movements", models.RecordMovementDto{
+		ProductID:    productID,
+		MovementType: "PURCHASE",
+		Quantity:     5,
+	}, map[string]string{})
+
+	assert.Equal(t, http.StatusBadRequest, w.Code, w.Body.String())
+	assert.Contains(t, w.Body.String(), inventoryErrors.MovementUnitCostRequired)
+}
+
+// AC-5, second half — the column means "what was paid", so a type that pays
+// nothing stores nothing even when a client insists on sending a number.
+func TestRecordMovement_SaleStoresNoUnitCost(t *testing.T) {
+	helper := SetupInventoryTest(t)
+	defer helper.Close()
+
+	productID := stockedProduct(t, helper, "MVCOSTNULL", 10)
+
+	w := helper.DoRequest("POST", "/inventory/movements", models.RecordMovementDto{
+		ProductID:    productID,
+		MovementType: "SALE",
+		Quantity:     2,
+		UnitCost:     ptrFloat64(99.99),
+	}, map[string]string{})
+	assert.Equal(t, http.StatusCreated, w.Code, w.Body.String())
+
+	movements := listMovements(t, helper, fmt.Sprintf("?product_id=%s&movement_type=SALE", productID))
+	assert.Equal(t, 1, len(movements.Movements))
+	assert.Nil(t, movements.Movements[0].UnitCost)
+}
+
+// The trail carries the sign it was applied with, so the history can render it
+// without re-deriving one from the type (Risks: old rows are all positive).
+func TestListMovements_StoresTheSignedQuantity(t *testing.T) {
+	helper := SetupInventoryTest(t)
+	defer helper.Close()
+
+	productID := stockedProduct(t, helper, "MVSIGNED", 10)
+	assert.Equal(t, http.StatusCreated, directedMovement(t, helper, productID, "SALE", 3, "").Code)
+
+	movements := listMovements(t, helper, fmt.Sprintf("?product_id=%s&movement_type=SALE", productID))
+
+	assert.Equal(t, 1, len(movements.Movements))
+	assert.Equal(t, -3.0, movements.Movements[0].Quantity)
+}
+
+// The magnitude is the contract: the DTO refuses a signed quantity rather than
+// letting the caller's sign compete with the type's (D1).
+func TestRecordMovement_NegativeQuantityIsRefused(t *testing.T) {
+	helper := SetupInventoryTest(t)
+	defer helper.Close()
+
+	productID := stockedProduct(t, helper, "MVNEGQTY", 10)
+
+	w := helper.DoRequest("POST", "/inventory/movements", models.RecordMovementDto{
+		ProductID:    productID,
+		MovementType: "SALE",
+		Quantity:     -5,
+	}, map[string]string{})
 
 	assert.Equal(t, http.StatusBadRequest, w.Code, w.Body.String())
 }

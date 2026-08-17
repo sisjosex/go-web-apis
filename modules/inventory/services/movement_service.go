@@ -40,6 +40,7 @@ func (s *MovementService) RecordMovement(
 		dto.Notes,
 		createdBy,
 		dto.SkuID,
+		dto.Direction,
 	)
 }
 

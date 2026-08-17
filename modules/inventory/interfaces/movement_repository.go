@@ -9,6 +9,9 @@ import (
 )
 
 type MovementRepository interface {
+	// direction is appended last for the same reason skuID was: every existing
+	// positional call site keeps meaning what it means, and nil is the normal case —
+	// only ADJUSTMENT and TRANSFER need it (INV-013 D1).
 	RecordMovement(
 		ctx context.Context,
 		tenantID uuid.UUID,
@@ -16,7 +19,7 @@ type MovementRepository interface {
 		quantity float64,
 		referenceType, referenceID *string,
 		unitCost *float64,
-		notes, createdBy, skuID *string,
+		notes, createdBy, skuID, direction *string,
 	) (*models.RecordMovementResponse, error)
 
 	GetMovement(ctx context.Context, tenantID uuid.UUID, movementID string) (*models.InventoryMovement, error)

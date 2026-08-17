@@ -31,7 +31,7 @@ func (r *MovementRepository) RecordMovement(
 	quantity float64,
 	referenceType, referenceID *string,
 	unitCost *float64,
-	notes, createdBy, skuID *string,
+	notes, createdBy, skuID, direction *string,
 ) (*models.RecordMovementResponse, error) {
 	var movementID string
 	var newStock float64
@@ -48,11 +48,14 @@ func (r *MovementRepository) RecordMovement(
 	// p_sku_id is the tenth parameter and the ninth is p_created_by — the SP has
 	// accepted it since INV-007 and nothing ever passed it, so every movement
 	// recorded before INV-011 landed on the product's default SKU.
+	//
+	// p_direction is the eleventh (INV-013 D1). quantity travels as the magnitude
+	// the DTO validated; the sign the SP applies is what comes back in the trail.
 	err := r.dbService.QueryRow(
 		ctx,
 		`SELECT movement_id, new_stock_quantity, message
-		 FROM inventory.sp_record_movement($1, $2, $3, $4, $5, $6::UUID, $7::DECIMAL, $8, $9::UUID, $10::UUID)`,
-		tenantID, productID, movementType, quantity, referenceType, referenceID, unitCost, notes, createdByParam, skuID,
+		 FROM inventory.sp_record_movement($1, $2, $3, $4, $5, $6::UUID, $7::DECIMAL, $8, $9::UUID, $10::UUID, $11)`,
+		tenantID, productID, movementType, quantity, referenceType, referenceID, unitCost, notes, createdByParam, skuID, direction,
 	).Scan(&movementID, &newStock, &message)
 
 	if err != nil {

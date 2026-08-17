@@ -39,6 +39,16 @@ const (
 	MovementSkuRequired = "inventory.movement.sku-required"
 	ReserveSkuRequired  = "inventory.reserve.sku-required"
 
+	// The movement type owns the sign (INV-013 D1). ADJUSTMENT and TRANSFER are the
+	// two whose direction is a real question, so they raise the first; the other five
+	// decide it themselves and raise the second for a direction that contradicts them.
+	MovementDirectionRequired = "inventory.movement.direction-required"
+	MovementDirectionConflict = "inventory.movement.direction-conflict"
+
+	// unit_cost is what was paid, so it is required exactly where something was
+	// bought — PURCHASE and PRODUCTION (INV-013 D2/D3).
+	MovementUnitCostRequired = "inventory.movement.unit-cost-required"
+
 	// Batch creation errors
 	BatchLotNumberRequired          = "batch.lot-number-required"
 	BatchExpiryDateMustBeFuture     = "batch.expiry-date-must-be-future"

@@ -78,6 +78,18 @@ func (ctrl *MovementController) RecordMovement(c *gin.Context) {
 			case inventoryErrors.InvalidMovementType:
 				c.JSON(http.StatusBadRequest, coreErrors.BuildErrorSingle(c, inventoryErrors.InvalidMovementType))
 				return
+			// INV-013 D1/D3 — three ways the body can be internally inconsistent, all
+			// of them the caller's to fix and none of them a conflict with stored
+			// state, so 400 rather than the 409 insufficient-stock takes.
+			case inventoryErrors.MovementDirectionRequired:
+				c.JSON(http.StatusBadRequest, coreErrors.BuildErrorSingle(c, inventoryErrors.MovementDirectionRequired))
+				return
+			case inventoryErrors.MovementDirectionConflict:
+				c.JSON(http.StatusBadRequest, coreErrors.BuildErrorSingle(c, inventoryErrors.MovementDirectionConflict))
+				return
+			case inventoryErrors.MovementUnitCostRequired:
+				c.JSON(http.StatusBadRequest, coreErrors.BuildErrorSingle(c, inventoryErrors.MovementUnitCostRequired))
+				return
 			}
 		}
 		c.JSON(http.StatusInternalServerError, coreErrors.BuildError(c, err))

@@ -54,11 +54,17 @@ type UpdateVariantOptionDto struct {
 // omitting it is meaningful: on a product with no axis it means the product SKU,
 // and on one whose stock lives on combinations the SP refuses it outright
 // (INV-011 D1) rather than filling the unassigned bucket.
+//
+// Quantity is a magnitude, never a signed amount: the movement type decides which
+// way stock moves (INV-013 D1), so gt=0 here and the SP applies the sign. Direction
+// is a pointer for the same reason SkuID is — omitting it is the normal case, and
+// only ADJUSTMENT and TRANSFER are refused for it.
 type RecordMovementDto struct {
 	ProductID     string   `json:"product_id" binding:"required"`
 	SkuID         *string  `json:"sku_id" binding:"omitempty,uuid"`
 	MovementType  string   `json:"movement_type" binding:"required"`
-	Quantity      float64  `json:"quantity" binding:"required"`
+	Quantity      float64  `json:"quantity" binding:"required,gt=0"`
+	Direction     *string  `json:"direction" binding:"omitempty,oneof=IN OUT"`
 	ReferenceType *string  `json:"reference_type"`
 	ReferenceID   *string  `json:"reference_id"`
 	UnitCost      *float64 `json:"unit_cost"`
