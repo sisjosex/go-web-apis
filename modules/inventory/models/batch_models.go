@@ -30,6 +30,7 @@ type BatchResponse struct {
 	CurrentQuantity float64             `json:"current_quantity"`
 	Status          string              `json:"status"`
 	DaysToExpiry    *int                `json:"days_to_expiry,omitempty"`
+	ProductName     *string             `json:"product_name,omitempty"`
 	Message         string              `json:"message,omitempty"`
 }
 

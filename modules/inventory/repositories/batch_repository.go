@@ -183,7 +183,7 @@ func (r *BatchRepository) GetOldestBatchForSale(ctx context.Context, tenantID uu
 // GetExpiringBatches retrieves all batches expiring within the specified number of days
 func (r *BatchRepository) GetExpiringBatches(ctx context.Context, tenantID uuid.UUID, warningDays int) ([]*models.BatchResponse, error) {
 	rows, err := r.dbService.Query(ctx,
-		"SELECT id, product_id, lot_number, purchase_date, expiry_date, unit_cost, initial_quantity, current_quantity, status, days_to_expiry FROM inventory.sp_get_expiring_batches($1, $2)",
+		"SELECT id, product_id, lot_number, purchase_date, expiry_date, unit_cost, initial_quantity, current_quantity, status, days_to_expiry, product_name FROM inventory.sp_get_expiring_batches($1, $2)",
 		tenantID,
 		warningDays,
 	)
@@ -197,6 +197,7 @@ func (r *BatchRepository) GetExpiringBatches(ctx context.Context, tenantID uuid.
 	for rows.Next() {
 		var batch models.BatchResponse
 		var daysToExpiry sql.NullInt64
+		var productName sql.NullString
 
 		if err := rows.Scan(
 			&batch.ID,
@@ -209,6 +210,7 @@ func (r *BatchRepository) GetExpiringBatches(ctx context.Context, tenantID uuid.
 			&batch.CurrentQuantity,
 			&batch.Status,
 			&daysToExpiry,
+			&productName,
 		); err != nil {
 			return nil, err
 		}
@@ -216,6 +218,11 @@ func (r *BatchRepository) GetExpiringBatches(ctx context.Context, tenantID uuid.
 		if daysToExpiry.Valid {
 			val := int(daysToExpiry.Int64)
 			batch.DaysToExpiry = &val
+		}
+
+		if productName.Valid {
+			val := productName.String
+			batch.ProductName = &val
 		}
 
 		batches = append(batches, &batch)

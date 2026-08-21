@@ -1,0 +1,41 @@
+-- Restore the expiring batches query without product_name
+DROP FUNCTION IF EXISTS inventory.sp_get_expiring_batches(UUID, INT);
+
+CREATE FUNCTION inventory.sp_get_expiring_batches(
+    p_tenant_id UUID,
+    p_warning_days INT
+)
+RETURNS TABLE(
+    id UUID,
+    product_id UUID,
+    lot_number VARCHAR,
+    purchase_date DATE,
+    expiry_date DATE,
+    unit_cost DECIMAL,
+    initial_quantity DECIMAL,
+    current_quantity DECIMAL,
+    status VARCHAR,
+    days_to_expiry INT
+) LANGUAGE plpgsql AS $$
+BEGIN
+    RETURN QUERY SELECT
+        pb.id,
+        pb.product_id,
+        pb.lot_number,
+        pb.purchase_date,
+        pb.expiry_date,
+        pb.unit_cost,
+        pb.initial_quantity,
+        pb.current_quantity,
+        pb.status,
+        CAST(pb.expiry_date - CURRENT_DATE AS INT)
+    FROM inventory.product_batches pb
+    WHERE pb.tenant_id = p_tenant_id
+        AND pb.expiry_date - CURRENT_DATE <= p_warning_days
+        AND pb.expiry_date - CURRENT_DATE > 0
+        AND pb.status IN ('active', 'expiring_soon')
+    ORDER BY pb.expiry_date ASC;
+END;
+$$;
+
+COMMENT ON FUNCTION inventory.sp_get_expiring_batches IS 'Lists batches expiring within the warning window';

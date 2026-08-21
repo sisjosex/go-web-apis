@@ -1680,6 +1680,54 @@ func TestBatchExpiryStatusCalculation(t *testing.T) {
 	assert.Equal(t, "expiring_soon", expiringBatch.Status)
 }
 
+func TestGetExpiringBatches_IncludesProductName(t *testing.T) {
+	helper := SetupInventoryTest(t)
+	defer helper.Close()
+
+	productName := fmt.Sprintf("Expiring Product %d", time.Now().UnixNano())
+	productBody := models.CreateProductDto{
+		SKU:       fmt.Sprintf("BATCH_EXPNAME_%d", time.Now().UnixNano()),
+		Name:      productName,
+		BasePrice: 100.00,
+	}
+	w := helper.DoRequest("POST", "/inventory/products", productBody, map[string]string{})
+	var createdProduct models.CreateProductResponse
+	json.Unmarshal(w.Body.Bytes(), &createdProduct)
+
+	batchBody := map[string]interface{}{
+		"product_id":       createdProduct.ProductID,
+		"lot_number":       fmt.Sprintf("LOT_EXPNAME_%d", time.Now().UnixNano()),
+		"purchase_date":    time.Now().AddDate(0, 0, -1).Format("2006-01-02"),
+		"expiry_date":      time.Now().AddDate(0, 0, 5).Format("2006-01-02"),
+		"unit_cost":        50.00,
+		"initial_quantity": 100.0,
+	}
+	w1 := helper.DoRequest("POST", "/inventory/batches", batchBody, map[string]string{})
+	assert.Equal(t, http.StatusCreated, w1.Code)
+
+	w2 := helper.DoRequest("GET", "/inventory/batches/expiring?warningDays=30", nil, map[string]string{})
+
+	assert.Equal(t, http.StatusOK, w2.Code)
+
+	var expiring []models.BatchResponse
+	err := json.Unmarshal(w2.Body.Bytes(), &expiring)
+	assert.NoError(t, err, "Expiring batches response should be a JSON array")
+
+	var found *models.BatchResponse
+	for i := range expiring {
+		if expiring[i].ProductID.String() == createdProduct.ProductID {
+			found = &expiring[i]
+			break
+		}
+	}
+
+	assert.NotNil(t, found, "The created batch should appear in the expiring list")
+	if found != nil {
+		assert.NotNil(t, found.ProductName, "product_name should be returned")
+		assert.Equal(t, productName, *found.ProductName)
+	}
+}
+
 func TestBatchNotFound(t *testing.T) {
 	helper := SetupInventoryTest(t)
 	defer helper.Close()
