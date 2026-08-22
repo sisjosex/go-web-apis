@@ -49,6 +49,16 @@ const (
 	// bought — PURCHASE and PRODUCTION (INV-013 D2/D3).
 	MovementUnitCostRequired = "inventory.movement.unit-cost-required"
 
+	// Creating a lot on a product stocked by variant must name the combination:
+	// the lot would otherwise land in the unassigned bucket, where
+	// sp_add_order_item can never reach it (INV-014 D1).
+	SkuRequired = "inventory.sku.required"
+
+	// A lot that has been consumed is booked COGS. Correcting or voiding it would
+	// rewrite money already recorded against sales (INV-014 D3).
+	BatchHasMovements = "inventory.batch.has-movements"
+	BatchVoided       = "inventory.batch.voided"
+
 	// Batch creation errors
 	BatchLotNumberRequired          = "batch.lot-number-required"
 	BatchExpiryDateMustBeFuture     = "batch.expiry-date-must-be-future"

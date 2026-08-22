@@ -124,4 +124,15 @@ func RegisterInventoryRoutes(
 	api.POST("/batches",
 		tenancyMW.RequirePermission(inventoryPerms.BatchesManage),
 		batchController.CreateBatch)
+	api.PATCH("/batches/:id",
+		tenancyMW.RequirePermission(inventoryPerms.BatchesManage),
+		batchController.UpdateBatch)
+	// DELETE voids the lot (status = 'void'); the row is never removed.
+	api.DELETE("/batches/:id",
+		tenancyMW.RequirePermission(inventoryPerms.BatchesManage),
+		batchController.VoidBatch)
+	// D2 — splits a lot stranded in the unassigned bucket onto real combinations.
+	api.POST("/products/:id/batches/redistribute",
+		tenancyMW.RequirePermission(inventoryPerms.BatchesManage),
+		batchController.RedistributeBatches)
 }

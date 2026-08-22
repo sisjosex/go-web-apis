@@ -30,18 +30,33 @@ func (s *BatchService) GetBatch(ctx context.Context, tenantID uuid.UUID, batchID
 }
 
 // ListBatchesByProduct lists all batches for a product
-func (s *BatchService) ListBatchesByProduct(ctx context.Context, tenantID uuid.UUID, productID uuid.UUID, onlyActive bool) (*models.ListBatchesResponse, error) {
-	return s.repository.ListBatchesByProduct(ctx, tenantID, productID, onlyActive)
+func (s *BatchService) ListBatchesByProduct(ctx context.Context, tenantID uuid.UUID, productID uuid.UUID, onlyActive bool, skuID *uuid.UUID) (*models.ListBatchesResponse, error) {
+	return s.repository.ListBatchesByProduct(ctx, tenantID, productID, onlyActive, skuID)
 }
 
 // GetOldestBatchForSale gets the oldest batch for FIFO sales
-func (s *BatchService) GetOldestBatchForSale(ctx context.Context, tenantID uuid.UUID, productID uuid.UUID) (*models.BatchResponse, error) {
-	return s.repository.GetOldestBatchForSale(ctx, tenantID, productID)
+func (s *BatchService) GetOldestBatchForSale(ctx context.Context, tenantID uuid.UUID, productID uuid.UUID, skuID *uuid.UUID) (*models.BatchResponse, error) {
+	return s.repository.GetOldestBatchForSale(ctx, tenantID, productID, skuID)
 }
 
 // GetExpiringBatches gets all batches expiring soon
 func (s *BatchService) GetExpiringBatches(ctx context.Context, tenantID uuid.UUID, warningDays int) ([]*models.BatchResponse, error) {
 	return s.repository.GetExpiringBatches(ctx, tenantID, warningDays)
+}
+
+// UpdateBatch corrects a lot
+func (s *BatchService) UpdateBatch(ctx context.Context, tenantID uuid.UUID, batchID uuid.UUID, dto *models.UpdateBatchDto) (*models.BatchResponse, error) {
+	return s.repository.UpdateBatch(ctx, tenantID, batchID, dto)
+}
+
+// VoidBatch writes a lot off
+func (s *BatchService) VoidBatch(ctx context.Context, tenantID uuid.UUID, batchID uuid.UUID) (*models.BatchResponse, error) {
+	return s.repository.VoidBatch(ctx, tenantID, batchID)
+}
+
+// RedistributeBatches splits a stranded lot onto real combinations
+func (s *BatchService) RedistributeBatches(ctx context.Context, tenantID uuid.UUID, productID uuid.UUID, dto *models.RedistributeBatchesDto, createdBy *uuid.UUID) (*models.RedistributeBatchesResponse, error) {
+	return s.repository.RedistributeBatches(ctx, tenantID, productID, dto, createdBy)
 }
 
 // ConsumeBatchStock reduces batch quantity after a sale

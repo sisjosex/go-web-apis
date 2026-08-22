@@ -298,9 +298,10 @@ func newSalesProduct(t *testing.T, helper *coreTestHelpers.ApiTestHelper, label 
 }
 
 // addAxisAndGenerateSkus turns the product into a stock_by_variant one with two
-// combinations. Batches created through POST /inventory/batches still land on
-// the default SKU — that is what makes the per-combination stock case below
-// reachable without touching the DB directly.
+// combinations. Since INV-014 a lot created after this point must name one of
+// them, so a test that wants stock stranded in the unassigned bucket has to
+// create it BEFORE calling this — which is exactly how every pre-INV-014 lot got
+// there.
 func addAxisAndGenerateSkus(t *testing.T, helper *coreTestHelpers.ApiTestHelper, productID string) {
 	t.Helper()
 
@@ -361,23 +362,44 @@ func productSkus(t *testing.T, helper *coreTestHelpers.ApiTestHelper, productID 
 	return defaultSku, generated
 }
 
-// stockBatchFor gives the product a batch. It lands on the product's default
-// SKU: CreateBatchDto carries no sku_id, so fn_resolve_sku resolves NULL.
+// stockBatchFor gives the product a batch on its default SKU. Valid only while
+// the product has no combinations: after INV-014 the API refuses a lot that names
+// none on a stock_by_variant product (inventory.sku.required).
 func stockBatchFor(t *testing.T, helper *coreTestHelpers.ApiTestHelper, productID string, qty float64) {
 	t.Helper()
 
+	stockBatchOn(t, helper, productID, "", qty)
+}
+
+// stockBatchOn gives the product a batch on the combination named, or on its
+// default SKU when skuID is empty. Returns the lot number so a caller can assert
+// which lot a sale drew from.
+func stockBatchOn(
+	t *testing.T,
+	helper *coreTestHelpers.ApiTestHelper,
+	productID, skuID string,
+	qty float64,
+) string {
+	t.Helper()
+
+	lotNumber := fmt.Sprintf("LOT-%d", uniqueTimestamp())
 	body := map[string]interface{}{
 		"product_id":       productID,
-		"lot_number":       fmt.Sprintf("LOT-%d", uniqueTimestamp()),
+		"lot_number":       lotNumber,
 		"purchase_date":    time.Now().Format("2006-01-02"),
 		"expiry_date":      time.Now().AddDate(1, 0, 0).Format("2006-01-02"),
 		"unit_cost":        5.0,
 		"initial_quantity": qty,
 	}
+	if skuID != "" {
+		body["sku_id"] = skuID
+	}
+
 	w := helper.DoRequest("POST", "/inventory/batches", body, map[string]string{})
 	if w.Code != http.StatusCreated && w.Code != http.StatusOK {
 		t.Skipf("could not create batch (status %d): %s", w.Code, w.Body.String())
 	}
+	return lotNumber
 }
 
 // newSalesOrder creates a customer and an empty order, returning the order ID.
@@ -488,8 +510,11 @@ func TestAddOrderItem_SkuRequired(t *testing.T) {
 	defer helper.Close()
 
 	productID := newSalesProduct(t, helper, "VARIANT")
-	addAxisAndGenerateSkus(t, helper, productID)
+	// Stocked before the axis exists: INV-014 refuses a lot that names no
+	// combination once the product is stocked by variant, and what this test needs
+	// is only that the product has stock somewhere.
 	stockBatchFor(t, helper, productID, 10)
+	addAxisAndGenerateSkus(t, helper, productID)
 	orderID := newSalesOrder(t, helper)
 
 	body := map[string]interface{}{
@@ -546,8 +571,10 @@ func TestAddOrderItem_InsufficientStockPerSku(t *testing.T) {
 	defer helper.Close()
 
 	productID := newSalesProduct(t, helper, "PERSKU")
-	addAxisAndGenerateSkus(t, helper, productID)
+	// The lot has to predate the axis to land in the unassigned bucket at all:
+	// after INV-014 the API will not put one there on a stock_by_variant product.
 	stockBatchFor(t, helper, productID, 10) // lands on the default SKU
+	addAxisAndGenerateSkus(t, helper, productID)
 	defaultSku, generated := productSkus(t, helper, productID)
 	if len(generated) == 0 {
 		t.Skip("no combination was generated; nothing to assert per SKU")
@@ -574,4 +601,180 @@ func TestAddOrderItem_InsufficientStockPerSku(t *testing.T) {
 		w.Code, w.Body.String())
 	assert.Contains(t, w.Body.String(), "insufficient-inventory")
 	t.Logf("✅ INV-010: empty combination → 409 insufficient-inventory while its sibling sells")
+}
+
+// TestAddOrderItem_FulfilledFromCombinationBatch — INV-014 AC-5, the bug that
+// started the spec. A lot created for Polera-M through the API alone fulfils an
+// order for Polera-M.
+//
+// Before INV-014 this was impossible: POST /inventory/batches carried no sku_id,
+// so every lot resolved to the product's default SKU, and
+// sp_add_order_item_with_batch fulfils strictly from pb.sku_id = v_sku_id. The
+// order failed with sales-order.insufficient-inventory while ten units sat in the
+// bucket, and no API call could put them anywhere else.
+func TestAddOrderItem_FulfilledFromCombinationBatch(t *testing.T) {
+	helper := SetupSalesAuthTest(t)
+	defer helper.Close()
+
+	productID := newSalesProduct(t, helper, "INV014")
+	addAxisAndGenerateSkus(t, helper, productID)
+	_, generated := productSkus(t, helper, productID)
+	if len(generated) == 0 {
+		t.Skip("no combination was generated; nothing to fulfil from")
+	}
+
+	lotNumber := stockBatchOn(t, helper, productID, generated[0], 10)
+	orderID := newSalesOrder(t, helper)
+
+	w := helper.DoRequest("POST", fmt.Sprintf("/sales/orders/%s/items", orderID),
+		map[string]interface{}{
+			"product_id": productID,
+			"quantity":   3,
+			"unit_price": 10.0,
+			"sku_id":     generated[0],
+		}, map[string]string{})
+
+	assert.Equal(t, http.StatusCreated, w.Code,
+		"an order for a combination that holds a lot should be fulfilled, got %d: %s",
+		w.Code, w.Body.String())
+	item := orderItemFromResponse(t, w.Body.Bytes())
+	assert.Equal(t, generated[0], item["sku_id"], "the line should sit on the combination ordered")
+
+	// The endpoint does not echo the lot it drew from, so the assignment is read
+	// back instead. sp_add_order_item_with_batch only ever assigns from
+	// pb.sku_id = v_sku_id, and this combination holds exactly one lot, so a
+	// non-zero batch_count is that lot and no other.
+	wb := helper.DoRequest("GET", fmt.Sprintf("/sales/orders/%s/with-batches", orderID), nil, map[string]string{})
+	assert.Equal(t, http.StatusOK, wb.Code, wb.Body.String())
+	assert.Contains(t, wb.Body.String(), `"batch_count":1`,
+		"the line should be fulfilled from the lot created for that combination: %s", wb.Body.String())
+	t.Logf("✅ INV-014: order for a combination fulfilled from its own lot %s", lotNumber)
+}
+
+// A voided lot is not sellable: sp_add_order_item_with_batch skips it exactly as
+// inventory's FIFO pick does, or a write-off would silently come back as COGS.
+func TestAddOrderItem_SkipsVoidedBatch(t *testing.T) {
+	helper := SetupSalesAuthTest(t)
+	defer helper.Close()
+
+	productID := newSalesProduct(t, helper, "INV014VOID")
+	addAxisAndGenerateSkus(t, helper, productID)
+	_, generated := productSkus(t, helper, productID)
+	if len(generated) == 0 {
+		t.Skip("no combination was generated; nothing to void")
+	}
+
+	stockBatchOn(t, helper, productID, generated[0], 10)
+	batchID := onlyBatchID(t, helper, productID, generated[0])
+
+	wd := helper.DoRequest("DELETE", fmt.Sprintf("/inventory/batches/%s", batchID), nil, map[string]string{})
+	assert.Equal(t, http.StatusOK, wd.Code, wd.Body.String())
+
+	orderID := newSalesOrder(t, helper)
+	w := helper.DoRequest("POST", fmt.Sprintf("/sales/orders/%s/items", orderID),
+		map[string]interface{}{
+			"product_id": productID,
+			"quantity":   1,
+			"unit_price": 10.0,
+			"sku_id":     generated[0],
+		}, map[string]string{})
+
+	assert.Equal(t, http.StatusConflict, w.Code,
+		"a voided lot should not be sellable, got %d: %s", w.Code, w.Body.String())
+	assert.Contains(t, w.Body.String(), "insufficient-inventory")
+	t.Logf("✅ INV-014: voided lot → 409 insufficient-inventory")
+}
+
+// onlyBatchID returns the id of the single lot a combination holds.
+func onlyBatchID(t *testing.T, helper *coreTestHelpers.ApiTestHelper, productID, skuID string) string {
+	t.Helper()
+
+	w := helper.DoRequest("GET",
+		fmt.Sprintf("/inventory/batches/product/%s?onlyActive=false&skuId=%s", productID, skuID),
+		nil, map[string]string{})
+	if w.Code != http.StatusOK {
+		t.Skipf("could not list the lots of %s (status %d): %s", productID, w.Code, w.Body.String())
+	}
+
+	var resp struct {
+		Batches []struct {
+			ID string `json:"id"`
+		} `json:"batches"`
+	}
+	json.Unmarshal(w.Body.Bytes(), &resp)
+	if len(resp.Batches) != 1 {
+		t.Fatalf("expected exactly one lot on the combination, got %d", len(resp.Batches))
+	}
+	return resp.Batches[0].ID
+}
+
+// TestCompleteOrder_DecrementsStockOnce — INV-014 A1, la otra mitad. El lote
+// sube las existencias al crearse, así que completar el pedido tiene que
+// bajarlas; si sólo bajara el saldo del lote, el stock se inflaría en cada venta.
+//
+// Comprueba además que se escribe inventory.batch_movements, la tabla que nada
+// llenaba nunca y de la que depende el guardia has-movements de INV-014 D3.
+func TestCompleteOrder_DecrementsStockOnce(t *testing.T) {
+	helper := SetupSalesAuthTest(t)
+	defer helper.Close()
+
+	productID := newSalesProduct(t, helper, "INV014STOCK")
+	addAxisAndGenerateSkus(t, helper, productID)
+	_, generated := productSkus(t, helper, productID)
+	if len(generated) == 0 {
+		t.Skip("no se generó ninguna combinación")
+	}
+
+	stockBatchOn(t, helper, productID, generated[0], 10)
+	assert.Equal(t, 10.0, skuStock(t, helper, productID, generated[0]),
+		"el lote debería haber entrado al stock de la combinación (A1)")
+
+	orderID := newSalesOrder(t, helper)
+	w := helper.DoRequest("POST", fmt.Sprintf("/sales/orders/%s/items", orderID),
+		map[string]interface{}{
+			"product_id": productID,
+			"quantity":   3,
+			"unit_price": 10.0,
+			"sku_id":     generated[0],
+		}, map[string]string{})
+	assert.Equal(t, http.StatusCreated, w.Code, w.Body.String())
+
+	// Asignar la línea no consume: el stock sólo baja al completar.
+	assert.Equal(t, 10.0, skuStock(t, helper, productID, generated[0]),
+		"añadir la línea no debe descontar todavía")
+
+	wc := helper.DoRequest("PATCH", fmt.Sprintf("/sales/orders/%s/complete", orderID), nil, map[string]string{})
+	if wc.Code != http.StatusOK {
+		t.Skipf("no se pudo completar el pedido (status %d): %s", wc.Code, wc.Body.String())
+	}
+
+	assert.Equal(t, 7.0, skuStock(t, helper, productID, generated[0]),
+		"completar un pedido de 3 debe dejar el stock en 7, descontado una sola vez")
+	t.Logf("✅ INV-014 A1: completar el pedido descontó 10 → 7")
+}
+
+// skuStock lee las existencias de una combinación desde el listado de SKUs.
+func skuStock(t *testing.T, helper *coreTestHelpers.ApiTestHelper, productID, skuID string) float64 {
+	t.Helper()
+
+	w := helper.DoRequest("GET", fmt.Sprintf("/inventory/products/%s/skus", productID), nil, map[string]string{})
+	if w.Code != http.StatusOK {
+		t.Skipf("no se pudieron listar los SKUs (status %d): %s", w.Code, w.Body.String())
+	}
+
+	var resp struct {
+		Skus []struct {
+			SkuID           string  `json:"sku_id"`
+			CurrentQuantity float64 `json:"current_quantity"`
+		} `json:"skus"`
+	}
+	json.Unmarshal(w.Body.Bytes(), &resp)
+
+	for _, sku := range resp.Skus {
+		if sku.SkuID == skuID {
+			return sku.CurrentQuantity
+		}
+	}
+	t.Fatalf("la combinación %s no aparece en el listado", skuID)
+	return 0
 }

@@ -4189,3 +4189,548 @@ func TestRecordMovement_NegativeQuantityIsRefused(t *testing.T) {
 
 	assert.Equal(t, http.StatusBadRequest, w.Code, w.Body.String())
 }
+
+// ============================================
+// INV-014 — a lot belongs to a combination
+// ============================================
+
+// createBatchOn posts a lot, naming a combination when skuID is non-empty.
+func createBatchOn(
+	t *testing.T,
+	helper *testhelpers.ApiTestHelper,
+	productID, skuID, lotNumber string,
+	expiresInDays int,
+	quantity float64,
+) *httptest.ResponseRecorder {
+	t.Helper()
+
+	body := map[string]interface{}{
+		"product_id":       productID,
+		"lot_number":       lotNumber,
+		"purchase_date":    time.Now().Format("2006-01-02"),
+		"expiry_date":      time.Now().AddDate(0, 0, expiresInDays).Format("2006-01-02"),
+		"unit_cost":        50.00,
+		"initial_quantity": quantity,
+	}
+	if skuID != "" {
+		body["sku_id"] = skuID
+	}
+
+	return helper.DoRequest("POST", "/inventory/batches", body, map[string]string{})
+}
+
+// combinationSkus returns the product's generated combinations, keyed by the
+// option name they carry — never the default SKU, which is the bucket.
+func combinationSkus(t *testing.T, helper *testhelpers.ApiTestHelper, productID string) map[string]models.ProductSku {
+	t.Helper()
+
+	byOption := map[string]models.ProductSku{}
+	for _, sku := range listSkus(t, helper, productID).Skus {
+		if sku.IsDefault {
+			continue
+		}
+		for _, option := range sku.Options {
+			byOption[option.OptionName] = sku
+		}
+	}
+	return byOption
+}
+
+// axisProductWithSkus is the fixture the whole section runs on: one product
+// stocked by variant, with M and XL generated.
+func axisProductWithSkus(
+	t *testing.T,
+	helper *testhelpers.ApiTestHelper,
+	prefix string,
+) (productID string, skus map[string]models.ProductSku) {
+	t.Helper()
+
+	productID, _ = createProductWithAxes(t, helper, prefix, []axisSpec{
+		{groupType: "Size", options: []string{"M", "XL"}},
+	})
+	if w := generateSkus(t, helper, productID); w.Code != http.StatusOK {
+		t.Fatalf("generating the SKUs of %s failed with %d: %s", productID, w.Code, w.Body.String())
+	}
+
+	return productID, combinationSkus(t, helper, productID)
+}
+
+// AC-1 — the lot lands on the combination it was created for, not the bucket.
+func TestCreateBatch_OnNamedSku(t *testing.T) {
+	helper := SetupInventoryTest(t)
+	defer helper.Close()
+	productID, skus := axisProductWithSkus(t, helper, "INV014_CREATE")
+
+	w := createBatchOn(t, helper, productID, skus["M"].SkuID,
+		fmt.Sprintf("LOT_M_%d", time.Now().UnixNano()), 90, 10)
+
+	assert.Equal(t, http.StatusCreated, w.Code, w.Body.String())
+	var batch models.BatchResponse
+	json.Unmarshal(w.Body.Bytes(), &batch)
+	if assert.NotNil(t, batch.SkuID, "the created lot carries no combination") {
+		assert.Equal(t, skus["M"].SkuID, batch.SkuID.String())
+	}
+}
+
+// AC-2 — the bug itself. Before INV-014 this answered 201 and quietly filed the
+// lot under the default SKU, where no sale could ever reach it.
+func TestCreateBatch_WithoutSkuOnVariantProductIsRefused(t *testing.T) {
+	helper := SetupInventoryTest(t)
+	defer helper.Close()
+	productID, _ := axisProductWithSkus(t, helper, "INV014_NOSKU")
+
+	w := createBatchOn(t, helper, productID, "",
+		fmt.Sprintf("LOT_BUCKET_%d", time.Now().UnixNano()), 90, 10)
+
+	assert.Equal(t, http.StatusBadRequest, w.Code, w.Body.String())
+	assert.Contains(t, w.Body.String(), inventoryErrors.SkuRequired)
+}
+
+// The guard is about products stocked by variant, not about batches: a product
+// with no axis must go on defaulting to its own SKU exactly as before.
+func TestCreateBatch_WithoutSkuOnPlainProductStillDefaults(t *testing.T) {
+	helper := SetupInventoryTest(t)
+	defer helper.Close()
+	productID, _ := createProductForSKU(t, helper, "INV014_PLAIN")
+
+	w := createBatchOn(t, helper, productID, "",
+		fmt.Sprintf("LOT_PLAIN_%d", time.Now().UnixNano()), 90, 5)
+
+	assert.Equal(t, http.StatusCreated, w.Code, w.Body.String())
+	var batch models.BatchResponse
+	json.Unmarshal(w.Body.Bytes(), &batch)
+	assert.NotNil(t, batch.SkuID)
+}
+
+// AC-3 — every row says which combination it belongs to, and skuId narrows the
+// list to one of them.
+func TestListBatchesByProduct_FilteredBySku(t *testing.T) {
+	helper := SetupInventoryTest(t)
+	defer helper.Close()
+	productID, skus := axisProductWithSkus(t, helper, "INV014_LIST")
+
+	stamp := time.Now().UnixNano()
+	for _, lot := range []struct {
+		option string
+		name   string
+	}{
+		{"M", fmt.Sprintf("LOT_M1_%d", stamp)},
+		{"M", fmt.Sprintf("LOT_M2_%d", stamp)},
+		{"XL", fmt.Sprintf("LOT_XL_%d", stamp)},
+	} {
+		w := createBatchOn(t, helper, productID, skus[lot.option].SkuID, lot.name, 90, 10)
+		assert.Equal(t, http.StatusCreated, w.Code, w.Body.String())
+	}
+
+	all := listBatches(t, helper, productID, "")
+	assert.Len(t, all.Batches, 3)
+	for _, batch := range all.Batches {
+		assert.NotNil(t, batch.SkuID, "a listed lot carries no combination")
+		assert.NotNil(t, batch.Sku)
+	}
+
+	onlyM := listBatches(t, helper, productID, skus["M"].SkuID)
+	assert.Len(t, onlyM.Batches, 2)
+	for _, batch := range onlyM.Batches {
+		assert.Equal(t, skus["M"].SkuID, batch.SkuID.String())
+	}
+}
+
+// listBatches reads a product's lots, optionally narrowed to one combination.
+func listBatches(
+	t *testing.T,
+	helper *testhelpers.ApiTestHelper,
+	productID, skuID string,
+) models.ListBatchesResponse {
+	t.Helper()
+
+	url := fmt.Sprintf("/inventory/batches/product/%s?onlyActive=false", productID)
+	if skuID != "" {
+		url += "&skuId=" + skuID
+	}
+
+	w := helper.DoRequest("GET", url, nil, map[string]string{})
+	if w.Code != http.StatusOK {
+		t.Fatalf("listing the lots of %s failed with %d: %s", productID, w.Code, w.Body.String())
+	}
+
+	var result models.ListBatchesResponse
+	json.Unmarshal(w.Body.Bytes(), &result)
+	return result
+}
+
+// AC-4 — FIFO picks within the combination asked for, not across the product.
+func TestGetOldestBatch_ScopedToSku(t *testing.T) {
+	helper := SetupInventoryTest(t)
+	defer helper.Close()
+	productID, skus := axisProductWithSkus(t, helper, "INV014_OLDEST")
+
+	stamp := time.Now().UnixNano()
+	xlSoonest := fmt.Sprintf("LOT_XL_SOON_%d", stamp)
+	mLater := fmt.Sprintf("LOT_M_LATER_%d", stamp)
+	// The XL lot expires first, so a product-wide pick would return it for M too.
+	assert.Equal(t, http.StatusCreated, createBatchOn(t, helper, productID, skus["XL"].SkuID, xlSoonest, 10, 10).Code)
+	assert.Equal(t, http.StatusCreated, createBatchOn(t, helper, productID, skus["M"].SkuID, mLater, 90, 10).Code)
+
+	assert.Equal(t, mLater, oldestBatch(t, helper, productID, skus["M"].SkuID).LotNumber)
+	assert.Equal(t, xlSoonest, oldestBatch(t, helper, productID, skus["XL"].SkuID).LotNumber)
+}
+
+func oldestBatch(
+	t *testing.T,
+	helper *testhelpers.ApiTestHelper,
+	productID, skuID string,
+) models.BatchResponse {
+	t.Helper()
+
+	url := fmt.Sprintf("/inventory/batches/product/%s/oldest", productID)
+	if skuID != "" {
+		url += "?skuId=" + skuID
+	}
+
+	w := helper.DoRequest("GET", url, nil, map[string]string{})
+	if w.Code != http.StatusOK {
+		t.Fatalf("the FIFO pick of %s failed with %d: %s", productID, w.Code, w.Body.String())
+	}
+
+	var batch models.BatchResponse
+	json.Unmarshal(w.Body.Bytes(), &batch)
+	return batch
+}
+
+// AC-6 (first half) — a lot with no movements is correctable, in both fields.
+func TestUpdateBatch_CorrectsLotNumberAndExpiry(t *testing.T) {
+	helper := SetupInventoryTest(t)
+	defer helper.Close()
+	productID, skus := axisProductWithSkus(t, helper, "INV014_PATCH")
+
+	w := createBatchOn(t, helper, productID, skus["M"].SkuID,
+		fmt.Sprintf("LOT_TYPO_%d", time.Now().UnixNano()), 90, 10)
+	assert.Equal(t, http.StatusCreated, w.Code, w.Body.String())
+	var created models.BatchResponse
+	json.Unmarshal(w.Body.Bytes(), &created)
+
+	corrected := fmt.Sprintf("LOT_FIXED_%d", time.Now().UnixNano())
+	newExpiry := time.Now().AddDate(0, 0, 120).Format("2006-01-02")
+	wp := helper.DoRequest("PATCH", fmt.Sprintf("/inventory/batches/%s", created.ID),
+		map[string]interface{}{"lot_number": corrected, "expiry_date": newExpiry},
+		map[string]string{})
+
+	assert.Equal(t, http.StatusOK, wp.Code, wp.Body.String())
+	var updated models.BatchResponse
+	json.Unmarshal(wp.Body.Bytes(), &updated)
+	assert.Equal(t, corrected, updated.LotNumber)
+	assert.Equal(t, newExpiry, time.Time(updated.ExpiryDate).Format("2006-01-02"))
+	// D3 — what a correction may never touch.
+	assert.Equal(t, created.UnitCost, updated.UnitCost)
+	assert.Equal(t, created.CurrentQuantity, updated.CurrentQuantity)
+}
+
+// AC-6 (second half) — once a sale has consumed the lot, both writes are refused:
+// batch_movements carries the COGS already booked against it.
+func TestUpdateAndVoidBatch_RefusedAfterMovements(t *testing.T) {
+	helper := SetupInventoryTest(t)
+	defer helper.Close()
+	productID, skus := axisProductWithSkus(t, helper, "INV014_CONSUMED")
+
+	w := createBatchOn(t, helper, productID, skus["M"].SkuID,
+		fmt.Sprintf("LOT_SOLD_%d", time.Now().UnixNano()), 90, 10)
+	assert.Equal(t, http.StatusCreated, w.Code, w.Body.String())
+	var created models.BatchResponse
+	json.Unmarshal(w.Body.Bytes(), &created)
+
+	consumeBatch(t, created.ID.String())
+
+	wp := helper.DoRequest("PATCH", fmt.Sprintf("/inventory/batches/%s", created.ID),
+		map[string]interface{}{"lot_number": "SHOULD_NOT_APPLY"}, map[string]string{})
+	assert.Equal(t, http.StatusConflict, wp.Code, wp.Body.String())
+	assert.Contains(t, wp.Body.String(), inventoryErrors.BatchHasMovements)
+
+	wd := helper.DoRequest("DELETE", fmt.Sprintf("/inventory/batches/%s", created.ID), nil, map[string]string{})
+	assert.Equal(t, http.StatusConflict, wd.Code, wd.Body.String())
+	assert.Contains(t, wd.Body.String(), inventoryErrors.BatchHasMovements)
+}
+
+// consumeBatch books a consumption against a lot the way a sale does. Written
+// straight to the table because sales lives in another module and another suite,
+// and what these tests need is only the row the guard reads.
+func consumeBatch(t *testing.T, batchID string) {
+	t.Helper()
+
+	ctx := context.Background()
+	conn := openInventoryDB(t)
+	defer conn.Close(ctx)
+
+	if _, err := conn.Exec(ctx,
+		`INSERT INTO inventory.batch_movements
+		     (tenant_id, batch_id, quantity_consumed, cost_of_goods_sold)
+		 SELECT pb.tenant_id, pb.id, 1, pb.unit_cost
+		 FROM inventory.product_batches pb
+		 WHERE pb.id = $1::uuid`, batchID); err != nil {
+		t.Fatalf("booking a consumption against %s: %v", batchID, err)
+	}
+}
+
+// AC-6 — DELETE voids, it never deletes, and the voided lot leaves the FIFO pick.
+func TestVoidBatch_KeepsRowAndLeavesFifo(t *testing.T) {
+	helper := SetupInventoryTest(t)
+	defer helper.Close()
+	productID, skus := axisProductWithSkus(t, helper, "INV014_VOID")
+
+	stamp := time.Now().UnixNano()
+	soonest := fmt.Sprintf("LOT_SOONEST_%d", stamp)
+	later := fmt.Sprintf("LOT_LATER_%d", stamp)
+	ws := createBatchOn(t, helper, productID, skus["M"].SkuID, soonest, 10, 10)
+	assert.Equal(t, http.StatusCreated, ws.Code, ws.Body.String())
+	var soonestBatch models.BatchResponse
+	json.Unmarshal(ws.Body.Bytes(), &soonestBatch)
+	assert.Equal(t, http.StatusCreated, createBatchOn(t, helper, productID, skus["M"].SkuID, later, 90, 10).Code)
+
+	assert.Equal(t, soonest, oldestBatch(t, helper, productID, skus["M"].SkuID).LotNumber)
+
+	wd := helper.DoRequest("DELETE", fmt.Sprintf("/inventory/batches/%s", soonestBatch.ID), nil, map[string]string{})
+	assert.Equal(t, http.StatusOK, wd.Code, wd.Body.String())
+	var voided models.BatchResponse
+	json.Unmarshal(wd.Body.Bytes(), &voided)
+	assert.Equal(t, "void", voided.Status)
+
+	// The row survives — batch_movements and order_batch_assignments point at it.
+	wg := helper.DoRequest("GET", fmt.Sprintf("/inventory/batches/%s", soonestBatch.ID), nil, map[string]string{})
+	assert.Equal(t, http.StatusOK, wg.Code, wg.Body.String())
+
+	assert.Equal(t, later, oldestBatch(t, helper, productID, skus["M"].SkuID).LotNumber)
+
+	wd2 := helper.DoRequest("DELETE", fmt.Sprintf("/inventory/batches/%s", soonestBatch.ID), nil, map[string]string{})
+	assert.Equal(t, http.StatusConflict, wd2.Code, wd2.Body.String())
+	assert.Contains(t, wd2.Body.String(), inventoryErrors.BatchVoided)
+}
+
+// AC-7 — a lot stranded in the unassigned bucket splits onto real combinations,
+// keeping its lot number, its dates and its unit cost.
+func TestRedistributeBatches_SplitsStrandedLot(t *testing.T) {
+	helper := SetupInventoryTest(t)
+	defer helper.Close()
+
+	// The lot has to be created BEFORE the axes exist: that is exactly how every
+	// pre-INV-014 lot ended up in the bucket, and the guard would refuse it after.
+	productID, _ := createProductForSKU(t, helper, "INV014_REDIST")
+	lotNumber := fmt.Sprintf("LOT_STRANDED_%d", time.Now().UnixNano())
+	wc := createBatchOn(t, helper, productID, "", lotNumber, 60, 10)
+	assert.Equal(t, http.StatusCreated, wc.Code, wc.Body.String())
+	var stranded models.BatchResponse
+	json.Unmarshal(wc.Body.Bytes(), &stranded)
+
+	putAxes(t, helper, productID, []axisSpec{{groupType: "Size", options: []string{"M", "XL"}}})
+	if w := generateSkus(t, helper, productID); w.Code != http.StatusOK {
+		t.Fatalf("generating the SKUs of %s failed with %d: %s", productID, w.Code, w.Body.String())
+	}
+	skus := combinationSkus(t, helper, productID)
+
+	w := helper.DoRequest("POST",
+		fmt.Sprintf("/inventory/products/%s/batches/redistribute", productID),
+		map[string]interface{}{
+			"batch_id": stranded.ID.String(),
+			"targets": []map[string]interface{}{
+				{"sku_id": skus["M"].SkuID, "quantity": 6},
+				{"sku_id": skus["XL"].SkuID, "quantity": 4},
+			},
+		}, map[string]string{})
+
+	assert.Equal(t, http.StatusOK, w.Code, w.Body.String())
+	var result models.RedistributeBatchesResponse
+	json.Unmarshal(w.Body.Bytes(), &result)
+	assert.Equal(t, 2, result.TargetCount)
+	assert.Equal(t, 10.0, result.MovedQuantity)
+
+	byQuantity := map[float64]models.BatchResponse{}
+	for _, child := range result.Batches {
+		byQuantity[child.CurrentQuantity] = child
+		assert.Equal(t, lotNumber, child.LotNumber, "the child lost its lot number")
+		assert.Equal(t, stranded.UnitCost, child.UnitCost, "the child lost its unit cost")
+		assert.Equal(t,
+			time.Time(stranded.ExpiryDate).Format("2006-01-02"),
+			time.Time(child.ExpiryDate).Format("2006-01-02"))
+	}
+	if assert.Contains(t, byQuantity, 6.0) {
+		assert.Equal(t, skus["M"].SkuID, byQuantity[6.0].SkuID.String())
+	}
+	if assert.Contains(t, byQuantity, 4.0) {
+		assert.Equal(t, skus["XL"].SkuID, byQuantity[4.0].SkuID.String())
+	}
+
+	// M can now be sold from; before the split its lots were unreachable.
+	assert.Equal(t, lotNumber, oldestBatch(t, helper, productID, skus["M"].SkuID).LotNumber)
+}
+
+// A1 — el reparto mueve existencias entre combinaciones sin crear ni destruir:
+// el total del producto es el mismo antes y después, el bucket se vacía y los
+// destinos reciben. Antes de A1 los lotes no tocaban el stock en absoluto y este
+// test habría exigido lo contrario.
+func TestRedistributeBatches_KeepsProductTotal(t *testing.T) {
+	helper := SetupInventoryTest(t)
+	defer helper.Close()
+
+	productID, _ := createProductForSKU(t, helper, "INV014_REDIST_STOCK")
+	wc := createBatchOn(t, helper, productID, "",
+		fmt.Sprintf("LOT_NOSTOCK_%d", time.Now().UnixNano()), 60, 10)
+	assert.Equal(t, http.StatusCreated, wc.Code, wc.Body.String())
+	var stranded models.BatchResponse
+	json.Unmarshal(wc.Body.Bytes(), &stranded)
+
+	putAxes(t, helper, productID, []axisSpec{{groupType: "Size", options: []string{"M", "XL"}}})
+	if w := generateSkus(t, helper, productID); w.Code != http.StatusOK {
+		t.Fatalf("generating the SKUs of %s failed with %d: %s", productID, w.Code, w.Body.String())
+	}
+	skus := combinationSkus(t, helper, productID)
+
+	before := skuQuantities(t, helper, productID)
+	assert.Equal(t, 10.0, total(before), "el lote debería haber entrado al stock (A1)")
+
+	w := helper.DoRequest("POST",
+		fmt.Sprintf("/inventory/products/%s/batches/redistribute", productID),
+		map[string]interface{}{
+			"batch_id": stranded.ID.String(),
+			"targets": []map[string]interface{}{
+				{"sku_id": skus["M"].SkuID, "quantity": 6},
+				{"sku_id": skus["XL"].SkuID, "quantity": 4},
+			},
+		}, map[string]string{})
+	assert.Equal(t, http.StatusOK, w.Code, w.Body.String())
+
+	after := skuQuantities(t, helper, productID)
+	assert.Equal(t, total(before), total(after),
+		"repartir no crea ni destruye unidades del producto")
+	assert.Equal(t, 6.0, after[skus["M"].SKU])
+	assert.Equal(t, 4.0, after[skus["XL"].SKU])
+	for sku, quantity := range after {
+		assert.GreaterOrEqualf(t, quantity, 0.0, "%s quedó negativo", sku)
+	}
+}
+
+// total suma las existencias de todas las combinaciones de un producto.
+func total(quantities map[string]float64) float64 {
+	sum := 0.0
+	for _, quantity := range quantities {
+		sum += quantity
+	}
+	return sum
+}
+
+// A1 — un lote es una entrada al stock: crearlo sube las existencias de su
+// combinación. Antes de A1 el lote quedaba en su propio libro y la pestaña de
+// Existencias seguía en cero, que es la incoherencia que originó la enmienda.
+func TestCreateBatch_RaisesStock(t *testing.T) {
+	helper := SetupInventoryTest(t)
+	defer helper.Close()
+	productID, skus := axisProductWithSkus(t, helper, "INV014_STOCK_IN")
+
+	before := skuQuantities(t, helper, productID)
+
+	w := createBatchOn(t, helper, productID, skus["M"].SkuID,
+		fmt.Sprintf("LOT_IN_%d", time.Now().UnixNano()), 90, 10)
+	assert.Equal(t, http.StatusCreated, w.Code, w.Body.String())
+
+	after := skuQuantities(t, helper, productID)
+	assert.Equal(t, before[skus["M"].SKU]+10, after[skus["M"].SKU],
+		"crear un lote de 10 debe subir el stock de esa combinación en 10")
+	assert.Equal(t, before[skus["XL"].SKU], after[skus["XL"].SKU],
+		"la combinación hermana no se toca")
+}
+
+// A1 — anular devuelve al stock lo que el lote todavía tenía, o las existencias
+// quedarían infladas por mercancía que ya no se puede vender.
+func TestVoidBatch_ReturnsStock(t *testing.T) {
+	helper := SetupInventoryTest(t)
+	defer helper.Close()
+	productID, skus := axisProductWithSkus(t, helper, "INV014_STOCK_OUT")
+
+	before := skuQuantities(t, helper, productID)
+	w := createBatchOn(t, helper, productID, skus["M"].SkuID,
+		fmt.Sprintf("LOT_OUT_%d", time.Now().UnixNano()), 90, 10)
+	assert.Equal(t, http.StatusCreated, w.Code, w.Body.String())
+	var created models.BatchResponse
+	json.Unmarshal(w.Body.Bytes(), &created)
+	assert.Equal(t, before[skus["M"].SKU]+10, skuQuantities(t, helper, productID)[skus["M"].SKU])
+
+	wd := helper.DoRequest("DELETE", fmt.Sprintf("/inventory/batches/%s", created.ID), nil, map[string]string{})
+	assert.Equal(t, http.StatusOK, wd.Code, wd.Body.String())
+
+	assert.Equal(t, before[skus["M"].SKU], skuQuantities(t, helper, productID)[skus["M"].SKU],
+		"anular el lote debe devolver el stock a donde estaba")
+}
+
+// skuQuantities is every combination's stock quantity, keyed by SKU code.
+func skuQuantities(t *testing.T, helper *testhelpers.ApiTestHelper, productID string) map[string]float64 {
+	t.Helper()
+
+	quantities := map[string]float64{}
+	for _, sku := range listSkus(t, helper, productID).Skus {
+		quantities[sku.SKU] = sku.CurrentQuantity
+	}
+	return quantities
+}
+
+// The amounts must add up to exactly the lot, or nothing moves.
+func TestRedistributeBatches_MismatchedAmountsRefused(t *testing.T) {
+	helper := SetupInventoryTest(t)
+	defer helper.Close()
+
+	productID, _ := createProductForSKU(t, helper, "INV014_REDIST_BAD")
+	wc := createBatchOn(t, helper, productID, "",
+		fmt.Sprintf("LOT_BAD_%d", time.Now().UnixNano()), 60, 10)
+	assert.Equal(t, http.StatusCreated, wc.Code, wc.Body.String())
+	var stranded models.BatchResponse
+	json.Unmarshal(wc.Body.Bytes(), &stranded)
+
+	putAxes(t, helper, productID, []axisSpec{{groupType: "Size", options: []string{"M", "XL"}}})
+	if w := generateSkus(t, helper, productID); w.Code != http.StatusOK {
+		t.Fatalf("generating the SKUs of %s failed with %d: %s", productID, w.Code, w.Body.String())
+	}
+	skus := combinationSkus(t, helper, productID)
+
+	w := helper.DoRequest("POST",
+		fmt.Sprintf("/inventory/products/%s/batches/redistribute", productID),
+		map[string]interface{}{
+			"batch_id": stranded.ID.String(),
+			"targets":  []map[string]interface{}{{"sku_id": skus["M"].SkuID, "quantity": 3}},
+		}, map[string]string{})
+
+	assert.Equal(t, http.StatusBadRequest, w.Code, w.Body.String())
+	assert.Contains(t, w.Body.String(), inventoryErrors.SkusRedistributionMismatch)
+
+	// Nothing moved: the lot is still whole and still in the bucket.
+	remaining := listBatches(t, helper, productID, "")
+	assert.Len(t, remaining.Batches, 1)
+	assert.Equal(t, 10.0, remaining.Batches[0].CurrentQuantity)
+}
+
+// A consumed lot is refused rather than split — the reason D2 chose a split over
+// an UPDATE in the first place.
+func TestRedistributeBatches_RefusedForConsumedLot(t *testing.T) {
+	helper := SetupInventoryTest(t)
+	defer helper.Close()
+
+	productID, _ := createProductForSKU(t, helper, "INV014_REDIST_USED")
+	wc := createBatchOn(t, helper, productID, "",
+		fmt.Sprintf("LOT_USED_%d", time.Now().UnixNano()), 60, 10)
+	assert.Equal(t, http.StatusCreated, wc.Code, wc.Body.String())
+	var stranded models.BatchResponse
+	json.Unmarshal(wc.Body.Bytes(), &stranded)
+	consumeBatch(t, stranded.ID.String())
+
+	putAxes(t, helper, productID, []axisSpec{{groupType: "Size", options: []string{"M", "XL"}}})
+	if w := generateSkus(t, helper, productID); w.Code != http.StatusOK {
+		t.Fatalf("generating the SKUs of %s failed with %d: %s", productID, w.Code, w.Body.String())
+	}
+	skus := combinationSkus(t, helper, productID)
+
+	w := helper.DoRequest("POST",
+		fmt.Sprintf("/inventory/products/%s/batches/redistribute", productID),
+		map[string]interface{}{
+			"batch_id": stranded.ID.String(),
+			"targets":  []map[string]interface{}{{"sku_id": skus["M"].SkuID, "quantity": 10}},
+		}, map[string]string{})
+
+	assert.Equal(t, http.StatusConflict, w.Code, w.Body.String())
+	assert.Contains(t, w.Body.String(), inventoryErrors.BatchHasMovements)
+}
