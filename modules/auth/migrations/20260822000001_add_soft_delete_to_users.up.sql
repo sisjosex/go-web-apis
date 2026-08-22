@@ -1,4 +1,6 @@
--- Add soft delete column to users table
+-- Soft delete columns for auth.users.
+-- Lives in auth, not users: auth owns the table, and the tenancy module
+-- backfill needs deleted_at while users itself migrates after tenancy.
 ALTER TABLE auth.users 
 ADD COLUMN IF NOT EXISTS deleted_at TIMESTAMP WITH TIME ZONE DEFAULT NULL;
 

@@ -11,7 +11,7 @@ import (
 )
 
 // fallbackModules is used when ENABLED_MODULES is not set in the environment
-const fallbackModules = "core,auth,users,tenancy,tracking,inventory,sales,purchasing"
+const fallbackModules = "core,auth,tenancy,users,tracking,inventory,sales,purchasing"
 
 // CmdMigration handles the `migration` (alias: m) subcommand
 func CmdMigration(args []string) {

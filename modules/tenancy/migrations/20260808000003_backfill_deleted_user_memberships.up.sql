@@ -2,8 +2,8 @@
 -- which is why deleted users kept showing up in Roles and permissions
 -- (tenancy.sp_list_role_users filters tenant_users.is_active, not users.deleted_at).
 --
--- Lives in tenancy rather than users because migrations run in ENABLED_MODULES
--- order (users before tenancy) and because tenant databases have no tenancy schema.
+-- Lives in tenancy rather than users because tenant databases have no tenancy
+-- schema. auth.users.deleted_at is created by the auth module, which migrates first.
 
 UPDATE tenancy.tenant_users tu
 SET is_active = FALSE

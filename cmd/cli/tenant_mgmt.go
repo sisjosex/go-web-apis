@@ -44,7 +44,7 @@ func CmdTenant(args []string) {
 	// Ensure platform env is loaded
 	if os.Getenv("ENV_FILE") == "" {
 		os.Setenv("ENV_FILE", ".env.platform")
-		os.Setenv("ENABLED_MODULES", "core,auth,users,tenancy")
+		os.Setenv("ENABLED_MODULES", "core,auth,tenancy,users")
 	}
 
 	if err := runTenantOps(*listFlag, *migrateFlag); err != nil {
