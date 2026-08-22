@@ -41,7 +41,7 @@ func (r *BatchRepository) CreateBatch(ctx context.Context, tenantID uuid.UUID, b
 	}
 
 	row := r.dbService.QueryRow(ctx,
-		"SELECT id, product_id, lot_number, purchase_date, expiry_date, unit_cost, initial_quantity, current_quantity, status, message FROM inventory.sp_create_batch($1, $2, $3, $4, $5, $6, $7, $8)",
+		"SELECT id, product_id, sku_id, sku, lot_number, purchase_date, expiry_date, unit_cost, initial_quantity, current_quantity, status, message FROM inventory.sp_create_batch($1, $2, $3, $4, $5, $6, $7, $8)",
 		tenantID,
 		productID,
 		batch.LotNumber,
@@ -53,9 +53,14 @@ func (r *BatchRepository) CreateBatch(ctx context.Context, tenantID uuid.UUID, b
 	)
 
 	var response models.BatchResponse
+	var skuIDValue uuid.UUID
+	var skuValue string
+
 	if err := row.Scan(
 		&response.ID,
 		&response.ProductID,
+		&skuIDValue,
+		&skuValue,
 		&response.LotNumber,
 		&response.PurchaseDate,
 		&response.ExpiryDate,
@@ -70,6 +75,9 @@ func (r *BatchRepository) CreateBatch(ctx context.Context, tenantID uuid.UUID, b
 		}
 		return nil, err
 	}
+
+	response.SkuID = &skuIDValue
+	response.Sku = &skuValue
 
 	return &response, nil
 }
