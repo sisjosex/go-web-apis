@@ -289,21 +289,26 @@ func (r *SalesOrderRepository) AddOrderItemWithBatch(ctx context.Context, tenant
 	return &item, nil
 }
 
-// CompleteOrder completes an order and consumes inventory from batches
+// CompleteOrder completes an order and consumes inventory from batches.
+//
+// sp_complete_sales_order reports the outcome of the operation — order_id,
+// order_number, status, total, message — not the order row, so the full order
+// is read back through sp_get_sales_order_by_id and the endpoint keeps
+// answering with a complete order.
 func (r *SalesOrderRepository) CompleteOrder(ctx context.Context, tenantID uuid.UUID, orderID uuid.UUID) (*models.SalesOrder, error) {
-	var order models.SalesOrder
-	row := r.dbService.QueryRow(ctx,
-		`SELECT order_id, order_number, customer_id, status, sub_total, tax_amount, total, discount_amount, shipping_address, notes, created_at, updated_at
+	var (
+		completedID uuid.UUID
+		orderNumber string
+		status      string
+		total       float64
+		message     string
+	)
+	err := r.dbService.QueryRow(ctx,
+		`SELECT order_id, order_number, status, total, message
 		 FROM sales.sp_complete_sales_order($1, $2)`,
 		tenantID,
 		orderID,
-	)
-
-	err := row.Scan(
-		&order.ID, &order.OrderNumber, &order.CustomerID, &order.Status,
-		&order.SubTotal, &order.TaxAmount, &order.Total, &order.DiscountAmount,
-		&order.ShippingAddress, &order.Notes, &order.CreatedAt, &order.UpdatedAt,
-	)
+	).Scan(&completedID, &orderNumber, &status, &total, &message)
 	if err != nil {
 		var pgErr *pgconn.PgError
 		if errors.As(err, &pgErr) {
@@ -311,26 +316,27 @@ func (r *SalesOrderRepository) CompleteOrder(ctx context.Context, tenantID uuid.
 		}
 		return nil, err
 	}
-	return &order, nil
+	return r.GetSalesOrderByID(ctx, tenantID, completedID)
 }
 
 // ========== PHASE 2: Reporting & Cancellation ==========
 
 // CancelOrder cancels an order and releases batch assignments
 func (r *SalesOrderRepository) CancelOrder(ctx context.Context, tenantID uuid.UUID, orderID uuid.UUID) (*models.SalesOrder, error) {
-	var order models.SalesOrder
-	row := r.dbService.QueryRow(ctx,
-		`SELECT id, order_number, customer_id, status, sub_total, tax_amount, total, discount_amount, shipping_address, notes, created_at, updated_at
+	// Same outcome-shaped result as sp_complete_sales_order; the order row is
+	// read back afterwards.
+	var (
+		cancelledID uuid.UUID
+		orderNumber string
+		status      string
+		message     string
+	)
+	err := r.dbService.QueryRow(ctx,
+		`SELECT order_id, order_number, status, message
 		 FROM sales.sp_cancel_sales_order($1, $2)`,
 		tenantID,
 		orderID,
-	)
-
-	err := row.Scan(
-		&order.ID, &order.OrderNumber, &order.CustomerID, &order.Status,
-		&order.SubTotal, &order.TaxAmount, &order.Total, &order.DiscountAmount,
-		&order.ShippingAddress, &order.Notes, &order.CreatedAt, &order.UpdatedAt,
-	)
+	).Scan(&cancelledID, &orderNumber, &status, &message)
 	if err != nil {
 		var pgErr *pgconn.PgError
 		if errors.As(err, &pgErr) {
@@ -338,7 +344,7 @@ func (r *SalesOrderRepository) CancelOrder(ctx context.Context, tenantID uuid.UU
 		}
 		return nil, err
 	}
-	return &order, nil
+	return r.GetSalesOrderByID(ctx, tenantID, cancelledID)
 }
 
 // GetOrderWithBatches retrieves an order with batch assignment details
@@ -425,18 +431,20 @@ func (r *SalesOrderRepository) CreateReturn(ctx context.Context, tenantID uuid.U
 
 // ApproveReturn approves a return and restores inventory
 func (r *SalesOrderRepository) ApproveReturn(ctx context.Context, tenantID uuid.UUID, returnID uuid.UUID) (*models.Return, error) {
-	var ret models.Return
-	row := r.dbService.QueryRow(ctx,
-		`SELECT id, order_id, customer_id, return_number, total_amount, reason, status, created_at, updated_at
+	// sp_approve_return reports the outcome (return_id, return_number, status,
+	// message); the return row is read back through sp_get_return.
+	var (
+		approvedID   uuid.UUID
+		returnNumber string
+		status       string
+		message      string
+	)
+	err := r.dbService.QueryRow(ctx,
+		`SELECT return_id, return_number, status, message
 		 FROM sales.sp_approve_return($1, $2)`,
 		tenantID,
 		returnID,
-	)
-
-	err := row.Scan(
-		&ret.ID, &ret.OrderID, &ret.CustomerID, &ret.ReturnNumber, &ret.TotalAmount,
-		&ret.Reason, &ret.Status, &ret.CreatedAt, &ret.UpdatedAt,
-	)
+	).Scan(&approvedID, &returnNumber, &status, &message)
 	if err != nil {
 		var pgErr *pgconn.PgError
 		if errors.As(err, &pgErr) {
@@ -444,7 +452,7 @@ func (r *SalesOrderRepository) ApproveReturn(ctx context.Context, tenantID uuid.
 		}
 		return nil, err
 	}
-	return &ret, nil
+	return r.GetReturn(ctx, tenantID, approvedID)
 }
 
 // GetReturn retrieves a return by ID
@@ -510,17 +518,22 @@ func (r *SalesOrderRepository) GetReturnsByOrder(ctx context.Context, tenantID u
 
 // CreatePayment creates a payment record for an order
 func (r *SalesOrderRepository) CreatePayment(ctx context.Context, tenantID uuid.UUID, orderID uuid.UUID, amount float64, paymentMethod string, referenceNumber string, notes string) (*models.Payment, error) {
-	var payment models.Payment
-	row := r.dbService.QueryRow(ctx,
-		`SELECT id, order_id, customer_id, amount, payment_method, status, reference_number, notes, created_at, updated_at
-		 FROM sales.sp_create_payment($1, $2, $3, $4, $5, $6, $7)`,
+	// sp_create_payment takes six arguments and reports the outcome
+	// (payment_id, order_id, amount, payment_method, status, message); the
+	// payment row is read back through sp_get_payment_by_id.
+	var (
+		paymentID   uuid.UUID
+		paidOrderID uuid.UUID
+		paidAmount  float64
+		method      string
+		status      string
+		message     string
+	)
+	err := r.dbService.QueryRow(ctx,
+		`SELECT payment_id, order_id, amount, payment_method, status, message
+		 FROM sales.sp_create_payment($1, $2, $3, $4, $5, $6)`,
 		tenantID, orderID, amount, paymentMethod, referenceNumber, notes,
-	)
-
-	err := row.Scan(
-		&payment.ID, &payment.OrderID, &payment.CustomerID, &payment.Amount, &payment.PaymentMethod,
-		&payment.Status, &payment.ReferenceNumber, &payment.Notes, &payment.CreatedAt, &payment.UpdatedAt,
-	)
+	).Scan(&paymentID, &paidOrderID, &paidAmount, &method, &status, &message)
 	if err != nil {
 		var pgErr *pgconn.PgError
 		if errors.As(err, &pgErr) {
@@ -528,7 +541,7 @@ func (r *SalesOrderRepository) CreatePayment(ctx context.Context, tenantID uuid.
 		}
 		return nil, err
 	}
-	return &payment, nil
+	return r.GetPaymentByID(ctx, tenantID, paymentID)
 }
 
 // GetPayments retrieves all payments for an order
