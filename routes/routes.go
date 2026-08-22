@@ -44,12 +44,12 @@ import (
 	"time"
 
 	_ "josex/web/docs"
+	coreValidators "josex/web/modules/core/validators"
 	_ "josex/web/modules/inventory"
 	_ "josex/web/modules/purchasing"
 	_ "josex/web/modules/sales"
 	_ "josex/web/modules/tracking"
 	_ "josex/web/modules/users"
-	coreValidators "josex/web/modules/core/validators"
 
 	"github.com/didip/tollbooth/v7"
 	"github.com/didip/tollbooth_gin"
@@ -121,8 +121,10 @@ func SetupRoutes(r *gin.Engine, dbService coreServices.DatabaseService) {
 		MaxAge:           12 * time.Hour,
 	}))
 
-	// Limitador de solicitudes
-	limiter := tollbooth.NewLimiter(10, nil)         // 10 req/segundo
+	// Limitador de solicitudes — RATE_LIMIT_PER_SECOND por IP. La suite de tests
+	// comparte un solo router entre todos los tests, así que necesita un límite
+	// alto para no rechazarse a sí misma.
+	limiter := tollbooth.NewLimiter(float64(config.ModularAppConfig.Core.RateLimitPerSecond), nil)
 	limiter.SetTokenBucketExpirationTTL(time.Second) // Define la ventana de tiempo en 1 segundo
 	limiter.SetIPLookups([]string{"RemoteAddr", "X-Forwarded-For", "X-Real-IP"})
 	r.Use(tollbooth_gin.LimitHandler(limiter))

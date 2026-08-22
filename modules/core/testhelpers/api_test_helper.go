@@ -25,8 +25,48 @@ import (
 	"github.com/google/uuid"
 )
 
-// testInitOnce ensures setup logs are printed only once
-var testInitOnce sync.Once
+// The router and the database service are built once per test binary and shared
+// by every test in the package. They used to be rebuilt inside SetupApiTest, so
+// each test opened its own pgxpool (DATABASE_POOL_SIZE connections) that nothing
+// ever closed — a package with a hundred tests exhausted PostgreSQL's
+// max_connections long before it finished. Tests never run in parallel here, so
+// one router and one pool serve them all.
+var (
+	sharedOnce      sync.Once
+	sharedEngine    *gin.Engine
+	sharedDBService coreServices.DatabaseService
+)
+
+// sharedTestServer returns the process-wide router and database service,
+// initializing them on first use.
+func sharedTestServer() (*gin.Engine, coreServices.DatabaseService) {
+	sharedOnce.Do(func() {
+		// Skip migrations: they already ran via `go run ./cmd/testutil -reset`.
+		os.Setenv("SKIP_MIGRATIONS", "true")
+		defer os.Unsetenv("SKIP_MIGRATIONS")
+
+		// Silence the repetitive startup logs.
+		oldOut := log.Writer()
+		log.SetOutput(io.Discard)
+		defer log.SetOutput(oldOut)
+
+		// context.Background(), not a per-test context: the pool outlives every
+		// individual test and is closed when the test binary exits.
+		dbService := coreServices.NewDatabaseService()
+		dbService.InitDatabase(context.Background())
+
+		gin.SetMode(gin.TestMode)
+		engine := gin.New()
+
+		coreServices.LoadAllTranslations([]string{"en", "es"})
+		routes.SetupRoutes(engine, dbService)
+
+		sharedEngine = engine
+		sharedDBService = dbService
+	})
+
+	return sharedEngine, sharedDBService
+}
 
 // InitTestEnvironment loads .env.test before any config is initialized
 // This should be called in init() of test files
@@ -97,7 +137,8 @@ type ApiTestHelper struct {
 	t            *testing.T
 }
 
-// SetupApiTest initializes test environment with real database
+// SetupApiTest returns a helper bound to the shared router and connection pool.
+// Only the per-test state (tokens, tenant slug, *testing.T) is fresh.
 func SetupApiTest(t *testing.T) *ApiTestHelper {
 	// Get global config (environment already loaded by init())
 	globalConfig := config.GetConfig()
@@ -105,43 +146,12 @@ func SetupApiTest(t *testing.T) *ApiTestHelper {
 		t.Fatal("Failed to load global configuration")
 	}
 
-	// Initialize database service
-	dbService := coreServices.NewDatabaseService()
-
-	// Create context
-	ctx, cancel := context.WithCancel(context.Background())
-	t.Cleanup(func() { cancel() })
-
-	// Skip migrations in tests (they're already run by: go run ./cmd/testutil -reset)
-	os.Setenv("SKIP_MIGRATIONS", "true")
-	defer os.Unsetenv("SKIP_MIGRATIONS")
-
-	// Silence repetitive logs during test setup
-	oldOut := log.Writer()
-	log.SetOutput(io.Discard)
-
-	// Initialize database synchronously (SKIP_MIGRATIONS=true makes it fast)
-	// No need for goroutine since we skip migrations in tests
-	dbService.InitDatabase(ctx)
-
-	// Set Gin to test mode
-	gin.SetMode(gin.TestMode)
-	engine := gin.New()
-
-	// Load translations (silent)
-	languages := []string{"en", "es"}
-	coreServices.LoadAllTranslations(languages)
-
-	// Setup routes (still silenced)
-	routes.SetupRoutes(engine, dbService)
-
-	// Restore log output after all setup is complete
-	log.SetOutput(oldOut)
+	engine, dbService := sharedTestServer()
 
 	helper := &ApiTestHelper{
 		engine:    engine,
 		dbService: dbService,
-		ctx:       ctx,
+		ctx:       context.Background(),
 		baseURL:   "/api/v1",
 		t:         t,
 	}

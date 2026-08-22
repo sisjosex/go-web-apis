@@ -197,15 +197,20 @@ func TestCreateCustomer_DuplicateEmail(t *testing.T) {
 
 	email := fmt.Sprintf("dup-customer-%d@example.com", uniqueTimestamp())
 	body := map[string]interface{}{
-		"name":  "First Customer",
-		"email": email,
+		"name":         "First Customer",
+		"email":        email,
+		"phone_number": "1234567890",
+		"address":      "123 Main St",
+		"city":         "New York",
+		"state":        "NY",
+		"postal_code":  "10001",
+		"country":      "USA",
 	}
 
 	// Create first customer
 	w := helper.DoRequest("POST", "/sales/customers", body, map[string]string{})
 	if w.Code != http.StatusCreated && w.Code != http.StatusOK {
-		t.Skipf("Could not create first customer (status %d); skipping duplicate test", w.Code)
-		return
+		t.Fatalf("could not create the first customer (status %d): %s", w.Code, w.Body.String())
 	}
 
 	// Try duplicate
@@ -226,32 +231,38 @@ func TestCompleteOrder_NoItems(t *testing.T) {
 	// First create a customer
 	email := fmt.Sprintf("order-noitems-%d@example.com", uniqueTimestamp())
 	customerBody := map[string]interface{}{
-		"name":  "No Items Customer",
-		"email": email,
+		"name":         "No Items Customer",
+		"email":        email,
+		"phone_number": "1234567890",
+		"address":      "123 Main St",
+		"city":         "New York",
+		"state":        "NY",
+		"postal_code":  "10001",
+		"country":      "USA",
 	}
 	w := helper.DoRequest("POST", "/sales/customers", customerBody, map[string]string{})
 	if w.Code != http.StatusCreated && w.Code != http.StatusOK {
-		t.Skipf("Could not create customer (status %d); skipping test", w.Code)
-		return
+		t.Fatalf("could not create the customer (status %d): %s", w.Code, w.Body.String())
 	}
 
-	var customer map[string]interface{}
-	json.Unmarshal(w.Body.Bytes(), &customer)
-	customerID, _ := customer["id"].(string)
+	customerID, _ := orderItemFromResponse(t, w.Body.Bytes())["id"].(string)
 
-	// Create empty order
+	// Create an empty order. `items` is required by the binder but nothing
+	// downstream reads it — sp_create_sales_order takes no items — so the order
+	// that comes back really has no lines.
 	orderBody := map[string]interface{}{
-		"customer_id": customerID,
+		"customer_id":      customerID,
+		"shipping_address": "123 Main St",
+		"items": []map[string]interface{}{
+			{"product_id": "550e8400-e29b-41d4-a716-446655440001", "quantity": 1},
+		},
 	}
 	w = helper.DoRequest("POST", "/sales/orders", orderBody, map[string]string{})
 	if w.Code != http.StatusCreated && w.Code != http.StatusOK {
-		t.Skipf("Could not create order (status %d); skipping test", w.Code)
-		return
+		t.Fatalf("could not create the order (status %d): %s", w.Code, w.Body.String())
 	}
 
-	var order map[string]interface{}
-	json.Unmarshal(w.Body.Bytes(), &order)
-	orderID, _ := order["id"].(string)
+	orderID, _ := orderItemFromResponse(t, w.Body.Bytes())["id"].(string)
 
 	// Try to complete the empty order
 	w = helper.DoRequest("PATCH", fmt.Sprintf("/sales/orders/%s/complete", orderID), nil, map[string]string{})
@@ -282,7 +293,7 @@ func newSalesProduct(t *testing.T, helper *coreTestHelpers.ApiTestHelper, label 
 	}
 	w := helper.DoRequest("POST", "/inventory/products", body, map[string]string{})
 	if w.Code != http.StatusCreated && w.Code != http.StatusOK {
-		t.Skipf("could not create product (status %d): %s", w.Code, w.Body.String())
+		t.Fatalf("could not create the product (status %d): %s", w.Code, w.Body.String())
 	}
 
 	var resp map[string]interface{}
@@ -292,7 +303,7 @@ func newSalesProduct(t *testing.T, helper *coreTestHelpers.ApiTestHelper, label 
 		id, _ = resp["id"].(string)
 	}
 	if id == "" {
-		t.Skipf("product response carried no id: %s", w.Body.String())
+		t.Fatalf("the product response carried no id: %s", w.Body.String())
 	}
 	return id
 }
@@ -325,12 +336,12 @@ func addAxisAndGenerateSkus(t *testing.T, helper *coreTestHelpers.ApiTestHelper,
 	}
 	w := helper.DoRequest("PUT", fmt.Sprintf("/inventory/products/%s", productID), body, map[string]string{})
 	if w.Code != http.StatusOK && w.Code != http.StatusCreated {
-		t.Skipf("could not add an axis (status %d): %s", w.Code, w.Body.String())
+		t.Fatalf("could not add an axis (status %d): %s", w.Code, w.Body.String())
 	}
 
 	w = helper.DoRequest("POST", fmt.Sprintf("/inventory/products/%s/skus/generate", productID), nil, map[string]string{})
 	if w.Code != http.StatusOK && w.Code != http.StatusCreated {
-		t.Skipf("could not generate SKUs (status %d): %s", w.Code, w.Body.String())
+		t.Fatalf("could not generate the SKUs (status %d): %s", w.Code, w.Body.String())
 	}
 }
 
@@ -341,7 +352,7 @@ func productSkus(t *testing.T, helper *coreTestHelpers.ApiTestHelper, productID 
 
 	w := helper.DoRequest("GET", fmt.Sprintf("/inventory/products/%s/skus", productID), nil, map[string]string{})
 	if w.Code != http.StatusOK {
-		t.Skipf("could not list SKUs (status %d): %s", w.Code, w.Body.String())
+		t.Fatalf("could not list the SKUs (status %d): %s", w.Code, w.Body.String())
 	}
 
 	var resp struct {
@@ -397,7 +408,7 @@ func stockBatchOn(
 
 	w := helper.DoRequest("POST", "/inventory/batches", body, map[string]string{})
 	if w.Code != http.StatusCreated && w.Code != http.StatusOK {
-		t.Skipf("could not create batch (status %d): %s", w.Code, w.Body.String())
+		t.Fatalf("could not create the batch (status %d): %s", w.Code, w.Body.String())
 	}
 	return lotNumber
 }
@@ -418,7 +429,7 @@ func newSalesOrder(t *testing.T, helper *coreTestHelpers.ApiTestHelper) string {
 	}
 	w := helper.DoRequest("POST", "/sales/customers", customerBody, map[string]string{})
 	if w.Code != http.StatusCreated && w.Code != http.StatusOK {
-		t.Skipf("could not create customer (status %d): %s", w.Code, w.Body.String())
+		t.Fatalf("could not create the customer (status %d): %s", w.Code, w.Body.String())
 	}
 	customerID, _ := orderItemFromResponse(t, w.Body.Bytes())["id"].(string)
 
@@ -434,7 +445,7 @@ func newSalesOrder(t *testing.T, helper *coreTestHelpers.ApiTestHelper) string {
 	}
 	w = helper.DoRequest("POST", "/sales/orders", orderBody, map[string]string{})
 	if w.Code != http.StatusCreated && w.Code != http.StatusOK {
-		t.Skipf("could not create order (status %d): %s", w.Code, w.Body.String())
+		t.Fatalf("could not create the order (status %d): %s", w.Code, w.Body.String())
 	}
 	orderID, _ := orderItemFromResponse(t, w.Body.Bytes())["id"].(string)
 	return orderID
@@ -577,7 +588,7 @@ func TestAddOrderItem_InsufficientStockPerSku(t *testing.T) {
 	addAxisAndGenerateSkus(t, helper, productID)
 	defaultSku, generated := productSkus(t, helper, productID)
 	if len(generated) == 0 {
-		t.Skip("no combination was generated; nothing to assert per SKU")
+		t.Fatal("no combination was generated; there is nothing to assert per SKU")
 	}
 	orderID := newSalesOrder(t, helper)
 
@@ -620,7 +631,7 @@ func TestAddOrderItem_FulfilledFromCombinationBatch(t *testing.T) {
 	addAxisAndGenerateSkus(t, helper, productID)
 	_, generated := productSkus(t, helper, productID)
 	if len(generated) == 0 {
-		t.Skip("no combination was generated; nothing to fulfil from")
+		t.Fatal("no combination was generated; there is nothing to fulfil from")
 	}
 
 	lotNumber := stockBatchOn(t, helper, productID, generated[0], 10)
@@ -661,7 +672,7 @@ func TestAddOrderItem_SkipsVoidedBatch(t *testing.T) {
 	addAxisAndGenerateSkus(t, helper, productID)
 	_, generated := productSkus(t, helper, productID)
 	if len(generated) == 0 {
-		t.Skip("no combination was generated; nothing to void")
+		t.Fatal("no combination was generated; there is nothing to void")
 	}
 
 	stockBatchOn(t, helper, productID, generated[0], 10)
@@ -693,7 +704,7 @@ func onlyBatchID(t *testing.T, helper *coreTestHelpers.ApiTestHelper, productID,
 		fmt.Sprintf("/inventory/batches/product/%s?onlyActive=false&skuId=%s", productID, skuID),
 		nil, map[string]string{})
 	if w.Code != http.StatusOK {
-		t.Skipf("could not list the lots of %s (status %d): %s", productID, w.Code, w.Body.String())
+		t.Fatalf("could not list the lots of %s (status %d): %s", productID, w.Code, w.Body.String())
 	}
 
 	var resp struct {
@@ -722,7 +733,7 @@ func TestCompleteOrder_DecrementsStockOnce(t *testing.T) {
 	addAxisAndGenerateSkus(t, helper, productID)
 	_, generated := productSkus(t, helper, productID)
 	if len(generated) == 0 {
-		t.Skip("no se generó ninguna combinación")
+		t.Fatal("no se generó ninguna combinación")
 	}
 
 	stockBatchOn(t, helper, productID, generated[0], 10)
@@ -745,7 +756,7 @@ func TestCompleteOrder_DecrementsStockOnce(t *testing.T) {
 
 	wc := helper.DoRequest("PATCH", fmt.Sprintf("/sales/orders/%s/complete", orderID), nil, map[string]string{})
 	if wc.Code != http.StatusOK {
-		t.Skipf("no se pudo completar el pedido (status %d): %s", wc.Code, wc.Body.String())
+		t.Fatalf("no se pudo completar el pedido (status %d): %s", wc.Code, wc.Body.String())
 	}
 
 	assert.Equal(t, 7.0, skuStock(t, helper, productID, generated[0]),
@@ -759,7 +770,7 @@ func skuStock(t *testing.T, helper *coreTestHelpers.ApiTestHelper, productID, sk
 
 	w := helper.DoRequest("GET", fmt.Sprintf("/inventory/products/%s/skus", productID), nil, map[string]string{})
 	if w.Code != http.StatusOK {
-		t.Skipf("no se pudieron listar los SKUs (status %d): %s", w.Code, w.Body.String())
+		t.Fatalf("no se pudieron listar los SKUs (status %d): %s", w.Code, w.Body.String())
 	}
 
 	var resp struct {

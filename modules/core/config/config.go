@@ -28,6 +28,9 @@ type CoreConfig struct {
 
 	// CORS
 	AllowedOrigins []string
+
+	// Rate limiting — requests per second per IP
+	RateLimitPerSecond int
 }
 
 // DefaultCoreConfig returns default configuration for core module
@@ -41,6 +44,8 @@ func DefaultCoreConfig() *CoreConfig {
 		AppPort:          "8080",
 		LogLevel:         "info",
 		AllowedOrigins:   []string{"http://localhost:3000"},
+
+		RateLimitPerSecond: 10,
 	}
 }
 
@@ -71,6 +76,9 @@ func LoadCoreConfig() *CoreConfig {
 
 		// CORS - comma-separated list
 		AllowedOrigins: utils.GetEnvAsStringSlice("ALLOWED_ORIGINS", []string{"http://localhost:3000"}),
+
+		// Rate limiting - requests per second per IP
+		RateLimitPerSecond: utils.GetEnvAsInt("RATE_LIMIT_PER_SECOND", 10),
 	}
 }
 

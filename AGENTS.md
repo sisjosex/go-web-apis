@@ -437,10 +437,17 @@ reference: `TestCreateProduct_Success`, `_WithVariants`, `_SKUAlreadyExists`,
 
 Run with `make test-{module}` for the modules you touched, or `make test-all`.
 
-**Known blocker:** every `make test-*` depends on `db-reset`, and migrations run in the
-literal order of `ENABLED_MODULES` in `.env.test`, where `users` currently precedes
-`tenancy`. If `db-reset` fails on migration ordering, that is this pre-existing config
-issue — report it, do not work around it by skipping the tests.
+**`db-reset` works — verify for real.** Every `make test-*` depends on it, and it drops,
+recreates, migrates and seeds `josex_test` from scratch. Migrations run in the literal order
+of `ENABLED_MODULES` in `.env.test`, which puts `tenancy` ahead of `users`; keep any new
+module after every module whose schema it references. A `db-reset` failure is a current
+problem to diagnose, not a known issue to report and step around.
+
+**Never skip a test to get past a broken endpoint.** `t.Skipf` on an unexpected status turns
+a dead endpoint into a green run: the whole sales order lifecycle was 500-ing for months
+behind fifteen of them. A setup step that does not return what the test needs is `t.Fatalf`.
+`t.Skip` is only for a route that genuinely does not exist yet, guarded on 404 specifically —
+never on "any status I did not want".
 
 ### Adding a New Module
 

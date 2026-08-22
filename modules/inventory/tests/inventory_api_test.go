@@ -4248,7 +4248,7 @@ func axisProductWithSkus(
 	productID, _ = createProductWithAxes(t, helper, prefix, []axisSpec{
 		{groupType: "Size", options: []string{"M", "XL"}},
 	})
-	if w := generateSkus(t, helper, productID); w.Code != http.StatusOK {
+	if w := generateSkus(t, helper, productID); w.Code != http.StatusCreated {
 		t.Fatalf("generating the SKUs of %s failed with %d: %s", productID, w.Code, w.Body.String())
 	}
 
@@ -4521,7 +4521,7 @@ func TestRedistributeBatches_SplitsStrandedLot(t *testing.T) {
 	json.Unmarshal(wc.Body.Bytes(), &stranded)
 
 	putAxes(t, helper, productID, []axisSpec{{groupType: "Size", options: []string{"M", "XL"}}})
-	if w := generateSkus(t, helper, productID); w.Code != http.StatusOK {
+	if w := generateSkus(t, helper, productID); w.Code != http.StatusCreated {
 		t.Fatalf("generating the SKUs of %s failed with %d: %s", productID, w.Code, w.Body.String())
 	}
 	skus := combinationSkus(t, helper, productID)
@@ -4578,7 +4578,7 @@ func TestRedistributeBatches_KeepsProductTotal(t *testing.T) {
 	json.Unmarshal(wc.Body.Bytes(), &stranded)
 
 	putAxes(t, helper, productID, []axisSpec{{groupType: "Size", options: []string{"M", "XL"}}})
-	if w := generateSkus(t, helper, productID); w.Code != http.StatusOK {
+	if w := generateSkus(t, helper, productID); w.Code != http.StatusCreated {
 		t.Fatalf("generating the SKUs of %s failed with %d: %s", productID, w.Code, w.Body.String())
 	}
 	skus := combinationSkus(t, helper, productID)
@@ -4683,7 +4683,7 @@ func TestRedistributeBatches_MismatchedAmountsRefused(t *testing.T) {
 	json.Unmarshal(wc.Body.Bytes(), &stranded)
 
 	putAxes(t, helper, productID, []axisSpec{{groupType: "Size", options: []string{"M", "XL"}}})
-	if w := generateSkus(t, helper, productID); w.Code != http.StatusOK {
+	if w := generateSkus(t, helper, productID); w.Code != http.StatusCreated {
 		t.Fatalf("generating the SKUs of %s failed with %d: %s", productID, w.Code, w.Body.String())
 	}
 	skus := combinationSkus(t, helper, productID)
@@ -4719,7 +4719,7 @@ func TestRedistributeBatches_RefusedForConsumedLot(t *testing.T) {
 	consumeBatch(t, stranded.ID.String())
 
 	putAxes(t, helper, productID, []axisSpec{{groupType: "Size", options: []string{"M", "XL"}}})
-	if w := generateSkus(t, helper, productID); w.Code != http.StatusOK {
+	if w := generateSkus(t, helper, productID); w.Code != http.StatusCreated {
 		t.Fatalf("generating the SKUs of %s failed with %d: %s", productID, w.Code, w.Body.String())
 	}
 	skus := combinationSkus(t, helper, productID)
