@@ -84,3 +84,24 @@ func (s *SkuService) RedistributeStock(
 		ctx, tenantID, productID, string(targetsJSON), createdBy,
 	)
 }
+
+// CreateCombination hands the SP the axis cap from InventoryConfig, exactly as
+// GenerateSkus does, and the axes as the JSON the SP reads.
+func (s *SkuService) CreateCombination(
+	ctx context.Context,
+	tenantID uuid.UUID,
+	productID string,
+	dto models.CreateCombinationDto,
+) (*models.CreateCombinationResponse, error) {
+	axesJSON, err := json.Marshal(dto.Axes)
+	if err != nil {
+		if s.logger != nil {
+			s.logger.Printf("❌ Error marshaling combination axes: %v", err)
+		}
+		return nil, err
+	}
+
+	return s.repository.CreateCombination(
+		ctx, tenantID, productID, string(axesJSON), dto.SKU, s.config.MaxAxes,
+	)
+}

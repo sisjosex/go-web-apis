@@ -57,7 +57,7 @@ func (ctrl *StockController) UpdateReorderLevel(c *gin.Context) {
 	}
 
 	userID := c.GetString("user_id")
-	result, err := ctrl.stockService.UpdateReorderLevel(c.Request.Context(), tenantID, productID, dto.ReorderLevel, &userID)
+	result, err := ctrl.stockService.UpdateReorderLevel(c.Request.Context(), tenantID, productID, dto.ReorderLevel, &userID, nil)
 	if err != nil {
 		var pgErr *pgconn.PgError
 		if errors.As(err, &pgErr) {

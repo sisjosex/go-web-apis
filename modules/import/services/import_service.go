@@ -97,10 +97,12 @@ type parsedRow struct {
 }
 
 func (s *importService) Validate(ctx importModels.ImportContext, resource string, data []byte) (*importModels.ValidateResponse, error) {
-	descriptor, rows, err := s.prepare(resource, data)
+	descriptor, rows, headers, err := s.prepare(resource, data)
 	if err != nil {
 		return nil, err
 	}
+	ctx.Headers = headers
+	ctx.Scratch = make(map[string]any)
 
 	response := &importModels.ValidateResponse{
 		Resource: descriptor.Resource(),
@@ -126,10 +128,12 @@ func (s *importService) Validate(ctx importModels.ImportContext, resource string
 }
 
 func (s *importService) Import(ctx importModels.ImportContext, resource string, data []byte) (*importModels.ImportResponse, error) {
-	descriptor, rows, err := s.prepare(resource, data)
+	descriptor, rows, headers, err := s.prepare(resource, data)
 	if err != nil {
 		return nil, err
 	}
+	ctx.Headers = headers
+	ctx.Scratch = make(map[string]any)
 
 	meta := importModels.RunMeta{
 		Resource:    descriptor.Resource(),
@@ -163,31 +167,33 @@ func (s *importService) Import(ctx importModels.ImportContext, resource string, 
 }
 
 // prepare parses the CSV, resolves the descriptor (explicit resource or header
-// detection), and enforces the row limit.
-func (s *importService) prepare(resource string, data []byte) (importInterfaces.ImportDescriptor, []parsedRow, error) {
+// detection), and enforces the row limit. The headers travel back out because a
+// row is a map by the time a descriptor sees it: ImportContext.Headers is the
+// only place the file's column order survives.
+func (s *importService) prepare(resource string, data []byte) (importInterfaces.ImportDescriptor, []parsedRow, []string, error) {
 	headers, rows, err := parseCSV(data)
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, nil, err
 	}
 
 	var descriptor importInterfaces.ImportDescriptor
 	if resource != "" {
 		found := false
 		if descriptor, found = s.registry.Get(resource); !found {
-			return nil, nil, importErrors.ErrUnknownFormat
+			return nil, nil, nil, importErrors.ErrUnknownFormat
 		}
 	} else {
 		found := false
 		if descriptor, found = s.registry.Detect(headers); !found {
-			return nil, nil, importErrors.ErrUnknownFormat
+			return nil, nil, nil, importErrors.ErrUnknownFormat
 		}
 	}
 
 	if len(rows) > readLimits().MaxRows {
-		return nil, nil, importErrors.ErrTooManyRows
+		return nil, nil, nil, importErrors.ErrTooManyRows
 	}
 
-	return descriptor, rows, nil
+	return descriptor, rows, headers, nil
 }
 
 // parseCSV reads the CSV, normalizes headers (trim + lowercase), and returns each

@@ -4,6 +4,7 @@ import (
 	appConfig "josex/web/config"
 	coreServices "josex/web/modules/core/services"
 	"josex/web/modules/inventory/controllers"
+	inventoryInterfaces "josex/web/modules/inventory/interfaces"
 	inventoryPerms "josex/web/modules/inventory/permissions"
 	"josex/web/modules/inventory/repositories"
 	inventoryServices "josex/web/modules/inventory/services"
@@ -12,35 +13,52 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-func RegisterInventoryRoutes(
-	router *gin.RouterGroup,
-	dbService coreServices.DatabaseService,
-	authMiddleware gin.HandlerFunc,
-	tenantMiddleware gin.HandlerFunc,
-) {
-	// Create repositories
+// InventoryServices is the module's service layer, built once and handed back so
+// callers outside the module can reach it. The CSV import descriptors live in
+// routes.go (INV-015 D1) and every one of them is a wrapper over a service that
+// used to be created inside RegisterInventoryRoutes and unreachable from there.
+type InventoryServices struct {
+	Product  inventoryInterfaces.ProductService
+	Category inventoryInterfaces.CategoryService
+	Movement inventoryInterfaces.MovementService
+	Stock    inventoryInterfaces.StockService
+	Sku      inventoryInterfaces.SkuService
+	Batch    inventoryInterfaces.BatchService
+}
+
+// NewInventoryServices wires the module's repositories and services over one
+// database service.
+func NewInventoryServices(dbService coreServices.DatabaseService) InventoryServices {
 	productRepo := repositories.NewProductRepository(dbService, nil)
 	movementRepo := repositories.NewMovementRepository(dbService, nil)
 	stockRepo := repositories.NewStockRepository(dbService, nil)
 	categoryRepo := repositories.NewCategoryRepository(dbService, nil)
 	skuRepo := repositories.NewSkuRepository(dbService, nil)
+	batchRepo := repositories.NewBatchRepository(dbService)
 
-	// Create services
-	productService := inventoryServices.NewProductService(productRepo, appConfig.GetConfig().Inventory, nil)
-	movementService := inventoryServices.NewMovementService(movementRepo, nil)
-	stockService := inventoryServices.NewStockService(stockRepo)
-	categoryService := inventoryServices.NewCategoryService(categoryRepo, nil)
-	skuService := inventoryServices.NewSkuService(skuRepo, appConfig.GetConfig().Inventory, nil)
+	return InventoryServices{
+		Product:  inventoryServices.NewProductService(productRepo, appConfig.GetConfig().Inventory, nil),
+		Category: inventoryServices.NewCategoryService(categoryRepo, nil),
+		Movement: inventoryServices.NewMovementService(movementRepo, nil),
+		Stock:    inventoryServices.NewStockService(stockRepo),
+		Sku:      inventoryServices.NewSkuService(skuRepo, appConfig.GetConfig().Inventory, nil),
+		Batch:    inventoryServices.NewBatchService(batchRepo),
+	}
+}
 
+func RegisterInventoryRoutes(
+	router *gin.RouterGroup,
+	services InventoryServices,
+	authMiddleware gin.HandlerFunc,
+	tenantMiddleware gin.HandlerFunc,
+) {
 	// Create controllers
-	productController := controllers.NewProductController(productService)
-	movementController := controllers.NewMovementController(movementService)
-	stockController := controllers.NewStockController(stockService)
-	categoryController := controllers.NewCategoryController(categoryService)
-	skuController := controllers.NewSkuController(skuService)
-	batchRepository := repositories.NewBatchRepository(dbService)
-	batchService := inventoryServices.NewBatchService(batchRepository)
-	batchController := controllers.NewBatchController(batchService)
+	productController := controllers.NewProductController(services.Product)
+	movementController := controllers.NewMovementController(services.Movement)
+	stockController := controllers.NewStockController(services.Stock)
+	categoryController := controllers.NewCategoryController(services.Category)
+	skuController := controllers.NewSkuController(services.Sku)
+	batchController := controllers.NewBatchController(services.Batch)
 
 	api := router.Group("/inventory", authMiddleware, tenantMiddleware)
 

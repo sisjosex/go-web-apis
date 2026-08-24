@@ -83,3 +83,50 @@ const (
 	CategoryHasProducts       = "category.has-products"
 	ProductAlreadyInCategory  = "product.already-in-category"
 )
+
+// CSV import (INV-015). Every code that quotes a cell back travels with the
+// value appended after the separator the wizard splits on ("…|Bebidas").
+const (
+	ImportSkuRequired           = "inventory.import.sku-required"
+	ImportSkuDuplicate          = "inventory.import.sku-duplicate"
+	ImportSkuUnknown            = "inventory.import.sku-unknown"
+	ImportNameRequired          = "inventory.import.name-required"
+	ImportCategoryUnknown       = "inventory.import.category-unknown"
+	ImportCategoryCreated       = "inventory.import.category-created"
+	ImportCategoryDuplicate     = "inventory.import.category-duplicate"
+	ImportCategoryParentUnknown = "inventory.import.category-parent-unknown"
+	ImportCombinationUnknown    = "inventory.import.combination-unknown"
+	ImportQuantityInvalid       = "inventory.import.quantity-invalid"
+	ImportReorderLevelInvalid   = "inventory.import.reorder-level-invalid"
+	ImportLotNumberRequired     = "inventory.import.lot-number-required"
+	ImportDateInvalid           = "inventory.import.date-invalid"
+	ImportExpiryBeforePurchase  = "inventory.import.expiry-before-purchase"
+	ImportUnitCostInvalid       = "inventory.import.unit-cost-invalid"
+	ImportImageMissing          = "inventory.import.image-missing"
+	ImportCreateFailed          = "inventory.import.create-failed"
+	ImportMediaFailed           = "inventory.import.media-failed"
+	ImportCategoryAssignFailed  = "inventory.import.category-assign-failed"
+	ImportStockFailed           = "inventory.import.stock-failed"
+	ImportBatchFailed           = "inventory.import.batch-failed"
+)
+
+// The catalogue file: one row per sellable thing, one column per axis, no cell
+// grammar (INV-016). `sku` names the product and `variant_sku` the combination,
+// so the two are told apart by name rather than by context.
+const (
+	ImportProductSkuRequired      = "inventory.import.product-sku-required"
+	ImportVariantSkuDuplicate     = "inventory.import.variant-sku-duplicate"
+	ImportVariantSkuTooLong       = "inventory.import.variant-sku-too-long"
+	ImportAxisColumnInvalid       = "inventory.import.axis-column-invalid"
+	ImportAxesNone                = "inventory.import.axes-none"
+	ImportAxesIncomplete          = "inventory.import.axes-incomplete"
+	ImportAxesInconsistent        = "inventory.import.axes-inconsistent"
+	ImportAxesTooMany             = "inventory.import.axes-too-many"
+	ImportPriceInvalid            = "inventory.import.price-invalid"
+	ImportPriceInconsistent       = "inventory.import.price-inconsistent"
+	ImportPriceAttributed         = "inventory.import.price-attributed"
+	ImportProductInconsistent     = "inventory.import.product-inconsistent"
+	ImportOptionImageInconsistent = "inventory.import.option-image-inconsistent"
+	ImportCombinationDuplicate    = "inventory.import.combination-duplicate"
+	ImportCombinationFailed       = "inventory.import.combination-failed"
+)

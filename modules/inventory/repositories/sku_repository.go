@@ -168,3 +168,43 @@ func (r *SkuRepository) RedistributeStock(
 
 	return &result, nil
 }
+
+// CreateCombination calls the INV-016 SP that creates one named combination.
+// Everything it enforces — the product exists, the axis cap, the combination is
+// new, the code is free — is in the SP, so nothing here validates anything.
+func (r *SkuRepository) CreateCombination(
+	ctx context.Context,
+	tenantID uuid.UUID,
+	productID string,
+	axesJSON string,
+	sku *string,
+	maxAxes int,
+) (*models.CreateCombinationResponse, error) {
+	var result models.CreateCombinationResponse
+
+	err := r.dbService.QueryRow(
+		ctx,
+		`SELECT CAST(product_id AS VARCHAR), CAST(sku_id AS VARCHAR), sku,
+		        axis_count
+		 FROM inventory.sp_create_product_sku_combination($1, $2, $3, $4, $5)`,
+		tenantID, productID, axesJSON, sku, maxAxes,
+	).Scan(
+		&result.ProductID,
+		&result.SkuID,
+		&result.SKU,
+		&result.AxisCount,
+	)
+
+	if err != nil {
+		if r.logger != nil {
+			r.logger.Printf("❌ Error creating product SKU combination: %v", err)
+		}
+		var pgErr *pgconn.PgError
+		if errors.As(err, &pgErr) {
+			return nil, pgErr
+		}
+		return nil, err
+	}
+
+	return &result, nil
+}

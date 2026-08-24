@@ -93,14 +93,29 @@ func (i ImportImages) Lookup(filename string) ([]byte, bool) {
 }
 
 // ImportContext carries the per-request scope a descriptor needs: the tenant it
-// runs in, the acting user, the request language, the parsed options, and the
-// images extracted from the optional companion archive.
+// runs in, the acting user, the request language, the parsed options, the images
+// extracted from the optional companion archive, and the file's columns in the
+// order they were written.
 type ImportContext struct {
 	TenantID    uuid.UUID
 	PerformedBy *uuid.UUID
 	Lang        string
 	Options     ImportOptions
 	Images      ImportImages
+	// Headers are the file's normalized headers in column order, as parseCSV
+	// read them. A row reaches a descriptor as a map, which has no order, so a
+	// descriptor whose columns are not fixed in advance — the products file and
+	// its variant[<axis>] markers (INV-016 D1) — has no other way to tell which
+	// of them the operator wrote first. Set by the engine on every run; a
+	// descriptor with a fixed column list ignores it.
+	Headers []string
+	// Scratch is per-run state a descriptor keeps across the rows of one file:
+	// the engine creates it empty at the start of every validate or process run
+	// and never reads it. A descriptor is registered once and shared by every
+	// request, so this — not a field on the descriptor — is where a ledger that
+	// must not leak between concurrent runs belongs. Rows of one run are
+	// processed in order on one goroutine, so it needs no lock.
+	Scratch map[string]any
 }
 
 // RowResult is the per-row outcome of a validate or process run, keyed by the

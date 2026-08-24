@@ -4,12 +4,15 @@
 package inventory_test
 
 import (
+	"archive/zip"
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"strings"
 	"testing"
 	"time"
 
@@ -4733,4 +4736,986 @@ func TestRedistributeBatches_RefusedForConsumedLot(t *testing.T) {
 
 	assert.Equal(t, http.StatusConflict, w.Code, w.Body.String())
 	assert.Contains(t, w.Body.String(), inventoryErrors.BatchHasMovements)
+}
+
+// ============================================================================
+// CSV import — products, categories, stock and lots (INV-015)
+// ============================================================================
+
+// importInventoryCSV posts a CSV — and, when given, its companion image archive —
+// to the generic import endpoint and returns the decoded response, failing the
+// test if the endpoint itself rejected the upload.
+func importInventoryCSV(
+	t *testing.T,
+	helper *testhelpers.ApiTestHelper,
+	path, resource, csv, options string,
+	images []byte,
+) map[string]interface{} {
+	t.Helper()
+
+	files := []testhelpers.MultipartFile{
+		{Field: "file", Filename: resource + ".csv", Content: []byte(csv)},
+	}
+	if images != nil {
+		files = append(files, testhelpers.MultipartFile{Field: "images", Filename: "images.zip", Content: images})
+	}
+
+	fields := map[string]string{"resource": resource}
+	if options != "" {
+		fields["options"] = options
+	}
+
+	w := helper.DoMultipartRequest("POST", path, fields, files, map[string]string{})
+	if w.Code != http.StatusOK {
+		t.Fatalf("import returned %d: %s", w.Code, w.Body.String())
+	}
+
+	var decoded map[string]interface{}
+	if err := json.Unmarshal(w.Body.Bytes(), &decoded); err != nil {
+		t.Fatalf("could not decode the import response: %v — %s", err, w.Body.String())
+	}
+	return decoded
+}
+
+// importRow returns one row of an import or validate response, by its position
+// in the file.
+func importRow(t *testing.T, response map[string]interface{}, index int) map[string]interface{} {
+	t.Helper()
+
+	rows, ok := response["rows"].([]interface{})
+	if !ok || len(rows) <= index {
+		t.Fatalf("expected at least %d rows in %v", index+1, response)
+	}
+	row, ok := rows[index].(map[string]interface{})
+	if !ok {
+		t.Fatalf("expected a row object, got %v", rows[index])
+	}
+	return row
+}
+
+// rowCodes flattens the errors or the warnings of one row into plain strings.
+func rowCodes(row map[string]interface{}, key string) []string {
+	raw, _ := row[key].([]interface{})
+	codes := make([]string, 0, len(raw))
+	for _, entry := range raw {
+		codes = append(codes, fmt.Sprint(entry))
+	}
+	return codes
+}
+
+// containsCode reports whether any code is the one expected, or the one expected
+// with a value appended after the separator the wizard splits on.
+func containsCode(codes []string, expected string) bool {
+	for _, code := range codes {
+		if code == expected || strings.HasPrefix(code, expected+"|") {
+			return true
+		}
+	}
+	return false
+}
+
+// archiveWith builds the companion image archive holding one entry.
+// archiveWith builds the companion image archive out of alternating name and
+// content arguments. It takes more than one because D7's option images arrive
+// in the same ZIP as the product's own picture.
+func archiveWith(t *testing.T, entries ...any) []byte {
+	t.Helper()
+
+	if len(entries)%2 != 0 {
+		t.Fatalf("archiveWith takes name/content pairs, got %d arguments", len(entries))
+	}
+
+	var buffer bytes.Buffer
+	writer := zip.NewWriter(&buffer)
+	for index := 0; index < len(entries); index += 2 {
+		name, ok := entries[index].(string)
+		if !ok {
+			t.Fatalf("argument %d should be a filename, got %v", index, entries[index])
+		}
+		content, ok := entries[index+1].([]byte)
+		if !ok {
+			t.Fatalf("argument %d should be the file's bytes, got %v", index+1, entries[index+1])
+		}
+
+		entry, err := writer.Create(name)
+		if err != nil {
+			t.Fatalf("could not build the image archive: %v", err)
+		}
+		if _, err := entry.Write(content); err != nil {
+			t.Fatalf("could not write into the image archive: %v", err)
+		}
+	}
+	if err := writer.Close(); err != nil {
+		t.Fatalf("could not close the image archive: %v", err)
+	}
+	return buffer.Bytes()
+}
+
+// productBySku reads an imported product back through the endpoint the operator
+// would use, which is the only handle a CSV row leaves behind.
+func productBySku(t *testing.T, helper *testhelpers.ApiTestHelper, sku string) models.ProductDetail {
+	t.Helper()
+
+	w := helper.DoRequest("GET", "/inventory/products/sku/"+sku, nil, map[string]string{})
+	if w.Code != http.StatusOK {
+		t.Fatalf("reading back %s returned %d: %s", sku, w.Code, w.Body.String())
+	}
+
+	var detail models.ProductDetail
+	if err := json.Unmarshal(w.Body.Bytes(), &detail); err != nil {
+		t.Fatalf("could not decode the product: %v — %s", err, w.Body.String())
+	}
+	return detail
+}
+
+// importPrefix is a per-test SKU stem: products are unique per tenant and the
+// suite shares one.
+func importPrefix(name string) string {
+	return fmt.Sprintf("%s%d", name, time.Now().UnixNano())
+}
+
+
+// AC-14 — the template and the schema come from the descriptor's Columns(), and
+// all three product resources publish the same two sample variant[…] columns so
+// the marker is met once (D6).
+func TestImportProducts_TemplateCarriesTheAxisMarker(t *testing.T) {
+	helper := SetupInventoryTest(t)
+	defer helper.Close()
+
+	for _, resource := range []string{"products", "product_stock", "product_batches"} {
+		template := helper.DoRequest("GET", "/import/template?resource="+resource, nil, map[string]string{})
+		assert.Equal(t, http.StatusOK, template.Code, template.Body.String())
+		assert.Contains(t, template.Body.String(), "variant[talle],variant[color]",
+			"%s should publish the two sample axis columns: %s", resource, template.Body.String())
+	}
+
+	template := helper.DoRequest("GET", "/import/template?resource=products", nil, map[string]string{})
+	assert.Contains(t, template.Body.String(), "sku,name,description,price",
+		"the catalogue header row: %s", template.Body.String())
+	// AC-13 — no descriptor publishes a packed cell any more.
+	for _, retired := range []string{"axes", "combination", "base_price"} {
+		assert.NotContains(t, template.Body.String(), retired+",",
+			"%q should be gone from the template: %s", retired, template.Body.String())
+	}
+
+	schema := helper.DoRequest("GET", "/import/schema?resource=products", nil, map[string]string{})
+	assert.Equal(t, http.StatusOK, schema.Code, schema.Body.String())
+}
+
+// AC-1 — one file creates the whole catalogue: a simple product, a one-axis
+// product and a two-axis product, in one pass (D9).
+func TestImportProducts_OneFileCreatesTheWholeCatalogue(t *testing.T) {
+	helper := SetupInventoryTest(t)
+	defer helper.Close()
+
+	prefix := importPrefix("IMPCAT")
+	csv := fmt.Sprintf(
+		"sku,name,price,category,variant[talle],variant[color],stock,reorder_level\n"+
+			"%s-Y,Yerba 1kg,4200,Bebidas %s,,,12,3\n"+
+			"%s-C,Gaseosa Cola,2200,Bebidas %s,,,24,6\n"+
+			"%s-R,Remera Basica,7500,Indumentaria %s,M,Negro,10,3\n"+
+			"%s-R,Remera Basica,7500,,L,Negro,8,3\n"+
+			"%s-R,Remera Basica,8700,,XL,Blanco,5,2\n",
+		prefix, prefix, prefix, prefix, prefix, prefix, prefix, prefix)
+
+	dryRun := importInventoryCSV(t, helper, "/import/validate", "products", csv, "", nil)
+	assert.Equal(t, float64(5), dryRun["valid"], "every row should validate: %v", dryRun)
+
+	response := importInventoryCSV(t, helper, "/import", "products", csv, "", nil)
+	for index := 0; index < 5; index++ {
+		assert.Equal(t, "created", importRow(t, response, index)["status"],
+			"row %d: %v", index, response)
+	}
+
+	// Three products out of five rows: the repeated sku is not a duplicate.
+	simple := productBySku(t, helper, prefix+"-Y")
+	assert.Empty(t, nonDefaultSkus(listSkus(t, helper, simple.ID).Skus),
+		"a row with no variant cell is a simple product")
+
+	shirt := productBySku(t, helper, prefix+"-R")
+	assert.Len(t, nonDefaultSkus(listSkus(t, helper, shirt.ID).Skus), 3,
+		"three listed combinations")
+}
+
+// AC-2 — the file's combinations and only those: three of the six that
+// talle{M,L,XL} × color{Negro,Blanco} spans (D2).
+func TestImportProducts_OnlyTheListedCombinationsExist(t *testing.T) {
+	helper := SetupInventoryTest(t)
+	defer helper.Close()
+
+	prefix := importPrefix("IMPPART")
+	csv := fmt.Sprintf(
+		"sku,name,price,variant[talle],variant[color]\n"+
+			"%s,Remera,7500,M,Negro\n"+
+			"%s,Remera,7500,L,Negro\n"+
+			"%s,Remera,8700,XL,Blanco\n",
+		prefix, prefix, prefix)
+
+	importInventoryCSV(t, helper, "/import", "products", csv, "", nil)
+	productID := productBySku(t, helper, prefix).ID
+
+	skus := nonDefaultSkus(listSkus(t, helper, productID).Skus)
+	assert.Len(t, skus, 3, "three combinations, not the six a cartesian product gives: %+v", skus)
+
+	// Both axes exist with the options the file named, and nothing else was
+	// generated from them.
+	detail := fetchProductDetail(t, helper, productID)
+	assert.Len(t, detail.Variants, 2, "two axes: %+v", detail.Variants)
+	for _, group := range detail.Variants {
+		assert.True(t, group.AffectsInventory, "%s should be an inventory axis", group.GroupType)
+	}
+}
+
+// AC-2 — the same file gives one product one axis and another two (D1).
+func TestImportProducts_EachProductGetsOnlyTheAxesItsRowsFill(t *testing.T) {
+	helper := SetupInventoryTest(t)
+	defer helper.Close()
+
+	prefix := importPrefix("IMPAXES")
+	csv := fmt.Sprintf(
+		"sku,name,price,variant[talle],variant[color],variant[tamano]\n"+
+			"%s-C,Gaseosa,2200,,,500ml\n"+
+			"%s-C,Gaseosa,3000,,,1.5L\n"+
+			"%s-R,Remera,7500,M,Negro,\n",
+		prefix, prefix, prefix)
+
+	importInventoryCSV(t, helper, "/import", "products", csv, "", nil)
+
+	cola := fetchProductDetail(t, helper, productBySku(t, helper, prefix+"-C").ID)
+	if assert.Len(t, cola.Variants, 1, "COLA gets only Tamano: %+v", cola.Variants) {
+		assert.Equal(t, "Tamano", cola.Variants[0].GroupType)
+	}
+
+	shirt := fetchProductDetail(t, helper, productBySku(t, helper, prefix+"-R").ID)
+	assert.Len(t, shirt.Variants, 2, "the shirt gets Talle and Color: %+v", shirt.Variants)
+}
+
+// AC-2b — a repeat row is not a duplicate; a differing non-empty product cell is
+// product-inconsistent (D9).
+func TestImportProducts_RepeatRowReconciliation(t *testing.T) {
+	helper := SetupInventoryTest(t)
+	defer helper.Close()
+
+	prefix := importPrefix("IMPREPEAT")
+	csv := fmt.Sprintf(
+		"sku,name,price,variant[talle]\n"+
+			"%s,Remera Basica,7500,M\n"+
+			"%s,Remera Basica,7500,L\n"+
+			"%s,Remera Premium,7500,XL\n",
+		prefix, prefix, prefix)
+
+	dryRun := importInventoryCSV(t, helper, "/import/validate", "products", csv, "", nil)
+	assert.Equal(t, "valid", importRow(t, dryRun, 1)["status"],
+		"an identical repeat is the same product: %v", dryRun)
+	third := importRow(t, dryRun, 2)
+	assert.Equal(t, "invalid", third["status"], "%v", third)
+	assert.True(t, containsCode(rowCodes(third, "errors"), inventoryErrors.ImportProductInconsistent),
+		"expected product-inconsistent: %v", third["errors"])
+
+	response := importInventoryCSV(t, helper, "/import", "products", csv, "", nil)
+	assert.Equal(t, "created", importRow(t, response, 1)["status"], "%v", response)
+	assert.Equal(t, "failed", importRow(t, response, 2)["status"], "%v", response)
+
+	productID := productBySku(t, helper, prefix).ID
+	assert.Len(t, nonDefaultSkus(listSkus(t, helper, productID).Skus), 2,
+		"the refused row created nothing")
+}
+
+// AC-3 — a filled variant_sku is the code verbatim, a blank one is derived the
+// way sp_generate_product_skus would, and one file may mix both (D6).
+func TestImportProducts_VariantSkuVerbatimOrDerived(t *testing.T) {
+	helper := SetupInventoryTest(t)
+	defer helper.Close()
+
+	prefix := importPrefix("IMPCODE")
+	legacy := fmt.Sprintf("LEGACY-%d", time.Now().UnixNano()%1000000)
+	csv := fmt.Sprintf(
+		"sku,name,price,variant[talle],variant_sku\n"+
+			"%s,Remera,7500,M,%s\n"+
+			"%s,Remera,7500,XL,\n",
+		prefix, legacy, prefix)
+
+	importInventoryCSV(t, helper, "/import", "products", csv, "", nil)
+	productID := productBySku(t, helper, prefix).ID
+
+	codes := map[string]bool{}
+	for _, sku := range nonDefaultSkus(listSkus(t, helper, productID).Skus) {
+		codes[sku.SKU] = true
+	}
+
+	assert.True(t, codes[legacy], "the filled code travels verbatim: %v", codes)
+	assert.True(t, codes[prefix+"-XL"], "the blank one is derived: %v", codes)
+}
+
+// AC-4 — the row's price becomes the modifier of the option D3 attributes it to,
+// through the trigger that derives product_skus.price_modifier.
+func TestImportProducts_PriceBecomesThePerOptionModifier(t *testing.T) {
+	helper := SetupInventoryTest(t)
+	defer helper.Close()
+
+	prefix := importPrefix("IMPPRICE")
+	csv := fmt.Sprintf(
+		"sku,name,price,variant[talle],variant[color]\n"+
+			"%s,Remera,7500,M,Negro\n"+
+			"%s,Remera,7500,L,Negro\n"+
+			"%s,Remera,8700,XL,Blanco\n",
+		prefix, prefix, prefix)
+
+	importInventoryCSV(t, helper, "/import", "products", csv, "", nil)
+	productID := productBySku(t, helper, prefix).ID
+
+	byOption := combinationSkus(t, helper, productID)
+	assert.Equal(t, 0.0, byOption["M"].PriceModifier, "the first row is the base")
+	assert.Equal(t, 0.0, byOption["L"].PriceModifier, "L costs the same as M")
+	assert.Equal(t, 1200.0, byOption["XL"].PriceModifier,
+		"the 1200 lands on XL, the row's first unfixed axis: %+v", byOption["XL"])
+	assert.Equal(t, 7500.0, productBySku(t, helper, prefix).BasePrice,
+		"the product's base is the price of its first row")
+}
+
+// AC-5 — a row whose difference cannot be reconciled fails, naming the cell, and
+// writes nothing.
+func TestImportProducts_UnattributablePriceFailsTheRow(t *testing.T) {
+	helper := SetupInventoryTest(t)
+	defer helper.Close()
+
+	prefix := importPrefix("IMPBADPRICE")
+	csv := fmt.Sprintf(
+		"sku,name,price,variant[talle],variant[color]\n"+
+			"%s,Remera,7500,M,Negro\n"+
+			"%s,Remera,8700,XL,Blanco\n"+
+			"%s,Remera,9000,M,Negro\n",
+		prefix, prefix, prefix)
+
+	response := importInventoryCSV(t, helper, "/import", "products", csv, "", nil)
+	row := importRow(t, response, 2)
+
+	assert.Equal(t, "failed", row["status"], "%v", row)
+	assert.True(t, containsCode(rowCodes(row, "errors"), inventoryErrors.ImportPriceInconsistent),
+		"expected price-inconsistent: %v", row["errors"])
+
+	productID := productBySku(t, helper, prefix).ID
+	assert.Len(t, nonDefaultSkus(listSkus(t, helper, productID).Skus), 2,
+		"the refused row created no combination")
+}
+
+// AC-6 — a product whose rows fill different axis columns is refused.
+func TestImportProducts_RaggedAxisSetFailsTheRow(t *testing.T) {
+	helper := SetupInventoryTest(t)
+	defer helper.Close()
+
+	prefix := importPrefix("IMPRAGGED")
+	csv := fmt.Sprintf(
+		"sku,name,price,variant[talle],variant[color]\n"+
+			"%s,Remera,7500,M,Negro\n"+
+			"%s,Remera,7500,L,\n",
+		prefix, prefix)
+
+	response := importInventoryCSV(t, helper, "/import", "products", csv, "", nil)
+	row := importRow(t, response, 1)
+
+	assert.Equal(t, "failed", row["status"], "%v", row)
+	assert.True(t, containsCode(rowCodes(row, "errors"), inventoryErrors.ImportAxesInconsistent),
+		"expected axes-inconsistent: %v", row["errors"])
+}
+
+// AC-7 — `stock` on a row with no variant cell seeds the simple product's
+// default bucket and writes one ADJUSTMENT movement (D9).
+func TestImportProducts_StockOnASimpleRowSeedsTheDefaultBucket(t *testing.T) {
+	helper := SetupInventoryTest(t)
+	defer helper.Close()
+
+	prefix := importPrefix("IMPSEED")
+	csv := fmt.Sprintf("sku,name,price,stock,reorder_level\n%s,Yerba,3500,25,5\n", prefix)
+
+	response := importInventoryCSV(t, helper, "/import", "products", csv, "", nil)
+	assert.Equal(t, "created", importRow(t, response, 0)["status"], "%v", response)
+
+	productID := productBySku(t, helper, prefix).ID
+
+	stock := helper.DoRequest("GET", "/inventory/stock/"+productID, nil, map[string]string{})
+	var current models.ProductStock
+	json.Unmarshal(stock.Body.Bytes(), &current)
+	assert.Equal(t, 25.0, current.CurrentQuantity, "the opening count: %s", stock.Body.String())
+	assert.Equal(t, 5.0, current.ReorderLevel, "the reorder level: %s", stock.Body.String())
+
+	movements := listMovements(t, helper, "?product_id="+productID)
+	if assert.Len(t, movements.Movements, 1, "one opening count is one movement: %+v", movements.Movements) {
+		assert.Equal(t, "ADJUSTMENT", movements.Movements[0].MovementType)
+	}
+}
+
+// AC-10 — stock and reorder_level land on the combination of their own row, and
+// a blank one leaves it at zero without an error.
+func TestImportProducts_StockLandsOnTheRowsOwnCombination(t *testing.T) {
+	helper := SetupInventoryTest(t)
+	defer helper.Close()
+
+	prefix := importPrefix("IMPCOMBSTK")
+	csv := fmt.Sprintf(
+		"sku,name,price,variant[talle],stock,reorder_level\n"+
+			"%s,Remera,7500,M,10,3\n"+
+			"%s,Remera,7500,L,,\n",
+		prefix, prefix)
+
+	response := importInventoryCSV(t, helper, "/import", "products", csv, "", nil)
+	for index := 0; index < 2; index++ {
+		row := importRow(t, response, index)
+		assert.Equal(t, "created", row["status"], "%v", row)
+		assert.Empty(t, rowCodes(row, "errors"), "row %d: %v", index, row["errors"])
+	}
+
+	productID := productBySku(t, helper, prefix).ID
+	byOption := combinationSkus(t, helper, productID)
+	assert.Equal(t, 10.0, byOption["M"].CurrentQuantity, "M holds what its row said")
+	assert.Equal(t, 3.0, byOption["M"].ReorderLevel, "the level lands on the combination")
+	assert.Equal(t, 0.0, byOption["L"].CurrentQuantity, "a blank stock leaves it at zero")
+}
+
+// AC-8 — a variant_sku the tenant already has is duplicate on the dry run and
+// skipped on process.
+func TestImportProducts_TakenVariantSkuIsDuplicateThenSkipped(t *testing.T) {
+	helper := SetupInventoryTest(t)
+	defer helper.Close()
+
+	prefix := importPrefix("IMPTAKEN")
+	code := fmt.Sprintf("TAKEN-%d", time.Now().UnixNano()%1000000)
+
+	first := fmt.Sprintf("sku,name,price,variant[talle],variant_sku\n%s-A,Remera,7500,M,%s\n", prefix, code)
+	importInventoryCSV(t, helper, "/import", "products", first, "", nil)
+
+	// A second product trying to claim the same code.
+	again := fmt.Sprintf("sku,name,price,variant[talle],variant_sku\n%s-B,Polera,8000,M,%s\n", prefix, code)
+
+	dryRun := importInventoryCSV(t, helper, "/import/validate", "products", again, "", nil)
+	row := importRow(t, dryRun, 0)
+	assert.Equal(t, "duplicate", row["status"], "%v", row)
+	assert.True(t, containsCode(rowCodes(row, "errors"), inventoryErrors.ImportVariantSkuDuplicate),
+		"expected variant-sku-duplicate: %v", row["errors"])
+
+	response := importInventoryCSV(t, helper, "/import", "products", again, "", nil)
+	assert.Equal(t, "skipped", importRow(t, response, 0)["status"], "%v", response)
+}
+
+// AC-8 — a code longer than product_skus.sku holds is refused by the row.
+func TestImportProducts_OverLongVariantSkuIsRefused(t *testing.T) {
+	helper := SetupInventoryTest(t)
+	defer helper.Close()
+
+	prefix := importPrefix("IMPLONG")
+	csv := fmt.Sprintf("sku,name,price,variant[talle],variant_sku\n%s,Remera,7500,M,%s\n",
+		prefix, strings.Repeat("X", 51))
+
+	response := importInventoryCSV(t, helper, "/import", "products", csv, "", nil)
+	row := importRow(t, response, 0)
+
+	assert.Equal(t, "failed", row["status"], "%v", row)
+	assert.True(t, containsCode(rowCodes(row, "errors"), inventoryErrors.ImportVariantSkuTooLong),
+		"expected variant-sku-too-long: %v", row["errors"])
+}
+
+// AC-9 — an axis nobody anticipated works with no code change, a malformed
+// marker is refused, and a stray column is ignored.
+func TestImportProducts_AnyAxisWorksAndStrayColumnsAreIgnored(t *testing.T) {
+	helper := SetupInventoryTest(t)
+	defer helper.Close()
+
+	prefix := importPrefix("IMPVOLT")
+	csv := fmt.Sprintf("sku,name,price,variant[voltaje],notas\n%s,Taladro,45000,220V,liquidacion\n", prefix)
+
+	response := importInventoryCSV(t, helper, "/import", "products", csv, "", nil)
+	row := importRow(t, response, 0)
+	assert.Equal(t, "created", row["status"], "%v", row)
+
+	detail := fetchProductDetail(t, helper, productBySku(t, helper, prefix).ID)
+	if assert.Len(t, detail.Variants, 1, "the axis the bracket named: %+v", detail.Variants) {
+		assert.Equal(t, "Voltaje", detail.Variants[0].GroupType)
+	}
+
+	broken := fmt.Sprintf("sku,name,price,variant[]\n%s-B,Taladro,45000,220V\n", prefix)
+	failed := importInventoryCSV(t, helper, "/import", "products", broken, "", nil)
+	brokenRow := importRow(t, failed, 0)
+	assert.Equal(t, "failed", brokenRow["status"], "%v", brokenRow)
+	assert.True(t, containsCode(rowCodes(brokenRow, "errors"), inventoryErrors.ImportAxisColumnInvalid),
+		"expected axis-column-invalid: %v", brokenRow["errors"])
+}
+
+// D9 — two rows naming the same combination: duplicate on the dry run, skipped
+// on process.
+func TestImportProducts_TheSameCombinationTwiceIsADuplicate(t *testing.T) {
+	helper := SetupInventoryTest(t)
+	defer helper.Close()
+
+	prefix := importPrefix("IMPDUPCOMB")
+	csv := fmt.Sprintf(
+		"sku,name,price,variant[talle]\n"+
+			"%s,Remera,7500,M\n"+
+			"%s,Remera,7500,M\n",
+		prefix, prefix)
+
+	dryRun := importInventoryCSV(t, helper, "/import/validate", "products", csv, "", nil)
+	assert.Equal(t, "duplicate", importRow(t, dryRun, 1)["status"], "%v", dryRun)
+
+	response := importInventoryCSV(t, helper, "/import", "products", csv, "", nil)
+	assert.Equal(t, "created", importRow(t, response, 0)["status"], "%v", response)
+	assert.Equal(t, "skipped", importRow(t, response, 1)["status"], "%v", response)
+
+	productID := productBySku(t, helper, prefix).ID
+	assert.Len(t, nonDefaultSkus(listSkus(t, helper, productID).Skus), 1, "one combination")
+}
+
+// D4 — a repeated product SKU across two runs is still a skip.
+func TestImportProducts_DuplicateSkuIsSkippedNotFatal(t *testing.T) {
+	helper := SetupInventoryTest(t)
+	defer helper.Close()
+
+	prefix := importPrefix("IMPDUP")
+	first := fmt.Sprintf("sku,name,price\n%s-A,Original,1000\n", prefix)
+	importInventoryCSV(t, helper, "/import", "products", first, "", nil)
+
+	again := fmt.Sprintf("sku,name,price\n%s-A,Repetido,1000\n%s-B,Nuevo,2000\n", prefix, prefix)
+
+	dryRun := importInventoryCSV(t, helper, "/import/validate", "products", again, "", nil)
+	assert.Equal(t, "duplicate", importRow(t, dryRun, 0)["status"], "%v", dryRun)
+
+	response := importInventoryCSV(t, helper, "/import", "products", again, "", nil)
+	assert.Equal(t, "skipped", importRow(t, response, 0)["status"], "%v", response)
+	assert.Equal(t, "created", importRow(t, response, 1)["status"], "%v", response)
+
+	assert.Equal(t, "Original", productBySku(t, helper, prefix+"-A").Name,
+		"the skipped row must not have rewritten the product")
+}
+
+// AC-12 — image[color] attaches the picture to the option, with the product's
+// own `image` staying the product-level primary (D7).
+func TestImportProducts_OptionImagesHangOffTheOption(t *testing.T) {
+	helper := SetupInventoryTest(t)
+	defer helper.Close()
+
+	prefix := importPrefix("IMPOPTIMG")
+	csv := fmt.Sprintf(
+		"sku,name,price,image,variant[talle],variant[color],image[color]\n"+
+			"%s,Remera,7500,producto.png,M,Negro,negra.png\n"+
+			"%s,Remera,7500,,L,Blanco,blanca.png\n",
+		prefix, prefix)
+	archive := archiveWith(t,
+		"producto.png", []byte("p"),
+		"negra.png", []byte("n"),
+		"blanca.png", []byte("b"))
+
+	response := importInventoryCSV(t, helper, "/import", "products", csv, "", archive)
+	for index := 0; index < 2; index++ {
+		row := importRow(t, response, index)
+		assert.Equal(t, "created", row["status"], "%v", row)
+		assert.Empty(t, rowCodes(row, "warnings"), "row %d: %v", index, row["warnings"])
+	}
+
+	detail := fetchProductDetail(t, helper, productBySku(t, helper, prefix).ID)
+	assert.Len(t, detail.Media, 1, "the product keeps its own primary image: %+v", detail.Media)
+
+	withImage := map[string]int{}
+	for _, group := range detail.Variants {
+		for _, option := range group.Options {
+			withImage[option.Name] = len(option.Media)
+			for _, media := range option.Media {
+				assert.True(t, media.IsPrimary, "%s: primary within its own scope", option.Name)
+			}
+		}
+	}
+	assert.Equal(t, 1, withImage["Negro"], "Negro carries its photo: %v", withImage)
+	assert.Equal(t, 1, withImage["Blanco"], "Blanco carries its photo: %v", withImage)
+	assert.Equal(t, 0, withImage["M"], "a size carries no colour photo: %v", withImage)
+}
+
+// AC-12 — two rows sharing an option but naming different files disagree, and a
+// file the archive lacks is a warning.
+func TestImportProducts_OptionImageDisagreementAndMissingFile(t *testing.T) {
+	helper := SetupInventoryTest(t)
+	defer helper.Close()
+
+	prefix := importPrefix("IMPIMGBAD")
+	csv := fmt.Sprintf(
+		"sku,name,price,variant[color],image[color]\n"+
+			"%s,Remera,7500,Negro,negra.png\n"+
+			"%s,Remera,7500,Blanco,ausente.png\n"+
+			"%s-B,Otra,7500,Negro,otra.png\n",
+		prefix, prefix, prefix)
+	archive := archiveWith(t, "negra.png", []byte("n"))
+
+	response := importInventoryCSV(t, helper, "/import", "products", csv, "", archive)
+
+	missing := importRow(t, response, 1)
+	assert.Equal(t, "created", missing["status"], "a missing file is not fatal: %v", missing)
+	assert.True(t, containsCode(rowCodes(missing, "warnings"), inventoryErrors.ImportImageMissing),
+		"expected image-missing: %v", missing["warnings"])
+
+	// The same option of the same product naming a second file.
+	clash := fmt.Sprintf(
+		"sku,name,price,variant[color],image[color]\n"+
+			"%s-C,Tercera,7500,Negro,negra.png\n"+
+			"%s-C,Tercera,7500,Negro,distinta.png\n",
+		prefix, prefix)
+	clashed := importInventoryCSV(t, helper, "/import", "products", clash, "", archive)
+	row := importRow(t, clashed, 1)
+	assert.Equal(t, "failed", row["status"], "%v", row)
+	assert.True(t, containsCode(rowCodes(row, "errors"), inventoryErrors.ImportOptionImageInconsistent),
+		"expected option-image-inconsistent: %v", row["errors"])
+}
+
+// AC-4 — the product-level image and its alt text still work, unchanged by D7.
+func TestImportProducts_ProductImageFromTheArchiveIsAttached(t *testing.T) {
+	helper := SetupInventoryTest(t)
+	defer helper.Close()
+
+	prefix := importPrefix("IMPIMG")
+	csv := fmt.Sprintf("sku,name,price,image,image_alt\n%s-A,Yerba,3500,yerba.png,Paquete de yerba\n", prefix)
+	archive := archiveWith(t, "yerba.png", []byte("not-really-a-png"))
+
+	response := importInventoryCSV(t, helper, "/import", "products", csv, "", archive)
+	row := importRow(t, response, 0)
+	assert.Equal(t, "created", row["status"], "%v", row)
+	assert.Empty(t, rowCodes(row, "warnings"), "a named image the archive carries raises nothing")
+
+	detail := productBySku(t, helper, prefix+"-A")
+	if assert.Len(t, detail.Media, 1, "the product should carry one image: %+v", detail.Media) {
+		assert.True(t, detail.Media[0].IsPrimary, "the imported image should be primary")
+		assert.NotEmpty(t, detail.Media[0].URL, "the imported image should have a URL")
+	}
+}
+
+func TestImportProducts_MissingImageIsAWarningNotAFailure(t *testing.T) {
+	helper := SetupInventoryTest(t)
+	defer helper.Close()
+
+	prefix := importPrefix("IMPNOIMG")
+	csv := fmt.Sprintf("sku,name,price,image\n%s-A,Yerba,3500,ausente.png\n", prefix)
+
+	response := importInventoryCSV(t, helper, "/import", "products", csv, "", nil)
+	row := importRow(t, response, 0)
+
+	assert.Equal(t, "created", row["status"], "%v", row)
+	assert.True(t, containsCode(rowCodes(row, "warnings"), inventoryErrors.ImportImageMissing),
+		"a missing image should be a warning: %v", row["warnings"])
+	assert.Empty(t, productBySku(t, helper, prefix+"-A").Media, "no image should have been attached")
+}
+
+// The category columns create the tree on the fly, unchanged by D9.
+func TestImportProducts_UnknownCategoryIsCreated(t *testing.T) {
+	helper := SetupInventoryTest(t)
+	defer helper.Close()
+
+	prefix := importPrefix("IMPCATEG")
+	stamp := time.Now().UnixNano()
+	csv := fmt.Sprintf("sku,name,price,category,subcategory\n%s-A,Yerba,3500,Bebidas %d,Infusiones %d\n",
+		prefix, stamp, stamp)
+
+	response := importInventoryCSV(t, helper, "/import", "products", csv, "", nil)
+	row := importRow(t, response, 0)
+
+	assert.Equal(t, "created", row["status"], "%v", row)
+	assert.True(t, containsCode(rowCodes(row, "warnings"), inventoryErrors.ImportCategoryCreated),
+		"creating a category should be announced: %v", row["warnings"])
+
+	list := helper.DoRequest("GET", "/inventory/categories?limit=200", nil, map[string]string{})
+	assert.Contains(t, list.Body.String(), fmt.Sprintf("Infusiones %d", stamp),
+		"the subcategory should exist: %s", list.Body.String())
+}
+
+func TestImportProducts_UnknownCategoryFailsWhenCreationIsOff(t *testing.T) {
+	helper := SetupInventoryTest(t)
+	defer helper.Close()
+
+	prefix := importPrefix("IMPNOCAT")
+	csv := fmt.Sprintf("sku,name,price,category\n%s-A,Yerba,3500,Bebdias %s\n", prefix, prefix)
+
+	response := importInventoryCSV(t, helper, "/import", "products", csv,
+		`{"create_categories": false}`, nil)
+	row := importRow(t, response, 0)
+
+	assert.Equal(t, "failed", row["status"], "%v", row)
+	assert.True(t, containsCode(rowCodes(row, "errors"), inventoryErrors.ImportCategoryUnknown),
+		"expected category-unknown: %v", row["errors"])
+}
+
+// AC-9 — a categories file creates the tree in one pass, parents resolved by
+// name against what the rows above have just created.
+func TestImportCategories_TreeInOnePass(t *testing.T) {
+	helper := SetupInventoryTest(t)
+	defer helper.Close()
+
+	stamp := time.Now().UnixNano()
+	parent := fmt.Sprintf("Bebidas %d", stamp)
+	child := fmt.Sprintf("Gaseosas %d", stamp)
+	grandchild := fmt.Sprintf("Colas %d", stamp)
+	csv := fmt.Sprintf(
+		"name,parent,description,display_order\n%s,,Todo lo que se toma,1\n%s,%s,,2\n%s,%s,,3\n",
+		parent, child, parent, grandchild, child)
+
+	response := importInventoryCSV(t, helper, "/import", "categories", csv, "", nil)
+	for index := 0; index < 3; index++ {
+		assert.Equal(t, "created", importRow(t, response, index)["status"],
+			"row %d should be created: %v", index, response)
+	}
+
+	list := helper.DoRequest("GET", "/inventory/categories?limit=200", nil, map[string]string{})
+	assert.Contains(t, list.Body.String(), grandchild,
+		"the deepest category should exist: %s", list.Body.String())
+}
+
+func TestImportCategories_UnknownParentFailsTheRow(t *testing.T) {
+	helper := SetupInventoryTest(t)
+	defer helper.Close()
+
+	stamp := time.Now().UnixNano()
+	csv := fmt.Sprintf("name,parent\nHuérfana %d,Inexistente %d\n", stamp, stamp)
+
+	dryRun := importInventoryCSV(t, helper, "/import/validate", "categories", csv, "", nil)
+	assert.True(t, containsCode(rowCodes(importRow(t, dryRun, 0), "warnings"),
+		inventoryErrors.ImportCategoryParentUnknown),
+		"the dry run cannot know the parent is missing for good, so it warns: %v", dryRun)
+
+	response := importInventoryCSV(t, helper, "/import", "categories", csv, "", nil)
+	row := importRow(t, response, 0)
+	assert.Equal(t, "failed", row["status"], "%v", row)
+	assert.True(t, containsCode(rowCodes(row, "errors"), inventoryErrors.ImportCategoryParentUnknown),
+		"expected category-parent-unknown: %v", row["errors"])
+}
+
+// AC-11 — a stock row names its combination with the same variant[…] columns the
+// catalogue file declared it with (D6).
+func TestImportStock_LandsOnTheCombinationItsAxesName(t *testing.T) {
+	helper := SetupInventoryTest(t)
+	defer helper.Close()
+
+	prefix := importPrefix("IMPSTK")
+	products := fmt.Sprintf(
+		"sku,name,price,variant[talle],variant[color]\n"+
+			"%s,Remera,7500,M,Negro\n"+
+			"%s,Remera,7500,XL,Negro\n",
+		prefix, prefix)
+	importInventoryCSV(t, helper, "/import", "products", products, "", nil)
+	productID := productBySku(t, helper, prefix).ID
+
+	stock := fmt.Sprintf(
+		"sku,variant[talle],variant[color],quantity,reorder_level\n"+
+			"%s,M,Negro,12,3\n"+
+			"%s,XL,Negro,7,\n",
+		prefix, prefix)
+
+	dryRun := importInventoryCSV(t, helper, "/import/validate", "product_stock", stock, "", nil)
+	assert.Equal(t, float64(2), dryRun["valid"], "both rows should resolve: %v", dryRun)
+
+	response := importInventoryCSV(t, helper, "/import", "product_stock", stock, "", nil)
+	assert.Equal(t, "created", importRow(t, response, 0)["status"], "%v", response)
+	assert.Equal(t, "created", importRow(t, response, 1)["status"], "%v", response)
+
+	byOption := combinationSkus(t, helper, productID)
+	assert.Equal(t, 12.0, byOption["M"].CurrentQuantity, "M holds what its row said")
+	assert.Equal(t, 7.0, byOption["XL"].CurrentQuantity, "XL holds what its row said")
+	assert.Equal(t, 3.0, byOption["M"].ReorderLevel, "the reorder level lands on the combination")
+}
+
+// AC-11 — a simple product takes no variant cell and resolves to its default
+// bucket.
+func TestImportStock_SimpleProductNeedsNoAxisCell(t *testing.T) {
+	helper := SetupInventoryTest(t)
+	defer helper.Close()
+
+	prefix := importPrefix("IMPSTKSIMPLE")
+	products := fmt.Sprintf("sku,name,price\n%s,Yerba,3500\n", prefix)
+	importInventoryCSV(t, helper, "/import", "products", products, "", nil)
+	productID := productBySku(t, helper, prefix).ID
+
+	stock := fmt.Sprintf("sku,variant[talle],quantity\n%s,,10\n", prefix)
+	response := importInventoryCSV(t, helper, "/import", "product_stock", stock, "", nil)
+	assert.Equal(t, "created", importRow(t, response, 0)["status"], "%v", response)
+
+	current := helper.DoRequest("GET", "/inventory/stock/"+productID, nil, map[string]string{})
+	var stockRow models.ProductStock
+	json.Unmarshal(current.Body.Bytes(), &stockRow)
+	assert.Equal(t, 10.0, stockRow.CurrentQuantity, "it lands on the default bucket: %s", current.Body.String())
+}
+
+// AC-11 — naming only some of the product's axes is axes-incomplete, and an
+// option set the product does not have is combination-unknown: never a silent
+// nearest match (D6).
+func TestImportStock_PartialAndUnknownCombinationsAreToldApart(t *testing.T) {
+	helper := SetupInventoryTest(t)
+	defer helper.Close()
+
+	prefix := importPrefix("IMPSTKBAD")
+	products := fmt.Sprintf(
+		"sku,name,price,variant[talle],variant[color]\n"+
+			"%s,Remera,7500,M,Negro\n"+
+			"%s,Remera,7500,XL,Negro\n",
+		prefix, prefix)
+	importInventoryCSV(t, helper, "/import", "products", products, "", nil)
+	productID := productBySku(t, helper, prefix).ID
+
+	partial := fmt.Sprintf("sku,variant[talle],variant[color],quantity\n%s,M,,10\n", prefix)
+	row := importRow(t, importInventoryCSV(t, helper, "/import", "product_stock", partial, "", nil), 0)
+	assert.Equal(t, "failed", row["status"], "%v", row)
+	assert.True(t, containsCode(rowCodes(row, "errors"), inventoryErrors.ImportAxesIncomplete),
+		"expected axes-incomplete: %v", row["errors"])
+
+	unknown := fmt.Sprintf("sku,variant[talle],variant[color],quantity\n%s,L,Blanco,10\n", prefix)
+	row = importRow(t, importInventoryCSV(t, helper, "/import", "product_stock", unknown, "", nil), 0)
+	assert.Equal(t, "failed", row["status"], "%v", row)
+	assert.True(t, containsCode(rowCodes(row, "errors"), inventoryErrors.ImportCombinationUnknown),
+		"expected combination-unknown: %v", row["errors"])
+
+	for sku, quantity := range skuQuantities(t, helper, productID) {
+		assert.Equal(t, 0.0, quantity, "%s must hold nothing after two refused rows", sku)
+	}
+}
+
+func TestImportStock_UnknownSkuFailsTheRow(t *testing.T) {
+	helper := SetupInventoryTest(t)
+	defer helper.Close()
+
+	stock := fmt.Sprintf("sku,variant[talle],quantity\nNOSUCH%d,,10\n", time.Now().UnixNano())
+	response := importInventoryCSV(t, helper, "/import", "product_stock", stock, "", nil)
+	row := importRow(t, response, 0)
+
+	assert.Equal(t, "failed", row["status"], "%v", row)
+	assert.True(t, containsCode(rowCodes(row, "errors"), inventoryErrors.ImportSkuUnknown),
+		"expected sku-unknown: %v", row["errors"])
+}
+
+// AC-11 — a lot row points at its combination the same way, and one naming a
+// simple product takes no variant cell at all.
+func TestImportBatches_LotsLandOnTheirCombinations(t *testing.T) {
+	helper := SetupInventoryTest(t)
+	defer helper.Close()
+
+	prefix := importPrefix("IMPLOT")
+	products := fmt.Sprintf(
+		"sku,name,price,variant[talle],variant[color]\n"+
+			"%s-R,Remera,7500,M,Negro\n"+
+			"%s-R,Remera,7500,XL,Negro\n"+
+			"%s-Y,Yerba,3500,,\n",
+		prefix, prefix, prefix)
+	importInventoryCSV(t, helper, "/import", "products", products, "", nil)
+	shirtID := productBySku(t, helper, prefix+"-R").ID
+	yerbaID := productBySku(t, helper, prefix+"-Y").ID
+
+	purchase := time.Now().AddDate(0, 0, -1).Format("2006-01-02")
+	expiry := time.Now().AddDate(0, 2, 0).Format("2006-01-02")
+	lots := fmt.Sprintf(
+		"sku,variant[talle],variant[color],lot_number,purchase_date,expiry_date,unit_cost,initial_quantity\n"+
+			"%s-R,M,Negro,LOTE-%s-M,%s,%s,1200,20\n"+
+			"%s-R,XL,Negro,LOTE-%s-XL,%s,%s,1300,5\n"+
+			"%s-Y,,,LOTE-%s-Y,%s,%s,900,30\n",
+		prefix, prefix, purchase, expiry,
+		prefix, prefix, purchase, expiry,
+		prefix, prefix, purchase, expiry)
+
+	response := importInventoryCSV(t, helper, "/import", "product_batches", lots, "", nil)
+	for index := 0; index < 3; index++ {
+		assert.Equal(t, "created", importRow(t, response, index)["status"],
+			"row %d: %v", index, response)
+	}
+
+	batches := listBatches(t, helper, shirtID, "")
+	if assert.Len(t, batches.Batches, 2, "two lots on the shirt: %+v", batches.Batches) {
+		for _, batch := range batches.Batches {
+			assert.NotNil(t, batch.SkuID, "the lot should hang off a combination: %+v", batch)
+			assert.NotNil(t, batch.DaysToExpiry, "the lot should report its expiry: %+v", batch)
+		}
+	}
+
+	byOption := combinationSkus(t, helper, shirtID)
+	assert.Equal(t, 20.0, byOption["M"].CurrentQuantity, "the lot books its own PURCHASE movement")
+	assert.Equal(t, 5.0, byOption["XL"].CurrentQuantity, "the lot books its own PURCHASE movement")
+
+	assert.Len(t, listBatches(t, helper, yerbaID, "").Batches, 1,
+		"the simple product's lot lands on its default bucket")
+}
+
+// A lot naming an option set the product does not have never reaches the SP.
+func TestImportBatches_UnknownCombinationFailsTheRow(t *testing.T) {
+	helper := SetupInventoryTest(t)
+	defer helper.Close()
+
+	prefix := importPrefix("IMPLOTCOMB")
+	products := fmt.Sprintf("sku,name,price,variant[talle]\n%s,Remera,7500,M\n", prefix)
+	importInventoryCSV(t, helper, "/import", "products", products, "", nil)
+
+	purchase := time.Now().AddDate(0, 0, -1).Format("2006-01-02")
+	expiry := time.Now().AddDate(0, 2, 0).Format("2006-01-02")
+	lots := fmt.Sprintf(
+		"sku,variant[talle],lot_number,purchase_date,expiry_date,unit_cost,initial_quantity\n"+
+			"%s,XXL,L1,%s,%s,1200,20\n",
+		prefix, purchase, expiry)
+
+	row := importRow(t, importInventoryCSV(t, helper, "/import", "product_batches", lots, "", nil), 0)
+	assert.Equal(t, "failed", row["status"], "%v", row)
+	assert.True(t, containsCode(rowCodes(row, "errors"), inventoryErrors.ImportCombinationUnknown),
+		"expected combination-unknown: %v", row["errors"])
+}
+
+func TestImportBatches_UnreadableRowsAreRejected(t *testing.T) {
+	helper := SetupInventoryTest(t)
+	defer helper.Close()
+
+	prefix := importPrefix("IMPLOTBAD")
+	products := fmt.Sprintf("sku,name,price\n%s,Leche,2500\n", prefix)
+	importInventoryCSV(t, helper, "/import", "products", products, "", nil)
+
+	header := "sku,variant[talle],lot_number,purchase_date,expiry_date,unit_cost,initial_quantity\n"
+	cases := map[string]string{
+		inventoryErrors.ImportDateInvalid:          fmt.Sprintf("%s,,L1,ayer,2027-01-01,1200,20\n", prefix),
+		inventoryErrors.ImportExpiryBeforePurchase: fmt.Sprintf("%s,,L2,2026-06-01,2026-01-01,1200,20\n", prefix),
+		inventoryErrors.ImportUnitCostInvalid:      fmt.Sprintf("%s,,L3,2026-06-01,2027-01-01,0,20\n", prefix),
+		inventoryErrors.ImportLotNumberRequired:    fmt.Sprintf("%s,,,2026-06-01,2027-01-01,1200,20\n", prefix),
+	}
+
+	for expected, line := range cases {
+		response := importInventoryCSV(t, helper, "/import", "product_batches", header+line, "", nil)
+		row := importRow(t, response, 0)
+
+		assert.Equal(t, "failed", row["status"], "%s: %v", expected, row)
+		assert.True(t, containsCode(rowCodes(row, "errors"), expected),
+			"expected %s, got %v", expected, row["errors"])
+	}
+}
+
+// AC-1 / AC-14 — every resource is on the registry, each with a template and a
+// schema of its own.
+func TestImportRegistry_CarriesEveryInventoryResource(t *testing.T) {
+	helper := SetupInventoryTest(t)
+	defer helper.Close()
+
+	meta := helper.DoRequest("GET", "/import/meta", nil, map[string]string{})
+	assert.Equal(t, http.StatusOK, meta.Code, "the endpoint is reachable here: %s", meta.Body.String())
+
+	for _, resource := range []string{"users", "products", "categories", "product_stock", "product_batches"} {
+		template := helper.DoRequest("GET", "/import/template?resource="+resource, nil, map[string]string{})
+		assert.Equal(t, http.StatusOK, template.Code, "%s template: %s", resource, template.Body.String())
+		assert.NotEmpty(t, strings.TrimSpace(template.Body.String()), "%s should have a header row", resource)
+
+		schema := helper.DoRequest("GET", "/import/schema?resource="+resource, nil, map[string]string{})
+		assert.Equal(t, http.StatusOK, schema.Code, "%s schema: %s", resource, schema.Body.String())
+	}
+}
+
+// D6 — sharing sku and the variant[…] columns leaves each file one column of its
+// own, so header detection still tells the four apart.
+func TestImportDetection_TellsTheInventoryFilesApart(t *testing.T) {
+	helper := SetupInventoryTest(t)
+	defer helper.Close()
+
+	stamp := time.Now().UnixNano()
+	cases := map[string]string{
+		"products":        fmt.Sprintf("sku,name,price,variant[talle]\nDET%d,Producto,100,\n", stamp),
+		"categories":      fmt.Sprintf("name,parent\nDetectada %d,\n", stamp),
+		"product_stock":   fmt.Sprintf("sku,variant[talle],quantity\nDET%d,,5\n", stamp),
+		"product_batches": fmt.Sprintf("sku,variant[talle],lot_number,purchase_date,expiry_date,unit_cost,initial_quantity\nDET%d,,L1,2026-06-01,2027-01-01,10,5\n", stamp),
+	}
+
+	for expected, csv := range cases {
+		response := importInventoryCSV(t, helper, "/import/validate", "", csv, "", nil)
+		assert.Equal(t, expected, response["resource"],
+			"the header row should resolve to %s: %v", expected, response)
+	}
 }

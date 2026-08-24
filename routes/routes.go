@@ -19,6 +19,7 @@ import (
 	importRoutes "josex/web/modules/import/routes"
 	importServices "josex/web/modules/import/services"
 	inventoryRoutes "josex/web/modules/inventory/routes"
+	inventoryServices "josex/web/modules/inventory/services"
 	purchasingRepos "josex/web/modules/purchasing/repositories"
 	purchasingRoutes "josex/web/modules/purchasing/routes"
 	purchasingServices "josex/web/modules/purchasing/services"
@@ -186,14 +187,6 @@ func SetupRoutes(r *gin.Engine, dbService coreServices.DatabaseService) {
 			// Users module — tenant-scoped: requires X-Tenant-Slug + owner/admin role
 			userRoutes.RegisterUserRoutes(apiV1, userController, userAuditController, jwtService, tenantMiddleware)
 
-			// Import module — generic CSV import, tenant-scoped. Descriptors are
-			// registered per resource; only Users is wired in this delivery.
-			importRegistry := importServices.NewRegistry()
-			importRegistry.Register(userServices.NewUsersImportDescriptor(userService, userAuditService, emailService, dbService, mediaService))
-			importService := importServices.NewImportService(importRegistry)
-			importController := importControllers.NewImportController(importService)
-			importRoutes.RegisterImportRoutes(apiV1, importController, jwtService, tenantMiddleware)
-
 			// Platform routes — cross-tenant, super_admin only, no tenant scope
 			platform := apiV1.Group("/platform")
 			platform.Use(authMiddleware, authMW.RequireSystemRole(coreModels.SystemRoleSuperAdmin))
@@ -232,8 +225,10 @@ func SetupRoutes(r *gin.Engine, dbService coreServices.DatabaseService) {
 		}
 
 		// Inventory module (if enabled)
+		var inventorySvcs inventoryRoutes.InventoryServices
 		if coreConf.IsModuleEnabled("inventory") {
-			inventoryRoutes.RegisterInventoryRoutes(apiV1, dbService, authMiddleware, tenantMiddleware)
+			inventorySvcs = inventoryRoutes.NewInventoryServices(dbService)
+			inventoryRoutes.RegisterInventoryRoutes(apiV1, inventorySvcs, authMiddleware, tenantMiddleware)
 			log.Println("✅ Inventory module (with Batches) enabled and routes registered")
 		}
 
@@ -261,6 +256,30 @@ func SetupRoutes(r *gin.Engine, dbService coreServices.DatabaseService) {
 			purchasingRoutes.RegisterPurchasingRoutes(apiV1, purchasingService, authMiddleware, tenantMiddleware)
 			log.Println("✅ Purchasing module enabled and routes registered")
 		}
+
+		// Import module — generic CSV import, tenant-scoped. The registry sits
+		// after every module block and outside all of them (INV-015 D1): its
+		// descriptors come from more than one module, and the tenant server —
+		// the only one that has inventory — does not enable tenancy, so a
+		// registry built inside that block left /import unreachable exactly
+		// where it is needed.
+		importRegistry := importServices.NewRegistry()
+		if coreConf.IsModuleEnabled("users") {
+			importRegistry.Register(userServices.NewUsersImportDescriptor(userService, userAuditService, emailService, dbService, mediaService))
+		}
+		if coreConf.IsModuleEnabled("inventory") {
+			importRegistry.Register(inventoryServices.NewProductsImportDescriptor(
+				inventorySvcs.Product, inventorySvcs.Category, inventorySvcs.Movement, inventorySvcs.Stock,
+				inventorySvcs.Sku, dbService, mediaService, config.GetConfig().Inventory))
+			importRegistry.Register(inventoryServices.NewCategoriesImportDescriptor(inventorySvcs.Category, dbService))
+			importRegistry.Register(inventoryServices.NewProductStockImportDescriptor(
+				inventorySvcs.Movement, inventorySvcs.Stock, dbService))
+			importRegistry.Register(inventoryServices.NewProductBatchesImportDescriptor(inventorySvcs.Batch, dbService))
+		}
+		importService := importServices.NewImportService(importRegistry)
+		importController := importControllers.NewImportController(importService)
+		importRoutes.RegisterImportRoutes(apiV1, importController, jwtService, tenantMiddleware)
+		log.Println("✅ Import module routes registered")
 	}
 
 	// Swagger documentation

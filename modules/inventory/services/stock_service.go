@@ -19,9 +19,10 @@ func NewStockService(stockRepository interfaces.StockRepository) *StockService {
 	}
 }
 
-// UpdateReorderLevel updates the minimum reorder level for a product
-func (s *StockService) UpdateReorderLevel(ctx context.Context, tenantID uuid.UUID, productID string, reorderLevel float64, userID *string) (*models.UpdateReorderLevelResponse, error) {
-	return s.stockRepository.UpdateReorderLevel(ctx, tenantID, productID, reorderLevel)
+// UpdateReorderLevel sets the reorder level of one SKU — the product's default
+// bucket when skuID is nil, which is what every caller but the CSV import sends.
+func (s *StockService) UpdateReorderLevel(ctx context.Context, tenantID uuid.UUID, productID string, reorderLevel float64, userID *string, skuID *string) (*models.UpdateReorderLevelResponse, error) {
+	return s.stockRepository.UpdateReorderLevel(ctx, tenantID, productID, reorderLevel, skuID)
 }
 
 // ReserveStock reserves inventory for a sales order

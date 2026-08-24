@@ -33,6 +33,15 @@ type SkuRepository interface {
 		targetsJSON string,
 		createdBy *string,
 	) (*models.RedistributeStockResponse, error)
+
+	CreateCombination(
+		ctx context.Context,
+		tenantID uuid.UUID,
+		productID string,
+		axesJSON string,
+		sku *string,
+		maxAxes int,
+	) (*models.CreateCombinationResponse, error)
 }
 
 type SkuService interface {
@@ -56,4 +65,14 @@ type SkuService interface {
 		dto models.RedistributeStockDto,
 		createdBy *string,
 	) (*models.RedistributeStockResponse, error)
+
+	// CreateCombination creates exactly the one combination the dto names
+	// (INV-016 D2), for the catalogue importer. Create-only: a combination the
+	// product already has comes back as an error, never as an update.
+	CreateCombination(
+		ctx context.Context,
+		tenantID uuid.UUID,
+		productID string,
+		dto models.CreateCombinationDto,
+	) (*models.CreateCombinationResponse, error)
 }

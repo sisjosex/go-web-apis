@@ -286,6 +286,32 @@ type GenerateSkusResponse struct {
 	Message          string `json:"message"`
 }
 
+// CreateCombinationDto names one combination of a product the way a catalogue
+// row does (INV-016 D6): the axes in the file's column order, each with the
+// option that row holds and the price modifier that option carries (D3). SKU is
+// the code verbatim when the row filled `variant_sku` and nil when it did not,
+// and the SP then derives the one sp_generate_product_skus would have.
+type CreateCombinationDto struct {
+	Axes []CombinationAxisDto `json:"axes"`
+	SKU  *string              `json:"sku,omitempty"`
+}
+
+// CombinationAxisDto is one axis column of one row.
+type CombinationAxisDto struct {
+	Axis     string  `json:"axis"`
+	Option   string  `json:"option"`
+	Modifier float64 `json:"modifier"`
+}
+
+// CreateCombinationResponse is the combination that was created: the SKU row an
+// opening count, a lot or an image then hangs off.
+type CreateCombinationResponse struct {
+	ProductID string `json:"product_id"`
+	SkuID     string `json:"sku_id"`
+	SKU       string `json:"sku"`
+	AxisCount int    `json:"axis_count"`
+}
+
 // RedistributeStockDto moves the whole default-SKU bucket onto combinations. The
 // amounts must sum to exactly what the bucket holds (INV-008 D4) — the SP checks
 // that, since only it can read the quantity under a lock.
