@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/csv"
 	"io"
+	"strconv"
 	"strings"
 	"time"
 
@@ -18,6 +19,17 @@ const (
 	defaultMaxFileSizeMB = 5
 	defaultMaxRows       = 500
 )
+
+// The two date shapes a cell may arrive in (IMPORT-001 D4); every descriptor
+// reads the first.
+const (
+	isoDateLayout      = "2006-01-02"
+	dayFirstDateLayout = "2/1/2006"
+)
+
+// utf8BOM is the byte-order mark Excel writes at the start of a "CSV UTF-8"
+// file. Left in, it glues itself to the first header and no column matches.
+var utf8BOM = []byte{0xEF, 0xBB, 0xBF}
 
 type importService struct {
 	registry importInterfaces.ImportRegistry
@@ -96,8 +108,36 @@ type parsedRow struct {
 	data map[string]string
 }
 
-func (s *importService) Validate(ctx importModels.ImportContext, resource string, data []byte) (*importModels.ValidateResponse, error) {
-	descriptor, rows, headers, err := s.prepare(resource, data)
+// Resources lists what a scope reaches (D2).
+func (s *importService) Resources(scope []string) []importModels.ImportResourceInfo {
+	return s.registry.Resources(scope)
+}
+
+// Detect names the resource a file is from its header line alone (A1-D1): the
+// wizard queues several files by it, in import order, before any of them is
+// validated — a lots file cannot be dry-run until its products exist.
+func (s *importService) Detect(target importModels.ImportTarget, data []byte) (*importModels.DetectResponse, error) {
+	headers, err := readHeaders(newCSVReader(data))
+	if err != nil {
+		return nil, err
+	}
+
+	descriptor, err := s.resolve(target, headers)
+	if err != nil {
+		return nil, err
+	}
+
+	response := &importModels.DetectResponse{Resource: descriptor.Resource()}
+	for _, info := range s.registry.Resources(nil) {
+		if info.Resource == response.Resource {
+			response.Module = info.Module
+		}
+	}
+	return response, nil
+}
+
+func (s *importService) Validate(ctx importModels.ImportContext, target importModels.ImportTarget, data []byte) (*importModels.ValidateResponse, error) {
+	descriptor, rows, headers, err := s.prepare(target, data)
 	if err != nil {
 		return nil, err
 	}
@@ -106,6 +146,7 @@ func (s *importService) Validate(ctx importModels.ImportContext, resource string
 
 	response := &importModels.ValidateResponse{
 		Resource: descriptor.Resource(),
+		Headers:  headers,
 		Total:    len(rows),
 		Rows:     make([]importModels.RowResult, 0, len(rows)),
 	}
@@ -127,8 +168,8 @@ func (s *importService) Validate(ctx importModels.ImportContext, resource string
 	return response, nil
 }
 
-func (s *importService) Import(ctx importModels.ImportContext, resource string, data []byte) (*importModels.ImportResponse, error) {
-	descriptor, rows, headers, err := s.prepare(resource, data)
+func (s *importService) Import(ctx importModels.ImportContext, target importModels.ImportTarget, data []byte) (*importModels.ImportResponse, error) {
+	descriptor, rows, headers, err := s.prepare(target, data)
 	if err != nil {
 		return nil, err
 	}
@@ -161,60 +202,202 @@ func (s *importService) Import(ctx importModels.ImportContext, resource string, 
 
 	return &importModels.ImportResponse{
 		Resource: descriptor.Resource(),
+		Headers:  headers,
 		Run:      meta,
 		Rows:     results,
 	}, nil
 }
 
 // prepare parses the CSV, resolves the descriptor (explicit resource or header
-// detection), and enforces the row limit. The headers travel back out because a
-// row is a map by the time a descriptor sees it: ImportContext.Headers is the
-// only place the file's column order survives.
-func (s *importService) prepare(resource string, data []byte) (importInterfaces.ImportDescriptor, []parsedRow, []string, error) {
+// detection inside the scope), and enforces the row limit. The headers travel
+// back out because a row is a map by the time a descriptor sees it:
+// ImportContext.Headers is the only place the file's column order survives.
+func (s *importService) prepare(target importModels.ImportTarget, data []byte) (importInterfaces.ImportDescriptor, []parsedRow, []string, error) {
 	headers, rows, err := parseCSV(data)
 	if err != nil {
 		return nil, nil, nil, err
 	}
 
-	var descriptor importInterfaces.ImportDescriptor
-	if resource != "" {
-		found := false
-		if descriptor, found = s.registry.Get(resource); !found {
-			return nil, nil, nil, importErrors.ErrUnknownFormat
-		}
-	} else {
-		found := false
-		if descriptor, found = s.registry.Detect(headers); !found {
-			return nil, nil, nil, importErrors.ErrUnknownFormat
-		}
+	descriptor, err := s.resolve(target, headers)
+	if err != nil {
+		return nil, nil, nil, err
 	}
 
 	if len(rows) > readLimits().MaxRows {
 		return nil, nil, nil, importErrors.ErrTooManyRows
 	}
 
+	normalizeCells(descriptor.Columns(), rows)
+
 	return descriptor, rows, headers, nil
 }
 
-// parseCSV reads the CSV, normalizes headers (trim + lowercase), and returns each
-// data row as a header-keyed, value-trimmed map paired with its CSV line number
-// (header is line 1, so the first data row is line 2).
-func parseCSV(data []byte) ([]string, []parsedRow, error) {
+// resolve picks the descriptor a request targets. An explicit resource must sit
+// inside the scope; otherwise the headers are matched within it. A file nothing
+// in the scope recognizes but something outside it does is out-of-scope rather
+// than unknown, so the operator is told where it belongs instead of that it is
+// broken (IMPORT-001 D1).
+func (s *importService) resolve(target importModels.ImportTarget, headers []string) (importInterfaces.ImportDescriptor, error) {
+	if target.Resource != "" {
+		descriptor, found := s.registry.Get(target.Resource)
+		if !found {
+			return nil, importErrors.ErrUnknownFormat
+		}
+		if !s.registry.InScope(target.Resource, target.Scope) {
+			return nil, importErrors.ErrOutOfScope
+		}
+		return descriptor, nil
+	}
+
+	if descriptor, found := s.registry.Detect(headers, target.Scope); found {
+		return descriptor, nil
+	}
+	if len(target.Scope) > 0 {
+		if _, found := s.registry.Detect(headers, nil); found {
+			return nil, importErrors.ErrOutOfScope
+		}
+	}
+	return nil, importErrors.ErrUnknownFormat
+}
+
+// normalizeCells rewrites the typed cells a spreadsheet in a Spanish locale
+// writes its own way — `1500,50`, `01/12/2026` — into the one shape every
+// descriptor and the wizard read (IMPORT-001 D4). A cell that still does not
+// parse is left as written, so the descriptor reports it in its own words.
+func normalizeCells(columns []importModels.ColumnSpec, rows []parsedRow) {
+	typed := make(map[string]importModels.ColumnType)
+	for _, column := range columns {
+		if column.Type == importModels.ColumnTypeNumber || column.Type == importModels.ColumnTypeDate {
+			typed[column.Key] = column.Type
+		}
+	}
+	if len(typed) == 0 {
+		return
+	}
+
+	for _, row := range rows {
+		for key, columnType := range typed {
+			value := row.data[key]
+			if value == "" {
+				continue
+			}
+			if columnType == importModels.ColumnTypeNumber {
+				row.data[key] = normalizeNumber(value)
+			} else {
+				row.data[key] = normalizeDate(value)
+			}
+		}
+	}
+}
+
+// normalizeNumber reads a decimal comma, and a thousands separator when both
+// marks appear, whichever comes last being the decimal one: `1500,50`,
+// `1.500,50` and `1,500.50` all become `1500.50`.
+func normalizeNumber(value string) string {
+	lastComma := strings.LastIndex(value, ",")
+	lastDot := strings.LastIndex(value, ".")
+
+	candidate := value
+	switch {
+	case lastComma >= 0 && lastDot >= 0 && lastComma > lastDot:
+		candidate = strings.Replace(strings.ReplaceAll(value, ".", ""), ",", ".", 1)
+	case lastComma >= 0 && lastDot >= 0:
+		candidate = strings.ReplaceAll(value, ",", "")
+	case lastComma >= 0:
+		candidate = strings.ReplaceAll(value, ",", ".")
+	}
+
+	if _, err := strconv.ParseFloat(candidate, 64); err != nil {
+		return value
+	}
+	return candidate
+}
+
+// normalizeDate accepts the ISO date every descriptor reads and the
+// day-first `DD/MM/YYYY` a Spanish spreadsheet shows (D4), one- or two-digit
+// day and month.
+func normalizeDate(value string) string {
+	if _, err := time.Parse(isoDateLayout, value); err == nil {
+		return value
+	}
+	parsed, err := time.Parse(dayFirstDateLayout, value)
+	if err != nil {
+		return value
+	}
+	return parsed.Format(isoDateLayout)
+}
+
+// sniffDelimiter picks the separator from the header line: Excel in a Spanish
+// locale saves "CSV" with `;`, because `,` is its decimal mark. Separators
+// inside a quoted header do not count.
+func sniffDelimiter(data []byte) rune {
+	commas, semicolons := 0, 0
+	quoted := false
+	for _, char := range data {
+		if char == '\n' && !quoted {
+			break
+		}
+		switch char {
+		case '"':
+			quoted = !quoted
+		case ',':
+			if !quoted {
+				commas++
+			}
+		case ';':
+			if !quoted {
+				semicolons++
+			}
+		}
+	}
+
+	if semicolons > commas {
+		return ';'
+	}
+	return ','
+}
+
+// newCSVReader opens a file the way every import reads it: a leading BOM
+// dropped and the separator sniffed from the header line, both how Excel saves
+// "CSV UTF-8".
+func newCSVReader(data []byte) *csv.Reader {
+	data = bytes.TrimPrefix(data, utf8BOM)
+
 	reader := csv.NewReader(bytes.NewReader(data))
+	reader.Comma = sniffDelimiter(data)
 	reader.FieldsPerRecord = -1 // tolerate ragged rows; missing cells map to ""
 	reader.TrimLeadingSpace = true
+	return reader
+}
 
+// readHeaders reads the header line and normalizes it (trim + lowercase), the
+// only part of a file detection needs.
+func readHeaders(reader *csv.Reader) ([]string, error) {
 	rawHeaders, err := reader.Read()
 	if err == io.EOF {
-		return nil, nil, importErrors.ErrFileEmpty
+		return nil, importErrors.ErrFileEmpty
 	}
 	if err != nil {
-		return nil, nil, importErrors.ErrFileInvalid
+		return nil, importErrors.ErrFileInvalid
 	}
 
 	headers := make([]string, len(rawHeaders))
 	for i, header := range rawHeaders {
 		headers[i] = strings.ToLower(strings.TrimSpace(header))
+	}
+	return headers, nil
+}
+
+// parseCSV reads the CSV, normalizes headers (trim + lowercase), and returns each
+// data row as a header-keyed, value-trimmed map paired with its CSV line number
+// (header is line 1, so the first data row is line 2). A leading BOM and a `;`
+// separator — both how Excel saves "CSV UTF-8" — are accepted as written.
+func parseCSV(data []byte) ([]string, []parsedRow, error) {
+	reader := newCSVReader(data)
+
+	headers, err := readHeaders(reader)
+	if err != nil {
+		return nil, nil, err
 	}
 
 	var rows []parsedRow

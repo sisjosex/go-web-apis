@@ -1,6 +1,7 @@
 package models
 
 import (
+	"context"
 	"strings"
 	"time"
 
@@ -70,6 +71,28 @@ func (o ImportOptions) BoolOr(key string, def bool) bool {
 	return value
 }
 
+// ImportTarget is what a request asks the engine to resolve: an explicit
+// resource, a scope of resource and module keys to detect within, or both — an
+// explicit resource outside its own scope is refused (IMPORT-001 D1).
+type ImportTarget struct {
+	Resource string
+	Scope    []string
+}
+
+// ImportResourceInfo is one resource a scope reaches and the module that owns
+// it, as GET /import/resources lists them (D2).
+type ImportResourceInfo struct {
+	Resource string `json:"resource"`
+	Module   string `json:"module"`
+}
+
+// DetectResponse is the resource a file's header line resolves to and the
+// module that owns it, as POST /import/detect answers (A1-D1).
+type DetectResponse struct {
+	Resource string `json:"resource"`
+	Module   string `json:"module"`
+}
+
 // ImportLimits are the configured upload constraints, surfaced to clients so the
 // UI hint stays in sync with the server (no hardcoded literal).
 type ImportLimits struct {
@@ -97,6 +120,9 @@ func (i ImportImages) Lookup(filename string) ([]byte, bool) {
 // extracted from the optional companion archive, and the file's columns in the
 // order they were written.
 type ImportContext struct {
+	// Ctx is the request's context, so a cancelled upload stops the run's
+	// queries instead of finishing them for nobody. Read it through Context().
+	Ctx         context.Context
 	TenantID    uuid.UUID
 	PerformedBy *uuid.UUID
 	Lang        string
@@ -116,6 +142,15 @@ type ImportContext struct {
 	// must not leak between concurrent runs belongs. Rows of one run are
 	// processed in order on one goroutine, so it needs no lock.
 	Scratch map[string]any
+}
+
+// Context returns the request's context, or Background for a run built without
+// one — a unit test driving a descriptor directly.
+func (c ImportContext) Context() context.Context {
+	if c.Ctx == nil {
+		return context.Background()
+	}
+	return c.Ctx
 }
 
 // RowResult is the per-row outcome of a validate or process run, keyed by the
@@ -142,8 +177,11 @@ type RunMeta struct {
 }
 
 // ValidateResponse is the dry-run result: per-row feedback plus aggregate counts.
+// Headers is the file's column order — a row's data is a map, so it is the only
+// way a client can write the file back in the order the operator wrote it.
 type ValidateResponse struct {
 	Resource  string      `json:"resource"`
+	Headers   []string    `json:"headers"`
 	Total     int         `json:"total"`
 	Valid     int         `json:"valid"`
 	Invalid   int         `json:"invalid"`
@@ -155,6 +193,7 @@ type ValidateResponse struct {
 // ImportResponse is the process result: per-row outcome plus the persisted run summary.
 type ImportResponse struct {
 	Resource string      `json:"resource"`
+	Headers  []string    `json:"headers"`
 	Run      RunMeta     `json:"run"`
 	Rows     []RowResult `json:"rows"`
 }

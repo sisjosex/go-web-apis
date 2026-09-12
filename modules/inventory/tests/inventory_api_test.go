@@ -17,6 +17,7 @@ import (
 	"time"
 
 	"josex/web/modules/core/testhelpers"
+	importErrors "josex/web/modules/import/errors"
 	inventoryErrors "josex/web/modules/inventory/errors"
 	"josex/web/modules/inventory/models"
 
@@ -5718,4 +5719,83 @@ func TestImportDetection_TellsTheInventoryFilesApart(t *testing.T) {
 		assert.Equal(t, expected, response["resource"],
 			"the header row should resolve to %s: %v", expected, response)
 	}
+}
+
+// scopedImport posts a CSV with a scope and no resource, the way the wizard
+// opened on a module does (IMPORT-001 D1), and returns the raw recorder so a
+// refusal can be asserted too.
+func scopedImport(helper *testhelpers.ApiTestHelper, scope, csv string) *httptest.ResponseRecorder {
+	files := []testhelpers.MultipartFile{{Field: "file", Filename: "scoped.csv", Content: []byte(csv)}}
+	return helper.DoMultipartRequest("POST", "/import/validate", map[string]string{"scope": scope}, files, map[string]string{})
+}
+
+func TestImportScope_LotsFileIsDetectedInsideInventory(t *testing.T) {
+	helper := SetupInventoryTest(t)
+	defer helper.Close()
+	csv := fmt.Sprintf("sku,lot_number,purchase_date,expiry_date,unit_cost,initial_quantity\nSCOPE%d,L1,01/06/2026,2027-01-01,\"10,5\",5\n",
+		time.Now().UnixNano())
+
+	w := scopedImport(helper, "inventory", csv)
+
+	assert.Equal(t, http.StatusOK, w.Code, w.Body.String())
+	var decoded map[string]interface{}
+	assert.NoError(t, json.Unmarshal(w.Body.Bytes(), &decoded))
+	assert.Equal(t, "product_batches", decoded["resource"], "%v", decoded)
+}
+
+func TestImportScope_UsersFileIsOutOfScopeInInventory(t *testing.T) {
+	helper := SetupInventoryTest(t)
+	defer helper.Close()
+
+	w := scopedImport(helper, "inventory", "first_name,last_name,email\nAna,Paz,ana@example.com\n")
+
+	assert.Equal(t, http.StatusBadRequest, w.Code, w.Body.String())
+	assert.Contains(t, w.Body.String(), importErrors.ImportDetectOutOfScope)
+}
+
+func TestImportResources_ListsWhatTheInventoryScopeReaches(t *testing.T) {
+	helper := SetupInventoryTest(t)
+	defer helper.Close()
+
+	w := helper.DoRequest("GET", "/import/resources?scope=inventory", nil, map[string]string{})
+
+	assert.Equal(t, http.StatusOK, w.Code, w.Body.String())
+	var resources []map[string]string
+	assert.NoError(t, json.Unmarshal(w.Body.Bytes(), &resources))
+	names := make([]string, 0, len(resources))
+	for _, resource := range resources {
+		assert.Equal(t, "inventory", resource["module"])
+		names = append(names, resource["resource"])
+	}
+	// A1-D1 — registration order is import order: what the others point at first.
+	assert.Equal(t, []string{"categories", "products", "product_stock", "product_batches"}, names)
+}
+
+// detectImport posts a CSV to the header-only detection endpoint (A1-D1).
+func detectImport(helper *testhelpers.ApiTestHelper, scope, csv string) *httptest.ResponseRecorder {
+	files := []testhelpers.MultipartFile{{Field: "file", Filename: "detect.csv", Content: []byte(csv)}}
+	return helper.DoMultipartRequest("POST", "/import/detect", map[string]string{"scope": scope}, files, map[string]string{})
+}
+
+func TestImportDetect_NamesTheResourceFromTheHeaderAlone(t *testing.T) {
+	helper := SetupInventoryTest(t)
+	defer helper.Close()
+
+	w := detectImport(helper, "inventory", "sku,variant[talle],lot_number,purchase_date,expiry_date,unit_cost,initial_quantity\n")
+
+	assert.Equal(t, http.StatusOK, w.Code, w.Body.String())
+	var decoded map[string]string
+	assert.NoError(t, json.Unmarshal(w.Body.Bytes(), &decoded))
+	assert.Equal(t, "product_batches", decoded["resource"])
+	assert.Equal(t, "inventory", decoded["module"])
+}
+
+func TestImportDetect_UsersHeaderIsOutOfScopeInInventory(t *testing.T) {
+	helper := SetupInventoryTest(t)
+	defer helper.Close()
+
+	w := detectImport(helper, "inventory", "first_name,last_name,email\n")
+
+	assert.Equal(t, http.StatusBadRequest, w.Code, w.Body.String())
+	assert.Contains(t, w.Body.String(), importErrors.ImportDetectOutOfScope)
 }

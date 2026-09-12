@@ -265,16 +265,18 @@ func SetupRoutes(r *gin.Engine, dbService coreServices.DatabaseService) {
 		// where it is needed.
 		importRegistry := importServices.NewRegistry()
 		if coreConf.IsModuleEnabled("users") {
-			importRegistry.Register(userServices.NewUsersImportDescriptor(userService, userAuditService, emailService, dbService, mediaService))
+			importRegistry.Register("users", userServices.NewUsersImportDescriptor(userService, userAuditService, emailService, dbService, mediaService))
 		}
 		if coreConf.IsModuleEnabled("inventory") {
-			importRegistry.Register(inventoryServices.NewProductsImportDescriptor(
+			// Registration order is import order (IMPORT-001 A1-D1): the tree the
+			// catalogue files into, the catalogue, then what points at its SKUs.
+			importRegistry.Register("inventory", inventoryServices.NewCategoriesImportDescriptor(inventorySvcs.Category, dbService))
+			importRegistry.Register("inventory", inventoryServices.NewProductsImportDescriptor(
 				inventorySvcs.Product, inventorySvcs.Category, inventorySvcs.Movement, inventorySvcs.Stock,
 				inventorySvcs.Sku, dbService, mediaService, config.GetConfig().Inventory))
-			importRegistry.Register(inventoryServices.NewCategoriesImportDescriptor(inventorySvcs.Category, dbService))
-			importRegistry.Register(inventoryServices.NewProductStockImportDescriptor(
+			importRegistry.Register("inventory", inventoryServices.NewProductStockImportDescriptor(
 				inventorySvcs.Movement, inventorySvcs.Stock, dbService))
-			importRegistry.Register(inventoryServices.NewProductBatchesImportDescriptor(inventorySvcs.Batch, dbService))
+			importRegistry.Register("inventory", inventoryServices.NewProductBatchesImportDescriptor(inventorySvcs.Batch, dbService))
 		}
 		importService := importServices.NewImportService(importRegistry)
 		importController := importControllers.NewImportController(importService)

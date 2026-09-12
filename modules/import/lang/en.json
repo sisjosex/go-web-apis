@@ -5,6 +5,7 @@
   "import.file.no-rows": "The file has a header but no data rows below it",
   "import.file.invalid": "The file could not be read as CSV",
   "import.detect.unknown-format": "The file format was not recognized for any resource",
+  "import.detect.out-of-scope": "This file belongs to another section; import it from there",
   "import.too-many-rows": "The file exceeds the 500-row limit",
   "import.options.invalid": "The options field is not valid JSON",
   "import.validation-failed": "Import validation failed",

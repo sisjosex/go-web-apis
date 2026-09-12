@@ -28,19 +28,34 @@ type ImportDescriptor interface {
 	RecordRun(ctx importModels.ImportContext, meta importModels.RunMeta)
 }
 
-// ImportRegistry holds the registered descriptors and resolves a CSV to one,
-// either by explicit resource key or by header-signature detection.
+// ImportRegistry holds the registered descriptors, each under the module that
+// owns it, and resolves a CSV to one — by explicit resource key or by
+// header-signature detection inside a scope. A scope is a list of resource and
+// module keys; an empty one reaches every descriptor (IMPORT-001 D1).
+//
+// Registration order is also import order (A1-D1): a module registers the
+// resources other ones point at first — categories before products, products
+// before their stock and lots — and the wizard runs a multi-file drop in it.
 type ImportRegistry interface {
-	Register(descriptor ImportDescriptor)
+	Register(module string, descriptor ImportDescriptor)
 	Get(resource string) (ImportDescriptor, bool)
-	Detect(headers []string) (ImportDescriptor, bool)
+	Detect(headers []string, scope []string) (ImportDescriptor, bool)
+	InScope(resource string, scope []string) bool
+	Resources(scope []string) []importModels.ImportResourceInfo
 }
 
 // ImportService is the generic engine: it parses the CSV, resolves the
-// descriptor, enforces limits, and runs the validate or process pass.
+// descriptor, enforces limits, and runs the validate or process pass. A request
+// names a resource, a scope to detect within, or both.
 type ImportService interface {
-	Validate(ctx importModels.ImportContext, resource string, data []byte) (*importModels.ValidateResponse, error)
-	Import(ctx importModels.ImportContext, resource string, data []byte) (*importModels.ImportResponse, error)
+	Validate(ctx importModels.ImportContext, target importModels.ImportTarget, data []byte) (*importModels.ValidateResponse, error)
+	Import(ctx importModels.ImportContext, target importModels.ImportTarget, data []byte) (*importModels.ImportResponse, error)
+	// Resources lists what a scope reaches, so a client opened on a module can
+	// offer its resources without knowing them (D2).
+	Resources(scope []string) []importModels.ImportResourceInfo
+	// Detect names the resource a file is from its header line alone, without
+	// reading or validating a row (A1-D1).
+	Detect(target importModels.ImportTarget, data []byte) (*importModels.DetectResponse, error)
 	// Limits returns the configured upload constraints for the UI hint.
 	Limits() importModels.ImportLimits
 	// Template returns the CSV header row for a resource, built from its

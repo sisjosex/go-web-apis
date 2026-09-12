@@ -7,6 +7,7 @@ import (
 	"io"
 	"mime/multipart"
 	"net/http"
+	"strings"
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
@@ -41,6 +42,7 @@ func (ctrl *ImportController) maxFileSizeBytes() int64 {
 // @Param        X-Tenant-Slug  header    string  true   "Tenant slug"
 // @Param        file           formData  file    true   "CSV file (max 5 MB, 500 rows)"
 // @Param        resource       formData  string  false  "Resource key (auto-detected from the header when omitted)"
+// @Param        scope          formData  string  false  "Comma-separated resource or module keys detection is limited to (e.g. inventory)"
 // @Param        options        formData  string  false  "Resource-specific options as a JSON object"
 // @Param        images         formData  file    false  "Optional ZIP of images referenced by the CSV (e.g. profile_picture)"
 // @Success      200  {object}  importModels.ValidateResponse
@@ -54,7 +56,7 @@ func (ctrl *ImportController) Validate(c *gin.Context) {
 		return
 	}
 
-	result, err := ctrl.importService.Validate(ctrl.buildContext(c, parsed), parsed.resource, parsed.data)
+	result, err := ctrl.importService.Validate(ctrl.buildContext(c, parsed), parsed.target, parsed.data)
 	if err != nil {
 		ctrl.mapError(c, err)
 		return
@@ -73,6 +75,7 @@ func (ctrl *ImportController) Validate(c *gin.Context) {
 // @Param        X-Tenant-Slug  header    string  true   "Tenant slug"
 // @Param        file           formData  file    true   "CSV file (max 5 MB, 500 rows)"
 // @Param        resource       formData  string  false  "Resource key (auto-detected from the header when omitted)"
+// @Param        scope          formData  string  false  "Comma-separated resource or module keys detection is limited to (e.g. inventory)"
 // @Param        options        formData  string  false  "Resource-specific options as a JSON object"
 // @Param        images         formData  file    false  "Optional ZIP of images referenced by the CSV (e.g. profile_picture)"
 // @Success      200  {object}  importModels.ImportResponse
@@ -86,7 +89,37 @@ func (ctrl *ImportController) Import(c *gin.Context) {
 		return
 	}
 
-	result, err := ctrl.importService.Import(ctrl.buildContext(c, parsed), parsed.resource, parsed.data)
+	result, err := ctrl.importService.Import(ctrl.buildContext(c, parsed), parsed.target, parsed.data)
+	if err != nil {
+		ctrl.mapError(c, err)
+		return
+	}
+
+	c.JSON(http.StatusOK, result)
+}
+
+// Detect godoc
+// @Summary      Detect a CSV's resource
+// @Description  Resolves the resource a CSV belongs to from its header line alone, inside the optional scope, without reading or validating any row — so a client can queue several files in import order before running them.
+// @Tags         Import
+// @Accept       multipart/form-data
+// @Produce      json
+// @Param        Authorization  header    string  true   "Bearer Token"
+// @Param        X-Tenant-Slug  header    string  true   "Tenant slug"
+// @Param        file           formData  file    true   "CSV file (max 5 MB)"
+// @Param        scope          formData  string  false  "Comma-separated resource or module keys detection is limited to (e.g. inventory)"
+// @Success      200  {object}  importModels.DetectResponse
+// @Failure      400  {object}  coreErrors.ErrorResponse
+// @Failure      401  {object}  coreErrors.ErrorResponse
+// @Router       /import/detect [post]
+// @Security     ApiKeyAuth
+func (ctrl *ImportController) Detect(c *gin.Context) {
+	parsed, ok := ctrl.readUpload(c)
+	if !ok {
+		return
+	}
+
+	result, err := ctrl.importService.Detect(parsed.target, parsed.data)
 	if err != nil {
 		ctrl.mapError(c, err)
 		return
@@ -108,6 +141,35 @@ func (ctrl *ImportController) Import(c *gin.Context) {
 // @Security     ApiKeyAuth
 func (ctrl *ImportController) Meta(c *gin.Context) {
 	c.JSON(http.StatusOK, ctrl.importService.Limits())
+}
+
+// Resources godoc
+// @Summary      Resources a scope reaches
+// @Description  Lists the import resources a scope of resource or module keys reaches, with the module that owns each, in detection order. An empty scope lists every registered resource.
+// @Tags         Import
+// @Produce      json
+// @Param        Authorization  header    string  true   "Bearer Token"
+// @Param        X-Tenant-Slug  header    string  true   "Tenant slug"
+// @Param        scope          query     string  false  "Comma-separated resource or module keys (e.g. inventory)"
+// @Success      200  {array}   importModels.ImportResourceInfo
+// @Failure      401  {object}  coreErrors.ErrorResponse
+// @Router       /import/resources [get]
+// @Security     ApiKeyAuth
+func (ctrl *ImportController) Resources(c *gin.Context) {
+	c.JSON(http.StatusOK, ctrl.importService.Resources(parseScope(c.Query("scope"))))
+}
+
+// parseScope splits the comma-separated scope field into its keys, dropping
+// blanks, so `inventory`, `inventory,users` and an empty field all read as
+// expected.
+func parseScope(raw string) []string {
+	var scope []string
+	for _, entry := range strings.Split(raw, ",") {
+		if entry = strings.TrimSpace(entry); entry != "" {
+			scope = append(scope, entry)
+		}
+	}
+	return scope
 }
 
 // Template godoc
@@ -159,13 +221,14 @@ func (ctrl *ImportController) Schema(c *gin.Context) {
 	c.JSON(http.StatusOK, result)
 }
 
-// upload is one parsed multipart request: the CSV bytes, the optional resource
-// key, the parsed options, and the images inflated from the optional archive.
+// upload is one parsed multipart request: the CSV bytes, the resource and scope
+// it targets, the parsed options, and the images inflated from the optional
+// archive.
 type upload struct {
-	data     []byte
-	resource string
-	options  importModels.ImportOptions
-	images   importModels.ImportImages
+	data    []byte
+	target  importModels.ImportTarget
+	options importModels.ImportOptions
+	images  importModels.ImportImages
 }
 
 // readUpload reads and size-checks the CSV file, the optional resource and
@@ -203,7 +266,11 @@ func (ctrl *ImportController) readUpload(c *gin.Context) (upload, bool) {
 		return upload{}, false
 	}
 
-	return upload{data: data, resource: c.PostForm("resource"), options: options, images: images}, true
+	target := importModels.ImportTarget{
+		Resource: strings.TrimSpace(c.PostForm("resource")),
+		Scope:    parseScope(c.PostForm("scope")),
+	}
+	return upload{data: data, target: target, options: options, images: images}, true
 }
 
 // readImages inflates the optional `images` archive. Absent is not an error —
@@ -259,6 +326,7 @@ func readMultipart(header *multipart.FileHeader, maxBytes int64) ([]byte, error)
 // plus the parsed upload.
 func (ctrl *ImportController) buildContext(c *gin.Context, parsed upload) importModels.ImportContext {
 	importCtx := importModels.ImportContext{
+		Ctx:     c.Request.Context(),
 		Lang:    c.GetString("lang"),
 		Options: parsed.options,
 		Images:  parsed.images,
@@ -281,6 +349,8 @@ func (ctrl *ImportController) mapError(c *gin.Context, err error) {
 	switch {
 	case errors.Is(err, importErrors.ErrUnknownFormat):
 		c.JSON(http.StatusBadRequest, coreErrors.BuildErrorSingle(c, importErrors.ImportDetectUnknownFormat))
+	case errors.Is(err, importErrors.ErrOutOfScope):
+		c.JSON(http.StatusBadRequest, coreErrors.BuildErrorSingle(c, importErrors.ImportDetectOutOfScope))
 	case errors.Is(err, importErrors.ErrTooManyRows):
 		c.JSON(http.StatusBadRequest, coreErrors.BuildErrorSingle(c, importErrors.ImportTooManyRows))
 	case errors.Is(err, importErrors.ErrFileEmpty):

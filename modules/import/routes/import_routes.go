@@ -22,8 +22,10 @@ func RegisterImportRoutes(
 	importRoutes.Use(tenantMiddleware)
 	{
 		importRoutes.GET("/meta", importController.Meta)
+		importRoutes.GET("/resources", importController.Resources)
 		importRoutes.GET("/template", importController.Template)
 		importRoutes.GET("/schema", importController.Schema)
+		importRoutes.POST("/detect", importController.Detect)
 		importRoutes.POST("/validate", importController.Validate)
 		importRoutes.POST("", importController.Import)
 	}

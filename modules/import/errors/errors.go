@@ -12,8 +12,10 @@ const (
 	ImportFileNoRows   = "import.file.no-rows"
 	ImportFileInvalid  = "import.file.invalid"
 
-	// Resource detection.
+	// Resource detection. OutOfScope is a file another screen imports — a users
+	// CSV dropped in inventory — told apart from one nothing recognizes.
 	ImportDetectUnknownFormat = "import.detect.unknown-format"
+	ImportDetectOutOfScope    = "import.detect.out-of-scope"
 
 	// Limits.
 	ImportTooManyRows = "import.too-many-rows"
@@ -38,6 +40,7 @@ var (
 	ErrFileInvalid   = errors.New(ImportFileInvalid)
 	ErrFileTooLarge  = errors.New(ImportFileTooLarge)
 	ErrUnknownFormat = errors.New(ImportDetectUnknownFormat)
+	ErrOutOfScope    = errors.New(ImportDetectOutOfScope)
 	ErrTooManyRows   = errors.New(ImportTooManyRows)
 
 	ErrImagesInvalid       = errors.New(ImportImagesInvalid)
