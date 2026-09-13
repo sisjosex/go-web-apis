@@ -3,7 +3,6 @@ package services
 import (
 	"strings"
 
-	coreServices "josex/web/modules/core/services"
 	importInterfaces "josex/web/modules/import/interfaces"
 	importModels "josex/web/modules/import/models"
 	inventoryErrors "josex/web/modules/inventory/errors"
@@ -22,19 +21,19 @@ import (
 type productStockImportDescriptor struct {
 	movementService inventoryInterfaces.MovementService
 	stockService    inventoryInterfaces.StockService
-	dbService       coreServices.DatabaseService
+	lookups         inventoryInterfaces.ImportLookupRepository
 }
 
 // NewProductStockImportDescriptor builds the product_stock import descriptor.
 func NewProductStockImportDescriptor(
 	movementService inventoryInterfaces.MovementService,
 	stockService inventoryInterfaces.StockService,
-	dbService coreServices.DatabaseService,
+	lookups inventoryInterfaces.ImportLookupRepository,
 ) importInterfaces.ImportDescriptor {
 	return &productStockImportDescriptor{
 		movementService: movementService,
 		stockService:    stockService,
-		dbService:       dbService,
+		lookups:         lookups,
 	}
 }
 
@@ -127,7 +126,7 @@ func (d *productStockImportDescriptor) check(ctx importModels.ImportContext, row
 		return fieldErrors, skuCandidate{}
 	}
 
-	target, code := resolveSkuByAxes(d.dbService, ctx.TenantID, row["sku"], pairs)
+	target, code := resolveSkuByAxes(d.lookups, ctx, row["sku"], pairs)
 	if code != "" {
 		return []string{code}, skuCandidate{}
 	}

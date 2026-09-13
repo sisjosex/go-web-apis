@@ -123,6 +123,7 @@ const (
 	ImportAxesInconsistent        = "inventory.import.axes-inconsistent"
 	ImportAxesTooMany             = "inventory.import.axes-too-many"
 	ImportPriceInvalid            = "inventory.import.price-invalid"
+	ImportPriceZero               = "inventory.import.price-zero"
 	ImportPriceInconsistent       = "inventory.import.price-inconsistent"
 	ImportPriceAttributed         = "inventory.import.price-attributed"
 	ImportProductInconsistent     = "inventory.import.product-inconsistent"

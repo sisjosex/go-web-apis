@@ -1,16 +1,12 @@
 package services
 
 import (
-	"context"
 	"fmt"
 	"regexp"
 	"strconv"
 	"strings"
 	"unicode"
 
-	"github.com/google/uuid"
-
-	coreServices "josex/web/modules/core/services"
 	importModels "josex/web/modules/import/models"
 	inventoryErrors "josex/web/modules/inventory/errors"
 	inventoryInterfaces "josex/web/modules/inventory/interfaces"
@@ -71,6 +67,10 @@ const (
 	// suffixed before the row gives up: product_categories.slug is UNIQUE per
 	// tenant, so two categories named the same under different parents collide.
 	slugCollisionLimit = 20
+
+	// pendingCategoriesKey is where a dry run keeps the categories its rows
+	// would have created by the time the next row is read.
+	pendingCategoriesKey = "inventory.pendingCategories"
 )
 
 // slugSeparatorPattern collapses everything that is not alphanumeric into the
@@ -184,14 +184,15 @@ func formatAxisPairs(pairs []axisPair) string {
 //
 // It returns the row code to report, empty when the SKU resolved.
 func resolveSkuByAxes(
-	dbService coreServices.DatabaseService,
-	tenantID uuid.UUID,
+	lookups inventoryInterfaces.ImportLookupRepository,
+	ctx importModels.ImportContext,
 	sku string,
 	pairs []axisPair,
 ) (skuCandidate, string) {
 	sku = strings.TrimSpace(sku)
-	if dbService == nil {
-		return skuCandidate{}, inventoryErrors.ImportSkuUnknown + errorParamSeparator + sku
+	unknown := inventoryErrors.ImportSkuUnknown + errorParamSeparator + sku
+	if lookups == nil {
+		return skuCandidate{}, unknown
 	}
 
 	axisNames := make([]string, 0, len(pairs))
@@ -201,91 +202,27 @@ func resolveSkuByAxes(
 		optionNames = append(optionNames, pair.Option)
 	}
 
-	// One round trip answers all of it: which product the cell names, how many
-	// axes it has, the SKU whose option set equals the row's, and the default
-	// bucket for the no-axis case.
-	query := `
-        WITH target AS (
-            SELECT p.id AS product_id
-            FROM inventory.products p
-            WHERE p.tenant_id = $1
-              AND LOWER(p.sku) = LOWER($2)
-            UNION
-            SELECT s.product_id
-            FROM inventory.product_skus s
-            WHERE s.tenant_id = $1
-              AND LOWER(s.sku) = LOWER($2)
-        ),
-        wanted AS (
-            SELECT ARRAY(
-                SELECT LOWER(TRIM(w.axis)) || '=' || LOWER(TRIM(w.option))
-                FROM unnest($3::TEXT[], $4::TEXT[]) AS w(axis, option)
-                ORDER BY 1
-            ) AS options
-        ),
-        matched AS (
-            SELECT s.id::TEXT AS sku_id, s.sku
-            FROM inventory.product_skus s
-            JOIN target t ON t.product_id = s.product_id
-            WHERE NOT s.is_default
-              AND ARRAY(
-                      SELECT LOWER(g.group_type) || '=' || LOWER(vo.option_name)
-                      FROM inventory.product_sku_options so
-                      JOIN inventory.product_variant_groups g
-                        ON g.id = so.variant_group_id
-                      JOIN inventory.product_variant_options vo
-                        ON vo.id = so.option_id
-                      WHERE so.sku_id = s.id
-                      ORDER BY 1
-                  ) = (SELECT w.options FROM wanted w)
-        )
-        SELECT (SELECT t.product_id::TEXT FROM target t LIMIT 1),
-               (SELECT COUNT(*)
-                FROM inventory.product_variant_groups vg
-                JOIN target t ON t.product_id = vg.product_id
-                WHERE vg.affects_inventory),
-               (SELECT m.sku_id FROM matched m LIMIT 1),
-               (SELECT m.sku FROM matched m LIMIT 1),
-               (SELECT s.id::TEXT
-                FROM inventory.product_skus s
-                JOIN target t ON t.product_id = s.product_id
-                WHERE s.is_default
-                LIMIT 1),
-               (SELECT s.sku
-                FROM inventory.product_skus s
-                JOIN target t ON t.product_id = s.product_id
-                WHERE s.is_default
-                LIMIT 1)
-    `
-
-	var productID, matchedID, matchedSku, defaultID, defaultSku *string
-	var axisCount int
-
-	row := dbService.QueryRow(context.Background(), query, tenantID, sku, axisNames, optionNames)
-	if err := row.Scan(&productID, &axisCount, &matchedID, &matchedSku, &defaultID, &defaultSku); err != nil {
-		return skuCandidate{}, inventoryErrors.ImportSkuUnknown + errorParamSeparator + sku
+	resolved, err := lookups.ResolveSkuByAxes(ctx.Context(), ctx.TenantID, sku, axisNames, optionNames)
+	if err != nil || resolved.ProductID == nil {
+		return skuCandidate{}, unknown
 	}
 
-	if productID == nil {
-		return skuCandidate{}, inventoryErrors.ImportSkuUnknown + errorParamSeparator + sku
-	}
-
-	if len(pairs) < axisCount {
+	if len(pairs) < resolved.AxisCount {
 		return skuCandidate{}, inventoryErrors.ImportAxesIncomplete + errorParamSeparator + sku
 	}
 
 	if len(pairs) == 0 {
-		if defaultID == nil {
-			return skuCandidate{}, inventoryErrors.ImportSkuUnknown + errorParamSeparator + sku
+		if resolved.DefaultSkuID == nil || resolved.DefaultSku == nil {
+			return skuCandidate{}, unknown
 		}
-		return skuCandidate{ProductID: *productID, SkuID: *defaultID, SKU: *defaultSku}, ""
+		return skuCandidate{ProductID: *resolved.ProductID, SkuID: *resolved.DefaultSkuID, SKU: *resolved.DefaultSku}, ""
 	}
 
-	if matchedID == nil {
+	if resolved.MatchedSkuID == nil || resolved.MatchedSku == nil {
 		return skuCandidate{}, inventoryErrors.ImportCombinationUnknown + errorParamSeparator + formatAxisPairs(pairs)
 	}
 
-	return skuCandidate{ProductID: *productID, SkuID: *matchedID, SKU: *matchedSku}, ""
+	return skuCandidate{ProductID: *resolved.ProductID, SkuID: *resolved.MatchedSkuID, SKU: *resolved.MatchedSku}, ""
 }
 
 // axisSampleColumns is the pair of `variant[…]` columns every product template
@@ -299,31 +236,24 @@ func axisSampleColumns() []importModels.ColumnSpec {
 	}
 }
 
-// findVariantOptionID resolves one option of one axis of a product to the id
-// product_media.variant_option_id references (D7). The axis and the option are
-// matched case-insensitively, the way every other cell of these files is.
-func findVariantOptionID(dbService coreServices.DatabaseService, productID, axis, option string) (string, bool) {
-	if dbService == nil || productID == "" {
+// findVariantOptionID resolves one option of one axis of the tenant's product to
+// the id product_media.variant_option_id references (D7). The axis and the
+// option are matched case-insensitively, the way every other cell of these files
+// is.
+func findVariantOptionID(
+	lookups inventoryInterfaces.ImportLookupRepository,
+	ctx importModels.ImportContext,
+	productID, axis, option string,
+) (string, bool) {
+	if lookups == nil || productID == "" {
 		return "", false
 	}
 
-	query := `
-        SELECT vo.id::TEXT
-        FROM inventory.product_variant_options vo
-        JOIN inventory.product_variant_groups vg ON vg.id = vo.variant_group_id
-        WHERE vg.product_id = $1::UUID
-          AND vg.affects_inventory
-          AND LOWER(vg.group_type)  = LOWER($2)
-          AND LOWER(vo.option_name) = LOWER($3)
-        LIMIT 1
-    `
-
-	optionID := ""
-	row := dbService.QueryRow(context.Background(), query, productID, strings.TrimSpace(axis), strings.TrimSpace(option))
-	if err := row.Scan(&optionID); err != nil {
+	optionID, err := lookups.FindVariantOptionID(ctx.Context(), ctx.TenantID, productID, axis, option)
+	if err != nil || optionID == nil {
 		return "", false
 	}
-	return optionID, optionID != ""
+	return *optionID, true
 }
 
 // slugify turns a category name into the slug sp_create_category requires. A
@@ -342,70 +272,93 @@ func slugify(name string) string {
 // tenant is not already using. product_categories.slug is UNIQUE per tenant, so
 // two categories legitimately named the same under different parents would
 // otherwise collide (D7).
-func findFreeSlug(dbService coreServices.DatabaseService, tenantID uuid.UUID, base string) string {
-	query := `
-        SELECT c.slug
-        FROM inventory.product_categories c
-        WHERE c.tenant_id = $1
-          AND (c.slug = $2 OR c.slug LIKE $2 || '-%')
-    `
-
-	rows, err := dbService.Query(context.Background(), query, tenantID, base)
-	if err != nil {
-		return base
-	}
-	defer rows.Close()
-
-	taken := make(map[string]bool)
-	for rows.Next() {
-		var slug string
-		if err := rows.Scan(&slug); err != nil {
-			return base
-		}
-		taken[slug] = true
-	}
-	if rows.Err() != nil {
+func findFreeSlug(lookups inventoryInterfaces.ImportLookupRepository, ctx importModels.ImportContext, base string) string {
+	if lookups == nil {
 		return base
 	}
 
-	if !taken[base] {
+	slug, err := lookups.FreeCategorySlug(ctx.Context(), ctx.TenantID, base, slugCollisionLimit)
+	if err != nil || slug == "" {
 		return base
 	}
-	for suffix := 2; suffix <= slugCollisionLimit; suffix++ {
-		candidate := base + "-" + strconv.Itoa(suffix)
-		if !taken[candidate] {
-			return candidate
-		}
-	}
-	return base
+	return slug
 }
 
 // findCategoryID returns the id of the tenant category with this name, matched
 // case-insensitively. parentID narrows the search to the children of one
 // category, which is exactly what a `subcategory` cell means.
-func findCategoryID(dbService coreServices.DatabaseService, tenantID uuid.UUID, name string, parentID *string) (string, bool) {
+func findCategoryID(
+	lookups inventoryInterfaces.ImportLookupRepository,
+	ctx importModels.ImportContext,
+	name string,
+	parentID *string,
+) (string, bool) {
 	name = strings.TrimSpace(name)
-	if name == "" || dbService == nil {
+	if name == "" || lookups == nil {
 		return "", false
 	}
 
-	query := `
-        SELECT c.id::TEXT
-        FROM inventory.product_categories c
-        WHERE c.tenant_id = $1
-          AND LOWER(c.name) = LOWER($2)
-          AND c.deleted_at IS NULL
-          AND ($3::UUID IS NULL OR c.parent_id = $3::UUID)
-        ORDER BY c.created_at
-        LIMIT 1
-    `
-
-	categoryID := ""
-	row := dbService.QueryRow(context.Background(), query, tenantID, name, parentID)
-	if err := row.Scan(&categoryID); err != nil {
+	categoryID, err := lookups.FindCategoryID(ctx.Context(), ctx.TenantID, name, parentID)
+	if err != nil || categoryID == nil {
 		return "", false
 	}
-	return categoryID, categoryID != ""
+	return *categoryID, true
+}
+
+// pendingCategories is the dry run's stand-in for the categories the real run
+// will have created by the time it reaches a row (INV-017). Nothing is written
+// on a dry run, so without it every row naming a new category announced it
+// again, and the child of a category created two rows up looked orphaned.
+//
+// A category is keyed by its path: the parent key, '/', the name lowercased. The
+// parent key is "" at the top, the id of a parent that exists, or the path of a
+// parent that is itself pending.
+type pendingCategories struct {
+	paths map[string]bool
+	// names maps a name to the path of the first pending category carrying it,
+	// which is what findCategoryID with no parent answers: the oldest one of
+	// that name, under any parent.
+	names map[string]string
+}
+
+// pendingCategoriesOf returns the run's ledger, creating it on first use.
+func pendingCategoriesOf(ctx importModels.ImportContext) *pendingCategories {
+	if existing, ok := ctx.Scratch[pendingCategoriesKey].(*pendingCategories); ok {
+		return existing
+	}
+
+	pending := &pendingCategories{paths: map[string]bool{}, names: map[string]string{}}
+	if ctx.Scratch != nil {
+		ctx.Scratch[pendingCategoriesKey] = pending
+	}
+	return pending
+}
+
+func categoryPath(parentKey, name string) string {
+	return parentKey + "/" + strings.ToLower(strings.TrimSpace(name))
+}
+
+// find mirrors findCategoryID against the ledger: under one parent, or under any
+// parent when parentKey is "". It returns the path that stands in for the id.
+func (p *pendingCategories) find(parentKey, name string) (string, bool) {
+	if parentKey == "" {
+		path, found := p.names[strings.ToLower(strings.TrimSpace(name))]
+		return path, found
+	}
+
+	path := categoryPath(parentKey, name)
+	return path, p.paths[path]
+}
+
+// add records a category the real run will create at this row.
+func (p *pendingCategories) add(parentKey, name string) {
+	path := categoryPath(parentKey, name)
+	p.paths[path] = true
+
+	key := strings.ToLower(strings.TrimSpace(name))
+	if _, known := p.names[key]; !known {
+		p.names[key] = path
+	}
 }
 
 // parseOptionalNumber reads a numeric cell. An empty cell is "not given" and
@@ -456,14 +409,14 @@ func seedCombination(
 			Direction:    &direction,
 			Notes:        &notes,
 		}
-		if _, err := movementService.RecordMovement(context.Background(), ctx.TenantID, dto, performedByString(ctx)); err != nil {
+		if _, err := movementService.RecordMovement(ctx.Context(), ctx.TenantID, dto, performedByString(ctx)); err != nil {
 			return inventoryErrors.ImportStockFailed, warnings
 		}
 	}
 
 	if level, given, err := parseOptionalNumber(reorderCell, 0); err == nil && given && stockService != nil {
 		if _, err := stockService.UpdateReorderLevel(
-			context.Background(), ctx.TenantID, target.ProductID, level, performedByString(ctx), &skuID,
+			ctx.Context(), ctx.TenantID, target.ProductID, level, performedByString(ctx), &skuID,
 		); err != nil {
 			warnings = append(warnings, inventoryErrors.ImportStockFailed)
 		}

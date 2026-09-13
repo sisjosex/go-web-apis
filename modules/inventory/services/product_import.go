@@ -1,7 +1,6 @@
 package services
 
 import (
-	"context"
 	"errors"
 	"log"
 	"math"
@@ -9,7 +8,6 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgconn"
 
 	coreServices "josex/web/modules/core/services"
@@ -120,23 +118,23 @@ type productsImportDescriptor struct {
 	movementService inventoryInterfaces.MovementService
 	stockService    inventoryInterfaces.StockService
 	skuService      inventoryInterfaces.SkuService
-	dbService       coreServices.DatabaseService
+	lookups         inventoryInterfaces.ImportLookupRepository
 	mediaService    coreServices.MediaService
 	config          *inventoryConfig.InventoryConfig
 }
 
 // NewProductsImportDescriptor builds the catalogue import descriptor out of the
-// services that already exist. dbService backs the read-only lookups no
-// repository method exposes (the SKU existence preview, category resolution by
-// name, the option a picture hangs off); mediaService stores the images the
-// companion archive carries; skuService creates the one combination a row names.
+// services that already exist. lookups backs the read-only previews the dry run
+// needs (the SKU existence preview, category resolution by name, the option a
+// picture hangs off); mediaService stores the images the companion archive
+// carries; skuService creates the one combination a row names.
 func NewProductsImportDescriptor(
 	productService inventoryInterfaces.ProductService,
 	categoryService inventoryInterfaces.CategoryService,
 	movementService inventoryInterfaces.MovementService,
 	stockService inventoryInterfaces.StockService,
 	skuService inventoryInterfaces.SkuService,
-	dbService coreServices.DatabaseService,
+	lookups inventoryInterfaces.ImportLookupRepository,
 	mediaService coreServices.MediaService,
 	config *inventoryConfig.InventoryConfig,
 ) importInterfaces.ImportDescriptor {
@@ -146,7 +144,7 @@ func NewProductsImportDescriptor(
 		movementService: movementService,
 		stockService:    stockService,
 		skuService:      skuService,
-		dbService:       dbService,
+		lookups:         lookups,
 		mediaService:    mediaService,
 		config:          config,
 	}
@@ -271,7 +269,7 @@ func (d *productsImportDescriptor) ProcessRow(ctx importModels.ImportContext, li
 	if len(parsed.Pairs) == 0 {
 		// A row with no axis cell is the whole product: its stock seeds the
 		// default bucket sp_create_product_with_variants just made (D9).
-		resolved, code := resolveSkuByAxes(d.dbService, ctx.TenantID, parsed.SKU, nil)
+		resolved, code := resolveSkuByAxes(d.lookups, ctx, parsed.SKU, nil)
 		if code != "" {
 			result.Status = importModels.RowStatusFailed
 			result.Errors = []string{code}
@@ -370,7 +368,7 @@ func (d *productsImportDescriptor) readRow(
 		if strings.TrimSpace(row["name"]) == "" {
 			fieldErrors = append(fieldErrors, inventoryErrors.ImportNameRequired)
 		}
-		if priceErr != nil || !priceGiven || price == 0 {
+		if priceErr != nil || !priceGiven {
 			fieldErrors = append(fieldErrors, inventoryErrors.ImportPriceInvalid)
 		}
 		product.BasePrice = price
@@ -384,6 +382,12 @@ func (d *productsImportDescriptor) readRow(
 		if !sameAxisSet(product.Axes, pairs) {
 			fieldErrors = append(fieldErrors, inventoryErrors.ImportAxesInconsistent)
 		}
+	}
+
+	// INV-017 D2 — 0 is a price: a free item, a sample. Accepted, and said out
+	// loud, because it is also what a forgotten cell looks like.
+	if priceErr == nil && priceGiven && price == 0 {
+		warnings = append(warnings, inventoryErrors.ImportPriceZero)
 	}
 
 	if code := d.readVariantSku(ledger, row, parsed); code != "" {
@@ -488,10 +492,10 @@ func (d *productsImportDescriptor) duplicateOf(ctx importModels.ImportContext, p
 	if parsed.Product.Combinations[parsed.Key] {
 		return inventoryErrors.ImportCombinationDuplicate
 	}
-	if parsed.IsFirst && d.skuExists(ctx.TenantID, parsed.SKU) {
+	if parsed.IsFirst && d.codeTaken(ctx, parsed.SKU).ProductSkuTaken {
 		return inventoryErrors.ImportSkuDuplicate
 	}
-	if parsed.VariantSku != nil && d.variantSkuExists(ctx.TenantID, *parsed.VariantSku) {
+	if parsed.VariantSku != nil && d.codeTaken(ctx, *parsed.VariantSku).VariantSkuTaken {
 		return inventoryErrors.ImportVariantSkuDuplicate
 	}
 	return ""
@@ -510,7 +514,7 @@ func (d *productsImportDescriptor) createProduct(ctx importModels.ImportContext,
 		dto.Description = &description
 	}
 
-	product, err := d.productService.CreateProductWithVariants(context.Background(), ctx.TenantID, dto)
+	product, err := d.productService.CreateProductWithVariants(ctx.Context(), ctx.TenantID, dto)
 	if err != nil {
 		// D4 — a repeated SKU is a skip, so the rest of the file still imports.
 		var pgErr *pgconn.PgError
@@ -550,7 +554,7 @@ func (d *productsImportDescriptor) createCombination(
 	}
 
 	created, err := d.skuService.CreateCombination(
-		context.Background(),
+		ctx.Context(),
 		ctx.TenantID,
 		parsed.Product.ProductID,
 		inventoryModels.CreateCombinationDto{Axes: axes, SKU: parsed.VariantSku},
@@ -671,7 +675,7 @@ func (d *productsImportDescriptor) attachOptionImages(ctx importModels.ImportCon
 			continue
 		}
 
-		optionID, ok := findVariantOptionID(d.dbService, parsed.Product.ProductID, image.Axis, image.Option)
+		optionID, ok := findVariantOptionID(d.lookups, ctx, parsed.Product.ProductID, image.Axis, image.Option)
 		if !ok {
 			warnings = append(warnings, inventoryErrors.ImportMediaFailed)
 			continue
@@ -694,7 +698,7 @@ func (d *productsImportDescriptor) attachOptionImages(ctx importModels.ImportCon
 			dto.AltText = &alt
 		}
 
-		if _, err := d.productService.AddProductMedia(context.Background(), ctx.TenantID, parsed.Product.ProductID, dto); err != nil {
+		if _, err := d.productService.AddProductMedia(ctx.Context(), ctx.TenantID, parsed.Product.ProductID, dto); err != nil {
 			warnings = append(warnings, inventoryErrors.ImportMediaFailed)
 		}
 	}
@@ -725,24 +729,28 @@ func (d *productsImportDescriptor) ledger(ctx importModels.ImportContext) *catal
 //
 // The subcategory is looked up among the children of the category, so two
 // tenants' "Gaseosas" under different parents never collide. With write false —
-// the dry run — nothing is created, and a subcategory whose parent does not
-// exist yet is announced without being searched for: it cannot be there.
+// the dry run — nothing is created: the run's pendingCategories ledger stands in
+// for what the rows above will have created, so a category is announced once,
+// on the row the real run creates it at, and a subcategory whose parent does
+// not exist yet is only looked for there.
 func (d *productsImportDescriptor) resolveCategories(ctx importModels.ImportContext, row map[string]string, write bool) ([]string, []string, []string) {
 	categoryName := strings.TrimSpace(row["category"])
 	subName := strings.TrimSpace(row["subcategory"])
-	if (categoryName == "" && subName == "") || d.dbService == nil {
+	if (categoryName == "" && subName == "") || d.lookups == nil {
 		return nil, nil, nil
 	}
 
 	create := ctx.Options.BoolOr("create_categories", true)
+	pending := pendingCategoriesOf(ctx)
 
 	var categoryIDs []string
 	var warnings []string
 	var parentID *string
+	parentKey := ""
 	parentPending := false
 
 	if categoryName != "" {
-		id, code, warning := d.categoryFor(ctx.TenantID, categoryName, nil, false, create, write)
+		id, code, warning := d.categoryFor(ctx, pending, categoryName, nil, "", false, create, write)
 		if code != "" {
 			return nil, []string{code}, warnings
 		}
@@ -752,13 +760,15 @@ func (d *productsImportDescriptor) resolveCategories(ctx importModels.ImportCont
 		if id != "" {
 			categoryIDs = append(categoryIDs, id)
 			parentID = &id
+			parentKey = id
 		} else {
 			parentPending = true
+			parentKey, _ = pending.find("", categoryName)
 		}
 	}
 
 	if subName != "" {
-		id, code, warning := d.categoryFor(ctx.TenantID, subName, parentID, parentPending, create, write)
+		id, code, warning := d.categoryFor(ctx, pending, subName, parentID, parentKey, parentPending, create, write)
 		if code != "" {
 			return categoryIDs, []string{code}, warnings
 		}
@@ -775,17 +785,20 @@ func (d *productsImportDescriptor) resolveCategories(ctx importModels.ImportCont
 
 // categoryFor finds one category by name, creating it when the run is allowed
 // to. parentPending says the parent itself is only going to exist after this
-// run, so there is nothing to search under and the lookup is skipped. It returns
-// the id, the row error code if the name cannot be used, and the warning to
-// attach when the category was (or will be) created.
+// run, so there is nothing to search under and the lookup is skipped; parentKey
+// is where the dry run's ledger files it. It returns the id, the row error code
+// if the name cannot be used, and the warning to attach when the category was
+// (or will be) created.
 func (d *productsImportDescriptor) categoryFor(
-	tenantID uuid.UUID,
+	ctx importModels.ImportContext,
+	pending *pendingCategories,
 	name string,
 	parentID *string,
+	parentKey string,
 	parentPending, create, write bool,
 ) (string, string, string) {
 	if !parentPending {
-		if id, found := findCategoryID(d.dbService, tenantID, name, parentID); found {
+		if id, found := findCategoryID(d.lookups, ctx, name, parentID); found {
 			return id, "", ""
 		}
 	}
@@ -796,12 +809,17 @@ func (d *productsImportDescriptor) categoryFor(
 
 	warning := inventoryErrors.ImportCategoryCreated + errorParamSeparator + name
 	if !write {
+		// A row above already creates it, and the real run finds it by then.
+		if _, found := pending.find(parentKey, name); found {
+			return "", "", ""
+		}
+		pending.add(parentKey, name)
 		return "", "", warning
 	}
 
-	created, err := d.categoryService.CreateCategory(context.Background(), tenantID, &inventoryModels.CreateCategoryDto{
+	created, err := d.categoryService.CreateCategory(ctx.Context(), ctx.TenantID, &inventoryModels.CreateCategoryDto{
 		Name:     name,
-		Slug:     findFreeSlug(d.dbService, tenantID, slugify(name)),
+		Slug:     findFreeSlug(d.lookups, ctx, slugify(name)),
 		ParentID: parentID,
 	})
 	if err != nil {
@@ -816,7 +834,7 @@ func (d *productsImportDescriptor) assignCategories(ctx importModels.ImportConte
 	var warnings []string
 
 	for _, categoryID := range categoryIDs {
-		if err := d.categoryService.AssignProductToCategory(context.Background(), ctx.TenantID, productID, categoryID); err != nil {
+		if err := d.categoryService.AssignProductToCategory(ctx.Context(), ctx.TenantID, productID, categoryID); err != nil {
 			warnings = append(warnings, inventoryErrors.ImportCategoryAssignFailed)
 		}
 	}
@@ -852,47 +870,29 @@ func (d *productsImportDescriptor) attachProductImage(ctx importModels.ImportCon
 		dto.AltText = &alt
 	}
 
-	if _, err := d.productService.AddProductMedia(context.Background(), ctx.TenantID, productID, dto); err != nil {
+	if _, err := d.productService.AddProductMedia(ctx.Context(), ctx.TenantID, productID, dto); err != nil {
 		return []string{inventoryErrors.ImportMediaFailed}
 	}
 	return nil
 }
 
-// skuExists performs the read-only existence check the create SP enforces, so
-// the dry run reports a duplicate without writing anything.
-func (d *productsImportDescriptor) skuExists(tenantID uuid.UUID, sku string) bool {
+// codeTaken is the read-only preview of what the create SPs enforce, so the dry
+// run reports a duplicate without writing anything: a product code for a first
+// row, and a combination code the row supplies — product_skus is UNIQUE
+// (tenant_id, sku), so one another product already carries is a duplicate
+// before anything is written (AC-8). A failed lookup previews nothing; the real
+// run still gets the SP's answer.
+func (d *productsImportDescriptor) codeTaken(ctx importModels.ImportContext, sku string) inventoryModels.ImportSkuExistence {
 	sku = strings.TrimSpace(sku)
-	if sku == "" || d.dbService == nil {
-		return false
+	if sku == "" || d.lookups == nil {
+		return inventoryModels.ImportSkuExistence{}
 	}
 
-	exists := false
-	row := d.dbService.QueryRow(context.Background(),
-		`SELECT EXISTS(SELECT 1 FROM inventory.products p WHERE p.tenant_id = $1 AND LOWER(p.sku) = LOWER($2))`,
-		tenantID, sku)
-	if err := row.Scan(&exists); err != nil {
-		return false
+	existence, err := d.lookups.SkuExists(ctx.Context(), ctx.TenantID, sku)
+	if err != nil {
+		return inventoryModels.ImportSkuExistence{}
 	}
-	return exists
-}
-
-// variantSkuExists is the same preview for a code the row supplies: product_skus
-// is UNIQUE (tenant_id, sku), so a code another product already carries is a
-// duplicate before anything is written (AC-8).
-func (d *productsImportDescriptor) variantSkuExists(tenantID uuid.UUID, sku string) bool {
-	sku = strings.TrimSpace(sku)
-	if sku == "" || d.dbService == nil {
-		return false
-	}
-
-	exists := false
-	row := d.dbService.QueryRow(context.Background(),
-		`SELECT EXISTS(SELECT 1 FROM inventory.product_skus s WHERE s.tenant_id = $1 AND LOWER(s.sku) = LOWER($2))`,
-		tenantID, sku)
-	if err := row.Scan(&exists); err != nil {
-		return false
-	}
-	return exists
+	return *existence
 }
 
 // reconcileProductCells checks a repeat row against the product's first one

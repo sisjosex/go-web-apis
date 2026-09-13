@@ -16,10 +16,12 @@ import (
 	"testing"
 	"time"
 
+	coreServices "josex/web/modules/core/services"
 	"josex/web/modules/core/testhelpers"
 	importErrors "josex/web/modules/import/errors"
 	inventoryErrors "josex/web/modules/inventory/errors"
 	"josex/web/modules/inventory/models"
+	inventoryRepositories "josex/web/modules/inventory/repositories"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
@@ -5470,16 +5472,167 @@ func TestImportCategories_UnknownParentFailsTheRow(t *testing.T) {
 	stamp := time.Now().UnixNano()
 	csv := fmt.Sprintf("name,parent\nHuérfana %d,Inexistente %d\n", stamp, stamp)
 
+	// INV-017 — the dry run knows what the rows above create, so a parent none of
+	// them creates is the failure the real run is going to report.
 	dryRun := importInventoryCSV(t, helper, "/import/validate", "categories", csv, "", nil)
-	assert.True(t, containsCode(rowCodes(importRow(t, dryRun, 0), "warnings"),
-		inventoryErrors.ImportCategoryParentUnknown),
-		"the dry run cannot know the parent is missing for good, so it warns: %v", dryRun)
+	checked := importRow(t, dryRun, 0)
+	assert.Equal(t, "invalid", checked["status"], "%v", checked)
+	assert.True(t, containsCode(rowCodes(checked, "errors"), inventoryErrors.ImportCategoryParentUnknown),
+		"expected category-parent-unknown on the dry run: %v", checked["errors"])
 
 	response := importInventoryCSV(t, helper, "/import", "categories", csv, "", nil)
 	row := importRow(t, response, 0)
 	assert.Equal(t, "failed", row["status"], "%v", row)
 	assert.True(t, containsCode(rowCodes(row, "errors"), inventoryErrors.ImportCategoryParentUnknown),
 		"expected category-parent-unknown: %v", row["errors"])
+}
+
+// INV-017 — 4-categorias.csv's shape: each parent is the row above, which the
+// real run has created by then, so the dry run validates all three rows.
+func TestImportCategories_DryRunSeesWhatTheRowsAboveCreate(t *testing.T) {
+	helper := SetupInventoryTest(t)
+	defer helper.Close()
+
+	stamp := time.Now().UnixNano()
+	parent := fmt.Sprintf("Limpieza %d", stamp)
+	child := fmt.Sprintf("Detergentes %d", stamp)
+	grandchild := fmt.Sprintf("Liquidos %d", stamp)
+	csv := fmt.Sprintf(
+		"name,parent,description,display_order\n%s,,Productos de limpieza,40\n%s,%s,,10\n%s,%s,,10\n",
+		parent, child, parent, grandchild, child)
+
+	dryRun := importInventoryCSV(t, helper, "/import/validate", "categories", csv, "", nil)
+	response := importInventoryCSV(t, helper, "/import", "categories", csv, "", nil)
+
+	for index := 0; index < 3; index++ {
+		checked := importRow(t, dryRun, index)
+		assert.Equal(t, "valid", checked["status"], "row %d should validate: %v", index, checked)
+		assert.Empty(t, rowCodes(checked, "warnings"), "row %d should not warn: %v", index, checked)
+		assert.Equal(t, "created", importRow(t, response, index)["status"],
+			"row %d should be created: %v", index, response)
+	}
+}
+
+// categoryCreatedCount is how many times one run says it created a category.
+func categoryCreatedCount(response map[string]interface{}) int {
+	rows, _ := response["rows"].([]interface{})
+	count := 0
+	for _, entry := range rows {
+		row, _ := entry.(map[string]interface{})
+		for _, code := range rowCodes(row, "warnings") {
+			if containsCode([]string{code}, inventoryErrors.ImportCategoryCreated) {
+				count++
+			}
+		}
+	}
+	return count
+}
+
+// INV-017 — 1-catalogo.csv's shape: the dry run announces each new category on
+// the row the real run creates it at, so both say category-created 8 times (the
+// dry run used to say 12).
+func TestImportProducts_DryRunAnnouncesTheCategoriesTheRealRunCreates(t *testing.T) {
+	helper := SetupInventoryTest(t)
+	defer helper.Close()
+
+	prefix := importPrefix("IMPLEDGER")
+	stamp := time.Now().UnixNano()
+	category := func(name string) string { return fmt.Sprintf("%s %d", name, stamp) }
+	rows := [][]string{
+		{"YERBA", "Yerba", "3500", category("Almacen"), category("Yerbas"), ""},
+		{"AGUA", "Agua", "900", category("Bebidas"), category("Aguas"), ""},
+		{"SERVILLETA", "Servilletas", "1200", category("Almacen"), category("Descartables"), ""},
+		{"LECHE", "Leche", "1500", category("Almacen"), "", ""},
+		{"COLA", "Gaseosa Cola", "2200", category("Bebidas"), category("Gaseosas"), "500ml"},
+		{"COLA", "", "3000", category("Bebidas"), category("Gaseosas"), "1.5L"},
+		{"REMERA", "Remera", "7500", category("Indumentaria"), category("Remeras"), ""},
+		{"YOGUR", "Yogur", "2100", category("Almacen"), "", ""},
+	}
+	csv := "sku,name,price,category,subcategory,variant[tamano]\n"
+	for _, row := range rows {
+		csv += fmt.Sprintf("%s-%s,%s,%s,%s,%s,%s\n", prefix, row[0], row[1], row[2], row[3], row[4], row[5])
+	}
+
+	dryRun := importInventoryCSV(t, helper, "/import/validate", "products", csv, "", nil)
+	response := importInventoryCSV(t, helper, "/import", "products", csv, "", nil)
+
+	assert.Equal(t, float64(len(rows)), dryRun["valid"], "every row should validate: %v", dryRun)
+	assert.Equal(t, 8, categoryCreatedCount(dryRun), "the dry run announces each category once: %v", dryRun)
+	assert.Equal(t, categoryCreatedCount(dryRun), categoryCreatedCount(response),
+		"the dry run and the real run agree: %v", response)
+}
+
+// INV-017 D1 — every import lookup is tenant-scoped in its SP. Through the API a
+// lookup only ever runs with the caller's own tenant, so this asks the
+// repository directly, with another tenant's id, for rows the caller owns.
+func TestImportLookups_AnotherTenantFindsNothing(t *testing.T) {
+	helper := SetupInventoryTest(t)
+	defer helper.Close()
+
+	prefix := importPrefix("IMPTENANT")
+	category := fmt.Sprintf("Tenant %d", time.Now().UnixNano())
+	csv := fmt.Sprintf("sku,name,price,category,variant[color]\n%s,Remera,7500,%s,Negro\n", prefix, category)
+	created := importInventoryCSV(t, helper, "/import", "products", csv, "", nil)
+	if status := importRow(t, created, 0)["status"]; status != "created" {
+		t.Fatalf("the setup row should be created: %v", created)
+	}
+
+	t.Setenv("SKIP_MIGRATIONS", "true")
+	ctx := context.Background()
+	db := coreServices.NewDatabaseService()
+	db.InitDatabase(ctx)
+	defer db.CloseDatabase(ctx)
+
+	var tenantID uuid.UUID
+	var productID string
+	err := db.QueryRow(ctx, `SELECT p.tenant_id, p.id::TEXT FROM inventory.products p WHERE p.sku = $1`, prefix).
+		Scan(&tenantID, &productID)
+	if err != nil {
+		t.Fatalf("the imported product should be readable: %v", err)
+	}
+
+	lookups := inventoryRepositories.NewImportLookupRepository(db)
+	other := uuid.New()
+
+	own, err := lookups.FindVariantOptionID(ctx, tenantID, productID, "Color", "Negro")
+	assert.NoError(t, err)
+	assert.NotNil(t, own, "the owner finds its own option")
+
+	foreign, err := lookups.FindVariantOptionID(ctx, other, productID, "Color", "Negro")
+	assert.NoError(t, err)
+	assert.Nil(t, foreign, "a product id alone must not reach another tenant's option")
+
+	resolution, err := lookups.ResolveSkuByAxes(ctx, other, prefix, []string{"Color"}, []string{"Negro"})
+	assert.NoError(t, err)
+	assert.Nil(t, resolution.ProductID, "another tenant's SKU is unknown")
+
+	categoryID, err := lookups.FindCategoryID(ctx, other, category, nil)
+	assert.NoError(t, err)
+	assert.Nil(t, categoryID, "another tenant's category is unknown")
+
+	existence, err := lookups.SkuExists(ctx, other, prefix)
+	assert.NoError(t, err)
+	assert.False(t, existence.ProductSkuTaken, "another tenant's SKU is not taken")
+}
+
+// INV-017 D2 — a catalogue row priced 0 is a free item: valid with a warning on
+// the dry run, and created with the same warning for real.
+func TestImportProducts_APriceOfZeroIsAcceptedWithAWarning(t *testing.T) {
+	helper := SetupInventoryTest(t)
+	defer helper.Close()
+
+	prefix := importPrefix("IMPZERO")
+	csv := fmt.Sprintf("sku,name,price\n%s,Muestra gratis,0\n", prefix)
+
+	dryRun := importInventoryCSV(t, helper, "/import/validate", "products", csv, "", nil)
+	response := importInventoryCSV(t, helper, "/import", "products", csv, "", nil)
+
+	checked := importRow(t, dryRun, 0)
+	assert.Equal(t, "valid", checked["status"], "%v", checked)
+	assert.True(t, containsCode(rowCodes(checked, "warnings"), inventoryErrors.ImportPriceZero), "%v", checked)
+	row := importRow(t, response, 0)
+	assert.Equal(t, "created", row["status"], "%v", row)
+	assert.True(t, containsCode(rowCodes(row, "warnings"), inventoryErrors.ImportPriceZero), "%v", row)
 }
 
 // AC-11 — a stock row names its combination with the same variant[…] columns the

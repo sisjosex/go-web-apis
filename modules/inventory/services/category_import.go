@@ -1,13 +1,9 @@
 package services
 
 import (
-	"context"
 	"strconv"
 	"strings"
 
-	"github.com/google/uuid"
-
-	coreServices "josex/web/modules/core/services"
 	importInterfaces "josex/web/modules/import/interfaces"
 	importModels "josex/web/modules/import/models"
 	inventoryErrors "josex/web/modules/inventory/errors"
@@ -21,17 +17,17 @@ import (
 // processes rows in order.
 type categoriesImportDescriptor struct {
 	categoryService inventoryInterfaces.CategoryService
-	dbService       coreServices.DatabaseService
+	lookups         inventoryInterfaces.ImportLookupRepository
 }
 
 // NewCategoriesImportDescriptor builds the Categories import descriptor.
 func NewCategoriesImportDescriptor(
 	categoryService inventoryInterfaces.CategoryService,
-	dbService coreServices.DatabaseService,
+	lookups inventoryInterfaces.ImportLookupRepository,
 ) importInterfaces.ImportDescriptor {
 	return &categoriesImportDescriptor{
 		categoryService: categoryService,
-		dbService:       dbService,
+		lookups:         lookups,
 	}
 }
 
@@ -60,35 +56,51 @@ func (d *categoriesImportDescriptor) Matches(headers []string) bool {
 		!hasHeaders(headers, "price")
 }
 
+// ValidateRow judges the row against what the real run will see when it gets
+// here: the tenant's categories plus the ones the rows above will have created,
+// which on a dry run exist only in the pendingCategories ledger. That is what
+// lets a child of the row above validate, and what makes a parent no row
+// creates the error it is going to be.
 func (d *categoriesImportDescriptor) ValidateRow(ctx importModels.ImportContext, line int, row map[string]string) importModels.RowResult {
 	result := importModels.RowResult{Line: line, Data: row}
-	fieldErrors, warnings := d.checkFormat(ctx, row)
-	result.Warnings = warnings
 
-	if len(fieldErrors) > 0 {
+	if fieldErrors := d.checkFormat(row); len(fieldErrors) > 0 {
 		result.Status = importModels.RowStatusInvalid
 		result.Errors = fieldErrors
 		return result
 	}
 
-	// A parent that does not exist yet is one an earlier row of this file will
-	// create, so nothing can be under it and there is nothing to call a
-	// duplicate — checkFormat has already warned about it.
+	pending := pendingCategoriesOf(ctx)
+	name := strings.TrimSpace(row["name"])
+
 	var parentID *string
+	parentKey := ""
 	if parent := strings.TrimSpace(row["parent"]); parent != "" {
-		id, found := findCategoryID(d.dbService, ctx.TenantID, parent, nil)
-		if !found {
-			result.Status = importModels.RowStatusValid
+		if id, found := findCategoryID(d.lookups, ctx, parent, nil); found {
+			parentID = &id
+			parentKey = id
+		} else if path, found := pending.find("", parent); found {
+			parentKey = path
+		} else {
+			result.Status = importModels.RowStatusInvalid
+			result.Errors = []string{inventoryErrors.ImportCategoryParentUnknown + errorParamSeparator + parent}
 			return result
 		}
-		parentID = &id
 	}
 
-	if _, found := findCategoryID(d.dbService, ctx.TenantID, row["name"], parentID); found {
+	// Under a parent the run has not created yet nothing can exist, so only the
+	// ledger is asked.
+	_, exists := pending.find(parentKey, name)
+	if !exists && (parentKey == "" || parentID != nil) {
+		_, exists = findCategoryID(d.lookups, ctx, name, parentID)
+	}
+	if exists {
 		result.Status = importModels.RowStatusDuplicate
 		result.Errors = []string{inventoryErrors.ImportCategoryDuplicate}
 		return result
 	}
+
+	pending.add(parentKey, name)
 
 	result.Status = importModels.RowStatusValid
 	return result
@@ -96,10 +108,8 @@ func (d *categoriesImportDescriptor) ValidateRow(ctx importModels.ImportContext,
 
 func (d *categoriesImportDescriptor) ProcessRow(ctx importModels.ImportContext, line int, row map[string]string) importModels.RowResult {
 	result := importModels.RowResult{Line: line, Data: row}
-	fieldErrors, warnings := d.checkFormat(ctx, row)
-	result.Warnings = warnings
 
-	if len(fieldErrors) > 0 {
+	if fieldErrors := d.checkFormat(row); len(fieldErrors) > 0 {
 		result.Status = importModels.RowStatusFailed
 		result.Errors = fieldErrors
 		return result
@@ -108,7 +118,7 @@ func (d *categoriesImportDescriptor) ProcessRow(ctx importModels.ImportContext, 
 	name := strings.TrimSpace(row["name"])
 	var parentID *string
 	if parent := strings.TrimSpace(row["parent"]); parent != "" {
-		id, found := findCategoryID(d.dbService, ctx.TenantID, parent, nil)
+		id, found := findCategoryID(d.lookups, ctx, parent, nil)
 		if !found {
 			result.Status = importModels.RowStatusFailed
 			result.Errors = []string{inventoryErrors.ImportCategoryParentUnknown + errorParamSeparator + parent}
@@ -117,13 +127,13 @@ func (d *categoriesImportDescriptor) ProcessRow(ctx importModels.ImportContext, 
 		parentID = &id
 	}
 
-	if _, found := findCategoryID(d.dbService, ctx.TenantID, name, parentID); found {
+	if _, found := findCategoryID(d.lookups, ctx, name, parentID); found {
 		result.Status = importModels.RowStatusSkipped
 		result.Errors = []string{inventoryErrors.ImportCategoryDuplicate}
 		return result
 	}
 
-	if _, err := d.categoryService.CreateCategory(context.Background(), ctx.TenantID, d.buildDto(ctx.TenantID, row, name, parentID)); err != nil {
+	if _, err := d.categoryService.CreateCategory(ctx.Context(), ctx.TenantID, d.buildDto(ctx, row, name, parentID)); err != nil {
 		result.Status = importModels.RowStatusFailed
 		result.Errors = []string{inventoryErrors.ImportCreateFailed}
 		return result
@@ -137,14 +147,10 @@ func (d *categoriesImportDescriptor) RecordRun(ctx importModels.ImportContext, m
 	logImportRun(meta)
 }
 
-// checkFormat validates the row's own cells. A `parent` this tenant does not
-// have yet is a warning rather than an error, because the dry run runs before
-// any row of the file has been written: the parent may well be the row above.
-// ProcessRow, which runs after those rows exist, turns the same miss into an
-// error.
-func (d *categoriesImportDescriptor) checkFormat(ctx importModels.ImportContext, row map[string]string) ([]string, []string) {
+// checkFormat validates the row's own cells, the part of the row that does not
+// depend on what the run has created so far.
+func (d *categoriesImportDescriptor) checkFormat(row map[string]string) []string {
 	var fieldErrors []string
-	var warnings []string
 
 	if strings.TrimSpace(row["name"]) == "" {
 		fieldErrors = append(fieldErrors, inventoryErrors.ImportNameRequired)
@@ -153,26 +159,20 @@ func (d *categoriesImportDescriptor) checkFormat(ctx importModels.ImportContext,
 		fieldErrors = append(fieldErrors, inventoryErrors.ImportQuantityInvalid)
 	}
 
-	if parent := strings.TrimSpace(row["parent"]); parent != "" {
-		if _, found := findCategoryID(d.dbService, ctx.TenantID, parent, nil); !found {
-			warnings = append(warnings, inventoryErrors.ImportCategoryParentUnknown+errorParamSeparator+parent)
-		}
-	}
-
-	return fieldErrors, warnings
+	return fieldErrors
 }
 
 // buildDto maps a CSV row to a CreateCategoryDto, giving the category a slug the
 // tenant is not already using — the name is the operator's, the slug is ours.
 func (d *categoriesImportDescriptor) buildDto(
-	tenantID uuid.UUID,
+	ctx importModels.ImportContext,
 	row map[string]string,
 	name string,
 	parentID *string,
 ) *inventoryModels.CreateCategoryDto {
 	dto := &inventoryModels.CreateCategoryDto{
 		Name:     name,
-		Slug:     findFreeSlug(d.dbService, tenantID, slugify(name)),
+		Slug:     findFreeSlug(d.lookups, ctx, slugify(name)),
 		ParentID: parentID,
 	}
 	if description := strings.TrimSpace(row["description"]); description != "" {

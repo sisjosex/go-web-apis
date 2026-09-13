@@ -1,11 +1,43 @@
 package services
 
 import (
+	"context"
 	"strings"
 	"testing"
 
+	"github.com/google/uuid"
+
 	inventoryErrors "josex/web/modules/inventory/errors"
+	inventoryInterfaces "josex/web/modules/inventory/interfaces"
+	inventoryModels "josex/web/modules/inventory/models"
 )
+
+// missingLookups is a tenant with nothing in it: every lookup misses. It is what
+// lets a white-box test drive the dry run's category ledger, which only runs
+// once the lookup has missed.
+type missingLookups struct{}
+
+var _ inventoryInterfaces.ImportLookupRepository = missingLookups{}
+
+func (missingLookups) ResolveSkuByAxes(context.Context, uuid.UUID, string, []string, []string) (*inventoryModels.ImportSkuResolution, error) {
+	return &inventoryModels.ImportSkuResolution{}, nil
+}
+
+func (missingLookups) FindCategoryID(context.Context, uuid.UUID, string, *string) (*string, error) {
+	return nil, nil
+}
+
+func (missingLookups) FindVariantOptionID(context.Context, uuid.UUID, string, string, string) (*string, error) {
+	return nil, nil
+}
+
+func (missingLookups) SkuExists(context.Context, uuid.UUID, string) (*inventoryModels.ImportSkuExistence, error) {
+	return &inventoryModels.ImportSkuExistence{}, nil
+}
+
+func (missingLookups) FreeCategorySlug(_ context.Context, _ uuid.UUID, base string, _ int) (string, error) {
+	return base, nil
+}
 
 func TestSlugify(t *testing.T) {
 	cases := map[string]string{

@@ -333,6 +333,25 @@ func TestReadRow_PriceMustBeANumber(t *testing.T) {
 	}
 }
 
+// INV-017 D2 — 0 is a price (a free item, a sample): the row validates, and
+// says so.
+func TestValidateRow_APriceOfZeroIsAcceptedWithAWarning(t *testing.T) {
+	descriptor := newProductsDescriptor()
+	descriptor.lookups = missingLookups{}
+	ctx := catalogueContext(catalogueHeaders(), nil)
+
+	result := descriptor.ValidateRow(ctx, 2, map[string]string{
+		"sku": "MUESTRA", "name": "Muestra gratis", "price": "0",
+	})
+
+	if result.Status != importModels.RowStatusValid {
+		t.Fatalf("a price of 0 is valid, got %s %v", result.Status, result.Errors)
+	}
+	if !slicesContain(result.Warnings, inventoryErrors.ImportPriceZero) {
+		t.Errorf("a price of 0 is price-zero, got %v", result.Warnings)
+	}
+}
+
 // AC-8 / D8 — a filled code is taken verbatim; only the two failures the row
 // cannot recover from are checked, and there is no prefix rule.
 func TestReadRow_VariantSkuIsVerbatimAndOnlyLengthAndClashesAreChecked(t *testing.T) {
@@ -634,6 +653,72 @@ func TestReadOptionImages_APictureOfAnAxisTheRowDoesNotFillIsSkipped(t *testing.
 	}
 	if len(parsed.Images) != 0 {
 		t.Errorf("nothing to attach it to, got %+v", parsed.Images)
+	}
+}
+
+// ---------------------------------------------------------------------------
+// The dry run's category ledger (INV-017)
+// ---------------------------------------------------------------------------
+
+// announcedCategories runs a file through the dry run and returns, in order,
+// every category it says it will create.
+func announcedCategories(t *testing.T, headers []string, rows []map[string]string) []string {
+	t.Helper()
+
+	descriptor := newProductsDescriptor()
+	descriptor.lookups = missingLookups{}
+	ctx := catalogueContext(headers, nil)
+
+	var announced []string
+	for index, row := range rows {
+		result := descriptor.ValidateRow(ctx, index+2, row)
+		if result.Status != importModels.RowStatusValid {
+			t.Fatalf("row %d should validate, got %s %v", index+2, result.Status, result.Errors)
+		}
+		for _, warning := range result.Warnings {
+			prefix := inventoryErrors.ImportCategoryCreated + errorParamSeparator
+			if strings.HasPrefix(warning, prefix) {
+				announced = append(announced, strings.TrimPrefix(warning, prefix))
+			}
+		}
+	}
+	return announced
+}
+
+// 1-catalogo.csv's categories: the real run creates 8, so the dry run announces
+// 8 — each on the row that creates it — and no longer 12.
+func TestValidateRow_ANewCategoryIsAnnouncedOnceOnTheRowThatCreatesIt(t *testing.T) {
+	headers := []string{"sku", "name", "price", "category", "subcategory", "variant[tamano]"}
+	announced := announcedCategories(t, headers, []map[string]string{
+		{"sku": "YERBA-1K", "name": "Yerba", "price": "3500", "category": "Almacen", "subcategory": "Yerbas"},
+		{"sku": "AGUA-500", "name": "Agua", "price": "900", "category": "Bebidas", "subcategory": "Aguas"},
+		{"sku": "SERVILLETA", "name": "Servilletas", "price": "1200", "category": "Almacen", "subcategory": "Descartables"},
+		{"sku": "LECHE-1L", "name": "Leche", "price": "1500", "category": "Almacen"},
+		{"sku": "COLA", "name": "Cola", "price": "2200", "category": "Bebidas", "subcategory": "Gaseosas", "variant[tamano]": "500ml"},
+		{"sku": "COLA", "price": "3000", "category": "Bebidas", "subcategory": "Gaseosas", "variant[tamano]": "1.5L"},
+		{"sku": "REMERA-BAS", "name": "Remera", "price": "7500", "category": "Indumentaria", "subcategory": "Remeras"},
+		{"sku": "YOGUR", "name": "Yogur", "price": "2100", "category": "Almacen"},
+	})
+
+	expected := []string{"Almacen", "Yerbas", "Bebidas", "Aguas", "Descartables", "Gaseosas", "Indumentaria", "Remeras"}
+	if strings.Join(announced, ",") != strings.Join(expected, ",") {
+		t.Errorf("expected %v, got %v", expected, announced)
+	}
+}
+
+// A subcategory is one per parent, so the same name under two new parents is
+// two categories — the real run creates both, and the dry run says so.
+func TestValidateRow_TheSameSubcategoryUnderTwoParentsIsTwoCategories(t *testing.T) {
+	headers := []string{"sku", "name", "price", "category", "subcategory"}
+	announced := announcedCategories(t, headers, []map[string]string{
+		{"sku": "A", "name": "A", "price": "10", "category": "Bebidas", "subcategory": "Otros"},
+		{"sku": "B", "name": "B", "price": "10", "category": "Almacen", "subcategory": "otros"},
+		{"sku": "C", "name": "C", "price": "10", "category": "bebidas", "subcategory": "OTROS"},
+	})
+
+	expected := []string{"Bebidas", "Otros", "Almacen", "otros"}
+	if strings.Join(announced, ",") != strings.Join(expected, ",") {
+		t.Errorf("expected %v, got %v", expected, announced)
 	}
 }
 

@@ -1,12 +1,10 @@
 package services
 
 import (
-	"context"
 	"strings"
 	"time"
 
 	coreModels "josex/web/modules/core/models"
-	coreServices "josex/web/modules/core/services"
 	importInterfaces "josex/web/modules/import/interfaces"
 	importModels "josex/web/modules/import/models"
 	inventoryErrors "josex/web/modules/inventory/errors"
@@ -21,17 +19,17 @@ import (
 // twice.
 type productBatchesImportDescriptor struct {
 	batchService inventoryInterfaces.BatchService
-	dbService    coreServices.DatabaseService
+	lookups      inventoryInterfaces.ImportLookupRepository
 }
 
 // NewProductBatchesImportDescriptor builds the product_batches import descriptor.
 func NewProductBatchesImportDescriptor(
 	batchService inventoryInterfaces.BatchService,
-	dbService coreServices.DatabaseService,
+	lookups inventoryInterfaces.ImportLookupRepository,
 ) importInterfaces.ImportDescriptor {
 	return &productBatchesImportDescriptor{
 		batchService: batchService,
-		dbService:    dbService,
+		lookups:      lookups,
 	}
 }
 
@@ -81,7 +79,7 @@ func (d *productBatchesImportDescriptor) ProcessRow(ctx importModels.ImportConte
 		return result
 	}
 
-	if _, err := d.batchService.CreateBatch(context.Background(), ctx.TenantID, d.buildDto(row, target)); err != nil {
+	if _, err := d.batchService.CreateBatch(ctx.Context(), ctx.TenantID, d.buildDto(row, target)); err != nil {
 		result.Status = importModels.RowStatusFailed
 		result.Errors = []string{inventoryErrors.ImportBatchFailed}
 		return result
@@ -134,7 +132,7 @@ func (d *productBatchesImportDescriptor) check(ctx importModels.ImportContext, r
 		return fieldErrors, skuCandidate{}
 	}
 
-	target, code := resolveSkuByAxes(d.dbService, ctx.TenantID, row["sku"], pairs)
+	target, code := resolveSkuByAxes(d.lookups, ctx, row["sku"], pairs)
 	if code != "" {
 		return []string{code}, skuCandidate{}
 	}

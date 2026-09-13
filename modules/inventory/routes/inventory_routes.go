@@ -24,6 +24,9 @@ type InventoryServices struct {
 	Stock    inventoryInterfaces.StockService
 	Sku      inventoryInterfaces.SkuService
 	Batch    inventoryInterfaces.BatchService
+	// ImportLookup is the read-only repository the import descriptors resolve
+	// and preview rows through (INV-017 D1); no route of this module uses it.
+	ImportLookup inventoryInterfaces.ImportLookupRepository
 }
 
 // NewInventoryServices wires the module's repositories and services over one
@@ -43,6 +46,8 @@ func NewInventoryServices(dbService coreServices.DatabaseService) InventoryServi
 		Stock:    inventoryServices.NewStockService(stockRepo),
 		Sku:      inventoryServices.NewSkuService(skuRepo, appConfig.GetConfig().Inventory, nil),
 		Batch:    inventoryServices.NewBatchService(batchRepo),
+
+		ImportLookup: repositories.NewImportLookupRepository(dbService),
 	}
 }
 
