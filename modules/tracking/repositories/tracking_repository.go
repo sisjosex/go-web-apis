@@ -140,7 +140,7 @@ func (r *TrackingRepository) RecordRideEvent(ctx context.Context, dto *models.Re
 
 	err := r.dbService.QueryRow(
 		ctx,
-		`SELECT * FROM tracking.sp_record_ride_event($1::UUID, $2::UUID, $3::UUID, $4::VARCHAR(50), $5::DECIMAL, $6::DECIMAL, $7::TEXT, $8::UUID)`,
+		`SELECT * FROM tracking.sp_record_ride_event($1::UUID, $2::UUID, $3::UUID, $4::VARCHAR(50), $5::DECIMAL, $6::DECIMAL, $7::TEXT, $8::UUID, $9::UUID)`,
 		dto.RiderID,
 		dto.VehicleID,
 		dto.RouteID,
@@ -149,6 +149,7 @@ func (r *TrackingRepository) RecordRideEvent(ctx context.Context, dto *models.Re
 		dto.Longitude,
 		dto.Notes,
 		createdBy,
+		dto.StopID,
 	).Scan(&eventID, &riderID, &vehicleID, &routeID, &eventType, &eventTime, &locationLatitude, &locationLongitude, &notes, &returnedCreatedBy, &createdAt)
 
 	if err != nil {

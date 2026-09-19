@@ -248,3 +248,8 @@ INSERT INTO tracking.rider_assignments (
     NOW()
 );
 
+-- ================================================================
+-- VEHICLE LOCATIONS
+-- ================================================================
+INSERT INTO tracking.vehicle_locations (vehicle_id, latitude, longitude, speed, heading, recorded_at)
+VALUES ('cccccccc-cccc-cccc-cccc-cccccccccccc'::uuid, 40.7128, -74.0060, 45.5, 180.0, NOW());

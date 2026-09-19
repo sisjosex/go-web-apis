@@ -6,6 +6,7 @@ package tracking_test
 
 import (
 	"encoding/json"
+	"net/http"
 	"testing"
 
 	"github.com/google/uuid"
@@ -279,6 +280,46 @@ func ValidAssignmentDto() models.AssignRiderDto {
 		PickupStopID:  &pickupStop,
 		DropoffStopID: &dropoffStop,
 	}
+}
+
+// CreateTestRider creates a rider in MainCompanyID and returns its id
+func CreateTestRider(t *testing.T, helper *testhelpers.ApiTestHelper) string {
+	dto := ValidRiderDto()
+	body := map[string]interface{}{
+		"company_id": dto.CompanyID,
+		"rider_type": dto.RiderType,
+		"first_name": dto.FirstName,
+		"last_name":  dto.LastName,
+	}
+	w := helper.DoRequest("POST", "/tracking/riders", body, map[string]string{})
+	if w.Code != http.StatusCreated {
+		t.Fatalf("create rider: expected 201, got %d: %s", w.Code, w.Body.String())
+	}
+	return ExtractID(t, ParseResponse(t, w.Body.Bytes()))
+}
+
+// CreateTestRouteAssignment creates a route with the given schedule, assigns riderID to it and returns the route id
+func CreateTestRouteAssignment(t *testing.T, helper *testhelpers.ApiTestHelper, riderID, startTime, endTime string) string {
+	dto := ValidRouteDto()
+	body := map[string]interface{}{
+		"company_id":           dto.CompanyID,
+		"route_name":           dto.RouteName,
+		"origin_address":       dto.OriginAddress,
+		"destination_address":  dto.DestinationAddress,
+		"scheduled_start_time": startTime,
+		"scheduled_end_time":   endTime,
+	}
+	w := helper.DoRequest("POST", "/tracking/routes", body, map[string]string{})
+	if w.Code != http.StatusCreated {
+		t.Fatalf("create route: expected 201, got %d: %s", w.Code, w.Body.String())
+	}
+	routeID := ExtractID(t, ParseResponse(t, w.Body.Bytes()))
+
+	w = helper.DoRequest("POST", "/tracking/assignments", map[string]interface{}{"rider_id": riderID, "route_id": routeID}, map[string]string{})
+	if w.Code != http.StatusCreated {
+		t.Fatalf("assign rider: expected 201, got %d: %s", w.Code, w.Body.String())
+	}
+	return routeID
 }
 
 // CleanTrackingDatabase cleans only tracking tables while preserving auth and system data

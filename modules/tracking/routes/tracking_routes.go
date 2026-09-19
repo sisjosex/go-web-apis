@@ -18,9 +18,6 @@ import (
 func RegisterTrackingRoutes(router *gin.Engine, trackingController *controllers.TrackingController, tenantMiddleware gin.HandlerFunc, jwtService authServices.JWTService) {
 	trackingGroup := router.Group("/api/v1/tracking")
 
-	// Public route — GPS device updates (no auth, no tenant context)
-	trackingGroup.POST("/locations", trackingController.UpdateVehicleLocation)
-
 	// Check if multi-tenant mode is enabled
 	coreConf := config.ModularAppConfig.Core
 	tenancyConf := config.ModularAppConfig.Tenancy

@@ -35,7 +35,7 @@ type RecordEventDto struct {
 	RiderID   uuid.UUID  `json:"rider_id" binding:"required,uuidv4"`
 	RouteID   uuid.UUID  `json:"route_id" binding:"required,uuidv4"`
 	VehicleID uuid.UUID  `json:"vehicle_id" binding:"required,uuidv4"`
-	EventType string     `json:"event_type" binding:"required,oneof=check_in checkout no_show emergency"`
+	EventType string     `json:"event_type" binding:"required,oneof=check_in checkout no_show emergency" enums:"check_in,checkout,no_show,emergency"`
 	StopID    *uuid.UUID `json:"stop_id" binding:"omitempty,uuidv4"`
 	Latitude  *float64   `json:"latitude" binding:"omitempty,min=-90,max=90"`
 	Longitude *float64   `json:"longitude" binding:"omitempty,min=-180,max=180"`
@@ -102,7 +102,7 @@ type RiderStatusResponse struct {
 type CreateAlertDto struct {
 	RouteID               uuid.UUID  `json:"route_id" binding:"required,uuidv4"`
 	VehicleID             *uuid.UUID `json:"vehicle_id" binding:"omitempty,uuidv4"`
-	AlertType             string     `json:"alert_type" binding:"required,oneof=delay breakdown traffic cancellation emergency other"`
+	AlertType             string     `json:"alert_type" binding:"required,oneof=delay breakdown cancellation emergency other" enums:"delay,breakdown,cancellation,emergency,other"`
 	Title                 string     `json:"title" binding:"required,min=3,max=255" conform:"trim"`
 	Message               string     `json:"message" binding:"required,min=5,max=1000" conform:"trim"`
 	Severity              string     `json:"severity" binding:"omitempty,oneof=low medium high critical"`

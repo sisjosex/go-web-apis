@@ -339,6 +339,71 @@ const docTemplate = `{
             }
         },
         "/api/v1/inventory/movements": {
+            "get": {
+                "description": "Paginated movement history, optionally filtered by product, type and date range",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "inventory"
+                ],
+                "summary": "List inventory movements",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Product ID",
+                        "name": "product_id",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Movement type (PURCHASE, SALE, ADJUSTMENT, TRANSFER, RETURN, WASTE, PRODUCTION)",
+                        "name": "movement_type",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Inclusive lower bound, YYYY-MM-DD",
+                        "name": "date_from",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Inclusive upper bound, YYYY-MM-DD",
+                        "name": "date_to",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "default": 1,
+                        "description": "Page number, 1-based",
+                        "name": "page",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "default": 20,
+                        "description": "Rows per page, max 100",
+                        "name": "page_size",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/josex_web_modules_inventory_models.ListMovementsResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    }
+                }
+            },
             "post": {
                 "description": "Record a stock movement (purchase, sale, adjustment, etc.)",
                 "consumes": [
@@ -431,7 +496,7 @@ const docTemplate = `{
         },
         "/api/v1/inventory/products": {
             "get": {
-                "description": "Retrieve a paginated list of active products",
+                "description": "Retrieve a paginated list of active products, each with the categories it is filed under. Optionally narrowed to one category and/or a name/SKU search.",
                 "produces": [
                     "application/json"
                 ],
@@ -451,6 +516,18 @@ const docTemplate = `{
                         "description": "Offset (default 0)",
                         "name": "offset",
                         "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Only products assigned to this category",
+                        "name": "category_id",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Case-insensitive match on name or SKU",
+                        "name": "search",
+                        "in": "query"
                     }
                 ],
                 "responses": {
@@ -461,6 +538,13 @@ const docTemplate = `{
                             "items": {
                                 "$ref": "#/definitions/josex_web_modules_inventory_models.Product"
                             }
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
                         }
                     }
                 }
@@ -536,6 +620,119 @@ const docTemplate = `{
                         "description": "OK",
                         "schema": {
                             "$ref": "#/definitions/josex_web_modules_inventory_models.ProductDetail"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    }
+                }
+            },
+            "put": {
+                "description": "Update name, description and base price, and diff the variant tree by id. Omitting \"variants\" leaves the tree untouched; {\"groups\": []} removes every group. The SKU is immutable.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "inventory"
+                ],
+                "summary": "Update a product and its variants",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Product ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Product update request",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/josex_web_modules_inventory_models.UpdateProductDto"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/josex_web_modules_inventory_models.UpdateProductResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "409": {
+                        "description": "Conflict",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/inventory/products/:id/categories": {
+            "get": {
+                "description": "Retrieve all categories a specific product is assigned to",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "inventory-categories"
+                ],
+                "summary": "Get categories of a product",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Product ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "integer",
+                        "default": 1,
+                        "description": "Page number",
+                        "name": "page",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "default": 100,
+                        "description": "Items per page",
+                        "name": "limit",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "array",
+                            "items": {
+                                "$ref": "#/definitions/josex_web_modules_inventory_models.CategoryResponse"
+                            }
                         }
                     },
                     "404": {
@@ -819,6 +1016,166 @@ const docTemplate = `{
                     },
                     "404": {
                         "description": "Not Found",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/inventory/products/{id}/skus": {
+            "get": {
+                "description": "One row per sellable combination — the default SKU first, then the generated ones — with its option labels, quantities and stock status",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "inventory"
+                ],
+                "summary": "List the SKUs of a product",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Product ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "integer",
+                        "description": "Page (default 1)",
+                        "name": "page",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "Page size (default 100, max 100)",
+                        "name": "page_size",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/josex_web_modules_inventory_models.ListProductSkusResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/inventory/products/{id}/skus/generate": {
+            "post": {
+                "description": "Creates one SKU per missing combination of the product's inventory axes. Re-runnable: existing combinations are left alone and the default SKU keeps its quantity.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "inventory"
+                ],
+                "summary": "Generate the combinations of a product",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Product ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "Created",
+                        "schema": {
+                            "$ref": "#/definitions/josex_web_modules_inventory_models.GenerateSkusResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "409": {
+                        "description": "Conflict",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/inventory/products/{id}/skus/redistribute": {
+            "post": {
+                "description": "Atomic move of the whole unassigned bucket. The amounts must sum to exactly the default SKU's current quantity; anything else changes nothing and returns 400.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "inventory"
+                ],
+                "summary": "Move the default SKU's stock onto the combinations",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Product ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Redistribution request",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/josex_web_modules_inventory_models.RedistributeStockDto"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/josex_web_modules_inventory_models.RedistributeStockResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "409": {
+                        "description": "Conflict",
                         "schema": {
                             "type": "object",
                             "additionalProperties": true
@@ -2038,6 +2395,110 @@ const docTemplate = `{
                         }
                     }
                 }
+            },
+            "delete": {
+                "description": "Write a lot off by setting its status to void. Never deletes the row.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Batches"
+                ],
+                "summary": "Void a lot",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Batch ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/josex_web_modules_inventory_models.BatchResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Batch not found",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "409": {
+                        "description": "Batch already consumed or voided",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    }
+                }
+            },
+            "patch": {
+                "description": "Correct a lot's lot number and expiry date, while it has no movements",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Batches"
+                ],
+                "summary": "Correct a lot",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Batch ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Fields to correct",
+                        "name": "batch",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/josex_web_modules_inventory_models.UpdateBatchDto"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/josex_web_modules_inventory_models.BatchResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid request",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "404": {
+                        "description": "Batch not found",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "409": {
+                        "description": "Batch already consumed or voided",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    }
+                }
             }
         },
         "/billing/payments": {
@@ -2284,6 +2745,534 @@ const docTemplate = `{
                 }
             }
         },
+        "/import": {
+            "post": {
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Detects the resource, creates each valid row, and returns per-row created|failed|skipped outcomes plus a persisted run summary (who/when/counts/warnings).",
+                "consumes": [
+                    "multipart/form-data"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Import"
+                ],
+                "summary": "Process an uploaded CSV",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Bearer Token",
+                        "name": "Authorization",
+                        "in": "header",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Tenant slug",
+                        "name": "X-Tenant-Slug",
+                        "in": "header",
+                        "required": true
+                    },
+                    {
+                        "type": "file",
+                        "description": "CSV file (max 5 MB, 500 rows)",
+                        "name": "file",
+                        "in": "formData",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Resource key (auto-detected from the header when omitted)",
+                        "name": "resource",
+                        "in": "formData"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Comma-separated resource or module keys detection is limited to (e.g. inventory)",
+                        "name": "scope",
+                        "in": "formData"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Resource-specific options as a JSON object",
+                        "name": "options",
+                        "in": "formData"
+                    },
+                    {
+                        "type": "file",
+                        "description": "Optional ZIP of images referenced by the CSV (e.g. profile_picture)",
+                        "name": "images",
+                        "in": "formData"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/josex_web_modules_import_models.ImportResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/josex_web_modules_core_errors.ErrorResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/josex_web_modules_core_errors.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/import/detect": {
+            "post": {
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Resolves the resource a CSV belongs to from its header line alone, inside the optional scope, without reading or validating any row — so a client can queue several files in import order before running them.",
+                "consumes": [
+                    "multipart/form-data"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Import"
+                ],
+                "summary": "Detect a CSV's resource",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Bearer Token",
+                        "name": "Authorization",
+                        "in": "header",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Tenant slug",
+                        "name": "X-Tenant-Slug",
+                        "in": "header",
+                        "required": true
+                    },
+                    {
+                        "type": "file",
+                        "description": "CSV file (max 5 MB)",
+                        "name": "file",
+                        "in": "formData",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Comma-separated resource or module keys detection is limited to (e.g. inventory)",
+                        "name": "scope",
+                        "in": "formData"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/josex_web_modules_import_models.DetectResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/josex_web_modules_core_errors.ErrorResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/josex_web_modules_core_errors.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/import/meta": {
+            "get": {
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Returns the configured upload constraints (max file size, max rows) so the UI hint stays in sync with the server.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Import"
+                ],
+                "summary": "Import limits",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Bearer Token",
+                        "name": "Authorization",
+                        "in": "header",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Tenant slug",
+                        "name": "X-Tenant-Slug",
+                        "in": "header",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/josex_web_modules_import_models.ImportLimits"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/josex_web_modules_core_errors.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/import/resources": {
+            "get": {
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Lists the import resources a scope of resource or module keys reaches, with the module that owns each, in detection order. An empty scope lists every registered resource.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Import"
+                ],
+                "summary": "Resources a scope reaches",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Bearer Token",
+                        "name": "Authorization",
+                        "in": "header",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Tenant slug",
+                        "name": "X-Tenant-Slug",
+                        "in": "header",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Comma-separated resource or module keys (e.g. inventory)",
+                        "name": "scope",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "array",
+                            "items": {
+                                "$ref": "#/definitions/josex_web_modules_import_models.ImportResourceInfo"
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/josex_web_modules_core_errors.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/import/schema": {
+            "get": {
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Returns the resource's columns with their type, required flag and optional validation pattern, so a client can render and check an editor per column without knowing the resource.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Import"
+                ],
+                "summary": "Column schema for a resource",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Bearer Token",
+                        "name": "Authorization",
+                        "in": "header",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Tenant slug",
+                        "name": "X-Tenant-Slug",
+                        "in": "header",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Resource key (e.g. users)",
+                        "name": "resource",
+                        "in": "query",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/josex_web_modules_import_models.SchemaResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/josex_web_modules_core_errors.ErrorResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/josex_web_modules_core_errors.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/import/template": {
+            "get": {
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Returns a CSV containing just the header row for a resource, built from its descriptor's columns.",
+                "produces": [
+                    "text/csv"
+                ],
+                "tags": [
+                    "Import"
+                ],
+                "summary": "Download a CSV template",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Bearer Token",
+                        "name": "Authorization",
+                        "in": "header",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Tenant slug",
+                        "name": "X-Tenant-Slug",
+                        "in": "header",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Resource key (e.g. users)",
+                        "name": "resource",
+                        "in": "query",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "file"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/josex_web_modules_core_errors.ErrorResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/josex_web_modules_core_errors.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/import/validate": {
+            "post": {
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Detects the resource from the CSV header (or the explicit resource field), validates every row, and returns per-row valid|invalid|duplicate feedback keyed by CSV line number. Writes nothing.",
+                "consumes": [
+                    "multipart/form-data"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Import"
+                ],
+                "summary": "Dry-run validate an uploaded CSV",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Bearer Token",
+                        "name": "Authorization",
+                        "in": "header",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Tenant slug",
+                        "name": "X-Tenant-Slug",
+                        "in": "header",
+                        "required": true
+                    },
+                    {
+                        "type": "file",
+                        "description": "CSV file (max 5 MB, 500 rows)",
+                        "name": "file",
+                        "in": "formData",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Resource key (auto-detected from the header when omitted)",
+                        "name": "resource",
+                        "in": "formData"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Comma-separated resource or module keys detection is limited to (e.g. inventory)",
+                        "name": "scope",
+                        "in": "formData"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Resource-specific options as a JSON object",
+                        "name": "options",
+                        "in": "formData"
+                    },
+                    {
+                        "type": "file",
+                        "description": "Optional ZIP of images referenced by the CSV (e.g. profile_picture)",
+                        "name": "images",
+                        "in": "formData"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/josex_web_modules_import_models.ValidateResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/josex_web_modules_core_errors.ErrorResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/josex_web_modules_core_errors.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/products/{id}/batches/redistribute": {
+            "post": {
+                "description": "Split a default-SKU lot into per-combination lots keeping its lot number, dates and unit cost",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Batches"
+                ],
+                "summary": "Split a stranded lot onto real combinations",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Product ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Lot and targets",
+                        "name": "redistribution",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/josex_web_modules_inventory_models.RedistributeBatchesDto"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/josex_web_modules_inventory_models.RedistributeBatchesResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Amounts do not add up, or a target is not a combination",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "404": {
+                        "description": "Batch not found",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "409": {
+                        "description": "Batch already consumed or voided",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    }
+                }
+            }
+        },
         "/products/{productId}/batches": {
             "get": {
                 "description": "Get all batches for a specific product, ordered by expiry date (FIFO)",
@@ -2309,6 +3298,12 @@ const docTemplate = `{
                         "type": "boolean",
                         "description": "Only active batches (default: true)",
                         "name": "onlyActive",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Only batches of this combination",
+                        "name": "skuId",
                         "in": "query"
                     }
                 ],
@@ -2349,6 +3344,12 @@ const docTemplate = `{
                         "name": "productId",
                         "in": "path",
                         "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Combination to pick from (default: the product SKU)",
+                        "name": "skuId",
+                        "in": "query"
                     }
                 ],
                 "responses": {
@@ -3348,6 +4349,514 @@ const docTemplate = `{
                 }
             }
         },
+        "/tenants/{tenant_slug}/roles": {
+            "get": {
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Returns all custom roles defined for the current tenant, including permission count",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Roles"
+                ],
+                "summary": "List roles for a tenant",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Bearer Token",
+                        "name": "Authorization",
+                        "in": "header",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Tenant slug",
+                        "name": "tenant_slug",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "array",
+                            "items": {
+                                "$ref": "#/definitions/josex_web_modules_tenancy_models.RoleListItem"
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/josex_web_modules_core_errors.ErrorResponse"
+                        }
+                    }
+                }
+            },
+            "post": {
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Creates a new custom role for the current tenant",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Roles"
+                ],
+                "summary": "Create a role",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Bearer Token",
+                        "name": "Authorization",
+                        "in": "header",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Tenant slug",
+                        "name": "tenant_slug",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Role data",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/josex_web_modules_tenancy_models.CreateRoleDto"
+                        }
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "Created",
+                        "schema": {
+                            "$ref": "#/definitions/josex_web_modules_tenancy_models.Role"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/josex_web_modules_core_errors.ErrorResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/josex_web_modules_core_errors.ErrorResponse"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/josex_web_modules_core_errors.ErrorResponse"
+                        }
+                    },
+                    "409": {
+                        "description": "Conflict",
+                        "schema": {
+                            "$ref": "#/definitions/josex_web_modules_core_errors.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/tenants/{tenant_slug}/roles/{role_id}": {
+            "get": {
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Returns a single role with its full permission code list",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Roles"
+                ],
+                "summary": "Get a role",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Bearer Token",
+                        "name": "Authorization",
+                        "in": "header",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Tenant slug",
+                        "name": "tenant_slug",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Role UUID",
+                        "name": "role_id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/josex_web_modules_tenancy_models.RoleDetail"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/josex_web_modules_core_errors.ErrorResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/josex_web_modules_core_errors.ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/josex_web_modules_core_errors.ErrorResponse"
+                        }
+                    }
+                }
+            },
+            "delete": {
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Deletes a custom tenant role; system roles cannot be deleted",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Roles"
+                ],
+                "summary": "Delete a role",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Bearer Token",
+                        "name": "Authorization",
+                        "in": "header",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Tenant slug",
+                        "name": "tenant_slug",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Role UUID",
+                        "name": "role_id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "204": {
+                        "description": "No Content"
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/josex_web_modules_core_errors.ErrorResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/josex_web_modules_core_errors.ErrorResponse"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/josex_web_modules_core_errors.ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/josex_web_modules_core_errors.ErrorResponse"
+                        }
+                    }
+                }
+            },
+            "patch": {
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Updates the name and/or description of a custom tenant role",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Roles"
+                ],
+                "summary": "Update a role",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Bearer Token",
+                        "name": "Authorization",
+                        "in": "header",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Tenant slug",
+                        "name": "tenant_slug",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Role UUID",
+                        "name": "role_id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Fields to update",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/josex_web_modules_tenancy_models.UpdateRoleDto"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/josex_web_modules_tenancy_models.Role"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/josex_web_modules_core_errors.ErrorResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/josex_web_modules_core_errors.ErrorResponse"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/josex_web_modules_core_errors.ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/josex_web_modules_core_errors.ErrorResponse"
+                        }
+                    },
+                    "409": {
+                        "description": "Conflict",
+                        "schema": {
+                            "$ref": "#/definitions/josex_web_modules_core_errors.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/tenants/{tenant_slug}/roles/{role_id}/permissions": {
+            "put": {
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Replaces all permissions for a role atomically; pass an empty array to clear all permissions",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Roles"
+                ],
+                "summary": "Set role permissions",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Bearer Token",
+                        "name": "Authorization",
+                        "in": "header",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Tenant slug",
+                        "name": "tenant_slug",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Role UUID",
+                        "name": "role_id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Permission codes",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/josex_web_modules_tenancy_models.SetRolePermissionsDto"
+                        }
+                    }
+                ],
+                "responses": {
+                    "204": {
+                        "description": "No Content"
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/josex_web_modules_core_errors.ErrorResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/josex_web_modules_core_errors.ErrorResponse"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/josex_web_modules_core_errors.ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/josex_web_modules_core_errors.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/tenants/{tenant_slug}/roles/{role_id}/users": {
+            "get": {
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Returns the active tenant members who currently hold a given role",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Roles"
+                ],
+                "summary": "List users assigned to a role",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Bearer Token",
+                        "name": "Authorization",
+                        "in": "header",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Tenant slug",
+                        "name": "tenant_slug",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Role UUID",
+                        "name": "role_id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "array",
+                            "items": {
+                                "$ref": "#/definitions/josex_web_modules_tenancy_models.RoleUser"
+                            }
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/josex_web_modules_core_errors.ErrorResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/josex_web_modules_core_errors.ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/josex_web_modules_core_errors.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
         "/tenants/{tenant_slug}/users": {
             "post": {
                 "security": [
@@ -3505,6 +5014,222 @@ const docTemplate = `{
                     },
                     "400": {
                         "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/josex_web_modules_core_errors.ErrorResponse"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/josex_web_modules_core_errors.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/tenants/{tenant_slug}/users/{user_id}/roles": {
+            "get": {
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Returns all custom roles currently assigned to a user within the tenant",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Roles"
+                ],
+                "summary": "List roles assigned to a user",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Bearer Token",
+                        "name": "Authorization",
+                        "in": "header",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Tenant slug",
+                        "name": "tenant_slug",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Target user UUID",
+                        "name": "user_id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "array",
+                            "items": {
+                                "$ref": "#/definitions/josex_web_modules_tenancy_models.UserRole"
+                            }
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/josex_web_modules_core_errors.ErrorResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/josex_web_modules_core_errors.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/tenants/{tenant_slug}/users/{user_id}/roles/{role_id}": {
+            "post": {
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Assigns a custom role to a tenant user; idempotent if already assigned",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Roles"
+                ],
+                "summary": "Assign a role to a user",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Bearer Token",
+                        "name": "Authorization",
+                        "in": "header",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Tenant slug",
+                        "name": "tenant_slug",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Target user UUID",
+                        "name": "user_id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Role UUID",
+                        "name": "role_id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "204": {
+                        "description": "No Content"
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/josex_web_modules_core_errors.ErrorResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/josex_web_modules_core_errors.ErrorResponse"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/josex_web_modules_core_errors.ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/josex_web_modules_core_errors.ErrorResponse"
+                        }
+                    }
+                }
+            },
+            "delete": {
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Removes a custom role from a tenant user; idempotent if not assigned",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Roles"
+                ],
+                "summary": "Revoke a role from a user",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Bearer Token",
+                        "name": "Authorization",
+                        "in": "header",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Tenant slug",
+                        "name": "tenant_slug",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Target user UUID",
+                        "name": "user_id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Role UUID",
+                        "name": "role_id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "204": {
+                        "description": "No Content"
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/josex_web_modules_core_errors.ErrorResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
                         "schema": {
                             "$ref": "#/definitions/josex_web_modules_core_errors.ErrorResponse"
                         }
@@ -5446,6 +7171,91 @@ const docTemplate = `{
                 }
             }
         },
+        "/users/audit": {
+            "get": {
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Returns paginated audit log entries for user management actions scoped to the current tenant",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Users"
+                ],
+                "summary": "List user audit log entries",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Bearer Token",
+                        "name": "Authorization",
+                        "in": "header",
+                        "required": true
+                    },
+                    {
+                        "type": "integer",
+                        "description": "Page number (default: 1)",
+                        "name": "page",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "Items per page (default: 20, max: 100)",
+                        "name": "limit",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Search by target or performer email",
+                        "name": "search",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Filter by action (e.g. user.created)",
+                        "name": "action",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Filter from date (RFC3339 or YYYY-MM-DD)",
+                        "name": "from",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Filter to date (RFC3339 or YYYY-MM-DD)",
+                        "name": "to",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/josex_web_modules_users_models.UserAuditListResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/josex_web_modules_core_errors.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/josex_web_modules_core_errors.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
         "/users/{id}": {
             "get": {
                 "security": [
@@ -5578,6 +7388,59 @@ const docTemplate = `{
                     },
                     "404": {
                         "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/josex_web_modules_core_errors.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/users/{id}/reset-password": {
+            "post": {
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Generates a password reset token and sends the reset email to the target user. Always returns 200 to avoid user enumeration.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Users"
+                ],
+                "summary": "Trigger a password reset email for a user",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Bearer Token",
+                        "name": "Authorization",
+                        "in": "header",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "User UUID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK"
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/josex_web_modules_core_errors.ErrorResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
                         "schema": {
                             "$ref": "#/definitions/josex_web_modules_core_errors.ErrorResponse"
                         }
@@ -6199,6 +8062,215 @@ const docTemplate = `{
                 }
             }
         },
+        "josex_web_modules_import_models.ColumnSpec": {
+            "type": "object",
+            "properties": {
+                "format": {
+                    "type": "string"
+                },
+                "key": {
+                    "type": "string"
+                },
+                "pattern": {
+                    "type": "string"
+                },
+                "required": {
+                    "type": "boolean"
+                },
+                "type": {
+                    "$ref": "#/definitions/josex_web_modules_import_models.ColumnType"
+                }
+            }
+        },
+        "josex_web_modules_import_models.ColumnType": {
+            "type": "string",
+            "enum": [
+                "text",
+                "email",
+                "phone",
+                "date",
+                "number",
+                "year",
+                "url",
+                "image"
+            ],
+            "x-enum-varnames": [
+                "ColumnTypeText",
+                "ColumnTypeEmail",
+                "ColumnTypePhone",
+                "ColumnTypeDate",
+                "ColumnTypeNumber",
+                "ColumnTypeYear",
+                "ColumnTypeURL",
+                "ColumnTypeImage"
+            ]
+        },
+        "josex_web_modules_import_models.DetectResponse": {
+            "type": "object",
+            "properties": {
+                "module": {
+                    "type": "string"
+                },
+                "resource": {
+                    "type": "string"
+                }
+            }
+        },
+        "josex_web_modules_import_models.ImportLimits": {
+            "type": "object",
+            "properties": {
+                "max_file_size_mb": {
+                    "type": "integer"
+                },
+                "max_rows": {
+                    "type": "integer"
+                }
+            }
+        },
+        "josex_web_modules_import_models.ImportResourceInfo": {
+            "type": "object",
+            "properties": {
+                "module": {
+                    "type": "string"
+                },
+                "resource": {
+                    "type": "string"
+                }
+            }
+        },
+        "josex_web_modules_import_models.ImportResponse": {
+            "type": "object",
+            "properties": {
+                "headers": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "resource": {
+                    "type": "string"
+                },
+                "rows": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/josex_web_modules_import_models.RowResult"
+                    }
+                },
+                "run": {
+                    "$ref": "#/definitions/josex_web_modules_import_models.RunMeta"
+                }
+            }
+        },
+        "josex_web_modules_import_models.RowResult": {
+            "type": "object",
+            "properties": {
+                "data": {
+                    "description": "original row, for client-side re-download of failures",
+                    "type": "object",
+                    "additionalProperties": {
+                        "type": "string"
+                    }
+                },
+                "errors": {
+                    "description": "mapped frontend error codes",
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "line": {
+                    "type": "integer"
+                },
+                "status": {
+                    "type": "string"
+                },
+                "warnings": {
+                    "description": "non-fatal mapped codes",
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                }
+            }
+        },
+        "josex_web_modules_import_models.RunMeta": {
+            "type": "object",
+            "properties": {
+                "created": {
+                    "type": "integer"
+                },
+                "failed": {
+                    "type": "integer"
+                },
+                "performed_by": {
+                    "type": "string"
+                },
+                "resource": {
+                    "type": "string"
+                },
+                "skipped": {
+                    "type": "integer"
+                },
+                "timestamp": {
+                    "type": "string"
+                },
+                "total": {
+                    "type": "integer"
+                },
+                "warnings": {
+                    "type": "integer"
+                }
+            }
+        },
+        "josex_web_modules_import_models.SchemaResponse": {
+            "type": "object",
+            "properties": {
+                "columns": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/josex_web_modules_import_models.ColumnSpec"
+                    }
+                },
+                "resource": {
+                    "type": "string"
+                }
+            }
+        },
+        "josex_web_modules_import_models.ValidateResponse": {
+            "type": "object",
+            "properties": {
+                "duplicate": {
+                    "type": "integer"
+                },
+                "headers": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "invalid": {
+                    "type": "integer"
+                },
+                "resource": {
+                    "type": "string"
+                },
+                "rows": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/josex_web_modules_import_models.RowResult"
+                    }
+                },
+                "total": {
+                    "type": "integer"
+                },
+                "valid": {
+                    "type": "integer"
+                },
+                "warnings": {
+                    "type": "integer"
+                }
+            }
+        },
         "josex_web_modules_inventory_models.AddProductMediaDto": {
             "type": "object",
             "required": [
@@ -6268,7 +8340,16 @@ const docTemplate = `{
                 "product_id": {
                     "type": "string"
                 },
+                "product_name": {
+                    "type": "string"
+                },
                 "purchase_date": {
+                    "type": "string"
+                },
+                "sku": {
+                    "type": "string"
+                },
+                "sku_id": {
                     "type": "string"
                 },
                 "status": {
@@ -6345,6 +8426,10 @@ const docTemplate = `{
                 "purchase_date": {
                     "type": "string"
                 },
+                "sku_id": {
+                    "description": "SkuID - the combination the lot belongs to. A pointer because omitting it\nand sending null must mean the same thing: let the SP resolve the default\n(and refuse when the product is stocked by variant, INV-014 D1).",
+                    "type": "string"
+                },
                 "unit_cost": {
                     "type": "number"
                 }
@@ -6417,6 +8502,32 @@ const docTemplate = `{
                 }
             }
         },
+        "josex_web_modules_inventory_models.GenerateSkusResponse": {
+            "type": "object",
+            "properties": {
+                "axis_count": {
+                    "type": "integer"
+                },
+                "combination_count": {
+                    "type": "integer"
+                },
+                "created_count": {
+                    "type": "integer"
+                },
+                "existing_count": {
+                    "type": "integer"
+                },
+                "message": {
+                    "type": "string"
+                },
+                "product_id": {
+                    "type": "string"
+                },
+                "stock_by_variant": {
+                    "type": "boolean"
+                }
+            }
+        },
         "josex_web_modules_inventory_models.GetProductsByCategoryResponse": {
             "type": "object",
             "properties": {
@@ -6470,6 +8581,13 @@ const docTemplate = `{
                 "reference_type": {
                     "type": "string"
                 },
+                "sku": {
+                    "type": "string"
+                },
+                "sku_id": {
+                    "description": "Which combination moved. Both are nullable: rows written before INV-007\ncarry no SKU and the trail still has to show them (INV-011 D2).",
+                    "type": "string"
+                },
                 "unit_cost": {
                     "type": "number"
                 }
@@ -6506,11 +8624,57 @@ const docTemplate = `{
                 }
             }
         },
+        "josex_web_modules_inventory_models.ListMovementsResponse": {
+            "type": "object",
+            "properties": {
+                "movements": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/josex_web_modules_inventory_models.InventoryMovement"
+                    }
+                },
+                "page": {
+                    "type": "integer"
+                },
+                "page_size": {
+                    "type": "integer"
+                },
+                "total_count": {
+                    "type": "integer"
+                }
+            }
+        },
+        "josex_web_modules_inventory_models.ListProductSkusResponse": {
+            "type": "object",
+            "properties": {
+                "page": {
+                    "type": "integer"
+                },
+                "page_size": {
+                    "type": "integer"
+                },
+                "skus": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/josex_web_modules_inventory_models.ProductSku"
+                    }
+                },
+                "total_count": {
+                    "type": "integer"
+                }
+            }
+        },
         "josex_web_modules_inventory_models.Product": {
             "type": "object",
             "properties": {
                 "base_price": {
                     "type": "number"
+                },
+                "categories": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/josex_web_modules_inventory_models.ProductCategoryRef"
+                    }
                 },
                 "created_at": {
                     "type": "string"
@@ -6531,6 +8695,20 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "status": {
+                    "type": "string"
+                }
+            }
+        },
+        "josex_web_modules_inventory_models.ProductCategoryRef": {
+            "type": "object",
+            "properties": {
+                "id": {
+                    "type": "string"
+                },
+                "name": {
+                    "type": "string"
+                },
+                "slug": {
                     "type": "string"
                 }
             }
@@ -6599,6 +8777,70 @@ const docTemplate = `{
                 }
             }
         },
+        "josex_web_modules_inventory_models.ProductSku": {
+            "type": "object",
+            "properties": {
+                "available_quantity": {
+                    "type": "number"
+                },
+                "combination_key": {
+                    "type": "string"
+                },
+                "current_quantity": {
+                    "type": "number"
+                },
+                "is_default": {
+                    "type": "boolean"
+                },
+                "options": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/josex_web_modules_inventory_models.ProductSkuOption"
+                    }
+                },
+                "price_modifier": {
+                    "type": "number"
+                },
+                "reorder_level": {
+                    "type": "number"
+                },
+                "reserved_quantity": {
+                    "type": "number"
+                },
+                "sellable": {
+                    "type": "boolean"
+                },
+                "sku": {
+                    "type": "string"
+                },
+                "sku_id": {
+                    "type": "string"
+                },
+                "status": {
+                    "type": "string"
+                },
+                "stock_status": {
+                    "type": "string"
+                }
+            }
+        },
+        "josex_web_modules_inventory_models.ProductSkuOption": {
+            "type": "object",
+            "properties": {
+                "group_id": {
+                    "type": "string"
+                },
+                "group_type": {
+                    "type": "string"
+                },
+                "option_id": {
+                    "type": "string"
+                },
+                "option_name": {
+                    "type": "string"
+                }
+            }
+        },
         "josex_web_modules_inventory_models.ProductStock": {
             "type": "object",
             "properties": {
@@ -6631,6 +8873,13 @@ const docTemplate = `{
                 "quantity"
             ],
             "properties": {
+                "direction": {
+                    "type": "string",
+                    "enum": [
+                        "IN",
+                        "OUT"
+                    ]
+                },
                 "movement_type": {
                     "type": "string"
                 },
@@ -6647,6 +8896,9 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "reference_type": {
+                    "type": "string"
+                },
+                "sku_id": {
                     "type": "string"
                 },
                 "unit_cost": {
@@ -6668,6 +8920,113 @@ const docTemplate = `{
                 }
             }
         },
+        "josex_web_modules_inventory_models.RedistributeBatchTarget": {
+            "type": "object",
+            "required": [
+                "quantity",
+                "sku_id"
+            ],
+            "properties": {
+                "quantity": {
+                    "type": "number"
+                },
+                "sku_id": {
+                    "type": "string"
+                }
+            }
+        },
+        "josex_web_modules_inventory_models.RedistributeBatchesDto": {
+            "type": "object",
+            "required": [
+                "batch_id",
+                "targets"
+            ],
+            "properties": {
+                "batch_id": {
+                    "type": "string"
+                },
+                "targets": {
+                    "type": "array",
+                    "minItems": 1,
+                    "items": {
+                        "$ref": "#/definitions/josex_web_modules_inventory_models.RedistributeBatchTarget"
+                    }
+                }
+            }
+        },
+        "josex_web_modules_inventory_models.RedistributeBatchesResponse": {
+            "type": "object",
+            "properties": {
+                "batch_id": {
+                    "type": "string"
+                },
+                "batches": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/josex_web_modules_inventory_models.BatchResponse"
+                    }
+                },
+                "message": {
+                    "type": "string"
+                },
+                "moved_quantity": {
+                    "type": "number"
+                },
+                "target_count": {
+                    "type": "integer"
+                }
+            }
+        },
+        "josex_web_modules_inventory_models.RedistributeStockDto": {
+            "type": "object",
+            "required": [
+                "targets"
+            ],
+            "properties": {
+                "targets": {
+                    "type": "array",
+                    "minItems": 1,
+                    "items": {
+                        "$ref": "#/definitions/josex_web_modules_inventory_models.RedistributeTargetDto"
+                    }
+                }
+            }
+        },
+        "josex_web_modules_inventory_models.RedistributeStockResponse": {
+            "type": "object",
+            "properties": {
+                "default_sku_id": {
+                    "type": "string"
+                },
+                "message": {
+                    "type": "string"
+                },
+                "moved_quantity": {
+                    "type": "number"
+                },
+                "product_id": {
+                    "type": "string"
+                },
+                "target_count": {
+                    "type": "integer"
+                }
+            }
+        },
+        "josex_web_modules_inventory_models.RedistributeTargetDto": {
+            "type": "object",
+            "required": [
+                "quantity",
+                "sku_id"
+            ],
+            "properties": {
+                "quantity": {
+                    "type": "number"
+                },
+                "sku_id": {
+                    "type": "string"
+                }
+            }
+        },
         "josex_web_modules_inventory_models.ReleaseReservedStockDto": {
             "type": "object",
             "required": [
@@ -6680,6 +9039,9 @@ const docTemplate = `{
                 },
                 "quantity": {
                     "type": "number"
+                },
+                "sku_id": {
+                    "type": "string"
                 }
             }
         },
@@ -6695,6 +9057,9 @@ const docTemplate = `{
                 },
                 "quantity": {
                     "type": "number"
+                },
+                "sku_id": {
+                    "type": "string"
                 }
             }
         },
@@ -6712,6 +9077,19 @@ const docTemplate = `{
                 },
                 "status": {
                     "type": "string"
+                }
+            }
+        },
+        "josex_web_modules_inventory_models.UpdateBatchDto": {
+            "type": "object",
+            "properties": {
+                "expiry_date": {
+                    "type": "string"
+                },
+                "lot_number": {
+                    "type": "string",
+                    "maxLength": 100,
+                    "minLength": 1
                 }
             }
         },
@@ -6738,6 +9116,55 @@ const docTemplate = `{
                 },
                 "slug": {
                     "type": "string"
+                }
+            }
+        },
+        "josex_web_modules_inventory_models.UpdateProductDto": {
+            "type": "object",
+            "required": [
+                "base_price",
+                "name"
+            ],
+            "properties": {
+                "base_price": {
+                    "type": "number"
+                },
+                "description": {
+                    "type": "string"
+                },
+                "name": {
+                    "type": "string"
+                },
+                "variants": {
+                    "$ref": "#/definitions/josex_web_modules_inventory_models.UpdateProductVariantsDto"
+                }
+            }
+        },
+        "josex_web_modules_inventory_models.UpdateProductResponse": {
+            "type": "object",
+            "properties": {
+                "message": {
+                    "type": "string"
+                },
+                "name": {
+                    "type": "string"
+                },
+                "product_id": {
+                    "type": "string"
+                },
+                "sku": {
+                    "type": "string"
+                }
+            }
+        },
+        "josex_web_modules_inventory_models.UpdateProductVariantsDto": {
+            "type": "object",
+            "properties": {
+                "groups": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/josex_web_modules_inventory_models.UpdateVariantGroupDto"
+                    }
                 }
             }
         },
@@ -6773,10 +9200,62 @@ const docTemplate = `{
                 }
             }
         },
+        "josex_web_modules_inventory_models.UpdateVariantGroupDto": {
+            "type": "object",
+            "required": [
+                "group_type"
+            ],
+            "properties": {
+                "affects_inventory": {
+                    "type": "boolean"
+                },
+                "group_type": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "string"
+                },
+                "is_required": {
+                    "type": "boolean"
+                },
+                "max_selections": {
+                    "type": "integer"
+                },
+                "options": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/josex_web_modules_inventory_models.UpdateVariantOptionDto"
+                    }
+                }
+            }
+        },
+        "josex_web_modules_inventory_models.UpdateVariantOptionDto": {
+            "type": "object",
+            "required": [
+                "name"
+            ],
+            "properties": {
+                "id": {
+                    "type": "string"
+                },
+                "modifier": {
+                    "type": "number"
+                },
+                "name": {
+                    "type": "string"
+                }
+            }
+        },
         "josex_web_modules_inventory_models.VariantGroup": {
             "type": "object",
             "properties": {
+                "affects_inventory": {
+                    "type": "boolean"
+                },
                 "group_type": {
+                    "type": "string"
+                },
+                "id": {
                     "type": "string"
                 },
                 "is_required": {
@@ -6835,6 +9314,10 @@ const docTemplate = `{
                 },
                 "quantity": {
                     "type": "number"
+                },
+                "sku_id": {
+                    "description": "SkuID names the combination to sell. Optional (INV-010 D2): omitted, the SP\nresolves the product's default SKU, which is what every pre-INV-010 client\nkeeps getting. On a stock_by_variant product, omitting it is a 400.",
+                    "type": "string"
                 },
                 "unit_price": {
                     "type": "number",
@@ -7058,10 +9541,18 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "product_sku": {
+                    "description": "ProductSku is the combination's code as it stood when the line was sold,\nSku the same combination's code as it stands now (INV-010 D4).",
                     "type": "string"
                 },
                 "quantity": {
                     "type": "integer"
+                },
+                "sku": {
+                    "type": "string"
+                },
+                "sku_id": {
+                    "description": "SkuID is the sellable combination this line sold; never null since INV-010.",
+                    "type": "string"
                 },
                 "unit_price": {
                     "type": "number"
@@ -7344,6 +9835,20 @@ const docTemplate = `{
                 }
             }
         },
+        "josex_web_modules_tenancy_models.CreateRoleDto": {
+            "type": "object",
+            "required": [
+                "name"
+            ],
+            "properties": {
+                "description": {
+                    "type": "string"
+                },
+                "name": {
+                    "type": "string"
+                }
+            }
+        },
         "josex_web_modules_tenancy_models.CreateTenantDto": {
             "type": "object",
             "required": [
@@ -7366,6 +9871,133 @@ const docTemplate = `{
                 },
                 "slug": {
                     "type": "string"
+                }
+            }
+        },
+        "josex_web_modules_tenancy_models.Role": {
+            "type": "object",
+            "properties": {
+                "created_at": {
+                    "type": "string"
+                },
+                "description": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "string"
+                },
+                "is_system": {
+                    "type": "boolean"
+                },
+                "name": {
+                    "type": "string"
+                },
+                "tenant_id": {
+                    "type": "string"
+                },
+                "updated_at": {
+                    "type": "string"
+                }
+            }
+        },
+        "josex_web_modules_tenancy_models.RoleDetail": {
+            "type": "object",
+            "properties": {
+                "created_at": {
+                    "type": "string"
+                },
+                "description": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "string"
+                },
+                "is_system": {
+                    "type": "boolean"
+                },
+                "name": {
+                    "type": "string"
+                },
+                "permissions": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "tenant_id": {
+                    "type": "string"
+                },
+                "updated_at": {
+                    "type": "string"
+                }
+            }
+        },
+        "josex_web_modules_tenancy_models.RoleListItem": {
+            "type": "object",
+            "properties": {
+                "created_at": {
+                    "type": "string"
+                },
+                "description": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "string"
+                },
+                "is_system": {
+                    "type": "boolean"
+                },
+                "name": {
+                    "type": "string"
+                },
+                "permission_count": {
+                    "type": "integer"
+                },
+                "tenant_id": {
+                    "type": "string"
+                },
+                "updated_at": {
+                    "type": "string"
+                }
+            }
+        },
+        "josex_web_modules_tenancy_models.RoleUser": {
+            "type": "object",
+            "properties": {
+                "assigned_at": {
+                    "type": "string"
+                },
+                "assigned_by": {
+                    "type": "string"
+                },
+                "email": {
+                    "type": "string"
+                },
+                "first_name": {
+                    "type": "string"
+                },
+                "last_name": {
+                    "type": "string"
+                },
+                "profile_picture_url": {
+                    "type": "string"
+                },
+                "user_id": {
+                    "type": "string"
+                }
+            }
+        },
+        "josex_web_modules_tenancy_models.SetRolePermissionsDto": {
+            "type": "object",
+            "required": [
+                "permissions"
+            ],
+            "properties": {
+                "permissions": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
                 }
             }
         },
@@ -7401,6 +10033,17 @@ const docTemplate = `{
                 }
             }
         },
+        "josex_web_modules_tenancy_models.UpdateRoleDto": {
+            "type": "object",
+            "properties": {
+                "description": {
+                    "type": "string"
+                },
+                "name": {
+                    "type": "string"
+                }
+            }
+        },
         "josex_web_modules_tenancy_models.UpdateTenantDto": {
             "type": "object",
             "properties": {
@@ -7432,6 +10075,29 @@ const docTemplate = `{
                         "admin",
                         "member"
                     ]
+                }
+            }
+        },
+        "josex_web_modules_tenancy_models.UserRole": {
+            "type": "object",
+            "properties": {
+                "assigned_at": {
+                    "type": "string"
+                },
+                "assigned_by": {
+                    "type": "string"
+                },
+                "description": {
+                    "type": "string"
+                },
+                "is_system": {
+                    "type": "boolean"
+                },
+                "role_id": {
+                    "type": "string"
+                },
+                "role_name": {
+                    "type": "string"
                 }
             }
         },
@@ -7574,7 +10240,6 @@ const docTemplate = `{
                     "enum": [
                         "delay",
                         "breakdown",
-                        "traffic",
                         "cancellation",
                         "emergency",
                         "other"
@@ -8636,6 +11301,64 @@ const docTemplate = `{
                     "description": "Optional deletion reason",
                     "type": "string",
                     "maxLength": 500
+                }
+            }
+        },
+        "josex_web_modules_users_models.UserAuditListResponse": {
+            "type": "object",
+            "properties": {
+                "entries": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/josex_web_modules_users_models.UserAuditLog"
+                    }
+                },
+                "limit": {
+                    "type": "integer"
+                },
+                "page": {
+                    "type": "integer"
+                },
+                "total": {
+                    "type": "integer"
+                },
+                "total_pages": {
+                    "type": "integer"
+                }
+            }
+        },
+        "josex_web_modules_users_models.UserAuditLog": {
+            "type": "object",
+            "properties": {
+                "action": {
+                    "type": "string"
+                },
+                "created_at": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "string"
+                },
+                "metadata": {
+                    "type": "array",
+                    "items": {
+                        "type": "integer"
+                    }
+                },
+                "performed_by": {
+                    "type": "string"
+                },
+                "performed_by_email": {
+                    "type": "string"
+                },
+                "source": {
+                    "type": "string"
+                },
+                "target_user_email": {
+                    "type": "string"
+                },
+                "target_user_id": {
+                    "type": "string"
                 }
             }
         },

@@ -417,6 +417,148 @@ definitions:
     - id
     - last_name
     type: object
+  josex_web_modules_import_models.ColumnSpec:
+    properties:
+      format:
+        type: string
+      key:
+        type: string
+      pattern:
+        type: string
+      required:
+        type: boolean
+      type:
+        $ref: '#/definitions/josex_web_modules_import_models.ColumnType'
+    type: object
+  josex_web_modules_import_models.ColumnType:
+    enum:
+    - text
+    - email
+    - phone
+    - date
+    - number
+    - year
+    - url
+    - image
+    type: string
+    x-enum-varnames:
+    - ColumnTypeText
+    - ColumnTypeEmail
+    - ColumnTypePhone
+    - ColumnTypeDate
+    - ColumnTypeNumber
+    - ColumnTypeYear
+    - ColumnTypeURL
+    - ColumnTypeImage
+  josex_web_modules_import_models.DetectResponse:
+    properties:
+      module:
+        type: string
+      resource:
+        type: string
+    type: object
+  josex_web_modules_import_models.ImportLimits:
+    properties:
+      max_file_size_mb:
+        type: integer
+      max_rows:
+        type: integer
+    type: object
+  josex_web_modules_import_models.ImportResourceInfo:
+    properties:
+      module:
+        type: string
+      resource:
+        type: string
+    type: object
+  josex_web_modules_import_models.ImportResponse:
+    properties:
+      headers:
+        items:
+          type: string
+        type: array
+      resource:
+        type: string
+      rows:
+        items:
+          $ref: '#/definitions/josex_web_modules_import_models.RowResult'
+        type: array
+      run:
+        $ref: '#/definitions/josex_web_modules_import_models.RunMeta'
+    type: object
+  josex_web_modules_import_models.RowResult:
+    properties:
+      data:
+        additionalProperties:
+          type: string
+        description: original row, for client-side re-download of failures
+        type: object
+      errors:
+        description: mapped frontend error codes
+        items:
+          type: string
+        type: array
+      line:
+        type: integer
+      status:
+        type: string
+      warnings:
+        description: non-fatal mapped codes
+        items:
+          type: string
+        type: array
+    type: object
+  josex_web_modules_import_models.RunMeta:
+    properties:
+      created:
+        type: integer
+      failed:
+        type: integer
+      performed_by:
+        type: string
+      resource:
+        type: string
+      skipped:
+        type: integer
+      timestamp:
+        type: string
+      total:
+        type: integer
+      warnings:
+        type: integer
+    type: object
+  josex_web_modules_import_models.SchemaResponse:
+    properties:
+      columns:
+        items:
+          $ref: '#/definitions/josex_web_modules_import_models.ColumnSpec'
+        type: array
+      resource:
+        type: string
+    type: object
+  josex_web_modules_import_models.ValidateResponse:
+    properties:
+      duplicate:
+        type: integer
+      headers:
+        items:
+          type: string
+        type: array
+      invalid:
+        type: integer
+      resource:
+        type: string
+      rows:
+        items:
+          $ref: '#/definitions/josex_web_modules_import_models.RowResult'
+        type: array
+      total:
+        type: integer
+      valid:
+        type: integer
+      warnings:
+        type: integer
+    type: object
   josex_web_modules_inventory_models.AddProductMediaDto:
     properties:
       alt_text:
@@ -463,7 +605,13 @@ definitions:
         type: string
       product_id:
         type: string
+      product_name:
+        type: string
       purchase_date:
+        type: string
+      sku:
+        type: string
+      sku_id:
         type: string
       status:
         type: string
@@ -508,6 +656,12 @@ definitions:
       product_id:
         type: string
       purchase_date:
+        type: string
+      sku_id:
+        description: |-
+          SkuID - the combination the lot belongs to. A pointer because omitting it
+          and sending null must mean the same thing: let the SP resolve the default
+          (and refuse when the product is stocked by variant, INV-014 D1).
         type: string
       unit_cost:
         type: number
@@ -564,6 +718,23 @@ definitions:
       sku:
         type: string
     type: object
+  josex_web_modules_inventory_models.GenerateSkusResponse:
+    properties:
+      axis_count:
+        type: integer
+      combination_count:
+        type: integer
+      created_count:
+        type: integer
+      existing_count:
+        type: integer
+      message:
+        type: string
+      product_id:
+        type: string
+      stock_by_variant:
+        type: boolean
+    type: object
   josex_web_modules_inventory_models.GetProductsByCategoryResponse:
     properties:
       base_price:
@@ -599,6 +770,13 @@ definitions:
         type: string
       reference_type:
         type: string
+      sku:
+        type: string
+      sku_id:
+        description: |-
+          Which combination moved. Both are nullable: rows written before INV-007
+          carry no SKU and the trail still has to show them (INV-011 D2).
+        type: string
       unit_cost:
         type: number
     type: object
@@ -622,10 +800,40 @@ definitions:
       total:
         type: integer
     type: object
+  josex_web_modules_inventory_models.ListMovementsResponse:
+    properties:
+      movements:
+        items:
+          $ref: '#/definitions/josex_web_modules_inventory_models.InventoryMovement'
+        type: array
+      page:
+        type: integer
+      page_size:
+        type: integer
+      total_count:
+        type: integer
+    type: object
+  josex_web_modules_inventory_models.ListProductSkusResponse:
+    properties:
+      page:
+        type: integer
+      page_size:
+        type: integer
+      skus:
+        items:
+          $ref: '#/definitions/josex_web_modules_inventory_models.ProductSku'
+        type: array
+      total_count:
+        type: integer
+    type: object
   josex_web_modules_inventory_models.Product:
     properties:
       base_price:
         type: number
+      categories:
+        items:
+          $ref: '#/definitions/josex_web_modules_inventory_models.ProductCategoryRef'
+        type: array
       created_at:
         type: string
       description:
@@ -639,6 +847,15 @@ definitions:
       sku:
         type: string
       status:
+        type: string
+    type: object
+  josex_web_modules_inventory_models.ProductCategoryRef:
+    properties:
+      id:
+        type: string
+      name:
+        type: string
+      slug:
         type: string
     type: object
   josex_web_modules_inventory_models.ProductDetail:
@@ -683,6 +900,48 @@ definitions:
       url:
         type: string
     type: object
+  josex_web_modules_inventory_models.ProductSku:
+    properties:
+      available_quantity:
+        type: number
+      combination_key:
+        type: string
+      current_quantity:
+        type: number
+      is_default:
+        type: boolean
+      options:
+        items:
+          $ref: '#/definitions/josex_web_modules_inventory_models.ProductSkuOption'
+        type: array
+      price_modifier:
+        type: number
+      reorder_level:
+        type: number
+      reserved_quantity:
+        type: number
+      sellable:
+        type: boolean
+      sku:
+        type: string
+      sku_id:
+        type: string
+      status:
+        type: string
+      stock_status:
+        type: string
+    type: object
+  josex_web_modules_inventory_models.ProductSkuOption:
+    properties:
+      group_id:
+        type: string
+      group_type:
+        type: string
+      option_id:
+        type: string
+      option_name:
+        type: string
+    type: object
   josex_web_modules_inventory_models.ProductStock:
     properties:
       available_quantity:
@@ -701,6 +960,11 @@ definitions:
     type: object
   josex_web_modules_inventory_models.RecordMovementDto:
     properties:
+      direction:
+        enum:
+        - IN
+        - OUT
+        type: string
       movement_type:
         type: string
       notes:
@@ -712,6 +976,8 @@ definitions:
       reference_id:
         type: string
       reference_type:
+        type: string
+      sku_id:
         type: string
       unit_cost:
         type: number
@@ -729,12 +995,85 @@ definitions:
       new_stock_quantity:
         type: number
     type: object
+  josex_web_modules_inventory_models.RedistributeBatchTarget:
+    properties:
+      quantity:
+        type: number
+      sku_id:
+        type: string
+    required:
+    - quantity
+    - sku_id
+    type: object
+  josex_web_modules_inventory_models.RedistributeBatchesDto:
+    properties:
+      batch_id:
+        type: string
+      targets:
+        items:
+          $ref: '#/definitions/josex_web_modules_inventory_models.RedistributeBatchTarget'
+        minItems: 1
+        type: array
+    required:
+    - batch_id
+    - targets
+    type: object
+  josex_web_modules_inventory_models.RedistributeBatchesResponse:
+    properties:
+      batch_id:
+        type: string
+      batches:
+        items:
+          $ref: '#/definitions/josex_web_modules_inventory_models.BatchResponse'
+        type: array
+      message:
+        type: string
+      moved_quantity:
+        type: number
+      target_count:
+        type: integer
+    type: object
+  josex_web_modules_inventory_models.RedistributeStockDto:
+    properties:
+      targets:
+        items:
+          $ref: '#/definitions/josex_web_modules_inventory_models.RedistributeTargetDto'
+        minItems: 1
+        type: array
+    required:
+    - targets
+    type: object
+  josex_web_modules_inventory_models.RedistributeStockResponse:
+    properties:
+      default_sku_id:
+        type: string
+      message:
+        type: string
+      moved_quantity:
+        type: number
+      product_id:
+        type: string
+      target_count:
+        type: integer
+    type: object
+  josex_web_modules_inventory_models.RedistributeTargetDto:
+    properties:
+      quantity:
+        type: number
+      sku_id:
+        type: string
+    required:
+    - quantity
+    - sku_id
+    type: object
   josex_web_modules_inventory_models.ReleaseReservedStockDto:
     properties:
       product_id:
         type: string
       quantity:
         type: number
+      sku_id:
+        type: string
     required:
     - product_id
     - quantity
@@ -745,6 +1084,8 @@ definitions:
         type: string
       quantity:
         type: number
+      sku_id:
+        type: string
     required:
     - product_id
     - quantity
@@ -758,6 +1099,15 @@ definitions:
       reserved_quantity:
         type: number
       status:
+        type: string
+    type: object
+  josex_web_modules_inventory_models.UpdateBatchDto:
+    properties:
+      expiry_date:
+        type: string
+      lot_number:
+        maxLength: 100
+        minLength: 1
         type: string
     type: object
   josex_web_modules_inventory_models.UpdateCategoryDto:
@@ -776,6 +1126,38 @@ definitions:
         type: string
       slug:
         type: string
+    type: object
+  josex_web_modules_inventory_models.UpdateProductDto:
+    properties:
+      base_price:
+        type: number
+      description:
+        type: string
+      name:
+        type: string
+      variants:
+        $ref: '#/definitions/josex_web_modules_inventory_models.UpdateProductVariantsDto'
+    required:
+    - base_price
+    - name
+    type: object
+  josex_web_modules_inventory_models.UpdateProductResponse:
+    properties:
+      message:
+        type: string
+      name:
+        type: string
+      product_id:
+        type: string
+      sku:
+        type: string
+    type: object
+  josex_web_modules_inventory_models.UpdateProductVariantsDto:
+    properties:
+      groups:
+        items:
+          $ref: '#/definitions/josex_web_modules_inventory_models.UpdateVariantGroupDto'
+        type: array
     type: object
   josex_web_modules_inventory_models.UpdateReorderLevelDto:
     properties:
@@ -798,9 +1180,43 @@ definitions:
       status:
         type: string
     type: object
+  josex_web_modules_inventory_models.UpdateVariantGroupDto:
+    properties:
+      affects_inventory:
+        type: boolean
+      group_type:
+        type: string
+      id:
+        type: string
+      is_required:
+        type: boolean
+      max_selections:
+        type: integer
+      options:
+        items:
+          $ref: '#/definitions/josex_web_modules_inventory_models.UpdateVariantOptionDto'
+        type: array
+    required:
+    - group_type
+    type: object
+  josex_web_modules_inventory_models.UpdateVariantOptionDto:
+    properties:
+      id:
+        type: string
+      modifier:
+        type: number
+      name:
+        type: string
+    required:
+    - name
+    type: object
   josex_web_modules_inventory_models.VariantGroup:
     properties:
+      affects_inventory:
+        type: boolean
       group_type:
+        type: string
+      id:
         type: string
       is_required:
         type: boolean
@@ -836,6 +1252,12 @@ definitions:
         type: string
       quantity:
         type: number
+      sku_id:
+        description: |-
+          SkuID names the combination to sell. Optional (INV-010 D2): omitted, the SP
+          resolves the product's default SKU, which is what every pre-INV-010 client
+          keeps getting. On a stock_by_variant product, omitting it is a 400.
+        type: string
       unit_price:
         minimum: 0
         type: number
@@ -1000,9 +1422,18 @@ definitions:
       product_name:
         type: string
       product_sku:
+        description: |-
+          ProductSku is the combination's code as it stood when the line was sold,
+          Sku the same combination's code as it stands now (INV-010 D4).
         type: string
       quantity:
         type: integer
+      sku:
+        type: string
+      sku_id:
+        description: SkuID is the sellable combination this line sold; never null
+          since INV-010.
+        type: string
       unit_price:
         type: number
     type: object
@@ -1195,6 +1626,15 @@ definitions:
     - role
     - user_id
     type: object
+  josex_web_modules_tenancy_models.CreateRoleDto:
+    properties:
+      description:
+        type: string
+      name:
+        type: string
+    required:
+    - name
+    type: object
   josex_web_modules_tenancy_models.CreateTenantDto:
     properties:
       database_url:
@@ -1211,6 +1651,89 @@ definitions:
     required:
     - name
     - slug
+    type: object
+  josex_web_modules_tenancy_models.Role:
+    properties:
+      created_at:
+        type: string
+      description:
+        type: string
+      id:
+        type: string
+      is_system:
+        type: boolean
+      name:
+        type: string
+      tenant_id:
+        type: string
+      updated_at:
+        type: string
+    type: object
+  josex_web_modules_tenancy_models.RoleDetail:
+    properties:
+      created_at:
+        type: string
+      description:
+        type: string
+      id:
+        type: string
+      is_system:
+        type: boolean
+      name:
+        type: string
+      permissions:
+        items:
+          type: string
+        type: array
+      tenant_id:
+        type: string
+      updated_at:
+        type: string
+    type: object
+  josex_web_modules_tenancy_models.RoleListItem:
+    properties:
+      created_at:
+        type: string
+      description:
+        type: string
+      id:
+        type: string
+      is_system:
+        type: boolean
+      name:
+        type: string
+      permission_count:
+        type: integer
+      tenant_id:
+        type: string
+      updated_at:
+        type: string
+    type: object
+  josex_web_modules_tenancy_models.RoleUser:
+    properties:
+      assigned_at:
+        type: string
+      assigned_by:
+        type: string
+      email:
+        type: string
+      first_name:
+        type: string
+      last_name:
+        type: string
+      profile_picture_url:
+        type: string
+      user_id:
+        type: string
+    type: object
+  josex_web_modules_tenancy_models.SetRolePermissionsDto:
+    properties:
+      permissions:
+        items:
+          type: string
+        type: array
+    required:
+    - permissions
     type: object
   josex_web_modules_tenancy_models.TenantDetailResponse:
     properties:
@@ -1231,6 +1754,13 @@ definitions:
       slug:
         type: string
       updated_at:
+        type: string
+    type: object
+  josex_web_modules_tenancy_models.UpdateRoleDto:
+    properties:
+      description:
+        type: string
+      name:
         type: string
     type: object
   josex_web_modules_tenancy_models.UpdateTenantDto:
@@ -1255,6 +1785,21 @@ definitions:
         type: string
     required:
     - role
+    type: object
+  josex_web_modules_tenancy_models.UserRole:
+    properties:
+      assigned_at:
+        type: string
+      assigned_by:
+        type: string
+      description:
+        type: string
+      is_system:
+        type: boolean
+      role_id:
+        type: string
+      role_name:
+        type: string
     type: object
   josex_web_modules_tenancy_models.UserTenantResponse:
     properties:
@@ -1345,7 +1890,6 @@ definitions:
         enum:
         - delay
         - breakdown
-        - traffic
         - cancellation
         - emergency
         - other
@@ -2107,6 +2651,44 @@ definitions:
     required:
     - id
     type: object
+  josex_web_modules_users_models.UserAuditListResponse:
+    properties:
+      entries:
+        items:
+          $ref: '#/definitions/josex_web_modules_users_models.UserAuditLog'
+        type: array
+      limit:
+        type: integer
+      page:
+        type: integer
+      total:
+        type: integer
+      total_pages:
+        type: integer
+    type: object
+  josex_web_modules_users_models.UserAuditLog:
+    properties:
+      action:
+        type: string
+      created_at:
+        type: string
+      id:
+        type: string
+      metadata:
+        items:
+          type: integer
+        type: array
+      performed_by:
+        type: string
+      performed_by_email:
+        type: string
+      source:
+        type: string
+      target_user_email:
+        type: string
+      target_user_id:
+        type: string
+    type: object
   josex_web_modules_users_models.UserListResponse:
     properties:
       limit:
@@ -2353,6 +2935,52 @@ paths:
       tags:
       - inventory-categories
   /api/v1/inventory/movements:
+    get:
+      description: Paginated movement history, optionally filtered by product, type
+        and date range
+      parameters:
+      - description: Product ID
+        in: query
+        name: product_id
+        type: string
+      - description: Movement type (PURCHASE, SALE, ADJUSTMENT, TRANSFER, RETURN,
+          WASTE, PRODUCTION)
+        in: query
+        name: movement_type
+        type: string
+      - description: Inclusive lower bound, YYYY-MM-DD
+        in: query
+        name: date_from
+        type: string
+      - description: Inclusive upper bound, YYYY-MM-DD
+        in: query
+        name: date_to
+        type: string
+      - default: 1
+        description: Page number, 1-based
+        in: query
+        name: page
+        type: integer
+      - default: 20
+        description: Rows per page, max 100
+        in: query
+        name: page_size
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/josex_web_modules_inventory_models.ListMovementsResponse'
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties: true
+            type: object
+      summary: List inventory movements
+      tags:
+      - inventory
     post:
       consumes:
       - application/json
@@ -2415,7 +3043,8 @@ paths:
       - inventory
   /api/v1/inventory/products:
     get:
-      description: Retrieve a paginated list of active products
+      description: Retrieve a paginated list of active products, each with the categories
+        it is filed under. Optionally narrowed to one category and/or a name/SKU search.
       parameters:
       - description: Limit (default 20)
         in: query
@@ -2425,6 +3054,14 @@ paths:
         in: query
         name: offset
         type: integer
+      - description: Only products assigned to this category
+        in: query
+        name: category_id
+        type: string
+      - description: Case-insensitive match on name or SKU
+        in: query
+        name: search
+        type: string
       produces:
       - application/json
       responses:
@@ -2434,6 +3071,11 @@ paths:
             items:
               $ref: '#/definitions/josex_web_modules_inventory_models.Product'
             type: array
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties: true
+            type: object
       summary: List all products
       tags:
       - inventory
@@ -2492,6 +3134,85 @@ paths:
       summary: Get product by ID
       tags:
       - inventory
+    put:
+      consumes:
+      - application/json
+      description: 'Update name, description and base price, and diff the variant
+        tree by id. Omitting "variants" leaves the tree untouched; {"groups": []}
+        removes every group. The SKU is immutable.'
+      parameters:
+      - description: Product ID
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Product update request
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/josex_web_modules_inventory_models.UpdateProductDto'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/josex_web_modules_inventory_models.UpdateProductResponse'
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties: true
+            type: object
+        "404":
+          description: Not Found
+          schema:
+            additionalProperties: true
+            type: object
+        "409":
+          description: Conflict
+          schema:
+            additionalProperties: true
+            type: object
+      summary: Update a product and its variants
+      tags:
+      - inventory
+  /api/v1/inventory/products/:id/categories:
+    get:
+      description: Retrieve all categories a specific product is assigned to
+      parameters:
+      - description: Product ID
+        in: path
+        name: id
+        required: true
+        type: string
+      - default: 1
+        description: Page number
+        in: query
+        name: page
+        type: integer
+      - default: 100
+        description: Items per page
+        in: query
+        name: limit
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/josex_web_modules_inventory_models.CategoryResponse'
+            type: array
+        "404":
+          description: Not Found
+          schema:
+            additionalProperties: true
+            type: object
+      summary: Get categories of a product
+      tags:
+      - inventory-categories
   /api/v1/inventory/products/:id/media:
     post:
       consumes:
@@ -2656,6 +3377,119 @@ paths:
       summary: Assign product to category
       tags:
       - inventory-categories
+  /api/v1/inventory/products/{id}/skus:
+    get:
+      description: One row per sellable combination — the default SKU first, then
+        the generated ones — with its option labels, quantities and stock status
+      parameters:
+      - description: Product ID
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Page (default 1)
+        in: query
+        name: page
+        type: integer
+      - description: Page size (default 100, max 100)
+        in: query
+        name: page_size
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/josex_web_modules_inventory_models.ListProductSkusResponse'
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties: true
+            type: object
+        "404":
+          description: Not Found
+          schema:
+            additionalProperties: true
+            type: object
+      summary: List the SKUs of a product
+      tags:
+      - inventory
+  /api/v1/inventory/products/{id}/skus/generate:
+    post:
+      description: 'Creates one SKU per missing combination of the product''s inventory
+        axes. Re-runnable: existing combinations are left alone and the default SKU
+        keeps its quantity.'
+      parameters:
+      - description: Product ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/josex_web_modules_inventory_models.GenerateSkusResponse'
+        "404":
+          description: Not Found
+          schema:
+            additionalProperties: true
+            type: object
+        "409":
+          description: Conflict
+          schema:
+            additionalProperties: true
+            type: object
+      summary: Generate the combinations of a product
+      tags:
+      - inventory
+  /api/v1/inventory/products/{id}/skus/redistribute:
+    post:
+      consumes:
+      - application/json
+      description: Atomic move of the whole unassigned bucket. The amounts must sum
+        to exactly the default SKU's current quantity; anything else changes nothing
+        and returns 400.
+      parameters:
+      - description: Product ID
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Redistribution request
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/josex_web_modules_inventory_models.RedistributeStockDto'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/josex_web_modules_inventory_models.RedistributeStockResponse'
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties: true
+            type: object
+        "404":
+          description: Not Found
+          schema:
+            additionalProperties: true
+            type: object
+        "409":
+          description: Conflict
+          schema:
+            additionalProperties: true
+            type: object
+      summary: Move the default SKU's stock onto the combinations
+      tags:
+      - inventory
   /api/v1/inventory/products/sku/:sku:
     get:
       description: Retrieve a product by its SKU code
@@ -3409,6 +4243,37 @@ paths:
       tags:
       - Batches
   /batches/{id}:
+    delete:
+      consumes:
+      - application/json
+      description: Write a lot off by setting its status to void. Never deletes the
+        row.
+      parameters:
+      - description: Batch ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/josex_web_modules_inventory_models.BatchResponse'
+        "404":
+          description: Batch not found
+          schema:
+            additionalProperties: true
+            type: object
+        "409":
+          description: Batch already consumed or voided
+          schema:
+            additionalProperties: true
+            type: object
+      summary: Void a lot
+      tags:
+      - Batches
     get:
       consumes:
       - application/json
@@ -3432,6 +4297,47 @@ paths:
             additionalProperties: true
             type: object
       summary: Get batch details
+      tags:
+      - Batches
+    patch:
+      consumes:
+      - application/json
+      description: Correct a lot's lot number and expiry date, while it has no movements
+      parameters:
+      - description: Batch ID
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Fields to correct
+        in: body
+        name: batch
+        required: true
+        schema:
+          $ref: '#/definitions/josex_web_modules_inventory_models.UpdateBatchDto'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/josex_web_modules_inventory_models.BatchResponse'
+        "400":
+          description: Invalid request
+          schema:
+            additionalProperties: true
+            type: object
+        "404":
+          description: Batch not found
+          schema:
+            additionalProperties: true
+            type: object
+        "409":
+          description: Batch already consumed or voided
+          schema:
+            additionalProperties: true
+            type: object
+      summary: Correct a lot
       tags:
       - Batches
   /batches/expiring:
@@ -3619,6 +4525,366 @@ paths:
       summary: Create or upgrade a subscription
       tags:
       - Billing
+  /import:
+    post:
+      consumes:
+      - multipart/form-data
+      description: Detects the resource, creates each valid row, and returns per-row
+        created|failed|skipped outcomes plus a persisted run summary (who/when/counts/warnings).
+      parameters:
+      - description: Bearer Token
+        in: header
+        name: Authorization
+        required: true
+        type: string
+      - description: Tenant slug
+        in: header
+        name: X-Tenant-Slug
+        required: true
+        type: string
+      - description: CSV file (max 5 MB, 500 rows)
+        in: formData
+        name: file
+        required: true
+        type: file
+      - description: Resource key (auto-detected from the header when omitted)
+        in: formData
+        name: resource
+        type: string
+      - description: Comma-separated resource or module keys detection is limited
+          to (e.g. inventory)
+        in: formData
+        name: scope
+        type: string
+      - description: Resource-specific options as a JSON object
+        in: formData
+        name: options
+        type: string
+      - description: Optional ZIP of images referenced by the CSV (e.g. profile_picture)
+        in: formData
+        name: images
+        type: file
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/josex_web_modules_import_models.ImportResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/josex_web_modules_core_errors.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/josex_web_modules_core_errors.ErrorResponse'
+      security:
+      - ApiKeyAuth: []
+      summary: Process an uploaded CSV
+      tags:
+      - Import
+  /import/detect:
+    post:
+      consumes:
+      - multipart/form-data
+      description: Resolves the resource a CSV belongs to from its header line alone,
+        inside the optional scope, without reading or validating any row — so a client
+        can queue several files in import order before running them.
+      parameters:
+      - description: Bearer Token
+        in: header
+        name: Authorization
+        required: true
+        type: string
+      - description: Tenant slug
+        in: header
+        name: X-Tenant-Slug
+        required: true
+        type: string
+      - description: CSV file (max 5 MB)
+        in: formData
+        name: file
+        required: true
+        type: file
+      - description: Comma-separated resource or module keys detection is limited
+          to (e.g. inventory)
+        in: formData
+        name: scope
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/josex_web_modules_import_models.DetectResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/josex_web_modules_core_errors.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/josex_web_modules_core_errors.ErrorResponse'
+      security:
+      - ApiKeyAuth: []
+      summary: Detect a CSV's resource
+      tags:
+      - Import
+  /import/meta:
+    get:
+      description: Returns the configured upload constraints (max file size, max rows)
+        so the UI hint stays in sync with the server.
+      parameters:
+      - description: Bearer Token
+        in: header
+        name: Authorization
+        required: true
+        type: string
+      - description: Tenant slug
+        in: header
+        name: X-Tenant-Slug
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/josex_web_modules_import_models.ImportLimits'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/josex_web_modules_core_errors.ErrorResponse'
+      security:
+      - ApiKeyAuth: []
+      summary: Import limits
+      tags:
+      - Import
+  /import/resources:
+    get:
+      description: Lists the import resources a scope of resource or module keys reaches,
+        with the module that owns each, in detection order. An empty scope lists every
+        registered resource.
+      parameters:
+      - description: Bearer Token
+        in: header
+        name: Authorization
+        required: true
+        type: string
+      - description: Tenant slug
+        in: header
+        name: X-Tenant-Slug
+        required: true
+        type: string
+      - description: Comma-separated resource or module keys (e.g. inventory)
+        in: query
+        name: scope
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/josex_web_modules_import_models.ImportResourceInfo'
+            type: array
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/josex_web_modules_core_errors.ErrorResponse'
+      security:
+      - ApiKeyAuth: []
+      summary: Resources a scope reaches
+      tags:
+      - Import
+  /import/schema:
+    get:
+      description: Returns the resource's columns with their type, required flag and
+        optional validation pattern, so a client can render and check an editor per
+        column without knowing the resource.
+      parameters:
+      - description: Bearer Token
+        in: header
+        name: Authorization
+        required: true
+        type: string
+      - description: Tenant slug
+        in: header
+        name: X-Tenant-Slug
+        required: true
+        type: string
+      - description: Resource key (e.g. users)
+        in: query
+        name: resource
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/josex_web_modules_import_models.SchemaResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/josex_web_modules_core_errors.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/josex_web_modules_core_errors.ErrorResponse'
+      security:
+      - ApiKeyAuth: []
+      summary: Column schema for a resource
+      tags:
+      - Import
+  /import/template:
+    get:
+      description: Returns a CSV containing just the header row for a resource, built
+        from its descriptor's columns.
+      parameters:
+      - description: Bearer Token
+        in: header
+        name: Authorization
+        required: true
+        type: string
+      - description: Tenant slug
+        in: header
+        name: X-Tenant-Slug
+        required: true
+        type: string
+      - description: Resource key (e.g. users)
+        in: query
+        name: resource
+        required: true
+        type: string
+      produces:
+      - text/csv
+      responses:
+        "200":
+          description: OK
+          schema:
+            type: file
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/josex_web_modules_core_errors.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/josex_web_modules_core_errors.ErrorResponse'
+      security:
+      - ApiKeyAuth: []
+      summary: Download a CSV template
+      tags:
+      - Import
+  /import/validate:
+    post:
+      consumes:
+      - multipart/form-data
+      description: Detects the resource from the CSV header (or the explicit resource
+        field), validates every row, and returns per-row valid|invalid|duplicate feedback
+        keyed by CSV line number. Writes nothing.
+      parameters:
+      - description: Bearer Token
+        in: header
+        name: Authorization
+        required: true
+        type: string
+      - description: Tenant slug
+        in: header
+        name: X-Tenant-Slug
+        required: true
+        type: string
+      - description: CSV file (max 5 MB, 500 rows)
+        in: formData
+        name: file
+        required: true
+        type: file
+      - description: Resource key (auto-detected from the header when omitted)
+        in: formData
+        name: resource
+        type: string
+      - description: Comma-separated resource or module keys detection is limited
+          to (e.g. inventory)
+        in: formData
+        name: scope
+        type: string
+      - description: Resource-specific options as a JSON object
+        in: formData
+        name: options
+        type: string
+      - description: Optional ZIP of images referenced by the CSV (e.g. profile_picture)
+        in: formData
+        name: images
+        type: file
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/josex_web_modules_import_models.ValidateResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/josex_web_modules_core_errors.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/josex_web_modules_core_errors.ErrorResponse'
+      security:
+      - ApiKeyAuth: []
+      summary: Dry-run validate an uploaded CSV
+      tags:
+      - Import
+  /products/{id}/batches/redistribute:
+    post:
+      consumes:
+      - application/json
+      description: Split a default-SKU lot into per-combination lots keeping its lot
+        number, dates and unit cost
+      parameters:
+      - description: Product ID
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Lot and targets
+        in: body
+        name: redistribution
+        required: true
+        schema:
+          $ref: '#/definitions/josex_web_modules_inventory_models.RedistributeBatchesDto'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/josex_web_modules_inventory_models.RedistributeBatchesResponse'
+        "400":
+          description: Amounts do not add up, or a target is not a combination
+          schema:
+            additionalProperties: true
+            type: object
+        "404":
+          description: Batch not found
+          schema:
+            additionalProperties: true
+            type: object
+        "409":
+          description: Batch already consumed or voided
+          schema:
+            additionalProperties: true
+            type: object
+      summary: Split a stranded lot onto real combinations
+      tags:
+      - Batches
   /products/{productId}/batches:
     get:
       consumes:
@@ -3635,6 +4901,10 @@ paths:
         in: query
         name: onlyActive
         type: boolean
+      - description: Only batches of this combination
+        in: query
+        name: skuId
+        type: string
       produces:
       - application/json
       responses:
@@ -3660,6 +4930,10 @@ paths:
         in: path
         name: productId
         required: true
+        type: string
+      - description: 'Combination to pick from (default: the product SKU)'
+        in: query
+        name: skuId
         type: string
       produces:
       - application/json
@@ -4258,6 +5532,340 @@ paths:
       summary: Run migrations on tenant database
       tags:
       - Tenants
+  /tenants/{tenant_slug}/roles:
+    get:
+      consumes:
+      - application/json
+      description: Returns all custom roles defined for the current tenant, including
+        permission count
+      parameters:
+      - description: Bearer Token
+        in: header
+        name: Authorization
+        required: true
+        type: string
+      - description: Tenant slug
+        in: path
+        name: tenant_slug
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/josex_web_modules_tenancy_models.RoleListItem'
+            type: array
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/josex_web_modules_core_errors.ErrorResponse'
+      security:
+      - ApiKeyAuth: []
+      summary: List roles for a tenant
+      tags:
+      - Roles
+    post:
+      consumes:
+      - application/json
+      description: Creates a new custom role for the current tenant
+      parameters:
+      - description: Bearer Token
+        in: header
+        name: Authorization
+        required: true
+        type: string
+      - description: Tenant slug
+        in: path
+        name: tenant_slug
+        required: true
+        type: string
+      - description: Role data
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/josex_web_modules_tenancy_models.CreateRoleDto'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/josex_web_modules_tenancy_models.Role'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/josex_web_modules_core_errors.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/josex_web_modules_core_errors.ErrorResponse'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/josex_web_modules_core_errors.ErrorResponse'
+        "409":
+          description: Conflict
+          schema:
+            $ref: '#/definitions/josex_web_modules_core_errors.ErrorResponse'
+      security:
+      - ApiKeyAuth: []
+      summary: Create a role
+      tags:
+      - Roles
+  /tenants/{tenant_slug}/roles/{role_id}:
+    delete:
+      consumes:
+      - application/json
+      description: Deletes a custom tenant role; system roles cannot be deleted
+      parameters:
+      - description: Bearer Token
+        in: header
+        name: Authorization
+        required: true
+        type: string
+      - description: Tenant slug
+        in: path
+        name: tenant_slug
+        required: true
+        type: string
+      - description: Role UUID
+        in: path
+        name: role_id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "204":
+          description: No Content
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/josex_web_modules_core_errors.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/josex_web_modules_core_errors.ErrorResponse'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/josex_web_modules_core_errors.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/josex_web_modules_core_errors.ErrorResponse'
+      security:
+      - ApiKeyAuth: []
+      summary: Delete a role
+      tags:
+      - Roles
+    get:
+      consumes:
+      - application/json
+      description: Returns a single role with its full permission code list
+      parameters:
+      - description: Bearer Token
+        in: header
+        name: Authorization
+        required: true
+        type: string
+      - description: Tenant slug
+        in: path
+        name: tenant_slug
+        required: true
+        type: string
+      - description: Role UUID
+        in: path
+        name: role_id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/josex_web_modules_tenancy_models.RoleDetail'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/josex_web_modules_core_errors.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/josex_web_modules_core_errors.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/josex_web_modules_core_errors.ErrorResponse'
+      security:
+      - ApiKeyAuth: []
+      summary: Get a role
+      tags:
+      - Roles
+    patch:
+      consumes:
+      - application/json
+      description: Updates the name and/or description of a custom tenant role
+      parameters:
+      - description: Bearer Token
+        in: header
+        name: Authorization
+        required: true
+        type: string
+      - description: Tenant slug
+        in: path
+        name: tenant_slug
+        required: true
+        type: string
+      - description: Role UUID
+        in: path
+        name: role_id
+        required: true
+        type: string
+      - description: Fields to update
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/josex_web_modules_tenancy_models.UpdateRoleDto'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/josex_web_modules_tenancy_models.Role'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/josex_web_modules_core_errors.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/josex_web_modules_core_errors.ErrorResponse'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/josex_web_modules_core_errors.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/josex_web_modules_core_errors.ErrorResponse'
+        "409":
+          description: Conflict
+          schema:
+            $ref: '#/definitions/josex_web_modules_core_errors.ErrorResponse'
+      security:
+      - ApiKeyAuth: []
+      summary: Update a role
+      tags:
+      - Roles
+  /tenants/{tenant_slug}/roles/{role_id}/permissions:
+    put:
+      consumes:
+      - application/json
+      description: Replaces all permissions for a role atomically; pass an empty array
+        to clear all permissions
+      parameters:
+      - description: Bearer Token
+        in: header
+        name: Authorization
+        required: true
+        type: string
+      - description: Tenant slug
+        in: path
+        name: tenant_slug
+        required: true
+        type: string
+      - description: Role UUID
+        in: path
+        name: role_id
+        required: true
+        type: string
+      - description: Permission codes
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/josex_web_modules_tenancy_models.SetRolePermissionsDto'
+      produces:
+      - application/json
+      responses:
+        "204":
+          description: No Content
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/josex_web_modules_core_errors.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/josex_web_modules_core_errors.ErrorResponse'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/josex_web_modules_core_errors.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/josex_web_modules_core_errors.ErrorResponse'
+      security:
+      - ApiKeyAuth: []
+      summary: Set role permissions
+      tags:
+      - Roles
+  /tenants/{tenant_slug}/roles/{role_id}/users:
+    get:
+      consumes:
+      - application/json
+      description: Returns the active tenant members who currently hold a given role
+      parameters:
+      - description: Bearer Token
+        in: header
+        name: Authorization
+        required: true
+        type: string
+      - description: Tenant slug
+        in: path
+        name: tenant_slug
+        required: true
+        type: string
+      - description: Role UUID
+        in: path
+        name: role_id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/josex_web_modules_tenancy_models.RoleUser'
+            type: array
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/josex_web_modules_core_errors.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/josex_web_modules_core_errors.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/josex_web_modules_core_errors.ErrorResponse'
+      security:
+      - ApiKeyAuth: []
+      summary: List users assigned to a role
+      tags:
+      - Roles
   /tenants/{tenant_slug}/users:
     post:
       consumes:
@@ -4368,6 +5976,149 @@ paths:
       summary: Update a user's role in the tenant (owner/admin only)
       tags:
       - Tenants
+  /tenants/{tenant_slug}/users/{user_id}/roles:
+    get:
+      consumes:
+      - application/json
+      description: Returns all custom roles currently assigned to a user within the
+        tenant
+      parameters:
+      - description: Bearer Token
+        in: header
+        name: Authorization
+        required: true
+        type: string
+      - description: Tenant slug
+        in: path
+        name: tenant_slug
+        required: true
+        type: string
+      - description: Target user UUID
+        in: path
+        name: user_id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/josex_web_modules_tenancy_models.UserRole'
+            type: array
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/josex_web_modules_core_errors.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/josex_web_modules_core_errors.ErrorResponse'
+      security:
+      - ApiKeyAuth: []
+      summary: List roles assigned to a user
+      tags:
+      - Roles
+  /tenants/{tenant_slug}/users/{user_id}/roles/{role_id}:
+    delete:
+      consumes:
+      - application/json
+      description: Removes a custom role from a tenant user; idempotent if not assigned
+      parameters:
+      - description: Bearer Token
+        in: header
+        name: Authorization
+        required: true
+        type: string
+      - description: Tenant slug
+        in: path
+        name: tenant_slug
+        required: true
+        type: string
+      - description: Target user UUID
+        in: path
+        name: user_id
+        required: true
+        type: string
+      - description: Role UUID
+        in: path
+        name: role_id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "204":
+          description: No Content
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/josex_web_modules_core_errors.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/josex_web_modules_core_errors.ErrorResponse'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/josex_web_modules_core_errors.ErrorResponse'
+      security:
+      - ApiKeyAuth: []
+      summary: Revoke a role from a user
+      tags:
+      - Roles
+    post:
+      consumes:
+      - application/json
+      description: Assigns a custom role to a tenant user; idempotent if already assigned
+      parameters:
+      - description: Bearer Token
+        in: header
+        name: Authorization
+        required: true
+        type: string
+      - description: Tenant slug
+        in: path
+        name: tenant_slug
+        required: true
+        type: string
+      - description: Target user UUID
+        in: path
+        name: user_id
+        required: true
+        type: string
+      - description: Role UUID
+        in: path
+        name: role_id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "204":
+          description: No Content
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/josex_web_modules_core_errors.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/josex_web_modules_core_errors.ErrorResponse'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/josex_web_modules_core_errors.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/josex_web_modules_core_errors.ErrorResponse'
+      security:
+      - ApiKeyAuth: []
+      summary: Assign a role to a user
+      tags:
+      - Roles
   /tenants/my-tenants:
     get:
       description: Returns list of tenants that the authenticated user can access
@@ -5750,6 +7501,97 @@ paths:
       security:
       - ApiKeyAuth: []
       summary: Get user by ID
+      tags:
+      - Users
+  /users/{id}/reset-password:
+    post:
+      consumes:
+      - application/json
+      description: Generates a password reset token and sends the reset email to the
+        target user. Always returns 200 to avoid user enumeration.
+      parameters:
+      - description: Bearer Token
+        in: header
+        name: Authorization
+        required: true
+        type: string
+      - description: User UUID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/josex_web_modules_core_errors.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/josex_web_modules_core_errors.ErrorResponse'
+      security:
+      - ApiKeyAuth: []
+      summary: Trigger a password reset email for a user
+      tags:
+      - Users
+  /users/audit:
+    get:
+      consumes:
+      - application/json
+      description: Returns paginated audit log entries for user management actions
+        scoped to the current tenant
+      parameters:
+      - description: Bearer Token
+        in: header
+        name: Authorization
+        required: true
+        type: string
+      - description: 'Page number (default: 1)'
+        in: query
+        name: page
+        type: integer
+      - description: 'Items per page (default: 20, max: 100)'
+        in: query
+        name: limit
+        type: integer
+      - description: Search by target or performer email
+        in: query
+        name: search
+        type: string
+      - description: Filter by action (e.g. user.created)
+        in: query
+        name: action
+        type: string
+      - description: Filter from date (RFC3339 or YYYY-MM-DD)
+        in: query
+        name: from
+        type: string
+      - description: Filter to date (RFC3339 or YYYY-MM-DD)
+        in: query
+        name: to
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/josex_web_modules_users_models.UserAuditListResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/josex_web_modules_core_errors.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/josex_web_modules_core_errors.ErrorResponse'
+      security:
+      - ApiKeyAuth: []
+      summary: List user audit log entries
       tags:
       - Users
 swagger: "2.0"

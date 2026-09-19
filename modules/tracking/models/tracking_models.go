@@ -132,7 +132,7 @@ type RideEvent struct {
 	RouteID      uuid.UUID  `json:"route_id"`
 	VehicleID    uuid.UUID  `json:"vehicle_id"`
 	AssignmentID *uuid.UUID `json:"assignment_id"`
-	EventType    string     `json:"event_type"` // boarded, arrived_destination, no_show
+	EventType    string     `json:"event_type"` // check_in, checkout, no_show, emergency
 	StopID       *uuid.UUID `json:"stop_id"`
 	Latitude     *float64   `json:"latitude"`
 	Longitude    *float64   `json:"longitude"`
@@ -147,7 +147,7 @@ type RouteAlert struct {
 	ID                    uuid.UUID  `json:"id"`
 	RouteID               uuid.UUID  `json:"route_id"`
 	VehicleID             *uuid.UUID `json:"vehicle_id"`
-	AlertType             string     `json:"alert_type"` // delay, breakdown, traffic, cancelled, emergency, other
+	AlertType             string     `json:"alert_type"` // delay, breakdown, cancellation, emergency, other
 	Severity              string     `json:"severity"`   // low, medium, high, critical
 	Title                 string     `json:"title"`
 	Message               string     `json:"message"`

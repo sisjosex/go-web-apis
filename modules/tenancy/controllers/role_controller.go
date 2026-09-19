@@ -33,7 +33,7 @@ func NewRoleController(roleService interfaces.RoleService) *RoleController {
 // @Param        Authorization  header  string  true  "Bearer Token"
 // @Param        tenant_slug    path    string  true  "Tenant slug"
 // @Success      200  {array}   models.RoleListItem
-// @Failure      401  {object}  errors.ErrorResponse
+// @Failure      401  {object}  coreErrors.ErrorResponse
 // @Router       /tenants/{tenant_slug}/roles [get]
 // @Security     ApiKeyAuth
 func (ctrl *RoleController) ListRoles(c *gin.Context) {
@@ -61,10 +61,10 @@ func (ctrl *RoleController) ListRoles(c *gin.Context) {
 // @Param        tenant_slug    path    string                  true  "Tenant slug"
 // @Param        body           body    models.CreateRoleDto    true  "Role data"
 // @Success      201  {object}  models.Role
-// @Failure      400  {object}  errors.ErrorResponse
-// @Failure      401  {object}  errors.ErrorResponse
-// @Failure      403  {object}  errors.ErrorResponse
-// @Failure      409  {object}  errors.ErrorResponse
+// @Failure      400  {object}  coreErrors.ErrorResponse
+// @Failure      401  {object}  coreErrors.ErrorResponse
+// @Failure      403  {object}  coreErrors.ErrorResponse
+// @Failure      409  {object}  coreErrors.ErrorResponse
 // @Router       /tenants/{tenant_slug}/roles [post]
 // @Security     ApiKeyAuth
 func (ctrl *RoleController) CreateRole(c *gin.Context) {
@@ -115,9 +115,9 @@ func (ctrl *RoleController) CreateRole(c *gin.Context) {
 // @Param        tenant_slug    path    string  true  "Tenant slug"
 // @Param        role_id        path    string  true  "Role UUID"
 // @Success      200  {object}  models.RoleDetail
-// @Failure      400  {object}  errors.ErrorResponse
-// @Failure      401  {object}  errors.ErrorResponse
-// @Failure      404  {object}  errors.ErrorResponse
+// @Failure      400  {object}  coreErrors.ErrorResponse
+// @Failure      401  {object}  coreErrors.ErrorResponse
+// @Failure      404  {object}  coreErrors.ErrorResponse
 // @Router       /tenants/{tenant_slug}/roles/{role_id} [get]
 // @Security     ApiKeyAuth
 func (ctrl *RoleController) GetRole(c *gin.Context) {
@@ -160,11 +160,11 @@ func (ctrl *RoleController) GetRole(c *gin.Context) {
 // @Param        role_id        path    string                  true  "Role UUID"
 // @Param        body           body    models.UpdateRoleDto    true  "Fields to update"
 // @Success      200  {object}  models.Role
-// @Failure      400  {object}  errors.ErrorResponse
-// @Failure      401  {object}  errors.ErrorResponse
-// @Failure      403  {object}  errors.ErrorResponse
-// @Failure      404  {object}  errors.ErrorResponse
-// @Failure      409  {object}  errors.ErrorResponse
+// @Failure      400  {object}  coreErrors.ErrorResponse
+// @Failure      401  {object}  coreErrors.ErrorResponse
+// @Failure      403  {object}  coreErrors.ErrorResponse
+// @Failure      404  {object}  coreErrors.ErrorResponse
+// @Failure      409  {object}  coreErrors.ErrorResponse
 // @Router       /tenants/{tenant_slug}/roles/{role_id} [patch]
 // @Security     ApiKeyAuth
 func (ctrl *RoleController) UpdateRole(c *gin.Context) {
@@ -227,10 +227,10 @@ func (ctrl *RoleController) UpdateRole(c *gin.Context) {
 // @Param        tenant_slug    path    string  true  "Tenant slug"
 // @Param        role_id        path    string  true  "Role UUID"
 // @Success      204
-// @Failure      400  {object}  errors.ErrorResponse
-// @Failure      401  {object}  errors.ErrorResponse
-// @Failure      403  {object}  errors.ErrorResponse
-// @Failure      404  {object}  errors.ErrorResponse
+// @Failure      400  {object}  coreErrors.ErrorResponse
+// @Failure      401  {object}  coreErrors.ErrorResponse
+// @Failure      403  {object}  coreErrors.ErrorResponse
+// @Failure      404  {object}  coreErrors.ErrorResponse
 // @Router       /tenants/{tenant_slug}/roles/{role_id} [delete]
 // @Security     ApiKeyAuth
 func (ctrl *RoleController) DeleteRole(c *gin.Context) {
@@ -283,10 +283,10 @@ func (ctrl *RoleController) DeleteRole(c *gin.Context) {
 // @Param        role_id        path    string                       true  "Role UUID"
 // @Param        body           body    models.SetRolePermissionsDto true  "Permission codes"
 // @Success      204
-// @Failure      400  {object}  errors.ErrorResponse
-// @Failure      401  {object}  errors.ErrorResponse
-// @Failure      403  {object}  errors.ErrorResponse
-// @Failure      404  {object}  errors.ErrorResponse
+// @Failure      400  {object}  coreErrors.ErrorResponse
+// @Failure      401  {object}  coreErrors.ErrorResponse
+// @Failure      403  {object}  coreErrors.ErrorResponse
+// @Failure      404  {object}  coreErrors.ErrorResponse
 // @Router       /tenants/{tenant_slug}/roles/{role_id}/permissions [put]
 // @Security     ApiKeyAuth
 func (ctrl *RoleController) SetRolePermissions(c *gin.Context) {
@@ -346,10 +346,10 @@ func (ctrl *RoleController) SetRolePermissions(c *gin.Context) {
 // @Param        user_id        path    string  true  "Target user UUID"
 // @Param        role_id        path    string  true  "Role UUID"
 // @Success      204
-// @Failure      400  {object}  errors.ErrorResponse
-// @Failure      401  {object}  errors.ErrorResponse
-// @Failure      403  {object}  errors.ErrorResponse
-// @Failure      404  {object}  errors.ErrorResponse
+// @Failure      400  {object}  coreErrors.ErrorResponse
+// @Failure      401  {object}  coreErrors.ErrorResponse
+// @Failure      403  {object}  coreErrors.ErrorResponse
+// @Failure      404  {object}  coreErrors.ErrorResponse
 // @Router       /tenants/{tenant_slug}/users/{user_id}/roles/{role_id} [post]
 // @Security     ApiKeyAuth
 func (ctrl *RoleController) AssignUserRole(c *gin.Context) {
@@ -408,9 +408,9 @@ func (ctrl *RoleController) AssignUserRole(c *gin.Context) {
 // @Param        user_id        path    string  true  "Target user UUID"
 // @Param        role_id        path    string  true  "Role UUID"
 // @Success      204
-// @Failure      400  {object}  errors.ErrorResponse
-// @Failure      401  {object}  errors.ErrorResponse
-// @Failure      403  {object}  errors.ErrorResponse
+// @Failure      400  {object}  coreErrors.ErrorResponse
+// @Failure      401  {object}  coreErrors.ErrorResponse
+// @Failure      403  {object}  coreErrors.ErrorResponse
 // @Router       /tenants/{tenant_slug}/users/{user_id}/roles/{role_id} [delete]
 // @Security     ApiKeyAuth
 func (ctrl *RoleController) RevokeUserRole(c *gin.Context) {
@@ -462,8 +462,8 @@ func (ctrl *RoleController) RevokeUserRole(c *gin.Context) {
 // @Param        tenant_slug    path    string  true  "Tenant slug"
 // @Param        user_id        path    string  true  "Target user UUID"
 // @Success      200  {array}   models.UserRole
-// @Failure      400  {object}  errors.ErrorResponse
-// @Failure      401  {object}  errors.ErrorResponse
+// @Failure      400  {object}  coreErrors.ErrorResponse
+// @Failure      401  {object}  coreErrors.ErrorResponse
 // @Router       /tenants/{tenant_slug}/users/{user_id}/roles [get]
 // @Security     ApiKeyAuth
 func (ctrl *RoleController) ListUserRoles(c *gin.Context) {
@@ -497,9 +497,9 @@ func (ctrl *RoleController) ListUserRoles(c *gin.Context) {
 // @Param        tenant_slug    path    string  true  "Tenant slug"
 // @Param        role_id        path    string  true  "Role UUID"
 // @Success      200  {array}   models.RoleUser
-// @Failure      400  {object}  errors.ErrorResponse
-// @Failure      401  {object}  errors.ErrorResponse
-// @Failure      404  {object}  errors.ErrorResponse
+// @Failure      400  {object}  coreErrors.ErrorResponse
+// @Failure      401  {object}  coreErrors.ErrorResponse
+// @Failure      404  {object}  coreErrors.ErrorResponse
 // @Router       /tenants/{tenant_slug}/roles/{role_id}/users [get]
 // @Security     ApiKeyAuth
 func (ctrl *RoleController) ListRoleUsers(c *gin.Context) {

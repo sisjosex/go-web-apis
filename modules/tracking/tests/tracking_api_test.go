@@ -793,6 +793,51 @@ func TestUpdateRiderSuccess(t *testing.T) {
 	assert.NotNil(t, rider["phone"])
 }
 
+// TestCreateRider_GuardianPersisted - Guardian and emergency contact survive a GET, PATCH keeps omitted fields
+func TestCreateRider_GuardianPersisted(t *testing.T) {
+	helper := SetupTrackingTest(t)
+	defer helper.Close()
+
+	dto := ValidRiderDto()
+	body := map[string]interface{}{
+		"company_id":              dto.CompanyID,
+		"rider_type":              dto.RiderType,
+		"first_name":              dto.FirstName,
+		"last_name":               dto.LastName,
+		"guardian_name":           "Laura Guardian",
+		"guardian_phone":          "+15550001",
+		"guardian_email":          "laura.guardian@test.local",
+		"emergency_contact_name":  "Mario Emergency",
+		"emergency_contact_phone": "+15550002",
+	}
+	w := helper.DoRequest("POST", "/tracking/riders", body, map[string]string{})
+	if w.Code != http.StatusCreated {
+		t.Fatalf("create rider: expected 201, got %d: %s", w.Code, w.Body.String())
+	}
+	riderID := ExtractID(t, ParseResponse(t, w.Body.Bytes()))
+
+	w = helper.DoRequest("GET", fmt.Sprintf("/tracking/riders/%s", riderID), nil, map[string]string{})
+
+	assert.Equal(t, http.StatusOK, w.Code)
+	rider := ParseResponse(t, w.Body.Bytes())
+	assert.Equal(t, "Laura Guardian", rider["guardian_name"])
+	assert.Equal(t, "+15550001", rider["guardian_phone"])
+	assert.Equal(t, "laura.guardian@test.local", rider["guardian_email"])
+	assert.Equal(t, "Mario Emergency", rider["emergency_contact_name"])
+	assert.Equal(t, "+15550002", rider["emergency_contact_phone"])
+
+	w = helper.DoRequest("PATCH", fmt.Sprintf("/tracking/riders/%s", riderID), map[string]interface{}{"guardian_phone": "+15550009"}, map[string]string{})
+	if w.Code != http.StatusOK {
+		t.Fatalf("update rider: expected 200, got %d: %s", w.Code, w.Body.String())
+	}
+	w = helper.DoRequest("GET", fmt.Sprintf("/tracking/riders/%s", riderID), nil, map[string]string{})
+
+	rider = ParseResponse(t, w.Body.Bytes())
+	assert.Equal(t, "Laura Guardian", rider["guardian_name"])
+	assert.Equal(t, "+15550009", rider["guardian_phone"])
+	assert.Equal(t, "Mario Emergency", rider["emergency_contact_name"])
+}
+
 // TestRiderEmailUniqueness - Duplicate email behavior
 func TestRiderEmailUniqueness(t *testing.T) {
 	helper := SetupTrackingTest(t)
@@ -1250,13 +1295,46 @@ func TestGetRiderStatusWithContent(t *testing.T) {
 	}
 }
 
+// TestGetRiderStatus_PicksCurrentOrNextRoute - Two active assignments → the route not yet ended, on every call
+func TestGetRiderStatus_PicksCurrentOrNextRoute(t *testing.T) {
+	helper := SetupTrackingTest(t)
+	defer helper.Close()
+
+	riderID := CreateTestRider(t, helper)
+	CreateTestRouteAssignment(t, helper, riderID, "00:00:00", "00:00:01")
+	lateRouteID := CreateTestRouteAssignment(t, helper, riderID, "23:59:00", "23:59:59")
+
+	for i := 0; i < 3; i++ {
+		w := helper.DoRequest("GET", fmt.Sprintf("/tracking/riders/%s/status", riderID), nil, map[string]string{})
+
+		assert.Equal(t, http.StatusOK, w.Code)
+		status := ParseResponse(t, w.Body.Bytes())
+		assert.Equal(t, lateRouteID, status["route_id"])
+	}
+}
+
+// TestGetRiderStatus_AllRoutesEnded - Only routes that already ended today → route_id null
+func TestGetRiderStatus_AllRoutesEnded(t *testing.T) {
+	helper := SetupTrackingTest(t)
+	defer helper.Close()
+
+	riderID := CreateTestRider(t, helper)
+	CreateTestRouteAssignment(t, helper, riderID, "00:00:00", "00:00:01")
+
+	w := helper.DoRequest("GET", fmt.Sprintf("/tracking/riders/%s/status", riderID), nil, map[string]string{})
+
+	assert.Equal(t, http.StatusOK, w.Code)
+	status := ParseResponse(t, w.Body.Bytes())
+	assert.Nil(t, status["route_id"])
+}
+
 // ============================================================================
 // LOCATIONS & EVENTS TESTS (10 tests)
 // ============================================================================
 
-// TestUpdateVehicleLocation - Record vehicle GPS location → 200
+// TestUpdateVehicleLocation - The unauthenticated GPS ingest route is gone → 404
 func TestUpdateVehicleLocation(t *testing.T) {
-	helper := SetupTrackingTest(t)
+	helper := testhelpers.SetupApiTest(t)
 	defer helper.Close()
 
 	body := map[string]interface{}{
@@ -1269,7 +1347,7 @@ func TestUpdateVehicleLocation(t *testing.T) {
 
 	w := helper.DoRequest("POST", "/tracking/locations", body, map[string]string{})
 
-	assert.Equal(t, http.StatusOK, w.Code)
+	assert.Equal(t, http.StatusNotFound, w.Code)
 }
 
 // TestGetVehicleCurrentLocation - Get latest vehicle location → 200
@@ -1334,6 +1412,44 @@ func TestRecordRideEvent(t *testing.T) {
 	}
 }
 
+// TestRecordRideEvent_StopShownInRiderStatus - Event with stop_id → rider status last_event_stop is that stop
+func TestRecordRideEvent_StopShownInRiderStatus(t *testing.T) {
+	helper := SetupTrackingTest(t)
+	defer helper.Close()
+
+	riderID := CreateTestRider(t, helper)
+	stop := ValidRouteStopDto()
+	w := helper.DoRequest("POST", "/tracking/route-stops", map[string]interface{}{
+		"route_id":       stop.RouteID,
+		"stop_name":      stop.StopName,
+		"stop_address":   stop.StopAddress,
+		"latitude":       stop.Latitude,
+		"longitude":      stop.Longitude,
+		"sequence_order": 9,
+	}, map[string]string{})
+	if w.Code != http.StatusCreated {
+		t.Fatalf("create stop: expected 201, got %d: %s", w.Code, w.Body.String())
+	}
+	body := map[string]interface{}{
+		"rider_id":   riderID,
+		"route_id":   MorningRouteID,
+		"vehicle_id": TestBusID,
+		"event_type": "check_in",
+		"stop_id":    ExtractID(t, ParseResponse(t, w.Body.Bytes())),
+	}
+	w = helper.DoRequest("POST", "/tracking/events", body, map[string]string{})
+	if w.Code != http.StatusCreated {
+		t.Fatalf("record event: expected 201, got %d: %s", w.Code, w.Body.String())
+	}
+
+	w = helper.DoRequest("GET", fmt.Sprintf("/tracking/riders/%s/status", riderID), nil, map[string]string{})
+
+	assert.Equal(t, http.StatusOK, w.Code)
+	status := ParseResponse(t, w.Body.Bytes())
+	assert.Equal(t, "check_in", status["last_event_type"])
+	assert.Equal(t, stop.StopName, status["last_event_stop"])
+}
+
 // TestRideEventTimeline - Sequence of events for ride → 200
 func TestRideEventTimeline(t *testing.T) {
 	helper := SetupTrackingTest(t)
@@ -1349,21 +1465,6 @@ func TestRideEventTimeline(t *testing.T) {
 	assert.Equal(t, http.StatusOK, w.Code)
 	events := ParseListResponse(t, w.Body.Bytes())
 	assert.NotNil(t, events)
-}
-
-// TestLocationValidation - GPS accuracy thresholds → 400
-func TestLocationValidation(t *testing.T) {
-	helper := SetupTrackingTest(t)
-	defer helper.Close()
-
-	body := map[string]interface{}{
-		"vehicle_id": TestBusID,
-		"latitude":   999.0, // Invalid latitude
-		"longitude":  -74.0060,
-	}
-
-	w := helper.DoRequest("POST", "/tracking/locations", body, map[string]string{})
-	assert.Equal(t, http.StatusBadRequest, w.Code)
 }
 
 // TestLocationHistory Pagination - Page through location history → 200
