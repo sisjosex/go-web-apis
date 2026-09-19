@@ -29,6 +29,11 @@ help:
 	@echo "  make swagger          - Generate Swagger documentation"
 	@echo "  make build            - Build server binary"
 	@echo ""
+	@echo "✅ QUALITY GATE"
+	@echo "  make gate             - fmt + lint + check + build, quiet; MODULES=\"tracking inventory\" adds their tests"
+	@echo "  make lint             - golangci-lint on changed code only (--new); make lint-all for the tree"
+	@echo "  make check            - tools/check: gofmt, tenant scope in SPs, DTO tenant binding (changed files)"
+	@echo ""
 	@echo "🚀 RUN  (compiled binary)"
 	@echo "  make run              - Start server (port 8080)"
 	@echo ""
@@ -193,6 +198,40 @@ docker-down:
 	@echo "🛑 Stopping Docker services..."
 	docker-compose down
 	@echo "✅ Services stopped"
+
+# ════════════════════════════════════════════════════════════════
+# QUALITY GATE — quiet: one line per step, the tail of the log on failure
+# ════════════════════════════════════════════════════════════════
+GATE_LOG := .gate.log
+# run a step quietly: $(call quiet,<name>,<command>)
+define quiet
+	@printf "> %s " "$(1)"; start=$$(date +%s); \
+	if $(2) > $(GATE_LOG) 2>&1; then echo "ok ($$(( $$(date +%s) - start ))s)"; \
+	else echo "FAIL"; tail -40 $(GATE_LOG); echo "GATE FAILED at $(1)"; rm -f $(GATE_LOG); exit 1; fi
+endef
+
+lint:
+	golangci-lint run --new ./...
+
+lint-all:
+	golangci-lint run ./...
+
+check:
+	go run ./tools/check
+
+check-all:
+	go run ./tools/check -all
+
+gate:
+	$(call quiet,check,go run ./tools/check)
+	$(call quiet,lint,golangci-lint run --new ./...)
+	$(call quiet,build,go build -o $(BINARY) ./cmd/server)
+	@for m in $(MODULES); do \
+		printf "> test-$$m "; start=$$(date +%s); \
+		if $(MAKE) -s test-$$m > $(GATE_LOG) 2>&1; then echo "ok ($$(( $$(date +%s) - start ))s)"; \
+		else echo "FAIL"; grep -E "^(---|===|FAIL|panic|\s+[a-z_]+\.go:[0-9]+)" $(GATE_LOG) | tail -40; echo "GATE FAILED at test-$$m"; rm -f $(GATE_LOG); exit 1; fi; \
+	done
+	@rm -f $(GATE_LOG); echo "GATE PASSED"
 
 # ════════════════════════════════════════════════════════════════
 # CLEANUP

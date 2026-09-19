@@ -9,7 +9,7 @@ before you open a file: where things are, how they run, and the gotchas that are
 - Business logic lives in PostgreSQL SPs. Go binds, calls, maps error codes, responds.
 - `tenant_id` only from `c.Get("tenant_id")`; tenant routes always carry auth + tenant middleware.
 - Secrets only from `.env.*`.
-- A change ships with `make test-<module>` green for every module it touches. `make build` alone is not
+- A change ships with `make gate MODULES="<modules touched>"` green. `make build` alone is not
   verification. New or changed endpoint ⇒ integration test in `modules/{name}/tests/`.
 - Changing an SP signature ⇒ `DROP FUNCTION IF EXISTS` + `CREATE FUNCTION`, never `CREATE OR REPLACE`.
 
@@ -18,6 +18,8 @@ before you open a file: where things are, how they run, and the gotchas that are
 ```bash
 make dev-platform | dev-tenant        # hot reload, ports 8080 / 9081
 make build                            # compile to bin/
+make gate MODULES="tracking"          # check + lint (changed code) + build + tests of MODULES, quiet
+make check-all | lint-all             # the whole-tree baseline, when asked for
 make docker-up | docker-down          # PostgreSQL containers (tests need them up)
 make test-<module>                    # auth core users tenancy tracking inventory sales purchasing billing
 make test-all                         # every module (db-reset first)
