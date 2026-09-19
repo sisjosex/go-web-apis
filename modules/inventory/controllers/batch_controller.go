@@ -3,7 +3,6 @@ package controllers
 import (
 	goErrors "errors"
 	"net/http"
-	"strconv"
 
 	coreErrors "josex/web/modules/core/errors"
 	"josex/web/modules/inventory/errors"
@@ -140,13 +139,15 @@ func (ctrl *BatchController) GetBatch(c *gin.Context) {
 
 // ListBatchesByProduct godoc
 // @Summary List all batches for a product
-// @Description Get all batches for a specific product, ordered by expiry date (FIFO)
+// @Description One page of a product's batches, ordered by expiry date (FIFO)
 // @Tags Batches
 // @Accept json
 // @Produce json
 // @Param productId path string true "Product ID"
 // @Param onlyActive query bool false "Only active batches (default: true)"
 // @Param skuId query string false "Only batches of this combination"
+// @Param page query int false "Page number, 1-based" default(1)
+// @Param page_size query int false "Rows per page, max 100" default(20)
 // @Success 200 {object} models.ListBatchesResponse
 // @Failure 400 {object} map[string]interface{} "Invalid request"
 // @Router /products/{productId}/batches [get]
@@ -168,18 +169,13 @@ func (ctrl *BatchController) ListBatchesByProduct(c *gin.Context) {
 		return
 	}
 
-	onlyActive := true
-	if c.Query("onlyActive") == "false" {
-		onlyActive = false
-	}
-
-	skuID, ok := parseSkuIDQuery(c)
-	if !ok {
-		c.JSON(http.StatusBadRequest, coreErrors.BuildErrorSingle(c, errors.SkuNotFound))
+	var query models.ListBatchesQuery
+	if err := c.ShouldBindQuery(&query); err != nil {
+		c.JSON(http.StatusBadRequest, coreErrors.BuildErrorDetail(c, "validation.invalid", err.Error()))
 		return
 	}
 
-	batches, err := ctrl.service.ListBatchesByProduct(c.Request.Context(), tenantID, productID, onlyActive, skuID)
+	batches, err := ctrl.service.ListBatchesByProduct(c.Request.Context(), tenantID, productID, query)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, coreErrors.BuildError(c, err))
 		return
@@ -438,12 +434,14 @@ func (ctrl *BatchController) RedistributeBatches(c *gin.Context) {
 
 // GetExpiringBatches godoc
 // @Summary Get all batches expiring soon
-// @Description Get all batches that will expire within the specified warning days
+// @Description One page of the batches that will expire within the warning window, soonest first
 // @Tags Batches
 // @Accept json
 // @Produce json
 // @Param warningDays query int false "Number of days to check for expiry (default: 30)"
-// @Success 200 {array} models.BatchResponse
+// @Param page query int false "Page number, 1-based" default(1)
+// @Param page_size query int false "Rows per page, max 100" default(20)
+// @Success 200 {object} models.ListBatchesResponse
 // @Failure 400 {object} map[string]interface{} "Invalid request"
 // @Router /batches/expiring [get]
 func (ctrl *BatchController) GetExpiringBatches(c *gin.Context) {
@@ -458,21 +456,13 @@ func (ctrl *BatchController) GetExpiringBatches(c *gin.Context) {
 		return
 	}
 
-	warningDays := 30 // default value
-	if days := c.Query("warningDays"); days != "" {
-		parsedDays, err := strconv.Atoi(days)
-		if err != nil {
-			c.JSON(http.StatusBadRequest, coreErrors.BuildErrorDetail(c, "validation.error", "warningDays must be a valid integer"))
-			return
-		}
-		if parsedDays <= 0 {
-			c.JSON(http.StatusBadRequest, coreErrors.BuildErrorDetail(c, "validation.error", "warningDays must be greater than 0"))
-			return
-		}
-		warningDays = parsedDays
+	var query models.ListExpiringBatchesQuery
+	if err := c.ShouldBindQuery(&query); err != nil {
+		c.JSON(http.StatusBadRequest, coreErrors.BuildErrorDetail(c, "validation.invalid", err.Error()))
+		return
 	}
 
-	batches, err := ctrl.service.GetExpiringBatches(c.Request.Context(), tenantID, warningDays)
+	batches, err := ctrl.service.GetExpiringBatches(c.Request.Context(), tenantID, query)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, coreErrors.BuildError(c, err))
 		return

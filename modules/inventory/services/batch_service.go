@@ -29,9 +29,13 @@ func (s *BatchService) GetBatch(ctx context.Context, tenantID uuid.UUID, batchID
 	return s.repository.GetBatch(ctx, tenantID, batchID)
 }
 
-// ListBatchesByProduct lists all batches for a product
-func (s *BatchService) ListBatchesByProduct(ctx context.Context, tenantID uuid.UUID, productID uuid.UUID, onlyActive bool, skuID *uuid.UUID) (*models.ListBatchesResponse, error) {
-	return s.repository.ListBatchesByProduct(ctx, tenantID, productID, onlyActive, skuID)
+// ListBatchesByProduct returns one page of a product's lots in FIFO order
+func (s *BatchService) ListBatchesByProduct(ctx context.Context, tenantID uuid.UUID, productID uuid.UUID, query models.ListBatchesQuery) (*models.ListBatchesResponse, error) {
+	batches, totalCount, err := s.repository.ListBatchesByProduct(ctx, tenantID, productID, query)
+	if err != nil {
+		return nil, err
+	}
+	return batchPage(batches, totalCount, query.Page, query.PageSize), nil
 }
 
 // GetOldestBatchForSale gets the oldest batch for FIFO sales
@@ -39,9 +43,21 @@ func (s *BatchService) GetOldestBatchForSale(ctx context.Context, tenantID uuid.
 	return s.repository.GetOldestBatchForSale(ctx, tenantID, productID, skuID)
 }
 
-// GetExpiringBatches gets all batches expiring soon
-func (s *BatchService) GetExpiringBatches(ctx context.Context, tenantID uuid.UUID, warningDays int) ([]*models.BatchResponse, error) {
-	return s.repository.GetExpiringBatches(ctx, tenantID, warningDays)
+// GetExpiringBatches returns one page of the lots expiring within the window, soonest first
+func (s *BatchService) GetExpiringBatches(ctx context.Context, tenantID uuid.UUID, query models.ListExpiringBatchesQuery) (*models.ListBatchesResponse, error) {
+	batches, totalCount, err := s.repository.GetExpiringBatches(ctx, tenantID, query)
+	if err != nil {
+		return nil, err
+	}
+	return batchPage(batches, totalCount, query.Page, query.PageSize), nil
+}
+
+// batchPage wraps one page of lots in the list shape; an empty page is [] on the wire, never null.
+func batchPage(batches []models.BatchResponse, totalCount int64, page, pageSize int) *models.ListBatchesResponse {
+	if batches == nil {
+		batches = []models.BatchResponse{}
+	}
+	return &models.ListBatchesResponse{Batches: batches, TotalCount: totalCount, Page: page, PageSize: pageSize}
 }
 
 // UpdateBatch corrects a lot

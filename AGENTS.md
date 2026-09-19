@@ -66,16 +66,19 @@ Reference files: `routes/routes.go` (DI wiring, middleware order) · `config/con
 `BuildErrorSingle` (one code) / `BuildErrorDetail` (binding, field detail) / `BuildError` (unexpected).
 
 **List endpoints have no uniform contract — read the handler before writing a client or a test.**
-Verified 2026-08-01:
+Verified 2026-09-19 (APP-004):
 
 | Endpoint | Params | Body |
 |---|---|---|
-| `GET /users` | `page limit search order` | `{ users, total, page, limit, total_pages }` |
-| `GET /inventory/products` | `limit offset` (cap 100) | `{ data, limit, offset }` |
+| `GET /users`, `/users/audit` | `page limit search` + `status sort order` / `action from to` | `{ users \| entries, total, page, limit, total_pages }` |
+| `GET /inventory/products` | `page page_size search category_id` (cap 100) | `{ products, total_count, page, page_size }` |
+| `GET /inventory/batches/product/:id` | `page page_size onlyActive skuId` (cap 100) | `{ batches, total_count, page, page_size }` |
+| `GET /inventory/batches/expiring` | `page page_size warningDays` (cap 100) | `{ batches, total_count, page, page_size }` |
+| `GET /inventory/movements` | `page page_size product_id sku_id movement_type date_from date_to` | `{ movements, total_count, page, page_size }` |
 | `GET /inventory/categories` | `page limit` | `{ categories, total }` |
 | `GET /purchasing/suppliers`, `/orders` | `page page_size` (cap 100) | `{ <plural>, total_count, page, page_size }` |
 | `GET /sales/orders` | `limit offset` | `{ data }` — no total |
-| `GET /sales/customers`, `/tracking/*`, `/inventory/{batches,movements,stock}` | filters only | array or `{ data }`, unpaginated |
+| `GET /sales/customers`, `/tracking/*`, `/inventory/stock/:id` | filters only | array, object or `{ data }`, unpaginated |
 
 New list endpoints use the purchasing shape. No total ⇒ the app can only "load more"; no `search`
 param ⇒ search is client-side or new API work — the spec decides, never the implementation.

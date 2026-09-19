@@ -89,9 +89,26 @@ type Batch struct {
 	UpdatedAt       time.Time
 }
 
-// ListBatchesResponse - Response for listing batches
+// ListBatchesQuery binds GET /inventory/batches/product/:productId (APP-004). OnlyActive is a
+// pointer because it defaults to true, which a bool's zero value cannot say.
+type ListBatchesQuery struct {
+	OnlyActive *bool   `form:"onlyActive"`
+	SkuID      *string `form:"skuId" binding:"omitempty,uuid"`
+	Page       int     `form:"page,default=1" binding:"min=1"`
+	PageSize   int     `form:"page_size,default=20" binding:"min=1,max=100"`
+}
+
+// ListExpiringBatchesQuery binds GET /inventory/batches/expiring (APP-004).
+type ListExpiringBatchesQuery struct {
+	WarningDays int `form:"warningDays,default=30" binding:"min=1"`
+	Page        int `form:"page,default=1" binding:"min=1"`
+	PageSize    int `form:"page_size,default=20" binding:"min=1,max=100"`
+}
+
+// ListBatchesResponse is one page of lots, in the purchasing list shape.
 type ListBatchesResponse struct {
-	Batches []BatchResponse `json:"batches"`
-	Count   int             `json:"count"`
-	Message string          `json:"message"`
+	Batches    []BatchResponse `json:"batches"`
+	TotalCount int64           `json:"total_count"`
+	Page       int             `json:"page"`
+	PageSize   int             `json:"page_size"`
 }

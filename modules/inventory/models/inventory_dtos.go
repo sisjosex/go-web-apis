@@ -7,11 +7,11 @@ import (
 // DTOs for API requests/responses
 
 type CreateProductDto struct {
-	SKU         string      `json:"sku" binding:"required"`
-	Name        string      `json:"name" binding:"required"`
-	Description *string     `json:"description"`
-	BasePrice   float64     `json:"base_price" binding:"required,gt=0"`
-	Variants    any `json:"variants"`
+	SKU         string  `json:"sku" binding:"required"`
+	Name        string  `json:"name" binding:"required"`
+	Description *string `json:"description"`
+	BasePrice   float64 `json:"base_price" binding:"required,gt=0"`
+	Variants    any     `json:"variants"`
 }
 
 // UpdateProductDto carries the editable product fields plus, optionally, the
@@ -82,6 +82,22 @@ type ListMovementsQuery struct {
 	DateTo       *string `form:"date_to" binding:"omitempty,datetime=2006-01-02"`
 	Page         int     `form:"page,default=1" binding:"min=1"`
 	PageSize     int     `form:"page_size,default=20" binding:"min=1,max=100"`
+}
+
+// ListProductsQuery binds GET /inventory/products (APP-004). category_id is validated here so a
+// malformed one is a 400, never a silently unfiltered list.
+type ListProductsQuery struct {
+	CategoryID *string `form:"category_id" binding:"omitempty,uuid"`
+	Search     string  `form:"search"`
+	Page       int     `form:"page,default=1" binding:"min=1"`
+	PageSize   int     `form:"page_size,default=20" binding:"min=1,max=100"`
+}
+
+type ListProductsResponse struct {
+	Products   []Product `json:"products"`
+	TotalCount int64     `json:"total_count"`
+	Page       int       `json:"page"`
+	PageSize   int       `json:"page_size"`
 }
 
 type ListMovementsResponse struct {

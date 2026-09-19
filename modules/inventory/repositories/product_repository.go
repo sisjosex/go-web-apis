@@ -255,18 +255,18 @@ func (r *ProductRepository) RemoveProductMedia(ctx context.Context, tenantID uui
 	return nil
 }
 
+// ListProducts returns one page of active products plus the total the same filters match.
+// total_count comes back on every row and stays 0 when the page is empty.
 func (r *ProductRepository) ListProducts(
 	ctx context.Context,
 	tenantID uuid.UUID,
-	limit, offset int,
-	categoryID *uuid.UUID,
-	search *string,
-) ([]models.Product, error) {
+	query models.ListProductsQuery,
+) ([]models.Product, int64, error) {
 	rows, err := r.dbService.Query(
 		ctx,
-		`SELECT id, sku, name, description, base_price, has_variants, status, created_at, categories
+		`SELECT id, sku, name, description, base_price, has_variants, status, created_at, categories, total_count
 		 FROM inventory.sp_list_products($1, $2, $3, $4::UUID, $5::VARCHAR)`,
-		tenantID, limit, offset, categoryID, search,
+		tenantID, query.Page, query.PageSize, query.CategoryID, query.Search,
 	)
 	if err != nil {
 		if r.logger != nil {
@@ -274,35 +274,33 @@ func (r *ProductRepository) ListProducts(
 		}
 		var pgErr *pgconn.PgError
 		if errors.As(err, &pgErr) {
-			return nil, pgErr
+			return nil, 0, pgErr
 		}
-		return nil, err
+		return nil, 0, err
 	}
 	defer rows.Close()
 
-	var products []models.Product
+	products := []models.Product{}
+	var totalCount int64
 	for rows.Next() {
 		var p models.Product
 		var categoriesJSON []byte
-		if err := rows.Scan(&p.ID, &p.SKU, &p.Name, &p.Description, &p.BasePrice, &p.HasVariants, &p.Status, &p.CreatedAt, &categoriesJSON); err != nil {
-			return nil, err
+		if err := rows.Scan(&p.ID, &p.SKU, &p.Name, &p.Description, &p.BasePrice, &p.HasVariants, &p.Status, &p.CreatedAt, &categoriesJSON, &totalCount); err != nil {
+			return nil, 0, err
 		}
 
 		p.Categories = []models.ProductCategoryRef{}
 		if len(categoriesJSON) > 0 {
 			if err := json.Unmarshal(categoriesJSON, &p.Categories); err != nil {
-				return nil, err
+				return nil, 0, err
 			}
 		}
 
 		products = append(products, p)
 	}
 	if err = rows.Err(); err != nil {
-		return nil, err
-	}
-	if products == nil {
-		products = []models.Product{}
+		return nil, 0, err
 	}
 
-	return products, nil
+	return products, totalCount, nil
 }

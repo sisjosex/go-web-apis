@@ -108,11 +108,19 @@ func (s *ProductService) GetProductBySkU(ctx context.Context, tenantID uuid.UUID
 func (s *ProductService) ListProducts(
 	ctx context.Context,
 	tenantID uuid.UUID,
-	limit, offset int,
-	categoryID *uuid.UUID,
-	search *string,
-) ([]models.Product, error) {
-	return s.repository.ListProducts(ctx, tenantID, limit, offset, categoryID, search)
+	query models.ListProductsQuery,
+) (*models.ListProductsResponse, error) {
+	products, totalCount, err := s.repository.ListProducts(ctx, tenantID, query)
+	if err != nil {
+		return nil, err
+	}
+
+	return &models.ListProductsResponse{
+		Products:   products,
+		TotalCount: totalCount,
+		Page:       query.Page,
+		PageSize:   query.PageSize,
+	}, nil
 }
 
 func (s *ProductService) AddProductMedia(ctx context.Context, tenantID uuid.UUID, productID string, dto models.AddProductMediaDto) (*models.AddProductMediaResponse, error) {

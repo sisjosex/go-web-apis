@@ -543,12 +543,46 @@ func TestListProducts_Success(t *testing.T) {
 	}
 
 	// List products
-	w := helper.DoRequest("GET", "/inventory/products?limit=10&offset=0", nil, map[string]string{})
+	w := helper.DoRequest("GET", "/inventory/products?page=1&page_size=10", nil, map[string]string{})
 	assert.Equal(t, http.StatusOK, w.Code)
 
-	var result map[string]interface{}
-	json.Unmarshal(w.Body.Bytes(), &result)
-	assert.NotNil(t, result["data"])
+	var result models.ListProductsResponse
+	assert.NoError(t, json.Unmarshal(w.Body.Bytes(), &result))
+	assert.NotNil(t, result.Products)
+	assert.GreaterOrEqual(t, result.TotalCount, int64(3))
+	assert.Equal(t, 1, result.Page)
+	assert.Equal(t, 10, result.PageSize)
+}
+
+// APP-004 — the second page carries the rows after the first and the same total.
+func TestListProducts_SecondPageCarriesTotal(t *testing.T) {
+	helper := SetupInventoryTest(t)
+	defer helper.Close()
+
+	suffix := uuid.New().String()[:8]
+	for i := 1; i <= 7; i++ {
+		createProductForList(t, helper, fmt.Sprintf("PAGE%d%s", i, suffix), fmt.Sprintf("Paged %d", i))
+	}
+
+	w := helper.DoRequest("GET", "/inventory/products?page=2&page_size=5&search="+suffix, nil, map[string]string{})
+	assert.Equal(t, http.StatusOK, w.Code, w.Body.String())
+
+	var result models.ListProductsResponse
+	assert.NoError(t, json.Unmarshal(w.Body.Bytes(), &result))
+	assert.Equal(t, int64(7), result.TotalCount)
+	assert.Equal(t, 2, result.Page)
+	assert.Equal(t, 5, result.PageSize)
+	assert.Len(t, result.Products, 2)
+}
+
+// APP-004 — the page size is capped; above it is a client error, not a silent clamp.
+func TestListProducts_PageSizeAboveCapReturns400(t *testing.T) {
+	helper := SetupInventoryTest(t)
+	defer helper.Close()
+
+	w := helper.DoRequest("GET", "/inventory/products?page_size=101", nil, map[string]string{})
+
+	assert.Equal(t, http.StatusBadRequest, w.Code, w.Body.String())
 }
 
 // ============================================
@@ -566,7 +600,7 @@ func TestListProducts_RowCarriesItsCategories(t *testing.T) {
 	assignProductToCategory(t, helper, productID, catA)
 	assignProductToCategory(t, helper, productID, catB)
 
-	products := listProducts(t, helper, "?limit=100&search=ROWCAT"+suffix)
+	products := listProducts(t, helper, "?page_size=100&search=ROWCAT"+suffix)
 
 	assert.Equal(t, 1, len(products), "search should isolate the product under test")
 	assert.Equal(t, 2, len(products[0].Categories), "a product in two categories lists both")
@@ -584,7 +618,7 @@ func TestListProducts_UncategorisedRowHasEmptyCategories(t *testing.T) {
 	suffix := uuid.New().String()[:8]
 	createProductForList(t, helper, "NOCAT"+suffix, "No Cat Product")
 
-	products := listProducts(t, helper, "?limit=100&search=NOCAT"+suffix)
+	products := listProducts(t, helper, "?page_size=100&search=NOCAT"+suffix)
 
 	assert.Equal(t, 1, len(products))
 	assert.NotNil(t, products[0].Categories, "categories must be [], never null")
@@ -605,7 +639,7 @@ func TestListProducts_FilterByCategory(t *testing.T) {
 	assignProductToCategory(t, helper, inCategory, other)
 	assignProductToCategory(t, helper, alsoIn, target)
 
-	products := listProducts(t, helper, "?limit=100&category_id="+target)
+	products := listProducts(t, helper, "?page_size=100&category_id="+target)
 
 	returnedIDs := []string{}
 	for _, p := range products {
@@ -627,14 +661,15 @@ func TestListProducts_FilterByUnknownCategoryIsEmpty(t *testing.T) {
 
 	createProductForList(t, helper, "UNKCAT"+uuid.New().String()[:8], "Unknown Cat Product")
 
-	w := helper.DoRequest("GET", "/inventory/products?limit=100&category_id="+uuid.New().String(), nil, map[string]string{})
+	w := helper.DoRequest("GET", "/inventory/products?page_size=100&category_id="+uuid.New().String(), nil, map[string]string{})
 
 	assert.Equal(t, http.StatusOK, w.Code)
-	var result listProductsResponse
+	var result models.ListProductsResponse
 	err := json.Unmarshal(w.Body.Bytes(), &result)
 	assert.NoError(t, err)
-	assert.NotNil(t, result.Data, "data must be [], never null")
-	assert.Equal(t, 0, len(result.Data))
+	assert.NotNil(t, result.Products, "products must be [], never null")
+	assert.Equal(t, 0, len(result.Products))
+	assert.Equal(t, int64(0), result.TotalCount)
 }
 
 func TestListProducts_MalformedCategoryIDReturns400(t *testing.T) {
@@ -655,7 +690,7 @@ func TestListProducts_SearchMatchesName(t *testing.T) {
 
 	// Lowercased on purpose: the match is case-insensitive, and the token lives
 	// only in the name, never in the SKU.
-	products := listProducts(t, helper, "?limit=100&search=zebra"+suffix)
+	products := listProducts(t, helper, "?page_size=100&search=zebra"+suffix)
 
 	assert.Equal(t, 1, len(products))
 	assert.Equal(t, productID, products[0].ID)
@@ -668,7 +703,7 @@ func TestListProducts_SearchMatchesSku(t *testing.T) {
 	suffix := uuid.New().String()[:8]
 	productID := createProductForList(t, helper, "SRCHSKU"+suffix, "Nothing Matching Here")
 
-	products := listProducts(t, helper, "?limit=100&search=srchsku"+suffix)
+	products := listProducts(t, helper, "?page_size=100&search=srchsku"+suffix)
 
 	assert.Equal(t, 1, len(products))
 	assert.Equal(t, productID, products[0].ID)
@@ -1568,8 +1603,18 @@ func TestListBatchesByProduct_Success(t *testing.T) {
 	var listResponse models.ListBatchesResponse
 	json.Unmarshal(w4.Body.Bytes(), &listResponse)
 
-	assert.Equal(t, 3, listResponse.Count)
+	assert.Equal(t, int64(3), listResponse.TotalCount)
 	assert.Equal(t, 3, len(listResponse.Batches))
+
+	// APP-004 — a page smaller than the set keeps FIFO order and the whole total.
+	w5 := helper.DoRequest("GET", fmt.Sprintf("/inventory/batches/product/%s?page=2&page_size=2", createdProduct.ProductID), nil, map[string]string{})
+	assert.Equal(t, http.StatusOK, w5.Code, w5.Body.String())
+
+	var secondPage models.ListBatchesResponse
+	json.Unmarshal(w5.Body.Bytes(), &secondPage)
+	assert.Equal(t, int64(3), secondPage.TotalCount)
+	assert.Len(t, secondPage.Batches, 1)
+	assert.Equal(t, listResponse.Batches[2].ID, secondPage.Batches[0].ID)
 }
 
 func TestGetOldestBatchForSale_FIFO(t *testing.T) {
@@ -1711,18 +1756,19 @@ func TestGetExpiringBatches_IncludesProductName(t *testing.T) {
 	w1 := helper.DoRequest("POST", "/inventory/batches", batchBody, map[string]string{})
 	assert.Equal(t, http.StatusCreated, w1.Code)
 
-	w2 := helper.DoRequest("GET", "/inventory/batches/expiring?warningDays=30", nil, map[string]string{})
+	w2 := helper.DoRequest("GET", "/inventory/batches/expiring?warningDays=30&page_size=100", nil, map[string]string{})
 
 	assert.Equal(t, http.StatusOK, w2.Code)
 
-	var expiring []models.BatchResponse
+	var expiring models.ListBatchesResponse
 	err := json.Unmarshal(w2.Body.Bytes(), &expiring)
-	assert.NoError(t, err, "Expiring batches response should be a JSON array")
+	assert.NoError(t, err, "Expiring batches response should be the list envelope")
+	assert.GreaterOrEqual(t, expiring.TotalCount, int64(1))
 
 	var found *models.BatchResponse
-	for i := range expiring {
-		if expiring[i].ProductID.String() == createdProduct.ProductID {
-			found = &expiring[i]
+	for i := range expiring.Batches {
+		if expiring.Batches[i].ProductID.String() == createdProduct.ProductID {
+			found = &expiring.Batches[i]
 			break
 		}
 	}
@@ -1732,6 +1778,16 @@ func TestGetExpiringBatches_IncludesProductName(t *testing.T) {
 		assert.NotNil(t, found.ProductName, "product_name should be returned")
 		assert.Equal(t, productName, *found.ProductName)
 	}
+}
+
+// APP-004 — warningDays keeps its lower bound under the query binding.
+func TestGetExpiringBatches_ZeroWindowReturns400(t *testing.T) {
+	helper := SetupInventoryTest(t)
+	defer helper.Close()
+
+	w := helper.DoRequest("GET", "/inventory/batches/expiring?warningDays=0", nil, map[string]string{})
+
+	assert.Equal(t, http.StatusBadRequest, w.Code, w.Body.String())
 }
 
 func TestBatchNotFound(t *testing.T) {
@@ -2237,14 +2293,6 @@ func TestProductCountAggregation(t *testing.T) {
 // Helper Functions
 // ============================================
 
-// listProductsResponse mirrors GET /inventory/products — { data, limit, offset },
-// no total (see AGENTS.md → List endpoints).
-type listProductsResponse struct {
-	Data   []models.Product `json:"data"`
-	Limit  int              `json:"limit"`
-	Offset int              `json:"offset"`
-}
-
 func listProducts(t *testing.T, helper *testhelpers.ApiTestHelper, query string) []models.Product {
 	t.Helper()
 
@@ -2253,11 +2301,11 @@ func listProducts(t *testing.T, helper *testhelpers.ApiTestHelper, query string)
 		t.Fatalf("list products %q returned %d: %s", query, w.Code, w.Body.String())
 	}
 
-	var result listProductsResponse
+	var result models.ListProductsResponse
 	if err := json.Unmarshal(w.Body.Bytes(), &result); err != nil {
 		t.Fatalf("list products %q returned invalid JSON: %v — %s", query, err, w.Body.String())
 	}
-	return result.Data
+	return result.Products
 }
 
 func createProductForList(t *testing.T, helper *testhelpers.ApiTestHelper, sku, name string) string {
@@ -4876,7 +4924,6 @@ func productBySku(t *testing.T, helper *testhelpers.ApiTestHelper, sku string) m
 func importPrefix(name string) string {
 	return fmt.Sprintf("%s%d", name, time.Now().UnixNano())
 }
-
 
 // AC-14 — the template and the schema come from the descriptor's Columns(), and
 // all three product resources publish the same two sample variant[…] columns so

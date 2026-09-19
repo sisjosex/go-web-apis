@@ -119,21 +119,26 @@ func (r *BatchRepository) GetBatch(ctx context.Context, tenantID uuid.UUID, batc
 	return &response, nil
 }
 
-// ListBatchesByProduct retrieves all batches for a product
-func (r *BatchRepository) ListBatchesByProduct(ctx context.Context, tenantID uuid.UUID, productID uuid.UUID, onlyActive bool, skuID *uuid.UUID) (*models.ListBatchesResponse, error) {
+// ListBatchesByProduct returns one page of a product's lots in FIFO order plus the total the
+// filters match. onlyActive defaults to true when the query leaves it out.
+func (r *BatchRepository) ListBatchesByProduct(ctx context.Context, tenantID uuid.UUID, productID uuid.UUID, query models.ListBatchesQuery) ([]models.BatchResponse, int64, error) {
+	onlyActive := query.OnlyActive == nil || *query.OnlyActive
 	rows, err := r.dbService.Query(ctx,
-		"SELECT id, product_id, lot_number, purchase_date, expiry_date, unit_cost, initial_quantity, current_quantity, status, days_to_expiry, sku_id, sku FROM inventory.sp_list_batches_by_product($1, $2, $3, $4)",
+		"SELECT id, product_id, lot_number, purchase_date, expiry_date, unit_cost, initial_quantity, current_quantity, status, days_to_expiry, sku_id, sku, total_count FROM inventory.sp_list_batches_by_product($1, $2, $3, $4::UUID, $5, $6)",
 		tenantID,
 		productID,
 		onlyActive,
-		skuID,
+		query.SkuID,
+		query.Page,
+		query.PageSize,
 	)
 	if err != nil {
-		return nil, err
+		return nil, 0, err
 	}
 	defer rows.Close()
 
-	var batches []models.BatchResponse
+	batches := []models.BatchResponse{}
+	var totalCount int64
 
 	for rows.Next() {
 		var batch models.BatchResponse
@@ -154,8 +159,9 @@ func (r *BatchRepository) ListBatchesByProduct(ctx context.Context, tenantID uui
 			&daysToExpiry,
 			&skuIDValue,
 			&skuValue,
+			&totalCount,
 		); err != nil {
-			return nil, err
+			return nil, 0, err
 		}
 
 		if daysToExpiry.Valid {
@@ -170,14 +176,10 @@ func (r *BatchRepository) ListBatchesByProduct(ctx context.Context, tenantID uui
 	}
 
 	if err := rows.Err(); err != nil {
-		return nil, err
+		return nil, 0, err
 	}
 
-	return &models.ListBatchesResponse{
-		Batches: batches,
-		Count:   len(batches),
-		Message: "Batches retrieved successfully",
-	}, nil
+	return batches, totalCount, nil
 }
 
 // GetOldestBatchForSale retrieves the oldest active batch (FIFO)
@@ -210,19 +212,23 @@ func (r *BatchRepository) GetOldestBatchForSale(ctx context.Context, tenantID uu
 	return &response, nil
 }
 
-// GetExpiringBatches retrieves all batches expiring within the specified number of days
-func (r *BatchRepository) GetExpiringBatches(ctx context.Context, tenantID uuid.UUID, warningDays int) ([]*models.BatchResponse, error) {
+// GetExpiringBatches returns one page of the lots expiring within the window, soonest first,
+// plus the total the window matches.
+func (r *BatchRepository) GetExpiringBatches(ctx context.Context, tenantID uuid.UUID, query models.ListExpiringBatchesQuery) ([]models.BatchResponse, int64, error) {
 	rows, err := r.dbService.Query(ctx,
-		"SELECT id, product_id, lot_number, purchase_date, expiry_date, unit_cost, initial_quantity, current_quantity, status, days_to_expiry, product_name, sku_id, sku FROM inventory.sp_get_expiring_batches($1, $2)",
+		"SELECT id, product_id, lot_number, purchase_date, expiry_date, unit_cost, initial_quantity, current_quantity, status, days_to_expiry, product_name, sku_id, sku, total_count FROM inventory.sp_get_expiring_batches($1, $2, $3, $4)",
 		tenantID,
-		warningDays,
+		query.WarningDays,
+		query.Page,
+		query.PageSize,
 	)
 	if err != nil {
-		return nil, err
+		return nil, 0, err
 	}
 	defer rows.Close()
 
-	var batches []*models.BatchResponse
+	batches := []models.BatchResponse{}
+	var totalCount int64
 
 	for rows.Next() {
 		var batch models.BatchResponse
@@ -245,8 +251,9 @@ func (r *BatchRepository) GetExpiringBatches(ctx context.Context, tenantID uuid.
 			&productName,
 			&skuIDValue,
 			&skuValue,
+			&totalCount,
 		); err != nil {
-			return nil, err
+			return nil, 0, err
 		}
 
 		batch.SkuID = &skuIDValue
@@ -262,14 +269,14 @@ func (r *BatchRepository) GetExpiringBatches(ctx context.Context, tenantID uuid.
 			batch.ProductName = &val
 		}
 
-		batches = append(batches, &batch)
+		batches = append(batches, batch)
 	}
 
 	if err := rows.Err(); err != nil {
-		return nil, err
+		return nil, 0, err
 	}
 
-	return batches, nil
+	return batches, totalCount, nil
 }
 
 // UpdateBatch corrects a lot's lot_number and expiry_date (INV-014 D3). The SP
