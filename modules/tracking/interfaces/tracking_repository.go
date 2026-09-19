@@ -27,14 +27,14 @@ type TrackingRepository interface {
 	// Companies CRUD
 	CreateCompany(ctx context.Context, tenantID uuid.UUID, dto *models.CreateCompanyDto) (*models.TransportCompany, error)
 	UpdateCompany(ctx context.Context, tenantID uuid.UUID, companyID uuid.UUID, dto *models.UpdateCompanyDto) (*models.TransportCompany, error)
-	ListCompanies(ctx context.Context, tenantID uuid.UUID, registrationNumber *string, status *string) ([]*models.TransportCompany, error)
+	ListCompanies(ctx context.Context, tenantID uuid.UUID, query models.ListCompaniesQuery) ([]*models.TransportCompany, int64, error)
 	GetCompany(ctx context.Context, tenantID uuid.UUID, companyID uuid.UUID) (*models.TransportCompany, error)
 	DeleteCompany(ctx context.Context, tenantID uuid.UUID, companyID uuid.UUID) error
 
 	// Vehicles CRUD
 	CreateVehicle(ctx context.Context, tenantID uuid.UUID, dto *models.CreateVehicleDto) (*models.Vehicle, error)
 	UpdateVehicle(ctx context.Context, tenantID uuid.UUID, vehicleID uuid.UUID, dto *models.UpdateVehicleDto) (*models.Vehicle, error)
-	ListVehicles(ctx context.Context, tenantID uuid.UUID, companyID *uuid.UUID, vehicleType *string, status *string) ([]*models.Vehicle, error)
+	ListVehicles(ctx context.Context, tenantID uuid.UUID, query models.ListVehiclesQuery) ([]*models.Vehicle, int64, error)
 	GetVehicle(ctx context.Context, tenantID uuid.UUID, vehicleID uuid.UUID) (*models.Vehicle, error)
 	DeleteVehicle(ctx context.Context, tenantID uuid.UUID, vehicleID uuid.UUID) error
 

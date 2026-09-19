@@ -7,6 +7,7 @@ package tracking_test
 import (
 	"fmt"
 	"net/http"
+	"net/url"
 	"testing"
 
 	"github.com/google/uuid"
@@ -103,11 +104,12 @@ func TestListCompaniesSuccess(t *testing.T) {
 	helper := SetupTrackingTest(t)
 	defer helper.Close()
 
-	w := helper.DoRequest("GET", "/tracking/companies", nil, map[string]string{})
+	result := ListCompanies(t, helper, "")
 
-	assert.Equal(t, http.StatusOK, w.Code)
-	companies := ParseListResponse(t, w.Body.Bytes())
-	assert.Greater(t, len(companies), 0, "Expected at least 1 pre-seeded company")
+	assert.Greater(t, len(result.Companies), 0, "Expected at least 1 pre-seeded company")
+	assert.GreaterOrEqual(t, result.TotalCount, int64(len(result.Companies)))
+	assert.Equal(t, 1, result.Page)
+	assert.Equal(t, 20, result.PageSize)
 }
 
 // TestUpdateCompanySuccess - Update existing company → 200
@@ -173,41 +175,71 @@ func TestListCompaniesWithFilter(t *testing.T) {
 	helper := SetupTrackingTest(t)
 	defer helper.Close()
 
-	w := helper.DoRequest("GET", "/tracking/companies?status=active", nil, map[string]string{})
+	result := ListCompanies(t, helper, "?status=active")
 
-	assert.Equal(t, http.StatusOK, w.Code)
-	companies := ParseListResponse(t, w.Body.Bytes())
-	assert.Greater(t, len(companies), 0)
+	assert.Greater(t, len(result.Companies), 0)
 
 	// Verify all companies have status active
-	for _, company := range companies {
-		assert.Equal(t, "active", company["status"].(string))
+	for _, company := range result.Companies {
+		assert.NotNil(t, company.Status)
+		assert.Equal(t, "active", *company.Status)
 	}
 }
 
-// TestListCompaniesEmpty - No companies → 200
+// TestListCompaniesEmpty - A search nothing matches → 200 with an empty page
 func TestListCompaniesEmpty(t *testing.T) {
 	helper := SetupTrackingTest(t)
 	defer helper.Close()
 
-	w := helper.DoRequest("GET", "/tracking/companies?status=inactive", nil, map[string]string{})
+	result := ListCompanies(t, helper, "?search=no-such-company-"+uuid.New().String())
 
-	assert.Equal(t, http.StatusOK, w.Code)
-	companies := ParseListResponse(t, w.Body.Bytes())
-	// Should return either empty list or filtered results (both are valid)
-	assert.True(t, companies != nil || len(companies) == 0)
+	assert.NotNil(t, result.Companies, "companies must be [], never null")
+	assert.Equal(t, 0, len(result.Companies))
+	assert.Equal(t, int64(0), result.TotalCount)
 }
 
-// TestCompanyPagination - Test pagination support → 200
+// TestCompanyPagination - One page at a time, total_count independent of the page → 200
 func TestCompanyPagination(t *testing.T) {
 	helper := SetupTrackingTest(t)
 	defer helper.Close()
 
-	w := helper.DoRequest("GET", "/tracking/companies?limit=10&offset=0", nil, map[string]string{})
+	firstPage := ListCompanies(t, helper, "?page=1&page_size=1")
+	assert.Equal(t, 1, len(firstPage.Companies))
+	assert.GreaterOrEqual(t, firstPage.TotalCount, int64(2), "seed has at least two companies")
 
-	assert.Equal(t, http.StatusOK, w.Code)
-	companies := ParseListResponse(t, w.Body.Bytes())
-	assert.NotNil(t, companies)
+	secondPage := ListCompanies(t, helper, "?page=2&page_size=1")
+	assert.Equal(t, 1, len(secondPage.Companies))
+	assert.Equal(t, firstPage.TotalCount, secondPage.TotalCount)
+	assert.NotEqual(t, firstPage.Companies[0].ID, secondPage.Companies[0].ID, "pages must not repeat a row")
+
+	// Past the end: total_count rides on the rows, so an empty page carries none.
+	pastEnd := ListCompanies(t, helper, "?page=999&page_size=1")
+	assert.Equal(t, 0, len(pastEnd.Companies), "companies must be [], never null")
+	assert.Equal(t, 999, pastEnd.Page)
+	assert.Equal(t, 1, pastEnd.PageSize)
+}
+
+// TestCompanySearchMatchesNameAndRegistration - search spans both columns → 200
+func TestCompanySearchMatchesNameAndRegistration(t *testing.T) {
+	helper := SetupTrackingTest(t)
+	defer helper.Close()
+
+	byRegistration := ListCompanies(t, helper, "?search=REG-TEST-001")
+	assert.Equal(t, 1, len(byRegistration.Companies))
+	assert.Equal(t, MainCompanyID, byRegistration.Companies[0].ID.String())
+
+	byName := ListCompanies(t, helper, "?search="+url.QueryEscape(byRegistration.Companies[0].Name))
+	assert.GreaterOrEqual(t, len(byName.Companies), 1)
+}
+
+// TestCompanyPageSizeAboveCapReturns400 - page_size is capped at 100 → 400
+func TestCompanyPageSizeAboveCapReturns400(t *testing.T) {
+	helper := SetupTrackingTest(t)
+	defer helper.Close()
+
+	w := helper.DoRequest("GET", "/tracking/companies?page_size=500", nil, map[string]string{})
+
+	assert.Equal(t, http.StatusBadRequest, w.Code, "page_size is capped at 100")
 }
 
 // TestCompanyInvalidUUID - Invalid UUID format → 400
@@ -265,13 +297,69 @@ func TestListVehiclesByCompany(t *testing.T) {
 	helper := SetupTrackingTest(t)
 	defer helper.Close()
 
-	companyID := MainCompanyID
-	w := helper.DoRequest("GET", fmt.Sprintf("/tracking/vehicles?company_id=%s", companyID), nil, map[string]string{})
+	result := ListVehicles(t, helper, "?company_id="+MainCompanyID)
 
-	assert.Equal(t, http.StatusOK, w.Code)
-	vehicles := ParseListResponse(t, w.Body.Bytes())
 	// Should find 2 pre-seeded vehicles
-	assert.Greater(t, len(vehicles), 0)
+	assert.Greater(t, len(result.Vehicles), 0)
+	for _, v := range result.Vehicles {
+		assert.Equal(t, MainCompanyID, v.CompanyID.String())
+		assert.NotNil(t, v.CompanyName, "every list row carries its company name")
+	}
+}
+
+// TestListVehiclesWithoutCompany - the whole fleet, every row named (D2) → 200
+func TestListVehiclesWithoutCompany(t *testing.T) {
+	helper := SetupTrackingTest(t)
+	defer helper.Close()
+
+	all := ListVehicles(t, helper, "")
+	assert.Greater(t, len(all.Vehicles), 0)
+
+	for _, v := range all.Vehicles {
+		assert.NotNil(t, v.CompanyName, "every list row carries its company name")
+		assert.NotEmpty(t, *v.CompanyName)
+	}
+
+	// The unfiltered list is never narrower than any single company's.
+	main := ListVehicles(t, helper, "?company_id="+MainCompanyID)
+	assert.GreaterOrEqual(t, all.TotalCount, main.TotalCount)
+}
+
+// TestVehiclePagination - One page at a time, total_count independent of the page → 200
+func TestVehiclePagination(t *testing.T) {
+	helper := SetupTrackingTest(t)
+	defer helper.Close()
+
+	firstPage := ListVehicles(t, helper, "?page=1&page_size=2")
+	assert.LessOrEqual(t, len(firstPage.Vehicles), 2)
+	assert.GreaterOrEqual(t, firstPage.TotalCount, int64(len(firstPage.Vehicles)))
+	assert.Equal(t, 1, firstPage.Page)
+	assert.Equal(t, 2, firstPage.PageSize)
+
+	pastEnd := ListVehicles(t, helper, "?page=999&page_size=2")
+	assert.Equal(t, 0, len(pastEnd.Vehicles), "vehicles must be [], never null")
+}
+
+// TestVehicleSearchByPlate - search narrows on the plate number → 200
+func TestVehicleSearchByPlate(t *testing.T) {
+	helper := SetupTrackingTest(t)
+	defer helper.Close()
+
+	result := ListVehicles(t, helper, "?search=TST-BUS-001")
+
+	assert.Equal(t, 1, len(result.Vehicles))
+	assert.Equal(t, "TST-BUS-001", result.Vehicles[0].PlateNumber)
+	assert.Equal(t, int64(1), result.TotalCount)
+}
+
+// TestVehiclePageSizeAboveCapReturns400 - page_size is capped at 100 → 400
+func TestVehiclePageSizeAboveCapReturns400(t *testing.T) {
+	helper := SetupTrackingTest(t)
+	defer helper.Close()
+
+	w := helper.DoRequest("GET", "/tracking/vehicles?page_size=500", nil, map[string]string{})
+
+	assert.Equal(t, http.StatusBadRequest, w.Code, "page_size is capped at 100")
 }
 
 // TestVehiclePlateNumberUniqueness - Plate number must be unique per company → 409
@@ -447,14 +535,11 @@ func TestListVehiclesByStatus(t *testing.T) {
 	helper := SetupTrackingTest(t)
 	defer helper.Close()
 
-	companyID := MainCompanyID
-	// List all vehicles for company (filtering not yet implemented)
-	w := helper.DoRequest("GET", fmt.Sprintf("/tracking/vehicles?company_id=%s", companyID), nil, map[string]string{})
+	result := ListVehicles(t, helper, "?company_id="+MainCompanyID+"&status=active")
 
-	assert.Equal(t, http.StatusOK, w.Code)
-	vehicles := ParseListResponse(t, w.Body.Bytes())
-	// Empty list is acceptable if seed is not loaded correctly
-	assert.True(t, vehicles == nil || len(vehicles) >= 0)
+	for _, v := range result.Vehicles {
+		assert.Equal(t, "active", v.Status)
+	}
 }
 
 // TestListVehiclesByType - Filter vehicles by type → 200
@@ -462,14 +547,11 @@ func TestListVehiclesByType(t *testing.T) {
 	helper := SetupTrackingTest(t)
 	defer helper.Close()
 
-	companyID := MainCompanyID
-	// List all vehicles for company
-	w := helper.DoRequest("GET", fmt.Sprintf("/tracking/vehicles?company_id=%s", companyID), nil, map[string]string{})
+	result := ListVehicles(t, helper, "?company_id="+MainCompanyID+"&vehicle_type=bus")
 
-	assert.Equal(t, http.StatusOK, w.Code)
-	vehicles := ParseListResponse(t, w.Body.Bytes())
-	// Should handle both nil and empty lists
-	assert.True(t, vehicles == nil || len(vehicles) >= 0)
+	for _, v := range result.Vehicles {
+		assert.Equal(t, "bus", v.VehicleType)
+	}
 }
 
 // TestListVehiclesByStatusAndType - Filter vehicles by both status and type → 200
@@ -477,14 +559,12 @@ func TestListVehiclesByStatusAndType(t *testing.T) {
 	helper := SetupTrackingTest(t)
 	defer helper.Close()
 
-	companyID := MainCompanyID
-	// Test listing vehicles
-	w := helper.DoRequest("GET", fmt.Sprintf("/tracking/vehicles?company_id=%s", companyID), nil, map[string]string{})
+	result := ListVehicles(t, helper, "?company_id="+MainCompanyID+"&status=active&vehicle_type=bus")
 
-	assert.Equal(t, http.StatusOK, w.Code)
-	vehicles := ParseListResponse(t, w.Body.Bytes())
-	// Accept nil or empty list
-	assert.True(t, vehicles == nil || len(vehicles) >= 0)
+	for _, v := range result.Vehicles {
+		assert.Equal(t, "active", v.Status)
+		assert.Equal(t, "bus", v.VehicleType)
+	}
 }
 
 // TestGetVehicleWithAllFields - Retrieve vehicle and verify all fields → 200

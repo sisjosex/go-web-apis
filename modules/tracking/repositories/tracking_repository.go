@@ -398,21 +398,29 @@ func (r *TrackingRepository) UpdateCompany(ctx context.Context, tenantID uuid.UU
 	return &company, nil
 }
 
-func (r *TrackingRepository) ListCompanies(ctx context.Context, tenantID uuid.UUID, registrationNumber *string, status *string) ([]*models.TransportCompany, error) {
-	rows, err := r.dbService.Query(ctx, `SELECT * FROM tracking.sp_list_companies($1::UUID, $2::VARCHAR(255), $3::VARCHAR(50))`, tenantID, registrationNumber, status)
+// ListCompanies returns one page of the tenant's companies plus the total the same filters
+// match. total_count comes back on every row and stays 0 when the page is empty.
+func (r *TrackingRepository) ListCompanies(ctx context.Context, tenantID uuid.UUID, query models.ListCompaniesQuery) ([]*models.TransportCompany, int64, error) {
+	rows, err := r.dbService.Query(ctx,
+		`SELECT * FROM tracking.sp_list_companies($1::UUID, $2::VARCHAR, $3::VARCHAR, $4::INT, $5::INT)`,
+		tenantID, query.Search, query.Status, query.Page, query.PageSize)
 	if err != nil {
-		return nil, &trackingErrors.TrackingError{Code: trackingErrors.CompanyListFailed, Err: err}
+		return nil, 0, &trackingErrors.TrackingError{Code: trackingErrors.CompanyListFailed, Err: err}
 	}
 	defer rows.Close()
-	var companies []*models.TransportCompany
+	companies := []*models.TransportCompany{}
+	var totalCount int64
 	for rows.Next() {
 		var c models.TransportCompany
-		if err := rows.Scan(&c.ID, &c.TenantID, &c.Name, &c.Email, &c.Phone, &c.Address, &c.City, &c.Country, &c.RegistrationNumber, &c.Status, &c.CreatedAt, &c.UpdatedAt); err != nil {
-			return nil, err
+		if err := rows.Scan(&c.ID, &c.TenantID, &c.Name, &c.Email, &c.Phone, &c.Address, &c.City, &c.Country, &c.RegistrationNumber, &c.Status, &c.CreatedAt, &c.UpdatedAt, &totalCount); err != nil {
+			return nil, 0, err
 		}
 		companies = append(companies, &c)
 	}
-	return companies, nil
+	if err := rows.Err(); err != nil {
+		return nil, 0, err
+	}
+	return companies, totalCount, nil
 }
 
 func (r *TrackingRepository) GetCompany(ctx context.Context, tenantID uuid.UUID, companyID uuid.UUID) (*models.TransportCompany, error) {
@@ -470,21 +478,29 @@ func (r *TrackingRepository) UpdateVehicle(ctx context.Context, tenantID uuid.UU
 	return &v, nil
 }
 
-func (r *TrackingRepository) ListVehicles(ctx context.Context, tenantID uuid.UUID, companyID *uuid.UUID, vehicleType *string, status *string) ([]*models.Vehicle, error) {
-	rows, err := r.dbService.Query(ctx, `SELECT * FROM tracking.sp_list_vehicles($1::UUID, $2::UUID, $3::VARCHAR(50), $4::VARCHAR(50))`, tenantID, companyID, vehicleType, status)
+// ListVehicles returns one page of the tenant's vehicles plus the total the same filters match.
+// query.CompanyID nil lists the whole fleet (TRACK-001 D2); every row carries its company name.
+func (r *TrackingRepository) ListVehicles(ctx context.Context, tenantID uuid.UUID, query models.ListVehiclesQuery) ([]*models.Vehicle, int64, error) {
+	rows, err := r.dbService.Query(ctx,
+		`SELECT * FROM tracking.sp_list_vehicles($1::UUID, $2::UUID, $3::VARCHAR, $4::VARCHAR, $5::VARCHAR, $6::INT, $7::INT)`,
+		tenantID, query.CompanyID, query.VehicleType, query.Status, query.Search, query.Page, query.PageSize)
 	if err != nil {
-		return nil, &trackingErrors.TrackingError{Code: trackingErrors.VehicleListFailed, Err: err}
+		return nil, 0, &trackingErrors.TrackingError{Code: trackingErrors.VehicleListFailed, Err: err}
 	}
 	defer rows.Close()
-	var vehicles []*models.Vehicle
+	vehicles := []*models.Vehicle{}
+	var totalCount int64
 	for rows.Next() {
 		var v models.Vehicle
-		if err := rows.Scan(&v.ID, &v.CompanyID, &v.PlateNumber, &v.VehicleType, &v.Brand, &v.Model, &v.Year, &v.Capacity, &v.GPSDeviceID, &v.Status, &v.CreatedAt, &v.UpdatedAt); err != nil {
-			return nil, err
+		if err := rows.Scan(&v.ID, &v.CompanyID, &v.CompanyName, &v.PlateNumber, &v.VehicleType, &v.Brand, &v.Model, &v.Year, &v.Capacity, &v.GPSDeviceID, &v.Status, &v.CreatedAt, &v.UpdatedAt, &totalCount); err != nil {
+			return nil, 0, err
 		}
 		vehicles = append(vehicles, &v)
 	}
-	return vehicles, nil
+	if err := rows.Err(); err != nil {
+		return nil, 0, err
+	}
+	return vehicles, totalCount, nil
 }
 
 func (r *TrackingRepository) GetVehicle(ctx context.Context, tenantID uuid.UUID, vehicleID uuid.UUID) (*models.Vehicle, error) {

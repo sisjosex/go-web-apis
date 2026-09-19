@@ -59,8 +59,17 @@ func (s *TrackingService) UpdateCompany(ctx context.Context, tenantID uuid.UUID,
 	return s.trackingRepo.UpdateCompany(ctx, tenantID, companyID, dto)
 }
 
-func (s *TrackingService) ListCompanies(ctx context.Context, tenantID uuid.UUID, registrationNumber *string, status *string) ([]*models.TransportCompany, error) {
-	return s.trackingRepo.ListCompanies(ctx, tenantID, registrationNumber, status)
+func (s *TrackingService) ListCompanies(ctx context.Context, tenantID uuid.UUID, query models.ListCompaniesQuery) (*models.ListCompaniesResponse, error) {
+	companies, totalCount, err := s.trackingRepo.ListCompanies(ctx, tenantID, query)
+	if err != nil {
+		return nil, err
+	}
+	return &models.ListCompaniesResponse{
+		Companies:  companies,
+		TotalCount: totalCount,
+		Page:       query.Page,
+		PageSize:   query.PageSize,
+	}, nil
 }
 
 func (s *TrackingService) GetCompany(ctx context.Context, tenantID uuid.UUID, companyID uuid.UUID) (*models.TransportCompany, error) {
@@ -81,8 +90,17 @@ func (s *TrackingService) UpdateVehicle(ctx context.Context, tenantID uuid.UUID,
 	return s.trackingRepo.UpdateVehicle(ctx, tenantID, vehicleID, dto)
 }
 
-func (s *TrackingService) ListVehicles(ctx context.Context, tenantID uuid.UUID, companyID *uuid.UUID, vehicleType *string, status *string) ([]*models.Vehicle, error) {
-	return s.trackingRepo.ListVehicles(ctx, tenantID, companyID, vehicleType, status)
+func (s *TrackingService) ListVehicles(ctx context.Context, tenantID uuid.UUID, query models.ListVehiclesQuery) (*models.ListVehiclesResponse, error) {
+	vehicles, totalCount, err := s.trackingRepo.ListVehicles(ctx, tenantID, query)
+	if err != nil {
+		return nil, err
+	}
+	return &models.ListVehiclesResponse{
+		Vehicles:   vehicles,
+		TotalCount: totalCount,
+		Page:       query.Page,
+		PageSize:   query.PageSize,
+	}, nil
 }
 
 func (s *TrackingService) GetVehicle(ctx context.Context, tenantID uuid.UUID, vehicleID uuid.UUID) (*models.Vehicle, error) {

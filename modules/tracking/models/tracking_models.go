@@ -24,8 +24,11 @@ type TransportCompany struct {
 
 // Vehicle represents a bus or van with GPS tracking
 type Vehicle struct {
-	ID          uuid.UUID `json:"id"`
-	CompanyID   uuid.UUID `json:"company_id"`
+	ID        uuid.UUID `json:"id"`
+	CompanyID uuid.UUID `json:"company_id"`
+	// CompanyName rides on the list rows only (TRACK-001 D2); the single-vehicle SPs do not
+	// join the company, so it is absent from create/update/get responses.
+	CompanyName *string   `json:"company_name,omitempty"`
 	PlateNumber string    `json:"plate_number"`
 	VehicleType string    `json:"vehicle_type"` // bus, van, car
 	Brand       *string   `json:"brand"`

@@ -77,8 +77,10 @@ Verified 2026-09-19 (APP-004):
 | `GET /inventory/movements` | `page page_size product_id sku_id movement_type date_from date_to` | `{ movements, total_count, page, page_size }` |
 | `GET /inventory/categories` | `page limit` | `{ categories, total }` |
 | `GET /purchasing/suppliers`, `/orders` | `page page_size` (cap 100) | `{ <plural>, total_count, page, page_size }` |
+| `GET /tracking/companies` | `page page_size search status` (cap 100) | `{ companies, total_count, page, page_size }` |
+| `GET /tracking/vehicles` | `page page_size search company_id vehicle_type status` (cap 100) | `{ vehicles, total_count, page, page_size }` — every row carries `company_name` |
 | `GET /sales/orders` | `limit offset` | `{ data }` — no total |
-| `GET /sales/customers`, `/tracking/*`, `/inventory/stock/:id` | filters only | array, object or `{ data }`, unpaginated |
+| `GET /sales/customers`, the other `/tracking/*`, `/inventory/stock/:id` | filters only | array, object or `{ data }`, unpaginated |
 
 New list endpoints use the purchasing shape. No total ⇒ the app can only "load more"; no `search`
 param ⇒ search is client-side or new API work — the spec decides, never the implementation.

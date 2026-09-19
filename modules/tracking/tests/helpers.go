@@ -223,6 +223,39 @@ func ParseListResponse(t *testing.T, body []byte) []map[string]interface{} {
 	return response
 }
 
+// ListCompanies calls the paged companies endpoint and decodes its envelope.
+// query is the raw query string including its leading "?", or "".
+func ListCompanies(t *testing.T, helper *testhelpers.ApiTestHelper, query string) models.ListCompaniesResponse {
+	t.Helper()
+
+	w := helper.DoRequest("GET", "/tracking/companies"+query, nil, map[string]string{})
+	if w.Code != http.StatusOK {
+		t.Fatalf("list companies %q returned %d: %s", query, w.Code, w.Body.String())
+	}
+
+	var result models.ListCompaniesResponse
+	if err := json.Unmarshal(w.Body.Bytes(), &result); err != nil {
+		t.Fatalf("list companies %q returned invalid JSON: %v — %s", query, err, w.Body.String())
+	}
+	return result
+}
+
+// ListVehicles calls the paged vehicles endpoint and decodes its envelope.
+func ListVehicles(t *testing.T, helper *testhelpers.ApiTestHelper, query string) models.ListVehiclesResponse {
+	t.Helper()
+
+	w := helper.DoRequest("GET", "/tracking/vehicles"+query, nil, map[string]string{})
+	if w.Code != http.StatusOK {
+		t.Fatalf("list vehicles %q returned %d: %s", query, w.Code, w.Body.String())
+	}
+
+	var result models.ListVehiclesResponse
+	if err := json.Unmarshal(w.Body.Bytes(), &result); err != nil {
+		t.Fatalf("list vehicles %q returned invalid JSON: %v — %s", query, err, w.Body.String())
+	}
+	return result
+}
+
 // ============================================================================
 // UTILITY FUNCTIONS
 // ============================================================================

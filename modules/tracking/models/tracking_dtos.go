@@ -148,7 +148,42 @@ type UpdateCompanyDto struct {
 	Country *string `json:"country" binding:"omitempty,max=100" conform:"trim"`
 }
 
+// ListCompaniesQuery binds GET /tracking/companies (TRACK-001). search matches the name or the
+// registration number; status narrows to one lifecycle state.
+type ListCompaniesQuery struct {
+	Search   string `form:"search"`
+	Status   string `form:"status" binding:"omitempty,oneof=active inactive suspended"`
+	Page     int    `form:"page,default=1" binding:"min=1"`
+	PageSize int    `form:"page_size,default=20" binding:"min=1,max=100"`
+}
+
+type ListCompaniesResponse struct {
+	Companies  []*TransportCompany `json:"companies"`
+	TotalCount int64               `json:"total_count"`
+	Page       int                 `json:"page"`
+	PageSize   int                 `json:"page_size"`
+}
+
 // === DTOs for Vehicle Management ===
+
+// ListVehiclesQuery binds GET /tracking/vehicles (TRACK-001 D2). company_id is optional: unset
+// lists the whole tenant fleet. It is validated here so a malformed one is a 400, never a
+// silently unfiltered list.
+type ListVehiclesQuery struct {
+	CompanyID   *string `form:"company_id" binding:"omitempty,uuid"`
+	VehicleType string  `form:"vehicle_type" binding:"omitempty,oneof=bus van car"`
+	Status      string  `form:"status" binding:"omitempty,oneof=active inactive maintenance"`
+	Search      string  `form:"search"`
+	Page        int     `form:"page,default=1" binding:"min=1"`
+	PageSize    int     `form:"page_size,default=20" binding:"min=1,max=100"`
+}
+
+type ListVehiclesResponse struct {
+	Vehicles   []*Vehicle `json:"vehicles"`
+	TotalCount int64      `json:"total_count"`
+	Page       int        `json:"page"`
+	PageSize   int        `json:"page_size"`
+}
 
 // CreateVehicleDto represents request to create vehicle
 type CreateVehicleDto struct {

@@ -3,6 +3,7 @@ package controllers
 import (
 	"errors"
 	"net/http"
+	"strings"
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
@@ -424,11 +425,16 @@ func (ctrl *TrackingController) UpdateCompany(c *gin.Context) {
 
 // ListCompanies godoc
 // @Summary List transport companies
-// @Description Get all companies owned by the current tenant
+// @Description One page of the current tenant's companies, newest first
 // @Tags Tracking - Companies
 // @Produce json
 // @Security BearerAuth
-// @Success 200 {array} models.TransportCompany
+// @Param search query string false "Match against name or registration number"
+// @Param status query string false "Lifecycle state" Enums(active, inactive, suspended)
+// @Param page query int false "Page number, 1-based" default(1)
+// @Param page_size query int false "Rows per page, max 100" default(20)
+// @Success 200 {object} models.ListCompaniesResponse
+// @Failure 400 {object} coreErrors.ErrorResponse
 // @Failure 500 {object} coreErrors.ErrorResponse
 // @Router /tracking/companies [get]
 func (ctrl *TrackingController) ListCompanies(c *gin.Context) {
@@ -437,22 +443,19 @@ func (ctrl *TrackingController) ListCompanies(c *gin.Context) {
 		return
 	}
 
-	var registrationNumber *string
-	var status *string
-
-	if reg := c.Query("registration_number"); reg != "" {
-		registrationNumber = &reg
+	var query models.ListCompaniesQuery
+	if err := c.ShouldBindQuery(&query); err != nil {
+		c.JSON(http.StatusBadRequest, coreErrors.BuildErrorDetail(c, "validation.invalid", err.Error()))
+		return
 	}
-	if st := c.Query("status"); st != "" {
-		status = &st
-	}
+	query.Search = strings.TrimSpace(query.Search)
 
-	companies, err := ctrl.trackingService.ListCompanies(c.Request.Context(), tenantID, registrationNumber, status)
+	result, err := ctrl.trackingService.ListCompanies(c.Request.Context(), tenantID, query)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, coreErrors.BuildError(c, err))
 		return
 	}
-	c.JSON(http.StatusOK, companies)
+	c.JSON(http.StatusOK, result)
 }
 
 // GetCompany godoc
@@ -609,12 +612,18 @@ func (ctrl *TrackingController) UpdateVehicle(c *gin.Context) {
 
 // ListVehicles godoc
 // @Summary List vehicles
-// @Description Get all vehicles for a company (scoped to current tenant)
+// @Description One page of the current tenant's vehicles, newest first. Without company_id the
+// @Description whole fleet is listed; every row carries its company name.
 // @Tags Tracking - Vehicles
 // @Produce json
 // @Security BearerAuth
-// @Param company_id query string true "Company ID (UUID)"
-// @Success 200 {array} models.Vehicle
+// @Param company_id query string false "Narrow to one company (UUID)"
+// @Param vehicle_type query string false "Vehicle type" Enums(bus, van, car)
+// @Param status query string false "Lifecycle state" Enums(active, inactive, maintenance)
+// @Param search query string false "Match against the plate number"
+// @Param page query int false "Page number, 1-based" default(1)
+// @Param page_size query int false "Rows per page, max 100" default(20)
+// @Success 200 {object} models.ListVehiclesResponse
 // @Failure 400 {object} coreErrors.ErrorResponse
 // @Failure 500 {object} coreErrors.ErrorResponse
 // @Router /tracking/vehicles [get]
@@ -624,17 +633,19 @@ func (ctrl *TrackingController) ListVehicles(c *gin.Context) {
 		return
 	}
 
-	companyID, err := uuid.Parse(c.Query("company_id"))
-	if err != nil {
-		c.JSON(http.StatusBadRequest, coreErrors.BuildErrorSingle(c, coreErrors.InvalidUUID))
+	var query models.ListVehiclesQuery
+	if err := c.ShouldBindQuery(&query); err != nil {
+		c.JSON(http.StatusBadRequest, coreErrors.BuildErrorDetail(c, "validation.invalid", err.Error()))
 		return
 	}
-	vehicles, err := ctrl.trackingService.ListVehicles(c.Request.Context(), tenantID, &companyID, nil, nil)
+	query.Search = strings.TrimSpace(query.Search)
+
+	result, err := ctrl.trackingService.ListVehicles(c.Request.Context(), tenantID, query)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, coreErrors.BuildError(c, err))
 		return
 	}
-	c.JSON(http.StatusOK, vehicles)
+	c.JSON(http.StatusOK, result)
 }
 
 // GetVehicle godoc
