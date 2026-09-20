@@ -678,3 +678,38 @@ func TestFreePlanLimitOneTenantsMax(t *testing.T) {
 	assert.True(t, w2.Code == http.StatusForbidden,
 		fmt.Sprintf("Expected 403, got %d: %s", w2.Code, w2.Body.String()))
 }
+
+// TestAddUserToTenant_AccessLevels_Organization_And_Portal verifies the two levels TRACK-015 adds
+// are assignable like any other: an organization user (scoped to its own organizations) and a
+// portal guardian (mobile only) both join through the same endpoint.
+func TestAddUserToTenant_AccessLevels_Organization_And_Portal(t *testing.T) {
+	ts := time.Now().UnixNano()
+	ownerEmail := fmt.Sprintf("owner-levels-%d@test.com", ts)
+	slug := fmt.Sprintf("access-levels-%d", ts)
+
+	owner := testhelpers.SetupApiTest(t)
+	defer owner.Close()
+	owner.Register(ownerEmail, "$Password2025", "Owner", "Levels")
+	owner.Login(ownerEmail, "$Password2025")
+	owner.DoRequest("POST", "/tenants/self-service", map[string]interface{}{
+		"slug": slug, "name": "Access Levels Test",
+	}, map[string]string{})
+
+	for _, level := range []string{"organization", "portal"} {
+		memberEmail := fmt.Sprintf("%s-levels-%d@test.com", level, ts)
+
+		member := testhelpers.SetupApiTest(t)
+		member.Register(memberEmail, "$Password2025", "Member", "Levels")
+		member.Login(memberEmail, "$Password2025")
+		memberID := member.GetUserID()
+		member.Close()
+
+		w := owner.DoRequest("POST", fmt.Sprintf("/tenants/%s/users", slug),
+			map[string]interface{}{"user_id": memberID, "role": level},
+			map[string]string{})
+		// The endpoint acknowledges with 200, as it has for every level — TRACK-015 widens the
+		// vocabulary, not the contract.
+		assert.Equal(t, http.StatusOK, w.Code,
+			fmt.Sprintf("level %q expected 200, got %d: %s", level, w.Code, w.Body.String()))
+	}
+}

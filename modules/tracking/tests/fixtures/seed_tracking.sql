@@ -72,6 +72,13 @@ INSERT INTO tracking.organizations (
     NOW()
 );
 
+-- orguser@test.local belongs to the main school and to nothing else: that one row is the whole
+-- scope TRACK-015's SPs resolve, so the empty employer beside it is what "out of scope" looks like.
+INSERT INTO tracking.organization_members (organization_id, user_id, role)
+SELECT '99999999-9999-9999-9999-999999999999'::uuid, u.id, 'admin'
+FROM auth.users u
+WHERE u.email = 'orguser@test.local';
+
 -- ================================================================
 -- VEHICLES
 -- ================================================================

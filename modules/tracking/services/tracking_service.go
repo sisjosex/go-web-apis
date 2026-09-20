@@ -35,13 +35,13 @@ func (s *TrackingService) RecordRideEvent(ctx context.Context, dto *models.Recor
 }
 
 // GetRouteRealtimeStatus gets comprehensive route status
-func (s *TrackingService) GetRouteRealtimeStatus(ctx context.Context, tenantID uuid.UUID, routeID uuid.UUID) (*models.RouteRealtimeStatusResponse, error) {
-	return s.trackingRepo.GetRouteRealtimeStatus(ctx, tenantID, routeID)
+func (s *TrackingService) GetRouteRealtimeStatus(ctx context.Context, tenantID uuid.UUID, routeID uuid.UUID, scopeUserID *uuid.UUID) (*models.RouteRealtimeStatusResponse, error) {
+	return s.trackingRepo.GetRouteRealtimeStatus(ctx, tenantID, routeID, scopeUserID)
 }
 
 // GetRiderStatus gets rider status for guardian view
-func (s *TrackingService) GetRiderStatus(ctx context.Context, tenantID uuid.UUID, riderID uuid.UUID) (*models.RiderStatusResponse, error) {
-	return s.trackingRepo.GetRiderStatus(ctx, tenantID, riderID)
+func (s *TrackingService) GetRiderStatus(ctx context.Context, tenantID uuid.UUID, riderID uuid.UUID, scopeUserID *uuid.UUID) (*models.RiderStatusResponse, error) {
+	return s.trackingRepo.GetRiderStatus(ctx, tenantID, riderID, scopeUserID)
 }
 
 // CreateRouteAlert creates a route delay/breakdown alert
@@ -121,12 +121,12 @@ func (s *TrackingService) UpdateRoute(ctx context.Context, tenantID uuid.UUID, r
 	return s.trackingRepo.UpdateRoute(ctx, tenantID, routeID, dto)
 }
 
-func (s *TrackingService) ListRoutes(ctx context.Context, tenantID uuid.UUID, companyID *uuid.UUID, isActive *bool) ([]*models.Route, error) {
-	return s.trackingRepo.ListRoutes(ctx, tenantID, companyID, isActive)
+func (s *TrackingService) ListRoutes(ctx context.Context, tenantID uuid.UUID, companyID *uuid.UUID, isActive *bool, scopeUserID *uuid.UUID) ([]*models.Route, error) {
+	return s.trackingRepo.ListRoutes(ctx, tenantID, companyID, isActive, scopeUserID)
 }
 
-func (s *TrackingService) GetRoute(ctx context.Context, tenantID uuid.UUID, routeID uuid.UUID) (*models.Route, error) {
-	return s.trackingRepo.GetRoute(ctx, tenantID, routeID)
+func (s *TrackingService) GetRoute(ctx context.Context, tenantID uuid.UUID, routeID uuid.UUID, scopeUserID *uuid.UUID) (*models.Route, error) {
+	return s.trackingRepo.GetRoute(ctx, tenantID, routeID, scopeUserID)
 }
 
 func (s *TrackingService) DeleteRoute(ctx context.Context, tenantID uuid.UUID, routeID uuid.UUID) error {
@@ -139,8 +139,8 @@ func (s *TrackingService) CreateRouteStop(ctx context.Context, tenantID uuid.UUI
 	return s.trackingRepo.CreateRouteStop(ctx, tenantID, dto)
 }
 
-func (s *TrackingService) ListRouteStops(ctx context.Context, tenantID uuid.UUID, routeID uuid.UUID) ([]*models.RouteStop, error) {
-	return s.trackingRepo.ListRouteStops(ctx, tenantID, routeID)
+func (s *TrackingService) ListRouteStops(ctx context.Context, tenantID uuid.UUID, routeID uuid.UUID, scopeUserID *uuid.UUID) ([]*models.RouteStop, error) {
+	return s.trackingRepo.ListRouteStops(ctx, tenantID, routeID, scopeUserID)
 }
 
 func (s *TrackingService) DeleteRouteStop(ctx context.Context, tenantID uuid.UUID, stopID uuid.UUID) error {
@@ -149,16 +149,16 @@ func (s *TrackingService) DeleteRouteStop(ctx context.Context, tenantID uuid.UUI
 
 // ==================== RIDERS CRUD ====================
 
-func (s *TrackingService) CreateRider(ctx context.Context, tenantID uuid.UUID, dto *models.CreateRiderDto) (*models.Rider, error) {
-	return s.trackingRepo.CreateRider(ctx, tenantID, dto)
+func (s *TrackingService) CreateRider(ctx context.Context, tenantID uuid.UUID, dto *models.CreateRiderDto, scopeUserID *uuid.UUID) (*models.Rider, error) {
+	return s.trackingRepo.CreateRider(ctx, tenantID, dto, scopeUserID)
 }
 
-func (s *TrackingService) UpdateRider(ctx context.Context, tenantID uuid.UUID, riderID uuid.UUID, dto *models.UpdateRiderDto) (*models.Rider, error) {
-	return s.trackingRepo.UpdateRider(ctx, tenantID, riderID, dto)
+func (s *TrackingService) UpdateRider(ctx context.Context, tenantID uuid.UUID, riderID uuid.UUID, dto *models.UpdateRiderDto, scopeUserID *uuid.UUID) (*models.Rider, error) {
+	return s.trackingRepo.UpdateRider(ctx, tenantID, riderID, dto, scopeUserID)
 }
 
-func (s *TrackingService) ListRiders(ctx context.Context, tenantID uuid.UUID, query models.ListRidersQuery) (*models.ListRidersResponse, error) {
-	riders, totalCount, err := s.trackingRepo.ListRiders(ctx, tenantID, query)
+func (s *TrackingService) ListRiders(ctx context.Context, tenantID uuid.UUID, query models.ListRidersQuery, scopeUserID *uuid.UUID) (*models.ListRidersResponse, error) {
+	riders, totalCount, err := s.trackingRepo.ListRiders(ctx, tenantID, query, scopeUserID)
 	if err != nil {
 		return nil, err
 	}
@@ -170,12 +170,12 @@ func (s *TrackingService) ListRiders(ctx context.Context, tenantID uuid.UUID, qu
 	}, nil
 }
 
-func (s *TrackingService) GetRider(ctx context.Context, tenantID uuid.UUID, riderID uuid.UUID, guardianUserID *uuid.UUID) (*models.Rider, error) {
-	return s.trackingRepo.GetRider(ctx, tenantID, riderID, guardianUserID)
+func (s *TrackingService) GetRider(ctx context.Context, tenantID uuid.UUID, riderID uuid.UUID, guardianUserID *uuid.UUID, scopeUserID *uuid.UUID) (*models.Rider, error) {
+	return s.trackingRepo.GetRider(ctx, tenantID, riderID, guardianUserID, scopeUserID)
 }
 
-func (s *TrackingService) DeleteRider(ctx context.Context, tenantID uuid.UUID, riderID uuid.UUID) error {
-	return s.trackingRepo.DeleteRider(ctx, tenantID, riderID)
+func (s *TrackingService) DeleteRider(ctx context.Context, tenantID uuid.UUID, riderID uuid.UUID, scopeUserID *uuid.UUID) error {
+	return s.trackingRepo.DeleteRider(ctx, tenantID, riderID, scopeUserID)
 }
 
 // ==================== ASSIGNMENTS CRUD ====================
@@ -188,8 +188,8 @@ func (s *TrackingService) UnassignRider(ctx context.Context, tenantID uuid.UUID,
 	return s.trackingRepo.UnassignRider(ctx, tenantID, assignmentID)
 }
 
-func (s *TrackingService) ListRiderAssignments(ctx context.Context, tenantID uuid.UUID, riderID *uuid.UUID, routeID *uuid.UUID, isActive *bool) ([]*models.RiderAssignment, error) {
-	return s.trackingRepo.ListRiderAssignments(ctx, tenantID, riderID, routeID, isActive)
+func (s *TrackingService) ListRiderAssignments(ctx context.Context, tenantID uuid.UUID, riderID *uuid.UUID, routeID *uuid.UUID, isActive *bool, scopeUserID *uuid.UUID) ([]*models.RiderAssignment, error) {
+	return s.trackingRepo.ListRiderAssignments(ctx, tenantID, riderID, routeID, isActive, scopeUserID)
 }
 
 // ==================== ORGANIZATIONS CRUD ====================

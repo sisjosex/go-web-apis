@@ -12,6 +12,7 @@ import (
 	"josex/web/config"
 	coreErrors "josex/web/modules/core/errors"
 	"josex/web/modules/core/utils"
+	tenancyModels "josex/web/modules/tenancy/models"
 	trackingErrors "josex/web/modules/tracking/errors"
 	"josex/web/modules/tracking/interfaces"
 	"josex/web/modules/tracking/models"
@@ -72,6 +73,35 @@ func (ctrl *TrackingController) requireTenantID(c *gin.Context) (uuid.UUID, bool
 		return uuid.Nil, false
 	}
 	return *tenantID, true
+}
+
+// scopeUserID is the user a scoped read is narrowed by (TRACK-015 D1). Only an `organization`
+// access level carries one: the SPs take it as p_scope_user_id and resolve the memberships
+// themselves, one round-trip, so no path list lives here. Every other level — operator, super_admin
+// — gets nil and reads the whole tenant, exactly as before.
+func (ctrl *TrackingController) scopeUserID(c *gin.Context) *uuid.UUID {
+	role, exists := c.Get("tenant_user_role")
+	if !exists || role != tenancyModels.RoleOrganization {
+		return nil
+	}
+
+	userID, err := uuid.Parse(c.GetString("user_id"))
+	if err != nil {
+		return nil
+	}
+	return &userID
+}
+
+// scopeRefused answers 403 when the caller's access level is organization but they belong to no
+// organization in this tenant — a misconfigured account, not an empty result. It reports whether it
+// has already written the response.
+func scopeRefused(c *gin.Context, err error) bool {
+	var trackingErr *trackingErrors.TrackingError
+	if errors.As(err, &trackingErr) && trackingErr.Code == trackingErrors.OrganizationScopeDenied {
+		c.JSON(http.StatusForbidden, coreErrors.BuildErrorSingle(c, trackingErr.Code))
+		return true
+	}
+	return false
 }
 
 // UpdateVehicleLocation godoc
@@ -230,8 +260,11 @@ func (ctrl *TrackingController) GetRouteRealtimeStatus(c *gin.Context) {
 		return
 	}
 
-	response, err := ctrl.trackingService.GetRouteRealtimeStatus(c.Request.Context(), tenantID, routeID)
+	response, err := ctrl.trackingService.GetRouteRealtimeStatus(c.Request.Context(), tenantID, routeID, ctrl.scopeUserID(c))
 	if err != nil {
+		if scopeRefused(c, err) {
+			return
+		}
 		if trackingErr, ok := err.(*trackingErrors.TrackingError); ok {
 			switch trackingErr.Code {
 			case trackingErrors.RouteNotFound:
@@ -275,8 +308,11 @@ func (ctrl *TrackingController) GetRiderStatus(c *gin.Context) {
 		return
 	}
 
-	response, err := ctrl.trackingService.GetRiderStatus(c.Request.Context(), tenantID, riderID)
+	response, err := ctrl.trackingService.GetRiderStatus(c.Request.Context(), tenantID, riderID, ctrl.scopeUserID(c))
 	if err != nil {
+		if scopeRefused(c, err) {
+			return
+		}
 		if trackingErr, ok := err.(*trackingErrors.TrackingError); ok {
 			switch trackingErr.Code {
 			case trackingErrors.RiderNotFound:
@@ -819,8 +855,11 @@ func (ctrl *TrackingController) ListRoutes(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, coreErrors.BuildErrorSingle(c, coreErrors.InvalidUUID))
 		return
 	}
-	routes, err := ctrl.trackingService.ListRoutes(c.Request.Context(), tenantID, &companyID, nil)
+	routes, err := ctrl.trackingService.ListRoutes(c.Request.Context(), tenantID, &companyID, nil, ctrl.scopeUserID(c))
 	if err != nil {
+		if scopeRefused(c, err) {
+			return
+		}
 		c.JSON(http.StatusInternalServerError, coreErrors.BuildError(c, err))
 		return
 	}
@@ -850,8 +889,11 @@ func (ctrl *TrackingController) GetRoute(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, coreErrors.BuildErrorSingle(c, coreErrors.InvalidUUID))
 		return
 	}
-	route, err := ctrl.trackingService.GetRoute(c.Request.Context(), tenantID, routeID)
+	route, err := ctrl.trackingService.GetRoute(c.Request.Context(), tenantID, routeID, ctrl.scopeUserID(c))
 	if err != nil {
+		if scopeRefused(c, err) {
+			return
+		}
 		var trackingErr *trackingErrors.TrackingError
 		if errors.As(err, &trackingErr) && trackingErr.Code == trackingErrors.RouteNotFound {
 			c.JSON(http.StatusNotFound, coreErrors.BuildError(c, err))
@@ -954,8 +996,16 @@ func (ctrl *TrackingController) ListRouteStops(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, coreErrors.BuildErrorSingle(c, coreErrors.InvalidUUID))
 		return
 	}
-	stops, err := ctrl.trackingService.ListRouteStops(c.Request.Context(), tenantID, routeID)
+	stops, err := ctrl.trackingService.ListRouteStops(c.Request.Context(), tenantID, routeID, ctrl.scopeUserID(c))
 	if err != nil {
+		if scopeRefused(c, err) {
+			return
+		}
+		var trackingErr *trackingErrors.TrackingError
+		if errors.As(err, &trackingErr) && trackingErr.Code == trackingErrors.RouteNotFound {
+			c.JSON(http.StatusNotFound, coreErrors.BuildError(c, err))
+			return
+		}
 		c.JSON(http.StatusInternalServerError, coreErrors.BuildError(c, err))
 		return
 	}
@@ -1023,8 +1073,16 @@ func (ctrl *TrackingController) CreateRider(c *gin.Context) {
 		return
 	}
 	conform.Strings(&dto)
-	rider, err := ctrl.trackingService.CreateRider(c.Request.Context(), tenantID, &dto)
+	rider, err := ctrl.trackingService.CreateRider(c.Request.Context(), tenantID, &dto, ctrl.scopeUserID(c))
 	if err != nil {
+		if scopeRefused(c, err) {
+			return
+		}
+		var trackingErr *trackingErrors.TrackingError
+		if errors.As(err, &trackingErr) && trackingErr.Code == trackingErrors.OrganizationNotFound {
+			c.JSON(http.StatusNotFound, coreErrors.BuildError(c, err))
+			return
+		}
 		c.JSON(http.StatusInternalServerError, coreErrors.BuildError(c, err))
 		return
 	}
@@ -1062,8 +1120,11 @@ func (ctrl *TrackingController) UpdateRider(c *gin.Context) {
 		return
 	}
 	conform.Strings(&dto)
-	rider, err := ctrl.trackingService.UpdateRider(c.Request.Context(), tenantID, riderID, &dto)
+	rider, err := ctrl.trackingService.UpdateRider(c.Request.Context(), tenantID, riderID, &dto, ctrl.scopeUserID(c))
 	if err != nil {
+		if scopeRefused(c, err) {
+			return
+		}
 		var trackingErr *trackingErrors.TrackingError
 		if errors.As(err, &trackingErr) && trackingErr.Code == trackingErrors.RiderNotFound {
 			c.JSON(http.StatusNotFound, coreErrors.BuildError(c, err))
@@ -1104,8 +1165,11 @@ func (ctrl *TrackingController) ListRiders(c *gin.Context) {
 	}
 	query.Search = strings.TrimSpace(query.Search)
 
-	result, err := ctrl.trackingService.ListRiders(c.Request.Context(), tenantID, query)
+	result, err := ctrl.trackingService.ListRiders(c.Request.Context(), tenantID, query, ctrl.scopeUserID(c))
 	if err != nil {
+		if scopeRefused(c, err) {
+			return
+		}
 		c.JSON(http.StatusInternalServerError, coreErrors.BuildError(c, err))
 		return
 	}
@@ -1135,8 +1199,11 @@ func (ctrl *TrackingController) GetRider(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, coreErrors.BuildErrorSingle(c, coreErrors.InvalidUUID))
 		return
 	}
-	rider, err := ctrl.trackingService.GetRider(c.Request.Context(), tenantID, riderID, nil)
+	rider, err := ctrl.trackingService.GetRider(c.Request.Context(), tenantID, riderID, nil, ctrl.scopeUserID(c))
 	if err != nil {
+		if scopeRefused(c, err) {
+			return
+		}
 		var trackingErr *trackingErrors.TrackingError
 		if errors.As(err, &trackingErr) && trackingErr.Code == trackingErrors.RiderNotFound {
 			c.JSON(http.StatusNotFound, coreErrors.BuildError(c, err))
@@ -1170,8 +1237,11 @@ func (ctrl *TrackingController) DeleteRider(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, coreErrors.BuildErrorSingle(c, coreErrors.InvalidUUID))
 		return
 	}
-	err = ctrl.trackingService.DeleteRider(c.Request.Context(), tenantID, riderID)
+	err = ctrl.trackingService.DeleteRider(c.Request.Context(), tenantID, riderID, ctrl.scopeUserID(c))
 	if err != nil {
+		if scopeRefused(c, err) {
+			return
+		}
 		var trackingErr *trackingErrors.TrackingError
 		if errors.As(err, &trackingErr) && trackingErr.Code == trackingErrors.RiderNotFound {
 			c.JSON(http.StatusNotFound, coreErrors.BuildError(c, err))
@@ -1308,8 +1378,11 @@ func (ctrl *TrackingController) ListRiderAssignments(c *gin.Context) {
 		isActive = &active
 	}
 
-	assignments, err := ctrl.trackingService.ListRiderAssignments(c.Request.Context(), tenantID, riderID, routeID, isActive)
+	assignments, err := ctrl.trackingService.ListRiderAssignments(c.Request.Context(), tenantID, riderID, routeID, isActive, ctrl.scopeUserID(c))
 	if err != nil {
+		if scopeRefused(c, err) {
+			return
+		}
 		c.JSON(http.StatusInternalServerError, coreErrors.BuildError(c, err))
 		return
 	}

@@ -492,6 +492,12 @@ func (h *ApiTestHelper) GetUserID() string {
 }
 
 // SetTenantSlug stores the tenant slug so DoRequest automatically includes X-Tenant-Slug header.
+// DB exposes the shared pool for the few assertions no endpoint can make — a column the API never
+// returns, such as a session's client_type. Everything a handler owns is still asserted through it.
+func (h *ApiTestHelper) DB() coreServices.DatabaseService {
+	return h.dbService
+}
+
 func (h *ApiTestHelper) SetTenantSlug(slug string) *ApiTestHelper {
 	h.tenantSlug = slug
 	return h

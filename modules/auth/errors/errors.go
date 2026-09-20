@@ -26,6 +26,9 @@ const (
 	UserPasswordResetTokenInvalid       = "reset-password.token-invalid"
 	UserForgorPasswordEmailSendingError = "user.forgot-password.sending-email-failed"
 
+	// Client declaration (TRACK-015 D2)
+	ClientTypeInvalid = "auth.client-type.invalid"
+
 	// Token errors
 	TokenRefreshInvalid       = "token.refresh.invalid"
 	TokenRefreshExpired       = "token.refresh.expired"

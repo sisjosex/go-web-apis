@@ -217,6 +217,14 @@ func TenantMiddlewareFromHeader(tenantService interfaces.TenantService) gin.Hand
 		// A system super_admin bypasses permission checks regardless of tenant role
 		tenantAccess.IsSuperAdmin = systemRoleStr == coreModels.SystemRoleSuperAdmin
 
+		// A portal account is a guardian on the mobile app (TRACK-015 D2). The level is already on
+		// the access row, so refusing it here costs nothing and covers every web tenant route at once.
+		if tenantAccess.UserRole == models.RolePortal {
+			c.JSON(http.StatusForbidden, coreErrors.BuildErrorSingle(c, tenancyErrors.TenantUserPortalWebForbidden))
+			c.Abort()
+			return
+		}
+
 		// Check if tenant is active
 		if !tenantAccess.IsActive {
 			c.JSON(http.StatusForbidden, coreErrors.BuildErrorSingle(c, tenancyErrors.TenantInactive))
@@ -276,6 +284,36 @@ func RequireTenantRole(allowedRoles ...string) gin.HandlerFunc {
 			c.JSON(http.StatusForbidden, coreErrors.BuildErrorSingle(c, tenancyErrors.TenantUserUnauthorized))
 			c.Abort()
 			return
+		}
+
+		c.Next()
+	}
+}
+
+// DenyTenantRole refuses the named access levels on this route. It is the counterpart of
+// RequireTenantRole for the handful of endpoints a level must not reach at all — an organization
+// user has no business in the operator's fleet, however its assigned roles are configured. A system
+// super_admin passes, as it does everywhere else.
+func DenyTenantRole(deniedRoles ...string) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		if systemRole, ok := c.Get("system_role"); ok && systemRole == coreModels.SystemRoleSuperAdmin {
+			c.Next()
+			return
+		}
+
+		userRole, exists := c.Get("tenant_user_role")
+		if !exists {
+			c.JSON(http.StatusUnauthorized, coreErrors.BuildErrorSingle(c, tenancyErrors.TenantUserUnauthorized))
+			c.Abort()
+			return
+		}
+
+		for _, role := range deniedRoles {
+			if userRole == role {
+				c.JSON(http.StatusForbidden, coreErrors.BuildErrorSingle(c, tenancyErrors.TenantUserUnauthorized))
+				c.Abort()
+				return
+			}
 		}
 
 		c.Next()

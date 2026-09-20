@@ -5,6 +5,7 @@
 package tracking_test
 
 import (
+	"context"
 	"fmt"
 	"net/http"
 	"net/url"
@@ -2098,4 +2099,176 @@ func TestAssignRider_Duplicate(t *testing.T) {
 	w = helper.DoRequest("POST", "/tracking/assignments", assignBody, map[string]string{})
 	assert.Equal(t, http.StatusConflict, w.Code,
 		"Duplicate assignment should return 409 Conflict, got %d: %s", w.Code, w.Body.String())
+}
+
+// ============================================================================
+// ACCESS LEVEL TESTS (TRACK-015)
+// ============================================================================
+
+// TestPortalUserRefusedOnWeb verifies that a portal guardian gets 403 on a web tenant route —
+// the tenant middleware refuses the level before any handler runs (D2).
+func TestPortalUserRefusedOnWeb(t *testing.T) {
+	helper := SetupPortalTest(t)
+	defer helper.Close()
+
+	w := helper.DoRequest("GET", "/tracking/companies", nil, map[string]string{})
+
+	assert.Equal(t, http.StatusForbidden, w.Code, w.Body.String())
+	assert.Contains(t, w.Body.String(), "tenant.user.portal-web-forbidden")
+}
+
+// TestOrganizationUserSeesOnlyItsOwnRiders verifies the scope resolved inside the SP: a rider in
+// another organization of the same tenant is neither listed nor readable (TRACK-015 D1).
+func TestOrganizationUserSeesOnlyItsOwnRiders(t *testing.T) {
+	operator := SetupTrackingTest(t)
+	defer operator.Close()
+
+	// A rider on the employer the organization user does not belong to.
+	foreign := RiderDtoForOrganization(uuid.MustParse(EmptyEmployerID))
+	w := operator.DoRequest("POST", "/tracking/riders", map[string]interface{}{
+		"organization_id": foreign.OrganizationID,
+		"rider_type":      foreign.RiderType,
+		"first_name":      "Foreign",
+		"last_name":       "Rider",
+	}, map[string]string{})
+	if w.Code != http.StatusCreated {
+		t.Fatalf("create foreign rider: expected 201, got %d: %s", w.Code, w.Body.String())
+	}
+	foreignRiderID := ExtractID(t, ParseResponse(t, w.Body.Bytes()))
+
+	org := SetupOrganizationTest(t)
+	defer org.Close()
+
+	listed := ListRiders(t, org, "?page=1&page_size=100")
+	if len(listed.Riders) == 0 {
+		t.Fatalf("organization user should see its own riders, got none")
+	}
+	for _, rider := range listed.Riders {
+		if rider.OrganizationID.String() != MainSchoolID {
+			t.Errorf("rider %s belongs to %s, outside the caller's scope", rider.ID, rider.OrganizationID)
+		}
+	}
+
+	w = org.DoRequest("GET", "/tracking/riders/"+foreignRiderID, nil, map[string]string{})
+	assert.Equal(t, http.StatusNotFound, w.Code, w.Body.String())
+}
+
+// TestOrganizationUserCannotCreateRiderElsewhere verifies that a rider write outside the scope is
+// refused as not-found, so the caller learns nothing about the organization it may not touch.
+func TestOrganizationUserCannotCreateRiderElsewhere(t *testing.T) {
+	org := SetupOrganizationTest(t)
+	defer org.Close()
+
+	w := org.DoRequest("POST", "/tracking/riders", map[string]interface{}{
+		"organization_id": EmptyEmployerID,
+		"rider_type":      "employee",
+		"first_name":      "Out",
+		"last_name":       "Of Scope",
+	}, map[string]string{})
+	assert.Equal(t, http.StatusNotFound, w.Code, w.Body.String())
+
+	// Its own organization still works, so the refusal above is the scope and not the permission.
+	w = org.DoRequest("POST", "/tracking/riders", map[string]interface{}{
+		"organization_id": MainSchoolID,
+		"rider_type":      "student",
+		"first_name":      "In",
+		"last_name":       "Scope",
+	}, map[string]string{})
+	assert.Equal(t, http.StatusCreated, w.Code, w.Body.String())
+}
+
+// TestOrganizationUserCannotReadForeignRouteStops verifies that a route no rider of theirs is
+// assigned to is not found — an empty stop list would read as "this route has no stops".
+func TestOrganizationUserCannotReadForeignRouteStops(t *testing.T) {
+	operator := SetupTrackingTest(t)
+	defer operator.Close()
+
+	dto := ValidRouteDto()
+	w := operator.DoRequest("POST", "/tracking/routes", map[string]interface{}{
+		"company_id":          dto.CompanyID,
+		"route_name":          dto.RouteName,
+		"origin_address":      dto.OriginAddress,
+		"destination_address": dto.DestinationAddress,
+	}, map[string]string{})
+	if w.Code != http.StatusCreated {
+		t.Fatalf("create unassigned route: expected 201, got %d: %s", w.Code, w.Body.String())
+	}
+	foreignRouteID := ExtractID(t, ParseResponse(t, w.Body.Bytes()))
+
+	org := SetupOrganizationTest(t)
+	defer org.Close()
+
+	w = org.DoRequest("GET", "/tracking/routes/"+foreignRouteID+"/stops", nil, map[string]string{})
+	assert.Equal(t, http.StatusNotFound, w.Code, w.Body.String())
+
+	// The seeded morning route carries riders of the school, so it stays readable.
+	w = org.DoRequest("GET", "/tracking/routes/"+MorningRouteID+"/stops", nil, map[string]string{})
+	assert.Equal(t, http.StatusOK, w.Code, w.Body.String())
+}
+
+// TestOrganizationUserDeniedOnOperatorRoutes verifies the per-route denial: the fleet and the
+// organizations themselves stay the operator's, whatever roles the level is granted.
+func TestOrganizationUserDeniedOnOperatorRoutes(t *testing.T) {
+	org := SetupOrganizationTest(t)
+	defer org.Close()
+
+	for _, path := range []string{"/tracking/companies", "/tracking/vehicles", "/tracking/organizations"} {
+		w := org.DoRequest("GET", path, nil, map[string]string{})
+		assert.Equal(t, http.StatusForbidden, w.Code, path+": "+w.Body.String())
+	}
+}
+
+// TestOrganizationUserWithoutMembershipRefused verifies that an organization-level account linked
+// to nothing is refused outright rather than shown an empty list — a misconfiguration, not a state.
+func TestOrganizationUserWithoutMembershipRefused(t *testing.T) {
+	org := SetupOrganizationTest(t)
+	defer org.Close()
+
+	if _, err := org.DB().Execute(context.Background(),
+		`DELETE FROM tracking.organization_members om
+		 USING auth.users u
+		 WHERE om.user_id = u.id AND u.email = 'orguser@test.local'`); err != nil {
+		t.Fatalf("drop the membership: %v", err)
+	}
+	defer func() {
+		if _, err := org.DB().Execute(context.Background(),
+			`INSERT INTO tracking.organization_members (organization_id, user_id, role)
+			 SELECT '99999999-9999-9999-9999-999999999999'::uuid, u.id, 'admin'
+			 FROM auth.users u WHERE u.email = 'orguser@test.local'`); err != nil {
+			t.Fatalf("restore the membership: %v", err)
+		}
+	}()
+
+	w := org.DoRequest("GET", "/tracking/riders", nil, map[string]string{})
+
+	assert.Equal(t, http.StatusForbidden, w.Code, w.Body.String())
+	assert.Contains(t, w.Body.String(), "tracking.organization.scope-denied")
+}
+
+// TestOperatorStillSeesEveryRider verifies the unscoped path is unchanged: NULL p_scope_user_id
+// reads the whole tenant, as it did before TRACK-015.
+func TestOperatorStillSeesEveryRider(t *testing.T) {
+	operator := SetupTrackingTest(t)
+	defer operator.Close()
+
+	foreign := RiderDtoForOrganization(uuid.MustParse(EmptyEmployerID))
+	w := operator.DoRequest("POST", "/tracking/riders", map[string]interface{}{
+		"organization_id": foreign.OrganizationID,
+		"rider_type":      foreign.RiderType,
+		"first_name":      "Operator",
+		"last_name":       "Visible",
+	}, map[string]string{})
+	if w.Code != http.StatusCreated {
+		t.Fatalf("create foreign rider: expected 201, got %d: %s", w.Code, w.Body.String())
+	}
+	created := ExtractID(t, ParseResponse(t, w.Body.Bytes()))
+
+	listed := ListRiders(t, operator, "?page=1&page_size=100")
+	found := false
+	for _, rider := range listed.Riders {
+		if rider.ID.String() == created {
+			found = true
+		}
+	}
+	assert.True(t, found, "the operator should still see riders of every organization")
 }

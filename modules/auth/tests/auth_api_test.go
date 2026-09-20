@@ -5,6 +5,7 @@ package auth_test
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -949,4 +950,105 @@ func TestChangePassword_MissingFields(t *testing.T) {
 	assert.Equal(t, http.StatusBadRequest, w.Code,
 		"missing password_new should return 400, got %d: %s", w.Code, w.Body.String())
 	t.Logf("✅ ChangePassword with missing fields returns 400")
+}
+
+// ============================================================================
+// CLIENT TYPE TESTS (TRACK-015 D2) — which client opened the session
+// ============================================================================
+
+// sessionClientType reads the client a session was opened from. The column is audit data no endpoint
+// returns, so the row itself is the assertion; the device id keeps one login's session apart from
+// the auto-login the registration before it created.
+func sessionClientType(t *testing.T, helper *testhelpers.ApiTestHelper, email, deviceID string) string {
+	t.Helper()
+
+	var clientType string
+	err := helper.DB().QueryRow(context.Background(), `
+		SELECT us.client_type
+		FROM auth.user_sessions us
+		INNER JOIN auth.users u ON u.id = us.user_id
+		WHERE LOWER(u.email) = LOWER($1) AND us.device_id = $2
+	`, email, deviceID).Scan(&clientType)
+	if err != nil {
+		t.Fatalf("read session client_type for %s/%s: %v", email, deviceID, err)
+	}
+	return clientType
+}
+
+func TestLoginDeclaresMobileClient(t *testing.T) {
+	helper := testhelpers.SetupApiTest(t)
+	defer helper.Close()
+
+	const email = "client-mobile@test.com"
+	helper.Register(email, "$Password2025", "Client", "Mobile")
+
+	deviceID := testDeviceID()
+	body := map[string]interface{}{"email": email, "password": "$Password2025", "device_id": deviceID}
+	w := helper.DoRequest("POST", "/auth/login", body, map[string]string{"X-Client-Type": "mobile"})
+	if w.Code != http.StatusOK {
+		t.Fatalf("login as mobile: expected 200, got %d: %s", w.Code, w.Body.String())
+	}
+
+	assert.Equal(t, "mobile", sessionClientType(t, helper, email, deviceID))
+}
+
+func TestLoginDefaultsToWebClient(t *testing.T) {
+	helper := testhelpers.SetupApiTest(t)
+	defer helper.Close()
+
+	const email = "client-default@test.com"
+	helper.Register(email, "$Password2025", "Client", "Default")
+
+	deviceID := testDeviceID()
+	body := map[string]interface{}{"email": email, "password": "$Password2025", "device_id": deviceID}
+	w := helper.DoRequest("POST", "/auth/login", body, map[string]string{})
+	if w.Code != http.StatusOK {
+		t.Fatalf("login without a client header: expected 200, got %d: %s", w.Code, w.Body.String())
+	}
+
+	assert.Equal(t, "web", sessionClientType(t, helper, email, deviceID))
+}
+
+func TestLoginRejectsUnknownClientType(t *testing.T) {
+	helper := testhelpers.SetupApiTest(t)
+	defer helper.Close()
+
+	const email = "client-unknown@test.com"
+	helper.Register(email, "$Password2025", "Client", "Unknown")
+
+	body := map[string]interface{}{"email": email, "password": "$Password2025", "device_id": testDeviceID()}
+	w := helper.DoRequest("POST", "/auth/login", body, map[string]string{"X-Client-Type": "tv"})
+
+	assert.Equal(t, http.StatusBadRequest, w.Code, w.Body.String())
+}
+
+func TestOtpVerifyDeclaresMobileClient(t *testing.T) {
+	helper := testhelpers.SetupApiTest(t)
+	defer helper.Close()
+
+	const email = "client-otp@test.com"
+	const otpCode = "654321"
+	helper.Register(email, "$Password2025", "Client", "Otp")
+
+	// The request endpoint sends the code before it stores it, and the test environment has no mail
+	// provider — so the OTP is issued through the same SP the service calls.
+	var otpID uuid.UUID
+	if err := helper.DB().QueryRow(context.Background(),
+		`SELECT otp_id FROM auth.sp_request_otp($1, 'email', $2)`, email, otpCode).Scan(&otpID); err != nil {
+		t.Fatalf("issue OTP for %s: %v", email, err)
+	}
+
+	deviceID := testDeviceID()
+	body := map[string]interface{}{
+		"destination": email,
+		"otp_code":    otpCode,
+		"channel":     "email",
+		"device_id":   deviceID,
+	}
+	w := helper.DoRequest("POST", "/auth/otp/verify", body, map[string]string{"X-Client-Type": "mobile"})
+	if w.Code != http.StatusOK {
+		t.Fatalf("verify OTP as mobile: expected 200, got %d: %s", w.Code, w.Body.String())
+	}
+
+	assert.Equal(t, "mobile", sessionClientType(t, helper, email, deviceID))
 }

@@ -63,6 +63,7 @@
   "tracking.organization.delete.failed": "Error al eliminar la organizaciÃ³n",
   "tracking.organization.list.failed": "Error al obtener las organizaciones",
   "tracking.organization.has-riders": "No se puede eliminar una organizaciÃ³n que todavÃ­a tiene pasajeros",
+  "tracking.organization.scope-denied": "Tu cuenta no está vinculada a ninguna organización en este espacio de trabajo",
   "tracking.organization-member.not-found": "Este usuario no es miembro de la organizaciÃ³n",
   "tracking.organization-member.user-not-found": "Usuario no encontrado",
   "tracking.organization-member.save.failed": "Error al guardar el miembro de la organizaciÃ³n",

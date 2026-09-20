@@ -140,7 +140,8 @@ p_device_id := $4,
 p_device_info := $5,
 p_device_os := $6,
 p_browser := $7,
-p_user_agent := $8
+p_user_agent := $8,
+p_client_type := $9
 )
     `
 
@@ -153,6 +154,7 @@ p_user_agent := $8
 		userDTO.DeviceOs,
 		userDTO.Browser,
 		userDTO.UserAgent,
+		userDTO.ClientType,
 	}
 
 	row := r.dbService.QueryRow(context.Background(), query, params...)
@@ -191,7 +193,8 @@ p_ip_address := $9,
 p_device_info := $10,
 p_device_os := $11,
 p_browser := $12,
-p_user_agent := $13
+p_user_agent := $13,
+p_client_type := $14
 )
     `
 
@@ -209,6 +212,7 @@ p_user_agent := $13
 		userDTO.DeviceOs,
 		userDTO.Browser,
 		userDTO.UserAgent,
+		userDTO.ClientType,
 	}
 
 	row := r.dbService.QueryRow(context.Background(), query, params...)

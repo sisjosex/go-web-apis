@@ -314,3 +314,68 @@ func TestTenantMiddleware_Returns403_WhenTenantSuspended(t *testing.T) {
 		t.Errorf("expected 403 for suspended tenant, got %d", status)
 	}
 }
+
+// TestTenantMiddlewareFromHeader_PortalUser_Returns403 verifies that a mobile-only guardian
+// (TRACK-015 D2) is refused on every web tenant route, with the code the app reads to show
+// "this account is mobile-only".
+func TestTenantMiddlewareFromHeader_PortalUser_Returns403(t *testing.T) {
+	svc := &mockTenantService{
+		accessInfo: &models.TenantAccessInfo{
+			TenantID:     uuid.New(),
+			Slug:         "some-tenant",
+			Name:         "Some Tenant",
+			SchemaName:   "public",
+			IsActive:     true,
+			IsSuspended:  false,
+			UserRole:     models.RolePortal,
+			UserIsActive: true,
+			Permissions:  make(map[string]bool),
+		},
+	}
+
+	_, status := runMiddlewareFromHeader("some-tenant", uuid.New(), "user", svc)
+
+	if status != http.StatusForbidden {
+		t.Errorf("expected 403 for a portal account on the web, got %d", status)
+	}
+}
+
+// runDenyTenantRole executes DenyTenantRole behind the context TenantMiddleware would have set.
+func runDenyTenantRole(tenantRole, systemRole string, denied ...string) int {
+	eng := gin.New()
+	eng.GET("/test",
+		func(c *gin.Context) {
+			if tenantRole != "" {
+				c.Set("tenant_user_role", tenantRole)
+			}
+			c.Set("system_role", systemRole)
+			c.Next()
+		},
+		middleware.DenyTenantRole(denied...),
+		func(c *gin.Context) { c.Status(http.StatusOK) },
+	)
+
+	w := httptest.NewRecorder()
+	eng.ServeHTTP(w, httptest.NewRequest(http.MethodGet, "/test", nil))
+	return w.Code
+}
+
+func TestDenyTenantRole(t *testing.T) {
+	cases := []struct {
+		name       string
+		tenantRole string
+		systemRole string
+		want       int
+	}{
+		{"denied level is refused", models.RoleOrganization, "user", http.StatusForbidden},
+		{"another level passes", models.RoleMember, "user", http.StatusOK},
+		{"super_admin passes", models.RoleOrganization, "super_admin", http.StatusOK},
+		{"no level at all is unauthorized", "", "user", http.StatusUnauthorized},
+	}
+
+	for _, tc := range cases {
+		if got := runDenyTenantRole(tc.tenantRole, tc.systemRole, models.RoleOrganization); got != tc.want {
+			t.Errorf("%s: expected %d, got %d", tc.name, tc.want, got)
+		}
+	}
+}

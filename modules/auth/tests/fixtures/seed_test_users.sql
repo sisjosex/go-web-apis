@@ -58,6 +58,50 @@ SET
 WHERE email = 'admin@test.local';
 
 -- ================================================================
+-- ORGANIZATION USER (TRACK-015)
+-- ================================================================
+-- Email: orguser@test.local
+-- Password: OrgUser123!
+-- Tenant access level: organization — sees only the organizations it is a member of
+-- ================================================================
+DELETE FROM auth.users WHERE email = 'orguser@test.local';
+SELECT * FROM auth.sp_register_user(
+	p_email := 'orguser@test.local',
+	p_first_name := 'Org',
+	p_last_name := 'User',
+	p_password := 'OrgUser123!'
+);
+
+UPDATE auth.users
+SET
+	system_role = 'user',
+	subscription_plan = 'free',
+	email_verified = true
+WHERE email = 'orguser@test.local';
+
+-- ================================================================
+-- PORTAL USER (TRACK-015)
+-- ================================================================
+-- Email: portal@test.local
+-- Password: Portal123!
+-- Tenant access level: portal — mobile only, refused on every web tenant route
+-- ================================================================
+DELETE FROM auth.users WHERE email = 'portal@test.local';
+SELECT * FROM auth.sp_register_user(
+	p_email := 'portal@test.local',
+	p_first_name := 'Portal',
+	p_last_name := 'Guardian',
+	p_password := 'Portal123!'
+);
+
+UPDATE auth.users
+SET
+	system_role = 'user',
+	subscription_plan = 'free',
+	email_verified = true
+WHERE email = 'portal@test.local';
+
+-- ================================================================
 -- ADD MORE TEST USERS BELOW
 -- ================================================================
 -- Example format (uncomment to use):

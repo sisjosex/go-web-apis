@@ -203,6 +203,11 @@ func (uc *OtpController) VerifyOtp(c *gin.Context) {
 		return
 	}
 
+	declaredClient, ok := clientType(c)
+	if !ok {
+		return
+	}
+
 	userAgent := c.GetHeader("User-Agent")
 	var deviceInfo, deviceOs, browser string
 	if uc.parser != nil {
@@ -222,6 +227,7 @@ func (uc *OtpController) VerifyOtp(c *gin.Context) {
 		DeviceOs:    deviceOs,
 		Browser:     browser,
 		UserAgent:   userAgent,
+		ClientType:  declaredClient,
 	}
 
 	response, err := uc.otpService.VerifyOtp(c.Request.Context(), otpVerifyDto)

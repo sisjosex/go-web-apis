@@ -5,6 +5,11 @@ const (
 	RoleOwner  = "owner"
 	RoleAdmin  = "admin"
 	RoleMember = "member"
+	// RoleOrganization sees only the organizations it is a member of (TRACK-015 D1); the scope
+	// lives in tracking.organization_members, not here.
+	RoleOrganization = "organization"
+	// RolePortal is a guardian on the mobile app; the web tenant middleware refuses it (D2).
+	RolePortal = "portal"
 )
 
 // IsPrivilegedTenantRole reports whether a tenant role bypasses permission

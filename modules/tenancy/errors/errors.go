@@ -26,6 +26,8 @@ const (
 	TenantUserNotAuthorized           = "tenant.user.not-authorized"
 	TenantUserCannotRemoveOwner       = "tenant.user.cannot-remove-owner"
 	TenantUserLastOwner               = "tenant.user.last-owner"
+	// TenantUserPortalWebForbidden refuses a mobile-only guardian on the web (TRACK-015 D2).
+	TenantUserPortalWebForbidden = "tenant.user.portal-web-forbidden"
 )
 
 // Tenant validation errors

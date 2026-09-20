@@ -5,6 +5,7 @@ import (
 	"josex/web/modules/auth/middleware"
 	authServices "josex/web/modules/auth/services"
 	tenancyMW "josex/web/modules/tenancy/middleware"
+	tenancyModels "josex/web/modules/tenancy/models"
 	"josex/web/modules/tracking/controllers"
 	trackingPerms "josex/web/modules/tracking/permissions"
 
@@ -28,38 +29,52 @@ func RegisterTrackingRoutes(router *gin.Engine, trackingController *controllers.
 		r.Use(middleware.AuthMiddleware(jwtService))
 		r.Use(tenantMiddleware)
 
+		// An organization user sees its own people and the routes they ride, and edits those
+		// riders — nothing else (TRACK-015 D1). The fleet, the organizations themselves and every
+		// write outside riders are the operator's, so those routes deny the level outright rather
+		// than relying on a scope the SP behind them does not take.
+		denyOrganization := tenancyMW.DenyTenantRole(tenancyModels.RoleOrganization)
+
 		// Real-time operations
 		r.POST("/events",
+			denyOrganization,
 			tenancyMW.RequirePermission(trackingPerms.EventsWrite),
 			trackingController.RecordRideEvent)
 		r.POST("/alerts",
+			denyOrganization,
 			tenancyMW.RequirePermission(trackingPerms.AlertsWrite),
 			trackingController.CreateRouteAlert)
 
 		// Companies
-		r.GET("/companies", trackingController.ListCompanies)
-		r.GET("/companies/:company_id", trackingController.GetCompany)
+		r.GET("/companies", denyOrganization, trackingController.ListCompanies)
+		r.GET("/companies/:company_id", denyOrganization, trackingController.GetCompany)
 		r.POST("/companies",
+			denyOrganization,
 			tenancyMW.RequirePermission(trackingPerms.CompaniesWrite),
 			trackingController.CreateCompany)
 		r.PATCH("/companies/:company_id",
+			denyOrganization,
 			tenancyMW.RequirePermission(trackingPerms.CompaniesWrite),
 			trackingController.UpdateCompany)
 		r.DELETE("/companies/:company_id",
+			denyOrganization,
 			tenancyMW.RequirePermission(trackingPerms.CompaniesDelete),
 			trackingController.DeleteCompany)
 
 		// Vehicles
-		r.GET("/vehicles", trackingController.ListVehicles)
-		r.GET("/vehicles/:vehicle_id", trackingController.GetVehicle)
-		r.GET("/vehicles/:vehicle_id/location", trackingController.GetVehicleCurrentLocation)
+		r.GET("/vehicles", denyOrganization, trackingController.ListVehicles)
+		r.GET("/vehicles/:vehicle_id", denyOrganization, trackingController.GetVehicle)
+		r.GET("/vehicles/:vehicle_id/location", denyOrganization, trackingController.GetVehicleCurrentLocation)
 		r.POST("/vehicles",
+			denyOrganization,
 			tenancyMW.RequirePermission(trackingPerms.VehiclesWrite),
 			trackingController.CreateVehicle)
 		r.PATCH("/vehicles/:vehicle_id",
+			denyOrganization,
 			tenancyMW.RequirePermission(trackingPerms.VehiclesWrite),
 			trackingController.UpdateVehicle)
 		r.DELETE("/vehicles/:vehicle_id",
+			denyOrganization,
 			tenancyMW.RequirePermission(trackingPerms.VehiclesDelete),
 			trackingController.DeleteVehicle)
 
@@ -69,48 +84,61 @@ func RegisterTrackingRoutes(router *gin.Engine, trackingController *controllers.
 		r.GET("/routes/:route_id/status", trackingController.GetRouteRealtimeStatus)
 		r.GET("/routes/:route_id/stops", trackingController.ListRouteStops)
 		r.POST("/routes",
+			denyOrganization,
 			tenancyMW.RequirePermission(trackingPerms.RoutesWrite),
 			trackingController.CreateRoute)
 		r.PATCH("/routes/:route_id",
+			denyOrganization,
 			tenancyMW.RequirePermission(trackingPerms.RoutesWrite),
 			trackingController.UpdateRoute)
 		r.DELETE("/routes/:route_id",
+			denyOrganization,
 			tenancyMW.RequirePermission(trackingPerms.RoutesDelete),
 			trackingController.DeleteRoute)
 
 		// Route Stops
 		r.POST("/route-stops",
+			denyOrganization,
 			tenancyMW.RequirePermission(trackingPerms.RoutesWrite),
 			trackingController.CreateRouteStop)
 		r.DELETE("/route-stops/:stop_id",
+			denyOrganization,
 			tenancyMW.RequirePermission(trackingPerms.RoutesDelete),
 			trackingController.DeleteRouteStop)
 
 		// Organizations
 		r.GET("/organizations",
+			denyOrganization,
 			tenancyMW.RequirePermission(trackingPerms.OrganizationsRead),
 			trackingController.ListOrganizations)
 		r.GET("/organizations/:organization_id",
+			denyOrganization,
 			tenancyMW.RequirePermission(trackingPerms.OrganizationsRead),
 			trackingController.GetOrganization)
 		r.POST("/organizations",
+			denyOrganization,
 			tenancyMW.RequirePermission(trackingPerms.OrganizationsWrite),
 			trackingController.CreateOrganization)
 		r.PATCH("/organizations/:organization_id",
+			denyOrganization,
 			tenancyMW.RequirePermission(trackingPerms.OrganizationsWrite),
 			trackingController.UpdateOrganization)
 		r.DELETE("/organizations/:organization_id",
+			denyOrganization,
 			tenancyMW.RequirePermission(trackingPerms.OrganizationsDelete),
 			trackingController.DeleteOrganization)
 
 		// Organization members
 		r.GET("/organizations/:organization_id/members",
+			denyOrganization,
 			tenancyMW.RequirePermission(trackingPerms.OrganizationsRead),
 			trackingController.ListOrganizationMembers)
 		r.PUT("/organizations/:organization_id/members/:user_id",
+			denyOrganization,
 			tenancyMW.RequirePermission(trackingPerms.OrganizationsWrite),
 			trackingController.UpsertOrganizationMember)
 		r.DELETE("/organizations/:organization_id/members/:user_id",
+			denyOrganization,
 			tenancyMW.RequirePermission(trackingPerms.OrganizationsWrite),
 			trackingController.DeleteOrganizationMember)
 
@@ -133,9 +161,11 @@ func RegisterTrackingRoutes(router *gin.Engine, trackingController *controllers.
 			tenancyMW.RequirePermission(trackingPerms.AssignmentsRead),
 			trackingController.ListRiderAssignments)
 		r.POST("/assignments",
+			denyOrganization,
 			tenancyMW.RequirePermission(trackingPerms.AssignmentsManage),
 			trackingController.AssignRider)
 		r.DELETE("/assignments/:assignment_id",
+			denyOrganization,
 			tenancyMW.RequirePermission(trackingPerms.AssignmentsManage),
 			trackingController.UnassignRider)
 	} else {

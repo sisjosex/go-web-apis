@@ -63,6 +63,7 @@
   "tracking.organization.delete.failed": "Failed to delete organization",
   "tracking.organization.list.failed": "Failed to retrieve organizations",
   "tracking.organization.has-riders": "Cannot delete an organization that still has riders",
+  "tracking.organization.scope-denied": "Your account is not linked to any organization in this workspace",
   "tracking.organization-member.not-found": "This user is not a member of the organization",
   "tracking.organization-member.user-not-found": "User not found",
   "tracking.organization-member.save.failed": "Failed to save the organization member",

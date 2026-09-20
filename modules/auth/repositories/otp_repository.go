@@ -69,7 +69,8 @@ func (r *OtpRepository) VerifyOtp(
 			p_device_os := $6,
 			p_browser := $7,
 			p_ip_address := $8,
-			p_user_agent := $9
+			p_user_agent := $9,
+			p_client_type := $10
 		)
 	`
 
@@ -83,6 +84,7 @@ func (r *OtpRepository) VerifyOtp(
 		dto.Browser,
 		dto.IpAddress,
 		dto.UserAgent,
+		dto.ClientType,
 	}
 
 	row := r.dbService.QueryRow(ctx, query, params...)

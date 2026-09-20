@@ -76,6 +76,9 @@ const (
 	OrganizationDeleteFailed = "tracking.organization.delete.failed"
 	OrganizationListFailed   = "tracking.organization.list.failed"
 	OrganizationHasRiders    = "tracking.organization.has-riders"
+	// OrganizationScopeDenied is raised by fn_organization_scope, verbatim: an organization-level
+	// user who belongs to no organization in this tenant (TRACK-015 D1).
+	OrganizationScopeDenied = "tracking.organization.scope-denied"
 
 	// Organization member errors
 	OrganizationMemberNotFound     = "tracking.organization-member.not-found"

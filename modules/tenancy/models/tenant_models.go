@@ -84,7 +84,7 @@ type RemoveUserFromTenantDto struct {
 
 // UpdateUserRoleDto for updating a user's role within a tenant
 type UpdateUserRoleDto struct {
-	Role string `json:"role" binding:"required,oneof=owner admin member" conform:"trim,lowercase"`
+	Role string `json:"role" binding:"required,oneof=owner admin member organization portal" conform:"trim,lowercase"`
 }
 
 // UserTenantResponse - tenant info for user's accessible tenants

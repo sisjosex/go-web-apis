@@ -62,6 +62,23 @@ func SetupTrackingTest(t *testing.T) *testhelpers.ApiTestHelper {
 	return helper
 }
 
+// SetupPortalTest signs in the seeded portal guardian — a mobile-only account (TRACK-015 D2).
+func SetupPortalTest(t *testing.T) *testhelpers.ApiTestHelper {
+	helper := testhelpers.SetupApiTest(t)
+	helper.Login("portal@test.local", "Portal123!")
+	helper.SetTenantSlug("test-company")
+	return helper
+}
+
+// SetupOrganizationTest signs in the seeded organization user, a member of MainSchoolID and of
+// nothing else: every tracking read it makes is scoped to that one organization (TRACK-015 D1).
+func SetupOrganizationTest(t *testing.T) *testhelpers.ApiTestHelper {
+	helper := testhelpers.SetupApiTest(t)
+	helper.Login("orguser@test.local", "OrgUser123!")
+	helper.SetTenantSlug("test-company")
+	return helper
+}
+
 // ============================================================================
 // COMPANY TEST BUILDERS
 // ============================================================================

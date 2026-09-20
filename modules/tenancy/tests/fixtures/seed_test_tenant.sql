@@ -45,6 +45,55 @@ SELECT
 FROM auth.users u
 WHERE u.email = 'admin@test.local';
 
+-- Add the two TRACK-015 access levels: an organization user scoped by its memberships, and a
+-- portal guardian the web tenant middleware refuses.
+INSERT INTO tenancy.tenant_users (tenant_id, user_id, role, is_active)
+SELECT
+    '00000000-0000-0000-0000-000000000001',
+    u.id,
+    'organization',
+    true
+FROM auth.users u
+WHERE u.email = 'orguser@test.local';
+
+INSERT INTO tenancy.tenant_users (tenant_id, user_id, role, is_active)
+SELECT
+    '00000000-0000-0000-0000-000000000001',
+    u.id,
+    'portal',
+    true
+FROM auth.users u
+WHERE u.email = 'portal@test.local';
+
+-- The organization user's capabilities come from an assigned role, exactly like any other member's
+-- (TRACK-015 D1): the access level decides what it sees, the role decides what it may do.
+DELETE FROM tenancy.roles
+WHERE tenant_id = '00000000-0000-0000-0000-000000000001' AND name = 'Organization Staff';
+
+INSERT INTO tenancy.roles (id, tenant_id, name, description, is_system)
+VALUES (
+    '00000000-0000-0000-0000-0000000000a1',
+    '00000000-0000-0000-0000-000000000001',
+    'Organization Staff',
+    'Reads and edits the riders of its own organizations',
+    false
+);
+
+INSERT INTO tenancy.role_permissions (role_id, permission_code)
+VALUES
+    ('00000000-0000-0000-0000-0000000000a1', 'tracking:riders:read'),
+    ('00000000-0000-0000-0000-0000000000a1', 'tracking:riders:write'),
+    ('00000000-0000-0000-0000-0000000000a1', 'tracking:riders:delete'),
+    ('00000000-0000-0000-0000-0000000000a1', 'tracking:routes:read'),
+    ('00000000-0000-0000-0000-0000000000a1', 'tracking:assignments:read')
+ON CONFLICT DO NOTHING;
+
+INSERT INTO tenancy.user_roles (user_id, role_id, tenant_id, assigned_by)
+SELECT u.id, '00000000-0000-0000-0000-0000000000a1', '00000000-0000-0000-0000-000000000001', u.id
+FROM auth.users u
+WHERE u.email = 'orguser@test.local'
+ON CONFLICT DO NOTHING;
+
 -- Enable all relevant modules for the test tenant
 INSERT INTO tenancy.tenant_modules (tenant_id, module_code, is_enabled)
 VALUES

@@ -24,6 +24,7 @@ type LoginUserDto struct {
 	DeviceOs   string     `json:"device_os"`
 	Browser    string     `json:"browser"`
 	UserAgent  string     `json:"user_agent"`
+	ClientType string     `json:"client_type"` // web | mobile, from X-Client-Type (TRACK-015 D2)
 }
 
 // LoginExternalRequestDto for OAuth logins (Facebook, Google, etc.)
@@ -52,6 +53,7 @@ type LoginExternalDto struct {
 	DeviceOs         string               `json:"device_os"`
 	Browser          string               `json:"browser"`
 	UserAgent        string               `json:"user_agent"`
+	ClientType       string               `json:"client_type"` // web | mobile, from X-Client-Type (TRACK-015 D2)
 }
 
 // LoginSuccessResponse returned after successful login
@@ -226,6 +228,7 @@ type VerifyOtpDto struct {
 	DeviceOs    string
 	Browser     string
 	UserAgent   string
+	ClientType  string // web | mobile, from X-Client-Type (TRACK-015 D2)
 }
 
 // VerifyOtpResponse is the response after successfully verifying an OTP

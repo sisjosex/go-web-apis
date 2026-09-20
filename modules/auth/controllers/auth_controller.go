@@ -65,6 +65,11 @@ func (uc *AuthController) Login(c *gin.Context) {
 		return
 	}
 
+	declaredClient, ok := clientType(c)
+	if !ok {
+		return
+	}
+
 	userAgent := c.GetHeader("User-Agent")
 
 	var deviceInfo, deviceOs string
@@ -94,6 +99,7 @@ func (uc *AuthController) Login(c *gin.Context) {
 	}
 	loginUser.Browser = browser
 	loginUser.UserAgent = userAgent
+	loginUser.ClientType = declaredClient
 
 	sessionUser, err := uc.authService.LoginUser(loginUser)
 	if err != nil {
@@ -138,6 +144,11 @@ func (uc *AuthController) LoginFacebook(c *gin.Context) {
 		return
 	}
 
+	declaredClient, ok := clientType(c)
+	if !ok {
+		return
+	}
+
 	userAgent := c.GetHeader("User-Agent")
 
 	var deviceInfo, deviceOs, browser string
@@ -165,6 +176,7 @@ func (uc *AuthController) LoginFacebook(c *gin.Context) {
 	loginExternal.DeviceOs = deviceOs
 	loginExternal.Browser = browser
 	loginExternal.UserAgent = userAgent
+	loginExternal.ClientType = declaredClient
 	// Facabeook Login
 	loginExternal.AuthProviderName = "facebook"
 
@@ -289,6 +301,11 @@ func (uc *AuthController) Register(ctx *gin.Context) {
 
 	// Auto-login: create a session immediately so the client receives tokens
 	// and can proceed to onboarding without a separate login step.
+	declaredClient, ok := clientType(ctx)
+	if !ok {
+		return
+	}
+
 	userAgent := ctx.GetHeader("User-Agent")
 	var deviceInfo, deviceOs, browser string
 	if uc.parser != nil {
@@ -306,6 +323,7 @@ func (uc *AuthController) Register(ctx *gin.Context) {
 		DeviceOs:   deviceOs,
 		Browser:    browser,
 		UserAgent:  userAgent,
+		ClientType: declaredClient,
 	})
 	if err != nil {
 		ctx.JSON(http.StatusInternalServerError, coreErrors.BuildError(ctx, err))
