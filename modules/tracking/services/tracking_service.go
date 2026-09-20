@@ -40,8 +40,8 @@ func (s *TrackingService) GetRouteRealtimeStatus(ctx context.Context, tenantID u
 }
 
 // GetRiderStatus gets rider status for guardian view
-func (s *TrackingService) GetRiderStatus(ctx context.Context, tenantID uuid.UUID, riderID uuid.UUID, scopeUserID *uuid.UUID) (*models.RiderStatusResponse, error) {
-	return s.trackingRepo.GetRiderStatus(ctx, tenantID, riderID, scopeUserID)
+func (s *TrackingService) GetRiderStatus(ctx context.Context, tenantID uuid.UUID, riderID uuid.UUID, scopeUserID *uuid.UUID, guardianUserID *uuid.UUID) (*models.RiderStatusResponse, error) {
+	return s.trackingRepo.GetRiderStatus(ctx, tenantID, riderID, scopeUserID, guardianUserID)
 }
 
 // CreateRouteAlert creates a route delay/breakdown alert
@@ -157,8 +157,8 @@ func (s *TrackingService) UpdateRider(ctx context.Context, tenantID uuid.UUID, r
 	return s.trackingRepo.UpdateRider(ctx, tenantID, riderID, dto, scopeUserID)
 }
 
-func (s *TrackingService) ListRiders(ctx context.Context, tenantID uuid.UUID, query models.ListRidersQuery, scopeUserID *uuid.UUID) (*models.ListRidersResponse, error) {
-	riders, totalCount, err := s.trackingRepo.ListRiders(ctx, tenantID, query, scopeUserID)
+func (s *TrackingService) ListRiders(ctx context.Context, tenantID uuid.UUID, query models.ListRidersQuery, scopeUserID *uuid.UUID, guardianUserID *uuid.UUID) (*models.ListRidersResponse, error) {
+	riders, totalCount, err := s.trackingRepo.ListRiders(ctx, tenantID, query, scopeUserID, guardianUserID)
 	if err != nil {
 		return nil, err
 	}

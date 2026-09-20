@@ -259,7 +259,7 @@ func (r *TrackingRepository) GetRouteRealtimeStatus(ctx context.Context, tenantI
 }
 
 // GetRiderStatus gets rider status for guardian view
-func (r *TrackingRepository) GetRiderStatus(ctx context.Context, tenantID uuid.UUID, riderID uuid.UUID, scopeUserID *uuid.UUID) (*models.RiderStatusResponse, error) {
+func (r *TrackingRepository) GetRiderStatus(ctx context.Context, tenantID uuid.UUID, riderID uuid.UUID, scopeUserID *uuid.UUID, guardianUserID *uuid.UUID) (*models.RiderStatusResponse, error) {
 	var retRiderID uuid.UUID
 	var riderName string
 	var routeID *uuid.UUID
@@ -280,10 +280,11 @@ func (r *TrackingRepository) GetRiderStatus(ctx context.Context, tenantID uuid.U
 
 	err := r.dbService.QueryRow(
 		ctx,
-		`SELECT * FROM tracking.sp_get_rider_status($1, $2, $3)`,
+		`SELECT * FROM tracking.sp_get_rider_status($1, $2, $3, $4)`,
 		tenantID,
 		riderID,
 		scopeUserID,
+		guardianUserID,
 	).Scan(
 		&retRiderID,
 		&riderName,
@@ -693,10 +694,10 @@ func (r *TrackingRepository) UpdateRider(ctx context.Context, tenantID uuid.UUID
 
 // ListRiders returns one page of the tenant's riders plus the total the same filters match.
 // total_count comes back on every row and stays 0 when the page is empty.
-func (r *TrackingRepository) ListRiders(ctx context.Context, tenantID uuid.UUID, query models.ListRidersQuery, scopeUserID *uuid.UUID) ([]*models.Rider, int64, error) {
+func (r *TrackingRepository) ListRiders(ctx context.Context, tenantID uuid.UUID, query models.ListRidersQuery, scopeUserID *uuid.UUID, guardianUserID *uuid.UUID) ([]*models.Rider, int64, error) {
 	rows, err := r.dbService.Query(ctx,
-		`SELECT * FROM tracking.sp_list_riders($1::UUID, $2::UUID, $3::VARCHAR, $4::VARCHAR, $5::BOOLEAN, $6::INT, $7::INT, $8::UUID)`,
-		tenantID, query.OrganizationID, query.Search, query.RiderType, query.IsActive, query.Page, query.PageSize, scopeUserID)
+		`SELECT * FROM tracking.sp_list_riders($1::UUID, $2::UUID, $3::VARCHAR, $4::VARCHAR, $5::BOOLEAN, $6::INT, $7::INT, $8::UUID, $9::UUID)`,
+		tenantID, query.OrganizationID, query.Search, query.RiderType, query.IsActive, query.Page, query.PageSize, scopeUserID, guardianUserID)
 	if err != nil {
 		return nil, 0, scopedErr(err, trackingErrors.RiderListFailed)
 	}

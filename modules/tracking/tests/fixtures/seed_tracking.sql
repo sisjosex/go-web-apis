@@ -150,6 +150,19 @@ INSERT INTO tracking.riders (
     NOW()
 );
 
+-- portal@test.local is John's guardian and no one else's: that one contact row is the whole scope
+-- TRACK-017's SPs resolve, so Jane beside him is what "out of scope" looks like for a guardian.
+INSERT INTO tracking.rider_contacts (rider_id, relation, name, phone, email, user_id, is_primary)
+SELECT 'eeeeeeee-eeee-eeee-eeee-eeeeeeeeeeee'::uuid,
+       'guardian',
+       'Portal Guardian',
+       '+3333333333',
+       u.email,
+       u.id,
+       true
+FROM auth.users u
+WHERE u.email = 'portal@test.local';
+
 -- ================================================================
 -- ROUTES
 -- ================================================================

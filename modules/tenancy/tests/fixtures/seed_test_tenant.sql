@@ -65,6 +65,16 @@ SELECT
 FROM auth.users u
 WHERE u.email = 'portal@test.local';
 
+-- A second guardian, linked to no rider (TRACK-017 D2): the access level alone is not a scope.
+INSERT INTO tenancy.tenant_users (tenant_id, user_id, role, is_active)
+SELECT
+    '00000000-0000-0000-0000-000000000001',
+    u.id,
+    'portal',
+    true
+FROM auth.users u
+WHERE u.email = 'portal-unlinked@test.local';
+
 -- A driver account is mobile-only too (TRACK-006 D1); the web refuses it exactly as it refuses portal.
 INSERT INTO tenancy.tenant_users (tenant_id, user_id, role, is_active)
 SELECT

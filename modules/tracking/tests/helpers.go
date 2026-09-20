@@ -75,6 +75,15 @@ func SetupPortalTest(t *testing.T) *testhelpers.ApiTestHelper {
 	return helper
 }
 
+// SetupUnlinkedPortalTest signs in the second seeded guardian, the one the school has linked to no
+// rider: its scope is empty, which is an empty list and not a refusal (TRACK-017 D2).
+func SetupUnlinkedPortalTest(t *testing.T) *testhelpers.ApiTestHelper {
+	helper := testhelpers.SetupApiTest(t)
+	helper.Login("portal-unlinked@test.local", "Portal123!")
+	helper.SetTenantSlug("test-company")
+	return helper
+}
+
 // SetupDriverTest signs in the seeded driver account — mobile-only, like portal (TRACK-006 D1).
 func SetupDriverTest(t *testing.T) *testhelpers.ApiTestHelper {
 	helper := testhelpers.SetupApiTest(t)

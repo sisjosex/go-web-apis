@@ -2729,6 +2729,95 @@ func TestDriverUserRefusedOnWeb(t *testing.T) {
 	assert.Contains(t, w.Body.String(), "tenant.user.portal-web-forbidden")
 }
 
+// ============================================================================
+// GUARDIAN ACCESS (TRACK-017)
+// ============================================================================
+
+// TestPortalGuardianListsOnlyItsOwnRiders verifies the whole of D1 and D2 on the list: the portal
+// chain lets the level through, and the scope inside the SP narrows the page to the riders the
+// guardian is a contact of — John is seeded to portal@test.local, Jane is not.
+func TestPortalGuardianListsOnlyItsOwnRiders(t *testing.T) {
+	portal := SetupPortalTest(t)
+	defer portal.Close()
+
+	listed := ListRiders(t, portal, "?page=1&page_size=100")
+
+	if len(listed.Riders) != 1 {
+		t.Fatalf("guardian should see exactly its one rider, got %d", len(listed.Riders))
+	}
+	assert.Equal(t, TestRiderJohnID, listed.Riders[0].ID.String())
+	assert.Equal(t, int64(1), listed.TotalCount)
+}
+
+// TestPortalGuardianReadsOnlyItsOwnRiderStatus verifies the same scope on the status read: the
+// rider outside it answers not-found, never forbidden, so the caller learns nothing about it.
+func TestPortalGuardianReadsOnlyItsOwnRiderStatus(t *testing.T) {
+	portal := SetupPortalTest(t)
+	defer portal.Close()
+
+	w := portal.DoRequest("GET", "/tracking/riders/"+TestRiderJohnID+"/status", nil, map[string]string{})
+	assert.Equal(t, http.StatusOK, w.Code, w.Body.String())
+	status := ParseResponse(t, w.Body.Bytes())
+	assert.Equal(t, "John Student", status["rider_name"])
+
+	w = portal.DoRequest("GET", "/tracking/riders/"+TestRiderJaneID+"/status", nil, map[string]string{})
+	assert.Equal(t, http.StatusNotFound, w.Code, w.Body.String())
+}
+
+// TestPortalGuardianStillRefusedElsewhere verifies that lifting the refusal is per route and not
+// per level: everything the guardian may not read is still the blanket 403 of TRACK-015 D2.
+func TestPortalGuardianStillRefusedElsewhere(t *testing.T) {
+	portal := SetupPortalTest(t)
+	defer portal.Close()
+
+	for _, path := range []string{
+		"/tracking/companies",
+		"/tracking/routes",
+		"/tracking/riders/" + TestRiderJohnID,
+	} {
+		w := portal.DoRequest("GET", path, nil, map[string]string{})
+		assert.Equal(t, http.StatusForbidden, w.Code, path+": "+w.Body.String())
+		assert.Contains(t, w.Body.String(), "tenant.user.portal-web-forbidden", path)
+	}
+}
+
+// TestUnlinkedGuardianReadsAnEmptyList verifies D2's one departure from the organization scope: a
+// parent the school has not linked yet is a normal state, so the list is empty and 200, not 403.
+func TestUnlinkedGuardianReadsAnEmptyList(t *testing.T) {
+	portal := SetupUnlinkedPortalTest(t)
+	defer portal.Close()
+
+	listed := ListRiders(t, portal, "?page=1&page_size=100")
+
+	assert.Empty(t, listed.Riders)
+	assert.Equal(t, int64(0), listed.TotalCount)
+
+	// And a rider it is not a guardian of stays not-found, as it is for a linked guardian.
+	w := portal.DoRequest("GET", "/tracking/riders/"+TestRiderJohnID+"/status", nil, map[string]string{})
+	assert.Equal(t, http.StatusNotFound, w.Code, w.Body.String())
+}
+
+// TestOperatorRidersUnchangedByGuardianScope verifies the contract the guardian parameter must not
+// break: an operator still reads the whole tenant on both routes (TRACK-017 step 3).
+func TestOperatorRidersUnchangedByGuardianScope(t *testing.T) {
+	operator := SetupTrackingTest(t)
+	defer operator.Close()
+
+	listed := ListRiders(t, operator, "?page=1&page_size=100")
+
+	ids := map[string]bool{}
+	for _, rider := range listed.Riders {
+		ids[rider.ID.String()] = true
+	}
+	assert.True(t, ids[TestRiderJohnID], "operator should still see John")
+	assert.True(t, ids[TestRiderJaneID], "operator should still see Jane")
+
+	for _, riderID := range []string{TestRiderJohnID, TestRiderJaneID} {
+		w := operator.DoRequest("GET", "/tracking/riders/"+riderID+"/status", nil, map[string]string{})
+		assert.Equal(t, http.StatusOK, w.Code, w.Body.String())
+	}
+}
+
 // TestOrganizationUserSeesOnlyItsOwnRiders verifies the scope resolved inside the SP: a rider in
 // another organization of the same tenant is neither listed nor readable (TRACK-015 D1).
 func TestOrganizationUserSeesOnlyItsOwnRiders(t *testing.T) {

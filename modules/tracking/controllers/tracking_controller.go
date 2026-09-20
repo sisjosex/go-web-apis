@@ -98,6 +98,26 @@ func (ctrl *TrackingController) scopeUserID(c *gin.Context) *uuid.UUID {
 	return &userID
 }
 
+// guardianUserID is the user a guardian's read is narrowed by (TRACK-017 D2). Only a `portal`
+// account carries one: the two reads it may make take it as p_guardian_user_id and resolve the
+// rider_contacts rows themselves, in the same round-trip. Every other level — operator,
+// organization, super_admin — gets nil and reads exactly as before.
+//
+// Unlike scopeUserID, an empty scope is not a refusal: a parent the school has not linked yet reads
+// an empty list, which is what the app has copy for.
+func (ctrl *TrackingController) guardianUserID(c *gin.Context) *uuid.UUID {
+	role, exists := c.Get("tenant_user_role")
+	if !exists || role != tenancyModels.RolePortal {
+		return nil
+	}
+
+	userID, err := uuid.Parse(c.GetString("user_id"))
+	if err != nil {
+		return nil
+	}
+	return &userID
+}
+
 // scopeRefused answers 403 when the caller's access level is organization but they belong to no
 // organization in this tenant — a misconfigured account, not an empty result. It reports whether it
 // has already written the response.
@@ -314,7 +334,7 @@ func (ctrl *TrackingController) GetRiderStatus(c *gin.Context) {
 		return
 	}
 
-	response, err := ctrl.trackingService.GetRiderStatus(c.Request.Context(), tenantID, riderID, ctrl.scopeUserID(c))
+	response, err := ctrl.trackingService.GetRiderStatus(c.Request.Context(), tenantID, riderID, ctrl.scopeUserID(c), ctrl.guardianUserID(c))
 	if err != nil {
 		if scopeRefused(c, err) {
 			return
@@ -1171,7 +1191,7 @@ func (ctrl *TrackingController) ListRiders(c *gin.Context) {
 	}
 	query.Search = strings.TrimSpace(query.Search)
 
-	result, err := ctrl.trackingService.ListRiders(c.Request.Context(), tenantID, query, ctrl.scopeUserID(c))
+	result, err := ctrl.trackingService.ListRiders(c.Request.Context(), tenantID, query, ctrl.scopeUserID(c), ctrl.guardianUserID(c))
 	if err != nil {
 		if scopeRefused(c, err) {
 			return

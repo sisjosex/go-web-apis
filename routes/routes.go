@@ -31,6 +31,7 @@ import (
 	tenancyControllers "josex/web/modules/tenancy/controllers"
 	tenancyInterfaces "josex/web/modules/tenancy/interfaces"
 	tenancyMW "josex/web/modules/tenancy/middleware"
+	tenancyModels "josex/web/modules/tenancy/models"
 	tenancyRepos "josex/web/modules/tenancy/repositories"
 	tenancyRoutes "josex/web/modules/tenancy/routes"
 	tenancyServices "josex/web/modules/tenancy/services"
@@ -160,6 +161,10 @@ func SetupRoutes(r *gin.Engine, dbService coreServices.DatabaseService) {
 		// Tenant middleware — no-op when tenancy is disabled so business routes still register
 		tenantMiddleware := gin.HandlerFunc(func(c *gin.Context) { c.Next() })
 
+		// Same chain, but a portal guardian passes the mobile-only refusal (TRACK-017 D1). Only the
+		// routes a guardian may read are registered behind it.
+		portalTenantMiddleware := tenantMiddleware
+
 		// Initialize tenancy services (needed for other modules)
 		var moduleService tenancyInterfaces.ModuleService
 		if coreConf.IsModuleEnabled("tenancy") && tenancyConf != nil && tenancyConf.Enabled {
@@ -189,6 +194,7 @@ func SetupRoutes(r *gin.Engine, dbService coreServices.DatabaseService) {
 			// TenantMiddlewareFromHeader always requires X-Tenant-Slug;
 			// super_admin can switch to any tenant, regular users must be members.
 			tenantMiddleware = tenancyMW.TenantMiddlewareFromHeader(tenantService)
+			portalTenantMiddleware = tenancyMW.TenantMiddlewareFromHeader(tenantService, tenancyModels.RolePortal)
 
 			// Users module — tenant-scoped: requires X-Tenant-Slug + owner/admin role
 			userRoutes.RegisterUserRoutes(apiV1, userController, userAuditController, jwtService, tenantMiddleware)
@@ -213,10 +219,12 @@ func SetupRoutes(r *gin.Engine, dbService coreServices.DatabaseService) {
 			trackingController := trackingControllers.NewTrackingController(trackingService, trackingDocumentFiles)
 
 			// Build a composite tenant+module middleware chain for tracking
-			trackingTenantMiddleware := tenantMiddleware
-			if moduleService != nil {
-				trackingTenantMiddleware = gin.HandlerFunc(func(c *gin.Context) {
-					tenantMiddleware(c)
+			trackingChain := func(tenant gin.HandlerFunc) gin.HandlerFunc {
+				if moduleService == nil {
+					return tenant
+				}
+				return gin.HandlerFunc(func(c *gin.Context) {
+					tenant(c)
 					if c.IsAborted() {
 						return
 					}
@@ -227,9 +235,12 @@ func SetupRoutes(r *gin.Engine, dbService coreServices.DatabaseService) {
 					tenancyMW.RequireModule("tracking")(c)
 				})
 			}
+			trackingTenantMiddleware := trackingChain(tenantMiddleware)
+			// The guardian's two reads run the same chain with the portal refusal lifted (TRACK-017 D1).
+			trackingPortalTenantMiddleware := trackingChain(portalTenantMiddleware)
 
 			// Register tracking routes with tenant middleware and JWT service for auth
-			trackingRoutes.RegisterTrackingRoutes(r, trackingController, trackingTenantMiddleware, jwtService)
+			trackingRoutes.RegisterTrackingRoutes(r, trackingController, trackingTenantMiddleware, trackingPortalTenantMiddleware, jwtService)
 			log.Println("✅ Tracking module enabled and routes registered")
 		}
 

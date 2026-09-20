@@ -147,7 +147,12 @@ func TenantMiddleware(tenantService interfaces.TenantService) gin.HandlerFunc {
 //
 // - super_admin: can switch to ANY tenant; membership in tenant_users is not required.
 // - All other roles: must be a member of the requested tenant (verified via tenant_users).
-func TenantMiddlewareFromHeader(tenantService interfaces.TenantService) gin.HandlerFunc {
+//
+// allowMobileRoles names the mobile-only access levels this chain lets through (TRACK-017 D1).
+// Empty — the production default — keeps the blanket refusal of TRACK-015 D2; a module that serves
+// a mobile client builds a second chain naming the level it serves, so the exception is read at the
+// route rather than from a path list in here.
+func TenantMiddlewareFromHeader(tenantService interfaces.TenantService, allowMobileRoles ...string) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		// Check if multitenancy is enabled
 		tenancyConf := config.ModularAppConfig.Tenancy
@@ -182,36 +187,10 @@ func TenantMiddlewareFromHeader(tenantService interfaces.TenantService) gin.Hand
 
 		systemRoleStr, _ := c.Get("system_role")
 
-		var tenantAccess *models.TenantAccessInfo
-
-		if systemRoleStr == coreModels.SystemRoleSuperAdmin {
-			// super_admin can switch to any tenant — bypass membership check
-			tenant, err := tenantService.GetTenantBySlug(c.Request.Context(), tenantSlug)
-			if err != nil {
-				c.JSON(http.StatusNotFound, coreErrors.BuildErrorSingle(c, tenancyErrors.TenantNotFound))
-				c.Abort()
-				return
-			}
-			tenantAccess = &models.TenantAccessInfo{
-				TenantID:     tenant.ID,
-				Slug:         tenant.Slug,
-				Name:         tenant.Name,
-				DatabaseURL:  tenant.DatabaseURL,
-				SchemaName:   tenant.SchemaName,
-				IsActive:     tenant.IsActive,
-				IsSuspended:  tenant.IsSuspended,
-				UserRole:     coreModels.SystemRoleSuperAdmin,
-				UserIsActive: true,
-				Permissions:  make(map[string]bool),
-			}
-		} else {
-			// Regular users must be members of the tenant
-			tenantAccess, err = tenantService.VerifyUserTenantAccess(c.Request.Context(), userID, tenantSlug)
-			if err != nil {
-				c.JSON(http.StatusForbidden, coreErrors.BuildError(c, err))
-				c.Abort()
-				return
-			}
+		tenantAccess := resolveTenantAccess(c, tenantService, tenantSlug, userID,
+			systemRoleStr == coreModels.SystemRoleSuperAdmin)
+		if tenantAccess == nil {
+			return
 		}
 
 		// A system super_admin bypasses permission checks regardless of tenant role
@@ -220,7 +199,7 @@ func TenantMiddlewareFromHeader(tenantService interfaces.TenantService) gin.Hand
 		// A portal guardian and a driver are mobile-only accounts (TRACK-015 D2, TRACK-006 D1). The
 		// level is already on the access row, so refusing it here costs nothing and covers every web
 		// tenant route at once.
-		if models.IsMobileOnlyTenantRole(tenantAccess.UserRole) {
+		if models.IsMobileOnlyTenantRole(tenantAccess.UserRole) && !roleAllowed(tenantAccess.UserRole, allowMobileRoles) {
 			c.JSON(http.StatusForbidden, coreErrors.BuildErrorSingle(c, tenancyErrors.TenantUserPortalWebForbidden))
 			c.Abort()
 			return
@@ -256,6 +235,57 @@ func TenantMiddlewareFromHeader(tenantService interfaces.TenantService) gin.Hand
 
 		c.Next()
 	}
+}
+
+// resolveTenantAccess answers the access row this request runs under: a super_admin switches to any
+// tenant without a membership, everyone else must be a member of the one they asked for. It writes
+// its own refusal and aborts, returning nil, when the tenant is unreachable either way.
+func resolveTenantAccess(
+	c *gin.Context,
+	tenantService interfaces.TenantService,
+	tenantSlug string,
+	userID uuid.UUID,
+	isSuperAdmin bool,
+) *models.TenantAccessInfo {
+	if isSuperAdmin {
+		tenant, err := tenantService.GetTenantBySlug(c.Request.Context(), tenantSlug)
+		if err != nil {
+			c.JSON(http.StatusNotFound, coreErrors.BuildErrorSingle(c, tenancyErrors.TenantNotFound))
+			c.Abort()
+			return nil
+		}
+		return &models.TenantAccessInfo{
+			TenantID:     tenant.ID,
+			Slug:         tenant.Slug,
+			Name:         tenant.Name,
+			DatabaseURL:  tenant.DatabaseURL,
+			SchemaName:   tenant.SchemaName,
+			IsActive:     tenant.IsActive,
+			IsSuspended:  tenant.IsSuspended,
+			UserRole:     coreModels.SystemRoleSuperAdmin,
+			UserIsActive: true,
+			Permissions:  make(map[string]bool),
+		}
+	}
+
+	tenantAccess, err := tenantService.VerifyUserTenantAccess(c.Request.Context(), userID, tenantSlug)
+	if err != nil {
+		c.JSON(http.StatusForbidden, coreErrors.BuildError(c, err))
+		c.Abort()
+		return nil
+	}
+	return tenantAccess
+}
+
+// roleAllowed reports whether role is one of allowed. The slice is a route-registration constant of
+// at most one element, so the scan costs nothing per request.
+func roleAllowed(role string, allowed []string) bool {
+	for _, r := range allowed {
+		if role == r {
+			return true
+		}
+	}
+	return false
 }
 
 // TenantMiddlewareFromHeaderOptional is kept as an alias for backward compatibility.

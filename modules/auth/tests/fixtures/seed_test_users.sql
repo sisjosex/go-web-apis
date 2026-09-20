@@ -102,6 +102,29 @@ SET
 WHERE email = 'portal@test.local';
 
 -- ================================================================
+-- UNLINKED PORTAL USER (TRACK-017)
+-- ================================================================
+-- Email: portal-unlinked@test.local
+-- Password: Portal123!
+-- Tenant access level: portal, with no rider linked to it — the normal state of a parent the school
+-- has not added yet, which reads an empty list rather than a refusal (D2).
+-- ================================================================
+DELETE FROM auth.users WHERE email = 'portal-unlinked@test.local';
+SELECT * FROM auth.sp_register_user(
+	p_email := 'portal-unlinked@test.local',
+	p_first_name := 'Unlinked',
+	p_last_name := 'Guardian',
+	p_password := 'Portal123!'
+);
+
+UPDATE auth.users
+SET
+	system_role = 'user',
+	subscription_plan = 'free',
+	email_verified = true
+WHERE email = 'portal-unlinked@test.local';
+
+-- ================================================================
 -- DRIVER USER (TRACK-006)
 -- ================================================================
 -- Email: driver@test.local
