@@ -851,6 +851,10 @@ func TestListRidersByOrganization(t *testing.T) {
 		if assert.NotNil(t, rider.OrganizationName) {
 			assert.Equal(t, "Main Test School", *rider.OrganizationName)
 		}
+		// And its kind, so the mobile app can call the rows students or staff (MOBILE-002 D3).
+		if assert.NotNil(t, rider.OrganizationKind) {
+			assert.Equal(t, "school", *rider.OrganizationKind)
+		}
 	}
 }
 
