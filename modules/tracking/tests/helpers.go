@@ -70,6 +70,14 @@ func SetupPortalTest(t *testing.T) *testhelpers.ApiTestHelper {
 	return helper
 }
 
+// SetupDriverTest signs in the seeded driver account — mobile-only, like portal (TRACK-006 D1).
+func SetupDriverTest(t *testing.T) *testhelpers.ApiTestHelper {
+	helper := testhelpers.SetupApiTest(t)
+	helper.Login("driver@test.local", "Driver123!")
+	helper.SetTenantSlug("test-company")
+	return helper
+}
+
 // SetupOrganizationTest signs in the seeded organization user, a member of MainSchoolID and of
 // nothing else: every tracking read it makes is scoped to that one organization (TRACK-015 D1).
 func SetupOrganizationTest(t *testing.T) *testhelpers.ApiTestHelper {
@@ -357,6 +365,32 @@ func ValidRouteStopDto() models.CreateRouteStopDto {
 		Longitude:     -74.0060,
 		SequenceOrder: 1,
 	}
+}
+
+// ============================================================================
+// DRIVER TEST BUILDERS (TRACK-006)
+// ============================================================================
+
+// ValidDriverBody returns a create-driver body for the seeded carrier, with a licence number no
+// other test can collide with.
+func ValidDriverBody() map[string]interface{} {
+	return map[string]interface{}{
+		"company_id":     MainCompanyID,
+		"first_name":     "Ana",
+		"last_name":      "Quispe",
+		"phone":          "+51987654321",
+		"license_number": "LIC-" + uuid.New().String()[:8],
+		"license_class":  "A-IIIb",
+	}
+}
+
+// CreateTestDriver creates a driver for the seeded carrier and returns its id.
+func CreateTestDriver(t *testing.T, helper *testhelpers.ApiTestHelper) string {
+	w := helper.DoRequest("POST", "/tracking/drivers", ValidDriverBody(), map[string]string{})
+	if w.Code != 201 {
+		t.Fatalf("create driver: expected 201, got %d: %s", w.Code, w.Body.String())
+	}
+	return ParseResponse(t, w.Body.Bytes())["id"].(string)
 }
 
 // ============================================================================

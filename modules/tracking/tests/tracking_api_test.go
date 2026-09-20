@@ -2102,6 +2102,220 @@ func TestAssignRider_Duplicate(t *testing.T) {
 }
 
 // ============================================================================
+// DRIVERS CRUD TESTS (TRACK-006)
+// ============================================================================
+
+// TestCreateDriverSuccess - Create a driver for the seeded carrier -> 201, with the carrier's name
+// and a NULL account already on the row.
+func TestCreateDriverSuccess(t *testing.T) {
+	helper := SetupTrackingTest(t)
+	defer helper.Close()
+
+	w := helper.DoRequest("POST", "/tracking/drivers", ValidDriverBody(), map[string]string{})
+
+	assert.Equal(t, http.StatusCreated, w.Code, w.Body.String())
+	driver := ParseResponse(t, w.Body.Bytes())
+	assert.Equal(t, MainCompanyID, driver["company_id"])
+	assert.Equal(t, "Main Test Transit", driver["company_name"])
+	assert.Equal(t, "active", driver["status"])
+	assert.Nil(t, driver["user_id"])
+	assert.Nil(t, driver["user_email"])
+}
+
+// TestCreateDriverDuplicateLicense - The licence number is unique per tenant -> 409 with the code
+// the app shows against the licence field.
+func TestCreateDriverDuplicateLicense(t *testing.T) {
+	helper := SetupTrackingTest(t)
+	defer helper.Close()
+
+	body := ValidDriverBody()
+	first := helper.DoRequest("POST", "/tracking/drivers", body, map[string]string{})
+	assert.Equal(t, http.StatusCreated, first.Code, first.Body.String())
+
+	second := helper.DoRequest("POST", "/tracking/drivers", body, map[string]string{})
+
+	assert.Equal(t, http.StatusConflict, second.Code, second.Body.String())
+	assert.Contains(t, second.Body.String(), "tracking.driver.license-already-exists")
+}
+
+// TestCreateDriverUnknownCompany - A carrier of another tenant, or none at all, is not a carrier
+// this driver may belong to -> 404.
+func TestCreateDriverUnknownCompany(t *testing.T) {
+	helper := SetupTrackingTest(t)
+	defer helper.Close()
+
+	body := ValidDriverBody()
+	body["company_id"] = uuid.New().String()
+
+	w := helper.DoRequest("POST", "/tracking/drivers", body, map[string]string{})
+
+	assert.Equal(t, http.StatusNotFound, w.Code, w.Body.String())
+	assert.Contains(t, w.Body.String(), "tracking.company.not-found")
+}
+
+// TestListDriversPaged - page_size caps the rows and total_count counts what the filters match, the
+// purchasing shape every new list endpoint answers with.
+func TestListDriversPaged(t *testing.T) {
+	helper := SetupTrackingTest(t)
+	defer helper.Close()
+
+	for i := 0; i < 3; i++ {
+		CreateTestDriver(t, helper)
+	}
+
+	w := helper.DoRequest("GET", "/tracking/drivers?page=1&page_size=2", nil, map[string]string{})
+
+	assert.Equal(t, http.StatusOK, w.Code, w.Body.String())
+	page := ParseResponse(t, w.Body.Bytes())
+	drivers := page["drivers"].([]interface{})
+	assert.Len(t, drivers, 2)
+	assert.GreaterOrEqual(t, page["total_count"].(float64), float64(3))
+	assert.Equal(t, float64(2), page["page_size"])
+}
+
+// TestListDriversBySearchAndCompany - search matches a name or the licence, company_id narrows to
+// one carrier, and a carrier with no drivers is an empty page, not an error.
+func TestListDriversBySearchAndCompany(t *testing.T) {
+	helper := SetupTrackingTest(t)
+	defer helper.Close()
+
+	body := ValidDriverBody()
+	surname := "Mamani" + uuid.New().String()[:6]
+	body["last_name"] = surname
+	created := helper.DoRequest("POST", "/tracking/drivers", body, map[string]string{})
+	assert.Equal(t, http.StatusCreated, created.Code, created.Body.String())
+
+	byName := helper.DoRequest("GET", "/tracking/drivers?search="+url.QueryEscape(surname), nil, map[string]string{})
+	assert.Equal(t, http.StatusOK, byName.Code, byName.Body.String())
+	assert.Equal(t, float64(1), ParseResponse(t, byName.Body.Bytes())["total_count"])
+
+	license := body["license_number"].(string)
+	byLicense := helper.DoRequest("GET", "/tracking/drivers?search="+url.QueryEscape(license), nil, map[string]string{})
+	assert.Equal(t, http.StatusOK, byLicense.Code, byLicense.Body.String())
+	assert.Equal(t, float64(1), ParseResponse(t, byLicense.Body.Bytes())["total_count"])
+
+	otherCarrier := helper.DoRequest("GET", "/tracking/drivers?company_id="+SecondaryCompanyID, nil, map[string]string{})
+	assert.Equal(t, http.StatusOK, otherCarrier.Code, otherCarrier.Body.String())
+	assert.Equal(t, float64(0), ParseResponse(t, otherCarrier.Body.Bytes())["total_count"])
+}
+
+// TestUpdateDriverKeepsCompanyAndUnlinksAccount - PATCH changes what it sends, the carrier is
+// immutable, and clear_user_id is the one thing no user_id value can say.
+func TestUpdateDriverKeepsCompanyAndUnlinksAccount(t *testing.T) {
+	helper := SetupTrackingTest(t)
+	defer helper.Close()
+
+	driverID := CreateTestDriver(t, helper)
+
+	var accountID string
+	if err := helper.DB().QueryRow(context.Background(),
+		`SELECT id::text FROM auth.users WHERE email = 'driver@test.local'`).Scan(&accountID); err != nil {
+		t.Fatalf("read the driver account: %v", err)
+	}
+
+	linked := helper.DoRequest("PATCH", "/tracking/drivers/"+driverID, map[string]interface{}{
+		"user_id":    accountID,
+		"company_id": SecondaryCompanyID, // ignored: the carrier never moves
+		"status":     "suspended",
+	}, map[string]string{})
+	assert.Equal(t, http.StatusOK, linked.Code, linked.Body.String())
+	driver := ParseResponse(t, linked.Body.Bytes())
+	assert.Equal(t, accountID, driver["user_id"])
+	assert.Equal(t, "driver@test.local", driver["user_email"])
+	assert.Equal(t, MainCompanyID, driver["company_id"])
+	assert.Equal(t, "suspended", driver["status"])
+
+	unlinked := helper.DoRequest("PATCH", "/tracking/drivers/"+driverID, map[string]interface{}{
+		"clear_user_id": true,
+	}, map[string]string{})
+	assert.Equal(t, http.StatusOK, unlinked.Code, unlinked.Body.String())
+	after := ParseResponse(t, unlinked.Body.Bytes())
+	assert.Nil(t, after["user_id"])
+	assert.Nil(t, after["user_email"])
+	assert.Equal(t, "suspended", after["status"], "a field PATCH did not send keeps its value")
+}
+
+// TestGetDriverNotFound - A driver of another tenant reads as absent, never as forbidden.
+func TestGetDriverNotFound(t *testing.T) {
+	helper := SetupTrackingTest(t)
+	defer helper.Close()
+
+	w := helper.DoRequest("GET", "/tracking/drivers/"+uuid.New().String(), nil, map[string]string{})
+
+	assert.Equal(t, http.StatusNotFound, w.Code, w.Body.String())
+	assert.Contains(t, w.Body.String(), "tracking.driver.not-found")
+}
+
+// TestDeleteDriverRefusedWhileARouteNamesThem - the FK would set those routes' default_driver_id to
+// NULL, which is never what the click meant -> 409 with the code the app turns into a toast.
+func TestDeleteDriverRefusedWhileARouteNamesThem(t *testing.T) {
+	helper := SetupTrackingTest(t)
+	defer helper.Close()
+
+	driverID := CreateTestDriver(t, helper)
+	if _, err := helper.DB().Execute(context.Background(),
+		`UPDATE tracking.routes SET default_driver_id = $1 WHERE id = $2`,
+		driverID, MorningRouteID); err != nil {
+		t.Fatalf("name the driver on the route: %v", err)
+	}
+
+	refused := helper.DoRequest("DELETE", "/tracking/drivers/"+driverID, nil, map[string]string{})
+	assert.Equal(t, http.StatusConflict, refused.Code, refused.Body.String())
+	assert.Contains(t, refused.Body.String(), "tracking.driver.has-routes")
+
+	if _, err := helper.DB().Execute(context.Background(),
+		`UPDATE tracking.routes SET default_driver_id = NULL WHERE id = $1`, MorningRouteID); err != nil {
+		t.Fatalf("clear the route: %v", err)
+	}
+
+	deleted := helper.DoRequest("DELETE", "/tracking/drivers/"+driverID, nil, map[string]string{})
+	assert.Equal(t, http.StatusNoContent, deleted.Code, deleted.Body.String())
+}
+
+// TestDriverNameOnStatusEndpoints - driver_name stops being a TODO: both status SPs read it off the
+// route's default driver. The schedule is widened for the call because sp_get_rider_status only
+// follows an assignment whose route has not ended yet, which would otherwise make this test depend
+// on the hour it runs at.
+func TestDriverNameOnStatusEndpoints(t *testing.T) {
+	helper := SetupTrackingTest(t)
+	defer helper.Close()
+
+	driverID := CreateTestDriver(t, helper)
+	if _, err := helper.DB().Execute(context.Background(),
+		`UPDATE tracking.routes SET default_driver_id = $1, scheduled_end_time = '23:59:59' WHERE id = $2`,
+		driverID, MorningRouteID); err != nil {
+		t.Fatalf("name the driver on the route: %v", err)
+	}
+	defer func() {
+		if _, err := helper.DB().Execute(context.Background(),
+			`UPDATE tracking.routes SET default_driver_id = NULL, scheduled_end_time = '17:00:00' WHERE id = $1`,
+			MorningRouteID); err != nil {
+			t.Fatalf("restore the route: %v", err)
+		}
+	}()
+
+	riderStatus := helper.DoRequest("GET", "/tracking/riders/"+TestRiderJohnID+"/status", nil, map[string]string{})
+	assert.Equal(t, http.StatusOK, riderStatus.Code, riderStatus.Body.String())
+	assert.Equal(t, "Ana Quispe", ParseResponse(t, riderStatus.Body.Bytes())["driver_name"])
+
+	routeStatus := helper.DoRequest("GET", "/tracking/routes/"+MorningRouteID+"/status", nil, map[string]string{})
+	assert.Equal(t, http.StatusOK, routeStatus.Code, routeStatus.Body.String())
+	assert.Equal(t, "Ana Quispe", ParseResponse(t, routeStatus.Body.Bytes())["driver_name"])
+}
+
+// TestRouteStatusWithoutDefaultDriver - a route with no default driver still answers, with a NULL
+// name, exactly as it did before TRACK-006.
+func TestRouteStatusWithoutDefaultDriver(t *testing.T) {
+	helper := SetupTrackingTest(t)
+	defer helper.Close()
+
+	w := helper.DoRequest("GET", "/tracking/routes/"+AfternoonRouteID+"/status", nil, map[string]string{})
+
+	assert.Equal(t, http.StatusOK, w.Code, w.Body.String())
+	assert.Nil(t, ParseResponse(t, w.Body.Bytes())["driver_name"])
+}
+
+// ============================================================================
 // ACCESS LEVEL TESTS (TRACK-015)
 // ============================================================================
 
@@ -2109,6 +2323,18 @@ func TestAssignRider_Duplicate(t *testing.T) {
 // the tenant middleware refuses the level before any handler runs (D2).
 func TestPortalUserRefusedOnWeb(t *testing.T) {
 	helper := SetupPortalTest(t)
+	defer helper.Close()
+
+	w := helper.DoRequest("GET", "/tracking/companies", nil, map[string]string{})
+
+	assert.Equal(t, http.StatusForbidden, w.Code, w.Body.String())
+	assert.Contains(t, w.Body.String(), "tenant.user.portal-web-forbidden")
+}
+
+// TestDriverUserRefusedOnWeb verifies that a driver account gets 403 on a web tenant route, with
+// the same code a portal guardian gets — the level is mobile-only (TRACK-006 D1).
+func TestDriverUserRefusedOnWeb(t *testing.T) {
+	helper := SetupDriverTest(t)
 	defer helper.Close()
 
 	w := helper.DoRequest("GET", "/tracking/companies", nil, map[string]string{})

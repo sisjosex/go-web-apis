@@ -205,6 +205,7 @@ func (r *TrackingRepository) GetRouteRealtimeStatus(ctx context.Context, tenantI
 	var routeName string
 	var vehicleID *uuid.UUID
 	var licensePlate *string
+	var driverName *string
 	var currentLatitude, currentLongitude *float64
 	var currentSpeed *float64
 	var locationAgeSeconds *int32
@@ -221,6 +222,7 @@ func (r *TrackingRepository) GetRouteRealtimeStatus(ctx context.Context, tenantI
 		&routeName,
 		&vehicleID,
 		&licensePlate,
+		&driverName,
 		&currentLatitude,
 		&currentLongitude,
 		&currentSpeed,
@@ -242,6 +244,7 @@ func (r *TrackingRepository) GetRouteRealtimeStatus(ctx context.Context, tenantI
 		RouteName:          routeName,
 		VehicleID:          vehicleID,
 		LicensePlate:       licensePlate,
+		DriverName:         driverName,
 		CurrentLatitude:    currentLatitude,
 		CurrentLongitude:   currentLongitude,
 		CurrentSpeed:       currentSpeed,
@@ -932,6 +935,135 @@ func (r *TrackingRepository) DeleteOrganizationMember(ctx context.Context, tenan
 		return mapOrganizationError(err, trackingErrors.OrganizationMemberSaveFailed)
 	}
 	return nil
+}
+
+// ==================== DRIVERS CRUD ====================
+
+// driverColumns is the one scan order every driver read shares — list, single and write alike — so
+// adding a column to the SPs is one edit here, not five.
+func scanDriver(d *models.Driver) []any {
+	return []any{
+		&d.ID, &d.TenantID, &d.CompanyID, &d.CompanyName, &d.UserID, &d.UserEmail,
+		&d.FirstName, &d.LastName, &d.Phone, &d.LicenseNumber, &d.LicenseClass,
+		&d.LicenseExpiresOn, &d.Status, &d.CreatedAt, &d.UpdatedAt,
+	}
+}
+
+func (r *TrackingRepository) CreateDriver(ctx context.Context, tenantID uuid.UUID, dto *models.CreateDriverDto) (*models.Driver, error) {
+	var driver models.Driver
+	err := r.dbService.QueryRow(ctx, `
+		SELECT * FROM tracking.sp_create_driver(
+			p_tenant_id          := $1,
+			p_company_id         := $2,
+			p_user_id            := $3,
+			p_first_name         := $4,
+			p_last_name          := $5,
+			p_phone              := $6,
+			p_license_number     := $7,
+			p_license_class      := $8,
+			p_license_expires_on := $9,
+			p_status             := $10
+		)
+	`, tenantID, dto.CompanyID, dto.UserID, dto.FirstName, dto.LastName, dto.Phone,
+		dto.LicenseNumber, dto.LicenseClass, dto.LicenseExpiresOn, dto.Status,
+	).Scan(scanDriver(&driver)...)
+	if err != nil {
+		return nil, mapDriverError(err, trackingErrors.DriverCreateFailed)
+	}
+	return &driver, nil
+}
+
+func (r *TrackingRepository) UpdateDriver(ctx context.Context, tenantID uuid.UUID, driverID uuid.UUID, dto *models.UpdateDriverDto) (*models.Driver, error) {
+	var driver models.Driver
+	err := r.dbService.QueryRow(ctx, `
+		SELECT * FROM tracking.sp_update_driver(
+			p_tenant_id          := $1,
+			p_driver_id          := $2,
+			p_user_id            := $3,
+			p_clear_user_id      := $4,
+			p_first_name         := $5,
+			p_last_name          := $6,
+			p_phone              := $7,
+			p_license_number     := $8,
+			p_license_class      := $9,
+			p_license_expires_on := $10,
+			p_status             := $11
+		)
+	`, tenantID, driverID, dto.UserID, dto.ClearUserID, dto.FirstName, dto.LastName, dto.Phone,
+		dto.LicenseNumber, dto.LicenseClass, dto.LicenseExpiresOn, dto.Status,
+	).Scan(scanDriver(&driver)...)
+	if err != nil {
+		return nil, mapDriverError(err, trackingErrors.DriverUpdateFailed)
+	}
+	return &driver, nil
+}
+
+// ListDrivers returns one page of the tenant's drivers plus the total the same filters match.
+// total_count comes back on every row and stays 0 when the page is empty.
+func (r *TrackingRepository) ListDrivers(ctx context.Context, tenantID uuid.UUID, query models.ListDriversQuery) ([]*models.Driver, int64, error) {
+	rows, err := r.dbService.Query(ctx,
+		`SELECT * FROM tracking.sp_list_drivers($1::UUID, $2::VARCHAR, $3::UUID, $4::VARCHAR, $5::INT, $6::INT)`,
+		tenantID, query.Search, query.CompanyID, query.Status, query.Page, query.PageSize)
+	if err != nil {
+		return nil, 0, &trackingErrors.TrackingError{Code: trackingErrors.DriverListFailed, Err: err}
+	}
+	defer rows.Close()
+	drivers := []*models.Driver{}
+	var totalCount int64
+	for rows.Next() {
+		var driver models.Driver
+		if err := rows.Scan(append(scanDriver(&driver), &totalCount)...); err != nil {
+			return nil, 0, err
+		}
+		drivers = append(drivers, &driver)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, 0, err
+	}
+	return drivers, totalCount, nil
+}
+
+func (r *TrackingRepository) GetDriver(ctx context.Context, tenantID uuid.UUID, driverID uuid.UUID) (*models.Driver, error) {
+	var driver models.Driver
+	err := r.dbService.QueryRow(ctx, `SELECT * FROM tracking.sp_get_driver($1, $2)`, tenantID, driverID).
+		Scan(scanDriver(&driver)...)
+	if err != nil {
+		return nil, mapDriverError(err, trackingErrors.DriverNotFound)
+	}
+	return &driver, nil
+}
+
+func (r *TrackingRepository) DeleteDriver(ctx context.Context, tenantID uuid.UUID, driverID uuid.UUID) error {
+	var deleted bool
+	err := r.dbService.QueryRow(ctx, `SELECT tracking.sp_delete_driver($1, $2)`, tenantID, driverID).Scan(&deleted)
+	if err != nil {
+		return mapDriverError(err, trackingErrors.DriverDeleteFailed)
+	}
+	if !deleted {
+		return &trackingErrors.TrackingError{Code: trackingErrors.DriverDeleteFailed}
+	}
+	return nil
+}
+
+// mapDriverError turns the SP's own codes into module codes, falling back to fallbackCode for
+// anything else. The controller maps the module code to a status.
+func mapDriverError(err error, fallbackCode string) error {
+	var pgErr *pgconn.PgError
+	if errors.As(err, &pgErr) {
+		switch pgErr.Message {
+		case "driver.not-found":
+			return &trackingErrors.TrackingError{Code: trackingErrors.DriverNotFound, Err: pgErr}
+		case "driver.license-already-exists":
+			return &trackingErrors.TrackingError{Code: trackingErrors.DriverLicenseAlreadyExists, Err: pgErr}
+		case "driver.user-already-linked":
+			return &trackingErrors.TrackingError{Code: trackingErrors.DriverUserAlreadyLinked, Err: pgErr}
+		case "driver.has-routes":
+			return &trackingErrors.TrackingError{Code: trackingErrors.DriverHasRoutes, Err: pgErr}
+		case "company.not-found":
+			return &trackingErrors.TrackingError{Code: trackingErrors.CompanyNotFound, Err: pgErr}
+		}
+	}
+	return &trackingErrors.TrackingError{Code: fallbackCode, Err: err}
 }
 
 // mapOrganizationError turns the SP's own codes into module codes, falling back to fallbackCode for

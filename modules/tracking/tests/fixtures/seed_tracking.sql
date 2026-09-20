@@ -4,6 +4,7 @@
 DELETE FROM tracking.rider_assignments;
 DELETE FROM tracking.route_stops;
 DELETE FROM tracking.routes;
+DELETE FROM tracking.drivers;
 DELETE FROM tracking.riders;
 DELETE FROM tracking.organization_members;
 DELETE FROM tracking.organizations;

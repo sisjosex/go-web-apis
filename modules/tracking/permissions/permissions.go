@@ -34,6 +34,9 @@ const (
 	OrganizationsRead   = "tracking:organizations:read"
 	OrganizationsWrite  = "tracking:organizations:write"
 	OrganizationsDelete = "tracking:organizations:delete"
+
+	DriversWrite  = "tracking:drivers:write"
+	DriversDelete = "tracking:drivers:delete"
 )
 
 func init() {
@@ -57,5 +60,7 @@ func init() {
 		{Code: OrganizationsRead, Module: "tracking", Name: "permission.tracking.organizations-read", Description: "permission.tracking.organizations-read.description"},
 		{Code: OrganizationsWrite, Module: "tracking", Name: "permission.tracking.organizations-write", Description: "permission.tracking.organizations-write.description"},
 		{Code: OrganizationsDelete, Module: "tracking", Name: "permission.tracking.organizations-delete", Description: "permission.tracking.organizations-delete.description"},
+		{Code: DriversWrite, Module: "tracking", Name: "permission.tracking.drivers-write", Description: "permission.tracking.drivers-write.description"},
+		{Code: DriversDelete, Module: "tracking", Name: "permission.tracking.drivers-delete", Description: "permission.tracking.drivers-delete.description"},
 	})
 }

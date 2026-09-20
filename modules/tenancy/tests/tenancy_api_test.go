@@ -695,7 +695,8 @@ func TestAddUserToTenant_AccessLevels_Organization_And_Portal(t *testing.T) {
 		"slug": slug, "name": "Access Levels Test",
 	}, map[string]string{})
 
-	for _, level := range []string{"organization", "portal"} {
+	// `driver` (TRACK-006 D1) joins the two TRACK-015 added and is assignable exactly the same way.
+	for _, level := range []string{"organization", "portal", "driver"} {
 		memberEmail := fmt.Sprintf("%s-levels-%d@test.com", level, ts)
 
 		member := testhelpers.SetupApiTest(t)

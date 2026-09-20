@@ -142,6 +142,22 @@ func RegisterTrackingRoutes(router *gin.Engine, trackingController *controllers.
 			tenancyMW.RequirePermission(trackingPerms.OrganizationsWrite),
 			trackingController.DeleteOrganizationMember)
 
+		// Drivers — the carrier's staff, so the operator's alone, like the rest of the fleet.
+		r.GET("/drivers", denyOrganization, trackingController.ListDrivers)
+		r.GET("/drivers/:driver_id", denyOrganization, trackingController.GetDriver)
+		r.POST("/drivers",
+			denyOrganization,
+			tenancyMW.RequirePermission(trackingPerms.DriversWrite),
+			trackingController.CreateDriver)
+		r.PATCH("/drivers/:driver_id",
+			denyOrganization,
+			tenancyMW.RequirePermission(trackingPerms.DriversWrite),
+			trackingController.UpdateDriver)
+		r.DELETE("/drivers/:driver_id",
+			denyOrganization,
+			tenancyMW.RequirePermission(trackingPerms.DriversDelete),
+			trackingController.DeleteDriver)
+
 		// Riders
 		r.GET("/riders", trackingController.ListRiders)
 		r.GET("/riders/:rider_id", trackingController.GetRider)
@@ -206,6 +222,12 @@ func RegisterTrackingRoutes(router *gin.Engine, trackingController *controllers.
 		trackingGroup.GET("/organizations/:organization_id/members", trackingController.ListOrganizationMembers)
 		trackingGroup.PUT("/organizations/:organization_id/members/:user_id", trackingController.UpsertOrganizationMember)
 		trackingGroup.DELETE("/organizations/:organization_id/members/:user_id", trackingController.DeleteOrganizationMember)
+
+		trackingGroup.POST("/drivers", trackingController.CreateDriver)
+		trackingGroup.GET("/drivers", trackingController.ListDrivers)
+		trackingGroup.GET("/drivers/:driver_id", trackingController.GetDriver)
+		trackingGroup.PATCH("/drivers/:driver_id", trackingController.UpdateDriver)
+		trackingGroup.DELETE("/drivers/:driver_id", trackingController.DeleteDriver)
 
 		trackingGroup.POST("/riders", trackingController.CreateRider)
 		trackingGroup.GET("/riders", trackingController.ListRiders)

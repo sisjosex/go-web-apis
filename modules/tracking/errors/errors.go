@@ -86,6 +86,17 @@ const (
 	OrganizationMemberSaveFailed   = "tracking.organization-member.save.failed"
 	OrganizationMemberListFailed   = "tracking.organization-member.list.failed"
 
+	// Driver errors (TR0181-TR0200)
+	DriverNotFound             = "tracking.driver.not-found"
+	DriverCreateFailed         = "tracking.driver.create.failed"
+	DriverUpdateFailed         = "tracking.driver.update.failed"
+	DriverDeleteFailed         = "tracking.driver.delete.failed"
+	DriverListFailed           = "tracking.driver.list.failed"
+	DriverLicenseAlreadyExists = "tracking.driver.license-already-exists"
+	DriverUserAlreadyLinked    = "tracking.driver.user-already-linked"
+	// DriverHasRoutes refuses a delete while a route still names the driver as its default.
+	DriverHasRoutes = "tracking.driver.has-routes"
+
 	TenantNotFound = "tracking.tenant.not-found"
 
 	// Generic errors

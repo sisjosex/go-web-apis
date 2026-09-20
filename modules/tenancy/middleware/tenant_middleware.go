@@ -217,9 +217,10 @@ func TenantMiddlewareFromHeader(tenantService interfaces.TenantService) gin.Hand
 		// A system super_admin bypasses permission checks regardless of tenant role
 		tenantAccess.IsSuperAdmin = systemRoleStr == coreModels.SystemRoleSuperAdmin
 
-		// A portal account is a guardian on the mobile app (TRACK-015 D2). The level is already on
-		// the access row, so refusing it here costs nothing and covers every web tenant route at once.
-		if tenantAccess.UserRole == models.RolePortal {
+		// A portal guardian and a driver are mobile-only accounts (TRACK-015 D2, TRACK-006 D1). The
+		// level is already on the access row, so refusing it here costs nothing and covers every web
+		// tenant route at once.
+		if models.IsMobileOnlyTenantRole(tenantAccess.UserRole) {
 			c.JSON(http.StatusForbidden, coreErrors.BuildErrorSingle(c, tenancyErrors.TenantUserPortalWebForbidden))
 			c.Abort()
 			return

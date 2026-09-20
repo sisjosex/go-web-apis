@@ -3,6 +3,8 @@ package models
 import (
 	"time"
 
+	coreModels "josex/web/modules/core/models"
+
 	"github.com/google/uuid"
 )
 
@@ -101,6 +103,28 @@ type OrganizationMember struct {
 	FirstName *string   `json:"first_name"`
 	LastName  *string   `json:"last_name"`
 	Role      string    `json:"role"` // admin, viewer, supervisor
+}
+
+// Driver is a person who drives a carrier's vehicles (TRACK-006). CompanyName and UserEmail are
+// joined on every read — list and single alike — so a row renders the carrier and the linked
+// account without a second call. UserID points at an account whose tenant access level is `driver`
+// (D1); it is nullable because a driver may exist long before anyone gives them one.
+type Driver struct {
+	ID               uuid.UUID            `json:"id"`
+	TenantID         uuid.UUID            `json:"tenant_id"`
+	CompanyID        uuid.UUID            `json:"company_id"`
+	CompanyName      string               `json:"company_name"`
+	UserID           *uuid.UUID           `json:"user_id"`
+	UserEmail        *string              `json:"user_email"`
+	FirstName        string               `json:"first_name"`
+	LastName         string               `json:"last_name"`
+	Phone            *string              `json:"phone"`
+	LicenseNumber    string               `json:"license_number"`
+	LicenseClass     *string              `json:"license_class"`
+	LicenseExpiresOn *coreModels.DateOnly `json:"license_expires_on"`
+	Status           string               `json:"status"` // active, inactive, suspended
+	CreatedAt        time.Time            `json:"created_at"`
+	UpdatedAt        time.Time            `json:"updated_at"`
 }
 
 // Rider represents a student or employee using transport

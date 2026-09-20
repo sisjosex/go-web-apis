@@ -340,6 +340,30 @@ func TestTenantMiddlewareFromHeader_PortalUser_Returns403(t *testing.T) {
 	}
 }
 
+// TestTenantMiddlewareFromHeader_DriverUser_Returns403 verifies that a driver account (TRACK-006 D1)
+// is mobile-only too, refused on every web tenant route with the same code as a portal guardian.
+func TestTenantMiddlewareFromHeader_DriverUser_Returns403(t *testing.T) {
+	svc := &mockTenantService{
+		accessInfo: &models.TenantAccessInfo{
+			TenantID:     uuid.New(),
+			Slug:         "some-tenant",
+			Name:         "Some Tenant",
+			SchemaName:   "public",
+			IsActive:     true,
+			IsSuspended:  false,
+			UserRole:     models.RoleDriver,
+			UserIsActive: true,
+			Permissions:  make(map[string]bool),
+		},
+	}
+
+	_, status := runMiddlewareFromHeader("some-tenant", uuid.New(), "user", svc)
+
+	if status != http.StatusForbidden {
+		t.Errorf("expected 403 for a driver account on the web, got %d", status)
+	}
+}
+
 // runDenyTenantRole executes DenyTenantRole behind the context TenantMiddleware would have set.
 func runDenyTenantRole(tenantRole, systemRole string, denied ...string) int {
 	eng := gin.New()

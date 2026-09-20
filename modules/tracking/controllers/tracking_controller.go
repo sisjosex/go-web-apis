@@ -1585,6 +1585,214 @@ func (ctrl *TrackingController) DeleteOrganization(c *gin.Context) {
 	c.Status(http.StatusNoContent)
 }
 
+// ==================== DRIVERS CRUD ====================
+
+// CreateDriver godoc
+// @Summary Create driver
+// @Description Create a driver for one of the tenant's carriers
+// @Tags Tracking - Drivers
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param driver body models.CreateDriverDto true "Driver data"
+// @Success 201 {object} models.Driver
+// @Failure 400 {object} coreErrors.ErrorResponse
+// @Failure 404 {object} coreErrors.ErrorResponse
+// @Failure 409 {object} coreErrors.ErrorResponse
+// @Failure 500 {object} coreErrors.ErrorResponse
+// @Router /tracking/drivers [post]
+func (ctrl *TrackingController) CreateDriver(c *gin.Context) {
+	tenantID, ok := ctrl.requireTenantID(c)
+	if !ok {
+		return
+	}
+
+	var dto models.CreateDriverDto
+	if err := c.ShouldBindJSON(&dto); err != nil {
+		c.JSON(http.StatusBadRequest, coreErrors.BuildErrorDetail(c, trackingErrors.DriverCreateFailed, utils.ExtractValidationError(c, err)))
+		return
+	}
+	_ = conform.Strings(&dto)
+
+	driver, err := ctrl.trackingService.CreateDriver(c.Request.Context(), tenantID, &dto)
+	if err != nil {
+		if driverErrorResponse(c, err) {
+			return
+		}
+		c.JSON(http.StatusInternalServerError, coreErrors.BuildError(c, err))
+		return
+	}
+	c.JSON(http.StatusCreated, driver)
+}
+
+// UpdateDriver godoc
+// @Summary Update driver
+// @Description Update a driver; every field is optional and the carrier is immutable
+// @Tags Tracking - Drivers
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param driver_id path string true "Driver ID (UUID)"
+// @Param driver body models.UpdateDriverDto true "Updated driver data"
+// @Success 200 {object} models.Driver
+// @Failure 400 {object} coreErrors.ErrorResponse
+// @Failure 404 {object} coreErrors.ErrorResponse
+// @Failure 409 {object} coreErrors.ErrorResponse
+// @Failure 500 {object} coreErrors.ErrorResponse
+// @Router /tracking/drivers/{driver_id} [patch]
+func (ctrl *TrackingController) UpdateDriver(c *gin.Context) {
+	tenantID, ok := ctrl.requireTenantID(c)
+	if !ok {
+		return
+	}
+
+	driverID, err := uuid.Parse(c.Param("driver_id"))
+	if err != nil {
+		c.JSON(http.StatusBadRequest, coreErrors.BuildErrorSingle(c, coreErrors.InvalidUUID))
+		return
+	}
+	var dto models.UpdateDriverDto
+	if err := c.ShouldBindJSON(&dto); err != nil {
+		c.JSON(http.StatusBadRequest, coreErrors.BuildErrorDetail(c, trackingErrors.DriverUpdateFailed, utils.ExtractValidationError(c, err)))
+		return
+	}
+	_ = conform.Strings(&dto)
+
+	driver, err := ctrl.trackingService.UpdateDriver(c.Request.Context(), tenantID, driverID, &dto)
+	if err != nil {
+		if driverErrorResponse(c, err) {
+			return
+		}
+		c.JSON(http.StatusInternalServerError, coreErrors.BuildError(c, err))
+		return
+	}
+	c.JSON(http.StatusOK, driver)
+}
+
+// ListDrivers godoc
+// @Summary List drivers
+// @Description One page of the current tenant's drivers, by surname
+// @Tags Tracking - Drivers
+// @Produce json
+// @Security BearerAuth
+// @Param search query string false "Match against a name or the licence number"
+// @Param company_id query string false "Carrier ID (UUID); unset lists every carrier"
+// @Param status query string false "Lifecycle state" Enums(active, inactive, suspended)
+// @Param page query int false "Page number, 1-based" default(1)
+// @Param page_size query int false "Rows per page, max 100" default(20)
+// @Success 200 {object} models.ListDriversResponse
+// @Failure 400 {object} coreErrors.ErrorResponse
+// @Failure 500 {object} coreErrors.ErrorResponse
+// @Router /tracking/drivers [get]
+func (ctrl *TrackingController) ListDrivers(c *gin.Context) {
+	tenantID, ok := ctrl.requireTenantID(c)
+	if !ok {
+		return
+	}
+
+	var query models.ListDriversQuery
+	if err := c.ShouldBindQuery(&query); err != nil {
+		c.JSON(http.StatusBadRequest, coreErrors.BuildErrorDetail(c, "validation.invalid", err.Error()))
+		return
+	}
+	query.Search = strings.TrimSpace(query.Search)
+
+	result, err := ctrl.trackingService.ListDrivers(c.Request.Context(), tenantID, query)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, coreErrors.BuildError(c, err))
+		return
+	}
+	c.JSON(http.StatusOK, result)
+}
+
+// GetDriver godoc
+// @Summary Get driver by ID
+// @Description Get a single driver by ID
+// @Tags Tracking - Drivers
+// @Produce json
+// @Security BearerAuth
+// @Param driver_id path string true "Driver ID (UUID)"
+// @Success 200 {object} models.Driver
+// @Failure 400 {object} coreErrors.ErrorResponse
+// @Failure 404 {object} coreErrors.ErrorResponse
+// @Failure 500 {object} coreErrors.ErrorResponse
+// @Router /tracking/drivers/{driver_id} [get]
+func (ctrl *TrackingController) GetDriver(c *gin.Context) {
+	tenantID, ok := ctrl.requireTenantID(c)
+	if !ok {
+		return
+	}
+
+	driverID, err := uuid.Parse(c.Param("driver_id"))
+	if err != nil {
+		c.JSON(http.StatusBadRequest, coreErrors.BuildErrorSingle(c, coreErrors.InvalidUUID))
+		return
+	}
+
+	driver, err := ctrl.trackingService.GetDriver(c.Request.Context(), tenantID, driverID)
+	if err != nil {
+		if driverErrorResponse(c, err) {
+			return
+		}
+		c.JSON(http.StatusInternalServerError, coreErrors.BuildError(c, err))
+		return
+	}
+	c.JSON(http.StatusOK, driver)
+}
+
+// DeleteDriver godoc
+// @Summary Delete driver
+// @Description Delete a driver; refused while a route still names them as its default driver
+// @Tags Tracking - Drivers
+// @Security BearerAuth
+// @Param driver_id path string true "Driver ID (UUID)"
+// @Success 204 "No Content"
+// @Failure 400 {object} coreErrors.ErrorResponse
+// @Failure 404 {object} coreErrors.ErrorResponse
+// @Failure 409 {object} coreErrors.ErrorResponse
+// @Failure 500 {object} coreErrors.ErrorResponse
+// @Router /tracking/drivers/{driver_id} [delete]
+func (ctrl *TrackingController) DeleteDriver(c *gin.Context) {
+	tenantID, ok := ctrl.requireTenantID(c)
+	if !ok {
+		return
+	}
+
+	driverID, err := uuid.Parse(c.Param("driver_id"))
+	if err != nil {
+		c.JSON(http.StatusBadRequest, coreErrors.BuildErrorSingle(c, coreErrors.InvalidUUID))
+		return
+	}
+
+	if err := ctrl.trackingService.DeleteDriver(c.Request.Context(), tenantID, driverID); err != nil {
+		if driverErrorResponse(c, err) {
+			return
+		}
+		c.JSON(http.StatusInternalServerError, coreErrors.BuildError(c, err))
+		return
+	}
+	c.Status(http.StatusNoContent)
+}
+
+// driverErrorResponse answers the driver codes that carry a status of their own and reports whether
+// it did; anything else is the caller's 500. One map keeps the five handlers from disagreeing about
+// what a duplicate licence is.
+func driverErrorResponse(c *gin.Context, err error) bool {
+	var trackingErr *trackingErrors.TrackingError
+	if !errors.As(err, &trackingErr) {
+		return false
+	}
+	switch trackingErr.Code {
+	case trackingErrors.DriverNotFound, trackingErrors.CompanyNotFound:
+		c.JSON(http.StatusNotFound, coreErrors.BuildErrorSingle(c, trackingErr.Code))
+		return true
+	case trackingErrors.DriverLicenseAlreadyExists, trackingErrors.DriverUserAlreadyLinked, trackingErrors.DriverHasRoutes:
+		c.JSON(http.StatusConflict, coreErrors.BuildErrorSingle(c, trackingErr.Code))
+		return true
+	}
+	return false
+}
+
 // ==================== ORGANIZATION MEMBERS ====================
 
 // ListOrganizationMembers godoc

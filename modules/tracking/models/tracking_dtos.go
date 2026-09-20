@@ -1,6 +1,10 @@
 package models
 
-import "github.com/google/uuid"
+import (
+	coreModels "josex/web/modules/core/models"
+
+	"github.com/google/uuid"
+)
 
 // === DTOs for Location Updates ===
 
@@ -56,20 +60,22 @@ type EventRecordedResponse struct {
 
 // RouteRealtimeStatusResponse represents comprehensive route status
 type RouteRealtimeStatusResponse struct {
-	RouteID            uuid.UUID  `json:"route_id"`
-	RouteName          string     `json:"route_name"`
-	VehicleID          *uuid.UUID `json:"vehicle_id"`
-	LicensePlate       *string    `json:"license_plate"`
-	CurrentLatitude    *float64   `json:"current_latitude"`
-	CurrentLongitude   *float64   `json:"current_longitude"`
-	CurrentSpeed       *float64   `json:"current_speed"`
-	LocationAgeSeconds *int32     `json:"location_age_seconds"`
-	TotalRiders        int32      `json:"total_riders"`
-	BoardedCount       int32      `json:"boarded_count"`
-	ArrivedCount       int32      `json:"arrived_count"`
-	NoShowCount        int32      `json:"no_show_count"`
-	PendingCount       int32      `json:"pending_count"`
-	ActiveAlerts       int32      `json:"active_alerts"`
+	RouteID      uuid.UUID  `json:"route_id"`
+	RouteName    string     `json:"route_name"`
+	VehicleID    *uuid.UUID `json:"vehicle_id"`
+	LicensePlate *string    `json:"license_plate"`
+	// DriverName is the route's default driver (TRACK-006); NULL while the route has none.
+	DriverName         *string  `json:"driver_name"`
+	CurrentLatitude    *float64 `json:"current_latitude"`
+	CurrentLongitude   *float64 `json:"current_longitude"`
+	CurrentSpeed       *float64 `json:"current_speed"`
+	LocationAgeSeconds *int32   `json:"location_age_seconds"`
+	TotalRiders        int32    `json:"total_riders"`
+	BoardedCount       int32    `json:"boarded_count"`
+	ArrivedCount       int32    `json:"arrived_count"`
+	NoShowCount        int32    `json:"no_show_count"`
+	PendingCount       int32    `json:"pending_count"`
+	ActiveAlerts       int32    `json:"active_alerts"`
 }
 
 // === DTOs for Rider Status (Guardian View) ===
@@ -361,4 +367,52 @@ type ListOrganizationsResponse struct {
 // same call adds a member and changes the role of one already there.
 type UpsertOrganizationMemberDto struct {
 	Role string `json:"role" binding:"required,oneof=admin viewer supervisor" conform:"trim,lowercase"`
+}
+
+// === DTOs for Driver Management (TRACK-006) ===
+
+// CreateDriverDto represents request to create a driver. The carrier is required and, once set,
+// never changes — a driver moves carrier by being re-created, so the routes that name them as
+// default driver are dealt with deliberately rather than re-scoped behind the operator's back.
+type CreateDriverDto struct {
+	CompanyID        uuid.UUID            `json:"company_id" binding:"required,uuidv4"`
+	UserID           *uuid.UUID           `json:"user_id" binding:"omitempty,uuidv4"`
+	FirstName        string               `json:"first_name" binding:"required,min=2,max=255" conform:"trim"`
+	LastName         string               `json:"last_name" binding:"required,min=2,max=255" conform:"trim"`
+	Phone            *string              `json:"phone" binding:"omitempty,max=50" conform:"trim"`
+	LicenseNumber    string               `json:"license_number" binding:"required,min=2,max=100" conform:"trim"`
+	LicenseClass     *string              `json:"license_class" binding:"omitempty,max=50" conform:"trim"`
+	LicenseExpiresOn *coreModels.DateOnly `json:"license_expires_on" time_format:"2006-01-02"`
+	Status           string               `json:"status" binding:"omitempty,oneof=active inactive suspended" conform:"trim,lowercase"`
+}
+
+// UpdateDriverDto represents request to update a driver. Every field is optional: the SP keeps what
+// it is not sent. ClearUserID is the one thing no value of UserID can say — "unlink the account" —
+// and the driver screen's Unlink is what sends it.
+type UpdateDriverDto struct {
+	UserID           *uuid.UUID           `json:"user_id" binding:"omitempty,uuidv4"`
+	ClearUserID      bool                 `json:"clear_user_id"`
+	FirstName        *string              `json:"first_name" binding:"omitempty,min=2,max=255" conform:"trim"`
+	LastName         *string              `json:"last_name" binding:"omitempty,min=2,max=255" conform:"trim"`
+	Phone            *string              `json:"phone" binding:"omitempty,max=50" conform:"trim"`
+	LicenseNumber    *string              `json:"license_number" binding:"omitempty,min=2,max=100" conform:"trim"`
+	LicenseClass     *string              `json:"license_class" binding:"omitempty,max=50" conform:"trim"`
+	LicenseExpiresOn *coreModels.DateOnly `json:"license_expires_on" time_format:"2006-01-02"`
+	Status           *string              `json:"status" binding:"omitempty,oneof=active inactive suspended" conform:"trim,lowercase"`
+}
+
+// ListDriversQuery binds GET /tracking/drivers. search matches a name or the licence number.
+type ListDriversQuery struct {
+	Search    string  `form:"search"`
+	CompanyID *string `form:"company_id" binding:"omitempty,uuid"`
+	Status    string  `form:"status" binding:"omitempty,oneof=active inactive suspended"`
+	Page      int     `form:"page,default=1" binding:"min=1"`
+	PageSize  int     `form:"page_size,default=20" binding:"min=1,max=100"`
+}
+
+type ListDriversResponse struct {
+	Drivers    []*Driver `json:"drivers"`
+	TotalCount int64     `json:"total_count"`
+	Page       int       `json:"page"`
+	PageSize   int       `json:"page_size"`
 }

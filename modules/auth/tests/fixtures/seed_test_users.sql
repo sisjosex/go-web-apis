@@ -102,6 +102,28 @@ SET
 WHERE email = 'portal@test.local';
 
 -- ================================================================
+-- DRIVER USER (TRACK-006)
+-- ================================================================
+-- Email: driver@test.local
+-- Password: Driver123!
+-- Tenant access level: driver — mobile only, refused on every web tenant route
+-- ================================================================
+DELETE FROM auth.users WHERE email = 'driver@test.local';
+SELECT * FROM auth.sp_register_user(
+	p_email := 'driver@test.local',
+	p_first_name := 'Driver',
+	p_last_name := 'Account',
+	p_password := 'Driver123!'
+);
+
+UPDATE auth.users
+SET
+	system_role = 'user',
+	subscription_plan = 'free',
+	email_verified = true
+WHERE email = 'driver@test.local';
+
+-- ================================================================
 -- ADD MORE TEST USERS BELOW
 -- ================================================================
 -- Example format (uncomment to use):

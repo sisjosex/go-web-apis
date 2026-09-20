@@ -65,6 +65,16 @@ SELECT
 FROM auth.users u
 WHERE u.email = 'portal@test.local';
 
+-- A driver account is mobile-only too (TRACK-006 D1); the web refuses it exactly as it refuses portal.
+INSERT INTO tenancy.tenant_users (tenant_id, user_id, role, is_active)
+SELECT
+    '00000000-0000-0000-0000-000000000001',
+    u.id,
+    'driver',
+    true
+FROM auth.users u
+WHERE u.email = 'driver@test.local';
+
 -- The organization user's capabilities come from an assigned role, exactly like any other member's
 -- (TRACK-015 D1): the access level decides what it sees, the role decides what it may do.
 DELETE FROM tenancy.roles

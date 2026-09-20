@@ -68,6 +68,14 @@
   "tracking.organization-member.user-not-found": "Usuario no encontrado",
   "tracking.organization-member.save.failed": "Error al guardar el miembro de la organizaciÃ³n",
   "tracking.organization-member.list.failed": "Error al obtener los miembros de la organizaciÃ³n",
+  "tracking.driver.not-found": "Conductor no encontrado",
+  "tracking.driver.create.failed": "Error al crear el conductor",
+  "tracking.driver.update.failed": "Error al actualizar el conductor",
+  "tracking.driver.delete.failed": "Error al eliminar el conductor",
+  "tracking.driver.list.failed": "Error al obtener los conductores",
+  "tracking.driver.license-already-exists": "Ya existe un conductor con este número de licencia",
+  "tracking.driver.user-already-linked": "Esta cuenta ya está vinculada a otro conductor",
+  "tracking.driver.has-routes": "No se puede eliminar un conductor que todavía es el conductor predeterminado de una ruta",
   "tracking.tenant.not-found": "Tenant cliente no encontrado",
 
   "tracking.unauthorized": "Acceso no autorizado al módulo de seguimiento",
@@ -112,5 +120,9 @@
   "permission.tracking.organizations-write": "Crear/editar organizaciones",
   "permission.tracking.organizations-write.description": "Crear y actualizar organizaciones y gestionar sus miembros",
   "permission.tracking.organizations-delete": "Eliminar organizaciones",
-  "permission.tracking.organizations-delete.description": "Eliminar organizaciones"
+  "permission.tracking.organizations-delete.description": "Eliminar organizaciones",
+  "permission.tracking.drivers-write": "Crear/editar conductores",
+  "permission.tracking.drivers-write.description": "Crear y actualizar conductores y vincular sus cuentas",
+  "permission.tracking.drivers-delete": "Eliminar conductores",
+  "permission.tracking.drivers-delete.description": "Eliminar conductores"
 }

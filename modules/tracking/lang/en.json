@@ -68,6 +68,14 @@
   "tracking.organization-member.user-not-found": "User not found",
   "tracking.organization-member.save.failed": "Failed to save the organization member",
   "tracking.organization-member.list.failed": "Failed to retrieve organization members",
+  "tracking.driver.not-found": "Driver not found",
+  "tracking.driver.create.failed": "Failed to create driver",
+  "tracking.driver.update.failed": "Failed to update driver",
+  "tracking.driver.delete.failed": "Failed to delete driver",
+  "tracking.driver.list.failed": "Failed to retrieve drivers",
+  "tracking.driver.license-already-exists": "A driver with this licence number already exists",
+  "tracking.driver.user-already-linked": "This account is already linked to another driver",
+  "tracking.driver.has-routes": "Cannot delete a driver who is still the default driver of a route",
   "tracking.tenant.not-found": "Client tenant not found",
 
   "tracking.unauthorized": "Unauthorized access to tracking module",
@@ -112,5 +120,9 @@
   "permission.tracking.organizations-write": "Create/edit organizations",
   "permission.tracking.organizations-write.description": "Create and update organizations and manage their members",
   "permission.tracking.organizations-delete": "Delete organizations",
-  "permission.tracking.organizations-delete.description": "Delete organizations"
+  "permission.tracking.organizations-delete.description": "Delete organizations",
+  "permission.tracking.drivers-write": "Create/edit drivers",
+  "permission.tracking.drivers-write.description": "Create and update drivers and link their accounts",
+  "permission.tracking.drivers-delete": "Delete drivers",
+  "permission.tracking.drivers-delete.description": "Delete drivers"
 }

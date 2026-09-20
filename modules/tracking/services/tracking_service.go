@@ -236,3 +236,34 @@ func (s *TrackingService) UpsertOrganizationMember(ctx context.Context, tenantID
 func (s *TrackingService) DeleteOrganizationMember(ctx context.Context, tenantID uuid.UUID, organizationID uuid.UUID, userID uuid.UUID) error {
 	return s.trackingRepo.DeleteOrganizationMember(ctx, tenantID, organizationID, userID)
 }
+
+// ==================== DRIVERS CRUD ====================
+
+func (s *TrackingService) CreateDriver(ctx context.Context, tenantID uuid.UUID, dto *models.CreateDriverDto) (*models.Driver, error) {
+	return s.trackingRepo.CreateDriver(ctx, tenantID, dto)
+}
+
+func (s *TrackingService) UpdateDriver(ctx context.Context, tenantID uuid.UUID, driverID uuid.UUID, dto *models.UpdateDriverDto) (*models.Driver, error) {
+	return s.trackingRepo.UpdateDriver(ctx, tenantID, driverID, dto)
+}
+
+func (s *TrackingService) ListDrivers(ctx context.Context, tenantID uuid.UUID, query models.ListDriversQuery) (*models.ListDriversResponse, error) {
+	drivers, totalCount, err := s.trackingRepo.ListDrivers(ctx, tenantID, query)
+	if err != nil {
+		return nil, err
+	}
+	return &models.ListDriversResponse{
+		Drivers:    drivers,
+		TotalCount: totalCount,
+		Page:       query.Page,
+		PageSize:   query.PageSize,
+	}, nil
+}
+
+func (s *TrackingService) GetDriver(ctx context.Context, tenantID uuid.UUID, driverID uuid.UUID) (*models.Driver, error) {
+	return s.trackingRepo.GetDriver(ctx, tenantID, driverID)
+}
+
+func (s *TrackingService) DeleteDriver(ctx context.Context, tenantID uuid.UUID, driverID uuid.UUID) error {
+	return s.trackingRepo.DeleteDriver(ctx, tenantID, driverID)
+}
