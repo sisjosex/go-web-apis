@@ -706,7 +706,7 @@ func (r *TrackingRepository) ListRiders(ctx context.Context, tenantID uuid.UUID,
 	var totalCount int64
 	for rows.Next() {
 		var rider models.Rider
-		if err := rows.Scan(&rider.ID, &rider.OrganizationID, &rider.RiderType, &rider.FirstName, &rider.LastName,
+		if err := rows.Scan(&rider.ID, &rider.OrganizationID, &rider.OrganizationName, &rider.RiderType, &rider.FirstName, &rider.LastName,
 			&rider.IdentificationNumber, &rider.Phone, &rider.Email, &rider.EmergencyContactName,
 			&rider.EmergencyContactPhone, &rider.GuardianUserID, &rider.GuardianName, &rider.GuardianPhone,
 			&rider.GuardianEmail, &rider.Address, &rider.IsActive, &rider.CreatedAt, &rider.UpdatedAt, &totalCount); err != nil {

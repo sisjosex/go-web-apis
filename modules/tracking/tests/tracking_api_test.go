@@ -846,6 +846,11 @@ func TestListRidersByOrganization(t *testing.T) {
 	assert.Greater(t, result.TotalCount, int64(0))
 	for _, rider := range result.Riders {
 		assert.Equal(t, MainSchoolID, rider.OrganizationID.String())
+		// The list rows carry the organization's name so the page can show a column without a
+		// second request (TRACK-003 D2).
+		if assert.NotNil(t, rider.OrganizationName) {
+			assert.Equal(t, "Main Test School", *rider.OrganizationName)
+		}
 	}
 }
 

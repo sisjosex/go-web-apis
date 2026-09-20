@@ -138,7 +138,10 @@ type Rider struct {
 	ID uuid.UUID `json:"id"`
 	// The organization that sends the rider, not the carrier that drives them (TRACK-005 D1); the
 	// carrier is reached through the route the rider is assigned to.
-	OrganizationID        uuid.UUID  `json:"organization_id"`
+	OrganizationID uuid.UUID `json:"organization_id"`
+	// OrganizationName rides on the list rows only (TRACK-003 D2), like Vehicle.CompanyName; the
+	// single-rider SPs do not join the organization, so it is absent from create/update/get.
+	OrganizationName      *string    `json:"organization_name,omitempty"`
 	RiderType             *string    `json:"rider_type"` // student, employee (nullable as it's not persisted)
 	FirstName             string     `json:"first_name"`
 	LastName              string     `json:"last_name"`
