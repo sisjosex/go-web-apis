@@ -157,8 +157,17 @@ func (s *TrackingService) UpdateRider(ctx context.Context, tenantID uuid.UUID, r
 	return s.trackingRepo.UpdateRider(ctx, tenantID, riderID, dto)
 }
 
-func (s *TrackingService) ListRiders(ctx context.Context, tenantID uuid.UUID, companyID *uuid.UUID, guardianUserID *uuid.UUID, riderType *string, isActive *bool) ([]*models.Rider, error) {
-	return s.trackingRepo.ListRiders(ctx, tenantID, companyID, guardianUserID, riderType, isActive)
+func (s *TrackingService) ListRiders(ctx context.Context, tenantID uuid.UUID, query models.ListRidersQuery) (*models.ListRidersResponse, error) {
+	riders, totalCount, err := s.trackingRepo.ListRiders(ctx, tenantID, query)
+	if err != nil {
+		return nil, err
+	}
+	return &models.ListRidersResponse{
+		Riders:     riders,
+		TotalCount: totalCount,
+		Page:       query.Page,
+		PageSize:   query.PageSize,
+	}, nil
 }
 
 func (s *TrackingService) GetRider(ctx context.Context, tenantID uuid.UUID, riderID uuid.UUID, guardianUserID *uuid.UUID) (*models.Rider, error) {
@@ -183,16 +192,47 @@ func (s *TrackingService) ListRiderAssignments(ctx context.Context, tenantID uui
 	return s.trackingRepo.ListRiderAssignments(ctx, tenantID, riderID, routeID, isActive)
 }
 
-// ==================== CLIENT ACCESS OPERATIONS ====================
+// ==================== ORGANIZATIONS CRUD ====================
 
-func (s *TrackingService) GrantClientAccess(ctx context.Context, tenantID uuid.UUID, companyID uuid.UUID, dto *models.GrantClientAccessDto, grantedBy uuid.UUID) (*models.CompanyClientAccess, error) {
-	return s.trackingRepo.GrantClientAccess(ctx, tenantID, companyID, dto, grantedBy)
+func (s *TrackingService) CreateOrganization(ctx context.Context, tenantID uuid.UUID, dto *models.CreateOrganizationDto) (*models.Organization, error) {
+	return s.trackingRepo.CreateOrganization(ctx, tenantID, dto)
 }
 
-func (s *TrackingService) RevokeClientAccess(ctx context.Context, tenantID uuid.UUID, companyID uuid.UUID, clientTenantID uuid.UUID, revokedBy uuid.UUID) error {
-	return s.trackingRepo.RevokeClientAccess(ctx, tenantID, companyID, clientTenantID, revokedBy)
+func (s *TrackingService) UpdateOrganization(ctx context.Context, tenantID uuid.UUID, organizationID uuid.UUID, dto *models.UpdateOrganizationDto) (*models.Organization, error) {
+	return s.trackingRepo.UpdateOrganization(ctx, tenantID, organizationID, dto)
 }
 
-func (s *TrackingService) ListCompanyClients(ctx context.Context, tenantID uuid.UUID, companyID uuid.UUID) ([]*models.CompanyClientAccess, error) {
-	return s.trackingRepo.ListCompanyClients(ctx, tenantID, companyID)
+func (s *TrackingService) ListOrganizations(ctx context.Context, tenantID uuid.UUID, query models.ListOrganizationsQuery) (*models.ListOrganizationsResponse, error) {
+	organizations, totalCount, err := s.trackingRepo.ListOrganizations(ctx, tenantID, query)
+	if err != nil {
+		return nil, err
+	}
+	return &models.ListOrganizationsResponse{
+		Organizations: organizations,
+		TotalCount:    totalCount,
+		Page:          query.Page,
+		PageSize:      query.PageSize,
+	}, nil
+}
+
+func (s *TrackingService) GetOrganization(ctx context.Context, tenantID uuid.UUID, organizationID uuid.UUID) (*models.Organization, error) {
+	return s.trackingRepo.GetOrganization(ctx, tenantID, organizationID)
+}
+
+func (s *TrackingService) DeleteOrganization(ctx context.Context, tenantID uuid.UUID, organizationID uuid.UUID) error {
+	return s.trackingRepo.DeleteOrganization(ctx, tenantID, organizationID)
+}
+
+// ==================== ORGANIZATION MEMBERS ====================
+
+func (s *TrackingService) ListOrganizationMembers(ctx context.Context, tenantID uuid.UUID, organizationID uuid.UUID) ([]*models.OrganizationMember, error) {
+	return s.trackingRepo.ListOrganizationMembers(ctx, tenantID, organizationID)
+}
+
+func (s *TrackingService) UpsertOrganizationMember(ctx context.Context, tenantID uuid.UUID, organizationID uuid.UUID, userID uuid.UUID, role string) (*models.OrganizationMember, error) {
+	return s.trackingRepo.UpsertOrganizationMember(ctx, tenantID, organizationID, userID, role)
+}
+
+func (s *TrackingService) DeleteOrganizationMember(ctx context.Context, tenantID uuid.UUID, organizationID uuid.UUID, userID uuid.UUID) error {
+	return s.trackingRepo.DeleteOrganizationMember(ctx, tenantID, organizationID, userID)
 }

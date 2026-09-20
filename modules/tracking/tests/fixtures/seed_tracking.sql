@@ -5,6 +5,8 @@ DELETE FROM tracking.rider_assignments;
 DELETE FROM tracking.route_stops;
 DELETE FROM tracking.routes;
 DELETE FROM tracking.riders;
+DELETE FROM tracking.organization_members;
+DELETE FROM tracking.organizations;
 DELETE FROM tracking.vehicles;
 DELETE FROM tracking.transport_companies;
 
@@ -39,6 +41,33 @@ INSERT INTO tracking.transport_companies (
     'Test Country',
     'REG-TEST-002',
     'active',
+    NOW(),
+    NOW()
+);
+
+-- ================================================================
+-- ORGANIZATIONS — the schools and employers riders belong to (TRACK-005)
+-- ================================================================
+INSERT INTO tracking.organizations (
+    id, tenant_id, kind, name, timezone, is_active, created_at, updated_at
+) VALUES
+(
+    '99999999-9999-9999-9999-999999999999'::uuid,
+    '00000000-0000-0000-0000-000000000001'::uuid,
+    'school',
+    'Main Test School',
+    'America/Lima',
+    true,
+    NOW(),
+    NOW()
+),
+(
+    'a1a1a1a1-a1a1-a1a1-a1a1-a1a1a1a1a1a1'::uuid,
+    '00000000-0000-0000-0000-000000000001'::uuid,
+    'company',
+    'Empty Test Employer',
+    'UTC',
+    true,
     NOW(),
     NOW()
 );
@@ -82,11 +111,11 @@ INSERT INTO tracking.vehicles (
 -- RIDERS
 -- ================================================================
 INSERT INTO tracking.riders (
-    id, company_id, rider_type, first_name, last_name, email, phone, identification_number, status, created_at, updated_at
+    id, organization_id, rider_type, first_name, last_name, email, phone, identification_number, status, created_at, updated_at
 ) VALUES
 (
     'eeeeeeee-eeee-eeee-eeee-eeeeeeeeeeee'::uuid,
-    'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa'::uuid,
+    '99999999-9999-9999-9999-999999999999'::uuid,
     'student',
     'John',
     'Student',
@@ -99,7 +128,7 @@ INSERT INTO tracking.riders (
 ),
 (
     'ffffffff-ffff-ffff-ffff-ffffffffffff'::uuid,
-    'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa'::uuid,
+    '99999999-9999-9999-9999-999999999999'::uuid,
     'employee',
     'Jane',
     'Employee',

@@ -815,12 +815,12 @@ func TestCreateRiderSuccess(t *testing.T) {
 
 	dto := ValidRiderDto()
 	body := map[string]interface{}{
-		"company_id": dto.CompanyID,
-		"rider_type": dto.RiderType,
-		"first_name": dto.FirstName,
-		"last_name":  dto.LastName,
-		"email":      *dto.Email,
-		"phone":      *dto.Phone,
+		"organization_id": dto.OrganizationID,
+		"rider_type":      dto.RiderType,
+		"first_name":      dto.FirstName,
+		"last_name":       dto.LastName,
+		"email":           *dto.Email,
+		"phone":           *dto.Phone,
 	}
 
 	w := helper.DoRequest("POST", "/tracking/riders", body, map[string]string{})
@@ -830,17 +830,51 @@ func TestCreateRiderSuccess(t *testing.T) {
 	AssertRiderResponse(t, rider)
 }
 
-// TestListRidersByCompany - List riders for company → 200
-func TestListRidersByCompany(t *testing.T) {
+// TestListRidersByOrganization - List riders for an organization → 200
+func TestListRidersByOrganization(t *testing.T) {
 	helper := SetupTrackingTest(t)
 	defer helper.Close()
 
-	companyID := MainCompanyID
-	w := helper.DoRequest("GET", fmt.Sprintf("/tracking/companies/%s/riders", companyID), nil, map[string]string{})
+	result := ListRiders(t, helper, fmt.Sprintf("?organization_id=%s", MainSchoolID))
 
-	assert.Equal(t, http.StatusOK, w.Code)
-	riders := ParseListResponse(t, w.Body.Bytes())
-	assert.Greater(t, len(riders), 0)
+	assert.Greater(t, len(result.Riders), 0)
+	assert.Greater(t, result.TotalCount, int64(0))
+	for _, rider := range result.Riders {
+		assert.Equal(t, MainSchoolID, rider.OrganizationID.String())
+	}
+}
+
+// TestListRidersPaged - page_size cuts the page while total_count counts the whole match
+func TestListRidersPaged(t *testing.T) {
+	helper := SetupTrackingTest(t)
+	defer helper.Close()
+
+	// A third rider, so a page of two is a real cut and not the whole list.
+	CreateTestRider(t, helper)
+
+	all := ListRiders(t, helper, "")
+	if all.TotalCount < 3 {
+		t.Fatalf("expected at least three riders, got total_count %d", all.TotalCount)
+	}
+
+	page := ListRiders(t, helper, "?page=1&page_size=2")
+	assert.Len(t, page.Riders, 2)
+	assert.Equal(t, all.TotalCount, page.TotalCount)
+	assert.Equal(t, 1, page.Page)
+	assert.Equal(t, 2, page.PageSize)
+}
+
+// TestListRidersSearch - the search matches a name
+func TestListRidersSearch(t *testing.T) {
+	helper := SetupTrackingTest(t)
+	defer helper.Close()
+
+	result := ListRiders(t, helper, "?search=Student")
+
+	assert.Greater(t, len(result.Riders), 0)
+	for _, rider := range result.Riders {
+		assert.Contains(t, rider.FirstName+" "+rider.LastName, "Student")
+	}
 }
 
 // TestGetRiderSuccess - Retrieve rider → 200
@@ -880,7 +914,7 @@ func TestCreateRider_GuardianPersisted(t *testing.T) {
 
 	dto := ValidRiderDto()
 	body := map[string]interface{}{
-		"company_id":              dto.CompanyID,
+		"organization_id":         dto.OrganizationID,
 		"rider_type":              dto.RiderType,
 		"first_name":              dto.FirstName,
 		"last_name":               dto.LastName,
@@ -924,12 +958,12 @@ func TestRiderEmailUniqueness(t *testing.T) {
 	defer helper.Close()
 
 	body := map[string]interface{}{
-		"company_id": MainCompanyID,
-		"rider_type": "student",
-		"first_name": "Duplicate",
-		"last_name":  "Email",
-		"email":      "john.student@test.local", // This already exists
-		"phone":      "+1111111111",
+		"organization_id": MainSchoolID,
+		"rider_type":      "student",
+		"first_name":      "Duplicate",
+		"last_name":       "Email",
+		"email":           "john.student@test.local", // This already exists
+		"phone":           "+1111111111",
 	}
 
 	w := helper.DoRequest("POST", "/tracking/riders", body, map[string]string{})
@@ -943,12 +977,12 @@ func TestRiderPhoneValidation(t *testing.T) {
 	defer helper.Close()
 
 	body := map[string]interface{}{
-		"company_id": MainCompanyID,
-		"rider_type": "student",
-		"first_name": "Invalid",
-		"last_name":  "Phone",
-		"email":      "test@email.com",
-		"phone":      "not-a-phone", // Invalid phone
+		"organization_id": MainSchoolID,
+		"rider_type":      "student",
+		"first_name":      "Invalid",
+		"last_name":       "Phone",
+		"email":           "test@email.com",
+		"phone":           "not-a-phone", // Invalid phone
 	}
 
 	w := helper.DoRequest("POST", "/tracking/riders", body, map[string]string{})
@@ -962,11 +996,11 @@ func TestRiderTypeValidation(t *testing.T) {
 	defer helper.Close()
 
 	body := map[string]interface{}{
-		"company_id": MainCompanyID,
-		"rider_type": "invalid_type", // Invalid type
-		"first_name": "Invalid",
-		"last_name":  "Type",
-		"phone":      "+1234567890",
+		"organization_id": MainSchoolID,
+		"rider_type":      "invalid_type", // Invalid type
+		"first_name":      "Invalid",
+		"last_name":       "Type",
+		"phone":           "+1234567890",
 	}
 
 	w := helper.DoRequest("POST", "/tracking/riders", body, map[string]string{})
@@ -981,12 +1015,12 @@ func TestDeleteRiderSuccess(t *testing.T) {
 	// Create rider to delete
 	dto := ValidRiderDto()
 	createBody := map[string]interface{}{
-		"company_id": dto.CompanyID,
-		"rider_type": dto.RiderType,
-		"first_name": dto.FirstName,
-		"last_name":  "ToDelete",
-		"email":      *dto.Email,
-		"phone":      *dto.Phone,
+		"organization_id": dto.OrganizationID,
+		"rider_type":      dto.RiderType,
+		"first_name":      dto.FirstName,
+		"last_name":       "ToDelete",
+		"email":           *dto.Email,
+		"phone":           *dto.Phone,
 	}
 	w := helper.DoRequest("POST", "/tracking/riders", createBody, map[string]string{})
 	assert.Equal(t, http.StatusCreated, w.Code)
@@ -1029,16 +1063,13 @@ func TestListRidersWithFilters(t *testing.T) {
 	helper := SetupTrackingTest(t)
 	defer helper.Close()
 
-	companyID := MainCompanyID
-	w := helper.DoRequest("GET", fmt.Sprintf("/tracking/companies/%s/riders?rider_type=student", companyID), nil, map[string]string{})
+	result := ListRiders(t, helper, fmt.Sprintf("?organization_id=%s&rider_type=student", MainSchoolID))
 
-	if w.Code == http.StatusNotFound {
-		t.Skip("rider filter by type not yet implemented on this route")
-		return
+	assert.Greater(t, len(result.Riders), 0)
+	for _, rider := range result.Riders {
+		assert.NotNil(t, rider.RiderType)
+		assert.Equal(t, "student", *rider.RiderType)
 	}
-	assert.Equal(t, http.StatusOK, w.Code)
-	riders := ParseListResponse(t, w.Body.Bytes())
-	assert.NotNil(t, riders)
 }
 
 // TestRiderActiveStatus - Activate/deactivate riders → 200
@@ -1067,12 +1098,12 @@ func TestRiderDeactivate(t *testing.T) {
 	dto := ValidRiderDto()
 	uniqueEmail := "deactivate" + uuid.New().String()[:8] + "@test.local"
 	createBody := map[string]interface{}{
-		"company_id": dto.CompanyID,
-		"rider_type": dto.RiderType,
-		"first_name": "ToDeactivate",
-		"last_name":  "User",
-		"email":      uniqueEmail,
-		"phone":      "+5555555555",
+		"organization_id": dto.OrganizationID,
+		"rider_type":      dto.RiderType,
+		"first_name":      "ToDeactivate",
+		"last_name":       "User",
+		"email":           uniqueEmail,
+		"phone":           "+5555555555",
 	}
 	w := helper.DoRequest("POST", "/tracking/riders", createBody, map[string]string{})
 
@@ -1109,12 +1140,12 @@ func TestRiderReactivate(t *testing.T) {
 	dto := ValidRiderDto()
 	uniqueEmail := "reactivate" + uuid.New().String()[:8] + "@test.local"
 	createBody := map[string]interface{}{
-		"company_id": dto.CompanyID,
-		"rider_type": dto.RiderType,
-		"first_name": "ToReactivate",
-		"last_name":  "User",
-		"email":      uniqueEmail,
-		"phone":      "+6666666666",
+		"organization_id": dto.OrganizationID,
+		"rider_type":      dto.RiderType,
+		"first_name":      "ToReactivate",
+		"last_name":       "User",
+		"email":           uniqueEmail,
+		"phone":           "+6666666666",
 	}
 	w := helper.DoRequest("POST", "/tracking/riders", createBody, map[string]string{})
 
@@ -1767,150 +1798,213 @@ func TestAlertSeverityLevels(t *testing.T) {
 }
 
 // ============================================================================
-// CLIENT ACCESS TESTS (9 tests)
+// ORGANIZATIONS TESTS (TRACK-005)
 // ============================================================================
 
-// TestGrantClientAccess - Give external client access → 201
-func TestGrantClientAccess(t *testing.T) {
+// TestCreateOrganizationSuccess - Create organization → 201
+func TestCreateOrganizationSuccess(t *testing.T) {
 	helper := SetupTrackingTest(t)
 	defer helper.Close()
 
-	clientTenantID := uuid.New()
+	dto := ValidOrganizationDto()
 	body := map[string]interface{}{
-		"client_tenant_id": clientTenantID,
-		"access_level":     "read_only",
-		"notes":            "Test client access",
+		"name":     dto.Name,
+		"kind":     dto.Kind,
+		"timezone": dto.Timezone,
 	}
 
-	w := helper.DoRequest("POST", "/tracking/access", body, map[string]string{})
+	w := helper.DoRequest("POST", "/tracking/organizations", body, map[string]string{})
 
-	if w.Code == http.StatusCreated || w.Code == http.StatusOK {
-		assert.True(t, true)
-	}
+	assert.Equal(t, http.StatusCreated, w.Code, w.Body.String())
+	organization := ParseResponse(t, w.Body.Bytes())
+	assert.NotNil(t, organization["id"])
+	assert.Equal(t, dto.Name, organization["name"])
+	assert.Equal(t, "school", organization["kind"])
+	assert.Equal(t, "America/Lima", organization["timezone"])
+	assert.Equal(t, true, organization["is_active"])
 }
 
-// TestListClientAccessGrants - List access grants → 200
-func TestListClientAccessGrants(t *testing.T) {
+// TestCreateOrganizationRejectsUnknownKind - kind is a CHECK on three values → 400
+func TestCreateOrganizationRejectsUnknownKind(t *testing.T) {
 	helper := SetupTrackingTest(t)
 	defer helper.Close()
 
-	w := helper.DoRequest("GET", "/tracking/access", nil, map[string]string{})
+	body := map[string]interface{}{"name": "Bad Kind", "kind": "hospital", "timezone": "UTC"}
+	w := helper.DoRequest("POST", "/tracking/organizations", body, map[string]string{})
 
-	if w.Code == http.StatusNotFound {
-		t.Skip("GET /tracking/access not yet implemented")
-		return
-	}
-	assert.Equal(t, http.StatusOK, w.Code)
-	grants := ParseListResponse(t, w.Body.Bytes())
-	assert.NotNil(t, grants)
+	assert.Equal(t, http.StatusBadRequest, w.Code)
 }
 
-// TestRevokeClientAccess - Remove client access → 204
-func TestRevokeClientAccess(t *testing.T) {
+// TestListOrganizationsPaged - page_size cuts the page while total_count counts the whole match
+func TestListOrganizationsPaged(t *testing.T) {
 	helper := SetupTrackingTest(t)
 	defer helper.Close()
 
-	accessID := uuid.New().String()
-	w := helper.DoRequest("DELETE", fmt.Sprintf("/tracking/access/%s", accessID), nil, map[string]string{})
-
-	if w.Code == http.StatusNoContent || w.Code == http.StatusOK || w.Code == http.StatusNotFound {
-		assert.True(t, true)
+	all := ListOrganizations(t, helper, "")
+	if all.TotalCount < 2 {
+		t.Fatalf("expected at least two seeded organizations, got total_count %d", all.TotalCount)
 	}
+
+	page := ListOrganizations(t, helper, "?page=1&page_size=1")
+	assert.Len(t, page.Organizations, 1)
+	assert.Equal(t, all.TotalCount, page.TotalCount)
+	assert.Equal(t, 1, page.Page)
+	assert.Equal(t, 1, page.PageSize)
 }
 
-// TestClientAccessScopes - Permission scopes for clients → 201
-func TestClientAccessScopes(t *testing.T) {
+// TestListOrganizationsFiltered - search and kind narrow the page
+func TestListOrganizationsFiltered(t *testing.T) {
 	helper := SetupTrackingTest(t)
 	defer helper.Close()
 
-	scopes := []string{"read_locations", "read_routes", "read_riders"}
-
-	for _, scope := range scopes {
-		body := map[string]interface{}{
-			"client_tenant_id": uuid.New(),
-			"access_level":     scope,
-		}
-
-		w := helper.DoRequest("POST", "/tracking/access", body, map[string]string{})
-		assert.True(t, w.Code >= 200)
+	byKind := ListOrganizations(t, helper, "?kind=school")
+	assert.Greater(t, len(byKind.Organizations), 0)
+	for _, org := range byKind.Organizations {
+		assert.Equal(t, "school", org.Kind)
 	}
+
+	bySearch := ListOrganizations(t, helper, "?search=Main+Test+School")
+	assert.Len(t, bySearch.Organizations, 1)
+	assert.Equal(t, MainSchoolID, bySearch.Organizations[0].ID.String())
 }
 
-// TestClientAccessExpiration - Time-limited access grants → 201
-func TestClientAccessExpiration(t *testing.T) {
+// TestGetOrganizationNotFound - An organization of another tenant is not readable → 404
+func TestGetOrganizationNotFound(t *testing.T) {
 	helper := SetupTrackingTest(t)
 	defer helper.Close()
 
-	body := map[string]interface{}{
-		"client_tenant_id": uuid.New(),
-		"access_level":     "read_only",
-		"expires_at":       "2026-04-02T00:00:00Z",
-	}
+	w := helper.DoRequest("GET", fmt.Sprintf("/tracking/organizations/%s", uuid.New()), nil, map[string]string{})
 
-	w := helper.DoRequest("POST", "/tracking/access", body, map[string]string{})
-
-	if w.Code == http.StatusCreated || w.Code >= 200 {
-		assert.True(t, true)
-	}
+	assert.Equal(t, http.StatusNotFound, w.Code)
 }
 
-// TestGetAccessGrant - Retrieve specific access grant → 200
-func TestGetAccessGrant(t *testing.T) {
+// TestUpdateOrganization - A PATCH of one field leaves the others alone → 200
+func TestUpdateOrganization(t *testing.T) {
 	helper := SetupTrackingTest(t)
 	defer helper.Close()
 
-	accessID := uuid.New().String()
-	w := helper.DoRequest("GET", fmt.Sprintf("/tracking/access/%s", accessID), nil, map[string]string{})
+	organizationID := createOrganization(t, helper)
 
-	if w.Code == http.StatusOK || w.Code == http.StatusNotFound {
-		assert.True(t, true)
+	w := helper.DoRequest("PATCH", fmt.Sprintf("/tracking/organizations/%s", organizationID),
+		map[string]interface{}{"name": "Renamed Organization"}, map[string]string{})
+	if w.Code != http.StatusOK {
+		t.Fatalf("update organization: expected 200, got %d: %s", w.Code, w.Body.String())
 	}
+
+	updated := ParseResponse(t, w.Body.Bytes())
+	assert.Equal(t, "Renamed Organization", updated["name"])
+	assert.Equal(t, "school", updated["kind"])
+	assert.Equal(t, "America/Lima", updated["timezone"])
 }
 
-// TestUpdateAccessGrant - Modify access level → 200
-func TestUpdateAccessGrant(t *testing.T) {
+// TestDeleteOrganizationWithRiders - The seeded school still has riders → 409
+func TestDeleteOrganizationWithRiders(t *testing.T) {
 	helper := SetupTrackingTest(t)
 	defer helper.Close()
 
-	accessID := uuid.New().String()
-	body := map[string]interface{}{
-		"access_level": "read_write",
-	}
+	w := helper.DoRequest("DELETE", fmt.Sprintf("/tracking/organizations/%s", MainSchoolID), nil, map[string]string{})
 
-	w := helper.DoRequest("PATCH", fmt.Sprintf("/tracking/access/%s", accessID), body, map[string]string{})
-
-	if w.Code == http.StatusOK || w.Code == http.StatusNotFound {
-		assert.True(t, true)
-	}
+	assert.Equal(t, http.StatusConflict, w.Code, w.Body.String())
+	assert.Contains(t, w.Body.String(), "tracking.organization.has-riders")
 }
 
-// TestMultiTenantClientAccess - Client access across tenants → 201
-func TestMultiTenantClientAccess(t *testing.T) {
+// TestDeleteOrganizationEmpty - An organization with no riders is deleted → 204
+func TestDeleteOrganizationEmpty(t *testing.T) {
 	helper := SetupTrackingTest(t)
 	defer helper.Close()
 
-	// Grant access to multiple companies
-	for i := 0; i < 2; i++ {
-		body := map[string]interface{}{
-			"client_tenant_id": uuid.New(),
-			"access_level":     "read_only",
-		}
+	organizationID := createOrganization(t, helper)
 
-		w := helper.DoRequest("POST", "/tracking/access", body, map[string]string{})
-		assert.True(t, w.Code >= 200)
-	}
+	w := helper.DoRequest("DELETE", fmt.Sprintf("/tracking/organizations/%s", organizationID), nil, map[string]string{})
+	assert.Equal(t, http.StatusNoContent, w.Code)
+
+	w = helper.DoRequest("GET", fmt.Sprintf("/tracking/organizations/%s", organizationID), nil, map[string]string{})
+	assert.Equal(t, http.StatusNotFound, w.Code)
 }
 
-// TestAccessAuditLog - Track access grant changes → 200
-func TestAccessAuditLog(t *testing.T) {
+// TestOrganizationMembersLifecycle - PUT adds a member, PUT again re-roles them, DELETE removes them
+func TestOrganizationMembersLifecycle(t *testing.T) {
 	helper := SetupTrackingTest(t)
 	defer helper.Close()
 
-	w := helper.DoRequest("GET", "/tracking/access/audit", nil, map[string]string{})
+	organizationID := createOrganization(t, helper)
+	userID := helper.GetUserID()
+	memberPath := fmt.Sprintf("/tracking/organizations/%s/members/%s", organizationID, userID)
 
-	if w.Code == http.StatusOK || w.Code == http.StatusNotFound {
-		assert.True(t, true)
+	w := helper.DoRequest("PUT", memberPath, map[string]interface{}{"role": "admin"}, map[string]string{})
+	if w.Code != http.StatusOK {
+		t.Fatalf("add member: expected 200, got %d: %s", w.Code, w.Body.String())
 	}
+	member := ParseResponse(t, w.Body.Bytes())
+	assert.Equal(t, userID, member["user_id"])
+	assert.Equal(t, "admin", member["role"])
+	assert.NotNil(t, member["email"])
+
+	members := listMembers(t, helper, organizationID)
+	assert.Len(t, members, 1)
+	assert.Equal(t, "admin", members[0]["role"])
+
+	// The same call re-roles the member instead of failing on the unique constraint.
+	w = helper.DoRequest("PUT", memberPath, map[string]interface{}{"role": "viewer"}, map[string]string{})
+	assert.Equal(t, http.StatusOK, w.Code, w.Body.String())
+
+	members = listMembers(t, helper, organizationID)
+	assert.Len(t, members, 1)
+	assert.Equal(t, "viewer", members[0]["role"])
+
+	w = helper.DoRequest("DELETE", memberPath, nil, map[string]string{})
+	assert.Equal(t, http.StatusNoContent, w.Code)
+	assert.Len(t, listMembers(t, helper, organizationID), 0)
+}
+
+// TestUpsertOrganizationMemberUnknownUser - A user that does not exist → 404
+func TestUpsertOrganizationMemberUnknownUser(t *testing.T) {
+	helper := SetupTrackingTest(t)
+	defer helper.Close()
+
+	organizationID := createOrganization(t, helper)
+	path := fmt.Sprintf("/tracking/organizations/%s/members/%s", organizationID, uuid.New())
+
+	w := helper.DoRequest("PUT", path, map[string]interface{}{"role": "viewer"}, map[string]string{})
+
+	assert.Equal(t, http.StatusNotFound, w.Code, w.Body.String())
+}
+
+// TestDeleteOrganizationMemberNotAMember - Removing someone who was never on it → 404
+func TestDeleteOrganizationMemberNotAMember(t *testing.T) {
+	helper := SetupTrackingTest(t)
+	defer helper.Close()
+
+	organizationID := createOrganization(t, helper)
+	path := fmt.Sprintf("/tracking/organizations/%s/members/%s", organizationID, helper.GetUserID())
+
+	w := helper.DoRequest("DELETE", path, nil, map[string]string{})
+
+	assert.Equal(t, http.StatusNotFound, w.Code)
+}
+
+// createOrganization creates one organization through the API and returns its id.
+func createOrganization(t *testing.T, helper *testhelpers.ApiTestHelper) string {
+	t.Helper()
+
+	dto := ValidOrganizationDto()
+	body := map[string]interface{}{"name": dto.Name, "kind": dto.Kind, "timezone": dto.Timezone}
+	w := helper.DoRequest("POST", "/tracking/organizations", body, map[string]string{})
+	if w.Code != http.StatusCreated {
+		t.Fatalf("create organization: expected 201, got %d: %s", w.Code, w.Body.String())
+	}
+	return ExtractID(t, ParseResponse(t, w.Body.Bytes()))
+}
+
+// listMembers reads an organization's members, failing the test on anything but a 200.
+func listMembers(t *testing.T, helper *testhelpers.ApiTestHelper, organizationID string) []map[string]interface{} {
+	t.Helper()
+
+	w := helper.DoRequest("GET", fmt.Sprintf("/tracking/organizations/%s/members", organizationID), nil, map[string]string{})
+	if w.Code != http.StatusOK {
+		t.Fatalf("list members: expected 200, got %d: %s", w.Code, w.Body.String())
+	}
+	return ParseListResponse(t, w.Body.Bytes())
 }
 
 // ============================================================================
@@ -1975,12 +2069,12 @@ func TestAssignRider_Duplicate(t *testing.T) {
 	// Create a fresh rider to ensure clean state
 	dto := ValidRiderDto()
 	createBody := map[string]interface{}{
-		"company_id": dto.CompanyID,
-		"rider_type": dto.RiderType,
-		"first_name": "Duplicate",
-		"last_name":  "Assign",
-		"email":      *dto.Email,
-		"phone":      *dto.Phone,
+		"organization_id": dto.OrganizationID,
+		"rider_type":      dto.RiderType,
+		"first_name":      "Duplicate",
+		"last_name":       "Assign",
+		"email":           *dto.Email,
+		"phone":           *dto.Phone,
 	}
 	w := helper.DoRequest("POST", "/tracking/riders", createBody, map[string]string{})
 	if w.Code != http.StatusCreated {

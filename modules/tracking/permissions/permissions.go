@@ -31,7 +31,9 @@ const (
 	EventsWrite = "tracking:events:write"
 	AlertsWrite = "tracking:alerts:write"
 
-	ClientsManage = "tracking:clients:manage"
+	OrganizationsRead   = "tracking:organizations:read"
+	OrganizationsWrite  = "tracking:organizations:write"
+	OrganizationsDelete = "tracking:organizations:delete"
 )
 
 func init() {
@@ -52,6 +54,8 @@ func init() {
 		{Code: AssignmentsManage, Module: "tracking", Name: "permission.tracking.assignments-manage", Description: "permission.tracking.assignments-manage.description"},
 		{Code: EventsWrite, Module: "tracking", Name: "permission.tracking.events-write", Description: "permission.tracking.events-write.description"},
 		{Code: AlertsWrite, Module: "tracking", Name: "permission.tracking.alerts-write", Description: "permission.tracking.alerts-write.description"},
-		{Code: ClientsManage, Module: "tracking", Name: "permission.tracking.clients-manage", Description: "permission.tracking.clients-manage.description"},
+		{Code: OrganizationsRead, Module: "tracking", Name: "permission.tracking.organizations-read", Description: "permission.tracking.organizations-read.description"},
+		{Code: OrganizationsWrite, Module: "tracking", Name: "permission.tracking.organizations-write", Description: "permission.tracking.organizations-write.description"},
+		{Code: OrganizationsDelete, Module: "tracking", Name: "permission.tracking.organizations-delete", Description: "permission.tracking.organizations-delete.description"},
 	})
 }

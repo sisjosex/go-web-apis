@@ -4,9 +4,9 @@ import (
 	"josex/web/config"
 	"josex/web/modules/auth/middleware"
 	authServices "josex/web/modules/auth/services"
+	tenancyMW "josex/web/modules/tenancy/middleware"
 	"josex/web/modules/tracking/controllers"
 	trackingPerms "josex/web/modules/tracking/permissions"
-	tenancyMW "josex/web/modules/tenancy/middleware"
 
 	"github.com/gin-gonic/gin"
 )
@@ -86,8 +86,36 @@ func RegisterTrackingRoutes(router *gin.Engine, trackingController *controllers.
 			tenancyMW.RequirePermission(trackingPerms.RoutesDelete),
 			trackingController.DeleteRouteStop)
 
+		// Organizations
+		r.GET("/organizations",
+			tenancyMW.RequirePermission(trackingPerms.OrganizationsRead),
+			trackingController.ListOrganizations)
+		r.GET("/organizations/:organization_id",
+			tenancyMW.RequirePermission(trackingPerms.OrganizationsRead),
+			trackingController.GetOrganization)
+		r.POST("/organizations",
+			tenancyMW.RequirePermission(trackingPerms.OrganizationsWrite),
+			trackingController.CreateOrganization)
+		r.PATCH("/organizations/:organization_id",
+			tenancyMW.RequirePermission(trackingPerms.OrganizationsWrite),
+			trackingController.UpdateOrganization)
+		r.DELETE("/organizations/:organization_id",
+			tenancyMW.RequirePermission(trackingPerms.OrganizationsDelete),
+			trackingController.DeleteOrganization)
+
+		// Organization members
+		r.GET("/organizations/:organization_id/members",
+			tenancyMW.RequirePermission(trackingPerms.OrganizationsRead),
+			trackingController.ListOrganizationMembers)
+		r.PUT("/organizations/:organization_id/members/:user_id",
+			tenancyMW.RequirePermission(trackingPerms.OrganizationsWrite),
+			trackingController.UpsertOrganizationMember)
+		r.DELETE("/organizations/:organization_id/members/:user_id",
+			tenancyMW.RequirePermission(trackingPerms.OrganizationsWrite),
+			trackingController.DeleteOrganizationMember)
+
 		// Riders
-		r.GET("/companies/:company_id/riders", trackingController.ListRiders)
+		r.GET("/riders", trackingController.ListRiders)
 		r.GET("/riders/:rider_id", trackingController.GetRider)
 		r.GET("/riders/:rider_id/status", trackingController.GetRiderStatus)
 		r.POST("/riders",
@@ -110,17 +138,6 @@ func RegisterTrackingRoutes(router *gin.Engine, trackingController *controllers.
 		r.DELETE("/assignments/:assignment_id",
 			tenancyMW.RequirePermission(trackingPerms.AssignmentsManage),
 			trackingController.UnassignRider)
-
-		// Client Access Management
-		r.GET("/companies/:company_id/clients",
-			tenancyMW.RequirePermission(trackingPerms.ClientsManage),
-			trackingController.ListCompanyClients)
-		r.POST("/companies/:company_id/clients",
-			tenancyMW.RequirePermission(trackingPerms.ClientsManage),
-			trackingController.GrantClientAccess)
-		r.DELETE("/companies/:company_id/clients/:client_tenant_id",
-			tenancyMW.RequirePermission(trackingPerms.ClientsManage),
-			trackingController.RevokeClientAccess)
 	} else {
 		// Single-database mode: no tenant/permission middleware
 		trackingGroup.POST("/events", trackingController.RecordRideEvent)
@@ -150,8 +167,18 @@ func RegisterTrackingRoutes(router *gin.Engine, trackingController *controllers.
 		trackingGroup.POST("/route-stops", trackingController.CreateRouteStop)
 		trackingGroup.DELETE("/route-stops/:stop_id", trackingController.DeleteRouteStop)
 
+		trackingGroup.POST("/organizations", trackingController.CreateOrganization)
+		trackingGroup.GET("/organizations", trackingController.ListOrganizations)
+		trackingGroup.GET("/organizations/:organization_id", trackingController.GetOrganization)
+		trackingGroup.PATCH("/organizations/:organization_id", trackingController.UpdateOrganization)
+		trackingGroup.DELETE("/organizations/:organization_id", trackingController.DeleteOrganization)
+
+		trackingGroup.GET("/organizations/:organization_id/members", trackingController.ListOrganizationMembers)
+		trackingGroup.PUT("/organizations/:organization_id/members/:user_id", trackingController.UpsertOrganizationMember)
+		trackingGroup.DELETE("/organizations/:organization_id/members/:user_id", trackingController.DeleteOrganizationMember)
+
 		trackingGroup.POST("/riders", trackingController.CreateRider)
-		trackingGroup.GET("/companies/:company_id/riders", trackingController.ListRiders)
+		trackingGroup.GET("/riders", trackingController.ListRiders)
 		trackingGroup.GET("/riders/:rider_id", trackingController.GetRider)
 		trackingGroup.GET("/riders/:rider_id/status", trackingController.GetRiderStatus)
 		trackingGroup.PATCH("/riders/:rider_id", trackingController.UpdateRider)
@@ -160,9 +187,5 @@ func RegisterTrackingRoutes(router *gin.Engine, trackingController *controllers.
 		trackingGroup.POST("/assignments", trackingController.AssignRider)
 		trackingGroup.GET("/assignments", trackingController.ListRiderAssignments)
 		trackingGroup.DELETE("/assignments/:assignment_id", trackingController.UnassignRider)
-
-		trackingGroup.POST("/companies/:company_id/clients", trackingController.GrantClientAccess)
-		trackingGroup.GET("/companies/:company_id/clients", trackingController.ListCompanyClients)
-		trackingGroup.DELETE("/companies/:company_id/clients/:client_tenant_id", trackingController.RevokeClientAccess)
 	}
 }

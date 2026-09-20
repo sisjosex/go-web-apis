@@ -1077,32 +1077,39 @@ func (ctrl *TrackingController) UpdateRider(c *gin.Context) {
 
 // ListRiders godoc
 // @Summary List riders
-// @Description Get all riders for a company (scoped to current tenant)
+// @Description One page of the current tenant's riders, alphabetically
 // @Tags Tracking - Riders
 // @Produce json
 // @Security BearerAuth
-// @Param company_id path string true "Company ID (UUID)"
-// @Success 200 {array} models.Rider
+// @Param organization_id query string false "Organization ID (UUID); unset lists the whole tenant"
+// @Param rider_type query string false "Rider type" Enums(student, employee)
+// @Param is_active query bool false "Lifecycle state"
+// @Param search query string false "Match against first name, last name or identification number"
+// @Param page query int false "Page number, 1-based" default(1)
+// @Param page_size query int false "Rows per page, max 100" default(20)
+// @Success 200 {object} models.ListRidersResponse
 // @Failure 400 {object} coreErrors.ErrorResponse
 // @Failure 500 {object} coreErrors.ErrorResponse
-// @Router /tracking/companies/{company_id}/riders [get]
+// @Router /tracking/riders [get]
 func (ctrl *TrackingController) ListRiders(c *gin.Context) {
 	tenantID, ok := ctrl.requireTenantID(c)
 	if !ok {
 		return
 	}
 
-	companyID, err := uuid.Parse(c.Param("company_id"))
-	if err != nil {
-		c.JSON(http.StatusBadRequest, coreErrors.BuildErrorSingle(c, coreErrors.InvalidUUID))
+	var query models.ListRidersQuery
+	if err := c.ShouldBindQuery(&query); err != nil {
+		c.JSON(http.StatusBadRequest, coreErrors.BuildErrorDetail(c, "validation.invalid", err.Error()))
 		return
 	}
-	riders, err := ctrl.trackingService.ListRiders(c.Request.Context(), tenantID, &companyID, nil, nil, nil)
+	query.Search = strings.TrimSpace(query.Search)
+
+	result, err := ctrl.trackingService.ListRiders(c.Request.Context(), tenantID, query)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, coreErrors.BuildError(c, err))
 		return
 	}
-	c.JSON(http.StatusOK, riders)
+	c.JSON(http.StatusOK, result)
 }
 
 // GetRider godoc
@@ -1309,130 +1316,335 @@ func (ctrl *TrackingController) ListRiderAssignments(c *gin.Context) {
 	c.JSON(http.StatusOK, assignments)
 }
 
-// ==================== CLIENT ACCESS OPERATIONS ====================
+// ==================== ORGANIZATIONS CRUD ====================
 
-// GrantClientAccess godoc
-// @Summary Grant client tenant access to company
-// @Description Allow a client tenant (e.g., school) to access a transport company's services
-// @Tags Tracking - Companies
+// CreateOrganization godoc
+// @Summary Create organization
+// @Description Create a school or employer whose people ride
+// @Tags Tracking - Organizations
 // @Accept json
 // @Produce json
-// @Param company_id path string true "Company UUID"
-// @Param request body models.GrantClientAccessDto true "Client access data"
-// @Success 200 {object} models.CompanyClientAccess
+// @Security BearerAuth
+// @Param organization body models.CreateOrganizationDto true "Organization data"
+// @Success 201 {object} models.Organization
 // @Failure 400 {object} coreErrors.ErrorResponse
-// @Failure 404 {object} coreErrors.ErrorResponse
 // @Failure 500 {object} coreErrors.ErrorResponse
-// @Router /tracking/companies/{company_id}/clients [post]
-func (ctrl *TrackingController) GrantClientAccess(c *gin.Context) {
+// @Router /tracking/organizations [post]
+func (ctrl *TrackingController) CreateOrganization(c *gin.Context) {
 	tenantID, ok := ctrl.requireTenantID(c)
 	if !ok {
 		return
 	}
 
-	companyID, err := uuid.Parse(c.Param("company_id"))
-	if err != nil {
-		c.JSON(http.StatusBadRequest, coreErrors.BuildErrorSingle(c, coreErrors.InvalidUUID))
-		return
-	}
-
-	var dto models.GrantClientAccessDto
+	var dto models.CreateOrganizationDto
 	if err := c.ShouldBindJSON(&dto); err != nil {
-		c.JSON(http.StatusBadRequest, coreErrors.BuildErrorDetail(c, trackingErrors.ClientAccessGrantFailed, utils.ExtractValidationError(c, err)))
+		c.JSON(http.StatusBadRequest, coreErrors.BuildErrorDetail(c, trackingErrors.OrganizationCreateFailed, utils.ExtractValidationError(c, err)))
 		return
 	}
+	_ = conform.Strings(&dto)
 
-	conform.Strings(&dto)
-
-	userID := c.GetString("user_id")
-	userUUID, _ := uuid.Parse(userID)
-
-	access, err := ctrl.trackingService.GrantClientAccess(c.Request.Context(), tenantID, companyID, &dto, userUUID)
+	organization, err := ctrl.trackingService.CreateOrganization(c.Request.Context(), tenantID, &dto)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, coreErrors.BuildError(c, err))
 		return
 	}
-
-	c.JSON(http.StatusOK, access)
+	c.JSON(http.StatusCreated, organization)
 }
 
-// RevokeClientAccess godoc
-// @Summary Revoke client tenant access to company
-// @Description Remove a client tenant's access to a transport company
-// @Tags Tracking - Companies
+// UpdateOrganization godoc
+// @Summary Update organization
+// @Description Update an organization; every field is optional
+// @Tags Tracking - Organizations
+// @Accept json
 // @Produce json
-// @Param company_id path string true "Company UUID"
-// @Param client_tenant_id path string true "Client Tenant UUID"
-// @Success 204
+// @Security BearerAuth
+// @Param organization_id path string true "Organization ID (UUID)"
+// @Param organization body models.UpdateOrganizationDto true "Updated organization data"
+// @Success 200 {object} models.Organization
 // @Failure 400 {object} coreErrors.ErrorResponse
 // @Failure 404 {object} coreErrors.ErrorResponse
 // @Failure 500 {object} coreErrors.ErrorResponse
-// @Router /tracking/companies/{company_id}/clients/{client_tenant_id} [delete]
-func (ctrl *TrackingController) RevokeClientAccess(c *gin.Context) {
+// @Router /tracking/organizations/{organization_id} [patch]
+func (ctrl *TrackingController) UpdateOrganization(c *gin.Context) {
 	tenantID, ok := ctrl.requireTenantID(c)
 	if !ok {
 		return
 	}
 
-	companyID, err := uuid.Parse(c.Param("company_id"))
+	organizationID, err := uuid.Parse(c.Param("organization_id"))
 	if err != nil {
 		c.JSON(http.StatusBadRequest, coreErrors.BuildErrorSingle(c, coreErrors.InvalidUUID))
 		return
 	}
-
-	clientTenantID, err := uuid.Parse(c.Param("client_tenant_id"))
-	if err != nil {
-		c.JSON(http.StatusBadRequest, coreErrors.BuildErrorSingle(c, coreErrors.InvalidUUID))
+	var dto models.UpdateOrganizationDto
+	if err := c.ShouldBindJSON(&dto); err != nil {
+		c.JSON(http.StatusBadRequest, coreErrors.BuildErrorDetail(c, trackingErrors.OrganizationUpdateFailed, utils.ExtractValidationError(c, err)))
 		return
 	}
+	_ = conform.Strings(&dto)
 
-	userID := c.GetString("user_id")
-	userUUID, _ := uuid.Parse(userID)
-
-	err = ctrl.trackingService.RevokeClientAccess(c.Request.Context(), tenantID, companyID, clientTenantID, userUUID)
+	organization, err := ctrl.trackingService.UpdateOrganization(c.Request.Context(), tenantID, organizationID, &dto)
 	if err != nil {
+		var trackingErr *trackingErrors.TrackingError
+		if errors.As(err, &trackingErr) && trackingErr.Code == trackingErrors.OrganizationNotFound {
+			c.JSON(http.StatusNotFound, coreErrors.BuildErrorSingle(c, trackingErr.Code))
+			return
+		}
 		c.JSON(http.StatusInternalServerError, coreErrors.BuildError(c, err))
 		return
 	}
-
-	c.Status(http.StatusNoContent)
+	c.JSON(http.StatusOK, organization)
 }
 
-// ListCompanyClients godoc
-// @Summary List client tenants with access to company
-// @Description Get all client tenants (e.g., schools) that have access to this transport company
-// @Tags Tracking - Companies
+// ListOrganizations godoc
+// @Summary List organizations
+// @Description One page of the current tenant's organizations, alphabetically
+// @Tags Tracking - Organizations
 // @Produce json
-// @Param company_id path string true "Company UUID"
-// @Success 200 {array} models.CompanyClientAccess
+// @Security BearerAuth
+// @Param search query string false "Match against the name"
+// @Param kind query string false "Organization kind" Enums(school, company, other)
+// @Param is_active query bool false "Lifecycle state"
+// @Param page query int false "Page number, 1-based" default(1)
+// @Param page_size query int false "Rows per page, max 100" default(20)
+// @Success 200 {object} models.ListOrganizationsResponse
 // @Failure 400 {object} coreErrors.ErrorResponse
-// @Failure 404 {object} coreErrors.ErrorResponse
 // @Failure 500 {object} coreErrors.ErrorResponse
-// @Router /tracking/companies/{company_id}/clients [get]
-func (ctrl *TrackingController) ListCompanyClients(c *gin.Context) {
+// @Router /tracking/organizations [get]
+func (ctrl *TrackingController) ListOrganizations(c *gin.Context) {
 	tenantID, ok := ctrl.requireTenantID(c)
 	if !ok {
 		return
 	}
 
-	companyID, err := uuid.Parse(c.Param("company_id"))
+	var query models.ListOrganizationsQuery
+	if err := c.ShouldBindQuery(&query); err != nil {
+		c.JSON(http.StatusBadRequest, coreErrors.BuildErrorDetail(c, "validation.invalid", err.Error()))
+		return
+	}
+	query.Search = strings.TrimSpace(query.Search)
+
+	result, err := ctrl.trackingService.ListOrganizations(c.Request.Context(), tenantID, query)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, coreErrors.BuildError(c, err))
+		return
+	}
+	c.JSON(http.StatusOK, result)
+}
+
+// GetOrganization godoc
+// @Summary Get organization by ID
+// @Description Get a single organization by ID
+// @Tags Tracking - Organizations
+// @Produce json
+// @Security BearerAuth
+// @Param organization_id path string true "Organization ID (UUID)"
+// @Success 200 {object} models.Organization
+// @Failure 400 {object} coreErrors.ErrorResponse
+// @Failure 404 {object} coreErrors.ErrorResponse
+// @Failure 500 {object} coreErrors.ErrorResponse
+// @Router /tracking/organizations/{organization_id} [get]
+func (ctrl *TrackingController) GetOrganization(c *gin.Context) {
+	tenantID, ok := ctrl.requireTenantID(c)
+	if !ok {
+		return
+	}
+
+	organizationID, err := uuid.Parse(c.Param("organization_id"))
 	if err != nil {
 		c.JSON(http.StatusBadRequest, coreErrors.BuildErrorSingle(c, coreErrors.InvalidUUID))
 		return
 	}
 
-	clients, err := ctrl.trackingService.ListCompanyClients(c.Request.Context(), tenantID, companyID)
+	organization, err := ctrl.trackingService.GetOrganization(c.Request.Context(), tenantID, organizationID)
+	if err != nil {
+		var trackingErr *trackingErrors.TrackingError
+		if errors.As(err, &trackingErr) && trackingErr.Code == trackingErrors.OrganizationNotFound {
+			c.JSON(http.StatusNotFound, coreErrors.BuildErrorSingle(c, trackingErr.Code))
+			return
+		}
+		c.JSON(http.StatusInternalServerError, coreErrors.BuildError(c, err))
+		return
+	}
+	c.JSON(http.StatusOK, organization)
+}
+
+// DeleteOrganization godoc
+// @Summary Delete organization
+// @Description Delete an organization; refused while it still has riders
+// @Tags Tracking - Organizations
+// @Security BearerAuth
+// @Param organization_id path string true "Organization ID (UUID)"
+// @Success 204 "No Content"
+// @Failure 400 {object} coreErrors.ErrorResponse
+// @Failure 404 {object} coreErrors.ErrorResponse
+// @Failure 409 {object} coreErrors.ErrorResponse
+// @Failure 500 {object} coreErrors.ErrorResponse
+// @Router /tracking/organizations/{organization_id} [delete]
+func (ctrl *TrackingController) DeleteOrganization(c *gin.Context) {
+	tenantID, ok := ctrl.requireTenantID(c)
+	if !ok {
+		return
+	}
+
+	organizationID, err := uuid.Parse(c.Param("organization_id"))
+	if err != nil {
+		c.JSON(http.StatusBadRequest, coreErrors.BuildErrorSingle(c, coreErrors.InvalidUUID))
+		return
+	}
+
+	err = ctrl.trackingService.DeleteOrganization(c.Request.Context(), tenantID, organizationID)
 	if err != nil {
 		var trackingErr *trackingErrors.TrackingError
 		if errors.As(err, &trackingErr) {
-			if trackingErr.Code == trackingErrors.CompanyNotFound {
-				c.JSON(http.StatusNotFound, coreErrors.BuildError(c, err))
+			switch trackingErr.Code {
+			case trackingErrors.OrganizationNotFound:
+				c.JSON(http.StatusNotFound, coreErrors.BuildErrorSingle(c, trackingErr.Code))
+				return
+			case trackingErrors.OrganizationHasRiders:
+				c.JSON(http.StatusConflict, coreErrors.BuildErrorSingle(c, trackingErr.Code))
 				return
 			}
 		}
 		c.JSON(http.StatusInternalServerError, coreErrors.BuildError(c, err))
 		return
 	}
+	c.Status(http.StatusNoContent)
+}
 
-	c.JSON(http.StatusOK, clients)
+// ==================== ORGANIZATION MEMBERS ====================
+
+// ListOrganizationMembers godoc
+// @Summary List organization members
+// @Description The tenant users on an organization, with their identity and role
+// @Tags Tracking - Organizations
+// @Produce json
+// @Security BearerAuth
+// @Param organization_id path string true "Organization ID (UUID)"
+// @Success 200 {array} models.OrganizationMember
+// @Failure 400 {object} coreErrors.ErrorResponse
+// @Failure 404 {object} coreErrors.ErrorResponse
+// @Failure 500 {object} coreErrors.ErrorResponse
+// @Router /tracking/organizations/{organization_id}/members [get]
+func (ctrl *TrackingController) ListOrganizationMembers(c *gin.Context) {
+	tenantID, ok := ctrl.requireTenantID(c)
+	if !ok {
+		return
+	}
+
+	organizationID, err := uuid.Parse(c.Param("organization_id"))
+	if err != nil {
+		c.JSON(http.StatusBadRequest, coreErrors.BuildErrorSingle(c, coreErrors.InvalidUUID))
+		return
+	}
+
+	members, err := ctrl.trackingService.ListOrganizationMembers(c.Request.Context(), tenantID, organizationID)
+	if err != nil {
+		var trackingErr *trackingErrors.TrackingError
+		if errors.As(err, &trackingErr) && trackingErr.Code == trackingErrors.OrganizationNotFound {
+			c.JSON(http.StatusNotFound, coreErrors.BuildErrorSingle(c, trackingErr.Code))
+			return
+		}
+		c.JSON(http.StatusInternalServerError, coreErrors.BuildError(c, err))
+		return
+	}
+	c.JSON(http.StatusOK, members)
+}
+
+// UpsertOrganizationMember godoc
+// @Summary Add an organization member or change their role
+// @Description Idempotent: the same call adds a member and re-roles one already there
+// @Tags Tracking - Organizations
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param organization_id path string true "Organization ID (UUID)"
+// @Param user_id path string true "User ID (UUID)"
+// @Param member body models.UpsertOrganizationMemberDto true "Member role"
+// @Success 200 {object} models.OrganizationMember
+// @Failure 400 {object} coreErrors.ErrorResponse
+// @Failure 404 {object} coreErrors.ErrorResponse
+// @Failure 500 {object} coreErrors.ErrorResponse
+// @Router /tracking/organizations/{organization_id}/members/{user_id} [put]
+func (ctrl *TrackingController) UpsertOrganizationMember(c *gin.Context) {
+	tenantID, ok := ctrl.requireTenantID(c)
+	if !ok {
+		return
+	}
+
+	organizationID, userID, ok := ctrl.memberPathIDs(c)
+	if !ok {
+		return
+	}
+	var dto models.UpsertOrganizationMemberDto
+	if err := c.ShouldBindJSON(&dto); err != nil {
+		c.JSON(http.StatusBadRequest, coreErrors.BuildErrorDetail(c, trackingErrors.OrganizationMemberSaveFailed, utils.ExtractValidationError(c, err)))
+		return
+	}
+	_ = conform.Strings(&dto)
+
+	member, err := ctrl.trackingService.UpsertOrganizationMember(c.Request.Context(), tenantID, organizationID, userID, dto.Role)
+	if err != nil {
+		var trackingErr *trackingErrors.TrackingError
+		if errors.As(err, &trackingErr) &&
+			(trackingErr.Code == trackingErrors.OrganizationNotFound || trackingErr.Code == trackingErrors.OrganizationMemberUserNotFound) {
+			c.JSON(http.StatusNotFound, coreErrors.BuildErrorSingle(c, trackingErr.Code))
+			return
+		}
+		c.JSON(http.StatusInternalServerError, coreErrors.BuildError(c, err))
+		return
+	}
+	c.JSON(http.StatusOK, member)
+}
+
+// DeleteOrganizationMember godoc
+// @Summary Remove an organization member
+// @Description Take a user off an organization; the user account itself is untouched
+// @Tags Tracking - Organizations
+// @Security BearerAuth
+// @Param organization_id path string true "Organization ID (UUID)"
+// @Param user_id path string true "User ID (UUID)"
+// @Success 204 "No Content"
+// @Failure 400 {object} coreErrors.ErrorResponse
+// @Failure 404 {object} coreErrors.ErrorResponse
+// @Failure 500 {object} coreErrors.ErrorResponse
+// @Router /tracking/organizations/{organization_id}/members/{user_id} [delete]
+func (ctrl *TrackingController) DeleteOrganizationMember(c *gin.Context) {
+	tenantID, ok := ctrl.requireTenantID(c)
+	if !ok {
+		return
+	}
+
+	organizationID, userID, ok := ctrl.memberPathIDs(c)
+	if !ok {
+		return
+	}
+
+	err := ctrl.trackingService.DeleteOrganizationMember(c.Request.Context(), tenantID, organizationID, userID)
+	if err != nil {
+		var trackingErr *trackingErrors.TrackingError
+		if errors.As(err, &trackingErr) &&
+			(trackingErr.Code == trackingErrors.OrganizationNotFound || trackingErr.Code == trackingErrors.OrganizationMemberNotFound) {
+			c.JSON(http.StatusNotFound, coreErrors.BuildErrorSingle(c, trackingErr.Code))
+			return
+		}
+		c.JSON(http.StatusInternalServerError, coreErrors.BuildError(c, err))
+		return
+	}
+	c.Status(http.StatusNoContent)
+}
+
+// memberPathIDs parses the two ids every membership route carries, answering 400 on either.
+func (ctrl *TrackingController) memberPathIDs(c *gin.Context) (uuid.UUID, uuid.UUID, bool) {
+	organizationID, err := uuid.Parse(c.Param("organization_id"))
+	if err != nil {
+		c.JSON(http.StatusBadRequest, coreErrors.BuildErrorSingle(c, coreErrors.InvalidUUID))
+		return uuid.Nil, uuid.Nil, false
+	}
+	userID, err := uuid.Parse(c.Param("user_id"))
+	if err != nil {
+		c.JSON(http.StatusBadRequest, coreErrors.BuildErrorSingle(c, coreErrors.InvalidUUID))
+		return uuid.Nil, uuid.Nil, false
+	}
+	return organizationID, userID, true
 }

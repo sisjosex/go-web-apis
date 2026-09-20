@@ -69,13 +69,21 @@ const (
 	RiderListFailed       = "tracking.rider.list.failed"
 	AssignmentListFailed  = "tracking.assignment.list.failed"
 
-	// Client Access errors (TR0161-TR0180)
-	ClientAccessNotFound      = "tracking.client-access.not-found"
-	ClientAccessAlreadyExists = "tracking.client-access.already-exists"
-	ClientAccessGrantFailed   = "tracking.client-access.grant.failed"
-	ClientAccessRevokeFailed  = "tracking.client-access.revoke.failed"
-	ClientAccessListFailed    = "tracking.client-access.list.failed"
-	TenantNotFound            = "tracking.tenant.not-found"
+	// Organization errors (TR0161-TR0180)
+	OrganizationNotFound     = "tracking.organization.not-found"
+	OrganizationCreateFailed = "tracking.organization.create.failed"
+	OrganizationUpdateFailed = "tracking.organization.update.failed"
+	OrganizationDeleteFailed = "tracking.organization.delete.failed"
+	OrganizationListFailed   = "tracking.organization.list.failed"
+	OrganizationHasRiders    = "tracking.organization.has-riders"
+
+	// Organization member errors
+	OrganizationMemberNotFound     = "tracking.organization-member.not-found"
+	OrganizationMemberUserNotFound = "tracking.organization-member.user-not-found"
+	OrganizationMemberSaveFailed   = "tracking.organization-member.save.failed"
+	OrganizationMemberListFailed   = "tracking.organization-member.list.failed"
+
+	TenantNotFound = "tracking.tenant.not-found"
 
 	// Generic errors
 	TrackingUnauthorized  = "tracking.unauthorized"

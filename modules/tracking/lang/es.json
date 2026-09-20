@@ -57,11 +57,16 @@
   "tracking.rider.list.failed": "Error al obtener pasajeros",
   "tracking.assignment.list.failed": "Error al obtener asignaciones de pasajeros",
 
-  "tracking.client-access.not-found": "Acceso de cliente no encontrado",
-  "tracking.client-access.already-exists": "El cliente ya tiene acceso a esta empresa",
-  "tracking.client-access.grant.failed": "Error al otorgar acceso al cliente",
-  "tracking.client-access.revoke.failed": "Error al revocar acceso del cliente",
-  "tracking.client-access.list.failed": "Error al obtener lista de accesos de clientes",
+  "tracking.organization.not-found": "OrganizaciÃ³n no encontrada",
+  "tracking.organization.create.failed": "Error al crear la organizaciÃ³n",
+  "tracking.organization.update.failed": "Error al actualizar la organizaciÃ³n",
+  "tracking.organization.delete.failed": "Error al eliminar la organizaciÃ³n",
+  "tracking.organization.list.failed": "Error al obtener las organizaciones",
+  "tracking.organization.has-riders": "No se puede eliminar una organizaciÃ³n que todavÃ­a tiene pasajeros",
+  "tracking.organization-member.not-found": "Este usuario no es miembro de la organizaciÃ³n",
+  "tracking.organization-member.user-not-found": "Usuario no encontrado",
+  "tracking.organization-member.save.failed": "Error al guardar el miembro de la organizaciÃ³n",
+  "tracking.organization-member.list.failed": "Error al obtener los miembros de la organizaciÃ³n",
   "tracking.tenant.not-found": "Tenant cliente no encontrado",
 
   "tracking.unauthorized": "Acceso no autorizado al módulo de seguimiento",
@@ -101,6 +106,10 @@
   "permission.tracking.events-write.description": "Registrar eventos de viaje en tiempo real",
   "permission.tracking.alerts-write": "Crear alertas de ruta",
   "permission.tracking.alerts-write.description": "Crear alertas en rutas activas",
-  "permission.tracking.clients-manage": "Gestionar acceso de clientes",
-  "permission.tracking.clients-manage.description": "Otorgar y revocar acceso de tenant cliente a empresas"
+  "permission.tracking.organizations-read": "Ver organizaciones",
+  "permission.tracking.organizations-read.description": "Listar y ver organizaciones y sus miembros",
+  "permission.tracking.organizations-write": "Crear/editar organizaciones",
+  "permission.tracking.organizations-write.description": "Crear y actualizar organizaciones y gestionar sus miembros",
+  "permission.tracking.organizations-delete": "Eliminar organizaciones",
+  "permission.tracking.organizations-delete.description": "Eliminar organizaciones"
 }

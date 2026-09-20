@@ -57,11 +57,16 @@
   "tracking.rider.list.failed": "Failed to retrieve riders",
   "tracking.assignment.list.failed": "Failed to retrieve rider assignments",
 
-  "tracking.client-access.not-found": "Client access not found",
-  "tracking.client-access.already-exists": "Client already has access to this company",
-  "tracking.client-access.grant.failed": "Failed to grant client access",
-  "tracking.client-access.revoke.failed": "Failed to revoke client access",
-  "tracking.client-access.list.failed": "Failed to retrieve client access list",
+  "tracking.organization.not-found": "Organization not found",
+  "tracking.organization.create.failed": "Failed to create organization",
+  "tracking.organization.update.failed": "Failed to update organization",
+  "tracking.organization.delete.failed": "Failed to delete organization",
+  "tracking.organization.list.failed": "Failed to retrieve organizations",
+  "tracking.organization.has-riders": "Cannot delete an organization that still has riders",
+  "tracking.organization-member.not-found": "This user is not a member of the organization",
+  "tracking.organization-member.user-not-found": "User not found",
+  "tracking.organization-member.save.failed": "Failed to save the organization member",
+  "tracking.organization-member.list.failed": "Failed to retrieve organization members",
   "tracking.tenant.not-found": "Client tenant not found",
 
   "tracking.unauthorized": "Unauthorized access to tracking module",
@@ -101,6 +106,10 @@
   "permission.tracking.events-write.description": "Record real-time ride events",
   "permission.tracking.alerts-write": "Create route alerts",
   "permission.tracking.alerts-write.description": "Create alerts on active routes",
-  "permission.tracking.clients-manage": "Manage client access",
-  "permission.tracking.clients-manage.description": "Grant and revoke client tenant access to companies"
+  "permission.tracking.organizations-read": "View organizations",
+  "permission.tracking.organizations-read.description": "List and view organizations and their members",
+  "permission.tracking.organizations-write": "Create/edit organizations",
+  "permission.tracking.organizations-write.description": "Create and update organizations and manage their members",
+  "permission.tracking.organizations-delete": "Delete organizations",
+  "permission.tracking.organizations-delete.description": "Delete organizations"
 }

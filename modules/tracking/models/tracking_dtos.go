@@ -211,9 +211,28 @@ type UpdateVehicleDto struct {
 
 // === DTOs for Rider Management ===
 
+// ListRidersQuery binds GET /tracking/riders (TRACK-005 D1). organization_id is optional: unset
+// lists every rider the tenant has. It is validated here so a malformed one is a 400, never a
+// silently unfiltered list.
+type ListRidersQuery struct {
+	OrganizationID *string `form:"organization_id" binding:"omitempty,uuid"`
+	RiderType      string  `form:"rider_type" binding:"omitempty,oneof=student employee"`
+	IsActive       *bool   `form:"is_active"`
+	Search         string  `form:"search"`
+	Page           int     `form:"page,default=1" binding:"min=1"`
+	PageSize       int     `form:"page_size,default=20" binding:"min=1,max=100"`
+}
+
+type ListRidersResponse struct {
+	Riders     []*Rider `json:"riders"`
+	TotalCount int64    `json:"total_count"`
+	Page       int      `json:"page"`
+	PageSize   int      `json:"page_size"`
+}
+
 // CreateRiderDto represents request to create rider
 type CreateRiderDto struct {
-	CompanyID             uuid.UUID  `json:"company_id" binding:"required,uuidv4"`
+	OrganizationID        uuid.UUID  `json:"organization_id" binding:"required,uuidv4"`
 	RiderType             string     `json:"rider_type" binding:"required,oneof=student employee"`
 	FirstName             string     `json:"first_name" binding:"required,min=2,max=255" conform:"trim"`
 	LastName              string     `json:"last_name" binding:"required,min=2,max=255" conform:"trim"`
@@ -303,11 +322,43 @@ type AssignRiderDto struct {
 	DropoffStopID *uuid.UUID `json:"dropoff_stop_id" binding:"omitempty,uuidv4"`
 }
 
-// === DTOs for Client Access Management ===
+// === DTOs for Organization Management ===
 
-// GrantClientAccessDto represents request to grant access to a client
-type GrantClientAccessDto struct {
-	ClientTenantID uuid.UUID `json:"client_tenant_id" binding:"required,uuidv4" conform:"trim"`
-	AccessLevel    string    `json:"access_level" binding:"omitempty,oneof=read_only read_write" conform:"trim,lowercase"`
-	Notes          *string   `json:"notes" binding:"omitempty,max=500" conform:"trim"`
+// CreateOrganizationDto represents request to create an organization (TRACK-005).
+type CreateOrganizationDto struct {
+	Name     string `json:"name" binding:"required,min=2,max=255" conform:"trim"`
+	Kind     string `json:"kind" binding:"required,oneof=school company other" conform:"trim,lowercase"`
+	Timezone string `json:"timezone" binding:"required,max=64" conform:"trim"`
+	IsActive *bool  `json:"is_active"`
+}
+
+// UpdateOrganizationDto represents request to update an organization. Every field is optional: the
+// SP keeps what it is not sent.
+type UpdateOrganizationDto struct {
+	Name     *string `json:"name" binding:"omitempty,min=2,max=255" conform:"trim"`
+	Kind     *string `json:"kind" binding:"omitempty,oneof=school company other" conform:"trim,lowercase"`
+	Timezone *string `json:"timezone" binding:"omitempty,max=64" conform:"trim"`
+	IsActive *bool   `json:"is_active"`
+}
+
+// ListOrganizationsQuery binds GET /tracking/organizations.
+type ListOrganizationsQuery struct {
+	Search   string `form:"search"`
+	Kind     string `form:"kind" binding:"omitempty,oneof=school company other"`
+	IsActive *bool  `form:"is_active"`
+	Page     int    `form:"page,default=1" binding:"min=1"`
+	PageSize int    `form:"page_size,default=20" binding:"min=1,max=100"`
+}
+
+type ListOrganizationsResponse struct {
+	Organizations []*Organization `json:"organizations"`
+	TotalCount    int64           `json:"total_count"`
+	Page          int             `json:"page"`
+	PageSize      int             `json:"page_size"`
+}
+
+// UpsertOrganizationMemberDto is the body of PUT /tracking/organizations/:id/members/:user_id — the
+// same call adds a member and changes the role of one already there.
+type UpsertOrganizationMemberDto struct {
+	Role string `json:"role" binding:"required,oneof=admin viewer supervisor" conform:"trim,lowercase"`
 }

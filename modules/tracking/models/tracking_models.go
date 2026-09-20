@@ -78,10 +78,37 @@ type RouteStop struct {
 	UpdatedAt                     time.Time `json:"updated_at"`
 }
 
+// Organization represents a school or employer whose people ride (TRACK-005). Kind is the only
+// thing that tells one from another; timezone is an IANA name, read per organization so a pickup
+// window means the same thing wherever the tenant operates.
+type Organization struct {
+	ID        uuid.UUID `json:"id"`
+	TenantID  uuid.UUID `json:"tenant_id"`
+	Kind      string    `json:"kind"` // school, company, other
+	Name      string    `json:"name"`
+	Timezone  string    `json:"timezone"`
+	IsActive  bool      `json:"is_active"`
+	CreatedAt time.Time `json:"created_at"`
+	UpdatedAt time.Time `json:"updated_at"`
+}
+
+// OrganizationMember is a tenant user on an organization, with the identity joined from auth.users.
+// The three name fields are nullable: a member whose user row was deleted keeps its seat until an
+// operator removes it (TRACK-005 D3).
+type OrganizationMember struct {
+	UserID    uuid.UUID `json:"user_id"`
+	Email     *string   `json:"email"`
+	FirstName *string   `json:"first_name"`
+	LastName  *string   `json:"last_name"`
+	Role      string    `json:"role"` // admin, viewer, supervisor
+}
+
 // Rider represents a student or employee using transport
 type Rider struct {
-	ID                    uuid.UUID  `json:"id"`
-	CompanyID             uuid.UUID  `json:"company_id"`
+	ID uuid.UUID `json:"id"`
+	// The organization that sends the rider, not the carrier that drives them (TRACK-005 D1); the
+	// carrier is reached through the route the rider is assigned to.
+	OrganizationID        uuid.UUID  `json:"organization_id"`
 	RiderType             *string    `json:"rider_type"` // student, employee (nullable as it's not persisted)
 	FirstName             string     `json:"first_name"`
 	LastName              string     `json:"last_name"`
@@ -160,19 +187,4 @@ type RouteAlert struct {
 	CreatedAt             time.Time  `json:"created_at"`
 	ResolvedAt            *time.Time `json:"resolved_at"`
 	ResolvedBy            *uuid.UUID `json:"resolved_by"`
-}
-
-// CompanyClientAccess represents multi-client access to a transport company
-type CompanyClientAccess struct {
-	ID             uuid.UUID  `json:"id"`
-	CompanyID      uuid.UUID  `json:"company_id"`
-	ClientTenantID uuid.UUID  `json:"client_tenant_id"`
-	ClientName     string     `json:"client_name"`  // From tenancy.tenants.name
-	AccessLevel    string     `json:"access_level"` // read_only, read_write
-	GrantedAt      time.Time  `json:"granted_at"`
-	GrantedBy      *uuid.UUID `json:"granted_by"`
-	RevokedAt      *time.Time `json:"revoked_at"`
-	RevokedBy      *uuid.UUID `json:"revoked_by"`
-	IsActive       bool       `json:"is_active"`
-	Notes          *string    `json:"notes"`
 }

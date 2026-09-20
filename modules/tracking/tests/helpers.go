@@ -22,6 +22,10 @@ const (
 	MainCompanyID      = "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"
 	SecondaryCompanyID = "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb"
 
+	// Organizations
+	MainSchoolID    = "99999999-9999-9999-9999-999999999999"
+	EmptyEmployerID = "a1a1a1a1-a1a1-a1a1-a1a1-a1a1a1a1a1a1"
+
 	// Vehicles
 	TestBusID = "cccccccc-cccc-cccc-cccc-cccccccccccc"
 	TestVanID = "dddddddd-dddd-dddd-dddd-dddddddddddd"
@@ -134,26 +138,35 @@ func RouteDtoForCompany(companyID uuid.UUID) models.CreateRouteDto {
 // RIDER TEST BUILDERS
 // ============================================================================
 
-// ValidRiderDto returns a valid rider DTO
+// ValidRiderDto returns a valid rider DTO on the seeded school
 func ValidRiderDto() models.CreateRiderDto {
-	companyID := uuid.MustParse(MainCompanyID)
+	organizationID := uuid.MustParse(MainSchoolID)
 	email := "rider-" + uuid.New().String()[:8] + "@test.local"
 	phone := "+1234567890"
 	return models.CreateRiderDto{
-		CompanyID: companyID,
-		RiderType: "student",
-		FirstName: "Test",
-		LastName:  "Rider",
-		Email:     &email,
-		Phone:     &phone,
+		OrganizationID: organizationID,
+		RiderType:      "student",
+		FirstName:      "Test",
+		LastName:       "Rider",
+		Email:          &email,
+		Phone:          &phone,
 	}
 }
 
-// RiderDtoForCompany returns a rider DTO for specific company
-func RiderDtoForCompany(companyID uuid.UUID) models.CreateRiderDto {
+// RiderDtoForOrganization returns a rider DTO for a specific organization
+func RiderDtoForOrganization(organizationID uuid.UUID) models.CreateRiderDto {
 	dto := ValidRiderDto()
-	dto.CompanyID = companyID
+	dto.OrganizationID = organizationID
 	return dto
+}
+
+// ValidOrganizationDto returns a valid organization DTO with test values
+func ValidOrganizationDto() models.CreateOrganizationDto {
+	return models.CreateOrganizationDto{
+		Name:     "Test Organization " + uuid.New().String()[:8],
+		Kind:     "school",
+		Timezone: "America/Lima",
+	}
 }
 
 // ============================================================================
@@ -186,7 +199,7 @@ func AssertRouteResponse(t *testing.T, data map[string]interface{}) {
 // AssertRiderResponse validates rider response structure
 func AssertRiderResponse(t *testing.T, data map[string]interface{}) {
 	assert.NotNil(t, data["id"])
-	assert.NotNil(t, data["company_id"])
+	assert.NotNil(t, data["organization_id"])
 	assert.NotNil(t, data["first_name"])
 	assert.NotNil(t, data["last_name"])
 }
@@ -256,6 +269,38 @@ func ListVehicles(t *testing.T, helper *testhelpers.ApiTestHelper, query string)
 	return result
 }
 
+// ListRiders calls the paged riders endpoint and decodes its envelope.
+func ListRiders(t *testing.T, helper *testhelpers.ApiTestHelper, query string) models.ListRidersResponse {
+	t.Helper()
+
+	w := helper.DoRequest("GET", "/tracking/riders"+query, nil, map[string]string{})
+	if w.Code != http.StatusOK {
+		t.Fatalf("list riders %q returned %d: %s", query, w.Code, w.Body.String())
+	}
+
+	var result models.ListRidersResponse
+	if err := json.Unmarshal(w.Body.Bytes(), &result); err != nil {
+		t.Fatalf("list riders %q returned invalid JSON: %v — %s", query, err, w.Body.String())
+	}
+	return result
+}
+
+// ListOrganizations calls the paged organizations endpoint and decodes its envelope.
+func ListOrganizations(t *testing.T, helper *testhelpers.ApiTestHelper, query string) models.ListOrganizationsResponse {
+	t.Helper()
+
+	w := helper.DoRequest("GET", "/tracking/organizations"+query, nil, map[string]string{})
+	if w.Code != http.StatusOK {
+		t.Fatalf("list organizations %q returned %d: %s", query, w.Code, w.Body.String())
+	}
+
+	var result models.ListOrganizationsResponse
+	if err := json.Unmarshal(w.Body.Bytes(), &result); err != nil {
+		t.Fatalf("list organizations %q returned invalid JSON: %v — %s", query, err, w.Body.String())
+	}
+	return result
+}
+
 // ============================================================================
 // UTILITY FUNCTIONS
 // ============================================================================
@@ -315,14 +360,14 @@ func ValidAssignmentDto() models.AssignRiderDto {
 	}
 }
 
-// CreateTestRider creates a rider in MainCompanyID and returns its id
+// CreateTestRider creates a rider in MainSchoolID and returns its id
 func CreateTestRider(t *testing.T, helper *testhelpers.ApiTestHelper) string {
 	dto := ValidRiderDto()
 	body := map[string]interface{}{
-		"company_id": dto.CompanyID,
-		"rider_type": dto.RiderType,
-		"first_name": dto.FirstName,
-		"last_name":  dto.LastName,
+		"organization_id": dto.OrganizationID,
+		"rider_type":      dto.RiderType,
+		"first_name":      dto.FirstName,
+		"last_name":       dto.LastName,
 	}
 	w := helper.DoRequest("POST", "/tracking/riders", body, map[string]string{})
 	if w.Code != http.StatusCreated {
