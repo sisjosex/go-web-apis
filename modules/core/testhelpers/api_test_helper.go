@@ -304,6 +304,18 @@ func (h *ApiTestHelper) DoRequest(method, path string, body interface{}, headers
 	return w
 }
 
+// DoRootRequest performs an unauthenticated request against the engine root,
+// for the few routes that live outside /api/v1 — the /livez and /readyz probes,
+// which carry no auth, no tenant and no version prefix on purpose.
+func (h *ApiTestHelper) DoRootRequest(method, path string) *httptest.ResponseRecorder {
+	req := httptest.NewRequest(method, path, nil)
+
+	w := httptest.NewRecorder()
+	h.engine.ServeHTTP(w, req)
+
+	return w
+}
+
 // MultipartFile is one file part of a multipart upload: the form field it is
 // posted under, the filename the server sees, and the bytes.
 type MultipartFile struct {

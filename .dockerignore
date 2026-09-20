@@ -3,6 +3,13 @@
 
 # Binary generated
 web*
+bin/
 
-# project files
-go.sum
+# Secrets never enter the build context — compose passes them at run time
+# through env_file, and a layer that once held them cannot be unmade.
+.env
+.env.*
+!.env.example
+
+# go.sum must NOT be excluded: without it the builder cannot verify modules and
+# has to run `go mod tidy`, which resolves versions afresh on every build.

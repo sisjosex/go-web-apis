@@ -1,0 +1,26 @@
+# Xanthops edge — the only container that publishes a host port.
+#
+# Caddy terminates TLS (certificates obtained and renewed automatically from
+# Let's Encrypt) and forwards to the two API containers over the compose
+# network. Neither API nor PostgreSQL is reachable from outside.
+#
+# The SPA is not part of this compose: it is hosted separately and reaches the
+# API cross-origin, which is what ALLOWED_ORIGINS / FRONTEND_URL configure.
+
+{
+	email {$ACME_EMAIL}
+}
+
+{$PLATFORM_HOST} {
+	encode zstd gzip
+
+	# X-Forwarded-For is set by Caddy; the API's rate limiter reads it, so the
+	# limit applies per real client and not once for the whole proxy.
+	reverse_proxy api-platform:8080
+}
+
+{$TENANT_HOST} {
+	encode zstd gzip
+
+	reverse_proxy api-tenant:9080
+}

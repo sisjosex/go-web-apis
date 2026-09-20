@@ -75,7 +75,7 @@ func (ds *databaseService) InitDatabase(ctx context.Context) {
 			return
 		}
 
-		if err := ds.runModularMigrations(dataBaseUrl); err == nil {
+		if err := RunModularMigrations(dataBaseUrl); err == nil {
 			log.Println("✅ All modular migrations completed successfully")
 			// core.settings exists only once migrations have run.
 			LoadSettings(ctx, ds)
@@ -176,8 +176,10 @@ func (ds *databaseService) CloseDatabase(ctx context.Context) {
 	log.Println("Database closed")
 }
 
-// runModularMigrations executes migrations for all enabled modules
-func (ds *databaseService) runModularMigrations(databaseURL string) error {
+// RunModularMigrations executes migrations for all enabled modules against the
+// given database. It carries no state, so the migrate job (`cli migrate`) runs
+// it without opening a pool the way InitDatabase does.
+func RunModularMigrations(databaseURL string) error {
 	// Open standard SQL connection for migration library
 	sqlDB, err := sql.Open("pgx", databaseURL)
 	if err != nil {
@@ -191,8 +193,13 @@ func (ds *databaseService) runModularMigrations(databaseURL string) error {
 		return err
 	}
 
-	// Load core config to get enabled modules
-	coreConf := config.ModularAppConfig.Core
+	// Load core config to get enabled modules. ModularAppConfig itself is nil
+	// when the caller never went through config.GetConfig() — the migrate job
+	// deliberately does not, so the whole pointer is checked, not just .Core.
+	var coreConf *coreConfig.CoreConfig
+	if config.ModularAppConfig != nil {
+		coreConf = config.ModularAppConfig.Core
+	}
 	if coreConf == nil {
 		coreConf = coreConfig.LoadCoreConfig()
 	}

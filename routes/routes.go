@@ -14,6 +14,7 @@ import (
 	coreConfig "josex/web/modules/core/config"
 	coreMiddleware "josex/web/modules/core/middleware"
 	coreModels "josex/web/modules/core/models"
+	coreRoutes "josex/web/modules/core/routes"
 	coreServices "josex/web/modules/core/services"
 	importControllers "josex/web/modules/import/controllers"
 	importRoutes "josex/web/modules/import/routes"
@@ -64,6 +65,11 @@ import (
 func SetupRoutes(r *gin.Engine, dbService coreServices.DatabaseService) {
 	// Register custom validators (must be done before any validation runs)
 	coreValidators.RegisterValidations()
+
+	// Health probes first: gin applies only the middleware registered before a
+	// route, so mounting /livez and /readyz here keeps the container's
+	// healthcheck out of the rate limiter (INFRA-002).
+	coreRoutes.RegisterHealthRoutes(r, dbService)
 
 	authConf := config.ModularAppConfig.Auth
 	var jwtService = authServices.NewJWTService(

@@ -1,41 +1,166 @@
-services:
-  web-app:
-    image: sisjosex/internal:7
-    ports:
-      - "${APP_PORT}:8080"
-#    depends_on:
-#      - db
-    env_file:
-      - .env.docker
-    environment:
-      - DATABASE_URL=${DATABASE_URL}
-      - DATABASE_POOL_SIZE=${DATABASE_POOL_SIZE}
-      - APP_MODE=${APP_MODE}
-      - FRONTEND_URL=${FRONTEND_URL}
-      - APP_HOST=0.0.0.0  # Para que escuche en todas las interfaces dentro del contenedor
-      - APP_PORT=${APP_PORT}
-      - JWT_SECRET_KEY=${JWT_SECRET_KEY}
-      - JWT_REFRESH_KEY=${JWT_REFRESH_KEY}
-      - JWT_EXPIRATION_SECONDS=${JWT_EXPIRATION_SECONDS}
-      - JWT_REFRESH_SECONDS=${JWT_REFRESH_SECONDS}
-      - SMTP_HOST=${SMTP_HOST}
-      - SMTP_PORT=${SMTP_PORT}
-      - SMTP_USER=${SMTP_USER}
-      - SMTP_PASSWORD=${SMTP_PASSWORD}
-      - SMTP_FROM=${SMTP_FROM}
-    command: ["./main"]
+# Production stack. Only Caddy publishes a host port; PostgreSQL and both APIs
+# live on the compose network alone.
+#
+# Variables come from `.env` beside this file (see .env.example → DEPLOY), the
+# per-server settings from `.env.platform` / `.env.tenant`. Both of those must
+# point DATABASE_URL at the `postgres` service, not at localhost.
+#
+#   docker compose -f docker-compose.prod.yml up -d --build
 
-  db:
-    image: postgres:alpine
-    restart: always
-    container_name: db
-    env_file:
-      - .env.docker
+name: xanthops
+
+services:
+  postgres:
+    image: postgis/postgis:17-3.5
+    restart: unless-stopped
     environment:
       POSTGRES_USER: ${POSTGRES_USER}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
       POSTGRES_DB: ${POSTGRES_DB}
-    ports:
-      - "${POSTGRES_PORT}:5432"
+      # The tenant server's own database — nothing in the API creates it.
+      POSTGRES_EXTRA_DBS: ${TENANT_POSTGRES_DB}
     volumes:
-      - ./docker/postgres/init.sql:/docker-entrypoint-initdb.d/init.sql
+      - pgdata:/var/lib/postgresql/data
+      - ./docker/postgres/init-extra-databases.sh:/docker-entrypoint-initdb.d/10-extra-databases.sh:ro
+      - ./docker/postgres/init.sql:/docker-entrypoint-initdb.d/20-init.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+
+  # ============ MIGRATE JOBS (one-shot, run before the servers) ============
+  # The servers start with SKIP_MIGRATIONS=true: with more than one replica,
+  # every replica migrating on boot races on the same schema. These jobs run
+  # once, exit non-zero on failure, and the servers wait for them.
+
+  migrate:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: xanthops-api:${API_TAG:-latest}
+    restart: "no"
+    env_file:
+      - .env.platform
+    environment:
+      ENV_FILE: .env.platform
+    # Platform schema first, then every tenant database registered in it.
+    command: ["sh", "-c", "./cli migrate && ./cli tenant -migrate all"]
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  migrate-tenant:
+    image: xanthops-api:${API_TAG:-latest}
+    restart: "no"
+    env_file:
+      - .env.tenant
+    environment:
+      ENV_FILE: .env.tenant
+    command: ["./cli", "migrate"]
+    depends_on:
+      postgres:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+
+  # ============ PLATFORM API (Admin) ============
+  api-platform:
+    image: xanthops-api:${API_TAG:-latest}
+    restart: unless-stopped
+    env_file:
+      - .env.platform
+    environment:
+      ENV_FILE: .env.platform
+      APP_HOST: 0.0.0.0
+      APP_PORT: 8080
+      SKIP_MIGRATIONS: "true"
+    command: ["./app", "-mode=platform"]
+    volumes:
+      - media:/app/storage/media
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8080/readyz > /dev/null || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    depends_on:
+      postgres:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+
+  # ============ TENANT API (Business) ============
+  api-tenant:
+    image: xanthops-api:${API_TAG:-latest}
+    restart: unless-stopped
+    env_file:
+      - .env.tenant
+    environment:
+      ENV_FILE: .env.tenant
+      APP_HOST: 0.0.0.0
+      APP_PORT: 9080
+      SKIP_MIGRATIONS: "true"
+    command: ["./app", "-mode=tenant"]
+    volumes:
+      - media:/app/storage/media
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:9080/readyz > /dev/null || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    depends_on:
+      postgres:
+        condition: service_healthy
+      migrate-tenant:
+        condition: service_completed_successfully
+
+  # ============ BACKUP ============
+  # Nightly pg_dump of every database in pg_database to S3-compatible storage.
+  # Restore steps: docker/backup/README.md
+  backup:
+    build:
+      context: ./docker/backup
+    restart: unless-stopped
+    environment:
+      POSTGRES_HOST: postgres
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      BACKUP_SCHEDULE: ${BACKUP_SCHEDULE:-0 3 * * *}
+      BACKUP_KEEP_DAYS: ${BACKUP_KEEP_DAYS:-14}
+      BACKUP_S3_BUCKET: ${BACKUP_S3_BUCKET}
+      BACKUP_S3_ENDPOINT: ${BACKUP_S3_ENDPOINT:-}
+      AWS_ACCESS_KEY_ID: ${BACKUP_S3_ACCESS_KEY}
+      AWS_SECRET_ACCESS_KEY: ${BACKUP_S3_SECRET_KEY}
+      AWS_DEFAULT_REGION: ${BACKUP_S3_REGION:-us-east-1}
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  # ============ EDGE ============
+  caddy:
+    image: caddy:2.8-alpine
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    environment:
+      PLATFORM_HOST: ${PLATFORM_HOST}
+      TENANT_HOST: ${TENANT_HOST}
+      ACME_EMAIL: ${ACME_EMAIL}
+    volumes:
+      - ./docker/caddy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      - api-platform
+      - api-tenant
+
+volumes:
+  pgdata:
+  media:
+  caddy_data:
+  caddy_config:

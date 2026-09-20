@@ -36,8 +36,11 @@ Setup is human-only: copy `.env.example` → `.env.platform` / `.env.tenant`, th
 
 | Server | Entry | Env | Port | Modules |
 |---|---|---|---|---|
-| Platform | `cmd/platform/main.go` | `.env.platform` | 8080 | core auth users tenancy billing |
-| Tenant | `cmd/tenant/main.go` | `.env.tenant` | 9081 | core auth users tracking inventory sales purchasing |
+| Platform | `cmd/server -mode=platform` | `.env.platform` | 8080 | core auth users tenancy billing |
+| Tenant | `cmd/server -mode=tenant` | `.env.tenant` | 9080 | core auth users tracking inventory sales purchasing |
+
+One binary, one `-mode` flag: `cmd/platform` and `cmd/tenant` have not existed for some time. The
+sibling `cmd/cli` carries `migration` (generate), `migrate` (apply, one shot) and `tenant`.
 
 Main DB holds `auth.*` + `tenancy.*`; one DB per tenant holds business schemas only. JWT carries
 `user_id + session_id`; tenancy middleware resolves `tenant_id` from `X-Tenant-Slug` per request.
@@ -92,6 +95,27 @@ param ⇒ search is client-side or new API work — the spec decides, never the 
 by `IsModuleEnabled` · 8. add to `ENABLED_MODULES` in the env file **and `.env.test`, after every module
 whose schema it references** — that list is the migration order · 9. `tests/helpers.go` + API tests ·
 10. `test-{name}` Makefile target.
+
+## Deploy
+
+`docker-compose.prod.yml` — one image (`Dockerfile` builds `app` + `cli`), one PostgreSQL 17 with
+PostGIS on a named `pgdata` volume, and Caddy as the only container publishing a host port (80/443,
+automatic TLS). Neither the database nor either API is reachable from outside.
+
+Servers run with `SKIP_MIGRATIONS=true`: migrations belong to the one-shot `migrate` /
+`migrate-tenant` jobs, which the APIs wait on (`service_completed_successfully`). Locally the servers
+still migrate on start — one replica, nothing to race with. `/livez` (always 200) and `/readyz` (200
+when the pool pings, else 503) back the healthchecks; both are registered before the CORS and rate
+limit middleware, so a probe is never rate-limited.
+
+Nothing in the API issues `CREATE DATABASE` — the tenancy service only migrates a URL it is handed.
+The tenant server's own database is created by `docker/postgres/init-extra-databases.sh` from
+`POSTGRES_EXTRA_DBS`, and a per-tenant database is created by hand before `cli tenant -migrate <slug>`.
+The users module runs against tenant databases too, which carry `auth.*` but no `tenancy.*`: every
+`tenancy` reference in a `users` migration must be guarded by `to_regclass`.
+
+`docker/backup/README.md` has the nightly dump and the restore steps; deploy variables are at the
+bottom of `.env.example`. PITR, PgBouncer and monitoring are INFRA-004.
 
 ## Gotchas not visible in code
 

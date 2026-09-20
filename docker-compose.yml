@@ -1,11 +1,12 @@
+# Local stack. Unlike prod, both servers migrate on start — a single replica,
+# no job to wait for. The PostgreSQL image is pinned to the one prod runs, so a
+# migration is never first tried on a version it was not written against.
 services:
   # ============ PLATFORM API (Admin) ============
   platform-app:
     build:
       context: .
       dockerfile: Dockerfile
-      args:
-        GO_MAIN: platform
     ports:
       - "8080:8080"
     depends_on:
@@ -13,11 +14,13 @@ services:
     env_file:
       - .env.platform
     environment:
+      - ENV_FILE=.env.platform
       - APP_HOST=0.0.0.0
       - APP_PORT=8080
+    command: ["./app", "-mode=platform"]
 
   platform-db:
-    image: postgres:16-alpine
+    image: postgis/postgis:17-3.5
     restart: always
     container_name: platform-db
     environment:
@@ -34,8 +37,6 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-      args:
-        GO_MAIN: tenant
     ports:
       - "9080:9080"
     depends_on:
@@ -43,11 +44,13 @@ services:
     env_file:
       - .env.tenant
     environment:
+      - ENV_FILE=.env.tenant
       - APP_HOST=0.0.0.0
       - APP_PORT=9080
+    command: ["./app", "-mode=tenant"]
 
   tenant-db:
-    image: postgres:16-alpine
+    image: postgis/postgis:17-3.5
     restart: always
     container_name: tenant-db
     environment:
