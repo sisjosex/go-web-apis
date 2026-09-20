@@ -28,6 +28,9 @@ type TransportCompany struct {
 type Vehicle struct {
 	ID        uuid.UUID `json:"id"`
 	CompanyID uuid.UUID `json:"company_id"`
+	// ServiceBlocked rides on the list rows only, like CompanyName: an expired document of a
+	// blocks_service type stands against this vehicle (TRACK-016 D2).
+	ServiceBlocked *bool `json:"service_blocked,omitempty"`
 	// CompanyName rides on the list rows only (TRACK-001 D2); the single-vehicle SPs do not
 	// join the company, so it is absent from create/update/get responses.
 	CompanyName *string   `json:"company_name,omitempty"`
@@ -123,8 +126,11 @@ type Driver struct {
 	LicenseClass     *string              `json:"license_class"`
 	LicenseExpiresOn *coreModels.DateOnly `json:"license_expires_on"`
 	Status           string               `json:"status"` // active, inactive, suspended
-	CreatedAt        time.Time            `json:"created_at"`
-	UpdatedAt        time.Time            `json:"updated_at"`
+	// ServiceBlocked rides on the list rows only: an expired document of a blocks_service type
+	// stands against this driver (TRACK-016 D2).
+	ServiceBlocked *bool     `json:"service_blocked,omitempty"`
+	CreatedAt      time.Time `json:"created_at"`
+	UpdatedAt      time.Time `json:"updated_at"`
 }
 
 // Rider represents a student or employee using transport
@@ -211,4 +217,61 @@ type RouteAlert struct {
 	CreatedAt             time.Time  `json:"created_at"`
 	ResolvedAt            *time.Time `json:"resolved_at"`
 	ResolvedBy            *uuid.UUID `json:"resolved_by"`
+}
+
+// DocumentType is one line of a tenant's compliance policy (TRACK-016): what a vehicle or a driver
+// must carry, how many days before expiry to warn, and whether an expired one stops them working.
+type DocumentType struct {
+	ID             uuid.UUID `json:"id"`
+	TenantID       uuid.UUID `json:"tenant_id"`
+	Code           string    `json:"code"`
+	Name           string    `json:"name"`
+	AppliesTo      string    `json:"applies_to"` // vehicle, driver, both
+	WarnDaysBefore int32     `json:"warn_days_before"`
+	BlocksService  bool      `json:"blocks_service"`
+	IsActive       bool      `json:"is_active"`
+	CreatedAt      time.Time `json:"created_at"`
+	UpdatedAt      time.Time `json:"updated_at"`
+}
+
+// ComplianceDocument is one piece of paper filed against one vehicle or driver. SubjectType says
+// which table SubjectID points at; SubjectName, TypeName and Status are resolved by the SP, so a row
+// renders without a second call. Status is valid, expiring or expired, measured against the type's
+// own WarnDaysBefore.
+type ComplianceDocument struct {
+	ID          uuid.UUID `json:"id"`
+	TenantID    uuid.UUID `json:"tenant_id"`
+	SubjectType string    `json:"subject_type"` // vehicle, driver
+	SubjectID   uuid.UUID `json:"subject_id"`
+	SubjectName *string   `json:"subject_name"`
+	// DocumentTypeID and TypeName are the policy line this document answers.
+	DocumentTypeID uuid.UUID            `json:"document_type_id"`
+	TypeName       string               `json:"type_name"`
+	Number         *string              `json:"number"`
+	IssuedOn       *coreModels.DateOnly `json:"issued_on"`
+	ExpiresOn      *coreModels.DateOnly `json:"expires_on"`
+	// The three file columns are what the browser is told on download; the stored file is named
+	// after the document's id (TRACK-016 D3).
+	FileName  *string    `json:"file_name"`
+	FileSize  *int64     `json:"file_size"`
+	FileExt   *string    `json:"file_ext"`
+	Notes     *string    `json:"notes"`
+	Status    string     `json:"status"`
+	WarnedAt  *time.Time `json:"warned_at"`
+	CreatedAt time.Time  `json:"created_at"`
+	UpdatedAt time.Time  `json:"updated_at"`
+}
+
+// DocumentAlert is one line of the expiry digest (TRACK-016 D1): a document the job has just claimed
+// by stamping warned_at, described well enough for the email without a second read.
+type DocumentAlert struct {
+	ID          uuid.UUID `json:"id"`
+	SubjectType string    `json:"subject_type"`
+	SubjectName *string   `json:"subject_name"`
+	TypeName    string    `json:"type_name"`
+	Number      *string   `json:"number"`
+	ExpiresOn   time.Time `json:"expires_on"`
+	// DaysLeft is negative once the document has expired — the digest says "act on these", not
+	// "these are about to happen".
+	DaysLeft int32 `json:"days_left"`
 }

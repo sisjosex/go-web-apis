@@ -97,6 +97,26 @@ const (
 	// DriverHasRoutes refuses a delete while a route still names the driver as its default.
 	DriverHasRoutes = "tracking.driver.has-routes"
 
+	// Document errors (TR0201-TR0220)
+	DocumentNotFound          = "tracking.document.not-found"
+	DocumentCreateFailed      = "tracking.document.create.failed"
+	DocumentUpdateFailed      = "tracking.document.update.failed"
+	DocumentDeleteFailed      = "tracking.document.delete.failed"
+	DocumentListFailed        = "tracking.document.list.failed"
+	DocumentSubjectNotFound   = "tracking.document.subject-not-found"
+	DocumentTypeNotApplicable = "tracking.document.type-not-applicable"
+	// DocumentFileInvalid covers every way an upload is refused: the wrong extension, content that
+	// is not what the extension claims, or more bytes than the cap (TRACK-016 D3).
+	DocumentFileInvalid  = "tracking.document.file-invalid"
+	DocumentFileNotFound = "tracking.document.file-not-found"
+	DocumentFileFailed   = "tracking.document.file.failed"
+
+	DocumentTypeNotFound          = "tracking.document-type.not-found"
+	DocumentTypeCreateFailed      = "tracking.document-type.create.failed"
+	DocumentTypeUpdateFailed      = "tracking.document-type.update.failed"
+	DocumentTypeListFailed        = "tracking.document-type.list.failed"
+	DocumentTypeCodeAlreadyExists = "tracking.document-type.code-already-exists"
+
 	TenantNotFound = "tracking.tenant.not-found"
 
 	// Generic errors

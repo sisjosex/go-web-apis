@@ -7,7 +7,9 @@ package tracking_test
 import (
 	"encoding/json"
 	"net/http"
+	"net/http/httptest"
 	"testing"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
@@ -18,6 +20,9 @@ import (
 
 // Test fixtures - UUIDs that match seed_tracking.sql
 const (
+	// The tenant every tracking fixture belongs to (tenancy/seed_test_tenant.sql).
+	TestTenantID = "00000000-0000-0000-0000-000000000001"
+
 	// Companies
 	MainCompanyID      = "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"
 	SecondaryCompanyID = "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb"
@@ -391,6 +396,66 @@ func CreateTestDriver(t *testing.T, helper *testhelpers.ApiTestHelper) string {
 		t.Fatalf("create driver: expected 201, got %d: %s", w.Code, w.Body.String())
 	}
 	return ParseResponse(t, w.Body.Bytes())["id"].(string)
+}
+
+// ============================================================================
+// DOCUMENT TEST BUILDERS (TRACK-016)
+// ============================================================================
+
+// CreateTestDocumentType adds one line to the tenant's compliance policy and returns its id. The
+// code is unique per call, so tests never collide on the per-tenant uniqueness.
+func CreateTestDocumentType(t *testing.T, helper *testhelpers.ApiTestHelper, appliesTo string, blocksService bool) string {
+	body := map[string]interface{}{
+		"code":             "DOC-" + uuid.New().String()[:8],
+		"name":             "Test " + appliesTo + " document",
+		"applies_to":       appliesTo,
+		"warn_days_before": 30,
+		"blocks_service":   blocksService,
+	}
+	w := helper.DoRequest("POST", "/tracking/document-types", body, map[string]string{})
+	if w.Code != 201 {
+		t.Fatalf("create document type: expected 201, got %d: %s", w.Code, w.Body.String())
+	}
+	return ParseResponse(t, w.Body.Bytes())["id"].(string)
+}
+
+// CreateTestDocument files a document against one subject and returns the parsed row.
+func CreateTestDocument(t *testing.T, helper *testhelpers.ApiTestHelper, subjectType, subjectID, typeID string, expiresInDays int) map[string]interface{} {
+	body := map[string]interface{}{
+		"subject_type":     subjectType,
+		"subject_id":       subjectID,
+		"document_type_id": typeID,
+		"number":           "N-" + uuid.New().String()[:6],
+		"expires_on":       time.Now().AddDate(0, 0, expiresInDays).Format("2006-01-02"),
+	}
+	w := helper.DoRequest("POST", "/tracking/documents", body, map[string]string{})
+	if w.Code != 201 {
+		t.Fatalf("create document: expected 201, got %d: %s", w.Code, w.Body.String())
+	}
+	return ParseResponse(t, w.Body.Bytes())
+}
+
+// UploadDocumentFile sends one file to PUT /tracking/documents/:id/file and returns the recorder,
+// so a test can assert the status as well as the body.
+func UploadDocumentFile(_ *testing.T, helper *testhelpers.ApiTestHelper, documentID, filename string, content []byte) *httptest.ResponseRecorder {
+	return helper.DoMultipartRequest("PUT", "/tracking/documents/"+documentID+"/file", nil,
+		[]testhelpers.MultipartFile{{Field: "file", Filename: filename, Content: content}},
+		map[string]string{})
+}
+
+// PdfBytes returns n bytes that sniff as a PDF — a real header followed by padding, so a size test
+// and a content test can use the same builder.
+func PdfBytes(n int) []byte {
+	head := []byte("%PDF-1.7\n%\xE2\xE3\xCF\xD3\n")
+	if n <= len(head) {
+		return head
+	}
+	out := make([]byte, n)
+	copy(out, head)
+	for i := len(head); i < n; i++ {
+		out[i] = ' '
+	}
+	return out
 }
 
 // ============================================================================

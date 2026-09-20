@@ -380,3 +380,26 @@ func (r *tenantRepository) UpdateUserRole(ctx context.Context, tenantID uuid.UUI
 
 	return nil
 }
+
+// ListTenantAdminEmails returns the active owners and admins of one tenant — who an operational
+// digest goes to (TRACK-016 D1).
+func (r *tenantRepository) ListTenantAdminEmails(ctx context.Context, tenantID uuid.UUID) ([]*models.TenantAdminEmail, error) {
+	rows, err := r.dbService.Query(ctx, `SELECT * FROM tenancy.sp_list_tenant_admin_emails($1)`, tenantID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	recipients := []*models.TenantAdminEmail{}
+	for rows.Next() {
+		var recipient models.TenantAdminEmail
+		if err := rows.Scan(&recipient.UserID, &recipient.Email, &recipient.FirstName, &recipient.LastName); err != nil {
+			return nil, err
+		}
+		recipients = append(recipients, &recipient)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return recipients, nil
+}

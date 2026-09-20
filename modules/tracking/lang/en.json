@@ -7,7 +7,6 @@
   "tracking.vehicle.update.failed": "Failed to update vehicle",
   "tracking.vehicle.delete.failed": "Failed to delete vehicle",
   "tracking.vehicle.invalid-license": "Invalid license plate format",
-
   "tracking.route.not-found": "Route not found",
   "tracking.route.already-exists": "Route already exists",
   "tracking.route.create.failed": "Failed to create route",
@@ -15,31 +14,25 @@
   "tracking.route.delete.failed": "Failed to delete route",
   "tracking.route.invalid-schedule-type": "Invalid schedule type. Must be: morning, afternoon, or custom",
   "tracking.route.code-already-exists": "Route code already exists for this company",
-
   "tracking.rider.not-found": "Rider (student/employee) not found",
   "tracking.rider.already-exists": "Rider already exists",
   "tracking.rider.create.failed": "Failed to create rider",
   "tracking.rider.update.failed": "Failed to update rider",
   "tracking.rider.delete.failed": "Failed to delete rider",
-
   "tracking.assignment.not-found": "Rider assignment not found",
   "tracking.assignment.create.failed": "Failed to assign rider to route",
   "tracking.assignment.delete.failed": "Failed to remove rider from route",
   "tracking.assignment.already-exists": "Rider is already assigned to this route",
-
   "tracking.location.update.failed": "Failed to update vehicle location",
   "tracking.location.invalid-coordinates": "Invalid GPS coordinates",
   "tracking.location.not-found": "No location data available for this vehicle",
-
   "tracking.event.record.failed": "Failed to record ride event",
   "tracking.event.not-found": "Ride event not found",
   "tracking.event.invalid-type": "Invalid event type",
-
   "tracking.alert.create.failed": "Failed to create route alert",
   "tracking.alert.not-found": "Alert not found",
   "tracking.alert.update.failed": "Failed to update alert",
   "tracking.alert.resolve.failed": "Failed to resolve alert",
-
   "tracking.company.not-found": "Transport company not found",
   "tracking.company.create.failed": "Failed to create transport company",
   "tracking.company.update.failed": "Failed to update transport company",
@@ -47,7 +40,6 @@
   "tracking.company.already-exists": "Transport company with this registration number already exists",
   "tracking.company.list.failed": "Failed to retrieve transport companies",
   "tracking.company.has-vehicles": "Cannot delete company that has associated vehicles",
-
   "tracking.vehicle.list.failed": "Failed to retrieve vehicles",
   "tracking.route.list.failed": "Failed to retrieve routes",
   "tracking.route-stop.not-found": "Route stop not found",
@@ -56,7 +48,6 @@
   "tracking.route-stop.delete.failed": "Failed to remove stop from route",
   "tracking.rider.list.failed": "Failed to retrieve riders",
   "tracking.assignment.list.failed": "Failed to retrieve rider assignments",
-
   "tracking.organization.not-found": "Organization not found",
   "tracking.organization.create.failed": "Failed to create organization",
   "tracking.organization.update.failed": "Failed to update organization",
@@ -77,12 +68,10 @@
   "tracking.driver.user-already-linked": "This account is already linked to another driver",
   "tracking.driver.has-routes": "Cannot delete a driver who is still the default driver of a route",
   "tracking.tenant.not-found": "Client tenant not found",
-
   "tracking.unauthorized": "Unauthorized access to tracking module",
   "tracking.forbidden": "You don't have permission to perform this action",
   "tracking.internal-error": "Internal tracking service error",
   "tracking.tenant.required": "A tenant must be specified via X-Tenant-Slug header",
-
   "permission.tracking.companies-read": "View companies",
   "permission.tracking.companies-read.description": "List and view transport companies",
   "permission.tracking.companies-write": "Create/edit companies",
@@ -124,5 +113,22 @@
   "permission.tracking.drivers-write": "Create/edit drivers",
   "permission.tracking.drivers-write.description": "Create and update drivers and link their accounts",
   "permission.tracking.drivers-delete": "Delete drivers",
-  "permission.tracking.drivers-delete.description": "Delete drivers"
+  "permission.tracking.drivers-delete.description": "Delete drivers",
+  "tracking.document.not-found": "Document not found",
+  "tracking.document.create.failed": "Failed to create document",
+  "tracking.document.update.failed": "Failed to update document",
+  "tracking.document.delete.failed": "Failed to delete document",
+  "tracking.document.list.failed": "Failed to retrieve documents",
+  "tracking.document.subject-not-found": "The vehicle or driver this document is for was not found",
+  "tracking.document.type-not-applicable": "This document type does not apply to that vehicle or driver",
+  "tracking.document.file-invalid": "The file must be a PDF, JPG or PNG within the size limit",
+  "tracking.document.file-not-found": "This document has no file attached",
+  "tracking.document.file.failed": "The file could not be stored. Please try again",
+  "tracking.document-type.not-found": "Document type not found",
+  "tracking.document-type.create.failed": "Failed to create document type",
+  "tracking.document-type.update.failed": "Failed to update document type",
+  "tracking.document-type.list.failed": "Failed to retrieve document types",
+  "tracking.document-type.code-already-exists": "A document type with this code already exists",
+  "permission.tracking.documents-write": "Manage documents",
+  "permission.tracking.documents-write.description": "Create, edit and delete compliance documents and the document types behind them"
 }

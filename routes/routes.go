@@ -207,7 +207,10 @@ func SetupRoutes(r *gin.Engine, dbService coreServices.DatabaseService) {
 			// Initialize tracking services
 			trackingRepository := trackingRepos.NewTrackingRepository(dbService)
 			trackingService := trackingServices.NewTrackingService(trackingRepository)
-			trackingController := trackingControllers.NewTrackingController(trackingService)
+			// The document file store is config, not state: where scans live and how big one may be
+			// (TRACK-016 D3).
+			trackingDocumentFiles := trackingServices.NewDocumentFileStore(config.ModularAppConfig.Tracking)
+			trackingController := trackingControllers.NewTrackingController(trackingService, trackingDocumentFiles)
 
 			// Build a composite tenant+module middleware chain for tracking
 			trackingTenantMiddleware := tenantMiddleware

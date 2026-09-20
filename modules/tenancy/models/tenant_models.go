@@ -125,3 +125,12 @@ func (t *TenantAccessInfo) HasPermission(perm string) bool {
 func (t *TenantAccessInfo) HasModule(code string) bool {
 	return t.EnabledModules[code]
 }
+
+// TenantAdminEmail is one recipient of an operational digest: an active owner or admin of a tenant,
+// with the identity joined from auth.users (TRACK-016 D1).
+type TenantAdminEmail struct {
+	UserID    uuid.UUID `json:"user_id"`
+	Email     string    `json:"email"`
+	FirstName *string   `json:"first_name"`
+	LastName  *string   `json:"last_name"`
+}

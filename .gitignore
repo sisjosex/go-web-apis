@@ -22,6 +22,10 @@ go.work
 # Dependency directories (remove the comment below to include it)
 # vendor/
 
+# Stored files: uploaded media and compliance document scans, plus whatever a test
+# run leaves behind. These are volumes in production and never source.
+storage/
+
 # Environment variables (CRITICAL - Never commit!)
 .env
 .env.local

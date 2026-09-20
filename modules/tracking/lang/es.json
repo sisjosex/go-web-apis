@@ -7,7 +7,6 @@
   "tracking.vehicle.update.failed": "Error al actualizar vehículo",
   "tracking.vehicle.delete.failed": "Error al eliminar vehículo",
   "tracking.vehicle.invalid-license": "Formato de placa inválido",
-
   "tracking.route.not-found": "Ruta no encontrada",
   "tracking.route.already-exists": "La ruta ya existe",
   "tracking.route.create.failed": "Error al crear ruta",
@@ -15,31 +14,25 @@
   "tracking.route.delete.failed": "Error al eliminar ruta",
   "tracking.route.invalid-schedule-type": "Tipo de horario inválido. Debe ser: morning, afternoon, o custom",
   "tracking.route.code-already-exists": "El código de ruta ya existe para esta empresa",
-
   "tracking.rider.not-found": "Pasajero (estudiante/empleado) no encontrado",
   "tracking.rider.already-exists": "El pasajero ya existe",
   "tracking.rider.create.failed": "Error al crear pasajero",
   "tracking.rider.update.failed": "Error al actualizar pasajero",
   "tracking.rider.delete.failed": "Error al eliminar pasajero",
-
   "tracking.assignment.not-found": "Asignación de pasajero no encontrada",
   "tracking.assignment.create.failed": "Error al asignar pasajero a la ruta",
   "tracking.assignment.delete.failed": "Error al remover pasajero de la ruta",
   "tracking.assignment.already-exists": "El pasajero ya está asignado a esta ruta",
-
   "tracking.location.update.failed": "Error al actualizar ubicación del vehículo",
   "tracking.location.invalid-coordinates": "Coordenadas GPS inválidas",
   "tracking.location.not-found": "No hay datos de ubicación disponibles para este vehículo",
-
   "tracking.event.record.failed": "Error al registrar evento de viaje",
   "tracking.event.not-found": "Evento de viaje no encontrado",
   "tracking.event.invalid-type": "Tipo de evento inválido",
-
   "tracking.alert.create.failed": "Error al crear alerta de ruta",
   "tracking.alert.not-found": "Alerta no encontrada",
   "tracking.alert.update.failed": "Error al actualizar alerta",
   "tracking.alert.resolve.failed": "Error al resolver alerta",
-
   "tracking.company.not-found": "Empresa de transporte no encontrada",
   "tracking.company.create.failed": "Error al crear empresa de transporte",
   "tracking.company.update.failed": "Error al actualizar empresa de transporte",
@@ -47,7 +40,6 @@
   "tracking.company.already-exists": "Ya existe una empresa de transporte con este número de registro",
   "tracking.company.list.failed": "Error al obtener empresas de transporte",
   "tracking.company.has-vehicles": "No se puede eliminar una empresa que tiene vehículos asociados",
-
   "tracking.vehicle.list.failed": "Error al obtener vehículos",
   "tracking.route.list.failed": "Error al obtener rutas",
   "tracking.route-stop.not-found": "Parada de ruta no encontrada",
@@ -56,7 +48,6 @@
   "tracking.route-stop.delete.failed": "Error al eliminar parada de la ruta",
   "tracking.rider.list.failed": "Error al obtener pasajeros",
   "tracking.assignment.list.failed": "Error al obtener asignaciones de pasajeros",
-
   "tracking.organization.not-found": "OrganizaciÃ³n no encontrada",
   "tracking.organization.create.failed": "Error al crear la organizaciÃ³n",
   "tracking.organization.update.failed": "Error al actualizar la organizaciÃ³n",
@@ -77,12 +68,10 @@
   "tracking.driver.user-already-linked": "Esta cuenta ya está vinculada a otro conductor",
   "tracking.driver.has-routes": "No se puede eliminar un conductor que todavía es el conductor predeterminado de una ruta",
   "tracking.tenant.not-found": "Tenant cliente no encontrado",
-
   "tracking.unauthorized": "Acceso no autorizado al módulo de seguimiento",
   "tracking.forbidden": "No tienes permiso para realizar esta acción",
   "tracking.internal-error": "Error interno del servicio de seguimiento",
   "tracking.tenant.required": "Un tenant debe especificarse mediante el header X-Tenant-Slug",
-
   "permission.tracking.companies-read": "Ver empresas",
   "permission.tracking.companies-read.description": "Listar y ver empresas de transporte",
   "permission.tracking.companies-write": "Crear/editar empresas",
@@ -124,5 +113,22 @@
   "permission.tracking.drivers-write": "Crear/editar conductores",
   "permission.tracking.drivers-write.description": "Crear y actualizar conductores y vincular sus cuentas",
   "permission.tracking.drivers-delete": "Eliminar conductores",
-  "permission.tracking.drivers-delete.description": "Eliminar conductores"
+  "permission.tracking.drivers-delete.description": "Eliminar conductores",
+  "tracking.document.not-found": "Documento no encontrado",
+  "tracking.document.create.failed": "Error al crear el documento",
+  "tracking.document.update.failed": "Error al actualizar el documento",
+  "tracking.document.delete.failed": "Error al eliminar el documento",
+  "tracking.document.list.failed": "Error al obtener los documentos",
+  "tracking.document.subject-not-found": "No se encontró el vehículo o conductor al que pertenece este documento",
+  "tracking.document.type-not-applicable": "Este tipo de documento no aplica a ese vehículo o conductor",
+  "tracking.document.file-invalid": "El archivo debe ser un PDF, JPG o PNG dentro del límite de tamaño",
+  "tracking.document.file-not-found": "Este documento no tiene ningún archivo adjunto",
+  "tracking.document.file.failed": "No se pudo guardar el archivo. Inténtalo de nuevo",
+  "tracking.document-type.not-found": "Tipo de documento no encontrado",
+  "tracking.document-type.create.failed": "Error al crear el tipo de documento",
+  "tracking.document-type.update.failed": "Error al actualizar el tipo de documento",
+  "tracking.document-type.list.failed": "Error al obtener los tipos de documento",
+  "tracking.document-type.code-already-exists": "Ya existe un tipo de documento con este código",
+  "permission.tracking.documents-write": "Gestionar documentos",
+  "permission.tracking.documents-write.description": "Crear, editar y eliminar documentos de cumplimiento y los tipos de documento correspondientes"
 }

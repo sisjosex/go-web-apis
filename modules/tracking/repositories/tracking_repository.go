@@ -518,7 +518,7 @@ func (r *TrackingRepository) ListVehicles(ctx context.Context, tenantID uuid.UUI
 	var totalCount int64
 	for rows.Next() {
 		var v models.Vehicle
-		if err := rows.Scan(&v.ID, &v.CompanyID, &v.CompanyName, &v.PlateNumber, &v.VehicleType, &v.Brand, &v.Model, &v.Year, &v.Capacity, &v.GPSDeviceID, &v.Status, &v.CreatedAt, &v.UpdatedAt, &totalCount); err != nil {
+		if err := rows.Scan(&v.ID, &v.CompanyID, &v.CompanyName, &v.PlateNumber, &v.VehicleType, &v.Brand, &v.Model, &v.Year, &v.Capacity, &v.GPSDeviceID, &v.Status, &v.ServiceBlocked, &v.CreatedAt, &v.UpdatedAt, &totalCount); err != nil {
 			return nil, 0, err
 		}
 		vehicles = append(vehicles, &v)
@@ -949,6 +949,16 @@ func scanDriver(d *models.Driver) []any {
 	}
 }
 
+// scanDriverRow is scanDriver plus the two columns only the list SP resolves: whether an expired
+// blocking document stands against the driver (TRACK-016 D2) and the page's total.
+func scanDriverRow(d *models.Driver, total *int64) []any {
+	return []any{
+		&d.ID, &d.TenantID, &d.CompanyID, &d.CompanyName, &d.UserID, &d.UserEmail,
+		&d.FirstName, &d.LastName, &d.Phone, &d.LicenseNumber, &d.LicenseClass,
+		&d.LicenseExpiresOn, &d.Status, &d.ServiceBlocked, &d.CreatedAt, &d.UpdatedAt, total,
+	}
+}
+
 func (r *TrackingRepository) CreateDriver(ctx context.Context, tenantID uuid.UUID, dto *models.CreateDriverDto) (*models.Driver, error) {
 	var driver models.Driver
 	err := r.dbService.QueryRow(ctx, `
@@ -1012,7 +1022,7 @@ func (r *TrackingRepository) ListDrivers(ctx context.Context, tenantID uuid.UUID
 	var totalCount int64
 	for rows.Next() {
 		var driver models.Driver
-		if err := rows.Scan(append(scanDriver(&driver), &totalCount)...); err != nil {
+		if err := rows.Scan(scanDriverRow(&driver, &totalCount)...); err != nil {
 			return nil, 0, err
 		}
 		drivers = append(drivers, &driver)
@@ -1061,6 +1071,243 @@ func mapDriverError(err error, fallbackCode string) error {
 			return &trackingErrors.TrackingError{Code: trackingErrors.DriverHasRoutes, Err: pgErr}
 		case "company.not-found":
 			return &trackingErrors.TrackingError{Code: trackingErrors.CompanyNotFound, Err: pgErr}
+		}
+	}
+	return &trackingErrors.TrackingError{Code: fallbackCode, Err: err}
+}
+
+// ==================== DOCUMENT TYPES ====================
+
+func scanDocumentType(t *models.DocumentType) []any {
+	return []any{
+		&t.ID, &t.TenantID, &t.Code, &t.Name, &t.AppliesTo,
+		&t.WarnDaysBefore, &t.BlocksService, &t.IsActive, &t.CreatedAt, &t.UpdatedAt,
+	}
+}
+
+func (r *TrackingRepository) CreateDocumentType(ctx context.Context, tenantID uuid.UUID, dto *models.CreateDocumentTypeDto) (*models.DocumentType, error) {
+	var docType models.DocumentType
+	err := r.dbService.QueryRow(ctx, `
+		SELECT * FROM tracking.sp_create_document_type(
+			p_tenant_id        := $1,
+			p_code             := $2,
+			p_name             := $3,
+			p_applies_to       := $4,
+			p_warn_days_before := $5,
+			p_blocks_service   := $6,
+			p_is_active        := $7
+		)
+	`, tenantID, dto.Code, dto.Name, dto.AppliesTo, dto.WarnDaysBefore, dto.BlocksService, dto.IsActive,
+	).Scan(scanDocumentType(&docType)...)
+	if err != nil {
+		return nil, mapDocumentError(err, trackingErrors.DocumentTypeCreateFailed)
+	}
+	return &docType, nil
+}
+
+func (r *TrackingRepository) UpdateDocumentType(ctx context.Context, tenantID uuid.UUID, typeID uuid.UUID, dto *models.UpdateDocumentTypeDto) (*models.DocumentType, error) {
+	var docType models.DocumentType
+	err := r.dbService.QueryRow(ctx, `
+		SELECT * FROM tracking.sp_update_document_type(
+			p_tenant_id          := $1,
+			p_document_type_id   := $2,
+			p_code               := $3,
+			p_name               := $4,
+			p_applies_to         := $5,
+			p_warn_days_before   := $6,
+			p_blocks_service     := $7,
+			p_is_active          := $8
+		)
+	`, tenantID, typeID, dto.Code, dto.Name, dto.AppliesTo, dto.WarnDaysBefore, dto.BlocksService, dto.IsActive,
+	).Scan(scanDocumentType(&docType)...)
+	if err != nil {
+		return nil, mapDocumentError(err, trackingErrors.DocumentTypeUpdateFailed)
+	}
+	return &docType, nil
+}
+
+// ListDocumentTypes returns the tenant's whole policy — a handful of rows the document modal needs
+// in one go, so it is not paged.
+func (r *TrackingRepository) ListDocumentTypes(ctx context.Context, tenantID uuid.UUID, query models.ListDocumentTypesQuery) ([]*models.DocumentType, error) {
+	rows, err := r.dbService.Query(ctx,
+		`SELECT * FROM tracking.sp_list_document_types($1::UUID, $2::VARCHAR, $3::BOOLEAN)`,
+		tenantID, query.AppliesTo, query.IsActive)
+	if err != nil {
+		return nil, &trackingErrors.TrackingError{Code: trackingErrors.DocumentTypeListFailed, Err: err}
+	}
+	defer rows.Close()
+	types := []*models.DocumentType{}
+	for rows.Next() {
+		var docType models.DocumentType
+		if err := rows.Scan(scanDocumentType(&docType)...); err != nil {
+			return nil, err
+		}
+		types = append(types, &docType)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return types, nil
+}
+
+// ==================== COMPLIANCE DOCUMENTS ====================
+
+// scanDocument is the one scan order every document read shares — list, single and write alike.
+func scanDocument(d *models.ComplianceDocument) []any {
+	return []any{
+		&d.ID, &d.TenantID, &d.SubjectType, &d.SubjectID, &d.SubjectName,
+		&d.DocumentTypeID, &d.TypeName, &d.Number, &d.IssuedOn, &d.ExpiresOn,
+		&d.FileName, &d.FileSize, &d.FileExt, &d.Notes, &d.Status, &d.WarnedAt,
+		&d.CreatedAt, &d.UpdatedAt,
+	}
+}
+
+func (r *TrackingRepository) CreateDocument(ctx context.Context, tenantID uuid.UUID, dto *models.CreateDocumentDto) (*models.ComplianceDocument, error) {
+	var doc models.ComplianceDocument
+	err := r.dbService.QueryRow(ctx, `
+		SELECT * FROM tracking.sp_create_document(
+			p_tenant_id        := $1,
+			p_subject_type     := $2,
+			p_subject_id       := $3,
+			p_document_type_id := $4,
+			p_number           := $5,
+			p_issued_on        := $6,
+			p_expires_on       := $7,
+			p_notes            := $8
+		)
+	`, tenantID, dto.SubjectType, dto.SubjectID, dto.DocumentTypeID, dto.Number, dto.IssuedOn, dto.ExpiresOn, dto.Notes,
+	).Scan(scanDocument(&doc)...)
+	if err != nil {
+		return nil, mapDocumentError(err, trackingErrors.DocumentCreateFailed)
+	}
+	return &doc, nil
+}
+
+func (r *TrackingRepository) UpdateDocument(ctx context.Context, tenantID uuid.UUID, documentID uuid.UUID, dto *models.UpdateDocumentDto) (*models.ComplianceDocument, error) {
+	var doc models.ComplianceDocument
+	err := r.dbService.QueryRow(ctx, `
+		SELECT * FROM tracking.sp_update_document(
+			p_tenant_id   := $1,
+			p_document_id := $2,
+			p_number      := $3,
+			p_issued_on   := $4,
+			p_expires_on  := $5,
+			p_notes       := $6
+		)
+	`, tenantID, documentID, dto.Number, dto.IssuedOn, dto.ExpiresOn, dto.Notes,
+	).Scan(scanDocument(&doc)...)
+	if err != nil {
+		return nil, mapDocumentError(err, trackingErrors.DocumentUpdateFailed)
+	}
+	return &doc, nil
+}
+
+// ListDocuments returns one page of the tenant's documents plus the total the same filters match.
+func (r *TrackingRepository) ListDocuments(ctx context.Context, tenantID uuid.UUID, query models.ListDocumentsQuery) ([]*models.ComplianceDocument, int64, error) {
+	rows, err := r.dbService.Query(ctx,
+		`SELECT * FROM tracking.sp_list_documents($1::UUID, $2::VARCHAR, $3::UUID, $4::INT, $5::INT, $6::INT)`,
+		tenantID, query.SubjectType, query.SubjectID, query.ExpiringWithinDays, query.Page, query.PageSize)
+	if err != nil {
+		return nil, 0, &trackingErrors.TrackingError{Code: trackingErrors.DocumentListFailed, Err: err}
+	}
+	defer rows.Close()
+	documents := []*models.ComplianceDocument{}
+	var totalCount int64
+	for rows.Next() {
+		var doc models.ComplianceDocument
+		if err := rows.Scan(append(scanDocument(&doc), &totalCount)...); err != nil {
+			return nil, 0, err
+		}
+		documents = append(documents, &doc)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, 0, err
+	}
+	return documents, totalCount, nil
+}
+
+func (r *TrackingRepository) GetDocument(ctx context.Context, tenantID uuid.UUID, documentID uuid.UUID) (*models.ComplianceDocument, error) {
+	var doc models.ComplianceDocument
+	err := r.dbService.QueryRow(ctx, `SELECT * FROM tracking.sp_get_document($1, $2)`, tenantID, documentID).
+		Scan(scanDocument(&doc)...)
+	if err != nil {
+		return nil, mapDocumentError(err, trackingErrors.DocumentNotFound)
+	}
+	return &doc, nil
+}
+
+// DeleteDocument removes the row and answers with the extension of the file it had, so the handler
+// can delete that file. The filesystem is not the database's to touch.
+func (r *TrackingRepository) DeleteDocument(ctx context.Context, tenantID uuid.UUID, documentID uuid.UUID) (*string, error) {
+	var fileExt *string
+	err := r.dbService.QueryRow(ctx, `SELECT * FROM tracking.sp_delete_document($1, $2)`, tenantID, documentID).Scan(&fileExt)
+	if err != nil {
+		return nil, mapDocumentError(err, trackingErrors.DocumentDeleteFailed)
+	}
+	return fileExt, nil
+}
+
+// SetDocumentFile records the file a document now carries. It runs after the bytes are on disk, so
+// a row never claims a file that is not there.
+func (r *TrackingRepository) SetDocumentFile(ctx context.Context, tenantID uuid.UUID, documentID uuid.UUID, name string, size int64, ext string) (*models.ComplianceDocument, error) {
+	var doc models.ComplianceDocument
+	err := r.dbService.QueryRow(ctx, `
+		SELECT * FROM tracking.sp_set_document_file(
+			p_tenant_id   := $1,
+			p_document_id := $2,
+			p_file_name   := $3,
+			p_file_size   := $4,
+			p_file_ext    := $5
+		)
+	`, tenantID, documentID, name, size, ext,
+	).Scan(scanDocument(&doc)...)
+	if err != nil {
+		return nil, mapDocumentError(err, trackingErrors.DocumentFileFailed)
+	}
+	return &doc, nil
+}
+
+// RaiseDocumentAlerts claims every not-yet-warned document inside its type's window and answers with
+// what to say about them. Claiming and reporting are one statement, so a document is named exactly
+// once however often the job runs (TRACK-016 D1).
+func (r *TrackingRepository) RaiseDocumentAlerts(ctx context.Context, tenantID uuid.UUID) ([]*models.DocumentAlert, error) {
+	rows, err := r.dbService.Query(ctx, `SELECT * FROM tracking.sp_raise_document_alerts($1)`, tenantID)
+	if err != nil {
+		return nil, &trackingErrors.TrackingError{Code: trackingErrors.DocumentListFailed, Err: err}
+	}
+	defer rows.Close()
+
+	alerts := []*models.DocumentAlert{}
+	for rows.Next() {
+		var alert models.DocumentAlert
+		if err := rows.Scan(&alert.ID, &alert.SubjectType, &alert.SubjectName, &alert.TypeName,
+			&alert.Number, &alert.ExpiresOn, &alert.DaysLeft); err != nil {
+			return nil, err
+		}
+		alerts = append(alerts, &alert)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return alerts, nil
+}
+
+// mapDocumentError turns the SP's own codes into module codes, falling back to fallbackCode for
+// anything else. The controller maps the module code to a status.
+func mapDocumentError(err error, fallbackCode string) error {
+	var pgErr *pgconn.PgError
+	if errors.As(err, &pgErr) {
+		switch pgErr.Message {
+		case "document.not-found":
+			return &trackingErrors.TrackingError{Code: trackingErrors.DocumentNotFound, Err: pgErr}
+		case "document.subject-not-found":
+			return &trackingErrors.TrackingError{Code: trackingErrors.DocumentSubjectNotFound, Err: pgErr}
+		case "document.type-not-applicable":
+			return &trackingErrors.TrackingError{Code: trackingErrors.DocumentTypeNotApplicable, Err: pgErr}
+		case "document-type.not-found":
+			return &trackingErrors.TrackingError{Code: trackingErrors.DocumentTypeNotFound, Err: pgErr}
+		case "document-type.code-already-exists":
+			return &trackingErrors.TrackingError{Code: trackingErrors.DocumentTypeCodeAlreadyExists, Err: pgErr}
 		}
 	}
 	return &trackingErrors.TrackingError{Code: fallbackCode, Err: err}

@@ -37,6 +37,10 @@ const (
 
 	DriversWrite  = "tracking:drivers:write"
 	DriversDelete = "tracking:drivers:delete"
+
+	// DocumentsWrite covers deleting one too (TRACK-016): filing a document and withdrawing it are
+	// the same job, and a separate delete permission no role would hold alone is noise.
+	DocumentsWrite = "tracking:documents:write"
 )
 
 func init() {
@@ -62,5 +66,6 @@ func init() {
 		{Code: OrganizationsDelete, Module: "tracking", Name: "permission.tracking.organizations-delete", Description: "permission.tracking.organizations-delete.description"},
 		{Code: DriversWrite, Module: "tracking", Name: "permission.tracking.drivers-write", Description: "permission.tracking.drivers-write.description"},
 		{Code: DriversDelete, Module: "tracking", Name: "permission.tracking.drivers-delete", Description: "permission.tracking.drivers-delete.description"},
+		{Code: DocumentsWrite, Module: "tracking", Name: "permission.tracking.documents-write", Description: "permission.tracking.documents-write.description"},
 	})
 }

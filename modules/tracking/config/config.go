@@ -23,6 +23,11 @@ type TrackingConfig struct {
 	// Performance settings
 	EnableLocationPartitioning bool
 	MaxEventsPerRider          int
+
+	// Compliance document scans (TRACK-016 D3). DocumentsRoot is deliberately not under MEDIA_ROOT:
+	// a licence scan is not public content and is only reachable through the download endpoint.
+	DocumentsRoot string
+	MaxDocumentKB int
 }
 
 // LoadTrackingConfig loads configuration from environment variables
@@ -44,5 +49,9 @@ func LoadTrackingConfig() *TrackingConfig {
 		// Performance settings
 		EnableLocationPartitioning: utils.GetEnvAsBool("TRACKING_ENABLE_LOCATION_PARTITIONING", true),
 		MaxEventsPerRider:          utils.GetEnvAsInt("TRACKING_MAX_EVENTS_PER_RIDER", 1000),
+
+		// Compliance documents
+		DocumentsRoot: utils.GetEnv("TRACKING_DOCUMENTS_ROOT", "storage/tracking-documents"),
+		MaxDocumentKB: utils.GetEnvAsInt("TRACKING_MAX_DOCUMENT_KB", 5120),
 	}
 }

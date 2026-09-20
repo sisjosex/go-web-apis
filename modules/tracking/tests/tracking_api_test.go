@@ -9,7 +9,11 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
+	"os"
+	"path/filepath"
+	"strings"
 	"testing"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
@@ -2313,6 +2317,388 @@ func TestRouteStatusWithoutDefaultDriver(t *testing.T) {
 
 	assert.Equal(t, http.StatusOK, w.Code, w.Body.String())
 	assert.Nil(t, ParseResponse(t, w.Body.Bytes())["driver_name"])
+}
+
+// ============================================================================
+// COMPLIANCE DOCUMENTS TESTS (TRACK-016)
+// ============================================================================
+
+// TestCreateDocumentTypeAndDuplicateCode - the policy line is created, and its code is unique per
+// tenant, upper-cased on the way in.
+func TestCreateDocumentTypeAndDuplicateCode(t *testing.T) {
+	helper := SetupTrackingTest(t)
+	defer helper.Close()
+
+	body := map[string]interface{}{
+		"code":             "ins-" + uuid.New().String()[:6],
+		"name":             "Insurance",
+		"applies_to":       "vehicle",
+		"warn_days_before": 30,
+		"blocks_service":   true,
+	}
+	first := helper.DoRequest("POST", "/tracking/document-types", body, map[string]string{})
+	assert.Equal(t, http.StatusCreated, first.Code, first.Body.String())
+	created := ParseResponse(t, first.Body.Bytes())
+	assert.Equal(t, strings.ToUpper(body["code"].(string)), created["code"])
+	assert.Equal(t, true, created["blocks_service"])
+
+	second := helper.DoRequest("POST", "/tracking/document-types", body, map[string]string{})
+	assert.Equal(t, http.StatusConflict, second.Code, second.Body.String())
+	assert.Contains(t, second.Body.String(), "tracking.document-type.code-already-exists")
+}
+
+// TestListDocumentTypesByAppliesTo - asking for a driver's types returns the driver ones and the
+// both-kinds ones, never the vehicle-only ones.
+func TestListDocumentTypesByAppliesTo(t *testing.T) {
+	helper := SetupTrackingTest(t)
+	defer helper.Close()
+
+	vehicleOnly := CreateTestDocumentType(t, helper, "vehicle", false)
+	driverOnly := CreateTestDocumentType(t, helper, "driver", false)
+	both := CreateTestDocumentType(t, helper, "both", false)
+
+	w := helper.DoRequest("GET", "/tracking/document-types?applies_to=driver", nil, map[string]string{})
+	assert.Equal(t, http.StatusOK, w.Code, w.Body.String())
+
+	ids := map[string]bool{}
+	for _, row := range ParseListResponse(t, w.Body.Bytes()) {
+		ids[row["id"].(string)] = true
+	}
+	assert.True(t, ids[driverOnly], "a driver type must be offered to a driver")
+	assert.True(t, ids[both], "a both-kinds type must be offered to a driver")
+	assert.False(t, ids[vehicleOnly], "a vehicle-only type must not be offered to a driver")
+}
+
+// TestCreateDocumentSuccess - a document is filed with its type and its subject already resolved on
+// the row, so the list renders without a second call.
+func TestCreateDocumentSuccess(t *testing.T) {
+	helper := SetupTrackingTest(t)
+	defer helper.Close()
+
+	typeID := CreateTestDocumentType(t, helper, "vehicle", false)
+	document := CreateTestDocument(t, helper, "vehicle", TestBusID, typeID, 200)
+
+	assert.Equal(t, "vehicle", document["subject_type"])
+	assert.Equal(t, "TST-BUS-001", document["subject_name"])
+	assert.Equal(t, "Test vehicle document", document["type_name"])
+	assert.Equal(t, "valid", document["status"], "200 days out is beyond the 30-day warning window")
+	assert.Nil(t, document["file_name"])
+}
+
+// TestCreateDocumentTypeNotApplicable - a driver's document type cannot be filed against a vehicle.
+func TestCreateDocumentTypeNotApplicable(t *testing.T) {
+	helper := SetupTrackingTest(t)
+	defer helper.Close()
+
+	driverTypeID := CreateTestDocumentType(t, helper, "driver", false)
+
+	w := helper.DoRequest("POST", "/tracking/documents", map[string]interface{}{
+		"subject_type":     "vehicle",
+		"subject_id":       TestBusID,
+		"document_type_id": driverTypeID,
+	}, map[string]string{})
+
+	assert.Equal(t, http.StatusConflict, w.Code, w.Body.String())
+	assert.Contains(t, w.Body.String(), "tracking.document.type-not-applicable")
+}
+
+// TestCreateDocumentUnknownSubject - no FK reaches the subject, so the SP is what refuses a document
+// filed against a vehicle that is not this tenant's.
+func TestCreateDocumentUnknownSubject(t *testing.T) {
+	helper := SetupTrackingTest(t)
+	defer helper.Close()
+
+	typeID := CreateTestDocumentType(t, helper, "vehicle", false)
+
+	w := helper.DoRequest("POST", "/tracking/documents", map[string]interface{}{
+		"subject_type":     "vehicle",
+		"subject_id":       uuid.New().String(),
+		"document_type_id": typeID,
+	}, map[string]string{})
+
+	assert.Equal(t, http.StatusNotFound, w.Code, w.Body.String())
+	assert.Contains(t, w.Body.String(), "tracking.document.subject-not-found")
+}
+
+// TestListDocumentsExpiringWithinDays - the filter is a window, not a sort: one expiring in 40 days
+// is outside a 30-day question, and one with no expiry is never part of it.
+func TestListDocumentsExpiringWithinDays(t *testing.T) {
+	helper := SetupTrackingTest(t)
+	defer helper.Close()
+
+	typeID := CreateTestDocumentType(t, helper, "vehicle", false)
+	soon := CreateTestDocument(t, helper, "vehicle", TestBusID, typeID, 10)
+	later := CreateTestDocument(t, helper, "vehicle", TestBusID, typeID, 40)
+
+	noExpiry := helper.DoRequest("POST", "/tracking/documents", map[string]interface{}{
+		"subject_type":     "vehicle",
+		"subject_id":       TestBusID,
+		"document_type_id": typeID,
+	}, map[string]string{})
+	assert.Equal(t, http.StatusCreated, noExpiry.Code, noExpiry.Body.String())
+	open := ParseResponse(t, noExpiry.Body.Bytes())
+
+	w := helper.DoRequest("GET", "/tracking/documents?expiring_within_days=30", nil, map[string]string{})
+	assert.Equal(t, http.StatusOK, w.Code, w.Body.String())
+
+	ids := map[string]bool{}
+	for _, row := range ParseResponse(t, w.Body.Bytes())["documents"].([]interface{}) {
+		ids[row.(map[string]interface{})["id"].(string)] = true
+	}
+	assert.True(t, ids[soon["id"].(string)], "10 days out is inside a 30-day window")
+	assert.False(t, ids[later["id"].(string)], "40 days out is outside a 30-day window")
+	assert.False(t, ids[open["id"].(string)], "a document with no expiry never expires")
+
+	assert.Equal(t, "expiring", soon["status"], "10 days out is inside the type's 30-day warning")
+}
+
+// TestListDocumentsBySubject - the detail panel asks for one subject's documents and gets only those.
+func TestListDocumentsBySubject(t *testing.T) {
+	helper := SetupTrackingTest(t)
+	defer helper.Close()
+
+	typeID := CreateTestDocumentType(t, helper, "vehicle", false)
+	mine := CreateTestDocument(t, helper, "vehicle", TestBusID, typeID, 100)
+	CreateTestDocument(t, helper, "vehicle", TestVanID, typeID, 100)
+
+	w := helper.DoRequest("GET", "/tracking/documents?subject_type=vehicle&subject_id="+TestBusID, nil, map[string]string{})
+	assert.Equal(t, http.StatusOK, w.Code, w.Body.String())
+
+	// Other tests in this package file documents against the same bus, so the claim is not "one
+	// row" but "only this subject's rows, and mine among them".
+	found := false
+	for _, row := range ParseResponse(t, w.Body.Bytes())["documents"].([]interface{}) {
+		document := row.(map[string]interface{})
+		assert.Equal(t, TestBusID, document["subject_id"], "another subject's document leaked in")
+		found = found || document["id"] == mine["id"]
+	}
+	assert.True(t, found, "the document just filed must be on its own subject's list")
+}
+
+// TestExpiredBlockingDocumentBlocksDriver - the whole of D2 end to end: an expired document of a
+// blocks_service type turns service_blocked on for its driver's list row, and clearing it turns it off.
+func TestExpiredBlockingDocumentBlocksDriver(t *testing.T) {
+	helper := SetupTrackingTest(t)
+	defer helper.Close()
+
+	driverID := CreateTestDriver(t, helper)
+	typeID := CreateTestDocumentType(t, helper, "driver", true)
+	document := CreateTestDocument(t, helper, "driver", driverID, typeID, -5)
+
+	assert.Equal(t, "expired", document["status"])
+	assert.Equal(t, true, driverRowByID(t, helper, driverID)["service_blocked"])
+
+	removed := helper.DoRequest("DELETE", "/tracking/documents/"+document["id"].(string), nil, map[string]string{})
+	assert.Equal(t, http.StatusNoContent, removed.Code, removed.Body.String())
+	assert.Equal(t, false, driverRowByID(t, helper, driverID)["service_blocked"])
+}
+
+// TestNonBlockingExpiredDocumentDoesNotBlock - only a blocks_service type stops a driver working; an
+// expired document of any other type is a warning, not a bar.
+func TestNonBlockingExpiredDocumentDoesNotBlock(t *testing.T) {
+	helper := SetupTrackingTest(t)
+	defer helper.Close()
+
+	driverID := CreateTestDriver(t, helper)
+	typeID := CreateTestDocumentType(t, helper, "driver", false)
+	CreateTestDocument(t, helper, "driver", driverID, typeID, -5)
+
+	assert.Equal(t, false, driverRowByID(t, helper, driverID)["service_blocked"])
+}
+
+// TestUpdateDocumentExpiryResetsWarnedAt - a renewed document is warned about again on its own
+// schedule instead of staying silent forever (D1).
+func TestUpdateDocumentExpiryResetsWarnedAt(t *testing.T) {
+	helper := SetupTrackingTest(t)
+	defer helper.Close()
+
+	typeID := CreateTestDocumentType(t, helper, "vehicle", false)
+	document := CreateTestDocument(t, helper, "vehicle", TestBusID, typeID, 5)
+
+	if _, err := helper.DB().Execute(context.Background(),
+		`UPDATE tracking.compliance_documents SET warned_at = CURRENT_TIMESTAMP WHERE id = $1`,
+		document["id"]); err != nil {
+		t.Fatalf("mark the document as warned: %v", err)
+	}
+
+	renewed := helper.DoRequest("PATCH", "/tracking/documents/"+document["id"].(string), map[string]interface{}{
+		"expires_on": time.Now().AddDate(1, 0, 0).Format("2006-01-02"),
+	}, map[string]string{})
+	assert.Equal(t, http.StatusOK, renewed.Code, renewed.Body.String())
+	assert.Nil(t, ParseResponse(t, renewed.Body.Bytes())["warned_at"], "a new expiry re-arms the warning")
+}
+
+// driverRowByID reads one driver off the list endpoint, which is where service_blocked rides.
+func driverRowByID(t *testing.T, helper *testhelpers.ApiTestHelper, driverID string) map[string]interface{} {
+	w := helper.DoRequest("GET", "/tracking/drivers?page=1&page_size=100", nil, map[string]string{})
+	assert.Equal(t, http.StatusOK, w.Code, w.Body.String())
+	for _, row := range ParseResponse(t, w.Body.Bytes())["drivers"].([]interface{}) {
+		driver := row.(map[string]interface{})
+		if driver["id"] == driverID {
+			return driver
+		}
+	}
+	t.Fatalf("driver %s is not on the list", driverID)
+	return nil
+}
+
+// ============================================================================
+// DOCUMENT FILES AND THE EXPIRY DIGEST (TRACK-016 D1, D3)
+// ============================================================================
+
+// TestUploadDocumentFileRoundTrip - a real PDF is accepted, recorded on the row, and streamed back
+// under a name built from the document rather than from whatever the uploader called it.
+func TestUploadDocumentFileRoundTrip(t *testing.T) {
+	helper := SetupTrackingTest(t)
+	defer helper.Close()
+
+	typeID := CreateTestDocumentType(t, helper, "vehicle", false)
+	document := CreateTestDocument(t, helper, "vehicle", TestBusID, typeID, 120)
+	documentID := document["id"].(string)
+	content := PdfBytes(2048)
+
+	uploaded := UploadDocumentFile(t, helper, documentID, "my licence scan.pdf", content)
+	assert.Equal(t, http.StatusOK, uploaded.Code, uploaded.Body.String())
+	saved := ParseResponse(t, uploaded.Body.Bytes())
+	assert.Equal(t, "my licence scan.pdf", saved["file_name"])
+	assert.Equal(t, float64(len(content)), saved["file_size"])
+	assert.Equal(t, "pdf", saved["file_ext"])
+
+	downloaded := helper.DoRequest("GET", "/tracking/documents/"+documentID+"/file", nil, map[string]string{})
+	assert.Equal(t, http.StatusOK, downloaded.Code)
+	assert.Equal(t, content, downloaded.Body.Bytes(), "the bytes must come back unchanged")
+	assert.Equal(t, "application/pdf", downloaded.Header().Get("Content-Type"))
+	disposition := downloaded.Header().Get("Content-Disposition")
+	assert.Contains(t, disposition, ".pdf")
+	assert.NotContains(t, disposition, "my licence scan",
+		"the uploader's filename must never reach a header")
+}
+
+// TestUploadDocumentFileRejectsDisguisedExecutable - the extension is the uploader's claim; the
+// bytes are what decide. A .exe renamed .pdf is refused (D3).
+func TestUploadDocumentFileRejectsDisguisedExecutable(t *testing.T) {
+	helper := SetupTrackingTest(t)
+	defer helper.Close()
+
+	typeID := CreateTestDocumentType(t, helper, "vehicle", false)
+	documentID := CreateTestDocument(t, helper, "vehicle", TestBusID, typeID, 120)["id"].(string)
+
+	// "MZ" is the DOS header every Windows executable starts with.
+	w := UploadDocumentFile(t, helper, documentID, "payload.pdf", []byte("MZ\x90\x00\x03\x00\x00\x00"))
+
+	assert.Equal(t, http.StatusBadRequest, w.Code, w.Body.String())
+	assert.Contains(t, w.Body.String(), "tracking.document.file-invalid")
+}
+
+// TestUploadDocumentFileRejectsWrongExtension - an extension the server does not accept is refused
+// before its bytes are looked at.
+func TestUploadDocumentFileRejectsWrongExtension(t *testing.T) {
+	helper := SetupTrackingTest(t)
+	defer helper.Close()
+
+	typeID := CreateTestDocumentType(t, helper, "vehicle", false)
+	documentID := CreateTestDocument(t, helper, "vehicle", TestBusID, typeID, 120)["id"].(string)
+
+	w := UploadDocumentFile(t, helper, documentID, "notes.txt", []byte("just text"))
+
+	assert.Equal(t, http.StatusBadRequest, w.Code, w.Body.String())
+	assert.Contains(t, w.Body.String(), "tracking.document.file-invalid")
+}
+
+// TestUploadDocumentFileRejectsOversized - a PDF past the cap is refused, and the row keeps saying
+// it has no file.
+func TestUploadDocumentFileRejectsOversized(t *testing.T) {
+	helper := SetupTrackingTest(t)
+	defer helper.Close()
+
+	typeID := CreateTestDocumentType(t, helper, "vehicle", false)
+	documentID := CreateTestDocument(t, helper, "vehicle", TestBusID, typeID, 120)["id"].(string)
+
+	// The default cap is 5120 KB; 6 MB is over it however the header is read.
+	w := UploadDocumentFile(t, helper, documentID, "huge.pdf", PdfBytes(6*1024*1024))
+
+	assert.Equal(t, http.StatusBadRequest, w.Code, w.Body.String())
+	assert.Contains(t, w.Body.String(), "tracking.document.file-invalid")
+
+	after := helper.DoRequest("GET", "/tracking/documents/"+documentID, nil, map[string]string{})
+	assert.Nil(t, ParseResponse(t, after.Body.Bytes())["file_name"], "a refused upload leaves no trace")
+}
+
+// TestDownloadDocumentFileWithoutOne - a document that carries no file says so rather than 500ing.
+func TestDownloadDocumentFileWithoutOne(t *testing.T) {
+	helper := SetupTrackingTest(t)
+	defer helper.Close()
+
+	typeID := CreateTestDocumentType(t, helper, "vehicle", false)
+	documentID := CreateTestDocument(t, helper, "vehicle", TestBusID, typeID, 120)["id"].(string)
+
+	w := helper.DoRequest("GET", "/tracking/documents/"+documentID+"/file", nil, map[string]string{})
+
+	assert.Equal(t, http.StatusNotFound, w.Code, w.Body.String())
+	assert.Contains(t, w.Body.String(), "tracking.document.file-not-found")
+}
+
+// TestDeleteDocumentRemovesItsFile - withdrawing a document takes its scan with it, so nothing is
+// left on disk that no row points at.
+func TestDeleteDocumentRemovesItsFile(t *testing.T) {
+	helper := SetupTrackingTest(t)
+	defer helper.Close()
+
+	typeID := CreateTestDocumentType(t, helper, "vehicle", false)
+	documentID := CreateTestDocument(t, helper, "vehicle", TestBusID, typeID, 120)["id"].(string)
+	assert.Equal(t, http.StatusOK, UploadDocumentFile(t, helper, documentID, "scan.pdf", PdfBytes(1024)).Code)
+
+	stored := filepath.Join("storage", "tracking-documents", TestTenantID, documentID+".pdf")
+	if _, err := os.Stat(stored); err != nil {
+		t.Fatalf("the upload should have written %s: %v", stored, err)
+	}
+
+	removed := helper.DoRequest("DELETE", "/tracking/documents/"+documentID, nil, map[string]string{})
+	assert.Equal(t, http.StatusNoContent, removed.Code, removed.Body.String())
+
+	_, err := os.Stat(stored)
+	assert.True(t, os.IsNotExist(err), "the stored scan must go with its row")
+}
+
+// TestRaiseDocumentAlertsClaimsEachDocumentOnce - the whole of D1's promise: the claim and the
+// report are one statement, so a second pass names nothing, and a document outside its window is
+// never touched.
+func TestRaiseDocumentAlertsClaimsEachDocumentOnce(t *testing.T) {
+	helper := SetupTrackingTest(t)
+	defer helper.Close()
+
+	typeID := CreateTestDocumentType(t, helper, "vehicle", false)
+	due := CreateTestDocument(t, helper, "vehicle", TestBusID, typeID, 10)
+	far := CreateTestDocument(t, helper, "vehicle", TestBusID, typeID, 200)
+
+	first := raiseAlerts(t, helper)
+	assert.Contains(t, first, due["id"], "a document inside its 30-day window is named")
+	assert.NotContains(t, far, far["id"], "a document 200 days out is left alone")
+	assert.NotContains(t, first, far["id"], "a document 200 days out is left alone")
+
+	second := raiseAlerts(t, helper)
+	assert.NotContains(t, second, due["id"], "a second pass names nothing already claimed")
+}
+
+// raiseAlerts runs one pass of the digest's claiming statement and returns the ids it named. The
+// job itself is a CLI process; what it promises is this SP, which is what a test can hold to.
+func raiseAlerts(t *testing.T, helper *testhelpers.ApiTestHelper) []string {
+	rows, err := helper.DB().Query(context.Background(),
+		`SELECT id::text FROM tracking.sp_raise_document_alerts($1)`, TestTenantID)
+	if err != nil {
+		t.Fatalf("raise document alerts: %v", err)
+	}
+	defer rows.Close()
+
+	ids := []string{}
+	for rows.Next() {
+		var id string
+		if err := rows.Scan(&id); err != nil {
+			t.Fatalf("scan an alert: %v", err)
+		}
+		ids = append(ids, id)
+	}
+	return ids
 }
 
 // ============================================================================

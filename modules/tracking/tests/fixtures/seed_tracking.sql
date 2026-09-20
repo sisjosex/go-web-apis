@@ -3,6 +3,8 @@
 
 DELETE FROM tracking.rider_assignments;
 DELETE FROM tracking.route_stops;
+DELETE FROM tracking.compliance_documents;
+DELETE FROM tracking.document_types;
 DELETE FROM tracking.routes;
 DELETE FROM tracking.drivers;
 DELETE FROM tracking.riders;

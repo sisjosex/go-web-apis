@@ -416,3 +416,70 @@ type ListDriversResponse struct {
 	Page       int       `json:"page"`
 	PageSize   int       `json:"page_size"`
 }
+
+// === DTOs for Compliance Documents (TRACK-016) ===
+
+// CreateDocumentTypeDto represents request to add a line to the tenant's compliance policy.
+type CreateDocumentTypeDto struct {
+	Code           string `json:"code" binding:"required,min=2,max=50" conform:"trim,upper"`
+	Name           string `json:"name" binding:"required,min=2,max=255" conform:"trim"`
+	AppliesTo      string `json:"applies_to" binding:"required,oneof=vehicle driver both" conform:"trim,lowercase"`
+	WarnDaysBefore *int32 `json:"warn_days_before" binding:"omitempty,min=0,max=365"`
+	BlocksService  *bool  `json:"blocks_service"`
+	IsActive       *bool  `json:"is_active"`
+}
+
+// UpdateDocumentTypeDto represents request to edit a policy line. Every field is optional: the SP
+// keeps what it is not sent, and every document references its type by id, so nothing here is frozen.
+type UpdateDocumentTypeDto struct {
+	Code           *string `json:"code" binding:"omitempty,min=2,max=50" conform:"trim,upper"`
+	Name           *string `json:"name" binding:"omitempty,min=2,max=255" conform:"trim"`
+	AppliesTo      *string `json:"applies_to" binding:"omitempty,oneof=vehicle driver both" conform:"trim,lowercase"`
+	WarnDaysBefore *int32  `json:"warn_days_before" binding:"omitempty,min=0,max=365"`
+	BlocksService  *bool   `json:"blocks_service"`
+	IsActive       *bool   `json:"is_active"`
+}
+
+// ListDocumentTypesQuery binds GET /tracking/document-types. The whole policy is a handful of rows,
+// so there is no paging here.
+type ListDocumentTypesQuery struct {
+	AppliesTo string `form:"applies_to" binding:"omitempty,oneof=vehicle driver both"`
+	IsActive  *bool  `form:"is_active"`
+}
+
+// CreateDocumentDto represents request to file a document against one vehicle or driver.
+type CreateDocumentDto struct {
+	SubjectType    string               `json:"subject_type" binding:"required,oneof=vehicle driver" conform:"trim,lowercase"`
+	SubjectID      uuid.UUID            `json:"subject_id" binding:"required,uuidv4"`
+	DocumentTypeID uuid.UUID            `json:"document_type_id" binding:"required,uuidv4"`
+	Number         *string              `json:"number" binding:"omitempty,max=100" conform:"trim"`
+	IssuedOn       *coreModels.DateOnly `json:"issued_on" time_format:"2006-01-02"`
+	ExpiresOn      *coreModels.DateOnly `json:"expires_on" time_format:"2006-01-02"`
+	Notes          *string              `json:"notes" binding:"omitempty,max=2000" conform:"trim"`
+}
+
+// UpdateDocumentDto represents request to edit a document. The subject and the type are set once: a
+// document that changes either is a different document, and re-filing it keeps the history honest.
+type UpdateDocumentDto struct {
+	Number    *string              `json:"number" binding:"omitempty,max=100" conform:"trim"`
+	IssuedOn  *coreModels.DateOnly `json:"issued_on" time_format:"2006-01-02"`
+	ExpiresOn *coreModels.DateOnly `json:"expires_on" time_format:"2006-01-02"`
+	Notes     *string              `json:"notes" binding:"omitempty,max=2000" conform:"trim"`
+}
+
+// ListDocumentsQuery binds GET /tracking/documents. ExpiringWithinDays narrows to what needs acting
+// on; a document with no expiry is never part of that answer.
+type ListDocumentsQuery struct {
+	SubjectType        string  `form:"subject_type" binding:"omitempty,oneof=vehicle driver"`
+	SubjectID          *string `form:"subject_id" binding:"omitempty,uuid"`
+	ExpiringWithinDays *int32  `form:"expiring_within_days" binding:"omitempty,min=0,max=365"`
+	Page               int     `form:"page,default=1" binding:"min=1"`
+	PageSize           int     `form:"page_size,default=20" binding:"min=1,max=100"`
+}
+
+type ListDocumentsResponse struct {
+	Documents  []*ComplianceDocument `json:"documents"`
+	TotalCount int64                 `json:"total_count"`
+	Page       int                   `json:"page"`
+	PageSize   int                   `json:"page_size"`
+}

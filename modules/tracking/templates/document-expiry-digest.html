@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>{{.Title}}</title>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <style>
+        body {
+            background-color: #f5f5f5;
+            margin: 0;
+            padding: 0;
+        }
+        .container {
+            background-color: #ffffff;
+            margin: 20px auto;
+            padding: 40px;
+            max-width: 560px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+        }
+        h2 {
+            color: #333333;
+            margin-top: 0;
+        }
+        p {
+            color: #555555;
+            line-height: 1.6;
+        }
+        .documents {
+            border: 1px solid #e9ecef;
+            border-radius: 6px;
+            margin: 24px 0;
+            overflow: hidden;
+        }
+        .document {
+            padding: 16px 20px;
+            border-bottom: 1px solid #f1f3f5;
+        }
+        .document:last-child {
+            border-bottom: none;
+        }
+        .document .subject {
+            color: #111111;
+            font-weight: bold;
+            font-size: 15px;
+            margin: 0;
+        }
+        .document .detail {
+            color: #666666;
+            font-size: 13px;
+            margin: 4px 0 0 0;
+        }
+        .document .when {
+            color: #b42318;
+            font-size: 13px;
+            font-weight: bold;
+            margin: 6px 0 0 0;
+        }
+        .button-wrap {
+            text-align: center;
+            margin: 32px 0;
+        }
+        .button {
+            display: inline-block;
+            background-color: #0076DE;
+            color: #ffffff !important;
+            text-decoration: none;
+            padding: 14px 32px;
+            border-radius: 6px;
+            font-weight: bold;
+            font-size: 15px;
+        }
+        .footer {
+            color: #999999;
+            font-size: 12px;
+            margin-top: 30px;
+            padding-top: 20px;
+            border-top: 1px solid #eeeeee;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h2>{{.TenantName}}</h2>
+        <p>{{.Description}}</p>
+
+        <div class="documents">
+            {{range .Documents}}
+            <div class="document">
+                <p class="subject">{{.Subject}}</p>
+                <p class="detail">{{.Type}}{{if .Number}} · {{.Number}}{{end}} · {{.ExpiresOn}}</p>
+                <p class="when">{{.When}}</p>
+            </div>
+            {{end}}
+        </div>
+
+        <div class="button-wrap">
+            <a href="{{.DocumentsURL}}" class="button">{{.ButtonText}}</a>
+        </div>
+
+        <div class="footer">
+            <p>{{.SignOff}}</p>
+            <p style="margin-top: 10px; color: #cccccc;">{{.AutomatedNote}}</p>
+        </div>
+    </div>
+</body>
+</html>

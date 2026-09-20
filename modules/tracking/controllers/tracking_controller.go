@@ -2,6 +2,7 @@ package controllers
 
 import (
 	"errors"
+	"io"
 	"net/http"
 	"strings"
 
@@ -16,15 +17,20 @@ import (
 	trackingErrors "josex/web/modules/tracking/errors"
 	"josex/web/modules/tracking/interfaces"
 	"josex/web/modules/tracking/models"
+	trackingServices "josex/web/modules/tracking/services"
 )
 
 type TrackingController struct {
 	trackingService interfaces.TrackingService
+	// documentFiles keeps compliance document scans on disk (TRACK-016 D3). It is the controller's
+	// and not the service's: the SPs own the rows, the filesystem is the handler's to touch.
+	documentFiles *trackingServices.DocumentFileStore
 }
 
-func NewTrackingController(trackingService interfaces.TrackingService) *TrackingController {
+func NewTrackingController(trackingService interfaces.TrackingService, documentFiles *trackingServices.DocumentFileStore) *TrackingController {
 	return &TrackingController{
 		trackingService: trackingService,
+		documentFiles:   documentFiles,
 	}
 }
 
@@ -1788,6 +1794,500 @@ func driverErrorResponse(c *gin.Context, err error) bool {
 		return true
 	case trackingErrors.DriverLicenseAlreadyExists, trackingErrors.DriverUserAlreadyLinked, trackingErrors.DriverHasRoutes:
 		c.JSON(http.StatusConflict, coreErrors.BuildErrorSingle(c, trackingErr.Code))
+		return true
+	}
+	return false
+}
+
+// ==================== DOCUMENT TYPES (TRACK-016) ====================
+
+// CreateDocumentType godoc
+// @Summary Create document type
+// @Description Add a line to the tenant's compliance policy
+// @Tags Tracking - Documents
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param document_type body models.CreateDocumentTypeDto true "Document type"
+// @Success 201 {object} models.DocumentType
+// @Failure 400 {object} coreErrors.ErrorResponse
+// @Failure 409 {object} coreErrors.ErrorResponse
+// @Failure 500 {object} coreErrors.ErrorResponse
+// @Router /tracking/document-types [post]
+func (ctrl *TrackingController) CreateDocumentType(c *gin.Context) {
+	tenantID, ok := ctrl.requireTenantID(c)
+	if !ok {
+		return
+	}
+
+	var dto models.CreateDocumentTypeDto
+	if err := c.ShouldBindJSON(&dto); err != nil {
+		c.JSON(http.StatusBadRequest, coreErrors.BuildErrorDetail(c, trackingErrors.DocumentTypeCreateFailed, utils.ExtractValidationError(c, err)))
+		return
+	}
+	_ = conform.Strings(&dto)
+
+	docType, err := ctrl.trackingService.CreateDocumentType(c.Request.Context(), tenantID, &dto)
+	if err != nil {
+		if documentErrorResponse(c, err) {
+			return
+		}
+		c.JSON(http.StatusInternalServerError, coreErrors.BuildError(c, err))
+		return
+	}
+	c.JSON(http.StatusCreated, docType)
+}
+
+// UpdateDocumentType godoc
+// @Summary Update document type
+// @Description Edit a policy line; every field is optional
+// @Tags Tracking - Documents
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param document_type_id path string true "Document type ID (UUID)"
+// @Param document_type body models.UpdateDocumentTypeDto true "Updated document type"
+// @Success 200 {object} models.DocumentType
+// @Failure 400 {object} coreErrors.ErrorResponse
+// @Failure 404 {object} coreErrors.ErrorResponse
+// @Failure 409 {object} coreErrors.ErrorResponse
+// @Failure 500 {object} coreErrors.ErrorResponse
+// @Router /tracking/document-types/{document_type_id} [patch]
+func (ctrl *TrackingController) UpdateDocumentType(c *gin.Context) {
+	tenantID, ok := ctrl.requireTenantID(c)
+	if !ok {
+		return
+	}
+
+	typeID, err := uuid.Parse(c.Param("document_type_id"))
+	if err != nil {
+		c.JSON(http.StatusBadRequest, coreErrors.BuildErrorSingle(c, coreErrors.InvalidUUID))
+		return
+	}
+	var dto models.UpdateDocumentTypeDto
+	if err := c.ShouldBindJSON(&dto); err != nil {
+		c.JSON(http.StatusBadRequest, coreErrors.BuildErrorDetail(c, trackingErrors.DocumentTypeUpdateFailed, utils.ExtractValidationError(c, err)))
+		return
+	}
+	_ = conform.Strings(&dto)
+
+	docType, err := ctrl.trackingService.UpdateDocumentType(c.Request.Context(), tenantID, typeID, &dto)
+	if err != nil {
+		if documentErrorResponse(c, err) {
+			return
+		}
+		c.JSON(http.StatusInternalServerError, coreErrors.BuildError(c, err))
+		return
+	}
+	c.JSON(http.StatusOK, docType)
+}
+
+// ListDocumentTypes godoc
+// @Summary List document types
+// @Description The tenant's whole compliance policy, alphabetically
+// @Tags Tracking - Documents
+// @Produce json
+// @Security BearerAuth
+// @Param applies_to query string false "Narrow to the types one subject kind may carry" Enums(vehicle, driver, both)
+// @Param is_active query bool false "Lifecycle state"
+// @Success 200 {array} models.DocumentType
+// @Failure 400 {object} coreErrors.ErrorResponse
+// @Failure 500 {object} coreErrors.ErrorResponse
+// @Router /tracking/document-types [get]
+func (ctrl *TrackingController) ListDocumentTypes(c *gin.Context) {
+	tenantID, ok := ctrl.requireTenantID(c)
+	if !ok {
+		return
+	}
+
+	var query models.ListDocumentTypesQuery
+	if err := c.ShouldBindQuery(&query); err != nil {
+		c.JSON(http.StatusBadRequest, coreErrors.BuildErrorDetail(c, "validation.invalid", err.Error()))
+		return
+	}
+
+	types, err := ctrl.trackingService.ListDocumentTypes(c.Request.Context(), tenantID, query)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, coreErrors.BuildError(c, err))
+		return
+	}
+	c.JSON(http.StatusOK, types)
+}
+
+// ==================== COMPLIANCE DOCUMENTS (TRACK-016) ====================
+
+// CreateDocument godoc
+// @Summary Create document
+// @Description File a compliance document against one vehicle or driver
+// @Tags Tracking - Documents
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param document body models.CreateDocumentDto true "Document"
+// @Success 201 {object} models.ComplianceDocument
+// @Failure 400 {object} coreErrors.ErrorResponse
+// @Failure 404 {object} coreErrors.ErrorResponse
+// @Failure 409 {object} coreErrors.ErrorResponse
+// @Failure 500 {object} coreErrors.ErrorResponse
+// @Router /tracking/documents [post]
+func (ctrl *TrackingController) CreateDocument(c *gin.Context) {
+	tenantID, ok := ctrl.requireTenantID(c)
+	if !ok {
+		return
+	}
+
+	var dto models.CreateDocumentDto
+	if err := c.ShouldBindJSON(&dto); err != nil {
+		c.JSON(http.StatusBadRequest, coreErrors.BuildErrorDetail(c, trackingErrors.DocumentCreateFailed, utils.ExtractValidationError(c, err)))
+		return
+	}
+	_ = conform.Strings(&dto)
+
+	document, err := ctrl.trackingService.CreateDocument(c.Request.Context(), tenantID, &dto)
+	if err != nil {
+		if documentErrorResponse(c, err) {
+			return
+		}
+		c.JSON(http.StatusInternalServerError, coreErrors.BuildError(c, err))
+		return
+	}
+	c.JSON(http.StatusCreated, document)
+}
+
+// UpdateDocument godoc
+// @Summary Update document
+// @Description Edit a document; the subject and the type are set once
+// @Tags Tracking - Documents
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param document_id path string true "Document ID (UUID)"
+// @Param document body models.UpdateDocumentDto true "Updated document"
+// @Success 200 {object} models.ComplianceDocument
+// @Failure 400 {object} coreErrors.ErrorResponse
+// @Failure 404 {object} coreErrors.ErrorResponse
+// @Failure 500 {object} coreErrors.ErrorResponse
+// @Router /tracking/documents/{document_id} [patch]
+func (ctrl *TrackingController) UpdateDocument(c *gin.Context) {
+	tenantID, ok := ctrl.requireTenantID(c)
+	if !ok {
+		return
+	}
+
+	documentID, err := uuid.Parse(c.Param("document_id"))
+	if err != nil {
+		c.JSON(http.StatusBadRequest, coreErrors.BuildErrorSingle(c, coreErrors.InvalidUUID))
+		return
+	}
+	var dto models.UpdateDocumentDto
+	if err := c.ShouldBindJSON(&dto); err != nil {
+		c.JSON(http.StatusBadRequest, coreErrors.BuildErrorDetail(c, trackingErrors.DocumentUpdateFailed, utils.ExtractValidationError(c, err)))
+		return
+	}
+	_ = conform.Strings(&dto)
+
+	document, err := ctrl.trackingService.UpdateDocument(c.Request.Context(), tenantID, documentID, &dto)
+	if err != nil {
+		if documentErrorResponse(c, err) {
+			return
+		}
+		c.JSON(http.StatusInternalServerError, coreErrors.BuildError(c, err))
+		return
+	}
+	c.JSON(http.StatusOK, document)
+}
+
+// ListDocuments godoc
+// @Summary List documents
+// @Description One page of the tenant's compliance documents, soonest expiry first
+// @Tags Tracking - Documents
+// @Produce json
+// @Security BearerAuth
+// @Param subject_type query string false "Narrow to vehicles or drivers" Enums(vehicle, driver)
+// @Param subject_id query string false "Narrow to one vehicle or driver (UUID)"
+// @Param expiring_within_days query int false "Only what expires within N days"
+// @Param page query int false "Page number, 1-based" default(1)
+// @Param page_size query int false "Rows per page, max 100" default(20)
+// @Success 200 {object} models.ListDocumentsResponse
+// @Failure 400 {object} coreErrors.ErrorResponse
+// @Failure 500 {object} coreErrors.ErrorResponse
+// @Router /tracking/documents [get]
+func (ctrl *TrackingController) ListDocuments(c *gin.Context) {
+	tenantID, ok := ctrl.requireTenantID(c)
+	if !ok {
+		return
+	}
+
+	var query models.ListDocumentsQuery
+	if err := c.ShouldBindQuery(&query); err != nil {
+		c.JSON(http.StatusBadRequest, coreErrors.BuildErrorDetail(c, "validation.invalid", err.Error()))
+		return
+	}
+
+	result, err := ctrl.trackingService.ListDocuments(c.Request.Context(), tenantID, query)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, coreErrors.BuildError(c, err))
+		return
+	}
+	c.JSON(http.StatusOK, result)
+}
+
+// GetDocument godoc
+// @Summary Get document by ID
+// @Description Get a single compliance document by ID
+// @Tags Tracking - Documents
+// @Produce json
+// @Security BearerAuth
+// @Param document_id path string true "Document ID (UUID)"
+// @Success 200 {object} models.ComplianceDocument
+// @Failure 400 {object} coreErrors.ErrorResponse
+// @Failure 404 {object} coreErrors.ErrorResponse
+// @Failure 500 {object} coreErrors.ErrorResponse
+// @Router /tracking/documents/{document_id} [get]
+func (ctrl *TrackingController) GetDocument(c *gin.Context) {
+	tenantID, ok := ctrl.requireTenantID(c)
+	if !ok {
+		return
+	}
+
+	documentID, err := uuid.Parse(c.Param("document_id"))
+	if err != nil {
+		c.JSON(http.StatusBadRequest, coreErrors.BuildErrorSingle(c, coreErrors.InvalidUUID))
+		return
+	}
+
+	document, err := ctrl.trackingService.GetDocument(c.Request.Context(), tenantID, documentID)
+	if err != nil {
+		if documentErrorResponse(c, err) {
+			return
+		}
+		c.JSON(http.StatusInternalServerError, coreErrors.BuildError(c, err))
+		return
+	}
+	c.JSON(http.StatusOK, document)
+}
+
+// DeleteDocument godoc
+// @Summary Delete document
+// @Description Withdraw a compliance document; its stored file goes with it
+// @Tags Tracking - Documents
+// @Security BearerAuth
+// @Param document_id path string true "Document ID (UUID)"
+// @Success 204 "No Content"
+// @Failure 400 {object} coreErrors.ErrorResponse
+// @Failure 404 {object} coreErrors.ErrorResponse
+// @Failure 500 {object} coreErrors.ErrorResponse
+// @Router /tracking/documents/{document_id} [delete]
+func (ctrl *TrackingController) DeleteDocument(c *gin.Context) {
+	tenantID, ok := ctrl.requireTenantID(c)
+	if !ok {
+		return
+	}
+
+	documentID, err := uuid.Parse(c.Param("document_id"))
+	if err != nil {
+		c.JSON(http.StatusBadRequest, coreErrors.BuildErrorSingle(c, coreErrors.InvalidUUID))
+		return
+	}
+
+	fileExt, err := ctrl.trackingService.DeleteDocument(c.Request.Context(), tenantID, documentID)
+	if err != nil {
+		if documentErrorResponse(c, err) {
+			return
+		}
+		c.JSON(http.StatusInternalServerError, coreErrors.BuildError(c, err))
+		return
+	}
+	// The row is gone either way; a file that cannot be removed is a leak to clean up, never a
+	// reason to tell the caller the delete failed.
+	ctrl.documentFiles.Remove(tenantID, documentID, fileExt)
+
+	c.Status(http.StatusNoContent)
+}
+
+// UploadDocumentFile godoc
+// @Summary Attach a document's file
+// @Description Upload the scan of a compliance document; PDF, JPG or PNG within the size limit
+// @Tags Tracking - Documents
+// @Accept multipart/form-data
+// @Produce json
+// @Security BearerAuth
+// @Param document_id path string true "Document ID (UUID)"
+// @Param file formData file true "The scan — pdf, jpg or png"
+// @Success 200 {object} models.ComplianceDocument
+// @Failure 400 {object} coreErrors.ErrorResponse
+// @Failure 404 {object} coreErrors.ErrorResponse
+// @Failure 500 {object} coreErrors.ErrorResponse
+// @Router /tracking/documents/{document_id}/file [put]
+func (ctrl *TrackingController) UploadDocumentFile(c *gin.Context) {
+	tenantID, ok := ctrl.requireTenantID(c)
+	if !ok {
+		return
+	}
+
+	documentID, err := uuid.Parse(c.Param("document_id"))
+	if err != nil {
+		c.JSON(http.StatusBadRequest, coreErrors.BuildErrorSingle(c, coreErrors.InvalidUUID))
+		return
+	}
+
+	// The document is read first: an upload against one that is not this tenant's must be a 404
+	// before a single byte is written anywhere.
+	if _, err := ctrl.trackingService.GetDocument(c.Request.Context(), tenantID, documentID); err != nil {
+		if documentErrorResponse(c, err) {
+			return
+		}
+		c.JSON(http.StatusInternalServerError, coreErrors.BuildError(c, err))
+		return
+	}
+
+	header, err := c.FormFile("file")
+	if err != nil {
+		c.JSON(http.StatusBadRequest, coreErrors.BuildErrorSingle(c, trackingErrors.DocumentFileInvalid))
+		return
+	}
+
+	name, size, ext, err := ctrl.documentFiles.Save(tenantID, documentID, header)
+	if err != nil {
+		if documentErrorResponse(c, err) {
+			return
+		}
+		c.JSON(http.StatusInternalServerError, coreErrors.BuildError(c, err))
+		return
+	}
+
+	document, err := ctrl.trackingService.SetDocumentFile(c.Request.Context(), tenantID, documentID, name, size, ext)
+	if err != nil {
+		// The row never learnt about the bytes, so the bytes are litter — take them back out.
+		ctrl.documentFiles.Remove(tenantID, documentID, &ext)
+		if documentErrorResponse(c, err) {
+			return
+		}
+		c.JSON(http.StatusInternalServerError, coreErrors.BuildError(c, err))
+		return
+	}
+	c.JSON(http.StatusOK, document)
+}
+
+// DownloadDocumentFile godoc
+// @Summary Download a document's file
+// @Description Stream the stored scan behind auth; it is never served from a public URL
+// @Tags Tracking - Documents
+// @Produce octet-stream
+// @Security BearerAuth
+// @Param document_id path string true "Document ID (UUID)"
+// @Success 200 {file} binary
+// @Failure 400 {object} coreErrors.ErrorResponse
+// @Failure 404 {object} coreErrors.ErrorResponse
+// @Failure 500 {object} coreErrors.ErrorResponse
+// @Router /tracking/documents/{document_id}/file [get]
+func (ctrl *TrackingController) DownloadDocumentFile(c *gin.Context) {
+	tenantID, ok := ctrl.requireTenantID(c)
+	if !ok {
+		return
+	}
+
+	documentID, err := uuid.Parse(c.Param("document_id"))
+	if err != nil {
+		c.JSON(http.StatusBadRequest, coreErrors.BuildErrorSingle(c, coreErrors.InvalidUUID))
+		return
+	}
+
+	document, err := ctrl.trackingService.GetDocument(c.Request.Context(), tenantID, documentID)
+	if err != nil {
+		if documentErrorResponse(c, err) {
+			return
+		}
+		c.JSON(http.StatusInternalServerError, coreErrors.BuildError(c, err))
+		return
+	}
+
+	file, err := ctrl.documentFiles.Open(tenantID, documentID, document.FileExt)
+	if err != nil {
+		if documentErrorResponse(c, err) {
+			return
+		}
+		c.JSON(http.StatusInternalServerError, coreErrors.BuildError(c, err))
+		return
+	}
+	defer func() { _ = file.Close() }()
+
+	c.Header("Content-Disposition", "attachment; filename=\""+downloadFilename(document)+"\"")
+	c.Header("X-Content-Type-Options", "nosniff")
+	// Never the browser's guess and never the uploader's claim: the extension is one this server
+	// accepted, so the type it maps to is the only one worth sending.
+	c.Header("Content-Type", downloadContentType(document.FileExt))
+	if _, err := io.Copy(c.Writer, file); err != nil {
+		// The status and part of the body are already out; there is nothing left to tell the client.
+		_ = c.Error(err)
+	}
+}
+
+// downloadFilename names the file after what it is — "Insurance-POL-1.pdf" — rather than after what
+// the uploader called it, which never reaches the filesystem or a header (security.md).
+func downloadFilename(document *models.ComplianceDocument) string {
+	parts := []string{safeFilenamePart(document.TypeName)}
+	if document.Number != nil && *document.Number != "" {
+		parts = append(parts, safeFilenamePart(*document.Number))
+	}
+	name := strings.Join(parts, "-")
+	if document.FileExt != nil && *document.FileExt != "" {
+		name += "." + *document.FileExt
+	}
+	return name
+}
+
+// safeFilenamePart keeps letters, digits and dashes and drops everything else, so no quote, slash or
+// newline from a stored value can break out of the Content-Disposition header.
+func safeFilenamePart(value string) string {
+	var out strings.Builder
+	for _, r := range value {
+		switch {
+		case r >= 'a' && r <= 'z', r >= 'A' && r <= 'Z', r >= '0' && r <= '9', r == '-':
+			out.WriteRune(r)
+		case r == ' ' || r == '_':
+			out.WriteRune('-')
+		}
+	}
+	if out.Len() == 0 {
+		return "document"
+	}
+	return out.String()
+}
+
+// downloadContentType maps the extension this server accepted to what it is served as.
+func downloadContentType(ext *string) string {
+	if ext == nil {
+		return "application/octet-stream"
+	}
+	switch *ext {
+	case "pdf":
+		return "application/pdf"
+	case "jpg", "jpeg":
+		return "image/jpeg"
+	case "png":
+		return "image/png"
+	}
+	return "application/octet-stream"
+}
+
+// documentErrorResponse answers the document codes that carry a status of their own and reports
+// whether it did; anything else is the caller's 500.
+func documentErrorResponse(c *gin.Context, err error) bool {
+	var trackingErr *trackingErrors.TrackingError
+	if !errors.As(err, &trackingErr) {
+		return false
+	}
+	switch trackingErr.Code {
+	case trackingErrors.DocumentNotFound, trackingErrors.DocumentTypeNotFound,
+		trackingErrors.DocumentSubjectNotFound, trackingErrors.DocumentFileNotFound:
+		c.JSON(http.StatusNotFound, coreErrors.BuildErrorSingle(c, trackingErr.Code))
+		return true
+	case trackingErrors.DocumentTypeCodeAlreadyExists, trackingErrors.DocumentTypeNotApplicable:
+		c.JSON(http.StatusConflict, coreErrors.BuildErrorSingle(c, trackingErr.Code))
+		return true
+	case trackingErrors.DocumentFileInvalid:
+		c.JSON(http.StatusBadRequest, coreErrors.BuildErrorSingle(c, trackingErr.Code))
 		return true
 	}
 	return false

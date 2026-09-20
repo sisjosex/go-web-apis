@@ -158,6 +158,40 @@ func RegisterTrackingRoutes(router *gin.Engine, trackingController *controllers.
 			tenancyMW.RequirePermission(trackingPerms.DriversDelete),
 			trackingController.DeleteDriver)
 
+		// Compliance documents and the policy behind them (TRACK-016). Reading them needs no
+		// permission of its own — anyone who may see the fleet may see what it must carry; writing
+		// and withdrawing share one permission.
+		r.GET("/document-types", denyOrganization, trackingController.ListDocumentTypes)
+		r.POST("/document-types",
+			denyOrganization,
+			tenancyMW.RequirePermission(trackingPerms.DocumentsWrite),
+			trackingController.CreateDocumentType)
+		r.PATCH("/document-types/:document_type_id",
+			denyOrganization,
+			tenancyMW.RequirePermission(trackingPerms.DocumentsWrite),
+			trackingController.UpdateDocumentType)
+
+		r.GET("/documents", denyOrganization, trackingController.ListDocuments)
+		r.GET("/documents/:document_id", denyOrganization, trackingController.GetDocument)
+		r.POST("/documents",
+			denyOrganization,
+			tenancyMW.RequirePermission(trackingPerms.DocumentsWrite),
+			trackingController.CreateDocument)
+		r.PATCH("/documents/:document_id",
+			denyOrganization,
+			tenancyMW.RequirePermission(trackingPerms.DocumentsWrite),
+			trackingController.UpdateDocument)
+		r.DELETE("/documents/:document_id",
+			denyOrganization,
+			tenancyMW.RequirePermission(trackingPerms.DocumentsWrite),
+			trackingController.DeleteDocument)
+		// The scan itself. Reading it is a read of the document; replacing it is a write of one.
+		r.GET("/documents/:document_id/file", denyOrganization, trackingController.DownloadDocumentFile)
+		r.PUT("/documents/:document_id/file",
+			denyOrganization,
+			tenancyMW.RequirePermission(trackingPerms.DocumentsWrite),
+			trackingController.UploadDocumentFile)
+
 		// Riders
 		r.GET("/riders", trackingController.ListRiders)
 		r.GET("/riders/:rider_id", trackingController.GetRider)
@@ -228,6 +262,18 @@ func RegisterTrackingRoutes(router *gin.Engine, trackingController *controllers.
 		trackingGroup.GET("/drivers/:driver_id", trackingController.GetDriver)
 		trackingGroup.PATCH("/drivers/:driver_id", trackingController.UpdateDriver)
 		trackingGroup.DELETE("/drivers/:driver_id", trackingController.DeleteDriver)
+
+		trackingGroup.GET("/document-types", trackingController.ListDocumentTypes)
+		trackingGroup.POST("/document-types", trackingController.CreateDocumentType)
+		trackingGroup.PATCH("/document-types/:document_type_id", trackingController.UpdateDocumentType)
+
+		trackingGroup.GET("/documents", trackingController.ListDocuments)
+		trackingGroup.GET("/documents/:document_id", trackingController.GetDocument)
+		trackingGroup.POST("/documents", trackingController.CreateDocument)
+		trackingGroup.PATCH("/documents/:document_id", trackingController.UpdateDocument)
+		trackingGroup.DELETE("/documents/:document_id", trackingController.DeleteDocument)
+		trackingGroup.GET("/documents/:document_id/file", trackingController.DownloadDocumentFile)
+		trackingGroup.PUT("/documents/:document_id/file", trackingController.UploadDocumentFile)
 
 		trackingGroup.POST("/riders", trackingController.CreateRider)
 		trackingGroup.GET("/riders", trackingController.ListRiders)

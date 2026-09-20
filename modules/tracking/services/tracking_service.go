@@ -267,3 +267,56 @@ func (s *TrackingService) GetDriver(ctx context.Context, tenantID uuid.UUID, dri
 func (s *TrackingService) DeleteDriver(ctx context.Context, tenantID uuid.UUID, driverID uuid.UUID) error {
 	return s.trackingRepo.DeleteDriver(ctx, tenantID, driverID)
 }
+
+// ==================== DOCUMENT TYPES ====================
+
+func (s *TrackingService) CreateDocumentType(ctx context.Context, tenantID uuid.UUID, dto *models.CreateDocumentTypeDto) (*models.DocumentType, error) {
+	return s.trackingRepo.CreateDocumentType(ctx, tenantID, dto)
+}
+
+func (s *TrackingService) UpdateDocumentType(ctx context.Context, tenantID uuid.UUID, typeID uuid.UUID, dto *models.UpdateDocumentTypeDto) (*models.DocumentType, error) {
+	return s.trackingRepo.UpdateDocumentType(ctx, tenantID, typeID, dto)
+}
+
+func (s *TrackingService) ListDocumentTypes(ctx context.Context, tenantID uuid.UUID, query models.ListDocumentTypesQuery) ([]*models.DocumentType, error) {
+	return s.trackingRepo.ListDocumentTypes(ctx, tenantID, query)
+}
+
+// ==================== COMPLIANCE DOCUMENTS ====================
+
+func (s *TrackingService) CreateDocument(ctx context.Context, tenantID uuid.UUID, dto *models.CreateDocumentDto) (*models.ComplianceDocument, error) {
+	return s.trackingRepo.CreateDocument(ctx, tenantID, dto)
+}
+
+func (s *TrackingService) UpdateDocument(ctx context.Context, tenantID uuid.UUID, documentID uuid.UUID, dto *models.UpdateDocumentDto) (*models.ComplianceDocument, error) {
+	return s.trackingRepo.UpdateDocument(ctx, tenantID, documentID, dto)
+}
+
+func (s *TrackingService) ListDocuments(ctx context.Context, tenantID uuid.UUID, query models.ListDocumentsQuery) (*models.ListDocumentsResponse, error) {
+	documents, totalCount, err := s.trackingRepo.ListDocuments(ctx, tenantID, query)
+	if err != nil {
+		return nil, err
+	}
+	return &models.ListDocumentsResponse{
+		Documents:  documents,
+		TotalCount: totalCount,
+		Page:       query.Page,
+		PageSize:   query.PageSize,
+	}, nil
+}
+
+func (s *TrackingService) GetDocument(ctx context.Context, tenantID uuid.UUID, documentID uuid.UUID) (*models.ComplianceDocument, error) {
+	return s.trackingRepo.GetDocument(ctx, tenantID, documentID)
+}
+
+func (s *TrackingService) DeleteDocument(ctx context.Context, tenantID uuid.UUID, documentID uuid.UUID) (*string, error) {
+	return s.trackingRepo.DeleteDocument(ctx, tenantID, documentID)
+}
+
+func (s *TrackingService) SetDocumentFile(ctx context.Context, tenantID uuid.UUID, documentID uuid.UUID, name string, size int64, ext string) (*models.ComplianceDocument, error) {
+	return s.trackingRepo.SetDocumentFile(ctx, tenantID, documentID, name, size, ext)
+}
+
+func (s *TrackingService) RaiseDocumentAlerts(ctx context.Context, tenantID uuid.UUID) ([]*models.DocumentAlert, error) {
+	return s.trackingRepo.RaiseDocumentAlerts(ctx, tenantID)
+}

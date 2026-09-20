@@ -4,11 +4,13 @@
 //   - migration: Generate new database migration files (independent, no config needed)
 //   - migrate:   Run the modular migrations on the ENV_FILE database once and exit
 //   - tenant:    Manage tenant instances and run tenant-specific migrations (requires .env.platform)
+//   - jobs:      Run one scheduled job and exit (requires .env.platform)
 //
 // Each subcommand has its own handler file:
 //   - migration.go:    Migration generation logic
 //   - migrate.go:      One-shot schema migration (the deploy's migrate job)
 //   - tenant_mgmt.go:  Tenant management and operations
+//   - jobs.go:         Scheduled jobs cron runs one at a time
 //   - main.go:         CLI routing and help (this file)
 package main
 
@@ -33,6 +35,8 @@ func main() {
 		CmdMigrate(args)
 	case "tenant", "t":
 		CmdTenant(args)
+	case "jobs", "j":
+		CmdJobs(args)
 	case "help", "h", "-h", "--help":
 		printMainUsage()
 	default:
@@ -51,11 +55,13 @@ func printMainUsage() {
 	fmt.Println("  migration, m    Create new database schema migrations")
 	fmt.Println("  migrate, mig    Run the modular migrations on the ENV_FILE database")
 	fmt.Println("  tenant, t       Manage tenant instances and run tenant migrations")
+	fmt.Println("  jobs, j         Run a scheduled job once (cron calls these)")
 	fmt.Println("  help, -h        Show this help message")
 	fmt.Println("\nExamples:")
 	fmt.Println("  go run ./cmd/cli migration -module=auth -name=add_refresh_tokens")
 	fmt.Println("  go run ./cmd/cli migrate")
 	fmt.Println("  go run ./cmd/cli tenant -list")
 	fmt.Println("  go run ./cmd/cli tenant -migrate all")
+	fmt.Println("  go run ./cmd/cli jobs document-alerts")
 	fmt.Println("\nRun 'go run ./cmd/cli <subcommand> -h' for subcommand help")
 }
