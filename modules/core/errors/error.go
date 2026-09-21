@@ -34,6 +34,11 @@ const (
 	UserInsufficientPermissions = "user.insufficient-permissions"
 )
 
+// Request errors
+const (
+	RequestRateLimited = "request.rate-limited"
+)
+
 // BuildErrorSingle creates an error response with just an error code and translates it
 func BuildErrorSingle(c *gin.Context, errorCode string) *ErrorResponse {
 	lang := getLangFromContext(c)

@@ -13,5 +13,6 @@
   "validation.datetime": "Invalid date/time format",
   "validation.uuid": "Invalid UUID format",
   "user.unauthorized": "User is not authenticated",
-  "user.insufficient-permissions": "You do not have permission to perform this action"
+  "user.insufficient-permissions": "You do not have permission to perform this action",
+  "request.rate-limited": "Too many requests, try again in a moment"
 }

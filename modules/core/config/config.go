@@ -1,6 +1,8 @@
 package config
 
 import (
+	"time"
+
 	"josex/web/modules/core/utils"
 )
 
@@ -31,6 +33,12 @@ type CoreConfig struct {
 
 	// Rate limiting — requests per second per IP
 	RateLimitPerSecond int
+
+	// Runtime roles and Valkey (INFRA-001)
+	AppRole            string        // all | api | realtime | worker | scheduler; the -role flag wins
+	RedisURL           string        // empty = no Valkey: in-memory rate limit, no jobs
+	JobsConcurrency    int           // asynq worker goroutines
+	OutboxPollInterval time.Duration // relay fallback when a NOTIFY is missed
 }
 
 // DefaultCoreConfig returns default configuration for core module
@@ -46,6 +54,10 @@ func DefaultCoreConfig() *CoreConfig {
 		AllowedOrigins:   []string{"http://localhost:3000"},
 
 		RateLimitPerSecond: 10,
+
+		AppRole:            "all",
+		JobsConcurrency:    10,
+		OutboxPollInterval: 5 * time.Second,
 	}
 }
 
@@ -79,6 +91,12 @@ func LoadCoreConfig() *CoreConfig {
 
 		// Rate limiting - requests per second per IP
 		RateLimitPerSecond: utils.GetEnvAsInt("RATE_LIMIT_PER_SECOND", 10),
+
+		// Runtime roles and Valkey
+		AppRole:            utils.GetEnv("APP_ROLE", "all"),
+		RedisURL:           utils.GetEnv("REDIS_URL", ""),
+		JobsConcurrency:    utils.GetEnvAsInt("JOBS_CONCURRENCY", 10),
+		OutboxPollInterval: utils.GetEnvAsDuration("OUTBOX_POLL_INTERVAL", 5*time.Second),
 	}
 }
 

@@ -35,6 +35,7 @@ var (
 	sharedOnce      sync.Once
 	sharedEngine    *gin.Engine
 	sharedDBService coreServices.DatabaseService
+	sharedValkey    coreServices.ValkeyService
 )
 
 // sharedTestServer returns the process-wide router and database service,
@@ -58,10 +59,18 @@ func sharedTestServer() (*gin.Engine, coreServices.DatabaseService) {
 		gin.SetMode(gin.TestMode)
 		engine := gin.New()
 
+		// REDIS_URL in .env.test points at its own Valkey database, so the jobs
+		// tests never read the dev server's queues.
+		valkey, err := coreServices.NewValkeyService(config.ModularAppConfig.Core.RedisURL)
+		if err != nil {
+			panic(err)
+		}
+
 		coreServices.LoadAllTranslations([]string{"en", "es"})
-		routes.SetupRoutes(engine, dbService)
+		routes.SetupRoutes(engine, dbService, valkey)
 
 		sharedEngine = engine
+		sharedValkey = valkey
 		sharedDBService = dbService
 	})
 
@@ -165,6 +174,11 @@ func SetupApiTest(t *testing.T) *ApiTestHelper {
 	}
 
 	return helper
+}
+
+// Valkey returns the shared test Valkey (REDIS_URL in .env.test), nil when it is unset.
+func (h *ApiTestHelper) Valkey() coreServices.ValkeyService {
+	return sharedValkey
 }
 
 // Close is a no-op since database lifecycle is managed by testutil

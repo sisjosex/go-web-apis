@@ -61,3 +61,13 @@ services:
       - "5433:5432"
     volumes:
       - ./docker/postgres/init.sql:/docker-entrypoint-initdb.d/init.sql
+
+  # ============ VALKEY (queues, rate limit) ============
+  # AOF everysec as in prod: a restart keeps the queued jobs.
+  valkey:
+    image: valkey/valkey:8-alpine
+    restart: always
+    container_name: valkey
+    command: ["valkey-server", "--appendonly", "yes", "--appendfsync", "everysec"]
+    ports:
+      - "6379:6379"

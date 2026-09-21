@@ -1,4 +1,4 @@
-﻿package services
+package services
 
 import (
 	"context"
@@ -6,7 +6,6 @@ import (
 	"josex/web/modules/core/validators"
 	"log"
 	"net/http"
-	"os"
 	"time"
 
 	"github.com/gin-contrib/cors"
@@ -59,7 +58,9 @@ func (ws *WebServerService) setupRoutes() {
 	})
 }
 
-func (ws *WebServerService) Start(quit <-chan os.Signal) {
+// Serve listens until ctx is cancelled, then drains in-flight requests for up to 5 s and returns, so
+// the caller can stop what the handlers depend on only once no request is using it.
+func (ws *WebServerService) Serve(ctx context.Context) {
 	coreConf := config.ModularAppConfig.Core
 	srv := &http.Server{
 		Addr:    coreConf.AppHost + ":" + coreConf.AppPort,
@@ -73,14 +74,13 @@ func (ws *WebServerService) Start(quit <-chan os.Signal) {
 		}
 	}()
 
-	// Esperar señal de terminación
-	<-quit
+	<-ctx.Done()
 	log.Println("Shutting down server...")
 
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	shutdownCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 5*time.Second)
 	defer cancel()
-	if err := srv.Shutdown(ctx); err != nil {
-		log.Fatal("Server forced to shutdown:", err)
+	if err := srv.Shutdown(shutdownCtx); err != nil {
+		log.Printf("Server forced to shutdown: %v", err)
 	}
 
 	log.Println("Server exiting")

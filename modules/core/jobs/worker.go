@@ -1,0 +1,35 @@
+package jobs
+
+import (
+	"log"
+
+	coreServices "josex/web/modules/core/services"
+
+	"github.com/hibiken/asynq"
+)
+
+// Worker runs the registered handlers against the three queues.
+type Worker struct {
+	server *asynq.Server
+}
+
+// StartWorker starts processing in the background. asynq retries a Valkey that is down on its own,
+// so a worker that boots before Valkey starts working once it is reachable.
+func StartWorker(valkey coreServices.ValkeyService, registry *Registry, concurrency int) (*Worker, error) {
+	server := asynq.NewServerFromRedisClient(valkey.Client(), asynq.Config{
+		Concurrency: concurrency,
+		Queues:      queueWeights,
+		LogLevel:    asynq.WarnLevel,
+	})
+	if err := server.Start(registry.mux); err != nil {
+		return nil, err
+	}
+	log.Printf("✅ Worker started (concurrency %d, queues critical:6 default:3 low:1)", concurrency)
+	return &Worker{server: server}, nil
+}
+
+// Shutdown stops pulling tasks and waits for the ones in flight, up to asynq's shutdown timeout;
+// an unfinished task goes back to its queue and runs again elsewhere.
+func (w *Worker) Shutdown() {
+	w.server.Shutdown()
+}

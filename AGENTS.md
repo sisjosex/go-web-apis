@@ -20,7 +20,7 @@ make dev-platform | dev-tenant        # hot reload, ports 8080 / 9081
 make build                            # compile to bin/
 make gate MODULES="tracking"          # check + lint (changed code) + build + tests of MODULES, quiet
 make check-all | lint-all             # the whole-tree baseline, when asked for
-make docker-up | docker-down          # PostgreSQL containers (tests need them up)
+make docker-up | docker-down          # PostgreSQL + Valkey containers (tests need them up)
 make test-<module>                    # auth core users tenancy tracking inventory sales purchasing billing
 make test-all                         # every module (db-reset first)
 make migrate MODULE=x NAME=y          # .up.sql + .down.sql pair
@@ -40,7 +40,19 @@ Setup is human-only: copy `.env.example` → `.env.platform` / `.env.tenant`, th
 | Tenant | `cmd/server -mode=tenant` | `.env.tenant` | 9080 | core auth users tracking inventory sales purchasing |
 
 One binary, one `-mode` flag: `cmd/platform` and `cmd/tenant` have not existed for some time. The
-sibling `cmd/cli` carries `migration` (generate), `migrate` (apply, one shot) and `tenant`.
+sibling `cmd/cli` carries `migration` (generate), `migrate` (apply, one shot), `tenant` and `jobs`.
+
+**Roles (INFRA-001).** `-role` (flag > `APP_ROLE` > `all`) picks what a process runs: `api`, `worker`
+(asynq handlers + outbox relay), `scheduler` (periodic entries, fired only while it holds the
+`jobs:scheduler:lease` in Valkey), `realtime` (tenant, empty until TRACK-010). Worker and scheduler exist
+in platform mode only — they walk the tenants `tenancy.*` lists. Non-API roles serve only the probes.
+Wiring is `cmd/server/background.go`: a module adds a handler or a periodic entry in `registerJobs`,
+never in `core/jobs`. `REDIS_URL` unset ⇒ `all` is the API alone; Valkey down ⇒ the rate limit fails open
+and `/readyz` answers 200 `degraded` (503 for worker/scheduler). asynqmon is at `/admin/jobs`, super_admin.
+
+**Outbox.** A side effect that must survive a crash is a row in `tracking.outbox`, inserted by the SP that
+makes the change, in its transaction. The relay publishes it as asynq task `outbox:<topic>` (TaskID
+`<tenant>:<id>`); handle the topic in `registerJobs`. Delivery is at least once — handlers are idempotent.
 
 Main DB holds `auth.*` + `tenancy.*`; one DB per tenant holds business schemas only. JWT carries
 `user_id + session_id`; tenancy middleware resolves `tenant_id` from `X-Tenant-Slug` per request.
@@ -110,7 +122,7 @@ automatic TLS). Neither the database nor either API is reachable from outside.
 Servers run with `SKIP_MIGRATIONS=true`: migrations belong to the one-shot `migrate` /
 `migrate-tenant` jobs, which the APIs wait on (`service_completed_successfully`). Locally the servers
 still migrate on start — one replica, nothing to race with. `/livez` (always 200) and `/readyz` (200
-when the pool pings, else 503) back the healthchecks; both are registered before the CORS and rate
+when the pool pings, else 503; Valkey per role, see Roles) back the healthchecks; both are registered before the CORS and rate
 limit middleware, so a probe is never rate-limited.
 
 Nothing in the API issues `CREATE DATABASE` — the tenancy service only migrates a URL it is handed.
@@ -118,6 +130,10 @@ The tenant server's own database is created by `docker/postgres/init-extra-datab
 `POSTGRES_EXTRA_DBS`, and a per-tenant database is created by hand before `cli tenant -migrate <slug>`.
 The users module runs against tenant databases too, which carry `auth.*` but no `tenancy.*`: every
 `tenancy` reference in a `users` migration must be guarded by `to_regclass`.
+
+Valkey (AOF `everysec`, `valkeydata` volume, `VALKEY_PASSWORD`) backs `api-worker` and `api-scheduler`,
+the same image in `-role=worker|scheduler`; the two APIs run `-role=api`. A second scheduler is safe
+(lease), a second worker scales throughput.
 
 `docker/backup/README.md` has the nightly dump and the restore steps; deploy variables are at the
 bottom of `.env.example`. PITR, PgBouncer and monitoring are INFRA-004.
@@ -130,3 +146,7 @@ bottom of `.env.example`. PITR, PgBouncer and monitoring are INFRA-004.
 - A test file without `//go:build integration` is excluded and the module looks green.
 - `t.Skipf` on an unexpected status hid a 500-ing sales flow for months. Use `t.Fatalf`.
 - Module error codes are matched by exact string in the app — renaming one is an app change too.
+- Local `REDIS_URL` uses `127.0.0.1`: Docker Desktop's IPv6 forward for `localhost` can accept a
+  connection and never answer, so go-redis times out while `valkey-cli` inside the container works.
+- In `modules/tracking/tests/` a test file must sort after `helpers.go` (`helpers.go` declares package
+  `tracking_test`; an earlier `_test.go` file is read as an external test and the package fails to load).

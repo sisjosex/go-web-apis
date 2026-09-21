@@ -1,5 +1,5 @@
-# Production stack. Only Caddy publishes a host port; PostgreSQL and both APIs
-# live on the compose network alone.
+# Production stack. Only Caddy publishes a host port; PostgreSQL, Valkey, both
+# APIs, the worker and the scheduler live on the compose network alone.
 #
 # Variables come from `.env` beside this file (see .env.example → DEPLOY), the
 # per-server settings from `.env.platform` / `.env.tenant`. Both of those must
@@ -29,6 +29,23 @@ services:
       timeout: 5s
       retries: 10
       start_period: 30s
+
+  # ============ VALKEY (queues, rate limit — INFRA-001) ============
+  # Nothing here is the only copy of business data (the outbox is in PostgreSQL),
+  # but AOF everysec keeps queued jobs across a restart, losing at most a second.
+  valkey:
+    image: valkey/valkey:8-alpine
+    restart: unless-stopped
+    command: ["valkey-server", "--appendonly", "yes", "--appendfsync", "everysec", "--requirepass", "${VALKEY_PASSWORD}"]
+    volumes:
+      - valkeydata:/data
+    healthcheck:
+      test: ["CMD-SHELL", "valkey-cli -a \"$$VALKEY_PASSWORD\" --no-auth-warning ping | grep -q PONG"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    environment:
+      VALKEY_PASSWORD: ${VALKEY_PASSWORD}
 
   # ============ MIGRATE JOBS (one-shot, run before the servers) ============
   # The servers start with SKIP_MIGRATIONS=true: with more than one replica,
@@ -76,7 +93,8 @@ services:
       APP_HOST: 0.0.0.0
       APP_PORT: 8080
       SKIP_MIGRATIONS: "true"
-    command: ["./app", "-mode=platform"]
+    # The worker and the scheduler run as their own services below.
+    command: ["./app", "-mode=platform", "-role=api"]
     volumes:
       - media:/app/storage/media
     healthcheck:
@@ -102,7 +120,7 @@ services:
       APP_HOST: 0.0.0.0
       APP_PORT: 9080
       SKIP_MIGRATIONS: "true"
-    command: ["./app", "-mode=tenant"]
+    command: ["./app", "-mode=tenant", "-role=api"]
     volumes:
       - media:/app/storage/media
     healthcheck:
@@ -116,6 +134,51 @@ services:
         condition: service_healthy
       migrate-tenant:
         condition: service_completed_successfully
+
+  # ============ WORKER & SCHEDULER (INFRA-001) ============
+  # Same image, platform mode: both walk every tenant listed in the platform
+  # database. They serve only /livez and /readyz, and /readyz is 503 while
+  # Valkey is unreachable. Scale api-worker freely; any number of schedulers
+  # fire each periodic task once, since only the lease holder fires.
+  api-worker:
+    image: xanthops-api:${API_TAG:-latest}
+    restart: unless-stopped
+    env_file:
+      - .env.platform
+    environment:
+      ENV_FILE: .env.platform
+      APP_HOST: 0.0.0.0
+      APP_PORT: 8080
+      SKIP_MIGRATIONS: "true"
+    command: ["./app", "-mode=platform", "-role=worker"]
+    # asynq waits up to 8 s for the tasks in flight; the default 10 s stop grace covers it.
+    healthcheck: &probe
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8080/readyz > /dev/null || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    depends_on: &jobs-deps
+      postgres:
+        condition: service_healthy
+      valkey:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+
+  api-scheduler:
+    image: xanthops-api:${API_TAG:-latest}
+    restart: unless-stopped
+    env_file:
+      - .env.platform
+    environment:
+      ENV_FILE: .env.platform
+      APP_HOST: 0.0.0.0
+      APP_PORT: 8080
+      SKIP_MIGRATIONS: "true"
+    command: ["./app", "-mode=platform", "-role=scheduler"]
+    healthcheck: *probe
+    depends_on: *jobs-deps
 
   # ============ BACKUP ============
   # Nightly pg_dump of every database in pg_database to S3-compatible storage.
@@ -161,6 +224,7 @@ services:
 
 volumes:
   pgdata:
+  valkeydata:
   media:
   caddy_data:
   caddy_config:

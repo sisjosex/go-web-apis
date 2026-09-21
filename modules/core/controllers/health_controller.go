@@ -17,10 +17,15 @@ const readyTimeout = 2 * time.Second
 // HealthController serves the unauthenticated liveness and readiness probes.
 type HealthController struct {
 	dbService coreServices.DatabaseService
+	valkey    coreServices.ValkeyService
+	// needsValkey is true for the worker and scheduler roles, which have nothing to do without it.
+	needsValkey bool
 }
 
-func NewHealthController(dbService coreServices.DatabaseService) *HealthController {
-	return &HealthController{dbService: dbService}
+// NewHealthController takes the process's Valkey (nil when REDIS_URL is unset) and whether this
+// role cannot work without it (INFRA-001 D5).
+func NewHealthController(dbService coreServices.DatabaseService, valkey coreServices.ValkeyService, needsValkey bool) *HealthController {
+	return &HealthController{dbService: dbService, valkey: valkey, needsValkey: needsValkey}
 }
 
 // Livez reports that the process is up. It never touches a dependency: a
@@ -38,6 +43,11 @@ func (hc *HealthController) Livez(c *gin.Context) {
 // Readyz reports that the process can serve traffic — that is, that its primary
 // pool answers. InitDatabase connects in the background and retries forever, so
 // a nil pool means "still starting", which is not ready either.
+//
+// Valkey down is a 503 only for a role that needs it (worker, scheduler). The api
+// role answers 200 "degraded": REST keeps working and the rate limit fails open,
+// so taking the replica out of rotation would only turn a degradation into an
+// outage (INFRA-001 D5).
 //
 // @Summary Readiness probe
 // @Tags health
@@ -57,6 +67,20 @@ func (hc *HealthController) Readyz(c *gin.Context) {
 
 	if err := pool.Ping(ctx); err != nil {
 		c.JSON(http.StatusServiceUnavailable, gin.H{"status": "unavailable", "reason": "database unreachable"})
+		return
+	}
+
+	if hc.valkey != nil {
+		if err := hc.valkey.Ping(ctx); err != nil {
+			if hc.needsValkey {
+				c.JSON(http.StatusServiceUnavailable, gin.H{"status": "unavailable", "reason": "valkey unreachable"})
+				return
+			}
+			c.JSON(http.StatusOK, gin.H{"status": "degraded", "reason": "valkey unreachable"})
+			return
+		}
+	} else if hc.needsValkey {
+		c.JSON(http.StatusServiceUnavailable, gin.H{"status": "unavailable", "reason": "valkey not configured"})
 		return
 	}
 

@@ -13,5 +13,6 @@
   "validation.datetime": "Formato de fecha/hora inválido",
   "validation.uuid": "Formato de UUID inválido",
   "user.unauthorized": "El usuario no está autenticado",
-  "user.insufficient-permissions": "No tienes permisos para realizar esta acción"
+  "user.insufficient-permissions": "No tienes permisos para realizar esta acción",
+  "request.rate-limited": "Demasiadas solicitudes, inténtalo de nuevo en un momento"
 }
