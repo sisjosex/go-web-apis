@@ -2,6 +2,7 @@ package repositories
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"strings"
 	"time"
@@ -616,29 +617,264 @@ func (r *TrackingRepository) DeleteRoute(ctx context.Context, tenantID uuid.UUID
 	return nil
 }
 
-// ==================== ROUTE STOPS CRUD ====================
+// ==================== STOP PLACES ====================
 
-func (r *TrackingRepository) CreateRouteStop(ctx context.Context, tenantID uuid.UUID, dto *models.CreateRouteStopDto) (*models.RouteStop, error) {
-	var stop models.RouteStop
-	err := r.dbService.QueryRow(ctx, `SELECT * FROM tracking.sp_create_route_stop($1, $2, $3, $4, $5, $6, $7, $8)`,
-		tenantID, dto.RouteID, dto.StopName, dto.StopAddress, dto.Latitude, dto.Longitude, dto.SequenceOrder, dto.ScheduledTime,
-	).Scan(&stop.ID, &stop.RouteID, &stop.StopName, &stop.Address, &stop.Latitude, &stop.Longitude, &stop.StopOrder, &stop.ScheduledArrivalOffsetMinutes, &stop.CreatedAt, &stop.UpdatedAt)
-	if err != nil {
-		return nil, &trackingErrors.TrackingError{Code: trackingErrors.RouteStopCreateFailed, Err: err}
+// scanStopPlace is the one scan order every stop-place read shares — list, single and write alike.
+func scanStopPlace(sp *models.StopPlace) []any {
+	return []any{
+		&sp.ID, &sp.TenantID, &sp.OrganizationID, &sp.Name, &sp.Address,
+		&sp.Latitude, &sp.Longitude, &sp.CreatedAt, &sp.UpdatedAt,
 	}
-	return &stop, nil
 }
 
-func (r *TrackingRepository) ListRouteStops(ctx context.Context, tenantID uuid.UUID, routeID uuid.UUID, scopeUserID *uuid.UUID) ([]*models.RouteStop, error) {
-	rows, err := r.dbService.Query(ctx, `SELECT * FROM tracking.sp_list_route_stops($1, $2, $3)`, tenantID, routeID, scopeUserID)
+// mapStopPlaceError turns the SP's own codes into module codes, falling back to fallbackCode for
+// anything else. The controller maps the module code to a status.
+func mapStopPlaceError(err error, fallbackCode string) error {
+	var pgErr *pgconn.PgError
+	if errors.As(err, &pgErr) {
+		switch pgErr.Message {
+		case "stop-place.not-found":
+			return &trackingErrors.TrackingError{Code: trackingErrors.StopPlaceNotFound, Err: pgErr}
+		case "stop-place.in-use":
+			return &trackingErrors.TrackingError{Code: trackingErrors.StopPlaceInUse, Err: pgErr}
+		case "organization.not-found":
+			return &trackingErrors.TrackingError{Code: trackingErrors.OrganizationNotFound, Err: pgErr}
+		}
+	}
+	return &trackingErrors.TrackingError{Code: fallbackCode, Err: err}
+}
+
+func (r *TrackingRepository) CreateStopPlace(ctx context.Context, tenantID uuid.UUID, dto *models.CreateStopPlaceDto) (*models.StopPlace, error) {
+	var place models.StopPlace
+	err := r.dbService.QueryRow(ctx, `
+		SELECT * FROM tracking.sp_create_stop_place(
+			p_tenant_id       := $1,
+			p_name            := $2,
+			p_address         := $3,
+			p_latitude        := $4,
+			p_longitude       := $5,
+			p_organization_id := $6
+		)
+	`, tenantID, dto.Name, dto.Address, dto.Latitude, dto.Longitude, dto.OrganizationID,
+	).Scan(scanStopPlace(&place)...)
+	if err != nil {
+		return nil, mapStopPlaceError(err, trackingErrors.StopPlaceCreateFailed)
+	}
+	return &place, nil
+}
+
+func (r *TrackingRepository) UpdateStopPlace(ctx context.Context, tenantID uuid.UUID, stopPlaceID uuid.UUID, dto *models.UpdateStopPlaceDto) (*models.StopPlace, error) {
+	var place models.StopPlace
+	err := r.dbService.QueryRow(ctx, `
+		SELECT * FROM tracking.sp_update_stop_place(
+			p_tenant_id       := $1,
+			p_stop_place_id   := $2,
+			p_name            := $3,
+			p_address         := $4,
+			p_latitude        := $5,
+			p_longitude       := $6,
+			p_organization_id := $7
+		)
+	`, tenantID, stopPlaceID, dto.Name, dto.Address, dto.Latitude, dto.Longitude, dto.OrganizationID,
+	).Scan(scanStopPlace(&place)...)
+	if err != nil {
+		return nil, mapStopPlaceError(err, trackingErrors.StopPlaceUpdateFailed)
+	}
+	return &place, nil
+}
+
+// ListStopPlaces returns one page of the tenant's stop places plus the total the same filters match.
+// latitude and longitude non-nil turn it into a `near` search: every row then carries distance_m and
+// the order is nearest first.
+func (r *TrackingRepository) ListStopPlaces(ctx context.Context, tenantID uuid.UUID, query models.ListStopPlacesQuery, latitude, longitude *float64) ([]*models.StopPlace, int64, error) {
+	rows, err := r.dbService.Query(ctx, `
+		SELECT * FROM tracking.sp_list_stop_places(
+			p_tenant_id  := $1,
+			p_search     := $2,
+			p_latitude   := $3,
+			p_longitude  := $4,
+			p_radius_m   := $5,
+			p_page       := $6,
+			p_page_size  := $7
+		)
+	`, tenantID, query.Search, latitude, longitude, query.RadiusM, query.Page, query.PageSize)
+	if err != nil {
+		return nil, 0, &trackingErrors.TrackingError{Code: trackingErrors.StopPlaceListFailed, Err: err}
+	}
+	defer rows.Close()
+	places := []*models.StopPlace{}
+	var totalCount int64
+	for rows.Next() {
+		var place models.StopPlace
+		if err := rows.Scan(&place.ID, &place.TenantID, &place.OrganizationID, &place.Name, &place.Address,
+			&place.Latitude, &place.Longitude, &place.DistanceM, &place.CreatedAt, &place.UpdatedAt, &totalCount); err != nil {
+			return nil, 0, err
+		}
+		places = append(places, &place)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, 0, err
+	}
+	return places, totalCount, nil
+}
+
+func (r *TrackingRepository) GetStopPlace(ctx context.Context, tenantID uuid.UUID, stopPlaceID uuid.UUID) (*models.StopPlace, error) {
+	var place models.StopPlace
+	err := r.dbService.QueryRow(ctx, `SELECT * FROM tracking.sp_get_stop_place($1, $2)`, tenantID, stopPlaceID).
+		Scan(scanStopPlace(&place)...)
+	if err != nil {
+		return nil, mapStopPlaceError(err, trackingErrors.StopPlaceNotFound)
+	}
+	return &place, nil
+}
+
+func (r *TrackingRepository) DeleteStopPlace(ctx context.Context, tenantID uuid.UUID, stopPlaceID uuid.UUID) error {
+	var deleted bool
+	err := r.dbService.QueryRow(ctx, `SELECT tracking.sp_delete_stop_place($1, $2)`, tenantID, stopPlaceID).Scan(&deleted)
+	if err != nil {
+		return mapStopPlaceError(err, trackingErrors.StopPlaceDeleteFailed)
+	}
+	if !deleted {
+		return &trackingErrors.TrackingError{Code: trackingErrors.StopPlaceDeleteFailed}
+	}
+	return nil
+}
+
+// ==================== ROUTE VERSIONS ====================
+
+// scanRouteVersion is the one scan order every route-version read shares.
+func scanRouteVersion(v *models.RouteVersion) []any {
+	return []any{
+		&v.ID, &v.RouteID, &v.EffectiveFrom, &v.EffectiveTo, &v.StopsCount,
+		&v.CreatedBy, &v.CreatedAt, &v.UpdatedAt,
+	}
+}
+
+// mapRouteVersionError turns the SP's own codes into module codes, falling back to fallbackCode.
+func mapRouteVersionError(err error, fallbackCode string) error {
+	var pgErr *pgconn.PgError
+	if errors.As(err, &pgErr) {
+		switch pgErr.Message {
+		case "route.not-found":
+			return &trackingErrors.TrackingError{Code: trackingErrors.RouteNotFound, Err: pgErr}
+		case "route.version-not-found":
+			return &trackingErrors.TrackingError{Code: trackingErrors.RouteVersionNotFound, Err: pgErr}
+		case "route.version-overlap":
+			return &trackingErrors.TrackingError{Code: trackingErrors.RouteVersionOverlap, Err: pgErr}
+		case "route.version-closed":
+			return &trackingErrors.TrackingError{Code: trackingErrors.RouteVersionClosed, Err: pgErr}
+		case "stop-place.not-found":
+			return &trackingErrors.TrackingError{Code: trackingErrors.StopPlaceNotFound, Err: pgErr}
+		}
+	}
+	return &trackingErrors.TrackingError{Code: fallbackCode, Err: err}
+}
+
+func (r *TrackingRepository) ListRouteVersions(ctx context.Context, tenantID uuid.UUID, routeID uuid.UUID) ([]*models.RouteVersion, error) {
+	rows, err := r.dbService.Query(ctx, `SELECT * FROM tracking.sp_list_route_versions($1, $2)`, tenantID, routeID)
+	if err != nil {
+		return nil, mapRouteVersionError(err, trackingErrors.RouteVersionListFailed)
+	}
+	defer rows.Close()
+	versions := []*models.RouteVersion{}
+	for rows.Next() {
+		var version models.RouteVersion
+		if err := rows.Scan(scanRouteVersion(&version)...); err != nil {
+			return nil, err
+		}
+		versions = append(versions, &version)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, mapRouteVersionError(err, trackingErrors.RouteVersionListFailed)
+	}
+	return versions, nil
+}
+
+// CreateRouteVersion publishes the next stop list. The stops travel as one JSONB argument, so the
+// whole list is written in the same statement that closes the previous version.
+func (r *TrackingRepository) CreateRouteVersion(ctx context.Context, tenantID uuid.UUID, routeID uuid.UUID, dto *models.CreateRouteVersionDto, createdBy *uuid.UUID) (*models.RouteVersion, error) {
+	stops, err := json.Marshal(dto.Stops)
+	if err != nil {
+		return nil, &trackingErrors.TrackingError{Code: trackingErrors.RouteVersionCreateFailed, Err: err}
+	}
+	var version models.RouteVersion
+	err = r.dbService.QueryRow(ctx, `
+		SELECT * FROM tracking.sp_create_route_version(
+			p_tenant_id      := $1,
+			p_route_id       := $2,
+			p_effective_from := $3,
+			p_stops          := $4,
+			p_created_by     := $5
+		)
+	`, tenantID, routeID, time.Time(dto.EffectiveFrom), stops, createdBy,
+	).Scan(scanRouteVersion(&version)...)
+	if err != nil {
+		return nil, mapRouteVersionError(err, trackingErrors.RouteVersionCreateFailed)
+	}
+	return &version, nil
+}
+
+// ReplaceRouteVersionStops swaps the whole list in one round-trip and returns what is stored.
+func (r *TrackingRepository) ReplaceRouteVersionStops(ctx context.Context, tenantID uuid.UUID, versionID uuid.UUID, dto *models.ReplaceRouteVersionStopsDto) ([]*models.RouteStop, error) {
+	payload, err := json.Marshal(dto.Stops)
+	if err != nil {
+		return nil, &trackingErrors.TrackingError{Code: trackingErrors.RouteVersionSaveStops, Err: err}
+	}
+	rows, err := r.dbService.Query(ctx, `
+		SELECT * FROM tracking.sp_replace_route_version_stops(
+			p_tenant_id  := $1,
+			p_version_id := $2,
+			p_stops      := $3
+		)
+	`, tenantID, versionID, payload)
+	if err != nil {
+		return nil, mapRouteVersionError(err, trackingErrors.RouteVersionSaveStops)
+	}
+	defer rows.Close()
+	stops := []*models.RouteStop{}
+	for rows.Next() {
+		var stop models.RouteStop
+		if err := rows.Scan(scanRouteStop(&stop)...); err != nil {
+			return nil, err
+		}
+		stops = append(stops, &stop)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, mapRouteVersionError(err, trackingErrors.RouteVersionSaveStops)
+	}
+	return stops, nil
+}
+
+// ==================== ROUTE STOPS ====================
+
+// scanRouteStop is the one scan order every route-stop read shares, so adding a column to the SP is
+// one edit here.
+func scanRouteStop(stop *models.RouteStop) []any {
+	return []any{
+		&stop.ID, &stop.RouteID, &stop.VersionID, &stop.StopPlaceID, &stop.StopName, &stop.Address,
+		&stop.Latitude, &stop.Longitude, &stop.Sequence, &stop.PlannedOffsetMin, &stop.DwellSec,
+		&stop.CreatedAt, &stop.UpdatedAt,
+	}
+}
+
+// ListRouteStops returns the stops the route runs on date — today when it is nil (TRACK-007 D1).
+func (r *TrackingRepository) ListRouteStops(ctx context.Context, tenantID uuid.UUID, routeID uuid.UUID, date *string, scopeUserID *uuid.UUID) ([]*models.RouteStop, error) {
+	rows, err := r.dbService.Query(ctx, `
+		SELECT * FROM tracking.sp_list_route_stops(
+			p_tenant_id      := $1,
+			p_route_id       := $2,
+			p_scope_user_id  := $3,
+			p_date           := $4
+		)
+	`, tenantID, routeID, scopeUserID, date)
 	if err != nil {
 		return nil, scopedErr(err, trackingErrors.RouteStopListFailed)
 	}
 	defer rows.Close()
-	var stops []*models.RouteStop
+	stops := []*models.RouteStop{}
 	for rows.Next() {
 		var stop models.RouteStop
-		if err := rows.Scan(&stop.ID, &stop.RouteID, &stop.StopName, &stop.Address, &stop.Latitude, &stop.Longitude, &stop.StopOrder, &stop.ScheduledArrivalOffsetMinutes, &stop.CreatedAt, &stop.UpdatedAt); err != nil {
+		if err := rows.Scan(scanRouteStop(&stop)...); err != nil {
 			return nil, err
 		}
 		stops = append(stops, &stop)
@@ -647,15 +883,6 @@ func (r *TrackingRepository) ListRouteStops(ctx context.Context, tenantID uuid.U
 		return nil, scopedErr(err, trackingErrors.RouteStopListFailed)
 	}
 	return stops, nil
-}
-
-func (r *TrackingRepository) DeleteRouteStop(ctx context.Context, tenantID uuid.UUID, stopID uuid.UUID) error {
-	var deleted bool
-	err := r.dbService.QueryRow(ctx, `SELECT tracking.sp_delete_route_stop($1, $2)`, tenantID, stopID).Scan(&deleted)
-	if err != nil || !deleted {
-		return &trackingErrors.TrackingError{Code: trackingErrors.RouteStopDeleteFailed, Err: err}
-	}
-	return nil
 }
 
 // ==================== RIDERS CRUD ====================

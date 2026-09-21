@@ -60,14 +60,11 @@ const (
 	CompanyHasVehicles   = "tracking.company.has-vehicles"
 
 	// Additional resource list errors
-	VehicleListFailed     = "tracking.vehicle.list.failed"
-	RouteListFailed       = "tracking.route.list.failed"
-	RouteStopNotFound     = "tracking.route-stop.not-found"
-	RouteStopCreateFailed = "tracking.route-stop.create.failed"
-	RouteStopListFailed   = "tracking.route-stop.list.failed"
-	RouteStopDeleteFailed = "tracking.route-stop.delete.failed"
-	RiderListFailed       = "tracking.rider.list.failed"
-	AssignmentListFailed  = "tracking.assignment.list.failed"
+	VehicleListFailed    = "tracking.vehicle.list.failed"
+	RouteListFailed      = "tracking.route.list.failed"
+	RouteStopListFailed  = "tracking.route-stop.list.failed"
+	RiderListFailed      = "tracking.rider.list.failed"
+	AssignmentListFailed = "tracking.assignment.list.failed"
 
 	// Organization errors (TR0161-TR0180)
 	OrganizationNotFound     = "tracking.organization.not-found"
@@ -85,6 +82,28 @@ const (
 	OrganizationMemberUserNotFound = "tracking.organization-member.user-not-found"
 	OrganizationMemberSaveFailed   = "tracking.organization-member.save.failed"
 	OrganizationMemberListFailed   = "tracking.organization-member.list.failed"
+
+	// Route version errors (TR0241-TR0260)
+	RouteVersionNotFound     = "tracking.route.version-not-found"
+	RouteVersionCreateFailed = "tracking.route.version-create.failed"
+	RouteVersionListFailed   = "tracking.route.version-list.failed"
+	// RouteVersionOverlap refuses a version that would not start after the latest one: history is
+	// appended to, never spliced.
+	RouteVersionOverlap = "tracking.route.version-overlap"
+	// RouteVersionClosed refuses editing the stop list of a version whose first day has passed —
+	// that list is the record of what the route ran.
+	RouteVersionClosed    = "tracking.route.version-closed"
+	RouteVersionSaveStops = "tracking.route.version-stops.failed"
+
+	// Stop place errors (TR0221-TR0240)
+	StopPlaceNotFound     = "tracking.stop-place.not-found"
+	StopPlaceCreateFailed = "tracking.stop-place.create.failed"
+	StopPlaceUpdateFailed = "tracking.stop-place.update.failed"
+	StopPlaceDeleteFailed = "tracking.stop-place.delete.failed"
+	StopPlaceListFailed   = "tracking.stop-place.list.failed"
+	// StopPlaceInUse refuses a delete while a route version still names the stop place: the version
+	// is the record of what a route ran, and removing a stop from it rewrites history.
+	StopPlaceInUse = "tracking.stop-place.in-use"
 
 	// Driver errors (TR0181-TR0200)
 	DriverNotFound             = "tracking.driver.not-found"

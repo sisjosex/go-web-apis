@@ -98,6 +98,9 @@ Verified 2026-09-19 (APP-004):
 | `GET /tracking/documents` | `page page_size subject_type subject_id expiring_within_days` (cap 100) | `{ documents, total_count, page, page_size }` — every row carries `type_name`, `subject_name` and a `status` of valid/expiring/expired |
 | `GET /tracking/document-types` | `applies_to is_active` | array — the tenant's whole policy, unpaginated |
 | `GET /tracking/organizations` | `page page_size search kind is_active` (cap 100) | `{ organizations, total_count, page, page_size }` |
+| `GET /tracking/stop-places` | `page page_size search near radius_m` (cap 100) | `{ stop_places, total_count, page, page_size }` — `near=lat,lng` narrows to `radius_m` metres (default 1000), adds `distance_m` to every row and orders nearest first |
+| `GET /tracking/routes/:id/stops` | `date` (YYYY-MM-DD, default today) | array — the stops of the route version in force that day; every row carries `version_id` and `stop_place_id` |
+| `GET /tracking/routes/:id/versions` | — | array, newest first — each version with `effective_from`, `effective_to` and `stops_count` |
 | `GET /tracking/riders` | `page page_size search organization_id rider_type is_active` (cap 100) | `{ riders, total_count, page, page_size }` — every row carries `organization_name` |
 | `GET /sales/orders` | `limit offset` | `{ data }` — no total |
 | `GET /sales/customers`, the other `/tracking/*`, `/inventory/stock/:id` | filters only | array, object or `{ data }`, unpaginated |

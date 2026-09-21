@@ -135,16 +135,53 @@ func (s *TrackingService) DeleteRoute(ctx context.Context, tenantID uuid.UUID, r
 
 // ==================== ROUTE STOPS CRUD ====================
 
-func (s *TrackingService) CreateRouteStop(ctx context.Context, tenantID uuid.UUID, dto *models.CreateRouteStopDto) (*models.RouteStop, error) {
-	return s.trackingRepo.CreateRouteStop(ctx, tenantID, dto)
+// ==================== STOP PLACES ====================
+
+func (s *TrackingService) CreateStopPlace(ctx context.Context, tenantID uuid.UUID, dto *models.CreateStopPlaceDto) (*models.StopPlace, error) {
+	return s.trackingRepo.CreateStopPlace(ctx, tenantID, dto)
 }
 
-func (s *TrackingService) ListRouteStops(ctx context.Context, tenantID uuid.UUID, routeID uuid.UUID, scopeUserID *uuid.UUID) ([]*models.RouteStop, error) {
-	return s.trackingRepo.ListRouteStops(ctx, tenantID, routeID, scopeUserID)
+func (s *TrackingService) UpdateStopPlace(ctx context.Context, tenantID uuid.UUID, stopPlaceID uuid.UUID, dto *models.UpdateStopPlaceDto) (*models.StopPlace, error) {
+	return s.trackingRepo.UpdateStopPlace(ctx, tenantID, stopPlaceID, dto)
 }
 
-func (s *TrackingService) DeleteRouteStop(ctx context.Context, tenantID uuid.UUID, stopID uuid.UUID) error {
-	return s.trackingRepo.DeleteRouteStop(ctx, tenantID, stopID)
+func (s *TrackingService) ListStopPlaces(ctx context.Context, tenantID uuid.UUID, query models.ListStopPlacesQuery, latitude, longitude *float64) (*models.ListStopPlacesResponse, error) {
+	places, totalCount, err := s.trackingRepo.ListStopPlaces(ctx, tenantID, query, latitude, longitude)
+	if err != nil {
+		return nil, err
+	}
+	return &models.ListStopPlacesResponse{
+		StopPlaces: places,
+		TotalCount: totalCount,
+		Page:       query.Page,
+		PageSize:   query.PageSize,
+	}, nil
+}
+
+func (s *TrackingService) GetStopPlace(ctx context.Context, tenantID uuid.UUID, stopPlaceID uuid.UUID) (*models.StopPlace, error) {
+	return s.trackingRepo.GetStopPlace(ctx, tenantID, stopPlaceID)
+}
+
+func (s *TrackingService) DeleteStopPlace(ctx context.Context, tenantID uuid.UUID, stopPlaceID uuid.UUID) error {
+	return s.trackingRepo.DeleteStopPlace(ctx, tenantID, stopPlaceID)
+}
+
+// ==================== ROUTE VERSIONS ====================
+
+func (s *TrackingService) ListRouteVersions(ctx context.Context, tenantID uuid.UUID, routeID uuid.UUID) ([]*models.RouteVersion, error) {
+	return s.trackingRepo.ListRouteVersions(ctx, tenantID, routeID)
+}
+
+func (s *TrackingService) CreateRouteVersion(ctx context.Context, tenantID uuid.UUID, routeID uuid.UUID, dto *models.CreateRouteVersionDto, createdBy *uuid.UUID) (*models.RouteVersion, error) {
+	return s.trackingRepo.CreateRouteVersion(ctx, tenantID, routeID, dto, createdBy)
+}
+
+func (s *TrackingService) ReplaceRouteVersionStops(ctx context.Context, tenantID uuid.UUID, versionID uuid.UUID, dto *models.ReplaceRouteVersionStopsDto) ([]*models.RouteStop, error) {
+	return s.trackingRepo.ReplaceRouteVersionStops(ctx, tenantID, versionID, dto)
+}
+
+func (s *TrackingService) ListRouteStops(ctx context.Context, tenantID uuid.UUID, routeID uuid.UUID, date *string, scopeUserID *uuid.UUID) ([]*models.RouteStop, error) {
+	return s.trackingRepo.ListRouteStops(ctx, tenantID, routeID, date, scopeUserID)
 }
 
 // ==================== RIDERS CRUD ====================

@@ -68,19 +68,51 @@ type Route struct {
 	UpdatedAt                time.Time  `json:"updated_at"`
 }
 
-// RouteStop represents an intermediate stop along a route
+// StopPlace is a place a route calls at (TRACK-007 D1) — named once and shared by every route that
+// stops there, rather than duplicated per route. OrganizationID is the school or employer whose gate
+// this is, and NULL for a public corner. DistanceM rides only on the rows a `near` search returns.
+type StopPlace struct {
+	ID             uuid.UUID  `json:"id"`
+	TenantID       uuid.UUID  `json:"tenant_id"`
+	OrganizationID *uuid.UUID `json:"organization_id"`
+	Name           string     `json:"name"`
+	Address        *string    `json:"address"`
+	Latitude       *float64   `json:"latitude"`
+	Longitude      *float64   `json:"longitude"`
+	DistanceM      *float64   `json:"distance_m,omitempty"`
+	CreatedAt      time.Time  `json:"created_at"`
+	UpdatedAt      time.Time  `json:"updated_at"`
+}
+
+// RouteVersion is one route's stop list over a range of dates (TRACK-007). EffectiveTo NULL is the
+// version in force from EffectiveFrom onwards; publishing a new one closes it the day before.
+type RouteVersion struct {
+	ID            uuid.UUID            `json:"id"`
+	RouteID       uuid.UUID            `json:"route_id"`
+	EffectiveFrom coreModels.DateOnly  `json:"effective_from"`
+	EffectiveTo   *coreModels.DateOnly `json:"effective_to"`
+	StopsCount    int32                `json:"stops_count"`
+	CreatedBy     *uuid.UUID           `json:"created_by"`
+	CreatedAt     time.Time            `json:"created_at"`
+	UpdatedAt     time.Time            `json:"updated_at"`
+}
+
+// RouteStop is one stop on one version of a route: the place, where it sits in the order, and when
+// the bus is due. ID is the row in the version's list; StopPlaceID is the place it names.
 type RouteStop struct {
-	ID                            uuid.UUID `json:"id"`
-	RouteID                       uuid.UUID `json:"route_id"`
-	StopName                      string    `json:"stop_name"`
-	Address                       string    `json:"address"`
-	Latitude                      *float64  `json:"latitude"`
-	Longitude                     *float64  `json:"longitude"`
-	StopOrder                     int32     `json:"stop_order"`
-	ScheduledArrivalOffsetMinutes *int32    `json:"scheduled_arrival_offset_minutes"`
-	IsActive                      bool      `json:"is_active"`
-	CreatedAt                     time.Time `json:"created_at"`
-	UpdatedAt                     time.Time `json:"updated_at"`
+	ID               uuid.UUID `json:"id"`
+	RouteID          uuid.UUID `json:"route_id"`
+	VersionID        uuid.UUID `json:"version_id"`
+	StopPlaceID      uuid.UUID `json:"stop_place_id"`
+	StopName         string    `json:"stop_name"`
+	Address          *string   `json:"address"`
+	Latitude         *float64  `json:"latitude"`
+	Longitude        *float64  `json:"longitude"`
+	Sequence         int32     `json:"sequence"`
+	PlannedOffsetMin *int32    `json:"planned_offset_min"`
+	DwellSec         *int32    `json:"dwell_sec"`
+	CreatedAt        time.Time `json:"created_at"`
+	UpdatedAt        time.Time `json:"updated_at"`
 }
 
 // Organization represents a school or employer whose people ride (TRACK-005). Kind is the only

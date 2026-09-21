@@ -88,6 +88,9 @@ func registerJobs(registry *jobs.Registry, db services.DatabaseService, relay *j
 	if config.ModularAppConfig.Core.IsModuleEnabled("tracking") {
 		registry.Handle(trackingJobs.TaskDocumentAlerts, trackingJobs.PassHandler(db, tenantLister(db)))
 		registry.Handle(trackingJobs.TaskDocumentDigest, trackingJobs.DigestHandler(services.NewEmailService(), tenantDirectory(db)))
+		// A route's stop list changed (TRACK-007). Registered now so the rows are consumed rather
+		// than retried forever; TRACK-008 rebuilds the affected trips from here.
+		registry.Handle(trackingJobs.TaskRouteChanged, trackingJobs.RouteChangedHandler())
 		registry.Schedule(jobs.Entry{
 			Cron: trackingJobs.DocumentAlertsCron, Period: daily,
 			Task: asynq.NewTask(trackingJobs.TaskDocumentAlerts, nil),

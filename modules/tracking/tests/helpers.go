@@ -43,11 +43,16 @@ const (
 	MorningRouteID   = "11111111-1111-1111-1111-111111111111"
 	AfternoonRouteID = "22222222-2222-2222-2222-222222222222"
 
-	// Route Stops
+	// Stop places (TRACK-007). Both seeded routes call at Central Station and at School B —
+	// the same two rows, which is the point of the table.
 	CentralStationID   = "33333333-3333-3333-3333-333333333333"
 	SchoolAStopID      = "44444444-4444-4444-4444-444444444444"
 	SchoolBStopID      = "55555555-5555-5555-5555-555555555555"
 	DowntownTerminalID = "66666666-6666-6666-6666-666666666666"
+
+	// Route versions — one open-ended version per seeded route, in force since 2026-01-01.
+	MorningVersionID   = "a0000000-0000-0000-0000-000000000001"
+	AfternoonVersionID = "a0000000-0000-0000-0000-000000000002"
 
 	// Assignments
 	JohnMorningAssignmentID   = "77777777-7777-7777-7777-777777777777"
@@ -365,20 +370,110 @@ func uuidPtr(u uuid.UUID) *uuid.UUID {
 }
 
 // ============================================================================
-// ROUTE STOP TEST BUILDERS
+// STOP PLACE AND ROUTE VERSION HELPERS (TRACK-007)
 // ============================================================================
 
-// ValidRouteStopDto returns a valid route stop DTO
-func ValidRouteStopDto() models.CreateRouteStopDto {
-	routeID := uuid.MustParse(MorningRouteID)
-	return models.CreateRouteStopDto{
-		RouteID:       routeID,
-		StopName:      "Test Stop " + uuid.New().String()[:8],
-		StopAddress:   "123 Test Address",
-		Latitude:      40.7128,
-		Longitude:     -74.0060,
-		SequenceOrder: 1,
+// ValidStopPlaceBody returns a create-stop-place body a few metres from the seeded Central Station,
+// so a `near` search over that point finds it too.
+func ValidStopPlaceBody() map[string]interface{} {
+	return map[string]interface{}{
+		"name":      "Test Stop " + uuid.New().String()[:8],
+		"address":   "123 Test Address",
+		"latitude":  40.7129,
+		"longitude": -74.0061,
 	}
+}
+
+// CreateTestStopPlace creates a stop place and returns its id.
+func CreateTestStopPlace(t *testing.T, helper *testhelpers.ApiTestHelper) string {
+	t.Helper()
+
+	w := helper.DoRequest("POST", "/tracking/stop-places", ValidStopPlaceBody(), map[string]string{})
+	if w.Code != http.StatusCreated {
+		t.Fatalf("create stop place: expected 201, got %d: %s", w.Code, w.Body.String())
+	}
+	return ExtractID(t, ParseResponse(t, w.Body.Bytes()))
+}
+
+// ListStopPlaces calls the paged stop-places endpoint and decodes its envelope.
+// query is the raw query string including its leading "?", or "".
+func ListStopPlaces(t *testing.T, helper *testhelpers.ApiTestHelper, query string) models.ListStopPlacesResponse {
+	t.Helper()
+
+	w := helper.DoRequest("GET", "/tracking/stop-places"+query, nil, map[string]string{})
+	if w.Code != http.StatusOK {
+		t.Fatalf("list stop places %q returned %d: %s", query, w.Code, w.Body.String())
+	}
+
+	var result models.ListStopPlacesResponse
+	if err := json.Unmarshal(w.Body.Bytes(), &result); err != nil {
+		t.Fatalf("list stop places %q returned invalid JSON: %v — %s", query, err, w.Body.String())
+	}
+	return result
+}
+
+// ListRouteStops reads the stops a route runs on a date; query is the raw query string including
+// its leading "?", or "".
+func ListRouteStops(t *testing.T, helper *testhelpers.ApiTestHelper, routeID, query string) []map[string]interface{} {
+	t.Helper()
+
+	w := helper.DoRequest("GET", "/tracking/routes/"+routeID+"/stops"+query, nil, map[string]string{})
+	if w.Code != http.StatusOK {
+		t.Fatalf("list route stops %q returned %d: %s", query, w.Code, w.Body.String())
+	}
+	return ParseListResponse(t, w.Body.Bytes())
+}
+
+// CreateTestRoute creates a route on the seeded carrier and returns its id. A fresh route carries
+// no versions, so a test that publishes one is independent of the seed and of every other test.
+func CreateTestRoute(t *testing.T, helper *testhelpers.ApiTestHelper) string {
+	t.Helper()
+
+	dto := ValidRouteDto()
+	w := helper.DoRequest("POST", "/tracking/routes", map[string]interface{}{
+		"company_id":          dto.CompanyID,
+		"route_name":          dto.RouteName,
+		"origin_address":      dto.OriginAddress,
+		"destination_address": dto.DestinationAddress,
+	}, map[string]string{})
+	if w.Code != http.StatusCreated {
+		t.Fatalf("create route: expected 201, got %d: %s", w.Code, w.Body.String())
+	}
+	return ExtractID(t, ParseResponse(t, w.Body.Bytes()))
+}
+
+// ListRouteVersions reads a route's versions, newest first.
+func ListRouteVersions(t *testing.T, helper *testhelpers.ApiTestHelper, routeID string) []map[string]interface{} {
+	t.Helper()
+
+	w := helper.DoRequest("GET", "/tracking/routes/"+routeID+"/versions", nil, map[string]string{})
+	if w.Code != http.StatusOK {
+		t.Fatalf("list route versions returned %d: %s", w.Code, w.Body.String())
+	}
+	return ParseListResponse(t, w.Body.Bytes())
+}
+
+// PublishRouteVersion publishes a version on a route and returns its id.
+func PublishRouteVersion(t *testing.T, helper *testhelpers.ApiTestHelper, routeID, effectiveFrom string, stops []map[string]interface{}) string {
+	t.Helper()
+
+	w := helper.DoRequest("POST", "/tracking/routes/"+routeID+"/versions", map[string]interface{}{
+		"effective_from": effectiveFrom,
+		"stops":          stops,
+	}, map[string]string{})
+	if w.Code != http.StatusCreated {
+		t.Fatalf("publish route version: expected 201, got %d: %s", w.Code, w.Body.String())
+	}
+	return ExtractID(t, ParseResponse(t, w.Body.Bytes()))
+}
+
+// StopNames is the ordered names of a route-stop list, which is what an ordering assertion is about.
+func StopNames(rows []map[string]interface{}) []string {
+	names := make([]string, 0, len(rows))
+	for _, row := range rows {
+		names = append(names, row["stop_name"].(string))
+	}
+	return names
 }
 
 // ============================================================================

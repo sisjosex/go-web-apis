@@ -1,6 +1,10 @@
 package models
 
 import (
+	"errors"
+	"strconv"
+	"strings"
+
 	coreModels "josex/web/modules/core/models"
 
 	"github.com/google/uuid"
@@ -305,17 +309,97 @@ type UpdateRouteDto struct {
 	IsActive                 *bool      `json:"is_active"`
 }
 
+// === DTOs for Route Versions (TRACK-007) ===
+
+// RouteVersionStopDto is one line of the editor's list. Sequence is a sort key, not the stored
+// number: the SP renumbers the list 1..n in the order asked for, so a reorder is one request and
+// cannot collide with itself halfway through.
+type RouteVersionStopDto struct {
+	StopPlaceID      uuid.UUID `json:"stop_place_id" binding:"required,uuidv4"`
+	Sequence         int32     `json:"sequence" binding:"required,min=1"`
+	PlannedOffsetMin *int32    `json:"planned_offset_min" binding:"omitempty,min=0,max=1440"`
+	DwellSec         *int32    `json:"dwell_sec" binding:"omitempty,min=0,max=3600"`
+}
+
+// CreateRouteVersionDto publishes a route's next stop list. The version in force is closed the day
+// before EffectiveFrom, so the two cover the calendar without a gap.
+type CreateRouteVersionDto struct {
+	EffectiveFrom coreModels.DateOnly   `json:"effective_from" binding:"required" time_format:"2006-01-02"`
+	Stops         []RouteVersionStopDto `json:"stops" binding:"omitempty,dive"`
+}
+
+// ReplaceRouteVersionStopsDto is the body of PUT …/versions/:vid/stops — the whole list, every time.
+type ReplaceRouteVersionStopsDto struct {
+	Stops []RouteVersionStopDto `json:"stops" binding:"omitempty,dive"`
+}
+
+// === DTOs for Stop Places (TRACK-007) ===
+
+// CreateStopPlaceDto represents request to create a stop place. Latitude and longitude are pointers
+// so that 0 — the equator and the prime meridian — is a coordinate and not an absent field.
+type CreateStopPlaceDto struct {
+	Name           string     `json:"name" binding:"required,min=2,max=255" conform:"trim"`
+	Address        *string    `json:"address" binding:"omitempty,max=500" conform:"trim"`
+	Latitude       *float64   `json:"latitude" binding:"required,min=-90,max=90"`
+	Longitude      *float64   `json:"longitude" binding:"required,min=-180,max=180"`
+	OrganizationID *uuid.UUID `json:"organization_id" binding:"omitempty,uuidv4"`
+}
+
+// UpdateStopPlaceDto represents request to edit a stop place. Every field is optional: the SP keeps
+// what it is not sent, and the coordinate moves only when both halves arrive.
+type UpdateStopPlaceDto struct {
+	Name           *string    `json:"name" binding:"omitempty,min=2,max=255" conform:"trim"`
+	Address        *string    `json:"address" binding:"omitempty,max=500" conform:"trim"`
+	Latitude       *float64   `json:"latitude" binding:"omitempty,min=-90,max=90"`
+	Longitude      *float64   `json:"longitude" binding:"omitempty,min=-180,max=180"`
+	OrganizationID *uuid.UUID `json:"organization_id" binding:"omitempty,uuidv4"`
+}
+
+// ListStopPlacesQuery binds GET /tracking/stop-places. `near=lat,lng` turns the list into the stop
+// places within `radius_m` of that point, nearest first, each carrying distance_m.
+type ListStopPlacesQuery struct {
+	Search   string  `form:"search"`
+	Near     *string `form:"near"`
+	RadiusM  *int32  `form:"radius_m" binding:"omitempty,min=1,max=100000"`
+	Page     int     `form:"page,default=1" binding:"min=1"`
+	PageSize int     `form:"page_size,default=20" binding:"min=1,max=100"`
+}
+
+// ErrInvalidNear is what NearPoint returns for a `near` the handler cannot read as a coordinate.
+var ErrInvalidNear = errors.New("near must be `latitude,longitude` within (-90..90, -180..180)")
+
+// NearPoint reads the `near` parameter. It answers (nil, nil, nil) when the caller did not send one,
+// so the same call covers both shapes of the list.
+func (q ListStopPlacesQuery) NearPoint() (latitude, longitude *float64, err error) {
+	if q.Near == nil || strings.TrimSpace(*q.Near) == "" {
+		return nil, nil, nil
+	}
+	parts := strings.Split(*q.Near, ",")
+	if len(parts) != 2 {
+		return nil, nil, ErrInvalidNear
+	}
+	lat, latErr := strconv.ParseFloat(strings.TrimSpace(parts[0]), 64)
+	lng, lngErr := strconv.ParseFloat(strings.TrimSpace(parts[1]), 64)
+	if latErr != nil || lngErr != nil || lat < -90 || lat > 90 || lng < -180 || lng > 180 {
+		return nil, nil, ErrInvalidNear
+	}
+	return &lat, &lng, nil
+}
+
+type ListStopPlacesResponse struct {
+	StopPlaces []*StopPlace `json:"stop_places"`
+	TotalCount int64        `json:"total_count"`
+	Page       int          `json:"page"`
+	PageSize   int          `json:"page_size"`
+}
+
 // === DTOs for Route Stop Management ===
 
-// CreateRouteStopDto represents request to create route stop
-type CreateRouteStopDto struct {
-	RouteID       uuid.UUID `json:"route_id" binding:"required,uuidv4"`
-	StopName      string    `json:"stop_name" binding:"required,min=3,max=255" conform:"trim"`
-	StopAddress   string    `json:"stop_address" binding:"required,min=5,max=500" conform:"trim"`
-	Latitude      float64   `json:"latitude" binding:"required,min=-90,max=90"`
-	Longitude     float64   `json:"longitude" binding:"required,min=-180,max=180"`
-	SequenceOrder int32     `json:"sequence_order" binding:"required,min=1"`
-	ScheduledTime *string   `json:"scheduled_time" binding:"omitempty"` // HH:MM:SS
+// ListRouteStopsQuery binds GET /tracking/routes/:route_id/stops (TRACK-007 D1). Date picks the day
+// whose list is wanted; unset means today, which is what every caller that does not care about
+// history sends.
+type ListRouteStopsQuery struct {
+	Date *string `form:"date" binding:"omitempty,datetime=2006-01-02"`
 }
 
 // === DTOs for Rider Assignment ===

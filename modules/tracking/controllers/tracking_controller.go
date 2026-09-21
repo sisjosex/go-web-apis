@@ -118,6 +118,24 @@ func (ctrl *TrackingController) guardianUserID(c *gin.Context) *uuid.UUID {
 	return &userID
 }
 
+// actingUserID is the signed-in user a write is recorded against. It is read from the context the
+// auth middleware filled, never from the body.
+func (ctrl *TrackingController) actingUserID(c *gin.Context) *uuid.UUID {
+	raw, exists := c.Get("user_id")
+	if !exists {
+		return nil
+	}
+	if userID, ok := raw.(uuid.UUID); ok {
+		return &userID
+	}
+	if str, ok := raw.(string); ok {
+		if userID, err := uuid.Parse(str); err == nil {
+			return &userID
+		}
+	}
+	return nil
+}
+
 // scopeRefused answers 403 when the caller's access level is organization but they belong to no
 // organization in this tenant — a misconfigured account, not an empty result. It reports whether it
 // has already written the response.
@@ -966,49 +984,372 @@ func (ctrl *TrackingController) DeleteRoute(c *gin.Context) {
 	c.Status(http.StatusNoContent)
 }
 
-// ==================== ROUTE STOPS CRUD ====================
+// ==================== ROUTE VERSIONS ====================
 
-// CreateRouteStop godoc
-// @Summary Create route stop
-// @Description Add a new stop to a route
-// @Tags Tracking - Route Stops
-// @Accept json
+// routeVersionErrorResponse maps the route-version codes to statuses and reports whether it has
+// already written the response.
+func routeVersionErrorResponse(c *gin.Context, err error) bool {
+	var trackingErr *trackingErrors.TrackingError
+	if !errors.As(err, &trackingErr) {
+		return false
+	}
+	switch trackingErr.Code {
+	case trackingErrors.RouteNotFound, trackingErrors.RouteVersionNotFound, trackingErrors.StopPlaceNotFound:
+		c.JSON(http.StatusNotFound, coreErrors.BuildErrorSingle(c, trackingErr.Code))
+		return true
+	case trackingErrors.RouteVersionOverlap, trackingErrors.RouteVersionClosed:
+		c.JSON(http.StatusConflict, coreErrors.BuildErrorSingle(c, trackingErr.Code))
+		return true
+	}
+	return false
+}
+
+// ListRouteVersions godoc
+// @Summary List a route's stop lists over time
+// @Description Every version of the route's stop list, newest first, each with how many stops it holds
+// @Tags Tracking - Route Versions
 // @Produce json
 // @Security BearerAuth
-// @Param stop body models.CreateRouteStopDto true "Route stop data"
-// @Success 201 {object} models.RouteStop
+// @Param route_id path string true "Route ID (UUID)"
+// @Success 200 {array} models.RouteVersion
 // @Failure 400 {object} coreErrors.ErrorResponse
+// @Failure 404 {object} coreErrors.ErrorResponse
 // @Failure 500 {object} coreErrors.ErrorResponse
-// @Router /tracking/route-stops [post]
-func (ctrl *TrackingController) CreateRouteStop(c *gin.Context) {
+// @Router /tracking/routes/{route_id}/versions [get]
+func (ctrl *TrackingController) ListRouteVersions(c *gin.Context) {
 	tenantID, ok := ctrl.requireTenantID(c)
 	if !ok {
 		return
 	}
 
-	var dto models.CreateRouteStopDto
-	if err := c.ShouldBindJSON(&dto); err != nil {
-		c.JSON(http.StatusBadRequest, coreErrors.BuildErrorDetail(c, trackingErrors.RouteStopCreateFailed, utils.ExtractValidationError(c, err)))
+	routeID, err := uuid.Parse(c.Param("route_id"))
+	if err != nil {
+		c.JSON(http.StatusBadRequest, coreErrors.BuildErrorSingle(c, coreErrors.InvalidUUID))
 		return
 	}
-	conform.Strings(&dto)
-	stop, err := ctrl.trackingService.CreateRouteStop(c.Request.Context(), tenantID, &dto)
+
+	versions, err := ctrl.trackingService.ListRouteVersions(c.Request.Context(), tenantID, routeID)
+	if err != nil {
+		if routeVersionErrorResponse(c, err) {
+			return
+		}
+		c.JSON(http.StatusInternalServerError, coreErrors.BuildError(c, err))
+		return
+	}
+	c.JSON(http.StatusOK, versions)
+}
+
+// CreateRouteVersion godoc
+// @Summary Publish a route's next stop list
+// @Description Publishes a new version from `effective_from`, closing the one in force the day before
+// @Tags Tracking - Route Versions
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param route_id path string true "Route ID (UUID)"
+// @Param version body models.CreateRouteVersionDto true "The date the list takes effect and the stops on it"
+// @Success 201 {object} models.RouteVersion
+// @Failure 400 {object} coreErrors.ErrorResponse
+// @Failure 404 {object} coreErrors.ErrorResponse
+// @Failure 409 {object} coreErrors.ErrorResponse
+// @Failure 500 {object} coreErrors.ErrorResponse
+// @Router /tracking/routes/{route_id}/versions [post]
+func (ctrl *TrackingController) CreateRouteVersion(c *gin.Context) {
+	tenantID, ok := ctrl.requireTenantID(c)
+	if !ok {
+		return
+	}
+
+	routeID, err := uuid.Parse(c.Param("route_id"))
+	if err != nil {
+		c.JSON(http.StatusBadRequest, coreErrors.BuildErrorSingle(c, coreErrors.InvalidUUID))
+		return
+	}
+	var dto models.CreateRouteVersionDto
+	if err := c.ShouldBindJSON(&dto); err != nil {
+		c.JSON(http.StatusBadRequest, coreErrors.BuildErrorDetail(c, trackingErrors.RouteVersionCreateFailed, utils.ExtractValidationError(c, err)))
+		return
+	}
+
+	version, err := ctrl.trackingService.CreateRouteVersion(c.Request.Context(), tenantID, routeID, &dto, ctrl.actingUserID(c))
+	if err != nil {
+		if routeVersionErrorResponse(c, err) {
+			return
+		}
+		c.JSON(http.StatusInternalServerError, coreErrors.BuildError(c, err))
+		return
+	}
+	c.JSON(http.StatusCreated, version)
+}
+
+// ReplaceRouteVersionStops godoc
+// @Summary Replace a route version's whole stop list
+// @Description One request replaces the list, so a reorder never renumbers rows one at a time; refused once the version's first day has passed
+// @Tags Tracking - Route Versions
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param route_id path string true "Route ID (UUID)"
+// @Param version_id path string true "Route version ID (UUID)"
+// @Param stops body models.ReplaceRouteVersionStopsDto true "The whole list, in the order it runs"
+// @Success 200 {array} models.RouteStop
+// @Failure 400 {object} coreErrors.ErrorResponse
+// @Failure 404 {object} coreErrors.ErrorResponse
+// @Failure 409 {object} coreErrors.ErrorResponse
+// @Failure 500 {object} coreErrors.ErrorResponse
+// @Router /tracking/routes/{route_id}/versions/{version_id}/stops [put]
+func (ctrl *TrackingController) ReplaceRouteVersionStops(c *gin.Context) {
+	tenantID, ok := ctrl.requireTenantID(c)
+	if !ok {
+		return
+	}
+
+	versionID, err := uuid.Parse(c.Param("version_id"))
+	if err != nil {
+		c.JSON(http.StatusBadRequest, coreErrors.BuildErrorSingle(c, coreErrors.InvalidUUID))
+		return
+	}
+	var dto models.ReplaceRouteVersionStopsDto
+	if err := c.ShouldBindJSON(&dto); err != nil {
+		c.JSON(http.StatusBadRequest, coreErrors.BuildErrorDetail(c, trackingErrors.RouteVersionSaveStops, utils.ExtractValidationError(c, err)))
+		return
+	}
+
+	stops, err := ctrl.trackingService.ReplaceRouteVersionStops(c.Request.Context(), tenantID, versionID, &dto)
+	if err != nil {
+		if routeVersionErrorResponse(c, err) {
+			return
+		}
+		c.JSON(http.StatusInternalServerError, coreErrors.BuildError(c, err))
+		return
+	}
+	c.JSON(http.StatusOK, stops)
+}
+
+// ==================== STOP PLACES ====================
+
+// stopPlaceErrorResponse maps the stop-place codes to statuses and reports whether it has already
+// written the response.
+func stopPlaceErrorResponse(c *gin.Context, err error) bool {
+	var trackingErr *trackingErrors.TrackingError
+	if !errors.As(err, &trackingErr) {
+		return false
+	}
+	switch trackingErr.Code {
+	case trackingErrors.StopPlaceNotFound, trackingErrors.OrganizationNotFound:
+		c.JSON(http.StatusNotFound, coreErrors.BuildErrorSingle(c, trackingErr.Code))
+		return true
+	case trackingErrors.StopPlaceInUse:
+		c.JSON(http.StatusConflict, coreErrors.BuildErrorSingle(c, trackingErr.Code))
+		return true
+	}
+	return false
+}
+
+// CreateStopPlace godoc
+// @Summary Create stop place
+// @Description Create a place routes can call at; one row shared by every route that stops there (TRACK-007 D1)
+// @Tags Tracking - Stop Places
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param stop_place body models.CreateStopPlaceDto true "Stop place data"
+// @Success 201 {object} models.StopPlace
+// @Failure 400 {object} coreErrors.ErrorResponse
+// @Failure 404 {object} coreErrors.ErrorResponse
+// @Failure 500 {object} coreErrors.ErrorResponse
+// @Router /tracking/stop-places [post]
+func (ctrl *TrackingController) CreateStopPlace(c *gin.Context) {
+	tenantID, ok := ctrl.requireTenantID(c)
+	if !ok {
+		return
+	}
+
+	var dto models.CreateStopPlaceDto
+	if err := c.ShouldBindJSON(&dto); err != nil {
+		c.JSON(http.StatusBadRequest, coreErrors.BuildErrorDetail(c, trackingErrors.StopPlaceCreateFailed, utils.ExtractValidationError(c, err)))
+		return
+	}
+	_ = conform.Strings(&dto)
+
+	place, err := ctrl.trackingService.CreateStopPlace(c.Request.Context(), tenantID, &dto)
+	if err != nil {
+		if stopPlaceErrorResponse(c, err) {
+			return
+		}
+		c.JSON(http.StatusInternalServerError, coreErrors.BuildError(c, err))
+		return
+	}
+	c.JSON(http.StatusCreated, place)
+}
+
+// UpdateStopPlace godoc
+// @Summary Update stop place
+// @Description Edit a stop place; every field is optional and the coordinate moves only when both halves are sent
+// @Tags Tracking - Stop Places
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param stop_place_id path string true "Stop place ID (UUID)"
+// @Param stop_place body models.UpdateStopPlaceDto true "Updated stop place data"
+// @Success 200 {object} models.StopPlace
+// @Failure 400 {object} coreErrors.ErrorResponse
+// @Failure 404 {object} coreErrors.ErrorResponse
+// @Failure 500 {object} coreErrors.ErrorResponse
+// @Router /tracking/stop-places/{stop_place_id} [patch]
+func (ctrl *TrackingController) UpdateStopPlace(c *gin.Context) {
+	tenantID, ok := ctrl.requireTenantID(c)
+	if !ok {
+		return
+	}
+
+	stopPlaceID, err := uuid.Parse(c.Param("stop_place_id"))
+	if err != nil {
+		c.JSON(http.StatusBadRequest, coreErrors.BuildErrorSingle(c, coreErrors.InvalidUUID))
+		return
+	}
+	var dto models.UpdateStopPlaceDto
+	if err := c.ShouldBindJSON(&dto); err != nil {
+		c.JSON(http.StatusBadRequest, coreErrors.BuildErrorDetail(c, trackingErrors.StopPlaceUpdateFailed, utils.ExtractValidationError(c, err)))
+		return
+	}
+	_ = conform.Strings(&dto)
+
+	place, err := ctrl.trackingService.UpdateStopPlace(c.Request.Context(), tenantID, stopPlaceID, &dto)
+	if err != nil {
+		if stopPlaceErrorResponse(c, err) {
+			return
+		}
+		c.JSON(http.StatusInternalServerError, coreErrors.BuildError(c, err))
+		return
+	}
+	c.JSON(http.StatusOK, place)
+}
+
+// ListStopPlaces godoc
+// @Summary List stop places
+// @Description One page of the tenant's stop places by name, or — with `near` — the ones within `radius_m` of a point, nearest first and each carrying `distance_m`
+// @Tags Tracking - Stop Places
+// @Produce json
+// @Security BearerAuth
+// @Param search query string false "Match against the name"
+// @Param near query string false "A point as `latitude,longitude`; turns the list into a proximity search"
+// @Param radius_m query int false "How far from `near` to look, in metres" default(1000)
+// @Param page query int false "Page number, 1-based" default(1)
+// @Param page_size query int false "Rows per page, max 100" default(20)
+// @Success 200 {object} models.ListStopPlacesResponse
+// @Failure 400 {object} coreErrors.ErrorResponse
+// @Failure 500 {object} coreErrors.ErrorResponse
+// @Router /tracking/stop-places [get]
+func (ctrl *TrackingController) ListStopPlaces(c *gin.Context) {
+	tenantID, ok := ctrl.requireTenantID(c)
+	if !ok {
+		return
+	}
+
+	var query models.ListStopPlacesQuery
+	if err := c.ShouldBindQuery(&query); err != nil {
+		c.JSON(http.StatusBadRequest, coreErrors.BuildErrorDetail(c, "validation.invalid", err.Error()))
+		return
+	}
+	query.Search = strings.TrimSpace(query.Search)
+	latitude, longitude, err := query.NearPoint()
+	if err != nil {
+		c.JSON(http.StatusBadRequest, coreErrors.BuildErrorDetail(c, "validation.invalid", err.Error()))
+		return
+	}
+
+	result, err := ctrl.trackingService.ListStopPlaces(c.Request.Context(), tenantID, query, latitude, longitude)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, coreErrors.BuildError(c, err))
 		return
 	}
-	c.JSON(http.StatusCreated, stop)
+	c.JSON(http.StatusOK, result)
 }
 
+// GetStopPlace godoc
+// @Summary Get stop place by ID
+// @Description Get a single stop place by ID
+// @Tags Tracking - Stop Places
+// @Produce json
+// @Security BearerAuth
+// @Param stop_place_id path string true "Stop place ID (UUID)"
+// @Success 200 {object} models.StopPlace
+// @Failure 400 {object} coreErrors.ErrorResponse
+// @Failure 404 {object} coreErrors.ErrorResponse
+// @Failure 500 {object} coreErrors.ErrorResponse
+// @Router /tracking/stop-places/{stop_place_id} [get]
+func (ctrl *TrackingController) GetStopPlace(c *gin.Context) {
+	tenantID, ok := ctrl.requireTenantID(c)
+	if !ok {
+		return
+	}
+
+	stopPlaceID, err := uuid.Parse(c.Param("stop_place_id"))
+	if err != nil {
+		c.JSON(http.StatusBadRequest, coreErrors.BuildErrorSingle(c, coreErrors.InvalidUUID))
+		return
+	}
+
+	place, err := ctrl.trackingService.GetStopPlace(c.Request.Context(), tenantID, stopPlaceID)
+	if err != nil {
+		if stopPlaceErrorResponse(c, err) {
+			return
+		}
+		c.JSON(http.StatusInternalServerError, coreErrors.BuildError(c, err))
+		return
+	}
+	c.JSON(http.StatusOK, place)
+}
+
+// DeleteStopPlace godoc
+// @Summary Delete stop place
+// @Description Delete a stop place; refused while any route version still names it
+// @Tags Tracking - Stop Places
+// @Security BearerAuth
+// @Param stop_place_id path string true "Stop place ID (UUID)"
+// @Success 204 "No Content"
+// @Failure 400 {object} coreErrors.ErrorResponse
+// @Failure 404 {object} coreErrors.ErrorResponse
+// @Failure 409 {object} coreErrors.ErrorResponse
+// @Failure 500 {object} coreErrors.ErrorResponse
+// @Router /tracking/stop-places/{stop_place_id} [delete]
+func (ctrl *TrackingController) DeleteStopPlace(c *gin.Context) {
+	tenantID, ok := ctrl.requireTenantID(c)
+	if !ok {
+		return
+	}
+
+	stopPlaceID, err := uuid.Parse(c.Param("stop_place_id"))
+	if err != nil {
+		c.JSON(http.StatusBadRequest, coreErrors.BuildErrorSingle(c, coreErrors.InvalidUUID))
+		return
+	}
+
+	if err := ctrl.trackingService.DeleteStopPlace(c.Request.Context(), tenantID, stopPlaceID); err != nil {
+		if stopPlaceErrorResponse(c, err) {
+			return
+		}
+		c.JSON(http.StatusInternalServerError, coreErrors.BuildError(c, err))
+		return
+	}
+	c.Status(http.StatusNoContent)
+}
+
+// ==================== ROUTE STOPS ====================
+
 // ListRouteStops godoc
-// @Summary List route stops
-// @Description Get all stops for a route in order
+// @Summary List the stops a route runs on a date
+// @Description The ordered stops of the route version in force on `date` — today when it is unset (TRACK-007 D1)
 // @Tags Tracking - Route Stops
 // @Produce json
 // @Security BearerAuth
 // @Param route_id path string true "Route ID (UUID)"
+// @Param date query string false "The day whose list is wanted (YYYY-MM-DD); defaults to today"
 // @Success 200 {array} models.RouteStop
 // @Failure 400 {object} coreErrors.ErrorResponse
+// @Failure 403 {object} coreErrors.ErrorResponse
+// @Failure 404 {object} coreErrors.ErrorResponse
 // @Failure 500 {object} coreErrors.ErrorResponse
 // @Router /tracking/routes/{route_id}/stops [get]
 func (ctrl *TrackingController) ListRouteStops(c *gin.Context) {
@@ -1022,7 +1363,13 @@ func (ctrl *TrackingController) ListRouteStops(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, coreErrors.BuildErrorSingle(c, coreErrors.InvalidUUID))
 		return
 	}
-	stops, err := ctrl.trackingService.ListRouteStops(c.Request.Context(), tenantID, routeID, ctrl.scopeUserID(c))
+	var query models.ListRouteStopsQuery
+	if err := c.ShouldBindQuery(&query); err != nil {
+		c.JSON(http.StatusBadRequest, coreErrors.BuildErrorDetail(c, "validation.invalid", err.Error()))
+		return
+	}
+
+	stops, err := ctrl.trackingService.ListRouteStops(c.Request.Context(), tenantID, routeID, query.Date, ctrl.scopeUserID(c))
 	if err != nil {
 		if scopeRefused(c, err) {
 			return
@@ -1036,41 +1383,6 @@ func (ctrl *TrackingController) ListRouteStops(c *gin.Context) {
 		return
 	}
 	c.JSON(http.StatusOK, stops)
-}
-
-// DeleteRouteStop godoc
-// @Summary Delete route stop
-// @Description Remove a stop from a route
-// @Tags Tracking - Route Stops
-// @Security BearerAuth
-// @Param id path string true "Route Stop ID (UUID)"
-// @Success 204 "No Content"
-// @Failure 400 {object} coreErrors.ErrorResponse
-// @Failure 404 {object} coreErrors.ErrorResponse
-// @Failure 500 {object} coreErrors.ErrorResponse
-// @Router /tracking/route-stops/{id} [delete]
-func (ctrl *TrackingController) DeleteRouteStop(c *gin.Context) {
-	tenantID, ok := ctrl.requireTenantID(c)
-	if !ok {
-		return
-	}
-
-	stopID, err := uuid.Parse(c.Param("stop_id"))
-	if err != nil {
-		c.JSON(http.StatusBadRequest, coreErrors.BuildErrorSingle(c, coreErrors.InvalidUUID))
-		return
-	}
-	err = ctrl.trackingService.DeleteRouteStop(c.Request.Context(), tenantID, stopID)
-	if err != nil {
-		var trackingErr *trackingErrors.TrackingError
-		if errors.As(err, &trackingErr) && trackingErr.Code == trackingErrors.RouteStopNotFound {
-			c.JSON(http.StatusNotFound, coreErrors.BuildError(c, err))
-			return
-		}
-		c.JSON(http.StatusInternalServerError, coreErrors.BuildError(c, err))
-		return
-	}
-	c.Status(http.StatusNoContent)
 }
 
 // ==================== RIDERS CRUD ====================

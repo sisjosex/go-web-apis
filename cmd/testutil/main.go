@@ -164,14 +164,19 @@ func seedDatabase() {
 	}
 }
 
+// execSQL runs one statement through psql against the server DATABASE_URL names. Host and port are
+// passed explicitly: without them psql falls back to libpq's defaults, so a DATABASE_URL pointing
+// anywhere but localhost:5432 would drop and create the database on a different server than the one
+// the migrations then connect to.
 func execSQL(database, query string) {
 	databaseURL := coreUtils.GetEnv("DATABASE_URL", "")
 	user, password := extractCredentials(databaseURL)
+	host, port := extractHostPort(databaseURL)
 
 	env := os.Environ()
 	env = append(env, "PGPASSWORD="+password)
 
-	cmd := exec.Command("psql", "-U", user, "-d", database, "-c", query)
+	cmd := exec.Command("psql", "-h", host, "-p", port, "-U", user, "-d", database, "-c", query)
 	cmd.Env = env
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
@@ -179,6 +184,23 @@ func execSQL(database, query string) {
 	if err := cmd.Run(); err != nil {
 		log.Printf("⚠️  SQL execution note: %v", err)
 	}
+}
+
+// extractHostPort parses the server a PostgreSQL connection URL points at, falling back to the
+// local defaults when the URL says nothing.
+func extractHostPort(databaseURL string) (host, port string) {
+	host, port = "127.0.0.1", "5432"
+	u, err := url.Parse(databaseURL)
+	if err != nil {
+		return host, port
+	}
+	if h := u.Hostname(); h != "" {
+		host = h
+	}
+	if p := u.Port(); p != "" {
+		port = p
+	}
+	return host, port
 }
 
 // extractCredentials parses user and password from a PostgreSQL connection URL

@@ -5,6 +5,7 @@ package tracking_test
 
 import (
 	"context"
+	"net/http"
 	"strconv"
 	"strings"
 	"testing"
@@ -12,6 +13,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/hibiken/asynq"
+	"github.com/stretchr/testify/assert"
 
 	"josex/web/config"
 	"josex/web/modules/core/jobs"
@@ -110,4 +112,85 @@ func TestOutboxRelay_CommittedRowOnly(t *testing.T) {
 			t.Fatalf("the rolled-back row was published as %s", task.ID)
 		}
 	}
+}
+
+// routeChangedRows is how many route.changed rows the outbox holds, which is what "this write left
+// exactly one behind" is measured against.
+func routeChangedRows(t *testing.T, helper *testhelpers.ApiTestHelper) int {
+	t.Helper()
+	var n int
+	if err := helper.DB().QueryRow(context.Background(),
+		`SELECT count(*) FROM tracking.outbox WHERE topic = 'route.changed'`).Scan(&n); err != nil {
+		t.Fatalf("count route.changed rows: %v", err)
+	}
+	return n
+}
+
+// TestOutboxRouteChanged_OneRowPerAcceptedWrite - TRACK-007 step 4: a stop list that changed leaves
+// exactly one route.changed row, which the relay publishes as outbox:route.changed; a write the SP
+// refuses leaves none, because the raise takes the insert down with it.
+func TestOutboxRouteChanged_OneRowPerAcceptedWrite(t *testing.T) {
+	helper := SetupTrackingTest(t)
+	defer helper.Close()
+	ctx := context.Background()
+
+	// Publish before the relay starts, so its own row is drained with the rest and the PUT below is
+	// the only write still to be published.
+	routeID := CreateTestRoute(t, helper)
+	versionID := PublishRouteVersion(t, helper, routeID, "2027-08-02", []map[string]interface{}{
+		{"stop_place_id": CentralStationID, "sequence": 1},
+		{"stop_place_id": SchoolAStopID, "sequence": 2},
+	})
+
+	tenantID := uuid.NewString()
+	relay, inspector := startTestRelay(t, helper, tenantID)
+	defer relay.Shutdown()
+	defer inspector.Close()
+	before := routeChangedRows(t, helper)
+
+	w := helper.DoRequest("PUT", "/tracking/routes/"+routeID+"/versions/"+versionID+"/stops",
+		map[string]interface{}{"stops": []map[string]interface{}{
+			{"stop_place_id": SchoolAStopID, "sequence": 1},
+			{"stop_place_id": CentralStationID, "sequence": 2},
+		}}, map[string]string{})
+	if w.Code != http.StatusOK {
+		t.Fatalf("reorder stops: expected 200, got %d: %s", w.Code, w.Body.String())
+	}
+
+	if got := routeChangedRows(t, helper) - before; got != 1 {
+		t.Fatalf("expected the reorder to leave 1 route.changed row, got %d", got)
+	}
+	var id int64
+	var changedRouteID, dateFrom string
+	var dateTo *string
+	if err := helper.DB().QueryRow(ctx, `
+		SELECT o.id, o.payload->>'route_id', o.payload->>'date_from', o.payload->>'date_to'
+		  FROM tracking.outbox o
+		 WHERE o.topic = 'route.changed'
+		 ORDER BY o.id DESC
+		 LIMIT 1`).Scan(&id, &changedRouteID, &dateFrom, &dateTo); err != nil {
+		t.Fatalf("read the route.changed row: %v", err)
+	}
+	assert.Equal(t, routeID, changedRouteID)
+	assert.Equal(t, "2027-08-02", dateFrom, "the version's first day")
+	assert.Nil(t, dateTo, "a published version has no end until the next one closes it")
+
+	taskID := tenantID + ":" + strconv.FormatInt(id, 10)
+	var info *asynq.TaskInfo
+	var err error
+	waitFor(t, time.Second, "the reorder's task", func() bool {
+		info, err = inspector.GetTaskInfo(jobs.QueueDefault, taskID)
+		return err == nil
+	})
+	assert.Equal(t, "outbox:route.changed", info.Type)
+
+	// A refused write leaves nothing: the seeded version's first day has passed, so the SP raises.
+	after := routeChangedRows(t, helper)
+	w = helper.DoRequest("PUT", "/tracking/routes/"+MorningRouteID+"/versions/"+MorningVersionID+"/stops",
+		map[string]interface{}{"stops": []map[string]interface{}{
+			{"stop_place_id": CentralStationID, "sequence": 1},
+		}}, map[string]string{})
+
+	assert.Equal(t, http.StatusConflict, w.Code, w.Body.String())
+	assert.Equal(t, after, routeChangedRows(t, helper), "a refused write must leave no outbox row")
 }

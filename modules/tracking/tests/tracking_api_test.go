@@ -691,41 +691,64 @@ func TestDeleteRouteSuccess(t *testing.T) {
 	assert.Equal(t, http.StatusNoContent, w.Code)
 }
 
-// TestAddRouteStop - Add stop to route → 201
-func TestAddRouteStop(t *testing.T) {
+// TestRouteStopsComeFromTheRouteVersion - the backfill (TRACK-007 D1): each seeded route reads its
+// stops through the version in force, in the order route_stops held, and every row names the place
+// and the version it came from.
+func TestRouteStopsComeFromTheRouteVersion(t *testing.T) {
 	helper := SetupTrackingTest(t)
 	defer helper.Close()
 
-	dto := ValidRouteStopDto()
-	body := map[string]interface{}{
-		"route_id":       dto.RouteID,
-		"stop_name":      dto.StopName,
-		"stop_address":   dto.StopAddress,
-		"latitude":       dto.Latitude,
-		"longitude":      dto.Longitude,
-		"sequence_order": 4,
-	}
+	stops := ListRouteStops(t, helper, MorningRouteID, "")
 
-	w := helper.DoRequest("POST", "/tracking/route-stops", body, map[string]string{})
-
-	if w.Code == http.StatusCreated || w.Code == http.StatusOK {
-		assert.True(t, true)
-	} else {
-		assert.Equal(t, http.StatusCreated, w.Code)
+	assert.Equal(t, []string{"Central Station", "School A", "School B", "Downtown Terminal"}, StopNames(stops))
+	for i, stop := range stops {
+		assert.Equal(t, MorningVersionID, stop["version_id"], "row %d", i)
+		assert.Equal(t, MorningRouteID, stop["route_id"], "row %d", i)
+		assert.Equal(t, float64(i+1), stop["sequence"], "row %d", i)
+		assert.NotNil(t, stop["stop_place_id"], "row %d", i)
 	}
+	assert.Equal(t, CentralStationID, stops[0]["stop_place_id"])
 }
 
-// TestRemoveRouteStop - Remove stop from route → 204
-func TestRemoveRouteStop(t *testing.T) {
+// TestRouteStopsTableIsGone - route_stops is replaced, not kept beside the new tables (D1).
+func TestRouteStopsTableIsGone(t *testing.T) {
 	helper := SetupTrackingTest(t)
 	defer helper.Close()
 
-	stopID := CentralStationID
-	w := helper.DoRequest("DELETE", fmt.Sprintf("/tracking/route-stops/%s", stopID), nil, map[string]string{})
+	var exists bool
+	err := helper.DB().QueryRow(context.Background(),
+		`SELECT to_regclass('tracking.route_stops') IS NOT NULL`).Scan(&exists)
 
-	if w.Code == http.StatusNoContent || w.Code == http.StatusOK {
-		assert.True(t, true)
-	}
+	assert.NoError(t, err)
+	assert.False(t, exists, "tracking.route_stops still exists")
+}
+
+// TestTwoRoutesShareOneStopPlace - the whole point of the table: the afternoon route calls at the
+// same Central Station row the morning route does, not at a copy of it.
+func TestTwoRoutesShareOneStopPlace(t *testing.T) {
+	helper := SetupTrackingTest(t)
+	defer helper.Close()
+
+	morning := ListRouteStops(t, helper, MorningRouteID, "")
+	afternoon := ListRouteStops(t, helper, AfternoonRouteID, "")
+
+	assert.Equal(t, CentralStationID, morning[0]["stop_place_id"])
+	assert.Equal(t, CentralStationID, afternoon[0]["stop_place_id"])
+	assert.Equal(t, SchoolBStopID, afternoon[1]["stop_place_id"])
+}
+
+// TestRiderStatusNamesTheStopPlace - the guardian view still names the pickup and dropoff stop,
+// read from stop_places now.
+func TestRiderStatusNamesTheStopPlace(t *testing.T) {
+	helper := SetupTrackingTest(t)
+	defer helper.Close()
+
+	w := helper.DoRequest("GET", fmt.Sprintf("/tracking/riders/%s/status", TestRiderJohnID), nil, map[string]string{})
+
+	assert.Equal(t, http.StatusOK, w.Code, w.Body.String())
+	status := ParseResponse(t, w.Body.Bytes())
+	assert.Equal(t, "Central Station", status["scheduled_pickup_stop"])
+	assert.Equal(t, "School A", status["scheduled_dropoff_stop"])
 }
 
 // TestRouteDepartureTimeValidation - Time format validation → 400
@@ -1543,26 +1566,14 @@ func TestRecordRideEvent_StopShownInRiderStatus(t *testing.T) {
 	defer helper.Close()
 
 	riderID := CreateTestRider(t, helper)
-	stop := ValidRouteStopDto()
-	w := helper.DoRequest("POST", "/tracking/route-stops", map[string]interface{}{
-		"route_id":       stop.RouteID,
-		"stop_name":      stop.StopName,
-		"stop_address":   stop.StopAddress,
-		"latitude":       stop.Latitude,
-		"longitude":      stop.Longitude,
-		"sequence_order": 9,
-	}, map[string]string{})
-	if w.Code != http.StatusCreated {
-		t.Fatalf("create stop: expected 201, got %d: %s", w.Code, w.Body.String())
-	}
 	body := map[string]interface{}{
 		"rider_id":   riderID,
 		"route_id":   MorningRouteID,
 		"vehicle_id": TestBusID,
 		"event_type": "check_in",
-		"stop_id":    ExtractID(t, ParseResponse(t, w.Body.Bytes())),
+		"stop_id":    SchoolAStopID,
 	}
-	w = helper.DoRequest("POST", "/tracking/events", body, map[string]string{})
+	w := helper.DoRequest("POST", "/tracking/events", body, map[string]string{})
 	if w.Code != http.StatusCreated {
 		t.Fatalf("record event: expected 201, got %d: %s", w.Code, w.Body.String())
 	}
@@ -1572,7 +1583,7 @@ func TestRecordRideEvent_StopShownInRiderStatus(t *testing.T) {
 	assert.Equal(t, http.StatusOK, w.Code)
 	status := ParseResponse(t, w.Body.Bytes())
 	assert.Equal(t, "check_in", status["last_event_type"])
-	assert.Equal(t, stop.StopName, status["last_event_stop"])
+	assert.Equal(t, "School A", status["last_event_stop"])
 }
 
 // TestRideEventTimeline - Sequence of events for ride → 200
@@ -2981,4 +2992,302 @@ func TestOperatorStillSeesEveryRider(t *testing.T) {
 		}
 	}
 	assert.True(t, found, "the operator should still see riders of every organization")
+}
+
+// ============================================================================
+// STOP PLACES (TRACK-007 step 2)
+// ============================================================================
+
+// TestCreateStopPlaceSuccess - a stop place is created with its coordinate → 201
+func TestCreateStopPlaceSuccess(t *testing.T) {
+	helper := SetupTrackingTest(t)
+	defer helper.Close()
+
+	body := ValidStopPlaceBody()
+
+	w := helper.DoRequest("POST", "/tracking/stop-places", body, map[string]string{})
+
+	assert.Equal(t, http.StatusCreated, w.Code, w.Body.String())
+	place := ParseResponse(t, w.Body.Bytes())
+	assert.Equal(t, body["name"], place["name"])
+	assert.InDelta(t, 40.7129, place["latitude"], 0.00001)
+	assert.InDelta(t, -74.0061, place["longitude"], 0.00001)
+}
+
+// TestCreateStopPlaceRequiresCoordinate - a place without a point is not a place → 400
+func TestCreateStopPlaceRequiresCoordinate(t *testing.T) {
+	helper := SetupTrackingTest(t)
+	defer helper.Close()
+
+	w := helper.DoRequest("POST", "/tracking/stop-places", map[string]interface{}{"name": "Nowhere"}, map[string]string{})
+
+	assert.Equal(t, http.StatusBadRequest, w.Code, w.Body.String())
+}
+
+// TestCreateStopPlaceUnknownOrganization - pinning a stop to another tenant's organization → 404
+func TestCreateStopPlaceUnknownOrganization(t *testing.T) {
+	helper := SetupTrackingTest(t)
+	defer helper.Close()
+
+	body := ValidStopPlaceBody()
+	body["organization_id"] = uuid.New().String()
+
+	w := helper.DoRequest("POST", "/tracking/stop-places", body, map[string]string{})
+
+	assert.Equal(t, http.StatusNotFound, w.Code, w.Body.String())
+	assert.Contains(t, w.Body.String(), "tracking.organization.not-found")
+}
+
+// TestListStopPlacesNearOrdersByDistance - `near` narrows to a radius, carries distance_m and puts
+// the nearest row first; the seeded Central Station sits exactly on the query point.
+func TestListStopPlacesNearOrdersByDistance(t *testing.T) {
+	helper := SetupTrackingTest(t)
+	defer helper.Close()
+	CreateTestStopPlace(t, helper)
+
+	result := ListStopPlaces(t, helper, "?near=40.7128,-74.0060&radius_m=500")
+
+	if len(result.StopPlaces) < 2 {
+		t.Fatalf("expected the seeded stop and the created one within 500 m, got %d", len(result.StopPlaces))
+	}
+	first := result.StopPlaces[0]
+	assert.Equal(t, CentralStationID, first.ID.String())
+	assert.NotNil(t, first.DistanceM, "near must carry distance_m")
+	assert.InDelta(t, 0, *first.DistanceM, 1)
+	for i := 1; i < len(result.StopPlaces); i++ {
+		assert.GreaterOrEqual(t, *result.StopPlaces[i].DistanceM, *result.StopPlaces[i-1].DistanceM,
+			"rows must be ordered nearest first")
+	}
+	// School A is ~5 km away, so the radius is a real filter and not decoration.
+	for _, place := range result.StopPlaces {
+		assert.NotEqual(t, SchoolAStopID, place.ID.String(), "School A is outside 500 m")
+	}
+}
+
+// TestListStopPlacesWithoutNearHasNoDistance - the plain list is alphabetical and distance_m is absent
+func TestListStopPlacesWithoutNearHasNoDistance(t *testing.T) {
+	helper := SetupTrackingTest(t)
+	defer helper.Close()
+
+	result := ListStopPlaces(t, helper, "?search=School")
+
+	assert.GreaterOrEqual(t, result.TotalCount, int64(2))
+	for _, place := range result.StopPlaces {
+		assert.Contains(t, place.Name, "School")
+		assert.Nil(t, place.DistanceM)
+	}
+}
+
+// TestListStopPlacesRejectsMalformedNear - a `near` that is not a coordinate → 400
+func TestListStopPlacesRejectsMalformedNear(t *testing.T) {
+	helper := SetupTrackingTest(t)
+	defer helper.Close()
+
+	w := helper.DoRequest("GET", "/tracking/stop-places?near=here", nil, map[string]string{})
+
+	assert.Equal(t, http.StatusBadRequest, w.Code, w.Body.String())
+}
+
+// TestUpdateStopPlaceMovesTheCoordinate - a PATCH renames and re-pins in one call
+func TestUpdateStopPlaceMovesTheCoordinate(t *testing.T) {
+	helper := SetupTrackingTest(t)
+	defer helper.Close()
+	stopPlaceID := CreateTestStopPlace(t, helper)
+
+	w := helper.DoRequest("PATCH", "/tracking/stop-places/"+stopPlaceID, map[string]interface{}{
+		"name":      "Moved Stop",
+		"latitude":  -12.0464,
+		"longitude": -77.0428,
+	}, map[string]string{})
+
+	assert.Equal(t, http.StatusOK, w.Code, w.Body.String())
+	place := ParseResponse(t, w.Body.Bytes())
+	assert.Equal(t, "Moved Stop", place["name"])
+	assert.InDelta(t, -12.0464, place["latitude"], 0.00001)
+	assert.InDelta(t, -77.0428, place["longitude"], 0.00001)
+}
+
+// TestGetStopPlaceNotFound - an id this tenant does not hold → 404
+func TestGetStopPlaceNotFound(t *testing.T) {
+	helper := SetupTrackingTest(t)
+	defer helper.Close()
+
+	w := helper.DoRequest("GET", "/tracking/stop-places/"+uuid.New().String(), nil, map[string]string{})
+
+	assert.Equal(t, http.StatusNotFound, w.Code, w.Body.String())
+	assert.Contains(t, w.Body.String(), "tracking.stop-place.not-found")
+}
+
+// TestDeleteStopPlaceInUse - a place a route version still names is refused → 409
+func TestDeleteStopPlaceInUse(t *testing.T) {
+	helper := SetupTrackingTest(t)
+	defer helper.Close()
+
+	w := helper.DoRequest("DELETE", "/tracking/stop-places/"+CentralStationID, nil, map[string]string{})
+
+	assert.Equal(t, http.StatusConflict, w.Code, w.Body.String())
+	assert.Contains(t, w.Body.String(), "tracking.stop-place.in-use")
+}
+
+// TestDeleteStopPlaceUnused - a place no version names goes → 204
+func TestDeleteStopPlaceUnused(t *testing.T) {
+	helper := SetupTrackingTest(t)
+	defer helper.Close()
+	stopPlaceID := CreateTestStopPlace(t, helper)
+
+	w := helper.DoRequest("DELETE", "/tracking/stop-places/"+stopPlaceID, nil, map[string]string{})
+
+	assert.Equal(t, http.StatusNoContent, w.Code, w.Body.String())
+	w = helper.DoRequest("GET", "/tracking/stop-places/"+stopPlaceID, nil, map[string]string{})
+	assert.Equal(t, http.StatusNotFound, w.Code, w.Body.String())
+}
+
+// ============================================================================
+// ROUTE VERSIONS (TRACK-007 step 3)
+// ============================================================================
+
+// TestListRouteVersionsShowsTheSeededOne - the backfilled version is open-ended and carries its count
+func TestListRouteVersionsShowsTheSeededOne(t *testing.T) {
+	helper := SetupTrackingTest(t)
+	defer helper.Close()
+
+	versions := ListRouteVersions(t, helper, MorningRouteID)
+
+	if len(versions) != 1 {
+		t.Fatalf("expected one seeded version, got %d", len(versions))
+	}
+	assert.Equal(t, MorningVersionID, versions[0]["id"])
+	assert.Equal(t, "2026-01-01", versions[0]["effective_from"])
+	assert.Nil(t, versions[0]["effective_to"])
+	assert.Equal(t, float64(4), versions[0]["stops_count"])
+}
+
+// TestPublishVersionClosesThePreviousOne - a version from 2026-10-05 closes the one before it on the
+// 4th, and …/stops?date reads whichever was in force that day. This is the whole point of versions:
+// yesterday's trip keeps the list it ran.
+func TestPublishVersionClosesThePreviousOne(t *testing.T) {
+	helper := SetupTrackingTest(t)
+	defer helper.Close()
+
+	w := helper.DoRequest("POST", "/tracking/routes/"+MorningRouteID+"/versions", map[string]interface{}{
+		"effective_from": "2026-10-05",
+		"stops": []map[string]interface{}{
+			{"stop_place_id": DowntownTerminalID, "sequence": 1},
+			{"stop_place_id": CentralStationID, "sequence": 2},
+		},
+	}, map[string]string{})
+
+	assert.Equal(t, http.StatusCreated, w.Code, w.Body.String())
+	published := ParseResponse(t, w.Body.Bytes())
+	assert.Equal(t, "2026-10-05", published["effective_from"])
+	assert.Equal(t, float64(2), published["stops_count"])
+
+	// The old list on the 4th, the new one on the 5th.
+	assert.Equal(t, []string{"Central Station", "School A", "School B", "Downtown Terminal"},
+		StopNames(ListRouteStops(t, helper, MorningRouteID, "?date=2026-10-04")))
+	assert.Equal(t, []string{"Downtown Terminal", "Central Station"},
+		StopNames(ListRouteStops(t, helper, MorningRouteID, "?date=2026-10-05")))
+
+	versions := ListRouteVersions(t, helper, MorningRouteID)
+	if len(versions) != 2 {
+		t.Fatalf("expected two versions after publishing, got %d", len(versions))
+	}
+	assert.Equal(t, "2026-10-05", versions[0]["effective_from"], "newest first")
+	assert.Equal(t, MorningVersionID, versions[1]["id"])
+	assert.Equal(t, "2026-10-04", versions[1]["effective_to"], "the previous version closes the day before")
+}
+
+// TestPublishVersionNotAfterTheLatest - history is appended to, never spliced → 409
+func TestPublishVersionNotAfterTheLatest(t *testing.T) {
+	helper := SetupTrackingTest(t)
+	defer helper.Close()
+
+	w := helper.DoRequest("POST", "/tracking/routes/"+AfternoonRouteID+"/versions", map[string]interface{}{
+		"effective_from": "2026-01-01",
+		"stops":          []map[string]interface{}{{"stop_place_id": CentralStationID, "sequence": 1}},
+	}, map[string]string{})
+
+	assert.Equal(t, http.StatusConflict, w.Code, w.Body.String())
+	assert.Contains(t, w.Body.String(), "tracking.route.version-overlap")
+}
+
+// TestPublishVersionUnknownStopPlace - a place outside the tenant is refused → 404
+func TestPublishVersionUnknownStopPlace(t *testing.T) {
+	helper := SetupTrackingTest(t)
+	defer helper.Close()
+
+	w := helper.DoRequest("POST", "/tracking/routes/"+MorningRouteID+"/versions", map[string]interface{}{
+		"effective_from": "2027-03-01",
+		"stops":          []map[string]interface{}{{"stop_place_id": uuid.New().String(), "sequence": 1}},
+	}, map[string]string{})
+
+	assert.Equal(t, http.StatusNotFound, w.Code, w.Body.String())
+	assert.Contains(t, w.Body.String(), "tracking.stop-place.not-found")
+}
+
+// TestReplaceVersionStopsReordersInOneRequest - the whole list goes in one PUT and comes back
+// renumbered 1..n, so an editor never renumbers rows one at a time.
+func TestReplaceVersionStopsReordersInOneRequest(t *testing.T) {
+	helper := SetupTrackingTest(t)
+	defer helper.Close()
+	routeID := CreateTestRoute(t, helper)
+	versionID := PublishRouteVersion(t, helper, routeID, "2027-01-04", []map[string]interface{}{
+		{"stop_place_id": CentralStationID, "sequence": 1},
+		{"stop_place_id": SchoolAStopID, "sequence": 2},
+		{"stop_place_id": SchoolBStopID, "sequence": 3},
+	})
+
+	w := helper.DoRequest("PUT", "/tracking/routes/"+routeID+"/versions/"+versionID+"/stops",
+		map[string]interface{}{"stops": []map[string]interface{}{
+			{"stop_place_id": SchoolBStopID, "sequence": 10, "planned_offset_min": 0, "dwell_sec": 30},
+			{"stop_place_id": CentralStationID, "sequence": 20},
+			{"stop_place_id": SchoolAStopID, "sequence": 30},
+		}}, map[string]string{})
+
+	assert.Equal(t, http.StatusOK, w.Code, w.Body.String())
+	stops := ParseListResponse(t, w.Body.Bytes())
+	assert.Equal(t, []string{"School B", "Central Station", "School A"}, StopNames(stops))
+	for i, stop := range stops {
+		assert.Equal(t, float64(i+1), stop["sequence"], "the stored list is renumbered 1..n")
+		assert.Equal(t, versionID, stop["version_id"])
+	}
+	assert.Equal(t, float64(30), stops[0]["dwell_sec"])
+}
+
+// TestReplaceVersionStopsOnAClosedVersion - the list a route already ran is the record of what it
+// ran; changing it from here on is a new version → 409
+func TestReplaceVersionStopsOnAClosedVersion(t *testing.T) {
+	helper := SetupTrackingTest(t)
+	defer helper.Close()
+
+	w := helper.DoRequest("PUT", "/tracking/routes/"+MorningRouteID+"/versions/"+MorningVersionID+"/stops",
+		map[string]interface{}{"stops": []map[string]interface{}{
+			{"stop_place_id": CentralStationID, "sequence": 1},
+		}}, map[string]string{})
+
+	assert.Equal(t, http.StatusConflict, w.Code, w.Body.String())
+	assert.Contains(t, w.Body.String(), "tracking.route.version-closed")
+}
+
+// TestReplaceVersionStopsUnknownVersion - an id this tenant does not hold → 404
+func TestReplaceVersionStopsUnknownVersion(t *testing.T) {
+	helper := SetupTrackingTest(t)
+	defer helper.Close()
+
+	w := helper.DoRequest("PUT", "/tracking/routes/"+MorningRouteID+"/versions/"+uuid.New().String()+"/stops",
+		map[string]interface{}{"stops": []map[string]interface{}{}}, map[string]string{})
+
+	assert.Equal(t, http.StatusNotFound, w.Code, w.Body.String())
+	assert.Contains(t, w.Body.String(), "tracking.route.version-not-found")
+}
+
+// TestListRouteVersionsUnknownRoute - a route outside the tenant → 404
+func TestListRouteVersionsUnknownRoute(t *testing.T) {
+	helper := SetupTrackingTest(t)
+	defer helper.Close()
+
+	w := helper.DoRequest("GET", "/tracking/routes/"+uuid.New().String()+"/versions", nil, map[string]string{})
+
+	assert.Equal(t, http.StatusNotFound, w.Code, w.Body.String())
+	assert.Contains(t, w.Body.String(), "tracking.route.not-found")
 }

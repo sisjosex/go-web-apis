@@ -2,7 +2,8 @@
 -- These are shared test data that can be reused across all tracking tests
 
 DELETE FROM tracking.rider_assignments;
-DELETE FROM tracking.route_stops;
+DELETE FROM tracking.route_version_stops;
+DELETE FROM tracking.route_versions;
 DELETE FROM tracking.compliance_documents;
 DELETE FROM tracking.document_types;
 DELETE FROM tracking.routes;
@@ -10,6 +11,7 @@ DELETE FROM tracking.drivers;
 DELETE FROM tracking.riders;
 DELETE FROM tracking.organization_members;
 DELETE FROM tracking.organizations;
+DELETE FROM tracking.stop_places;
 DELETE FROM tracking.vehicles;
 DELETE FROM tracking.transport_companies;
 
@@ -167,7 +169,7 @@ WHERE u.email = 'portal@test.local';
 -- ROUTES
 -- ================================================================
 INSERT INTO tracking.routes (
-    id, company_id, route_name, origin_address, destination_address, scheduled_start_time, scheduled_end_time, status, created_at, updated_at
+    id, company_id, route_name, origin_address, destination_address, direction, scheduled_start_time, scheduled_end_time, status, created_at, updated_at
 ) VALUES
 (
     '11111111-1111-1111-1111-111111111111'::uuid,
@@ -175,6 +177,7 @@ INSERT INTO tracking.routes (
     'Morning Route',
     'Central Station',
     'Downtown Terminal',
+    'outbound',
     '07:00:00'::time,
     '17:00:00'::time,
     'active',
@@ -187,6 +190,7 @@ INSERT INTO tracking.routes (
     'Afternoon Route',
     'Central Station',
     'Downtown Terminal',
+    'inbound',
     '12:00:00'::time,
     '20:00:00'::time,
     'active',
@@ -195,83 +199,88 @@ INSERT INTO tracking.routes (
 );
 
 -- ================================================================
--- ROUTE STOPS
+-- STOP PLACES — one row per place, shared by every route that calls there (TRACK-007 D1).
+-- The ids are the ones route_stops used to carry, so the assignments below are unchanged.
 -- ================================================================
-INSERT INTO tracking.route_stops (
-    id, route_id, stop_order, location_name, latitude, longitude, estimated_arrival, status, created_at, updated_at
+INSERT INTO tracking.stop_places (
+    id, tenant_id, organization_id, name, address, location, created_at, updated_at
 ) VALUES
 (
     '33333333-3333-3333-3333-333333333333'::uuid,
-    '11111111-1111-1111-1111-111111111111'::uuid,
-    1,
+    '00000000-0000-0000-0000-000000000001'::uuid,
+    NULL,
     'Central Station',
-    40.7128,
-    -74.0060,
-    '07:30:00'::time,
-    'active',
+    '1 Central Plaza',
+    ST_SetSRID(ST_MakePoint(-74.0060, 40.7128), 4326)::geography,
     NOW(),
     NOW()
 ),
 (
     '44444444-4444-4444-4444-444444444444'::uuid,
-    '11111111-1111-1111-1111-111111111111'::uuid,
-    2,
+    '00000000-0000-0000-0000-000000000001'::uuid,
+    '99999999-9999-9999-9999-999999999999'::uuid,
     'School A',
-    40.7589,
-    -73.9851,
-    '08:15:00'::time,
-    'active',
+    '10 School Avenue',
+    ST_SetSRID(ST_MakePoint(-73.9851, 40.7589), 4326)::geography,
     NOW(),
     NOW()
 ),
 (
     '55555555-5555-5555-5555-555555555555'::uuid,
-    '11111111-1111-1111-1111-111111111111'::uuid,
-    3,
+    '00000000-0000-0000-0000-000000000001'::uuid,
+    NULL,
     'School B',
-    40.7614,
-    -73.9776,
-    '09:00:00'::time,
-    'active',
+    '20 School Road',
+    ST_SetSRID(ST_MakePoint(-73.9776, 40.7614), 4326)::geography,
     NOW(),
     NOW()
 ),
 (
     '66666666-6666-6666-6666-666666666666'::uuid,
-    '11111111-1111-1111-1111-111111111111'::uuid,
-    4,
+    '00000000-0000-0000-0000-000000000001'::uuid,
+    NULL,
     'Downtown Terminal',
-    40.7549,
-    -73.9840,
-    '17:30:00'::time,
-    'active',
-    NOW(),
-    NOW()
-),
-(
-    '77777777-7777-7777-7777-888888888888'::uuid,
-    '22222222-2222-2222-2222-222222222222'::uuid,
-    1,
-    'Central Station',
-    40.7128,
-    -74.0060,
-    '12:30:00'::time,
-    'active',
-    NOW(),
-    NOW()
-),
-(
-    '88888888-8888-8888-8888-999999999999'::uuid,
-    '22222222-2222-2222-2222-222222222222'::uuid,
-    2,
-    'School B',
-    40.7614,
-    -73.9776,
-    '13:15:00'::time,
-    'active',
+    '5 Downtown Way',
+    ST_SetSRID(ST_MakePoint(-73.9840, 40.7549), 4326)::geography,
     NOW(),
     NOW()
 );
+
+-- ================================================================
+-- ROUTE VERSIONS — one open-ended version per route, in force since 2026-01-01.
+-- Both routes call at Central Station and at School B: the same two rows, not copies.
+-- ================================================================
+INSERT INTO tracking.route_versions (
+    id, route_id, effective_from, effective_to, created_by, created_at, updated_at
+) VALUES
+(
+    'a0000000-0000-0000-0000-000000000001'::uuid,
+    '11111111-1111-1111-1111-111111111111'::uuid,
+    DATE '2026-01-01',
+    NULL,
+    NULL,
+    NOW(),
+    NOW()
+),
+(
+    'a0000000-0000-0000-0000-000000000002'::uuid,
+    '22222222-2222-2222-2222-222222222222'::uuid,
+    DATE '2026-01-01',
+    NULL,
+    NULL,
+    NOW(),
+    NOW()
+);
+
+INSERT INTO tracking.route_version_stops (
+    version_id, stop_place_id, sequence, planned_offset_min, dwell_sec, created_at, updated_at
+) VALUES
+('a0000000-0000-0000-0000-000000000001'::uuid, '33333333-3333-3333-3333-333333333333'::uuid, 1, 0,  60, NOW(), NOW()),
+('a0000000-0000-0000-0000-000000000001'::uuid, '44444444-4444-4444-4444-444444444444'::uuid, 2, 45, 60, NOW(), NOW()),
+('a0000000-0000-0000-0000-000000000001'::uuid, '55555555-5555-5555-5555-555555555555'::uuid, 3, 90, 60, NOW(), NOW()),
+('a0000000-0000-0000-0000-000000000001'::uuid, '66666666-6666-6666-6666-666666666666'::uuid, 4, 120, 60, NOW(), NOW()),
+('a0000000-0000-0000-0000-000000000002'::uuid, '33333333-3333-3333-3333-333333333333'::uuid, 1, 0,  60, NOW(), NOW()),
+('a0000000-0000-0000-0000-000000000002'::uuid, '55555555-5555-5555-5555-555555555555'::uuid, 2, 45, 60, NOW(), NOW());
 
 -- ================================================================
 -- RIDER ASSIGNMENTS
@@ -293,8 +302,8 @@ INSERT INTO tracking.rider_assignments (
     '88888888-8888-8888-8888-888888888888'::uuid,
     'ffffffff-ffff-ffff-ffff-ffffffffffff'::uuid,
     '22222222-2222-2222-2222-222222222222'::uuid,
-    '77777777-7777-7777-7777-888888888888'::uuid,
-    '88888888-8888-8888-8888-999999999999'::uuid,
+    '33333333-3333-3333-3333-333333333333'::uuid,
+    '55555555-5555-5555-5555-555555555555'::uuid,
     'active',
     NOW(),
     NOW()

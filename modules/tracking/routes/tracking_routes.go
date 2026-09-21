@@ -66,6 +66,7 @@ func registerTenantRoutes(
 
 	registerFleetRoutes(r, denyOrganization, trackingController)
 	registerRouteRoutes(r, denyOrganization, trackingController)
+	registerStopPlaceRoutes(r, denyOrganization, trackingController)
 	registerOrganizationRoutes(r, denyOrganization, trackingController)
 	registerDocumentRoutes(r, denyOrganization, trackingController)
 	registerRiderRoutes(r, p, denyOrganization, trackingController)
@@ -154,15 +155,44 @@ func registerRouteRoutes(r *gin.RouterGroup, denyOrganization gin.HandlerFunc, t
 		tenancyMW.RequirePermission(trackingPerms.RoutesDelete),
 		trackingController.DeleteRoute)
 
-	// Route Stops
-	r.POST("/route-stops",
+	// Route versions — the history of what a route's stop list was, and the editor that changes it.
+	r.GET("/routes/:route_id/versions",
+		denyOrganization,
+		tenancyMW.RequirePermission(trackingPerms.RoutesRead),
+		trackingController.ListRouteVersions)
+	r.POST("/routes/:route_id/versions",
 		denyOrganization,
 		tenancyMW.RequirePermission(trackingPerms.RoutesWrite),
-		trackingController.CreateRouteStop)
-	r.DELETE("/route-stops/:stop_id",
+		trackingController.CreateRouteVersion)
+	r.PUT("/routes/:route_id/versions/:version_id/stops",
+		denyOrganization,
+		tenancyMW.RequirePermission(trackingPerms.RoutesWrite),
+		trackingController.ReplaceRouteVersionStops)
+}
+
+// registerStopPlaceRoutes covers the places routes call at (TRACK-007). A stop place is part of the
+// board the operator plans, so it rides on the routes permissions rather than a family of its own.
+func registerStopPlaceRoutes(r *gin.RouterGroup, denyOrganization gin.HandlerFunc, trackingController *controllers.TrackingController) {
+	r.GET("/stop-places",
+		denyOrganization,
+		tenancyMW.RequirePermission(trackingPerms.RoutesRead),
+		trackingController.ListStopPlaces)
+	r.GET("/stop-places/:stop_place_id",
+		denyOrganization,
+		tenancyMW.RequirePermission(trackingPerms.RoutesRead),
+		trackingController.GetStopPlace)
+	r.POST("/stop-places",
+		denyOrganization,
+		tenancyMW.RequirePermission(trackingPerms.RoutesWrite),
+		trackingController.CreateStopPlace)
+	r.PATCH("/stop-places/:stop_place_id",
+		denyOrganization,
+		tenancyMW.RequirePermission(trackingPerms.RoutesWrite),
+		trackingController.UpdateStopPlace)
+	r.DELETE("/stop-places/:stop_place_id",
 		denyOrganization,
 		tenancyMW.RequirePermission(trackingPerms.RoutesDelete),
-		trackingController.DeleteRouteStop)
+		trackingController.DeleteStopPlace)
 }
 
 // registerOrganizationRoutes covers the schools and employers, and who belongs to them.
@@ -282,6 +312,7 @@ func registerRiderRoutes(
 func registerOpenRoutes(trackingGroup *gin.RouterGroup, trackingController *controllers.TrackingController) {
 	registerOpenFleetRoutes(trackingGroup, trackingController)
 	registerOpenRouteRoutes(trackingGroup, trackingController)
+	registerOpenStopPlaceRoutes(trackingGroup, trackingController)
 	registerOpenOrganizationRoutes(trackingGroup, trackingController)
 	registerOpenDocumentRoutes(trackingGroup, trackingController)
 	registerOpenRiderRoutes(trackingGroup, trackingController)
@@ -318,8 +349,18 @@ func registerOpenRouteRoutes(g *gin.RouterGroup, trackingController *controllers
 	g.GET("/routes/:route_id/stops", trackingController.ListRouteStops)
 	g.PATCH("/routes/:route_id", trackingController.UpdateRoute)
 	g.DELETE("/routes/:route_id", trackingController.DeleteRoute)
-	g.POST("/route-stops", trackingController.CreateRouteStop)
-	g.DELETE("/route-stops/:stop_id", trackingController.DeleteRouteStop)
+	g.GET("/routes/:route_id/versions", trackingController.ListRouteVersions)
+	g.POST("/routes/:route_id/versions", trackingController.CreateRouteVersion)
+	g.PUT("/routes/:route_id/versions/:version_id/stops", trackingController.ReplaceRouteVersionStops)
+}
+
+// registerOpenStopPlaceRoutes mirrors registerStopPlaceRoutes without the guards.
+func registerOpenStopPlaceRoutes(g *gin.RouterGroup, trackingController *controllers.TrackingController) {
+	g.GET("/stop-places", trackingController.ListStopPlaces)
+	g.GET("/stop-places/:stop_place_id", trackingController.GetStopPlace)
+	g.POST("/stop-places", trackingController.CreateStopPlace)
+	g.PATCH("/stop-places/:stop_place_id", trackingController.UpdateStopPlace)
+	g.DELETE("/stop-places/:stop_place_id", trackingController.DeleteStopPlace)
 }
 
 // registerOpenOrganizationRoutes mirrors registerOrganizationRoutes without the guards.
