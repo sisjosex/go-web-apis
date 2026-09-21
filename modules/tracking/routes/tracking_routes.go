@@ -127,14 +127,10 @@ func registerFleetRoutes(r *gin.RouterGroup, denyOrganization gin.HandlerFunc, t
 		trackingController.DeleteDriver)
 }
 
-// registerRouteRoutes covers the board itself — the routes, their stops, and the events and alerts
-// reported against them.
+// registerRouteRoutes covers the board itself — the routes, their stops, and the alerts reported
+// against them. Boarding and arrival are trip task transitions now (TRACK-008 D3).
 func registerRouteRoutes(r *gin.RouterGroup, denyOrganization gin.HandlerFunc, trackingController *controllers.TrackingController) {
 	// Real-time operations
-	r.POST("/events",
-		denyOrganization,
-		tenancyMW.RequirePermission(trackingPerms.EventsWrite),
-		trackingController.RecordRideEvent)
 	r.POST("/alerts",
 		denyOrganization,
 		tenancyMW.RequirePermission(trackingPerms.AlertsWrite),
@@ -423,7 +419,6 @@ func registerOpenFleetRoutes(g *gin.RouterGroup, trackingController *controllers
 
 // registerOpenRouteRoutes mirrors registerRouteRoutes without the guards.
 func registerOpenRouteRoutes(g *gin.RouterGroup, trackingController *controllers.TrackingController) {
-	g.POST("/events", trackingController.RecordRideEvent)
 	g.POST("/alerts", trackingController.CreateRouteAlert)
 	g.POST("/routes", trackingController.CreateRoute)
 	g.GET("/routes", trackingController.ListRoutes)

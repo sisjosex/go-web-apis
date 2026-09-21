@@ -20,6 +20,7 @@ const (
 	RouteDeleteFailed        = "tracking.route.delete.failed"
 	RouteInvalidScheduleType = "tracking.route.invalid-schedule-type"
 	RouteCodeAlreadyExists   = "tracking.route.code-already-exists"
+	RouteTimezone            = "tracking.route.timezone"
 
 	// Rider errors (TR0041-TR0060)
 	RiderNotFound      = "tracking.rider.not-found"
@@ -42,7 +43,6 @@ const (
 	// Event errors (TR0101-TR0120)
 	EventRecordFailed = "tracking.event.record.failed"
 	EventNotFound     = "tracking.event.not-found"
-	EventInvalidType  = "tracking.event.invalid-type"
 
 	// Alert errors (TR0121-TR0140)
 	AlertCreateFailed  = "tracking.alert.create.failed"

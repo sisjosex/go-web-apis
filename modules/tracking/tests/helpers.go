@@ -54,11 +54,13 @@ const (
 	MorningVersionID   = "a0000000-0000-0000-0000-000000000001"
 	AfternoonVersionID = "a0000000-0000-0000-0000-000000000002"
 
-	// Route schedules — one open-ended weekday schedule per seeded route, in force since
-	// 2026-01-01: Monday to Friday (bitmask 31) at the route's own departure time (TRACK-018).
-	MorningScheduleID   = "b0000000-0000-0000-0000-000000000001"
-	AfternoonScheduleID = "b0000000-0000-0000-0000-000000000002"
-	WeekdaysMask        = 31
+	// Route schedules — open-ended weekday schedules in force since 2026-01-01: Monday to Friday
+	// (bitmask 31) at the route's own departure time (TRACK-018). The Afternoon Route also runs back
+	// at 16:00, so it has an outbound and an inbound trip each weekday (TRACK-008).
+	MorningScheduleID         = "b0000000-0000-0000-0000-000000000001"
+	AfternoonScheduleID       = "b0000000-0000-0000-0000-000000000002"
+	AfternoonReturnScheduleID = "b0000000-0000-0000-0000-000000000003"
+	WeekdaysMask              = 31
 
 	// Assignments
 	JohnMorningAssignmentID   = "77777777-7777-7777-7777-777777777777"

@@ -38,28 +38,6 @@ type CurrentLocationResponse struct {
 
 // === DTOs for Ride Events ===
 
-// RecordEventDto represents a check-in/checkout event
-type RecordEventDto struct {
-	RiderID   uuid.UUID  `json:"rider_id" binding:"required,uuidv4"`
-	RouteID   uuid.UUID  `json:"route_id" binding:"required,uuidv4"`
-	VehicleID uuid.UUID  `json:"vehicle_id" binding:"required,uuidv4"`
-	EventType string     `json:"event_type" binding:"required,oneof=check_in checkout no_show emergency" enums:"check_in,checkout,no_show,emergency"`
-	StopID    *uuid.UUID `json:"stop_id" binding:"omitempty,uuidv4"`
-	Latitude  *float64   `json:"latitude" binding:"omitempty,min=-90,max=90"`
-	Longitude *float64   `json:"longitude" binding:"omitempty,min=-180,max=180"`
-	Notes     *string    `json:"notes" binding:"omitempty,max=500"`
-}
-
-// EventRecordedResponse represents response after recording event
-type EventRecordedResponse struct {
-	EventID   uuid.UUID `json:"event_id"`
-	RiderID   uuid.UUID `json:"rider_id"`
-	RiderName string    `json:"rider_name"`
-	EventType string    `json:"event_type"`
-	EventTime string    `json:"event_time"`
-	StopName  *string   `json:"stop_name"`
-}
-
 // === DTOs for Route Status ===
 
 // RouteRealtimeStatusResponse represents comprehensive route status
@@ -307,6 +285,9 @@ type UpdateRouteDto struct {
 	ScheduledEndTime         *string    `json:"scheduled_end_time" binding:"omitempty"`
 	EstimatedDurationMinutes *int32     `json:"estimated_duration_minutes" binding:"omitempty,min=1,max=999"`
 	IsActive                 *bool      `json:"is_active"`
+	// Timezone is the IANA zone the route runs in (TRACK-008 D2); the SP refuses a name PostgreSQL
+	// does not know.
+	Timezone *string `json:"timezone" binding:"omitempty,max=64"`
 }
 
 // === DTOs for Route Versions (TRACK-007) ===

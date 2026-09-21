@@ -1,6 +1,7 @@
 -- Test Fixtures for Tracking Module
 -- These are shared test data that can be reused across all tracking tests
 
+DELETE FROM tracking.trips;
 DELETE FROM tracking.rider_assignments;
 DELETE FROM tracking.route_exceptions;
 DELETE FROM tracking.route_schedules;
@@ -287,9 +288,10 @@ INSERT INTO tracking.route_version_stops (
 ('a0000000-0000-0000-0000-000000000002'::uuid, '55555555-5555-5555-5555-555555555555'::uuid, 2, 45, 60, NOW(), NOW());
 
 -- ================================================================
--- ROUTE SCHEDULES — one open-ended schedule per route, weekdays only (TRACK-018 D1).
+-- ROUTE SCHEDULES — open-ended, weekdays only (TRACK-018 D1).
 -- 31 is bits 0..4: Monday through Friday. Each route keeps the start time its row already
--- carried, so the seeded plan says the same thing the route row does.
+-- carried, so the seeded plan says the same thing the route row does. The Afternoon Route also
+-- runs back at 16:00: an outbound and an inbound trip of one route on one day (TRACK-008).
 -- ================================================================
 INSERT INTO tracking.route_schedules (
     id, route_id, days_of_week, start_time, valid_from, valid_until, calendar_id, created_at, updated_at
@@ -310,6 +312,17 @@ INSERT INTO tracking.route_schedules (
     '22222222-2222-2222-2222-222222222222'::uuid,
     31,
     '12:00:00'::time,
+    DATE '2026-01-01',
+    NULL,
+    NULL,
+    NOW(),
+    NOW()
+),
+(
+    'b0000000-0000-0000-0000-000000000003'::uuid,
+    '22222222-2222-2222-2222-222222222222'::uuid,
+    31,
+    '16:00:00'::time,
     DATE '2026-01-01',
     NULL,
     NULL,

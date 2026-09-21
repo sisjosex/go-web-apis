@@ -146,60 +146,6 @@ func (r *TrackingRepository) GetVehicleCurrentLocation(ctx context.Context, vehi
 	}, nil
 }
 
-// RecordRideEvent records a boarding/arrival event
-func (r *TrackingRepository) RecordRideEvent(ctx context.Context, dto *models.RecordEventDto, createdBy *uuid.UUID) (*models.EventRecordedResponse, error) {
-	var eventID uuid.UUID
-	var riderID uuid.UUID
-	var vehicleID uuid.UUID
-	var routeID uuid.UUID
-	var eventType string
-	var eventTime time.Time
-	var locationLatitude *float64
-	var locationLongitude *float64
-	var notes *string
-	var returnedCreatedBy *uuid.UUID
-	var createdAt time.Time
-
-	err := r.dbService.QueryRow(
-		ctx,
-		`SELECT * FROM tracking.sp_record_ride_event($1::UUID, $2::UUID, $3::UUID, $4::VARCHAR(50), $5::DECIMAL, $6::DECIMAL, $7::TEXT, $8::UUID, $9::UUID)`,
-		dto.RiderID,
-		dto.VehicleID,
-		dto.RouteID,
-		dto.EventType,
-		dto.Latitude,
-		dto.Longitude,
-		dto.Notes,
-		createdBy,
-		dto.StopID,
-	).Scan(&eventID, &riderID, &vehicleID, &routeID, &eventType, &eventTime, &locationLatitude, &locationLongitude, &notes, &returnedCreatedBy, &createdAt)
-
-	if err != nil {
-		errMsg := err.Error()
-		switch errMsg {
-		case "TR0001":
-			return nil, &trackingErrors.TrackingError{Code: trackingErrors.VehicleNotFound}
-		case "TR0002":
-			return nil, &trackingErrors.TrackingError{Code: trackingErrors.RiderNotFound}
-		case "TR0003":
-			return nil, &trackingErrors.TrackingError{Code: trackingErrors.RouteNotFound}
-		default:
-			return nil, &trackingErrors.TrackingError{Code: trackingErrors.EventRecordFailed, Err: err}
-		}
-	}
-
-	riderName := ""
-
-	return &models.EventRecordedResponse{
-		EventID:   eventID,
-		RiderID:   riderID,
-		RiderName: riderName,
-		EventType: eventType,
-		EventTime: eventTime.Format(time.RFC3339),
-		StopName:  nil,
-	}, nil
-}
-
 // GetRouteRealtimeStatus gets comprehensive route status
 func (r *TrackingRepository) GetRouteRealtimeStatus(ctx context.Context, tenantID uuid.UUID, routeID uuid.UUID, scopeUserID *uuid.UUID) (*models.RouteRealtimeStatusResponse, error) {
 	var retRouteID uuid.UUID
@@ -567,10 +513,14 @@ func (r *TrackingRepository) CreateRoute(ctx context.Context, tenantID uuid.UUID
 
 func (r *TrackingRepository) UpdateRoute(ctx context.Context, tenantID uuid.UUID, routeID uuid.UUID, dto *models.UpdateRouteDto) (*models.Route, error) {
 	var rt models.Route
-	err := r.dbService.QueryRow(ctx, `SELECT * FROM tracking.sp_update_route($1, $2, $3, $4, $5)`,
-		tenantID, routeID, dto.RouteName, dto.VehicleID, dto.IsActive,
-	).Scan(&rt.ID, &rt.CompanyID, &rt.VehicleID, &rt.RouteName, &rt.RouteCode, &rt.OriginAddress, &rt.OriginLat, &rt.OriginLng, &rt.DestinationAddress, &rt.DestinationLat, &rt.DestinationLng, &rt.ScheduleType, &rt.ScheduledStartTime, &rt.ScheduledEndTime, &rt.EstimatedDurationMinutes, &rt.IsActive, &rt.CreatedAt, &rt.UpdatedAt)
+	err := r.dbService.QueryRow(ctx, `SELECT * FROM tracking.sp_update_route($1, $2, $3, $4, $5, $6)`,
+		tenantID, routeID, dto.RouteName, dto.VehicleID, dto.IsActive, dto.Timezone,
+	).Scan(&rt.ID, &rt.CompanyID, &rt.VehicleID, &rt.RouteName, &rt.RouteCode, &rt.OriginAddress, &rt.OriginLat, &rt.OriginLng, &rt.DestinationAddress, &rt.DestinationLat, &rt.DestinationLng, &rt.ScheduleType, &rt.ScheduledStartTime, &rt.ScheduledEndTime, &rt.EstimatedDurationMinutes, &rt.IsActive, &rt.CreatedAt, &rt.UpdatedAt, &rt.Timezone)
 	if err != nil {
+		var pgErr *pgconn.PgError
+		if errors.As(err, &pgErr) && pgErr.Message == "route.timezone" {
+			return nil, &trackingErrors.TrackingError{Code: trackingErrors.RouteTimezone, Err: pgErr}
+		}
 		return nil, &trackingErrors.TrackingError{Code: trackingErrors.RouteUpdateFailed, Err: err}
 	}
 	return &rt, nil
@@ -601,7 +551,7 @@ func (r *TrackingRepository) ListRoutes(ctx context.Context, tenantID uuid.UUID,
 func (r *TrackingRepository) GetRoute(ctx context.Context, tenantID uuid.UUID, routeID uuid.UUID, scopeUserID *uuid.UUID) (*models.Route, error) {
 	var rt models.Route
 	err := r.dbService.QueryRow(ctx, `SELECT * FROM tracking.sp_get_route($1, $2, $3)`, tenantID, routeID, scopeUserID).Scan(
-		&rt.ID, &rt.CompanyID, &rt.VehicleID, &rt.RouteName, &rt.RouteCode, &rt.OriginAddress, &rt.OriginLat, &rt.OriginLng, &rt.DestinationAddress, &rt.DestinationLat, &rt.DestinationLng, &rt.ScheduleType, &rt.ScheduledStartTime, &rt.ScheduledEndTime, &rt.EstimatedDurationMinutes, &rt.IsActive, &rt.CreatedAt, &rt.UpdatedAt)
+		&rt.ID, &rt.CompanyID, &rt.VehicleID, &rt.RouteName, &rt.RouteCode, &rt.OriginAddress, &rt.OriginLat, &rt.OriginLng, &rt.DestinationAddress, &rt.DestinationLat, &rt.DestinationLng, &rt.ScheduleType, &rt.ScheduledStartTime, &rt.ScheduledEndTime, &rt.EstimatedDurationMinutes, &rt.IsActive, &rt.CreatedAt, &rt.UpdatedAt, &rt.Timezone)
 	if err != nil {
 		return nil, scopedErr(err, trackingErrors.RouteNotFound)
 	}

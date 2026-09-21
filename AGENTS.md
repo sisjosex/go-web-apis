@@ -54,6 +54,12 @@ and `/readyz` answers 200 `degraded` (503 for worker/scheduler). asynqmon is at 
 makes the change, in its transaction. The relay publishes it as asynq task `outbox:<topic>` (TaskID
 `<tenant>:<id>`); handle the topic in `registerJobs`. Delivery is at least once — handlers are idempotent.
 
+**Trips (TRACK-008).** `tracking.sp_materialise_trips` is the only writer of planned trips: the
+`outbox:route.changed` handler calls it for one route (tenant taken from the TaskID), the daily
+`tracking:trips-materialise` entry (02:00 UTC) for every route. Both are clamped to each route's local
+today..today+14 (`routes.timezone`, IANA). An SP that changes a route's plan or riders writes
+`route.changed` via `tracking.fn_route_changed` and never touches trips itself.
+
 Main DB holds `auth.*` + `tenancy.*`; one DB per tenant holds business schemas only. JWT carries
 `user_id + session_id`; tenancy middleware resolves `tenant_id` from `X-Tenant-Slug` per request.
 

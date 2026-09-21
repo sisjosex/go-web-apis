@@ -29,11 +29,6 @@ func (s *TrackingService) GetVehicleCurrentLocation(ctx context.Context, vehicle
 	return s.trackingRepo.GetVehicleCurrentLocation(ctx, vehicleID)
 }
 
-// RecordRideEvent records a boarding/arrival event
-func (s *TrackingService) RecordRideEvent(ctx context.Context, dto *models.RecordEventDto, createdBy *uuid.UUID) (*models.EventRecordedResponse, error) {
-	return s.trackingRepo.RecordRideEvent(ctx, dto, createdBy)
-}
-
 // GetRouteRealtimeStatus gets comprehensive route status
 func (s *TrackingService) GetRouteRealtimeStatus(ctx context.Context, tenantID uuid.UUID, routeID uuid.UUID, scopeUserID *uuid.UUID) (*models.RouteRealtimeStatusResponse, error) {
 	return s.trackingRepo.GetRouteRealtimeStatus(ctx, tenantID, routeID, scopeUserID)

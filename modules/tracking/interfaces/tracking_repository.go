@@ -2,6 +2,7 @@ package interfaces
 
 import (
 	"context"
+	"time"
 
 	"josex/web/modules/tracking/models"
 
@@ -15,7 +16,6 @@ type TrackingRepository interface {
 	GetVehicleCurrentLocation(ctx context.Context, vehicleID uuid.UUID) (*models.CurrentLocationResponse, error)
 
 	// Event operations
-	RecordRideEvent(ctx context.Context, dto *models.RecordEventDto, createdBy *uuid.UUID) (*models.EventRecordedResponse, error)
 
 	// Status queries
 	GetRouteRealtimeStatus(ctx context.Context, tenantID uuid.UUID, routeID uuid.UUID, scopeUserID *uuid.UUID) (*models.RouteRealtimeStatusResponse, error)
@@ -116,6 +116,9 @@ type TrackingRepository interface {
 	DeleteDocument(ctx context.Context, tenantID uuid.UUID, documentID uuid.UUID) (*string, error)
 	SetDocumentFile(ctx context.Context, tenantID uuid.UUID, documentID uuid.UUID, name string, size int64, ext string) (*models.ComplianceDocument, error)
 	RaiseDocumentAlerts(ctx context.Context, tenantID uuid.UUID) ([]*models.DocumentAlert, error)
+
+	// Trips (TRACK-008)
+	MaterialiseTrips(ctx context.Context, tenantID uuid.UUID, routeID *uuid.UUID, from, to *time.Time) (int, error)
 
 	// Organization members
 	ListOrganizationMembers(ctx context.Context, tenantID uuid.UUID, organizationID uuid.UUID) ([]*models.OrganizationMember, error)

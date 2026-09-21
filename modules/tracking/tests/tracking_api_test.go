@@ -1540,69 +1540,6 @@ func TestGetLocationHistory(t *testing.T) {
 	assert.NotNil(t, locations)
 }
 
-// TestRecordRideEvent - Log ride events → 201
-func TestRecordRideEvent(t *testing.T) {
-	helper := SetupTrackingTest(t)
-	defer helper.Close()
-
-	body := map[string]interface{}{
-		"rider_id":   TestRiderJohnID,
-		"route_id":   MorningRouteID,
-		"vehicle_id": TestBusID,
-		"event_type": "check_in",
-		"stop_id":    CentralStationID,
-	}
-
-	w := helper.DoRequest("POST", "/tracking/events", body, map[string]string{})
-
-	if w.Code == http.StatusCreated || w.Code == http.StatusOK {
-		assert.True(t, true)
-	}
-}
-
-// TestRecordRideEvent_StopShownInRiderStatus - Event with stop_id → rider status last_event_stop is that stop
-func TestRecordRideEvent_StopShownInRiderStatus(t *testing.T) {
-	helper := SetupTrackingTest(t)
-	defer helper.Close()
-
-	riderID := CreateTestRider(t, helper)
-	body := map[string]interface{}{
-		"rider_id":   riderID,
-		"route_id":   MorningRouteID,
-		"vehicle_id": TestBusID,
-		"event_type": "check_in",
-		"stop_id":    SchoolAStopID,
-	}
-	w := helper.DoRequest("POST", "/tracking/events", body, map[string]string{})
-	if w.Code != http.StatusCreated {
-		t.Fatalf("record event: expected 201, got %d: %s", w.Code, w.Body.String())
-	}
-
-	w = helper.DoRequest("GET", fmt.Sprintf("/tracking/riders/%s/status", riderID), nil, map[string]string{})
-
-	assert.Equal(t, http.StatusOK, w.Code)
-	status := ParseResponse(t, w.Body.Bytes())
-	assert.Equal(t, "check_in", status["last_event_type"])
-	assert.Equal(t, "School A", status["last_event_stop"])
-}
-
-// TestRideEventTimeline - Sequence of events for ride → 200
-func TestRideEventTimeline(t *testing.T) {
-	helper := SetupTrackingTest(t)
-	defer helper.Close()
-
-	riderID := TestRiderJohnID
-	w := helper.DoRequest("GET", fmt.Sprintf("/tracking/events?rider_id=%s", riderID), nil, map[string]string{})
-
-	if w.Code == http.StatusNotFound {
-		t.Skip("GET /tracking/events not yet implemented")
-		return
-	}
-	assert.Equal(t, http.StatusOK, w.Code)
-	events := ParseListResponse(t, w.Body.Bytes())
-	assert.NotNil(t, events)
-}
-
 // TestLocationHistory Pagination - Page through location history → 200
 func TestLocationHistoryPagination(t *testing.T) {
 	helper := SetupTrackingTest(t)
@@ -1616,43 +1553,6 @@ func TestLocationHistoryPagination(t *testing.T) {
 		return
 	}
 	assert.Equal(t, http.StatusOK, w.Code)
-}
-
-// TestRideEventTypes - Various event types → 201
-func TestRideEventTypes(t *testing.T) {
-	helper := SetupTrackingTest(t)
-	defer helper.Close()
-
-	eventTypes := []string{"check_in", "checkout", "no_show"}
-
-	for _, eventType := range eventTypes {
-		body := map[string]interface{}{
-			"rider_id":   TestRiderJohnID,
-			"route_id":   MorningRouteID,
-			"vehicle_id": TestBusID,
-			"event_type": eventType,
-		}
-
-		w := helper.DoRequest("POST", "/tracking/events", body, map[string]string{})
-		assert.True(t, w.Code >= 200)
-	}
-}
-
-// TestEventNotificationTriggers - Events trigger notifications → 201
-func TestEventNotificationTriggers(t *testing.T) {
-	helper := SetupTrackingTest(t)
-	defer helper.Close()
-
-	body := map[string]interface{}{
-		"rider_id":   TestRiderJohnID,
-		"route_id":   MorningRouteID,
-		"vehicle_id": TestBusID,
-		"event_type": "check_in",
-	}
-
-	w := helper.DoRequest("POST", "/tracking/events", body, map[string]string{})
-	// Event creation should succeed
-	assert.True(t, w.Code >= 200)
 }
 
 // ============================================================================

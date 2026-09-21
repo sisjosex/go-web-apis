@@ -67,6 +67,8 @@ type Route struct {
 	IsActive                 bool       `json:"is_active"`
 	CreatedAt                time.Time  `json:"created_at"`
 	UpdatedAt                time.Time  `json:"updated_at"`
+	// Timezone rides on the single-route read and the update (TRACK-008 D2); the list omits it.
+	Timezone string `json:"timezone,omitempty"`
 }
 
 // StopPlace is a place a route calls at (TRACK-007 D1) — named once and shared by every route that
@@ -289,23 +291,6 @@ type VehicleLocation struct {
 	Accuracy   *float64  `json:"accuracy"`
 	RecordedAt time.Time `json:"recorded_at"`
 	CreatedAt  time.Time `json:"created_at"`
-}
-
-// RideEvent represents boarding/arrival events
-type RideEvent struct {
-	ID           uuid.UUID  `json:"id"`
-	RiderID      uuid.UUID  `json:"rider_id"`
-	RouteID      uuid.UUID  `json:"route_id"`
-	VehicleID    uuid.UUID  `json:"vehicle_id"`
-	AssignmentID *uuid.UUID `json:"assignment_id"`
-	EventType    string     `json:"event_type"` // check_in, checkout, no_show, emergency
-	StopID       *uuid.UUID `json:"stop_id"`
-	Latitude     *float64   `json:"latitude"`
-	Longitude    *float64   `json:"longitude"`
-	EventTime    time.Time  `json:"event_time"`
-	Notes        *string    `json:"notes"`
-	CreatedBy    *uuid.UUID `json:"created_by"`
-	CreatedAt    time.Time  `json:"created_at"`
 }
 
 // RouteAlert represents route delays/incidents

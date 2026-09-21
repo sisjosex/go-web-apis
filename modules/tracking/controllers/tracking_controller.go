@@ -227,56 +227,6 @@ func (ctrl *TrackingController) GetVehicleCurrentLocation(c *gin.Context) {
 	c.JSON(http.StatusOK, response)
 }
 
-// RecordRideEvent godoc
-// @Summary Record ride event (check-in/checkout)
-// @Description Record when a student/employee boards, arrives, or doesn't show
-// @Tags Tracking - Events
-// @Accept json
-// @Produce json
-// @Security BearerAuth
-// @Param event body models.RecordEventDto true "Ride event data"
-// @Success 201 {object} models.EventRecordedResponse
-// @Failure 400 {object} coreErrors.ErrorResponse
-// @Failure 401 {object} coreErrors.ErrorResponse
-// @Failure 404 {object} coreErrors.ErrorResponse
-// @Failure 500 {object} coreErrors.ErrorResponse
-// @Router /tracking/events [post]
-func (ctrl *TrackingController) RecordRideEvent(c *gin.Context) {
-	var dto models.RecordEventDto
-
-	if err := c.ShouldBindJSON(&dto); err != nil {
-		c.JSON(http.StatusBadRequest, coreErrors.BuildErrorDetail(c, trackingErrors.EventInvalidType, utils.ExtractValidationError(c, err)))
-		return
-	}
-
-	conform.Strings(&dto)
-
-	userID, exists := c.Get("user_id")
-	var createdBy *uuid.UUID
-	if exists {
-		if uid, ok := userID.(uuid.UUID); ok {
-			createdBy = &uid
-		}
-	}
-
-	response, err := ctrl.trackingService.RecordRideEvent(c.Request.Context(), &dto, createdBy)
-	if err != nil {
-		if trackingErr, ok := err.(*trackingErrors.TrackingError); ok {
-			switch trackingErr.Code {
-			case trackingErrors.VehicleNotFound, trackingErrors.RiderNotFound, trackingErrors.RouteNotFound:
-				c.JSON(http.StatusNotFound, coreErrors.BuildErrorSingle(c, trackingErr.Code))
-			default:
-				c.JSON(http.StatusInternalServerError, coreErrors.BuildError(c, err))
-			}
-			return
-		}
-		c.JSON(http.StatusInternalServerError, coreErrors.BuildError(c, err))
-		return
-	}
-
-	c.JSON(http.StatusCreated, response)
-}
-
 // GetRouteRealtimeStatus godoc
 // @Summary Get route real-time status
 // @Description Get comprehensive route status: vehicle location, rider counts, alerts
@@ -869,6 +819,10 @@ func (ctrl *TrackingController) UpdateRoute(c *gin.Context) {
 		var trackingErr *trackingErrors.TrackingError
 		if errors.As(err, &trackingErr) && trackingErr.Code == trackingErrors.RouteNotFound {
 			c.JSON(http.StatusNotFound, coreErrors.BuildError(c, err))
+			return
+		}
+		if errors.As(err, &trackingErr) && trackingErr.Code == trackingErrors.RouteTimezone {
+			c.JSON(http.StatusBadRequest, coreErrors.BuildErrorSingle(c, trackingErr.Code))
 			return
 		}
 		c.JSON(http.StatusInternalServerError, coreErrors.BuildError(c, err))
