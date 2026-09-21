@@ -502,12 +502,59 @@ type ListRouteStopsQuery struct {
 
 // === DTOs for Rider Assignment ===
 
-// AssignRiderDto represents request to assign rider to route
+// AssignRiderDto is one assignment to create — the body of POST /tracking/assignments and one item
+// of the bulk list. It travels to the SP as JSON, so a stop or an end date left out is a key left
+// out. DaysOfWeek is the bitmask of RouteSchedule.
 type AssignRiderDto struct {
-	RiderID       uuid.UUID  `json:"rider_id" binding:"required,uuidv4"`
-	RouteID       uuid.UUID  `json:"route_id" binding:"required,uuidv4"`
-	PickupStopID  *uuid.UUID `json:"pickup_stop_id" binding:"omitempty,uuidv4"`
-	DropoffStopID *uuid.UUID `json:"dropoff_stop_id" binding:"omitempty,uuidv4"`
+	RiderID            uuid.UUID            `json:"rider_id" binding:"required,uuidv4"`
+	RouteID            uuid.UUID            `json:"route_id" binding:"required,uuidv4"`
+	DaysOfWeek         int16                `json:"days_of_week" binding:"required,min=1,max=127"`
+	PickupStopPlaceID  *uuid.UUID           `json:"pickup_stop_place_id,omitempty" binding:"omitempty,uuidv4"`
+	DropoffStopPlaceID *uuid.UUID           `json:"dropoff_stop_place_id,omitempty" binding:"omitempty,uuidv4"`
+	ValidFrom          coreModels.DateOnly  `json:"valid_from" binding:"required" time_format:"2006-01-02"`
+	ValidUntil         *coreModels.DateOnly `json:"valid_until,omitempty" binding:"omitempty" time_format:"2006-01-02"`
+}
+
+// UpdateAssignmentDto edits an assignment in place. Every field is optional and a field left out
+// keeps its value — the SP reads the object by key presence, hence omitempty everywhere. The rider
+// is not editable: another rider is a delete and a create.
+type UpdateAssignmentDto struct {
+	RouteID            *uuid.UUID           `json:"route_id,omitempty" binding:"omitempty,uuidv4"`
+	DaysOfWeek         *int16               `json:"days_of_week,omitempty" binding:"omitempty,min=1,max=127"`
+	PickupStopPlaceID  *uuid.UUID           `json:"pickup_stop_place_id,omitempty" binding:"omitempty,uuidv4"`
+	DropoffStopPlaceID *uuid.UUID           `json:"dropoff_stop_place_id,omitempty" binding:"omitempty,uuidv4"`
+	ValidFrom          *coreModels.DateOnly `json:"valid_from,omitempty" binding:"omitempty" time_format:"2006-01-02"`
+	ValidUntil         *coreModels.DateOnly `json:"valid_until,omitempty" binding:"omitempty" time_format:"2006-01-02"`
+}
+
+// ListAssignmentsQuery binds GET /tracking/assignments. Date narrows to the assignments in force
+// that day. A malformed id or date is a 400, not a silently unfiltered list.
+type ListAssignmentsQuery struct {
+	RiderID  *string `form:"rider_id" binding:"omitempty,uuid"`
+	RouteID  *string `form:"route_id" binding:"omitempty,uuid"`
+	Date     *string `form:"date" binding:"omitempty,datetime=2006-01-02"`
+	Page     int     `form:"page,default=1" binding:"min=1"`
+	PageSize int     `form:"page_size,default=20" binding:"min=1,max=100"`
+}
+
+type ListAssignmentsResponse struct {
+	Assignments []*RiderRouteAssignment `json:"assignments"`
+	TotalCount  int64                   `json:"total_count"`
+	Page        int                     `json:"page"`
+	PageSize    int                     `json:"page_size"`
+}
+
+// AssignmentResponse is what a single create or an edit answers: the row and the capacity warnings
+// of its route.
+type AssignmentResponse struct {
+	Assignment *RiderRouteAssignment `json:"assignment"`
+	Warnings   []AssignmentWarning   `json:"warnings"`
+}
+
+// BulkAssignmentResponse is what POST /tracking/assignments/bulk answers, in the order sent.
+type BulkAssignmentResponse struct {
+	Assignments []*RiderRouteAssignment `json:"assignments"`
+	Warnings    []AssignmentWarning     `json:"warnings"`
 }
 
 // === DTOs for Organization Management ===

@@ -5,6 +5,7 @@
 package tracking_test
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -722,18 +723,25 @@ func PdfBytes(n int) []byte {
 // ASSIGNMENT TEST BUILDERS
 // ============================================================================
 
-// ValidAssignmentDto returns a valid assignment DTO
-func ValidAssignmentDto() models.AssignRiderDto {
-	riderID := uuid.MustParse(TestRiderJohnID)
-	routeID := uuid.MustParse(MorningRouteID)
-	pickupStop := uuid.MustParse(CentralStationID)
-	dropoffStop := uuid.MustParse(SchoolAStopID)
-	return models.AssignRiderDto{
-		RiderID:       riderID,
-		RouteID:       routeID,
-		PickupStopID:  &pickupStop,
-		DropoffStopID: &dropoffStop,
+// AssignmentBody is an assignment from the first day of the seed's year, open-ended, on the given
+// weekdays: the shape every assignment test starts from.
+func AssignmentBody(riderID, routeID string, daysOfWeek int) map[string]interface{} {
+	return map[string]interface{}{
+		"rider_id":     riderID,
+		"route_id":     routeID,
+		"days_of_week": daysOfWeek,
+		"valid_from":   "2026-01-01",
 	}
+}
+
+// CreateAssignment posts an assignment and returns the response body's assignment.
+func CreateAssignment(t *testing.T, helper *testhelpers.ApiTestHelper, body map[string]interface{}) map[string]interface{} {
+	t.Helper()
+	w := helper.DoRequest("POST", "/tracking/assignments", body, map[string]string{})
+	if w.Code != http.StatusCreated {
+		t.Fatalf("assign rider: expected 201, got %d: %s", w.Code, w.Body.String())
+	}
+	return ParseResponse(t, w.Body.Bytes())["assignment"].(map[string]interface{})
 }
 
 // CreateTestRider creates a rider in MainSchoolID and returns its id
@@ -752,8 +760,11 @@ func CreateTestRider(t *testing.T, helper *testhelpers.ApiTestHelper) string {
 	return ExtractID(t, ParseResponse(t, w.Body.Bytes()))
 }
 
-// CreateTestRouteAssignment creates a route with the given schedule, assigns riderID to it and returns the route id
-func CreateTestRouteAssignment(t *testing.T, helper *testhelpers.ApiTestHelper, riderID, startTime, endTime string) string {
+// CreateTestRouteAssignment creates a route with the given schedule and direction, assigns riderID
+// to it every day and returns the route id. Two routes of one rider must differ in direction to be
+// in force on the same day (TRACK-009 D4); routes are created outbound, so inbound is set directly.
+func CreateTestRouteAssignment(t *testing.T, helper *testhelpers.ApiTestHelper, riderID, startTime, endTime, direction string) string {
+	t.Helper()
 	dto := ValidRouteDto()
 	body := map[string]interface{}{
 		"company_id":           dto.CompanyID,
@@ -768,12 +779,19 @@ func CreateTestRouteAssignment(t *testing.T, helper *testhelpers.ApiTestHelper, 
 		t.Fatalf("create route: expected 201, got %d: %s", w.Code, w.Body.String())
 	}
 	routeID := ExtractID(t, ParseResponse(t, w.Body.Bytes()))
+	SetRouteDirection(t, helper, routeID, direction)
 
-	w = helper.DoRequest("POST", "/tracking/assignments", map[string]interface{}{"rider_id": riderID, "route_id": routeID}, map[string]string{})
-	if w.Code != http.StatusCreated {
-		t.Fatalf("assign rider: expected 201, got %d: %s", w.Code, w.Body.String())
-	}
+	CreateAssignment(t, helper, AssignmentBody(riderID, routeID, EveryDayMask))
 	return routeID
+}
+
+// SetRouteDirection writes a route's direction, which no endpoint edits yet.
+func SetRouteDirection(t *testing.T, helper *testhelpers.ApiTestHelper, routeID, direction string) {
+	t.Helper()
+	if _, err := helper.DB().Execute(context.Background(),
+		`UPDATE tracking.routes SET direction = $2 WHERE id = $1`, routeID, direction); err != nil {
+		t.Fatalf("set route direction: %v", err)
+	}
 }
 
 // CleanTrackingDatabase cleans only tracking tables while preserving auth and system data

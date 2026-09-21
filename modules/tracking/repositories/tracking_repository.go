@@ -919,65 +919,6 @@ func (r *TrackingRepository) DeleteRider(ctx context.Context, tenantID uuid.UUID
 	return nil
 }
 
-// ==================== ASSIGNMENTS CRUD ====================
-
-func (r *TrackingRepository) AssignRider(ctx context.Context, tenantID uuid.UUID, dto *models.AssignRiderDto) (*models.RiderAssignment, error) {
-	var assignment models.RiderAssignment
-	var status string
-	err := r.dbService.QueryRow(ctx, `SELECT * FROM tracking.sp_assign_rider($1::UUID, $2::UUID, $3::UUID, $4::UUID, $5::UUID, $6::VARCHAR(50))`,
-		tenantID, dto.RiderID, dto.RouteID, dto.PickupStopID, dto.DropoffStopID, "active",
-	).Scan(&assignment.ID, &assignment.RiderID, &assignment.RouteID, &assignment.PickupStopID, &assignment.DropoffStopID, &status, &assignment.CreatedAt, &assignment.UpdatedAt)
-	if err != nil {
-		var pgErr *pgconn.PgError
-		if errors.As(err, &pgErr) {
-			switch pgErr.Message {
-			case "rider.not-found":
-				return nil, &trackingErrors.TrackingError{Code: trackingErrors.RiderNotFound, Err: pgErr}
-			case "route.not-found":
-				return nil, &trackingErrors.TrackingError{Code: trackingErrors.RouteNotFound, Err: pgErr}
-			case "assignment.already-exists":
-				return nil, &trackingErrors.TrackingError{Code: trackingErrors.AssignmentAlreadyExists, Err: pgErr}
-			}
-		}
-		return nil, &trackingErrors.TrackingError{Code: trackingErrors.AssignmentCreateFailed, Err: err}
-	}
-	assignment.IsActive = (status == "active")
-	assignment.AssignedAt = assignment.CreatedAt
-	return &assignment, nil
-}
-
-func (r *TrackingRepository) UnassignRider(ctx context.Context, tenantID uuid.UUID, assignmentID uuid.UUID) error {
-	var deleted bool
-	err := r.dbService.QueryRow(ctx, `SELECT tracking.sp_unassign_rider($1, $2)`, tenantID, assignmentID).Scan(&deleted)
-	if err != nil || !deleted {
-		return &trackingErrors.TrackingError{Code: trackingErrors.AssignmentDeleteFailed, Err: err}
-	}
-	return nil
-}
-
-func (r *TrackingRepository) ListRiderAssignments(ctx context.Context, tenantID uuid.UUID, riderID *uuid.UUID, routeID *uuid.UUID, isActive *bool, scopeUserID *uuid.UUID) ([]*models.RiderAssignment, error) {
-	rows, err := r.dbService.Query(ctx, `SELECT * FROM tracking.sp_list_rider_assignments($1::UUID, $2::UUID, $3::UUID, $4::BOOLEAN, $5::UUID)`, tenantID, riderID, routeID, isActive, scopeUserID)
-	if err != nil {
-		return nil, scopedErr(err, trackingErrors.AssignmentListFailed)
-	}
-	defer rows.Close()
-	var assignments []*models.RiderAssignment
-	for rows.Next() {
-		var a models.RiderAssignment
-		var status string
-		if err := rows.Scan(&a.ID, &a.RiderID, &a.RouteID, &a.PickupStopID, &a.DropoffStopID, &status, &a.CreatedAt, &a.UpdatedAt); err != nil {
-			return nil, err
-		}
-		a.IsActive = (status == "active")
-		a.AssignedAt = a.CreatedAt
-		assignments = append(assignments, &a)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, scopedErr(err, trackingErrors.AssignmentListFailed)
-	}
-	return assignments, nil
-}
-
 // ==================== ORGANIZATIONS CRUD ====================
 
 func (r *TrackingRepository) CreateOrganization(ctx context.Context, tenantID uuid.UUID, dto *models.CreateOrganizationDto) (*models.Organization, error) {

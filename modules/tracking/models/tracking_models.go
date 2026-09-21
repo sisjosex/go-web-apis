@@ -265,18 +265,35 @@ type Rider struct {
 	UpdatedAt             time.Time  `json:"updated_at"`
 }
 
-// RiderAssignment maps riders to routes with pickup/dropoff stops
-type RiderAssignment struct {
-	ID            uuid.UUID  `json:"id"`
-	RiderID       uuid.UUID  `json:"rider_id"`
-	RouteID       uuid.UUID  `json:"route_id"`
-	PickupStopID  *uuid.UUID `json:"pickup_stop_id"`
-	DropoffStopID *uuid.UUID `json:"dropoff_stop_id"`
-	IsActive      bool       `json:"is_active"`
-	AssignedAt    time.Time  `json:"assigned_at"`
-	UnassignedAt  *time.Time `json:"unassigned_at"`
-	CreatedAt     time.Time  `json:"created_at"`
-	UpdatedAt     time.Time  `json:"updated_at"`
+// RiderRouteAssignment is which route a rider rides, on which weekdays and between which dates
+// (TRACK-009). DaysOfWeek is a bitmask — bit 0 Monday … bit 6 Sunday — and ValidUntil nil is
+// open-ended. Direction is the route's (D2). The names ride along so a list needs no client-side join.
+type RiderRouteAssignment struct {
+	ID                 uuid.UUID            `json:"id"`
+	RiderID            uuid.UUID            `json:"rider_id"`
+	RiderName          string               `json:"rider_name"`
+	RouteID            uuid.UUID            `json:"route_id"`
+	RouteName          string               `json:"route_name"`
+	Direction          string               `json:"direction"`
+	DaysOfWeek         int16                `json:"days_of_week"`
+	PickupStopPlaceID  *uuid.UUID           `json:"pickup_stop_place_id"`
+	PickupStopName     *string              `json:"pickup_stop_name"`
+	DropoffStopPlaceID *uuid.UUID           `json:"dropoff_stop_place_id"`
+	DropoffStopName    *string              `json:"dropoff_stop_name"`
+	ValidFrom          coreModels.DateOnly  `json:"valid_from"`
+	ValidUntil         *coreModels.DateOnly `json:"valid_until"`
+	CreatedAt          time.Time            `json:"created_at"`
+	UpdatedAt          time.Time            `json:"updated_at"`
+}
+
+// AssignmentWarning is a day of the materialised window on which a route's planned vehicle seats
+// fewer riders than are assigned (TRACK-009 D3). It never blocks a write.
+type AssignmentWarning struct {
+	ServiceDate coreModels.DateOnly `json:"service_date"`
+	RouteID     uuid.UUID           `json:"route_id"`
+	VehicleID   uuid.UUID           `json:"vehicle_id"`
+	Capacity    int32               `json:"capacity"`
+	Assigned    int32               `json:"assigned"`
 }
 
 // VehicleLocation represents GPS coordinates of a vehicle

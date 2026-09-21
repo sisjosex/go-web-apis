@@ -30,10 +30,20 @@ const (
 	RiderDeleteFailed  = "tracking.rider.delete.failed"
 
 	// Assignment errors (TR0061-TR0080)
-	AssignmentNotFound      = "tracking.assignment.not-found"
-	AssignmentCreateFailed  = "tracking.assignment.create.failed"
-	AssignmentDeleteFailed  = "tracking.assignment.delete.failed"
-	AssignmentAlreadyExists = "tracking.assignment.already-exists"
+	AssignmentNotFound     = "tracking.assignment.not-found"
+	AssignmentCreateFailed = "tracking.assignment.create.failed"
+	AssignmentUpdateFailed = "tracking.assignment.update.failed"
+	AssignmentDeleteFailed = "tracking.assignment.delete.failed"
+	// AssignmentOverlap refuses an assignment that would seat the rider twice: another of theirs in
+	// the same direction shares a weekday over dates that meet (TRACK-009 D4).
+	AssignmentOverlap = "tracking.assignment.overlap"
+	// AssignmentStopNotOnRoute refuses a pickup or dropoff the route does not call at in the version
+	// in force when the assignment first rides.
+	AssignmentStopNotOnRoute = "tracking.assignment.stop-not-on-route"
+	// AssignmentDaysOfWeek and AssignmentRange refuse a bitmask outside 1..127 and an end before the
+	// start — the checks a PATCH can only fail once merged with the stored row.
+	AssignmentDaysOfWeek = "tracking.assignment.days-of-week"
+	AssignmentRange      = "tracking.assignment.range"
 
 	// Location errors (TR0081-TR0100)
 	LocationUpdateFailed  = "tracking.location.update.failed"
@@ -194,6 +204,8 @@ const (
 type TrackingError struct {
 	Code string
 	Err  error
+	// Detail, when set, is answered beside the code — e.g. which item of a bulk request was refused.
+	Detail any
 }
 
 func (e *TrackingError) Error() string {

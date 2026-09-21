@@ -370,18 +370,26 @@ func registerRiderRoutes(
 		tenancyMW.RequirePermission(trackingPerms.RidersDelete),
 		trackingController.DeleteRider)
 
-	// Assignments
+	// Assignments (TRACK-009)
 	r.GET("/assignments",
 		tenancyMW.RequirePermission(trackingPerms.AssignmentsRead),
-		trackingController.ListRiderAssignments)
+		trackingController.ListAssignments)
 	r.POST("/assignments",
 		denyOrganization,
 		tenancyMW.RequirePermission(trackingPerms.AssignmentsManage),
-		trackingController.AssignRider)
+		trackingController.CreateAssignment)
+	r.POST("/assignments/bulk",
+		denyOrganization,
+		tenancyMW.RequirePermission(trackingPerms.AssignmentsManage),
+		trackingController.CreateAssignmentsBulk)
+	r.PATCH("/assignments/:assignment_id",
+		denyOrganization,
+		tenancyMW.RequirePermission(trackingPerms.AssignmentsManage),
+		trackingController.UpdateAssignment)
 	r.DELETE("/assignments/:assignment_id",
 		denyOrganization,
 		tenancyMW.RequirePermission(trackingPerms.AssignmentsManage),
-		trackingController.UnassignRider)
+		trackingController.DeleteAssignment)
 }
 
 // registerOpenRoutes is the single-database shape: no tenant, no permissions, every handler bare.
@@ -502,7 +510,9 @@ func registerOpenRiderRoutes(g *gin.RouterGroup, trackingController *controllers
 	g.GET("/riders/:rider_id/status", trackingController.GetRiderStatus)
 	g.PATCH("/riders/:rider_id", trackingController.UpdateRider)
 	g.DELETE("/riders/:rider_id", trackingController.DeleteRider)
-	g.POST("/assignments", trackingController.AssignRider)
-	g.GET("/assignments", trackingController.ListRiderAssignments)
-	g.DELETE("/assignments/:assignment_id", trackingController.UnassignRider)
+	g.GET("/assignments", trackingController.ListAssignments)
+	g.POST("/assignments", trackingController.CreateAssignment)
+	g.POST("/assignments/bulk", trackingController.CreateAssignmentsBulk)
+	g.PATCH("/assignments/:assignment_id", trackingController.UpdateAssignment)
+	g.DELETE("/assignments/:assignment_id", trackingController.DeleteAssignment)
 }

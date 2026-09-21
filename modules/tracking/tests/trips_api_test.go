@@ -62,13 +62,10 @@ func createTripRoute(t *testing.T, helper *testhelpers.ApiTestHelper, startTimes
 
 func assignRider(t *testing.T, helper *testhelpers.ApiTestHelper, riderID, routeID string) {
 	t.Helper()
-	w := helper.DoRequest("POST", "/tracking/assignments", map[string]interface{}{
-		"rider_id": riderID, "route_id": routeID,
-		"pickup_stop_id": CentralStationID, "dropoff_stop_id": SchoolAStopID,
-	}, map[string]string{})
-	if w.Code != http.StatusCreated {
-		t.Fatalf("assign rider: expected 201, got %d: %s", w.Code, w.Body.String())
-	}
+	body := AssignmentBody(riderID, routeID, EveryDayMask)
+	body["pickup_stop_place_id"] = CentralStationID
+	body["dropoff_stop_place_id"] = SchoolAStopID
+	CreateAssignment(t, helper, body)
 }
 
 // materialiseRoute is what the route.changed handler does for one route over [from, to].

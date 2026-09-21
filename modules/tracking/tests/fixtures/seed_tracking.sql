@@ -2,7 +2,7 @@
 -- These are shared test data that can be reused across all tracking tests
 
 DELETE FROM tracking.trips;
-DELETE FROM tracking.rider_assignments;
+DELETE FROM tracking.rider_route_assignments;
 DELETE FROM tracking.route_exceptions;
 DELETE FROM tracking.route_schedules;
 DELETE FROM tracking.calendar_dates;
@@ -333,16 +333,20 @@ INSERT INTO tracking.route_schedules (
 -- ================================================================
 -- RIDER ASSIGNMENTS
 -- ================================================================
-INSERT INTO tracking.rider_assignments (
-    id, rider_id, route_id, pickup_stop_id, dropoff_stop_id, status, created_at, updated_at
+-- Every day from the start of the year, open-ended: the shape TRACK-009's backfill gives an old row.
+INSERT INTO tracking.rider_route_assignments (
+    id, rider_id, route_id, days_of_week, pickup_stop_place_id, dropoff_stop_place_id,
+    valid_from, valid_until, created_at, updated_at
 ) VALUES
 (
     '77777777-7777-7777-7777-777777777777'::uuid,
     'eeeeeeee-eeee-eeee-eeee-eeeeeeeeeeee'::uuid,
     '11111111-1111-1111-1111-111111111111'::uuid,
+    127,
     '33333333-3333-3333-3333-333333333333'::uuid,
     '44444444-4444-4444-4444-444444444444'::uuid,
-    'active',
+    DATE '2026-01-01',
+    NULL,
     NOW(),
     NOW()
 ),
@@ -350,9 +354,11 @@ INSERT INTO tracking.rider_assignments (
     '88888888-8888-8888-8888-888888888888'::uuid,
     'ffffffff-ffff-ffff-ffff-ffffffffffff'::uuid,
     '22222222-2222-2222-2222-222222222222'::uuid,
+    127,
     '33333333-3333-3333-3333-333333333333'::uuid,
     '55555555-5555-5555-5555-555555555555'::uuid,
-    'active',
+    DATE '2026-01-01',
+    NULL,
     NOW(),
     NOW()
 );

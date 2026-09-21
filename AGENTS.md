@@ -112,6 +112,7 @@ Verified 2026-09-19 (APP-004):
 | `GET /tracking/routes/:id/schedules` | — | array, newest validity first — `days_of_week` is a bitmask (bit 0 Monday), `start_time` is HH:MM, every row carries `calendar_name` |
 | `GET /tracking/routes/:id/exceptions` | `date_from date_to` (overlap, not containment) | array, oldest first — `kind` and a `payload` whose keys the kind defines |
 | `GET /tracking/routes/:id/preview` | `from to` (YYYY-MM-DD, both required, at most 92 days apart) | array — one row per departure the plan produces, with `service_date`, `schedule_id`, `start_time`, `version_id`, `vehicle_id`, `driver_id`, a `status` of planned/cancelled and the `exceptions` that apply; a day the route does not run has no row |
+| `GET /tracking/assignments` | `page page_size rider_id route_id date` (cap 100) | `{ assignments, total_count, page, page_size }` — `date` narrows to the assignments in force that day; every row carries `rider_name`, `route_name`, `direction`, `pickup_stop_name`, `dropoff_stop_name`; `days_of_week` is the schedules' bitmask. Writes (`POST`, `PATCH /:id`, `POST /bulk`) answer `{ assignment \| assignments, warnings }` |
 | `GET /tracking/riders` | `page page_size search organization_id rider_type is_active` (cap 100) | `{ riders, total_count, page, page_size }` — every row carries `organization_name` |
 | `GET /sales/orders` | `limit offset` | `{ data }` — no total |
 | `GET /sales/customers`, the other `/tracking/*`, `/inventory/stock/:id` | filters only | array, object or `{ data }`, unpaginated |

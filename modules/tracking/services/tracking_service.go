@@ -212,16 +212,38 @@ func (s *TrackingService) DeleteRider(ctx context.Context, tenantID uuid.UUID, r
 
 // ==================== ASSIGNMENTS CRUD ====================
 
-func (s *TrackingService) AssignRider(ctx context.Context, tenantID uuid.UUID, dto *models.AssignRiderDto) (*models.RiderAssignment, error) {
-	return s.trackingRepo.AssignRider(ctx, tenantID, dto)
+// CreateAssignment is the bulk path with one item, so a single POST and an import share every check.
+func (s *TrackingService) CreateAssignment(ctx context.Context, tenantID uuid.UUID, dto *models.AssignRiderDto) (*models.AssignmentResponse, error) {
+	result, err := s.trackingRepo.CreateAssignments(ctx, tenantID, []models.AssignRiderDto{*dto})
+	if err != nil {
+		return nil, err
+	}
+	return &models.AssignmentResponse{Assignment: result.Assignments[0], Warnings: result.Warnings}, nil
 }
 
-func (s *TrackingService) UnassignRider(ctx context.Context, tenantID uuid.UUID, assignmentID uuid.UUID) error {
-	return s.trackingRepo.UnassignRider(ctx, tenantID, assignmentID)
+func (s *TrackingService) CreateAssignments(ctx context.Context, tenantID uuid.UUID, dtos []models.AssignRiderDto) (*models.BulkAssignmentResponse, error) {
+	return s.trackingRepo.CreateAssignments(ctx, tenantID, dtos)
 }
 
-func (s *TrackingService) ListRiderAssignments(ctx context.Context, tenantID uuid.UUID, riderID *uuid.UUID, routeID *uuid.UUID, isActive *bool, scopeUserID *uuid.UUID) ([]*models.RiderAssignment, error) {
-	return s.trackingRepo.ListRiderAssignments(ctx, tenantID, riderID, routeID, isActive, scopeUserID)
+func (s *TrackingService) UpdateAssignment(ctx context.Context, tenantID uuid.UUID, assignmentID uuid.UUID, dto *models.UpdateAssignmentDto) (*models.AssignmentResponse, error) {
+	return s.trackingRepo.UpdateAssignment(ctx, tenantID, assignmentID, dto)
+}
+
+func (s *TrackingService) DeleteAssignment(ctx context.Context, tenantID uuid.UUID, assignmentID uuid.UUID) error {
+	return s.trackingRepo.DeleteAssignment(ctx, tenantID, assignmentID)
+}
+
+func (s *TrackingService) ListAssignments(ctx context.Context, tenantID uuid.UUID, query models.ListAssignmentsQuery, scopeUserID *uuid.UUID) (*models.ListAssignmentsResponse, error) {
+	assignments, totalCount, err := s.trackingRepo.ListAssignments(ctx, tenantID, query, scopeUserID)
+	if err != nil {
+		return nil, err
+	}
+	return &models.ListAssignmentsResponse{
+		Assignments: assignments,
+		TotalCount:  totalCount,
+		Page:        query.Page,
+		PageSize:    query.PageSize,
+	}, nil
 }
 
 // ==================== ORGANIZATIONS CRUD ====================
