@@ -1,6 +1,7 @@
 package models
 
 import (
+	"encoding/json"
 	"time"
 
 	coreModels "josex/web/modules/core/models"
@@ -113,6 +114,73 @@ type RouteStop struct {
 	DwellSec         *int32    `json:"dwell_sec"`
 	CreatedAt        time.Time `json:"created_at"`
 	UpdatedAt        time.Time `json:"updated_at"`
+}
+
+// RouteSchedule is when a route runs (TRACK-018 D1): a weekday bitmask — bit 0 Monday … bit 6
+// Sunday — and a departure time, over a range of dates. ValidUntil NULL is "and every day after".
+// CalendarName rides along so a list needs no second request to say which holidays apply.
+type RouteSchedule struct {
+	ID           uuid.UUID            `json:"id"`
+	RouteID      uuid.UUID            `json:"route_id"`
+	DaysOfWeek   int16                `json:"days_of_week"`
+	StartTime    string               `json:"start_time"`
+	ValidFrom    coreModels.DateOnly  `json:"valid_from"`
+	ValidUntil   *coreModels.DateOnly `json:"valid_until"`
+	CalendarID   *uuid.UUID           `json:"calendar_id"`
+	CalendarName *string              `json:"calendar_name"`
+	CreatedAt    time.Time            `json:"created_at"`
+	UpdatedAt    time.Time            `json:"updated_at"`
+}
+
+// Calendar is a named set of dates a schedule points at — a school year, the public holidays.
+// OrganizationID is the school whose calendar it is, and NULL for one the operator keeps for the
+// whole tenant.
+type Calendar struct {
+	ID             uuid.UUID  `json:"id"`
+	TenantID       uuid.UUID  `json:"tenant_id"`
+	OrganizationID *uuid.UUID `json:"organization_id"`
+	Name           string     `json:"name"`
+	DatesCount     int32      `json:"dates_count"`
+	CreatedAt      time.Time  `json:"created_at"`
+	UpdatedAt      time.Time  `json:"updated_at"`
+}
+
+// CalendarDate is one date of one calendar: no_service suppresses the run, special_service adds one
+// the weekday mask would not have produced.
+type CalendarDate struct {
+	Date  coreModels.DateOnly `json:"date"`
+	Kind  string              `json:"kind"`
+	Label *string             `json:"label"`
+}
+
+// RouteException is what happens differently over a range of dates (TRACK-018). Kind says what
+// changes and Payload carries it in the shape that kind defines, which the SP checks on the way in —
+// it stays raw JSON here because there is one shape per kind and no reader wants the other six.
+type RouteException struct {
+	ID        uuid.UUID           `json:"id"`
+	RouteID   uuid.UUID           `json:"route_id"`
+	DateFrom  coreModels.DateOnly `json:"date_from"`
+	DateTo    coreModels.DateOnly `json:"date_to"`
+	Kind      string              `json:"kind"`
+	Payload   json.RawMessage     `json:"payload"`
+	Reason    *string             `json:"reason"`
+	CreatedBy *uuid.UUID          `json:"created_by"`
+	CreatedAt time.Time           `json:"created_at"`
+	UpdatedAt time.Time           `json:"updated_at"`
+}
+
+// RoutePreviewDay is one departure the plan produces: which schedule made it, at what time, running
+// which stop list, with which bus and driver, and the exceptions that apply to the day. A date the
+// route does not run — a weekday the mask excludes, or a calendar's no_service day — has no row.
+type RoutePreviewDay struct {
+	ServiceDate coreModels.DateOnly `json:"service_date"`
+	ScheduleID  uuid.UUID           `json:"schedule_id"`
+	StartTime   string              `json:"start_time"`
+	VersionID   *uuid.UUID          `json:"version_id"`
+	VehicleID   *uuid.UUID          `json:"vehicle_id"`
+	DriverID    *uuid.UUID          `json:"driver_id"`
+	Status      string              `json:"status"`
+	Exceptions  json.RawMessage     `json:"exceptions"`
 }
 
 // Organization represents a school or employer whose people ride (TRACK-005). Kind is the only

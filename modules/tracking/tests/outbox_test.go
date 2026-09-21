@@ -194,3 +194,79 @@ func TestOutboxRouteChanged_OneRowPerAcceptedWrite(t *testing.T) {
 	assert.Equal(t, http.StatusConflict, w.Code, w.Body.String())
 	assert.Equal(t, after, routeChangedRows(t, helper), "a refused write must leave no outbox row")
 }
+
+// TestOutboxRouteChanged_ExceptionsAndSchedules - TRACK-018 step 4: every accepted planning write
+// leaves exactly one route.changed row, carrying the days it changed, and the relay publishes it;
+// a write the SP refuses leaves none, because the raise takes the insert down with it.
+func TestOutboxRouteChanged_ExceptionsAndSchedules(t *testing.T) {
+	helper := SetupTrackingTest(t)
+	defer helper.Close()
+	ctx := context.Background()
+
+	// Created before the relay starts, so their own rows drain with the rest and the writes below
+	// are the only ones still to be published.
+	routeID := CreateTestRoute(t, helper)
+	CreateRouteSchedule(t, helper, routeID, WeekdayScheduleBody("07:00", "2027-09-01"))
+
+	tenantID := uuid.NewString()
+	relay, inspector := startTestRelay(t, helper, tenantID)
+	defer relay.Shutdown()
+	defer inspector.Close()
+	before := routeChangedRows(t, helper)
+
+	w := helper.DoRequest("POST", "/tracking/routes/"+routeID+"/exceptions",
+		CancelDay("2027-10-03", "Strike"), map[string]string{})
+	if w.Code != http.StatusCreated {
+		t.Fatalf("create exception: expected 201, got %d: %s", w.Code, w.Body.String())
+	}
+
+	if got := routeChangedRows(t, helper) - before; got != 1 {
+		t.Fatalf("expected the exception to leave 1 route.changed row, got %d", got)
+	}
+	var id int64
+	var changedRouteID, dateFrom, dateTo string
+	if err := helper.DB().QueryRow(ctx, `
+		SELECT o.id, o.payload->>'route_id', o.payload->>'date_from', o.payload->>'date_to'
+		  FROM tracking.outbox o
+		 WHERE o.topic = 'route.changed'
+		 ORDER BY o.id DESC
+		 LIMIT 1`).Scan(&id, &changedRouteID, &dateFrom, &dateTo); err != nil {
+		t.Fatalf("read the route.changed row: %v", err)
+	}
+	assert.Equal(t, routeID, changedRouteID)
+	assert.Equal(t, "2027-10-03", dateFrom, "the exception's first day")
+	assert.Equal(t, "2027-10-03", dateTo, "and its last")
+
+	taskID := tenantID + ":" + strconv.FormatInt(id, 10)
+	var info *asynq.TaskInfo
+	var err error
+	waitFor(t, time.Second, "the exception's task", func() bool {
+		info, err = inspector.GetTaskInfo(jobs.QueueDefault, taskID)
+		return err == nil
+	})
+	assert.Equal(t, "outbox:route.changed", info.Type)
+
+	// A payload that does not carry the keys its kind defines is refused, and leaves nothing.
+	after := routeChangedRows(t, helper)
+	w = helper.DoRequest("POST", "/tracking/routes/"+routeID+"/exceptions", map[string]interface{}{
+		"date_from": "2027-10-04", "date_to": "2027-10-04",
+		"kind": "change_time", "payload": map[string]interface{}{"time": "08:00"},
+	}, map[string]string{})
+
+	assert.Equal(t, http.StatusBadRequest, w.Code, w.Body.String())
+	assert.Equal(t, after, routeChangedRows(t, helper), "a refused write must leave no outbox row")
+
+	// A schedule that would overlap is refused the same way.
+	w = helper.DoRequest("POST", "/tracking/routes/"+routeID+"/schedules",
+		WeekdayScheduleBody("07:00", "2027-09-01"), map[string]string{})
+
+	assert.Equal(t, http.StatusConflict, w.Code, w.Body.String())
+	assert.Equal(t, after, routeChangedRows(t, helper), "a refused schedule must leave no outbox row")
+
+	// And an accepted schedule write leaves exactly one more.
+	w = helper.DoRequest("POST", "/tracking/routes/"+routeID+"/schedules",
+		WeekdayScheduleBody("19:30", "2027-09-01"), map[string]string{})
+
+	assert.Equal(t, http.StatusCreated, w.Code, w.Body.String())
+	assert.Equal(t, after+1, routeChangedRows(t, helper))
+}

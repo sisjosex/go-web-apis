@@ -54,6 +54,12 @@ const (
 	MorningVersionID   = "a0000000-0000-0000-0000-000000000001"
 	AfternoonVersionID = "a0000000-0000-0000-0000-000000000002"
 
+	// Route schedules — one open-ended weekday schedule per seeded route, in force since
+	// 2026-01-01: Monday to Friday (bitmask 31) at the route's own departure time (TRACK-018).
+	MorningScheduleID   = "b0000000-0000-0000-0000-000000000001"
+	AfternoonScheduleID = "b0000000-0000-0000-0000-000000000002"
+	WeekdaysMask        = 31
+
 	// Assignments
 	JohnMorningAssignmentID   = "77777777-7777-7777-7777-777777777777"
 	JaneAfternoonAssignmentID = "88888888-8888-8888-8888-888888888888"
@@ -474,6 +480,154 @@ func StopNames(rows []map[string]interface{}) []string {
 		names = append(names, row["stop_name"].(string))
 	}
 	return names
+}
+
+// ============================================================================
+// SCHEDULE AND CALENDAR HELPERS (TRACK-018)
+// ============================================================================
+
+// ListRouteSchedules reads a route's schedules, newest validity first.
+func ListRouteSchedules(t *testing.T, helper *testhelpers.ApiTestHelper, routeID string) []map[string]interface{} {
+	t.Helper()
+
+	w := helper.DoRequest("GET", "/tracking/routes/"+routeID+"/schedules", nil, map[string]string{})
+	if w.Code != http.StatusOK {
+		t.Fatalf("list route schedules returned %d: %s", w.Code, w.Body.String())
+	}
+	return ParseListResponse(t, w.Body.Bytes())
+}
+
+// CreateRouteSchedule adds a recurrence to a route and returns its id.
+func CreateRouteSchedule(t *testing.T, helper *testhelpers.ApiTestHelper, routeID string, body map[string]interface{}) string {
+	t.Helper()
+
+	w := helper.DoRequest("POST", "/tracking/routes/"+routeID+"/schedules", body, map[string]string{})
+	if w.Code != http.StatusCreated {
+		t.Fatalf("create route schedule: expected 201, got %d: %s", w.Code, w.Body.String())
+	}
+	return ExtractID(t, ParseResponse(t, w.Body.Bytes()))
+}
+
+// WeekdayScheduleBody is the common case: Monday to Friday, open-ended, no calendar.
+func WeekdayScheduleBody(startTime, validFrom string) map[string]interface{} {
+	return map[string]interface{}{
+		"days_of_week": WeekdaysMask,
+		"start_time":   startTime,
+		"valid_from":   validFrom,
+	}
+}
+
+// CreateTestCalendar creates a calendar and returns its id.
+func CreateTestCalendar(t *testing.T, helper *testhelpers.ApiTestHelper) string {
+	t.Helper()
+
+	w := helper.DoRequest("POST", "/tracking/calendars", map[string]interface{}{
+		"name": "Calendar " + uuid.New().String()[:8],
+	}, map[string]string{})
+	if w.Code != http.StatusCreated {
+		t.Fatalf("create calendar: expected 201, got %d: %s", w.Code, w.Body.String())
+	}
+	return ExtractID(t, ParseResponse(t, w.Body.Bytes()))
+}
+
+// ListCalendars calls the paged calendars endpoint and decodes its envelope.
+// query is the raw query string including its leading "?", or "".
+func ListCalendars(t *testing.T, helper *testhelpers.ApiTestHelper, query string) models.ListCalendarsResponse {
+	t.Helper()
+
+	w := helper.DoRequest("GET", "/tracking/calendars"+query, nil, map[string]string{})
+	if w.Code != http.StatusOK {
+		t.Fatalf("list calendars %q returned %d: %s", query, w.Code, w.Body.String())
+	}
+
+	var result models.ListCalendarsResponse
+	if err := json.Unmarshal(w.Body.Bytes(), &result); err != nil {
+		t.Fatalf("list calendars %q returned invalid JSON: %v — %s", query, err, w.Body.String())
+	}
+	return result
+}
+
+// ReplaceCalendarDates saves a calendar's whole date list and returns what is stored.
+func ReplaceCalendarDates(t *testing.T, helper *testhelpers.ApiTestHelper, calendarID string, dates []map[string]interface{}) []map[string]interface{} {
+	t.Helper()
+
+	w := helper.DoRequest("PUT", "/tracking/calendars/"+calendarID+"/dates", dates, map[string]string{})
+	if w.Code != http.StatusOK {
+		t.Fatalf("replace calendar dates: expected 200, got %d: %s", w.Code, w.Body.String())
+	}
+	return ParseListResponse(t, w.Body.Bytes())
+}
+
+// NoServiceDates is a run of consecutive no_service days, which is what a shutdown week looks like.
+func NoServiceDates(first string, count int) []map[string]interface{} {
+	start, err := time.Parse("2006-01-02", first)
+	if err != nil {
+		panic(err)
+	}
+	dates := make([]map[string]interface{}, 0, count)
+	for i := 0; i < count; i++ {
+		dates = append(dates, map[string]interface{}{
+			"date":  start.AddDate(0, 0, i).Format("2006-01-02"),
+			"kind":  "no_service",
+			"label": "Holiday",
+		})
+	}
+	return dates
+}
+
+// CreateRouteException records an exception on a route and returns its id.
+func CreateRouteException(t *testing.T, helper *testhelpers.ApiTestHelper, routeID string, body map[string]interface{}) string {
+	t.Helper()
+
+	w := helper.DoRequest("POST", "/tracking/routes/"+routeID+"/exceptions", body, map[string]string{})
+	if w.Code != http.StatusCreated {
+		t.Fatalf("create route exception: expected 201, got %d: %s", w.Code, w.Body.String())
+	}
+	return ExtractID(t, ParseResponse(t, w.Body.Bytes()))
+}
+
+// ListRouteExceptions reads a route's exceptions; query is the raw query string including its
+// leading "?", or "".
+func ListRouteExceptions(t *testing.T, helper *testhelpers.ApiTestHelper, routeID, query string) []map[string]interface{} {
+	t.Helper()
+
+	w := helper.DoRequest("GET", "/tracking/routes/"+routeID+"/exceptions"+query, nil, map[string]string{})
+	if w.Code != http.StatusOK {
+		t.Fatalf("list route exceptions %q returned %d: %s", query, w.Code, w.Body.String())
+	}
+	return ParseListResponse(t, w.Body.Bytes())
+}
+
+// CancelDay is the commonest exception of all: one day off, for a reason.
+func CancelDay(date, reason string) map[string]interface{} {
+	return map[string]interface{}{
+		"date_from": date,
+		"date_to":   date,
+		"kind":      "cancel",
+		"payload":   map[string]interface{}{},
+		"reason":    reason,
+	}
+}
+
+// PreviewRoute reads the plan a route runs over a window.
+func PreviewRoute(t *testing.T, helper *testhelpers.ApiTestHelper, routeID, from, to string) []map[string]interface{} {
+	t.Helper()
+
+	w := helper.DoRequest("GET", "/tracking/routes/"+routeID+"/preview?from="+from+"&to="+to, nil, map[string]string{})
+	if w.Code != http.StatusOK {
+		t.Fatalf("preview route %s..%s returned %d: %s", from, to, w.Code, w.Body.String())
+	}
+	return ParseListResponse(t, w.Body.Bytes())
+}
+
+// ServiceDates is the ordered dates a preview produced, which is what "that day is not in the plan"
+// is asserted against.
+func ServiceDates(rows []map[string]interface{}) []string {
+	dates := make([]string, 0, len(rows))
+	for _, row := range rows {
+		dates = append(dates, row["service_date"].(string))
+	}
+	return dates
 }
 
 // ============================================================================

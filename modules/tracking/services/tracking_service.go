@@ -357,3 +357,76 @@ func (s *TrackingService) SetDocumentFile(ctx context.Context, tenantID uuid.UUI
 func (s *TrackingService) RaiseDocumentAlerts(ctx context.Context, tenantID uuid.UUID) ([]*models.DocumentAlert, error) {
 	return s.trackingRepo.RaiseDocumentAlerts(ctx, tenantID)
 }
+
+// ==================== SCHEDULES AND CALENDARS (TRACK-018) ====================
+
+func (s *TrackingService) ListRouteSchedules(ctx context.Context, tenantID uuid.UUID, routeID uuid.UUID) ([]*models.RouteSchedule, error) {
+	return s.trackingRepo.ListRouteSchedules(ctx, tenantID, routeID)
+}
+
+func (s *TrackingService) CreateRouteSchedule(ctx context.Context, tenantID uuid.UUID, routeID uuid.UUID, dto *models.CreateRouteScheduleDto) (*models.RouteSchedule, error) {
+	return s.trackingRepo.CreateRouteSchedule(ctx, tenantID, routeID, dto)
+}
+
+func (s *TrackingService) UpdateRouteSchedule(ctx context.Context, tenantID uuid.UUID, scheduleID uuid.UUID, dto *models.UpdateRouteScheduleDto) (*models.RouteSchedule, error) {
+	return s.trackingRepo.UpdateRouteSchedule(ctx, tenantID, scheduleID, dto)
+}
+
+func (s *TrackingService) DeleteRouteSchedule(ctx context.Context, tenantID uuid.UUID, scheduleID uuid.UUID) error {
+	return s.trackingRepo.DeleteRouteSchedule(ctx, tenantID, scheduleID)
+}
+
+func (s *TrackingService) SplitRouteSchedule(ctx context.Context, tenantID uuid.UUID, scheduleID uuid.UUID, dto *models.SplitRouteScheduleDto) (*models.SplitRouteScheduleResponse, error) {
+	return s.trackingRepo.SplitRouteSchedule(ctx, tenantID, scheduleID, dto)
+}
+
+func (s *TrackingService) ListCalendars(ctx context.Context, tenantID uuid.UUID, query models.ListCalendarsQuery) (*models.ListCalendarsResponse, error) {
+	calendars, totalCount, err := s.trackingRepo.ListCalendars(ctx, tenantID, query)
+	if err != nil {
+		return nil, err
+	}
+	return &models.ListCalendarsResponse{
+		Calendars:  calendars,
+		TotalCount: totalCount,
+		Page:       query.Page,
+		PageSize:   query.PageSize,
+	}, nil
+}
+
+func (s *TrackingService) CreateCalendar(ctx context.Context, tenantID uuid.UUID, dto *models.CreateCalendarDto) (*models.Calendar, error) {
+	return s.trackingRepo.CreateCalendar(ctx, tenantID, dto)
+}
+
+func (s *TrackingService) UpdateCalendar(ctx context.Context, tenantID uuid.UUID, calendarID uuid.UUID, dto *models.UpdateCalendarDto) (*models.Calendar, error) {
+	return s.trackingRepo.UpdateCalendar(ctx, tenantID, calendarID, dto)
+}
+
+func (s *TrackingService) DeleteCalendar(ctx context.Context, tenantID uuid.UUID, calendarID uuid.UUID) error {
+	return s.trackingRepo.DeleteCalendar(ctx, tenantID, calendarID)
+}
+
+func (s *TrackingService) ListCalendarDates(ctx context.Context, tenantID uuid.UUID, calendarID uuid.UUID, from, to *string) ([]*models.CalendarDate, error) {
+	return s.trackingRepo.ListCalendarDates(ctx, tenantID, calendarID, from, to)
+}
+
+func (s *TrackingService) ReplaceCalendarDates(ctx context.Context, tenantID uuid.UUID, calendarID uuid.UUID, dates []models.CalendarDateDto) ([]*models.CalendarDate, error) {
+	return s.trackingRepo.ReplaceCalendarDates(ctx, tenantID, calendarID, dates)
+}
+
+// ==================== EXCEPTIONS AND PREVIEW (TRACK-018) ====================
+
+func (s *TrackingService) ListRouteExceptions(ctx context.Context, tenantID uuid.UUID, routeID uuid.UUID, dateFrom, dateTo *string) ([]*models.RouteException, error) {
+	return s.trackingRepo.ListRouteExceptions(ctx, tenantID, routeID, dateFrom, dateTo)
+}
+
+func (s *TrackingService) CreateRouteException(ctx context.Context, tenantID uuid.UUID, routeID uuid.UUID, dto *models.CreateRouteExceptionDto, createdBy *uuid.UUID) (*models.RouteException, error) {
+	return s.trackingRepo.CreateRouteException(ctx, tenantID, routeID, dto, createdBy)
+}
+
+func (s *TrackingService) DeleteRouteException(ctx context.Context, tenantID uuid.UUID, exceptionID uuid.UUID) error {
+	return s.trackingRepo.DeleteRouteException(ctx, tenantID, exceptionID)
+}
+
+func (s *TrackingService) PreviewRoute(ctx context.Context, tenantID uuid.UUID, routeID uuid.UUID, from, to string) ([]*models.RoutePreviewDay, error) {
+	return s.trackingRepo.PreviewRoute(ctx, tenantID, routeID, from, to)
+}

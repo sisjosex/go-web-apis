@@ -95,6 +95,51 @@ const (
 	RouteVersionClosed    = "tracking.route.version-closed"
 	RouteVersionSaveStops = "tracking.route.version-stops.failed"
 
+	// Route schedule errors (TR0261-TR0280)
+	ScheduleNotFound     = "tracking.schedule.not-found"
+	ScheduleCreateFailed = "tracking.schedule.create.failed"
+	ScheduleUpdateFailed = "tracking.schedule.update.failed"
+	ScheduleDeleteFailed = "tracking.schedule.delete.failed"
+	ScheduleListFailed   = "tracking.schedule.list.failed"
+	ScheduleSplitFailed  = "tracking.schedule.split.failed"
+	// ScheduleOverlap refuses a schedule that would leave the route with two departures at the same
+	// time of day on the same date — the exclusion constraint is the backstop for two writers racing.
+	ScheduleOverlap = "tracking.schedule.overlap"
+	// ScheduleSplitDate refuses a split outside the schedule's own validity: before it starts there is
+	// nothing to close, after it ends there is nothing to carry.
+	ScheduleSplitDate = "tracking.schedule.split-date"
+	// ScheduleDaysOfWeek refuses a weekday bitmask outside 1..127 arriving through a split's changes,
+	// which the DTO cannot reach.
+	ScheduleDaysOfWeek = "tracking.schedule.days-of-week"
+
+	// Calendar errors (TR0281-TR0300)
+	CalendarNotFound     = "tracking.calendar.not-found"
+	CalendarCreateFailed = "tracking.calendar.create.failed"
+	CalendarUpdateFailed = "tracking.calendar.update.failed"
+	CalendarDeleteFailed = "tracking.calendar.delete.failed"
+	CalendarListFailed   = "tracking.calendar.list.failed"
+	CalendarDatesFailed  = "tracking.calendar.dates.failed"
+	// CalendarInUse refuses a delete while a schedule still points at the calendar: the schedule would
+	// silently start running on the holidays.
+	CalendarInUse = "tracking.calendar.in-use"
+	// CalendarDuplicateDate refuses a replace whose list names one date twice — which of the two the
+	// calendar would keep is not the caller's to leave unsaid.
+	CalendarDuplicateDate = "tracking.calendar.duplicate-date"
+
+	// Route exception errors (TR0301-TR0320)
+	ExceptionNotFound     = "tracking.exception.not-found"
+	ExceptionCreateFailed = "tracking.exception.create.failed"
+	ExceptionDeleteFailed = "tracking.exception.delete.failed"
+	ExceptionListFailed   = "tracking.exception.list.failed"
+	// ExceptionPayload refuses a payload that does not carry exactly the keys its kind defines: an
+	// extra key is a caller saying something the SP will not read.
+	ExceptionPayload = "tracking.exception.payload"
+
+	// Preview errors
+	RoutePreviewFailed = "tracking.route.preview.failed"
+	// RoutePreviewRange refuses a window wider than 92 days — a quarter is what the screen shows.
+	RoutePreviewRange = "tracking.route.preview-range"
+
 	// Stop place errors (TR0221-TR0240)
 	StopPlaceNotFound     = "tracking.stop-place.not-found"
 	StopPlaceCreateFailed = "tracking.stop-place.create.failed"

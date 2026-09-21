@@ -101,6 +101,11 @@ Verified 2026-09-19 (APP-004):
 | `GET /tracking/stop-places` | `page page_size search near radius_m` (cap 100) | `{ stop_places, total_count, page, page_size }` — `near=lat,lng` narrows to `radius_m` metres (default 1000), adds `distance_m` to every row and orders nearest first |
 | `GET /tracking/routes/:id/stops` | `date` (YYYY-MM-DD, default today) | array — the stops of the route version in force that day; every row carries `version_id` and `stop_place_id` |
 | `GET /tracking/routes/:id/versions` | — | array, newest first — each version with `effective_from`, `effective_to` and `stops_count` |
+| `GET /tracking/calendars` | `page page_size search` (cap 100) | `{ calendars, total_count, page, page_size }` — every row carries `dates_count` |
+| `GET /tracking/calendars/:id/dates` | `from to` (YYYY-MM-DD, both optional) | array, oldest first — `date`, `kind` of no_service/special_service, `label`; `PUT` replaces the whole list with a bare array of the same shape |
+| `GET /tracking/routes/:id/schedules` | — | array, newest validity first — `days_of_week` is a bitmask (bit 0 Monday), `start_time` is HH:MM, every row carries `calendar_name` |
+| `GET /tracking/routes/:id/exceptions` | `date_from date_to` (overlap, not containment) | array, oldest first — `kind` and a `payload` whose keys the kind defines |
+| `GET /tracking/routes/:id/preview` | `from to` (YYYY-MM-DD, both required, at most 92 days apart) | array — one row per departure the plan produces, with `service_date`, `schedule_id`, `start_time`, `version_id`, `vehicle_id`, `driver_id`, a `status` of planned/cancelled and the `exceptions` that apply; a day the route does not run has no row |
 | `GET /tracking/riders` | `page page_size search organization_id rider_type is_active` (cap 100) | `{ riders, total_count, page, page_size }` — every row carries `organization_name` |
 | `GET /sales/orders` | `limit offset` | `{ data }` — no total |
 | `GET /sales/customers`, the other `/tracking/*`, `/inventory/stock/:id` | filters only | array, object or `{ data }`, unpaginated |

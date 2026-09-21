@@ -2,6 +2,10 @@
 -- These are shared test data that can be reused across all tracking tests
 
 DELETE FROM tracking.rider_assignments;
+DELETE FROM tracking.route_exceptions;
+DELETE FROM tracking.route_schedules;
+DELETE FROM tracking.calendar_dates;
+DELETE FROM tracking.calendars;
 DELETE FROM tracking.route_version_stops;
 DELETE FROM tracking.route_versions;
 DELETE FROM tracking.compliance_documents;
@@ -281,6 +285,37 @@ INSERT INTO tracking.route_version_stops (
 ('a0000000-0000-0000-0000-000000000001'::uuid, '66666666-6666-6666-6666-666666666666'::uuid, 4, 120, 60, NOW(), NOW()),
 ('a0000000-0000-0000-0000-000000000002'::uuid, '33333333-3333-3333-3333-333333333333'::uuid, 1, 0,  60, NOW(), NOW()),
 ('a0000000-0000-0000-0000-000000000002'::uuid, '55555555-5555-5555-5555-555555555555'::uuid, 2, 45, 60, NOW(), NOW());
+
+-- ================================================================
+-- ROUTE SCHEDULES — one open-ended schedule per route, weekdays only (TRACK-018 D1).
+-- 31 is bits 0..4: Monday through Friday. Each route keeps the start time its row already
+-- carried, so the seeded plan says the same thing the route row does.
+-- ================================================================
+INSERT INTO tracking.route_schedules (
+    id, route_id, days_of_week, start_time, valid_from, valid_until, calendar_id, created_at, updated_at
+) VALUES
+(
+    'b0000000-0000-0000-0000-000000000001'::uuid,
+    '11111111-1111-1111-1111-111111111111'::uuid,
+    31,
+    '07:00:00'::time,
+    DATE '2026-01-01',
+    NULL,
+    NULL,
+    NOW(),
+    NOW()
+),
+(
+    'b0000000-0000-0000-0000-000000000002'::uuid,
+    '22222222-2222-2222-2222-222222222222'::uuid,
+    31,
+    '12:00:00'::time,
+    DATE '2026-01-01',
+    NULL,
+    NULL,
+    NOW(),
+    NOW()
+);
 
 -- ================================================================
 -- RIDER ASSIGNMENTS

@@ -67,6 +67,9 @@ func registerTenantRoutes(
 	registerFleetRoutes(r, denyOrganization, trackingController)
 	registerRouteRoutes(r, denyOrganization, trackingController)
 	registerStopPlaceRoutes(r, denyOrganization, trackingController)
+	registerScheduleRoutes(r, denyOrganization, trackingController)
+	registerCalendarRoutes(r, denyOrganization, trackingController)
+	registerExceptionRoutes(r, denyOrganization, trackingController)
 	registerOrganizationRoutes(r, denyOrganization, trackingController)
 	registerDocumentRoutes(r, denyOrganization, trackingController)
 	registerRiderRoutes(r, p, denyOrganization, trackingController)
@@ -195,6 +198,83 @@ func registerStopPlaceRoutes(r *gin.RouterGroup, denyOrganization gin.HandlerFun
 		trackingController.DeleteStopPlace)
 }
 
+// registerScheduleRoutes covers when a route runs and what happens differently on one day
+// (TRACK-018 D2). Planning the board is the operator's job, so these ride on the routes permissions
+// rather than a family of their own.
+func registerScheduleRoutes(r *gin.RouterGroup, denyOrganization gin.HandlerFunc, trackingController *controllers.TrackingController) {
+	r.GET("/routes/:route_id/schedules",
+		denyOrganization,
+		tenancyMW.RequirePermission(trackingPerms.RoutesRead),
+		trackingController.ListRouteSchedules)
+	r.POST("/routes/:route_id/schedules",
+		denyOrganization,
+		tenancyMW.RequirePermission(trackingPerms.RoutesWrite),
+		trackingController.CreateRouteSchedule)
+	r.PATCH("/routes/:route_id/schedules/:schedule_id",
+		denyOrganization,
+		tenancyMW.RequirePermission(trackingPerms.RoutesWrite),
+		trackingController.UpdateRouteSchedule)
+	r.DELETE("/routes/:route_id/schedules/:schedule_id",
+		denyOrganization,
+		tenancyMW.RequirePermission(trackingPerms.RoutesWrite),
+		trackingController.DeleteRouteSchedule)
+	// The split is a write of two schedules, not a delete of one: it keeps the routes-write
+	// permission rather than routes-delete.
+	r.POST("/routes/:route_id/schedules/:schedule_id/split",
+		denyOrganization,
+		tenancyMW.RequirePermission(trackingPerms.RoutesWrite),
+		trackingController.SplitRouteSchedule)
+}
+
+// registerCalendarRoutes covers the holidays and shutdowns a schedule reads (TRACK-018).
+func registerCalendarRoutes(r *gin.RouterGroup, denyOrganization gin.HandlerFunc, trackingController *controllers.TrackingController) {
+	r.GET("/calendars",
+		denyOrganization,
+		tenancyMW.RequirePermission(trackingPerms.RoutesRead),
+		trackingController.ListCalendars)
+	r.POST("/calendars",
+		denyOrganization,
+		tenancyMW.RequirePermission(trackingPerms.RoutesWrite),
+		trackingController.CreateCalendar)
+	r.PATCH("/calendars/:calendar_id",
+		denyOrganization,
+		tenancyMW.RequirePermission(trackingPerms.RoutesWrite),
+		trackingController.UpdateCalendar)
+	r.DELETE("/calendars/:calendar_id",
+		denyOrganization,
+		tenancyMW.RequirePermission(trackingPerms.RoutesDelete),
+		trackingController.DeleteCalendar)
+	r.GET("/calendars/:calendar_id/dates",
+		denyOrganization,
+		tenancyMW.RequirePermission(trackingPerms.RoutesRead),
+		trackingController.ListCalendarDates)
+	r.PUT("/calendars/:calendar_id/dates",
+		denyOrganization,
+		tenancyMW.RequirePermission(trackingPerms.RoutesWrite),
+		trackingController.ReplaceCalendarDates)
+}
+
+// registerExceptionRoutes covers the days that do not follow the recurrence, and the read-only
+// preview that puts schedules, calendar, version and exceptions together (TRACK-018).
+func registerExceptionRoutes(r *gin.RouterGroup, denyOrganization gin.HandlerFunc, trackingController *controllers.TrackingController) {
+	r.GET("/routes/:route_id/exceptions",
+		denyOrganization,
+		tenancyMW.RequirePermission(trackingPerms.RoutesRead),
+		trackingController.ListRouteExceptions)
+	r.POST("/routes/:route_id/exceptions",
+		denyOrganization,
+		tenancyMW.RequirePermission(trackingPerms.RoutesWrite),
+		trackingController.CreateRouteException)
+	r.DELETE("/routes/:route_id/exceptions/:exception_id",
+		denyOrganization,
+		tenancyMW.RequirePermission(trackingPerms.RoutesWrite),
+		trackingController.DeleteRouteException)
+	r.GET("/routes/:route_id/preview",
+		denyOrganization,
+		tenancyMW.RequirePermission(trackingPerms.RoutesRead),
+		trackingController.PreviewRoute)
+}
+
 // registerOrganizationRoutes covers the schools and employers, and who belongs to them.
 func registerOrganizationRoutes(r *gin.RouterGroup, denyOrganization gin.HandlerFunc, trackingController *controllers.TrackingController) {
 	// Organizations
@@ -313,6 +393,9 @@ func registerOpenRoutes(trackingGroup *gin.RouterGroup, trackingController *cont
 	registerOpenFleetRoutes(trackingGroup, trackingController)
 	registerOpenRouteRoutes(trackingGroup, trackingController)
 	registerOpenStopPlaceRoutes(trackingGroup, trackingController)
+	registerOpenScheduleRoutes(trackingGroup, trackingController)
+	registerOpenCalendarRoutes(trackingGroup, trackingController)
+	registerOpenExceptionRoutes(trackingGroup, trackingController)
 	registerOpenOrganizationRoutes(trackingGroup, trackingController)
 	registerOpenDocumentRoutes(trackingGroup, trackingController)
 	registerOpenRiderRoutes(trackingGroup, trackingController)
@@ -361,6 +444,33 @@ func registerOpenStopPlaceRoutes(g *gin.RouterGroup, trackingController *control
 	g.POST("/stop-places", trackingController.CreateStopPlace)
 	g.PATCH("/stop-places/:stop_place_id", trackingController.UpdateStopPlace)
 	g.DELETE("/stop-places/:stop_place_id", trackingController.DeleteStopPlace)
+}
+
+// registerOpenScheduleRoutes mirrors registerScheduleRoutes without the guards.
+func registerOpenScheduleRoutes(g *gin.RouterGroup, trackingController *controllers.TrackingController) {
+	g.GET("/routes/:route_id/schedules", trackingController.ListRouteSchedules)
+	g.POST("/routes/:route_id/schedules", trackingController.CreateRouteSchedule)
+	g.PATCH("/routes/:route_id/schedules/:schedule_id", trackingController.UpdateRouteSchedule)
+	g.DELETE("/routes/:route_id/schedules/:schedule_id", trackingController.DeleteRouteSchedule)
+	g.POST("/routes/:route_id/schedules/:schedule_id/split", trackingController.SplitRouteSchedule)
+}
+
+// registerOpenCalendarRoutes mirrors registerCalendarRoutes without the guards.
+func registerOpenCalendarRoutes(g *gin.RouterGroup, trackingController *controllers.TrackingController) {
+	g.GET("/calendars", trackingController.ListCalendars)
+	g.POST("/calendars", trackingController.CreateCalendar)
+	g.PATCH("/calendars/:calendar_id", trackingController.UpdateCalendar)
+	g.DELETE("/calendars/:calendar_id", trackingController.DeleteCalendar)
+	g.GET("/calendars/:calendar_id/dates", trackingController.ListCalendarDates)
+	g.PUT("/calendars/:calendar_id/dates", trackingController.ReplaceCalendarDates)
+}
+
+// registerOpenExceptionRoutes mirrors registerExceptionRoutes without the guards.
+func registerOpenExceptionRoutes(g *gin.RouterGroup, trackingController *controllers.TrackingController) {
+	g.GET("/routes/:route_id/exceptions", trackingController.ListRouteExceptions)
+	g.POST("/routes/:route_id/exceptions", trackingController.CreateRouteException)
+	g.DELETE("/routes/:route_id/exceptions/:exception_id", trackingController.DeleteRouteException)
+	g.GET("/routes/:route_id/preview", trackingController.PreviewRoute)
 }
 
 // registerOpenOrganizationRoutes mirrors registerOrganizationRoutes without the guards.

@@ -333,6 +333,123 @@ type ReplaceRouteVersionStopsDto struct {
 	Stops []RouteVersionStopDto `json:"stops" binding:"omitempty,dive"`
 }
 
+// === DTOs for Schedules and Calendars (TRACK-018) ===
+
+// CreateRouteScheduleDto adds a recurrence to a route. DaysOfWeek is the bitmask of D1 — bit 0
+// Monday … bit 6 Sunday — so 0 would be a schedule that never runs and is refused here rather than
+// stored. StartTime crosses the wire as HH:MM, which is what comes back.
+type CreateRouteScheduleDto struct {
+	DaysOfWeek int16                `json:"days_of_week" binding:"required,min=1,max=127"`
+	StartTime  string               `json:"start_time" binding:"required,datetime=15:04"`
+	ValidFrom  coreModels.DateOnly  `json:"valid_from" binding:"required" time_format:"2006-01-02"`
+	ValidUntil *coreModels.DateOnly `json:"valid_until" binding:"omitempty" time_format:"2006-01-02"`
+	CalendarID *uuid.UUID           `json:"calendar_id" binding:"omitempty,uuidv4"`
+}
+
+// UpdateRouteScheduleDto edits a schedule in place. Every field is optional: the SP keeps what it is
+// not sent. Moving the validity of a schedule that is already running is what a split is for — this
+// is for fixing a schedule that was entered wrong.
+type UpdateRouteScheduleDto struct {
+	DaysOfWeek *int16               `json:"days_of_week" binding:"omitempty,min=1,max=127"`
+	StartTime  *string              `json:"start_time" binding:"omitempty,datetime=15:04"`
+	ValidFrom  *coreModels.DateOnly `json:"valid_from" binding:"omitempty" time_format:"2006-01-02"`
+	ValidUntil *coreModels.DateOnly `json:"valid_until" binding:"omitempty" time_format:"2006-01-02"`
+	CalendarID *uuid.UUID           `json:"calendar_id" binding:"omitempty,uuidv4"`
+}
+
+// RouteScheduleChangesDto is what the new half of a split carries. A field left out keeps what the
+// closed half had, which is why every field is a pointer and every json tag omits an empty one: the
+// SP reads the object by key presence.
+type RouteScheduleChangesDto struct {
+	DaysOfWeek *int16     `json:"days_of_week,omitempty" binding:"omitempty,min=1,max=127"`
+	StartTime  *string    `json:"start_time,omitempty" binding:"omitempty,datetime=15:04"`
+	CalendarID *uuid.UUID `json:"calendar_id,omitempty" binding:"omitempty,uuidv4"`
+}
+
+// SplitRouteScheduleDto is "from this date onward": the schedule in force is closed the day before
+// FromDate and a new one carrying Changes opens on it.
+type SplitRouteScheduleDto struct {
+	FromDate coreModels.DateOnly     `json:"from_date" binding:"required" time_format:"2006-01-02"`
+	Changes  RouteScheduleChangesDto `json:"changes"`
+}
+
+// SplitRouteScheduleResponse is both halves of a split, so the editor can show what it did without
+// re-reading the list.
+type SplitRouteScheduleResponse struct {
+	Closed  *RouteSchedule `json:"closed"`
+	Created *RouteSchedule `json:"created"`
+}
+
+// CreateCalendarDto represents request to create a calendar.
+type CreateCalendarDto struct {
+	Name           string     `json:"name" binding:"required,min=2,max=255" conform:"trim"`
+	OrganizationID *uuid.UUID `json:"organization_id" binding:"omitempty,uuidv4"`
+}
+
+// UpdateCalendarDto represents request to edit a calendar. Every field is optional: the SP keeps
+// what it is not sent.
+type UpdateCalendarDto struct {
+	Name           *string    `json:"name" binding:"omitempty,min=2,max=255" conform:"trim"`
+	OrganizationID *uuid.UUID `json:"organization_id" binding:"omitempty,uuidv4"`
+}
+
+// ListCalendarsQuery binds GET /tracking/calendars.
+type ListCalendarsQuery struct {
+	Search   string `form:"search"`
+	Page     int    `form:"page,default=1" binding:"min=1"`
+	PageSize int    `form:"page_size,default=20" binding:"min=1,max=100"`
+}
+
+type ListCalendarsResponse struct {
+	Calendars  []*Calendar `json:"calendars"`
+	TotalCount int64       `json:"total_count"`
+	Page       int         `json:"page"`
+	PageSize   int         `json:"page_size"`
+}
+
+// CalendarDateDto is one line of the calendar editor's list. The whole list travels in one PUT, so
+// a school year is saved once rather than one holiday at a time.
+type CalendarDateDto struct {
+	Date  coreModels.DateOnly `json:"date" binding:"required" time_format:"2006-01-02"`
+	Kind  string              `json:"kind" binding:"required,oneof=no_service special_service"`
+	Label *string             `json:"label" binding:"omitempty,max=255" conform:"trim"`
+}
+
+// ListCalendarDatesQuery binds GET /tracking/calendars/:id/dates. Both bounds are optional and an
+// absent one means "no bound on that side".
+type ListCalendarDatesQuery struct {
+	From *string `form:"from"`
+	To   *string `form:"to"`
+}
+
+// === DTOs for Exceptions and Preview (TRACK-018) ===
+
+// CreateRouteExceptionDto records what happens differently over a range of dates. DateFrom equals
+// DateTo for the common case, a single day off. Payload stays an untyped object because its shape
+// is the kind's contract and the SP is where that contract is checked — seven typed structs here
+// would be seven places to keep in step with it.
+type CreateRouteExceptionDto struct {
+	DateFrom coreModels.DateOnly    `json:"date_from" binding:"required" time_format:"2006-01-02"`
+	DateTo   coreModels.DateOnly    `json:"date_to" binding:"required" time_format:"2006-01-02"`
+	Kind     string                 `json:"kind" binding:"required,oneof=cancel change_time change_vehicle change_driver skip_stop add_stop detour"`
+	Payload  map[string]interface{} `json:"payload"`
+	Reason   *string                `json:"reason" binding:"omitempty,max=500" conform:"trim"`
+}
+
+// ListRouteExceptionsQuery binds GET /tracking/routes/:route_id/exceptions. An exception that starts
+// before the window and runs into it is part of the answer, so the filter is an overlap.
+type ListRouteExceptionsQuery struct {
+	DateFrom *string `form:"date_from"`
+	DateTo   *string `form:"date_to"`
+}
+
+// RoutePreviewQuery binds GET /tracking/routes/:route_id/preview. Both bounds are required: an open
+// window is one generate_series away from a request that scans years.
+type RoutePreviewQuery struct {
+	From string `form:"from" binding:"required,datetime=2006-01-02"`
+	To   string `form:"to" binding:"required,datetime=2006-01-02"`
+}
+
 // === DTOs for Stop Places (TRACK-007) ===
 
 // CreateStopPlaceDto represents request to create a stop place. Latitude and longitude are pointers
