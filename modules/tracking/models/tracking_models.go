@@ -71,6 +71,10 @@ type Route struct {
 	IsActive  bool      `json:"is_active"`
 	CreatedAt time.Time `json:"created_at"`
 	UpdatedAt time.Time `json:"updated_at"`
+	// Capacity is the seats the route offers: its own override, else its vehicle's; nil with
+	// neither. CapacityOverride is what the route itself holds (TRACK-023 D2).
+	Capacity         *int32 `json:"capacity"`
+	CapacityOverride *int32 `json:"capacity_override"`
 }
 
 // StopPlace is a place a route calls at (TRACK-007 D1) — named once and shared by every route that
@@ -199,6 +203,9 @@ type Organization struct {
 	IsActive  bool      `json:"is_active"`
 	CreatedAt time.Time `json:"created_at"`
 	UpdatedAt time.Time `json:"updated_at"`
+	// AbsenceCutoffMin is how many minutes before a pickup a guardian may still report an absence
+	// from the portal (TRACK-022 D1).
+	AbsenceCutoffMin int32 `json:"absence_cutoff_min"`
 }
 
 // OrganizationMember is a tenant user on an organization, with the identity joined from auth.users.
@@ -265,6 +272,10 @@ type Rider struct {
 	IsActive              bool       `json:"is_active"`
 	CreatedAt             time.Time  `json:"created_at"`
 	UpdatedAt             time.Time  `json:"updated_at"`
+	// The home point suggestions are measured from (TRACK-022); both nil until it is set.
+	HomeLatitude  *float64 `json:"home_latitude"`
+	HomeLongitude *float64 `json:"home_longitude"`
+	Notes         *string  `json:"notes"`
 }
 
 // RiderRouteAssignment is which route a rider rides, on which weekdays and between which dates

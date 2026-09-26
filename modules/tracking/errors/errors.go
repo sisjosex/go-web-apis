@@ -207,6 +207,18 @@ const (
 	TripUpdateFailed     = "tracking.trip.update.failed"
 	TripTransitionFailed = "tracking.trip.transition.failed"
 
+	// Absence and suggestion errors (TRACK-022). Overlap is a range meeting another absence in the
+	// same direction or in both; Cutoff a guardian inside the organization's absence_cutoff_min.
+	AbsenceNotFound        = "tracking.absence.not-found"
+	AbsenceOverlap         = "tracking.absence.overlap"
+	AbsenceCutoff          = "tracking.absence.cutoff"
+	AbsenceInvalidRange    = "tracking.absence.invalid-range"
+	AbsenceListFailed      = "tracking.absence.list.failed"
+	AbsenceCreateFailed    = "tracking.absence.create.failed"
+	AbsenceDeleteFailed    = "tracking.absence.delete.failed"
+	RiderNoHomeLocation    = "tracking.rider.no-home-location"
+	RiderSuggestionsFailed = "tracking.rider.suggestions.failed"
+
 	TenantNotFound = "tracking.tenant.not-found"
 
 	// Generic errors

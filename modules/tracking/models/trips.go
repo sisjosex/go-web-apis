@@ -36,6 +36,13 @@ type Trip struct {
 	UpdatedAt       time.Time           `json:"updated_at"`
 }
 
+// TripListRow is a row of GET /tracking/trips: the trip plus how long its next pending stop has
+// been due (TRACK-021) — 0 when not yet due, nil once the trip has ended.
+type TripListRow struct {
+	Trip
+	DelaySeconds *int32 `json:"delay_seconds"`
+}
+
 // TripDetail is GET /tracking/trips/:id and what every trip write answers: the row plus its stops
 // in order, each with its tasks.
 type TripDetail struct {
@@ -106,10 +113,10 @@ type ListTripsQuery struct {
 }
 
 type ListTripsResponse struct {
-	Trips      []*Trip `json:"trips"`
-	TotalCount int64   `json:"total_count"`
-	Page       int     `json:"page"`
-	PageSize   int     `json:"page_size"`
+	Trips      []*TripListRow `json:"trips"`
+	TotalCount int64          `json:"total_count"`
+	Page       int            `json:"page"`
+	PageSize   int            `json:"page_size"`
 }
 
 // UpdateTripDto is PATCH /tracking/trips/:id, the operator's override: a field left out keeps its

@@ -80,7 +80,7 @@ func (r *TrackingRepository) queryTripDetail(ctx context.Context, fallbackCode, 
 }
 
 // ListTrips returns one page of a day's trips plus the total the same filters match.
-func (r *TrackingRepository) ListTrips(ctx context.Context, tenantID uuid.UUID, query models.ListTripsQuery) ([]*models.Trip, int64, error) {
+func (r *TrackingRepository) ListTrips(ctx context.Context, tenantID uuid.UUID, query models.ListTripsQuery) ([]*models.TripListRow, int64, error) {
 	rows, err := r.dbService.Query(ctx, `
 		SELECT * FROM tracking.sp_list_trips(
 			p_tenant_id       := $1,
@@ -96,11 +96,11 @@ func (r *TrackingRepository) ListTrips(ctx context.Context, tenantID uuid.UUID, 
 		return nil, 0, mapTripError(err, trackingErrors.TripListFailed)
 	}
 	defer rows.Close()
-	trips := []*models.Trip{}
+	trips := []*models.TripListRow{}
 	var totalCount int64
 	for rows.Next() {
-		var t models.Trip
-		if err := rows.Scan(append(scanTrip(&t), &totalCount)...); err != nil {
+		var t models.TripListRow
+		if err := rows.Scan(append(scanTrip(&t.Trip), &t.DelaySeconds, &totalCount)...); err != nil {
 			return nil, 0, err
 		}
 		trips = append(trips, &t)

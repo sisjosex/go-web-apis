@@ -386,6 +386,19 @@ func registerRiderRoutes(
 	// here. Everything else about a rider stays operator- and organization-only.
 	p.GET("/riders", trackingController.ListRiders)
 	p.GET("/riders/:rider_id/status", trackingController.GetRiderStatus)
+	// Absences (TRACK-022) are a guardian's too: the SPs resolve the scope and mark a guardian's write
+	// `portal`. A staff caller still needs riders:write to change them.
+	p.GET("/riders/:rider_id/absences", trackingController.ListRiderAbsences)
+	p.POST("/riders/:rider_id/absences",
+		guardianOrPermission(trackingPerms.RidersWrite),
+		trackingController.CreateRiderAbsence)
+	p.DELETE("/riders/:rider_id/absences/:absence_id",
+		guardianOrPermission(trackingPerms.RidersWrite),
+		trackingController.DeleteRiderAbsence)
+	r.GET("/riders/:rider_id/suggestions",
+		denyOrganization,
+		tenancyMW.RequirePermission(trackingPerms.AssignmentsRead),
+		trackingController.SuggestRiderStops)
 	r.GET("/riders/:rider_id", trackingController.GetRider)
 	r.POST("/riders",
 		tenancyMW.RequirePermission(trackingPerms.RidersWrite),
@@ -417,6 +430,19 @@ func registerRiderRoutes(
 		denyOrganization,
 		tenancyMW.RequirePermission(trackingPerms.AssignmentsManage),
 		trackingController.DeleteAssignment)
+}
+
+// guardianOrPermission lets a portal account through — its scope is resolved in the SP — and holds
+// every other level to permission.
+func guardianOrPermission(permission string) gin.HandlerFunc {
+	require := tenancyMW.RequirePermission(permission)
+	return func(c *gin.Context) {
+		if role, _ := c.Get("tenant_user_role"); role == tenancyModels.RolePortal {
+			c.Next()
+			return
+		}
+		require(c)
+	}
 }
 
 // registerOpenRoutes is the single-database shape: no tenant, no permissions, every handler bare.
@@ -538,6 +564,10 @@ func registerOpenRiderRoutes(g *gin.RouterGroup, trackingController *controllers
 	g.GET("/riders/:rider_id/status", trackingController.GetRiderStatus)
 	g.PATCH("/riders/:rider_id", trackingController.UpdateRider)
 	g.DELETE("/riders/:rider_id", trackingController.DeleteRider)
+	g.GET("/riders/:rider_id/absences", trackingController.ListRiderAbsences)
+	g.POST("/riders/:rider_id/absences", trackingController.CreateRiderAbsence)
+	g.DELETE("/riders/:rider_id/absences/:absence_id", trackingController.DeleteRiderAbsence)
+	g.GET("/riders/:rider_id/suggestions", trackingController.SuggestRiderStops)
 	g.GET("/assignments", trackingController.ListAssignments)
 	g.POST("/assignments", trackingController.CreateAssignment)
 	g.POST("/assignments/bulk", trackingController.CreateAssignmentsBulk)

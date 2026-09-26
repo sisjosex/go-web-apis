@@ -127,6 +127,44 @@ func TestListTrips_DayRows(t *testing.T) {
 	assert.Equal(t, http.StatusBadRequest, w.Code, w.Body.String())
 }
 
+// TestListTrips_Delay - a row carries how long its next pending stop has been due (TRACK-021): 0 while
+// not yet due, the overdue seconds once past, nil when the trip has ended.
+func TestListTrips_Delay(t *testing.T) {
+	helper := SetupTrackingTest(t)
+	defer helper.Close()
+	routeID, _, tripID := todaysTrip(t, helper)
+	delay := func() *int32 {
+		t.Helper()
+		w := helper.DoRequest("GET", "/tracking/trips?route_id="+routeID, nil, map[string]string{})
+		assert.Equal(t, http.StatusOK, w.Code, w.Body.String())
+		var list models.ListTripsResponse
+		decodeBody(t, w, &list)
+		if !assert.Len(t, list.Trips, 1) {
+			t.FailNow()
+		}
+		return list.Trips[0].DelaySeconds
+	}
+	due := func(offset string) {
+		t.Helper()
+		if _, err := helper.DB().Execute(context.Background(), `UPDATE tracking.trip_stops
+			SET planned_at = now() + $2::INTERVAL + (sequence - 1) * INTERVAL '30 minutes'
+			WHERE trip_id = $1`, tripID, offset); err != nil {
+			t.Fatalf("move the stops: %v", err)
+		}
+	}
+
+	due("1 hour")
+	if d := delay(); assert.NotNil(t, d) {
+		assert.Equal(t, int32(0), *d, "the first stop is not due yet")
+	}
+	due("-10 minutes")
+	if d := delay(); assert.NotNil(t, d) {
+		assert.Greater(t, *d, int32(500), "the first stop has been due ten minutes")
+	}
+	tripRequest(t, helper, "POST", "/tracking/trips/"+tripID+"/cancel", nil, http.StatusOK)
+	assert.Nil(t, delay(), "an ended trip has no delay")
+}
+
 // TestGetTrip_StopsAndTasks - the detail's first stop carries the rider's pickup with their name;
 // an unknown id is a 404.
 func TestGetTrip_StopsAndTasks(t *testing.T) {

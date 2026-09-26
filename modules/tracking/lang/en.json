@@ -177,5 +177,14 @@
   "tracking.trip.task.op-conflict": "This operation was already used for another task",
   "tracking.trip.list.failed": "Failed to retrieve the trips",
   "tracking.trip.update.failed": "Failed to update the trip",
-  "tracking.trip.transition.failed": "Failed to update the trip's progress"
+  "tracking.trip.transition.failed": "Failed to update the trip's progress",
+  "tracking.absence.not-found": "Absence not found",
+  "tracking.absence.overlap": "An absence already covers some of these days",
+  "tracking.absence.cutoff": "It's too close to the pickup to change this absence; contact the school",
+  "tracking.absence.invalid-range": "The end date must be on or after the start date",
+  "tracking.absence.list.failed": "Failed to retrieve the absences",
+  "tracking.absence.create.failed": "Failed to report the absence",
+  "tracking.absence.delete.failed": "Failed to delete the absence",
+  "tracking.rider.no-home-location": "Set the rider's home location first",
+  "tracking.rider.suggestions.failed": "Failed to suggest stops"
 }

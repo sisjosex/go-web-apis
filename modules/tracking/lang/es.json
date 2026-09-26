@@ -177,5 +177,14 @@
   "tracking.trip.task.op-conflict": "Esta operación ya se usó para otra tarea",
   "tracking.trip.list.failed": "Error al obtener los viajes",
   "tracking.trip.update.failed": "Error al actualizar el viaje",
-  "tracking.trip.transition.failed": "Error al registrar el avance del viaje"
+  "tracking.trip.transition.failed": "Error al registrar el avance del viaje",
+  "tracking.absence.not-found": "Ausencia no encontrada",
+  "tracking.absence.overlap": "Ya hay una ausencia que cubre alguno de estos días",
+  "tracking.absence.cutoff": "Falta muy poco para la recogida para cambiar esta ausencia; contacta al colegio",
+  "tracking.absence.invalid-range": "La fecha final debe ser igual o posterior a la inicial",
+  "tracking.absence.list.failed": "Error al obtener las ausencias",
+  "tracking.absence.create.failed": "Error al registrar la ausencia",
+  "tracking.absence.delete.failed": "Error al eliminar la ausencia",
+  "tracking.rider.no-home-location": "Primero indica la ubicación del domicilio del pasajero",
+  "tracking.rider.suggestions.failed": "Error al sugerir paradas"
 }

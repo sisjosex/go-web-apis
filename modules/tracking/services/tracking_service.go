@@ -294,6 +294,28 @@ func (s *TrackingService) TransitionTripTask(ctx context.Context, tenantID, task
 	return s.trackingRepo.TransitionTripTask(ctx, tenantID, taskID, action, dto, userID)
 }
 
+// ==================== ABSENCES, SUGGESTIONS (TRACK-022) ====================
+
+func (s *TrackingService) ListRiderAbsences(ctx context.Context, tenantID, riderID uuid.UUID, query models.ListRiderAbsencesQuery, scopeUserID, guardianUserID *uuid.UUID) ([]*models.RiderAbsence, error) {
+	return s.trackingRepo.ListRiderAbsences(ctx, tenantID, riderID, query, scopeUserID, guardianUserID)
+}
+
+func (s *TrackingService) CreateRiderAbsence(ctx context.Context, tenantID, riderID uuid.UUID, dto *models.CreateRiderAbsenceDto, userID, scopeUserID, guardianUserID *uuid.UUID) (*models.CreateRiderAbsenceResponse, error) {
+	return s.trackingRepo.CreateRiderAbsence(ctx, tenantID, riderID, dto, userID, scopeUserID, guardianUserID)
+}
+
+func (s *TrackingService) DeleteRiderAbsence(ctx context.Context, tenantID, riderID, absenceID uuid.UUID, scopeUserID, guardianUserID *uuid.UUID) error {
+	return s.trackingRepo.DeleteRiderAbsence(ctx, tenantID, riderID, absenceID, scopeUserID, guardianUserID)
+}
+
+func (s *TrackingService) SuggestRiderStops(ctx context.Context, tenantID, riderID uuid.UUID, query models.SuggestRiderStopsQuery) (*models.SuggestRiderStopsResponse, error) {
+	suggestions, err := s.trackingRepo.SuggestRiderStops(ctx, tenantID, riderID, query)
+	if err != nil {
+		return nil, err
+	}
+	return &models.SuggestRiderStopsResponse{Suggestions: suggestions}, nil
+}
+
 // ==================== ORGANIZATIONS CRUD ====================
 
 func (s *TrackingService) CreateOrganization(ctx context.Context, tenantID uuid.UUID, dto *models.CreateOrganizationDto) (*models.Organization, error) {

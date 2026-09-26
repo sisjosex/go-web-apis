@@ -120,13 +120,19 @@ type TrackingRepository interface {
 
 	// Trips (TRACK-008, TRACK-020)
 	MaterialiseTrips(ctx context.Context, tenantID uuid.UUID, routeID *uuid.UUID, from, to *time.Time) (int, error)
-	ListTrips(ctx context.Context, tenantID uuid.UUID, query models.ListTripsQuery) ([]*models.Trip, int64, error)
+	ListTrips(ctx context.Context, tenantID uuid.UUID, query models.ListTripsQuery) ([]*models.TripListRow, int64, error)
 	GetTrip(ctx context.Context, tenantID, tripID uuid.UUID) (*models.TripDetail, error)
 	GetTripStatus(ctx context.Context, tenantID, tripID uuid.UUID) (*models.TripStatus, error)
 	UpdateTrip(ctx context.Context, tenantID, tripID uuid.UUID, dto *models.UpdateTripDto, userID *uuid.UUID) (*models.TripDetail, error)
 	TransitionTrip(ctx context.Context, tenantID, tripID uuid.UUID, action string, userID *uuid.UUID) (*models.TripDetail, error)
 	TransitionTripStop(ctx context.Context, tenantID, stopID uuid.UUID, action string, userID *uuid.UUID) (*models.TripDetail, error)
 	TransitionTripTask(ctx context.Context, tenantID, taskID uuid.UUID, action string, dto *models.TripTaskTransitionDto, userID *uuid.UUID) (*models.TripDetail, error)
+
+	// Absences and suggestions (TRACK-022)
+	ListRiderAbsences(ctx context.Context, tenantID, riderID uuid.UUID, query models.ListRiderAbsencesQuery, scopeUserID, guardianUserID *uuid.UUID) ([]*models.RiderAbsence, error)
+	CreateRiderAbsence(ctx context.Context, tenantID, riderID uuid.UUID, dto *models.CreateRiderAbsenceDto, userID, scopeUserID, guardianUserID *uuid.UUID) (*models.CreateRiderAbsenceResponse, error)
+	DeleteRiderAbsence(ctx context.Context, tenantID, riderID, absenceID uuid.UUID, scopeUserID, guardianUserID *uuid.UUID) error
+	SuggestRiderStops(ctx context.Context, tenantID, riderID uuid.UUID, query models.SuggestRiderStopsQuery) ([]*models.RiderStopSuggestion, error)
 
 	// Organization members
 	ListOrganizationMembers(ctx context.Context, tenantID uuid.UUID, organizationID uuid.UUID) ([]*models.OrganizationMember, error)

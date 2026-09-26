@@ -234,6 +234,9 @@ type CreateRiderDto struct {
 	GuardianPhone         *string    `json:"guardian_phone" binding:"omitempty,max=50" conform:"trim"`
 	GuardianEmail         *string    `json:"guardian_email" binding:"omitempty,email-valid" conform:"trim,lowercase"`
 	Address               *string    `json:"address" binding:"omitempty,max=500" conform:"trim"`
+	HomeLatitude          *float64   `json:"home_latitude" binding:"required_with=HomeLongitude,omitempty,min=-90,max=90"`
+	HomeLongitude         *float64   `json:"home_longitude" binding:"required_with=HomeLatitude,omitempty,min=-180,max=180"`
+	Notes                 *string    `json:"notes" binding:"omitempty,max=2000" conform:"trim"`
 }
 
 // UpdateRiderDto represents request to update rider
@@ -247,6 +250,9 @@ type UpdateRiderDto struct {
 	GuardianPhone         *string    `json:"guardian_phone" binding:"omitempty,max=50" conform:"trim"`
 	GuardianEmail         *string    `json:"guardian_email" binding:"omitempty,email-valid" conform:"trim,lowercase"`
 	Address               *string    `json:"address" binding:"omitempty,max=500" conform:"trim"`
+	HomeLatitude          *float64   `json:"home_latitude" binding:"required_with=HomeLongitude,omitempty,min=-90,max=90"`
+	HomeLongitude         *float64   `json:"home_longitude" binding:"required_with=HomeLatitude,omitempty,min=-180,max=180"`
+	Notes                 *string    `json:"notes" binding:"omitempty,max=2000" conform:"trim"`
 	IsActive              *bool      `json:"is_active"`
 }
 
@@ -287,6 +293,8 @@ type CreateRouteDto struct {
 	DestinationLat           *float64   `json:"destination_lat" binding:"omitempty,min=-90,max=90"`
 	DestinationLng           *float64   `json:"destination_lng" binding:"omitempty,min=-180,max=180"`
 	EstimatedDurationMinutes *int32     `json:"estimated_duration_minutes" binding:"omitempty,min=1,max=999"`
+	// Capacity overrides the vehicle's seats for this route (TRACK-023 D2); 0 clears the override.
+	Capacity *int32 `json:"capacity" binding:"omitempty,min=0,max=200"`
 }
 
 // UpdateRouteDto represents request to update route. company_id is immutable. VehicleID and
@@ -305,7 +313,9 @@ type UpdateRouteDto struct {
 	DestinationLat           *float64   `json:"destination_lat" binding:"omitempty,min=-90,max=90"`
 	DestinationLng           *float64   `json:"destination_lng" binding:"omitempty,min=-180,max=180"`
 	EstimatedDurationMinutes *int32     `json:"estimated_duration_minutes" binding:"omitempty,min=1,max=999"`
-	IsActive                 *bool      `json:"is_active"`
+	// Capacity overrides the vehicle's seats for this route (TRACK-023 D2); 0 clears the override.
+	Capacity *int32 `json:"capacity" binding:"omitempty,min=0,max=200"`
+	IsActive *bool  `json:"is_active"`
 	// Timezone is the IANA zone the route runs in (TRACK-008 D2); the SP refuses a name PostgreSQL
 	// does not know.
 	Timezone *string `json:"timezone" binding:"omitempty,max=64"`
@@ -586,6 +596,8 @@ type CreateOrganizationDto struct {
 	Kind     string `json:"kind" binding:"required,oneof=school company other" conform:"trim,lowercase"`
 	Timezone string `json:"timezone" binding:"required,max=64" conform:"trim"`
 	IsActive *bool  `json:"is_active"`
+	// Minutes before a pickup up to which a guardian may report an absence (TRACK-022 D1); 60 when unset.
+	AbsenceCutoffMin *int32 `json:"absence_cutoff_min" binding:"omitempty,min=0,max=1440"`
 }
 
 // UpdateOrganizationDto represents request to update an organization. Every field is optional: the
@@ -595,6 +607,8 @@ type UpdateOrganizationDto struct {
 	Kind     *string `json:"kind" binding:"omitempty,oneof=school company other" conform:"trim,lowercase"`
 	Timezone *string `json:"timezone" binding:"omitempty,max=64" conform:"trim"`
 	IsActive *bool   `json:"is_active"`
+	// Minutes before a pickup up to which a guardian may report an absence (TRACK-022 D1).
+	AbsenceCutoffMin *int32 `json:"absence_cutoff_min" binding:"omitempty,min=0,max=1440"`
 }
 
 // ListOrganizationsQuery binds GET /tracking/organizations.

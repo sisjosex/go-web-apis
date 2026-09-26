@@ -505,7 +505,7 @@ func scanRoute(rt *models.Route) []any {
 		&rt.ID, &rt.CompanyID, &rt.CompanyName, &rt.VehicleID, &rt.LicensePlate, &rt.DefaultDriverID, &rt.DriverName,
 		&rt.RouteName, &rt.RouteCode, &rt.Direction, &rt.OriginAddress, &rt.OriginLat, &rt.OriginLng,
 		&rt.DestinationAddress, &rt.DestinationLat, &rt.DestinationLng, &rt.EstimatedDurationMinutes,
-		&rt.Timezone, &rt.IsActive, &rt.CreatedAt, &rt.UpdatedAt,
+		&rt.Timezone, &rt.IsActive, &rt.CreatedAt, &rt.UpdatedAt, &rt.Capacity, &rt.CapacityOverride,
 	}
 }
 
@@ -532,10 +532,10 @@ func mapRouteError(err error, fallbackCode string) error {
 func (r *TrackingRepository) CreateRoute(ctx context.Context, tenantID uuid.UUID, dto *models.CreateRouteDto) (*models.Route, error) {
 	var rt models.Route
 	err := r.dbService.QueryRow(ctx,
-		`SELECT * FROM tracking.sp_create_route($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)`,
+		`SELECT * FROM tracking.sp_create_route($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)`,
 		tenantID, dto.CompanyID, dto.RouteName, dto.OriginAddress, dto.DestinationAddress, dto.Direction,
 		dto.VehicleID, dto.DefaultDriverID, dto.Timezone, dto.RouteCode,
-		dto.OriginLat, dto.OriginLng, dto.DestinationLat, dto.DestinationLng, dto.EstimatedDurationMinutes,
+		dto.OriginLat, dto.OriginLng, dto.DestinationLat, dto.DestinationLng, dto.EstimatedDurationMinutes, dto.Capacity,
 	).Scan(scanRoute(&rt)...)
 	if err != nil {
 		return nil, mapRouteError(err, trackingErrors.RouteCreateFailed)
@@ -546,10 +546,10 @@ func (r *TrackingRepository) CreateRoute(ctx context.Context, tenantID uuid.UUID
 func (r *TrackingRepository) UpdateRoute(ctx context.Context, tenantID uuid.UUID, routeID uuid.UUID, dto *models.UpdateRouteDto) (*models.Route, error) {
 	var rt models.Route
 	err := r.dbService.QueryRow(ctx,
-		`SELECT * FROM tracking.sp_update_route($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)`,
+		`SELECT * FROM tracking.sp_update_route($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)`,
 		tenantID, routeID, dto.RouteName, dto.RouteCode, dto.Direction, dto.VehicleID, dto.DefaultDriverID, dto.Timezone,
 		dto.OriginAddress, dto.OriginLat, dto.OriginLng, dto.DestinationAddress, dto.DestinationLat, dto.DestinationLng,
-		dto.EstimatedDurationMinutes, dto.IsActive,
+		dto.EstimatedDurationMinutes, dto.IsActive, dto.Capacity,
 	).Scan(scanRoute(&rt)...)
 	if err != nil {
 		return nil, mapRouteError(err, trackingErrors.RouteUpdateFailed)
@@ -875,14 +875,16 @@ func (r *TrackingRepository) ListRouteStops(ctx context.Context, tenantID uuid.U
 
 func (r *TrackingRepository) CreateRider(ctx context.Context, tenantID uuid.UUID, dto *models.CreateRiderDto, scopeUserID *uuid.UUID) (*models.Rider, error) {
 	var rider models.Rider
-	err := r.dbService.QueryRow(ctx, `SELECT * FROM tracking.sp_create_rider($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)`,
+	err := r.dbService.QueryRow(ctx, `SELECT * FROM tracking.sp_create_rider($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17::DECIMAL, $18::DECIMAL, $19::TEXT)`,
 		tenantID, dto.OrganizationID, dto.RiderType, dto.FirstName, dto.LastName, dto.IdentificationNumber,
 		dto.Phone, dto.Email, dto.EmergencyContactName, dto.EmergencyContactPhone,
 		dto.GuardianUserID, dto.GuardianName, dto.GuardianPhone, dto.GuardianEmail, dto.Address, scopeUserID,
+		dto.HomeLatitude, dto.HomeLongitude, dto.Notes,
 	).Scan(&rider.ID, &rider.OrganizationID, &rider.RiderType, &rider.FirstName, &rider.LastName,
 		&rider.IdentificationNumber, &rider.Phone, &rider.Email, &rider.EmergencyContactName,
 		&rider.EmergencyContactPhone, &rider.GuardianUserID, &rider.GuardianName, &rider.GuardianPhone,
-		&rider.GuardianEmail, &rider.Address, &rider.IsActive, &rider.CreatedAt, &rider.UpdatedAt)
+		&rider.GuardianEmail, &rider.Address, &rider.IsActive, &rider.CreatedAt, &rider.UpdatedAt,
+		&rider.HomeLatitude, &rider.HomeLongitude, &rider.Notes)
 	if err != nil {
 		return nil, scopedErr(err, trackingErrors.RiderCreateFailed)
 	}
@@ -891,14 +893,15 @@ func (r *TrackingRepository) CreateRider(ctx context.Context, tenantID uuid.UUID
 
 func (r *TrackingRepository) UpdateRider(ctx context.Context, tenantID uuid.UUID, riderID uuid.UUID, dto *models.UpdateRiderDto, scopeUserID *uuid.UUID) (*models.Rider, error) {
 	var rider models.Rider
-	err := r.dbService.QueryRow(ctx, `SELECT * FROM tracking.sp_update_rider($1, $2, $3::VARCHAR(50), $4::VARCHAR(255), $5::VARCHAR(255), $6::VARCHAR(50), $7::UUID, $8::VARCHAR(255), $9::VARCHAR(50), $10::VARCHAR(255), $11::VARCHAR(500), $12::BOOLEAN, $13::UUID)`,
+	err := r.dbService.QueryRow(ctx, `SELECT * FROM tracking.sp_update_rider($1, $2, $3::VARCHAR(50), $4::VARCHAR(255), $5::VARCHAR(255), $6::VARCHAR(50), $7::UUID, $8::VARCHAR(255), $9::VARCHAR(50), $10::VARCHAR(255), $11::VARCHAR(500), $12::BOOLEAN, $13::UUID, $14::DECIMAL, $15::DECIMAL, $16::TEXT)`,
 		tenantID, riderID, dto.Phone, dto.Email, dto.EmergencyContactName, dto.EmergencyContactPhone,
 		dto.GuardianUserID, dto.GuardianName, dto.GuardianPhone, dto.GuardianEmail,
-		dto.Address, dto.IsActive, scopeUserID,
+		dto.Address, dto.IsActive, scopeUserID, dto.HomeLatitude, dto.HomeLongitude, dto.Notes,
 	).Scan(&rider.ID, &rider.OrganizationID, &rider.RiderType, &rider.FirstName, &rider.LastName,
 		&rider.IdentificationNumber, &rider.Phone, &rider.Email, &rider.EmergencyContactName,
 		&rider.EmergencyContactPhone, &rider.GuardianUserID, &rider.GuardianName, &rider.GuardianPhone,
-		&rider.GuardianEmail, &rider.Address, &rider.IsActive, &rider.CreatedAt, &rider.UpdatedAt)
+		&rider.GuardianEmail, &rider.Address, &rider.IsActive, &rider.CreatedAt, &rider.UpdatedAt,
+		&rider.HomeLatitude, &rider.HomeLongitude, &rider.Notes)
 	if err != nil {
 		return nil, scopedErr(err, trackingErrors.RiderUpdateFailed)
 	}
@@ -922,7 +925,8 @@ func (r *TrackingRepository) ListRiders(ctx context.Context, tenantID uuid.UUID,
 		if err := rows.Scan(&rider.ID, &rider.OrganizationID, &rider.OrganizationName, &rider.OrganizationKind, &rider.RiderType, &rider.FirstName, &rider.LastName,
 			&rider.IdentificationNumber, &rider.Phone, &rider.Email, &rider.EmergencyContactName,
 			&rider.EmergencyContactPhone, &rider.GuardianUserID, &rider.GuardianName, &rider.GuardianPhone,
-			&rider.GuardianEmail, &rider.Address, &rider.IsActive, &rider.CreatedAt, &rider.UpdatedAt, &totalCount); err != nil {
+			&rider.GuardianEmail, &rider.Address, &rider.IsActive, &rider.CreatedAt, &rider.UpdatedAt,
+			&rider.HomeLatitude, &rider.HomeLongitude, &rider.Notes, &totalCount); err != nil {
 			return nil, 0, err
 		}
 		riders = append(riders, &rider)
@@ -939,7 +943,8 @@ func (r *TrackingRepository) GetRider(ctx context.Context, tenantID uuid.UUID, r
 		&rider.ID, &rider.OrganizationID, &rider.RiderType, &rider.FirstName, &rider.LastName,
 		&rider.IdentificationNumber, &rider.Phone, &rider.Email, &rider.EmergencyContactName,
 		&rider.EmergencyContactPhone, &rider.GuardianUserID, &rider.GuardianName, &rider.GuardianPhone,
-		&rider.GuardianEmail, &rider.Address, &rider.IsActive, &rider.CreatedAt, &rider.UpdatedAt)
+		&rider.GuardianEmail, &rider.Address, &rider.IsActive, &rider.CreatedAt, &rider.UpdatedAt,
+		&rider.HomeLatitude, &rider.HomeLongitude, &rider.Notes)
 	if err != nil {
 		return nil, scopedErr(err, trackingErrors.RiderNotFound)
 	}
@@ -965,10 +970,11 @@ func (r *TrackingRepository) CreateOrganization(ctx context.Context, tenantID uu
 			p_kind      := $2,
 			p_name      := $3,
 			p_timezone  := $4,
-			p_is_active := $5
+			p_is_active := $5,
+			p_absence_cutoff_min := $6
 		)
-	`, tenantID, dto.Kind, dto.Name, dto.Timezone, dto.IsActive,
-	).Scan(&org.ID, &org.TenantID, &org.Kind, &org.Name, &org.Timezone, &org.IsActive, &org.CreatedAt, &org.UpdatedAt)
+	`, tenantID, dto.Kind, dto.Name, dto.Timezone, dto.IsActive, dto.AbsenceCutoffMin,
+	).Scan(&org.ID, &org.TenantID, &org.Kind, &org.Name, &org.Timezone, &org.IsActive, &org.CreatedAt, &org.UpdatedAt, &org.AbsenceCutoffMin)
 	if err != nil {
 		return nil, &trackingErrors.TrackingError{Code: trackingErrors.OrganizationCreateFailed, Err: err}
 	}
@@ -984,10 +990,11 @@ func (r *TrackingRepository) UpdateOrganization(ctx context.Context, tenantID uu
 			p_kind            := $3,
 			p_name            := $4,
 			p_timezone        := $5,
-			p_is_active       := $6
+			p_is_active       := $6,
+			p_absence_cutoff_min := $7
 		)
-	`, tenantID, organizationID, dto.Kind, dto.Name, dto.Timezone, dto.IsActive,
-	).Scan(&org.ID, &org.TenantID, &org.Kind, &org.Name, &org.Timezone, &org.IsActive, &org.CreatedAt, &org.UpdatedAt)
+	`, tenantID, organizationID, dto.Kind, dto.Name, dto.Timezone, dto.IsActive, dto.AbsenceCutoffMin,
+	).Scan(&org.ID, &org.TenantID, &org.Kind, &org.Name, &org.Timezone, &org.IsActive, &org.CreatedAt, &org.UpdatedAt, &org.AbsenceCutoffMin)
 	if err != nil {
 		return nil, mapOrganizationError(err, trackingErrors.OrganizationUpdateFailed)
 	}
@@ -1009,7 +1016,7 @@ func (r *TrackingRepository) ListOrganizations(ctx context.Context, tenantID uui
 	for rows.Next() {
 		var org models.Organization
 		if err := rows.Scan(&org.ID, &org.TenantID, &org.Kind, &org.Name, &org.Timezone, &org.IsActive,
-			&org.CreatedAt, &org.UpdatedAt, &totalCount); err != nil {
+			&org.CreatedAt, &org.UpdatedAt, &org.AbsenceCutoffMin, &totalCount); err != nil {
 			return nil, 0, err
 		}
 		organizations = append(organizations, &org)
@@ -1023,7 +1030,7 @@ func (r *TrackingRepository) ListOrganizations(ctx context.Context, tenantID uui
 func (r *TrackingRepository) GetOrganization(ctx context.Context, tenantID uuid.UUID, organizationID uuid.UUID) (*models.Organization, error) {
 	var org models.Organization
 	err := r.dbService.QueryRow(ctx, `SELECT * FROM tracking.sp_get_organization($1, $2)`, tenantID, organizationID).Scan(
-		&org.ID, &org.TenantID, &org.Kind, &org.Name, &org.Timezone, &org.IsActive, &org.CreatedAt, &org.UpdatedAt)
+		&org.ID, &org.TenantID, &org.Kind, &org.Name, &org.Timezone, &org.IsActive, &org.CreatedAt, &org.UpdatedAt, &org.AbsenceCutoffMin)
 	if err != nil {
 		return nil, &trackingErrors.TrackingError{Code: trackingErrors.OrganizationNotFound, Err: err}
 	}
