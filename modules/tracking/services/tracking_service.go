@@ -255,6 +255,45 @@ func (s *TrackingService) ListAssignments(ctx context.Context, tenantID uuid.UUI
 	}, nil
 }
 
+// ==================== TRIPS (TRACK-020) ====================
+
+func (s *TrackingService) ListTrips(ctx context.Context, tenantID uuid.UUID, query models.ListTripsQuery) (*models.ListTripsResponse, error) {
+	trips, totalCount, err := s.trackingRepo.ListTrips(ctx, tenantID, query)
+	if err != nil {
+		return nil, err
+	}
+	return &models.ListTripsResponse{
+		Trips:      trips,
+		TotalCount: totalCount,
+		Page:       query.Page,
+		PageSize:   query.PageSize,
+	}, nil
+}
+
+func (s *TrackingService) GetTrip(ctx context.Context, tenantID, tripID uuid.UUID) (*models.TripDetail, error) {
+	return s.trackingRepo.GetTrip(ctx, tenantID, tripID)
+}
+
+func (s *TrackingService) GetTripStatus(ctx context.Context, tenantID, tripID uuid.UUID) (*models.TripStatus, error) {
+	return s.trackingRepo.GetTripStatus(ctx, tenantID, tripID)
+}
+
+func (s *TrackingService) UpdateTrip(ctx context.Context, tenantID, tripID uuid.UUID, dto *models.UpdateTripDto, userID *uuid.UUID) (*models.TripDetail, error) {
+	return s.trackingRepo.UpdateTrip(ctx, tenantID, tripID, dto, userID)
+}
+
+func (s *TrackingService) TransitionTrip(ctx context.Context, tenantID, tripID uuid.UUID, action string, userID *uuid.UUID) (*models.TripDetail, error) {
+	return s.trackingRepo.TransitionTrip(ctx, tenantID, tripID, action, userID)
+}
+
+func (s *TrackingService) TransitionTripStop(ctx context.Context, tenantID, stopID uuid.UUID, action string, userID *uuid.UUID) (*models.TripDetail, error) {
+	return s.trackingRepo.TransitionTripStop(ctx, tenantID, stopID, action, userID)
+}
+
+func (s *TrackingService) TransitionTripTask(ctx context.Context, tenantID, taskID uuid.UUID, action string, dto *models.TripTaskTransitionDto, userID *uuid.UUID) (*models.TripDetail, error) {
+	return s.trackingRepo.TransitionTripTask(ctx, tenantID, taskID, action, dto, userID)
+}
+
 // ==================== ORGANIZATIONS CRUD ====================
 
 func (s *TrackingService) CreateOrganization(ctx context.Context, tenantID uuid.UUID, dto *models.CreateOrganizationDto) (*models.Organization, error) {

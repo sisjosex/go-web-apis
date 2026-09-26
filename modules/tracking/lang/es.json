@@ -168,5 +168,14 @@
   "tracking.exception.list.failed": "Error al obtener las excepciones",
   "tracking.exception.payload": "Este cambio necesita exactamente los datos que define su tipo",
   "tracking.route.preview.failed": "Error al construir el plan",
-  "tracking.route.preview-range": "El plan abarca como máximo 92 días a la vez"
+  "tracking.route.preview-range": "El plan abarca como máximo 92 días a la vez",
+  "tracking.trip.not-found": "Viaje no encontrado",
+  "tracking.trip.stop.not-found": "Parada del viaje no encontrada",
+  "tracking.trip.task.not-found": "Tarea del viaje no encontrada",
+  "tracking.trip.invalid-transition": "No se puede hacer en el estado actual del viaje",
+  "tracking.trip.task.trip-not-active": "El viaje no ha empezado o ya terminó",
+  "tracking.trip.task.op-conflict": "Esta operación ya se usó para otra tarea",
+  "tracking.trip.list.failed": "Error al obtener los viajes",
+  "tracking.trip.update.failed": "Error al actualizar el viaje",
+  "tracking.trip.transition.failed": "Error al registrar el avance del viaje"
 }

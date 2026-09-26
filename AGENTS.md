@@ -62,6 +62,12 @@ makes the change, in its transaction. The relay publishes it as asynq task `outb
 today..today+14 (`routes.timezone`, IANA). An SP that changes a route's plan or riders writes
 `route.changed` via `tracking.fn_route_changed` and never touches trips itself.
 
+Trips move over HTTP (TRACK-020): `POST /trips/:id/start|complete|cancel`, `/trip-stops/:id/arrive|skip`,
+`/trip-stop-tasks/:id/done|no-show` (body `client_op_id`, idempotent), `PATCH /trips/:id` (override →
+`is_overridden`). Each SP locks the trip row, writes `trip_events` + a `trip.changed` outbox row through
+`tracking.fn_trip_changed` and answers the detail; the `outbox:trip.changed` handler only acknowledges
+until TRACK-010/012 consume it.
+
 Main DB holds `auth.*` + `tenancy.*`; one DB per tenant holds business schemas only. JWT carries
 `user_id + session_id`; tenancy middleware resolves `tenant_id` from `X-Tenant-Slug` per request.
 
@@ -124,6 +130,7 @@ Verified 2026-09-19 (APP-004):
 | `GET /tracking/routes/:id/exceptions` | `date_from date_to` (overlap, not containment) | array, oldest first — `kind` and a `payload` whose keys the kind defines |
 | `GET /tracking/routes/:id/preview` | `from to` (YYYY-MM-DD, both required, at most 92 days apart) | array — one row per departure the plan produces, with `service_date`, `schedule_id`, `start_time`, `version_id`, `vehicle_id`, `driver_id`, a `status` of planned/cancelled and the `exceptions` that apply; a day the route does not run has no row |
 | `GET /tracking/assignments` | `page page_size rider_id route_id date` (cap 100) | `{ assignments, total_count, page, page_size }` — `date` narrows to the assignments in force that day; every row carries `rider_name`, `route_name`, `direction`, `pickup_stop_name`, `dropoff_stop_name`; `days_of_week` is the schedules' bitmask. Writes (`POST`, `PATCH /:id`, `POST /bulk`) answer `{ assignment \| assignments, warnings }` |
+| `GET /tracking/trips` | `page page_size date route_id status organization_id` (cap 100) | `{ trips, total_count, page, page_size }` — `date` defaults to each route's local today; every row carries `route_name`, `direction`, `license_plate`, `driver_name`, `stops_count`, `tasks_total` (not cancelled), `tasks_done` (done or no_show); `GET /:id` and every trip write answer the row plus `stops[].tasks[]` |
 | `GET /tracking/riders` | `page page_size search organization_id rider_type is_active` (cap 100) | `{ riders, total_count, page, page_size }` — every row carries `organization_name` |
 | `GET /sales/orders` | `limit offset` | `{ data }` — no total |
 | `GET /sales/customers`, the other `/tracking/*`, `/inventory/stock/:id` | filters only | array, object or `{ data }`, unpaginated |

@@ -73,6 +73,7 @@ func registerTenantRoutes(
 	registerOrganizationRoutes(r, denyOrganization, trackingController)
 	registerDocumentRoutes(r, denyOrganization, trackingController)
 	registerRiderRoutes(r, p, denyOrganization, trackingController)
+	registerTripRoutes(r, denyOrganization, trackingController)
 }
 
 // registerFleetRoutes is what the operator owns and runs: its companies, its buses, its drivers.
@@ -167,6 +168,32 @@ func registerRouteRoutes(r *gin.RouterGroup, denyOrganization gin.HandlerFunc, t
 		denyOrganization,
 		tenancyMW.RequirePermission(trackingPerms.RoutesWrite),
 		trackingController.ReplaceRouteVersionStops)
+}
+
+// registerTripRoutes covers the day's trips (TRACK-020): the operations board reads them like the
+// route status, moving one is recording what happened (events:write), and overriding its vehicle,
+// driver or start is editing the plan (routes:write). All of it is the operator's.
+func registerTripRoutes(r *gin.RouterGroup, denyOrganization gin.HandlerFunc, trackingController *controllers.TrackingController) {
+	r.GET("/trips", denyOrganization, trackingController.ListTrips)
+	r.GET("/trips/:trip_id", denyOrganization, trackingController.GetTrip)
+	r.GET("/trips/:trip_id/status", denyOrganization, trackingController.GetTripStatus)
+	r.PATCH("/trips/:trip_id",
+		denyOrganization,
+		tenancyMW.RequirePermission(trackingPerms.RoutesWrite),
+		trackingController.UpdateTrip)
+	// :action is start|complete|cancel, arrive|skip and done|no-show; the handler answers 404 to any other.
+	r.POST("/trips/:trip_id/:action",
+		denyOrganization,
+		tenancyMW.RequirePermission(trackingPerms.EventsWrite),
+		trackingController.TransitionTrip)
+	r.POST("/trip-stops/:stop_id/:action",
+		denyOrganization,
+		tenancyMW.RequirePermission(trackingPerms.EventsWrite),
+		trackingController.TransitionTripStop)
+	r.POST("/trip-stop-tasks/:task_id/:action",
+		denyOrganization,
+		tenancyMW.RequirePermission(trackingPerms.EventsWrite),
+		trackingController.TransitionTripTask)
 }
 
 // registerStopPlaceRoutes covers the places routes call at (TRACK-007). A stop place is part of the
@@ -403,6 +430,7 @@ func registerOpenRoutes(trackingGroup *gin.RouterGroup, trackingController *cont
 	registerOpenOrganizationRoutes(trackingGroup, trackingController)
 	registerOpenDocumentRoutes(trackingGroup, trackingController)
 	registerOpenRiderRoutes(trackingGroup, trackingController)
+	registerOpenTripRoutes(trackingGroup, trackingController)
 }
 
 // registerOpenFleetRoutes mirrors registerFleetRoutes without the guards.
@@ -515,4 +543,15 @@ func registerOpenRiderRoutes(g *gin.RouterGroup, trackingController *controllers
 	g.POST("/assignments/bulk", trackingController.CreateAssignmentsBulk)
 	g.PATCH("/assignments/:assignment_id", trackingController.UpdateAssignment)
 	g.DELETE("/assignments/:assignment_id", trackingController.DeleteAssignment)
+}
+
+// registerOpenTripRoutes mirrors registerTripRoutes without the guards.
+func registerOpenTripRoutes(g *gin.RouterGroup, trackingController *controllers.TrackingController) {
+	g.GET("/trips", trackingController.ListTrips)
+	g.GET("/trips/:trip_id", trackingController.GetTrip)
+	g.GET("/trips/:trip_id/status", trackingController.GetTripStatus)
+	g.PATCH("/trips/:trip_id", trackingController.UpdateTrip)
+	g.POST("/trips/:trip_id/:action", trackingController.TransitionTrip)
+	g.POST("/trip-stops/:stop_id/:action", trackingController.TransitionTripStop)
+	g.POST("/trip-stop-tasks/:task_id/:action", trackingController.TransitionTripTask)
 }

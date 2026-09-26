@@ -194,6 +194,19 @@ const (
 	DocumentTypeListFailed        = "tracking.document-type.list.failed"
 	DocumentTypeCodeAlreadyExists = "tracking.document-type.code-already-exists"
 
+	// Trip errors (TRACK-020). InvalidTransition is any action the trip, stop or task's current state
+	// does not allow; TaskTripNotActive is a task marked on a trip that is not in progress.
+	TripNotFound          = "tracking.trip.not-found"
+	TripStopNotFound      = "tracking.trip.stop.not-found"
+	TripTaskNotFound      = "tracking.trip.task.not-found"
+	TripInvalidTransition = "tracking.trip.invalid-transition"
+	TripTaskTripNotActive = "tracking.trip.task.trip-not-active"
+	// TripTaskOpConflict is a client_op_id already spent on another task.
+	TripTaskOpConflict   = "tracking.trip.task.op-conflict"
+	TripListFailed       = "tracking.trip.list.failed"
+	TripUpdateFailed     = "tracking.trip.update.failed"
+	TripTransitionFailed = "tracking.trip.transition.failed"
+
 	TenantNotFound = "tracking.tenant.not-found"
 
 	// Generic errors

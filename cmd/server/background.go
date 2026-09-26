@@ -92,6 +92,8 @@ func registerJobs(registry *jobs.Registry, db services.DatabaseService, relay *j
 		// pass is the same SP over every route, so a missed row is caught the next morning.
 		registry.Handle(trackingJobs.TaskRouteChanged, trackingJobs.RouteChangedHandler(db, tenantLister(db)))
 		registry.Handle(trackingJobs.TaskTripsMaterialise, trackingJobs.TripsMaterialiseHandler(db, tenantLister(db)))
+		// A trip moved (TRACK-020 D1): acknowledged until TRACK-010/012 bring its consumers.
+		registry.Handle(trackingJobs.TaskTripChanged, trackingJobs.TripChangedHandler())
 		registry.Schedule(jobs.Entry{
 			Cron: trackingJobs.DocumentAlertsCron, Period: daily,
 			Task: asynq.NewTask(trackingJobs.TaskDocumentAlerts, nil),

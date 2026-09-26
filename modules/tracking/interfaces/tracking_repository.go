@@ -118,8 +118,15 @@ type TrackingRepository interface {
 	SetDocumentFile(ctx context.Context, tenantID uuid.UUID, documentID uuid.UUID, name string, size int64, ext string) (*models.ComplianceDocument, error)
 	RaiseDocumentAlerts(ctx context.Context, tenantID uuid.UUID) ([]*models.DocumentAlert, error)
 
-	// Trips (TRACK-008)
+	// Trips (TRACK-008, TRACK-020)
 	MaterialiseTrips(ctx context.Context, tenantID uuid.UUID, routeID *uuid.UUID, from, to *time.Time) (int, error)
+	ListTrips(ctx context.Context, tenantID uuid.UUID, query models.ListTripsQuery) ([]*models.Trip, int64, error)
+	GetTrip(ctx context.Context, tenantID, tripID uuid.UUID) (*models.TripDetail, error)
+	GetTripStatus(ctx context.Context, tenantID, tripID uuid.UUID) (*models.TripStatus, error)
+	UpdateTrip(ctx context.Context, tenantID, tripID uuid.UUID, dto *models.UpdateTripDto, userID *uuid.UUID) (*models.TripDetail, error)
+	TransitionTrip(ctx context.Context, tenantID, tripID uuid.UUID, action string, userID *uuid.UUID) (*models.TripDetail, error)
+	TransitionTripStop(ctx context.Context, tenantID, stopID uuid.UUID, action string, userID *uuid.UUID) (*models.TripDetail, error)
+	TransitionTripTask(ctx context.Context, tenantID, taskID uuid.UUID, action string, dto *models.TripTaskTransitionDto, userID *uuid.UUID) (*models.TripDetail, error)
 
 	// Organization members
 	ListOrganizationMembers(ctx context.Context, tenantID uuid.UUID, organizationID uuid.UUID) ([]*models.OrganizationMember, error)

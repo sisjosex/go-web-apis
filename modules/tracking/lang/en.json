@@ -168,5 +168,14 @@
   "tracking.exception.list.failed": "Failed to retrieve the exceptions",
   "tracking.exception.payload": "This change needs exactly the details its type defines",
   "tracking.route.preview.failed": "Failed to build the plan",
-  "tracking.route.preview-range": "The plan covers at most 92 days at a time"
+  "tracking.route.preview-range": "The plan covers at most 92 days at a time",
+  "tracking.trip.not-found": "Trip not found",
+  "tracking.trip.stop.not-found": "Trip stop not found",
+  "tracking.trip.task.not-found": "Trip task not found",
+  "tracking.trip.invalid-transition": "This can't be done in the trip's current state",
+  "tracking.trip.task.trip-not-active": "The trip hasn't started or has already ended",
+  "tracking.trip.task.op-conflict": "This operation was already used for another task",
+  "tracking.trip.list.failed": "Failed to retrieve the trips",
+  "tracking.trip.update.failed": "Failed to update the trip",
+  "tracking.trip.transition.failed": "Failed to update the trip's progress"
 }
