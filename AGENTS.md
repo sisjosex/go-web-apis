@@ -21,11 +21,12 @@ make build                            # compile to bin/
 make gate MODULES="tracking"          # check + lint (changed code) + build + tests of MODULES, quiet
 make check-all | lint-all             # the whole-tree baseline, when asked for
 make docker-up | docker-down          # PostgreSQL + Valkey containers (tests need them up)
-make test-<module>                    # auth core users tenancy tracking inventory sales purchasing billing
+make test-<module>                    # auth core users tenancy tracking inventory sales purchasing billing geo
 make test-all                         # every module (db-reset first)
 make migrate MODULE=x NAME=y          # .up.sql + .down.sql pair
 make tenant-migrate SLUG=x            # apply to one tenant DB
 make swagger                          # regenerate docs
+make geo-build | geo-switch DATE=… | geo-rollback | geo-up   # geo data, docker/geo/README.md
 ```
 
 Setup is human-only: copy `.env.example` → `.env.platform` / `.env.tenant`, then `make docker-up`.
@@ -37,10 +38,11 @@ Setup is human-only: copy `.env.example` → `.env.platform` / `.env.tenant`, th
 | Server | Entry | Env | Port | Modules |
 |---|---|---|---|---|
 | Platform | `cmd/server -mode=platform` | `.env.platform` | 8080 | core auth users tenancy billing |
-| Tenant | `cmd/server -mode=tenant` | `.env.tenant` | 9080 | core auth users tracking inventory sales purchasing |
+| Tenant | `cmd/server -mode=tenant` | `.env.tenant` | 9080 | core auth users tracking inventory sales purchasing geo |
 
 One binary, one `-mode` flag: `cmd/platform` and `cmd/tenant` have not existed for some time. The
-sibling `cmd/cli` carries `migration` (generate), `migrate` (apply, one shot), `tenant` and `jobs`.
+sibling `cmd/cli` carries `migration` (generate), `migrate` (apply, one shot), `tenant`, `jobs` and
+`geo import`.
 
 **Roles (INFRA-001).** `-role` (flag > `APP_ROLE` > `all`) picks what a process runs: `api`, `worker`
 (asynq handlers + outbox relay), `scheduler` (periodic entries, fired only while it holds the
@@ -80,6 +82,14 @@ modules/{name}/
 Reference files: `routes/routes.go` (DI wiring, middleware order) · `config/config.go` ·
 `modules/core/errors/error.go` (`BuildError*`) · `modules/auth/controllers/auth_controller.go`
 (canonical controller) · `modules/inventory/tests/` (canonical tests).
+
+**Geo (INFRA-003).** `modules/geo`, tenant server only: `GET /geo/geocode`, `/geo/reverse`,
+`POST /geo/route`, `/geo/eta`, behind auth + tenant. `geo.places` is OSM, the same for every tenant,
+so it lives in the server's own database and the repository always takes the primary pool; tenant
+databases never get the schema (`tenant_service.go` excludes it). Routing goes through the
+`interfaces.Router` port (Valhalla adapter, gobreaker: 5 failures → open 30 s); a 4xx from Valhalla is
+`ErrNoRoute` (422) and never opens the breaker. `/geo/eta` always answers: Valhalla → observed
+durations (nil until TRACK-010) → straight line × 1.3, flagged in `estimate_source`.
 
 ## REST conventions
 
@@ -150,6 +160,9 @@ Valkey (AOF `everysec`, `valkeydata` volume, `VALKEY_PASSWORD`) backs `api-worke
 the same image in `-role=worker|scheduler`; the two APIs run `-role=api`. A second scheduler is safe
 (lease), a second worker scales throughput.
 
+`valhalla` serves routing from `${GEO_DATA_DIR}/current`, Caddy the basemap under `TENANT_HOST/tiles/`;
+builds are made off the server and put live by `docker/geo/switch.sh` (`docker/geo/README.md`).
+
 `docker/backup/README.md` has the nightly dump and the restore steps; deploy variables are at the
 bottom of `.env.example`. PITR, PgBouncer and monitoring are INFRA-004.
 
@@ -163,5 +176,8 @@ bottom of `.env.example`. PITR, PgBouncer and monitoring are INFRA-004.
 - Module error codes are matched by exact string in the app — renaming one is an app change too.
 - Local `REDIS_URL` uses `127.0.0.1`: Docker Desktop's IPv6 forward for `localhost` can accept a
   connection and never answer, so go-redis times out while `valkey-cli` inside the container works.
-- In `modules/tracking/tests/` a test file must sort after `helpers.go` (`helpers.go` declares package
-  `tracking_test`; an earlier `_test.go` file is read as an external test and the package fails to load).
+- Docker Desktop cannot run Valhalla's tile build on a Windows bind mount (its memory-mapped scratch
+  files segfault): `docker/geo/build.sh` builds on the container's disk and copies results out.
+- In `modules/tracking/tests/` and `modules/geo/tests/` a test file must sort after `helpers.go`
+  (`helpers.go` declares the `_test` package; an earlier `_test.go` file is read as an external test and
+  the package fails to load).

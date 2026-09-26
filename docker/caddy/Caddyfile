@@ -22,5 +22,8 @@
 {$TENANT_HOST} {
 	encode zstd gzip
 
+	# The basemap, off the geo data dir (docker/geo/README.md).
+	import tiles.caddy
+
 	reverse_proxy api-tenant:9080
 }

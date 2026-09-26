@@ -5,12 +5,14 @@
 //   - migrate:   Run the modular migrations on the ENV_FILE database once and exit
 //   - tenant:    Manage tenant instances and run tenant-specific migrations (requires .env.platform)
 //   - jobs:      Run one scheduled job and exit (requires .env.platform)
+//   - geo:       Import the address-search places of a geo build (.env.tenant)
 //
 // Each subcommand has its own handler file:
 //   - migration.go:    Migration generation logic
 //   - migrate.go:      One-shot schema migration (the deploy's migrate job)
 //   - tenant_mgmt.go:  Tenant management and operations
 //   - jobs.go:         Scheduled jobs cron runs one at a time
+//   - geo.go:          Geo places import
 //   - main.go:         CLI routing and help (this file)
 package main
 
@@ -37,6 +39,8 @@ func main() {
 		CmdTenant(args)
 	case "jobs", "j":
 		CmdJobs(args)
+	case "geo":
+		CmdGeo(args)
 	case "help", "h", "-h", "--help":
 		printMainUsage()
 	default:
@@ -56,6 +60,7 @@ func printMainUsage() {
 	fmt.Println("  migrate, mig    Run the modular migrations on the ENV_FILE database")
 	fmt.Println("  tenant, t       Manage tenant instances and run tenant migrations")
 	fmt.Println("  jobs, j         Run a scheduled job once (cron calls these)")
+	fmt.Println("  geo             Import a geo build's places into geo.places")
 	fmt.Println("  help, -h        Show this help message")
 	fmt.Println("\nExamples:")
 	fmt.Println("  go run ./cmd/cli migration -module=auth -name=add_refresh_tokens")
@@ -63,5 +68,6 @@ func printMainUsage() {
 	fmt.Println("  go run ./cmd/cli tenant -list")
 	fmt.Println("  go run ./cmd/cli tenant -migrate all")
 	fmt.Println("  go run ./cmd/cli jobs document-alerts")
+	fmt.Println("  go run ./cmd/cli geo import docker/geo/data/current/places.geojsonl")
 	fmt.Println("\nRun 'go run ./cmd/cli <subcommand> -h' for subcommand help")
 }

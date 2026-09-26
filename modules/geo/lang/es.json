@@ -1,0 +1,10 @@
+{
+  "geo.validation.failed": "Solicitud geográfica inválida",
+  "geo.point.incomplete": "Envía lat y lng juntos, o ninguno",
+  "geo.geocode.failed": "La búsqueda de direcciones falló",
+  "geo.reverse.not-found": "No hay un lugar conocido a menos de 500 m de ese punto",
+  "geo.reverse.failed": "La búsqueda inversa falló",
+  "geo.route.unavailable": "El cálculo de rutas no está disponible ahora, inténtalo en un momento",
+  "geo.route.not-found": "Ninguna ruta une esos puntos",
+  "geo.eta.failed": "No se pudo estimar el tiempo de viaje"
+}

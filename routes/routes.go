@@ -18,6 +18,11 @@ import (
 	coreModels "josex/web/modules/core/models"
 	coreRoutes "josex/web/modules/core/routes"
 	coreServices "josex/web/modules/core/services"
+	geoControllers "josex/web/modules/geo/controllers"
+	geoRepos "josex/web/modules/geo/repositories"
+	geoRoutes "josex/web/modules/geo/routes"
+	geoServices "josex/web/modules/geo/services"
+	geoRouting "josex/web/modules/geo/services/routing"
 	importControllers "josex/web/modules/import/controllers"
 	importRoutes "josex/web/modules/import/routes"
 	importServices "josex/web/modules/import/services"
@@ -129,6 +134,7 @@ func SetupRoutes(r *gin.Engine, dbService coreServices.DatabaseService, valkey c
 	registerTracking(d, chains)
 	inventorySvcs := registerBusinessModules(d, chains)
 	registerImport(d, chains, inventorySvcs)
+	registerGeo(d, chains)
 
 	// Swagger documentation
 	r.GET("/swagger/*any", ginSwagger.WrapHandler(swaggerFiles.Handler))
@@ -332,4 +338,17 @@ func registerImport(d routeDeps, chains tenantChains, inventorySvcs inventoryRou
 	importController := importControllers.NewImportController(importServices.NewImportService(importRegistry))
 	importRoutes.RegisterImportRoutes(d.apiV1, importController, d.jwt, chains.tenant)
 	log.Println("✅ Import module routes registered")
+}
+
+// registerGeo mounts address search and routing (INFRA-003) — the tenant server. Observed durations
+// (the ETA's second source) are nil until TRACK-010.
+func registerGeo(d routeDeps, chains tenantChains) {
+	if !config.ModularAppConfig.Core.IsModuleEnabled("geo") {
+		return
+	}
+	geoConf := config.ModularAppConfig.Geo
+	geoService := geoServices.NewGeoService(
+		geoRepos.NewPlacesRepository(d.db), geoRouting.NewRouter(geoConf), nil, geoConf)
+	geoRoutes.RegisterGeoRoutes(d.apiV1, geoControllers.NewGeoController(geoService), d.authMiddleware, chains.tenant)
+	log.Println("✅ Geo module routes registered")
 }

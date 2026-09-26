@@ -7,6 +7,7 @@ import (
 	billingConfig "josex/web/modules/billing/config"
 	coreConfig "josex/web/modules/core/config"
 	"josex/web/modules/core/utils"
+	geoConfig "josex/web/modules/geo/config"
 	importConfig "josex/web/modules/import/config"
 	inventoryConfig "josex/web/modules/inventory/config"
 	purchasingConfig "josex/web/modules/purchasing/config"
@@ -28,6 +29,7 @@ type ModularConfig struct {
 	Inventory  *inventoryConfig.InventoryConfig
 	Sales      *salesConfig.SalesConfig
 	Purchasing *purchasingConfig.PurchasingConfig
+	Geo        *geoConfig.GeoConfig
 }
 
 // Global modular configuration (lazy-loaded on first access)
@@ -54,6 +56,7 @@ func GetConfig() *ModularConfig {
 			Inventory:  inventoryConfig.LoadInventoryConfig(),
 			Sales:      salesConfig.LoadSalesConfig(),
 			Purchasing: purchasingConfig.LoadPurchasingConfig(),
+			Geo:        geoConfig.LoadGeoConfig(),
 		}
 	})
 	return ModularAppConfig

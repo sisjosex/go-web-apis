@@ -26,6 +26,9 @@ go.work
 # run leaves behind. These are volumes in production and never source.
 storage/
 
+# Geo builds and their download cache (INFRA-003): gigabytes, rebuilt monthly.
+docker/geo/data/
+
 # Environment variables (CRITICAL - Never commit!)
 .env
 .env.local

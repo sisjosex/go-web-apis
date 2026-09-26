@@ -1,0 +1,7 @@
+DROP FUNCTION IF EXISTS geo.sp_reverse_place(FLOAT8, FLOAT8);
+DROP FUNCTION IF EXISTS geo.sp_search_places(TEXT, FLOAT8, FLOAT8, INT);
+DROP FUNCTION IF EXISTS geo.sp_replace_places();
+DROP TABLE IF EXISTS geo.places_import;
+DROP TABLE IF EXISTS geo.places;
+DROP FUNCTION IF EXISTS geo.fn_fold(TEXT);
+DROP SCHEMA IF EXISTS geo;

@@ -1,0 +1,10 @@
+{
+  "geo.validation.failed": "Invalid geo request",
+  "geo.point.incomplete": "Send both lat and lng, or neither",
+  "geo.geocode.failed": "Address search failed",
+  "geo.reverse.not-found": "No known place within 500 m of that point",
+  "geo.reverse.failed": "Reverse lookup failed",
+  "geo.route.unavailable": "Routing is unavailable right now, try again shortly",
+  "geo.route.not-found": "No route joins those locations",
+  "geo.eta.failed": "Could not estimate the travel time"
+}

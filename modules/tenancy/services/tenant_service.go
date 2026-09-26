@@ -94,6 +94,7 @@ func (s *tenantService) runTenantMigrations(databaseURL string) error {
 	mainConfig := config.ModularAppConfig.Core
 	excludedModules := map[string]bool{
 		"tenancy": true, // Tenant management only in Main DB
+		"geo":     true, // OSM places are the same for every tenant: the server's own DB (INFRA-003)
 	}
 
 	// Always include 'core' module for base extensions (uuid-ossp, etc.)
@@ -108,7 +109,7 @@ func (s *tenantService) runTenantMigrations(databaseURL string) error {
 	tenantCoreConfig := &coreConfig.CoreConfig{
 		DatabaseURL:           mainConfig.DatabaseURL,
 		DatabasePoolSize:      mainConfig.DatabasePoolSize,
-		EnabledModules:        tenantEnabledModules,              // Filtered list without 'tenancy', 'auth', 'users'
+		EnabledModules:        tenantEnabledModules,             // Filtered list without 'tenancy', 'auth', 'users'
 		ExcludedFromMigration: mainConfig.ExcludedFromMigration, // Keep exclusions from main config
 		AppMode:               mainConfig.AppMode,
 		AppHost:               mainConfig.AppHost,

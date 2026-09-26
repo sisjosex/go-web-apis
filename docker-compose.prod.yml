@@ -202,6 +202,25 @@ services:
       postgres:
         condition: service_healthy
 
+  # ============ GEO (INFRA-003) ============
+  # Routing on the build in ${GEO_DATA_DIR}/current, uploaded and put live by
+  # docker/geo/switch.sh — the server never builds (D3). Read-only and
+  # stateless; the tenant API reaches it on the compose network only. A 4 GB
+  # box wants 2 GB of swap for the peaks (docker/geo/README.md).
+  valhalla:
+    image: ghcr.io/valhalla/valhalla:3.9.0
+    restart: unless-stopped
+    command: ["valhalla_service", "/valhalla/valhalla.json", "2"]
+    mem_limit: 1g
+    volumes:
+      - ${GEO_DATA_DIR:-./docker/geo/data}/current/valhalla:/valhalla:ro
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS -o /dev/null http://localhost:8002/status || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+
   # ============ EDGE ============
   caddy:
     image: caddy:2.8-alpine
@@ -216,6 +235,9 @@ services:
       ACME_EMAIL: ${ACME_EMAIL}
     volumes:
       - ./docker/caddy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - ./docker/caddy/tiles.caddy:/etc/caddy/tiles.caddy:ro
+      # The basemap under TENANT_HOST/tiles/ (docker/caddy/tiles.caddy).
+      - ${GEO_DATA_DIR:-./docker/geo/data}:/srv/geo:ro
       - caddy_data:/data
       - caddy_config:/config
     depends_on:

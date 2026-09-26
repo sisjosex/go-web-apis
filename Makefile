@@ -1,7 +1,8 @@
 .PHONY: help swagger build run \
         dev \
         migrate migrate-list tenant-list tenant-migrate \
-        test test-auth test-users test-core test-tenancy test-tracking test-inventory test-sales test-purchasing test-billing test-import test-all \
+        test test-auth test-users test-core test-tenancy test-tracking test-inventory test-sales test-purchasing test-billing test-import test-geo test-all \
+        geo-build geo-switch geo-rollback geo-up \
         db-reset docker-up docker-down clean
 
 # Build output
@@ -53,6 +54,7 @@ help:
 	@echo "  make test-users       - Users module"
 	@echo "  make test-core        - Core module (jobs tests need Valkey up)"
 	@echo "  make test-import      - Import engine (unit, no DB)"
+	@echo "  make test-geo         - Geo module (address search, routing breaker, ETA fallback)"
 	@echo ""
 	@echo "🗄️  DATABASE"
 	@echo "  make db-reset         - Drop, recreate, and migrate test database"
@@ -60,6 +62,12 @@ help:
 	@echo "🐳 DOCKER"
 	@echo "  make docker-up        - Start docker-compose services (PostgreSQL, Valkey)"
 	@echo "  make docker-down      - Stop docker-compose services"
+	@echo ""
+	@echo "🗺️  GEO  (docker/geo/README.md)"
+	@echo "  make geo-build [DATE=YYYY-MM-DD]   - Build routing, basemap, places into docker/geo/data/<date>"
+	@echo "  make geo-switch DATE=YYYY-MM-DD    - Check that build, make it current, import places"
+	@echo "  make geo-rollback                  - Swap current and previous"
+	@echo "  make geo-up                        - Start valhalla (:8002) and the tiles server (:8090)"
 	@echo ""
 	@echo "🧹 CLEANUP"
 	@echo "  make clean            - Remove built binary"
@@ -179,6 +187,9 @@ test-purchasing: db-reset
 test-billing: db-reset
 	go test $(TEST_FLAGS) ./modules/billing/tests
 
+test-geo: db-reset
+	go test $(TEST_FLAGS) ./modules/geo/tests ./modules/geo/services/routing
+
 # ════════════════════════════════════════════════════════════════
 # DATABASE
 # ════════════════════════════════════════════════════════════════
@@ -198,6 +209,26 @@ docker-down:
 	@echo "🛑 Stopping Docker services..."
 	docker-compose down
 	@echo "✅ Services stopped"
+
+# ════════════════════════════════════════════════════════════════
+# GEO (INFRA-003) — the dev side of docker/geo; on the server the scripts run
+# directly against docker-compose.prod.yml (docker/geo/README.md)
+# ════════════════════════════════════════════════════════════════
+GEO_DEV := GEO_COMPOSE=docker-compose.yml ENV_FILE=.env.tenant \
+	GEO_IMPORT="go run ./cmd/cli geo import docker/geo/data/current/places.geojsonl"
+
+geo-build:
+	docker/geo/build.sh $(DATE)
+
+geo-switch:
+	@[ "$(DATE)" ] || (echo "❌ DATE required. Usage: make geo-switch DATE=2026-09-23"; exit 1)
+	$(GEO_DEV) docker/geo/switch.sh $(DATE)
+
+geo-rollback:
+	$(GEO_DEV) docker/geo/rollback.sh
+
+geo-up:
+	docker compose --profile geo up -d valhalla tiles
 
 # ════════════════════════════════════════════════════════════════
 # QUALITY GATE — quiet: one line per step, the tail of the log on failure

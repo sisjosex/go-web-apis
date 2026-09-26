@@ -71,3 +71,37 @@ services:
     command: ["valkey-server", "--appendonly", "yes", "--appendfsync", "everysec"]
     ports:
       - "6379:6379"
+
+  # ============ GEO (INFRA-003) ============
+  # Both serve the build in ${GEO_DATA_DIR}/current (docker/geo/README.md), so
+  # they sit behind the `geo` profile: `make docker-up` works before any build
+  # exists. `make geo-up` starts them; `make geo-switch` recreates valhalla.
+  valhalla:
+    image: ghcr.io/valhalla/valhalla:3.9.0
+    profiles: [geo]
+    restart: always
+    command: ["valhalla_service", "/valhalla/valhalla.json", "2"]
+    mem_limit: 1g
+    # Published in dev only, for the tenant server running outside Docker.
+    ports:
+      - "8002:8002"
+    volumes:
+      - ${GEO_DATA_DIR:-./docker/geo/data}/current/valhalla:/valhalla:ro
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS -o /dev/null http://localhost:8002/status || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+
+  # The basemap on :8090 — prod serves the same snippet under TENANT_HOST/tiles/.
+  tiles:
+    image: caddy:2.8-alpine
+    profiles: [geo]
+    restart: always
+    ports:
+      - "8090:8090"
+    volumes:
+      - ./docker/caddy/Caddyfile.tiles:/etc/caddy/Caddyfile:ro
+      - ./docker/caddy/tiles.caddy:/etc/caddy/tiles.caddy:ro
+      - ${GEO_DATA_DIR:-./docker/geo/data}:/srv/geo:ro

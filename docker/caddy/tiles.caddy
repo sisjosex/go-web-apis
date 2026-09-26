@@ -1,0 +1,17 @@
+# Static basemap for MapView and the mobile apps (INFRA-003): the current
+# build's tiles/ — basemap.pmtiles (read by HTTP range), the light and dark
+# styles, fonts and sprites. The path is resolved per request, so the rename in
+# docker/geo/switch.sh flips the basemap with no reload.
+handle_path /tiles/* {
+	root * /srv/geo/current/tiles
+	header {
+		Access-Control-Allow-Origin *
+		Access-Control-Allow-Methods "GET, HEAD, OPTIONS"
+		Access-Control-Allow-Headers "Range, If-Match"
+		Access-Control-Expose-Headers "ETag, Content-Range, Content-Length"
+		Cache-Control "public, max-age=86400"
+	}
+	@preflight method OPTIONS
+	respond @preflight 204
+	file_server
+}

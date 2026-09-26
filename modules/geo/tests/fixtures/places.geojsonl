@@ -1,0 +1,5 @@
+{"type":"Feature","geometry":{"type":"LineString","coordinates":[[-66.1602,-17.3968],[-66.1570,-17.3962],[-66.1531,-17.3955]]},"properties":{"name":"Av. Aroma","highway":"primary"}}
+{"type":"Feature","geometry":{"type":"Point","coordinates":[-66.1568,-17.3895]},"properties":{"name":"Cochabamba","place":"city"}}
+{"type":"Feature","geometry":{"type":"Point","coordinates":[-68.2200,-17.3300]},"properties":{"name":"Aroma","place":"village"}}
+{"type":"Feature","geometry":{"type":"Polygon","coordinates":[[[-66.1545,-17.3990],[-66.1530,-17.3990],[-66.1530,-17.3978],[-66.1545,-17.3978],[-66.1545,-17.3990]]]},"properties":{"name":"Mercado 25 de Mayo","amenity":"marketplace"}}
+{"type":"Feature","geometry":{"type":"LineString","coordinates":[[-66.1580,-17.3920],[-66.1540,-17.3915]]},"properties":{"name":"Calle Sucre","highway":"residential"}}
