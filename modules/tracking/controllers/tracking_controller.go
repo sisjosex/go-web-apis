@@ -149,46 +149,6 @@ func scopeRefused(c *gin.Context, err error) bool {
 	return false
 }
 
-// UpdateVehicleLocation godoc
-// @Summary Update vehicle GPS location
-// @Description Insert GPS coordinates for a vehicle (high-frequency operation)
-// @Tags Tracking - Locations
-// @Accept json
-// @Produce json
-// @Param location body models.UpdateLocationDto true "GPS location data"
-// @Success 200 {object} models.CurrentLocationResponse
-// @Failure 400 {object} coreErrors.ErrorResponse
-// @Failure 404 {object} coreErrors.ErrorResponse
-// @Failure 500 {object} coreErrors.ErrorResponse
-// @Router /tracking/locations [post]
-func (ctrl *TrackingController) UpdateVehicleLocation(c *gin.Context) {
-	var dto models.UpdateLocationDto
-
-	if err := c.ShouldBindJSON(&dto); err != nil {
-		c.JSON(http.StatusBadRequest, coreErrors.BuildErrorDetail(c, trackingErrors.LocationInvalidCoords, utils.ExtractValidationError(c, err)))
-		return
-	}
-
-	conform.Strings(&dto)
-
-	response, err := ctrl.trackingService.UpdateVehicleLocation(c.Request.Context(), &dto)
-	if err != nil {
-		if trackingErr, ok := err.(*trackingErrors.TrackingError); ok {
-			switch trackingErr.Code {
-			case trackingErrors.VehicleNotFound:
-				c.JSON(http.StatusNotFound, coreErrors.BuildErrorSingle(c, trackingErr.Code))
-			default:
-				c.JSON(http.StatusInternalServerError, coreErrors.BuildError(c, err))
-			}
-			return
-		}
-		c.JSON(http.StatusInternalServerError, coreErrors.BuildError(c, err))
-		return
-	}
-
-	c.JSON(http.StatusOK, response)
-}
-
 // GetVehicleCurrentLocation godoc
 // @Summary Get vehicle current location
 // @Description Retrieve the most recent GPS location for a vehicle

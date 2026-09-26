@@ -13,6 +13,9 @@ const (
 	// RoleDriver drives a route on the mobile app; which driver record the account belongs to is
 	// tracking.drivers.user_id, never a column here (TRACK-006 D1).
 	RoleDriver = "driver"
+	// RoleGPSDevice is not a membership: it is what a request authenticated by a GPS device token runs
+	// as — no user, no permissions, accepted by the position ingest alone (TRACK-010).
+	RoleGPSDevice = "gps_device"
 )
 
 // IsMobileOnlyTenantRole reports whether an access level may only sign in through the mobile app.

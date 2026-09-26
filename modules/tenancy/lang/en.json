@@ -30,5 +30,6 @@
   "multitenancy.disabled": "Multitenancy is not enabled on this server",
   "tenant.permission.denied": "You do not have permission to perform this action",
   "tenant.permission.code-required": "Permission code is required",
-  "tenant.user.portal-web-forbidden": "This account is mobile-only — sign in from the app"
+  "tenant.user.portal-web-forbidden": "This account is mobile-only — sign in from the app",
+  "tenant.gps-device.unauthorized": "Unknown GPS device token"
 }

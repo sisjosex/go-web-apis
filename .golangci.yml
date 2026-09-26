@@ -30,8 +30,8 @@ linters:
       min-complexity: 15
   exclusions:
     rules:
-      # Entry points and tests may create root contexts and be long.
-      - path: ^cmd/|_test\.go$|/tests/
+      # Entry points (cmd/, tools/) and tests may create root contexts and be long.
+      - path: ^(cmd|tools)/|_test\.go$|/tests/
         linters: [forbidigo, funlen, gocyclo]
       # Swagger output is generated.
       - path: ^docs/

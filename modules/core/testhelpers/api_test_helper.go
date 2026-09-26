@@ -19,6 +19,7 @@ import (
 
 	"josex/web/config"
 	coreServices "josex/web/modules/core/services"
+	"josex/web/modules/tracking/realtime"
 	"josex/web/routes"
 
 	"github.com/gin-gonic/gin"
@@ -67,7 +68,13 @@ func sharedTestServer() (*gin.Engine, coreServices.DatabaseService) {
 		}
 
 		coreServices.LoadAllTranslations([]string{"en", "es"})
-		routes.SetupRoutes(engine, dbService, valkey)
+		// The WebSocket gateway, as the all role runs it (TRACK-025).
+		var hub *realtime.Hub
+		if valkey != nil {
+			hub = realtime.NewHub(valkey.Client(), config.ModularAppConfig.Tracking.WSQueueMax, nil)
+			hub.Start(context.Background()) //nolint:forbidigo // startup: the hub lives as long as the test binary
+		}
+		routes.SetupRoutes(engine, dbService, valkey, hub)
 
 		sharedEngine = engine
 		sharedValkey = valkey
@@ -479,6 +486,16 @@ func (h *ApiTestHelper) RefreshToken() (string, error) {
 	}
 
 	return "", fmt.Errorf("access_token not found in response")
+}
+
+// Engine is the shared router, for a test that needs a real listener (a WebSocket upgrade).
+func (h *ApiTestHelper) Engine() *gin.Engine {
+	return h.engine
+}
+
+// Token is the signed-in user's access token.
+func (h *ApiTestHelper) Token() string {
+	return h.token
 }
 
 // ClearToken removes the stored token (useful after logout)

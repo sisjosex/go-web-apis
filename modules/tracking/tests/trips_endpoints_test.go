@@ -4,13 +4,10 @@
 package tracking_test
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
-	"log"
 	"net/http"
 	"net/http/httptest"
-	"os"
 	"strconv"
 	"testing"
 	"time"
@@ -405,11 +402,10 @@ func TestTripChanged_PublishedAndAcknowledged(t *testing.T) {
 		return err == nil && published
 	})
 
-	var logged bytes.Buffer
-	log.SetOutput(&logged)
-	defer log.SetOutput(os.Stderr)
-	err = trackingJobs.TripChangedHandler()(ctx, asynq.NewTask(info.Type, info.Payload))
+	lister := func(context.Context) ([]jobs.Tenant, error) { return []jobs.Tenant{testTenant()}, nil }
+	err = trackingJobs.TripChangedHandler(helper.DB(), lister, nil, nil)(ctx, asynq.NewTask(info.Type, info.Payload))
 
 	assert.NoError(t, err)
-	assert.Contains(t, logged.String(), "trip.changed "+tripID+" start acknowledged")
+	assert.Equal(t, 0, countRows(t, helper, `SELECT count(*) FROM tracking.trips WHERE id = $1 AND polyline IS NOT NULL`, tripID),
+		"a start stores no trace")
 }

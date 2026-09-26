@@ -25,5 +25,10 @@
 	# The basemap, off the geo data dir (docker/geo/README.md).
 	import tiles.caddy
 
+	# The WebSocket gateway (TRACK-025) is its own process: deploying the API never drops a socket,
+	# and a second api-realtime only adds connections (fan-out is Valkey pub/sub, no sticky sessions).
+	@realtime path /api/v1/tracking/ws
+	reverse_proxy @realtime api-realtime:9080
+
 	reverse_proxy api-tenant:9080
 }

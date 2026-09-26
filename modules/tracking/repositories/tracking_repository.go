@@ -46,69 +46,6 @@ func scopedErr(err error, fallback string) error {
 	return &trackingErrors.TrackingError{Code: fallback, Err: err}
 }
 
-// UpdateVehicleLocation inserts GPS coordinates for a vehicle
-func (r *TrackingRepository) UpdateVehicleLocation(ctx context.Context, dto *models.UpdateLocationDto) (*models.CurrentLocationResponse, error) {
-	var recordedAt time.Time
-	if dto.RecordedAt != nil {
-		parsedTime, err := time.Parse(time.RFC3339, *dto.RecordedAt)
-		if err == nil {
-			recordedAt = parsedTime
-		} else {
-			recordedAt = time.Now()
-		}
-	} else {
-		recordedAt = time.Now()
-	}
-
-	var locationID uuid.UUID
-	var vehicleID uuid.UUID
-	var latitude, longitude float64
-	var returnedRecordedAt time.Time
-
-	var speed, heading, altitude, accuracy *float64
-
-	err := r.dbService.QueryRow(
-		ctx,
-		`SELECT * FROM tracking.sp_record_vehicle_location($1, $2, $3, $4, $5, $6, $7, $8)`,
-		dto.VehicleID,
-		dto.Latitude,
-		dto.Longitude,
-		dto.Speed,
-		dto.Heading,
-		dto.Altitude,
-		dto.Accuracy,
-		recordedAt,
-	).Scan(&locationID, &vehicleID, &latitude, &longitude, &speed, &heading, &altitude, &accuracy, &returnedRecordedAt)
-
-	if err != nil {
-		return nil, &trackingErrors.TrackingError{Code: trackingErrors.LocationUpdateFailed, Err: err}
-	}
-
-	// Get vehicle details
-	var licensePlate string
-	err = r.dbService.QueryRow(ctx,
-		`SELECT plate_number FROM tracking.sp_get_vehicle_plate($1)`,
-		vehicleID,
-	).Scan(&licensePlate)
-	if err != nil {
-		return nil, &trackingErrors.TrackingError{Code: trackingErrors.VehicleNotFound, Err: err}
-	}
-
-	recordedAtStr := returnedRecordedAt.Format(time.RFC3339)
-	ageSeconds := int32(time.Since(returnedRecordedAt).Seconds())
-
-	return &models.CurrentLocationResponse{
-		VehicleID:    vehicleID,
-		LicensePlate: licensePlate,
-		Latitude:     &latitude,
-		Longitude:    &longitude,
-		Speed:        dto.Speed,
-		Heading:      dto.Heading,
-		RecordedAt:   &recordedAtStr,
-		AgeSeconds:   &ageSeconds,
-	}, nil
-}
-
 // GetVehicleCurrentLocation retrieves the most recent GPS location
 func (r *TrackingRepository) GetVehicleCurrentLocation(ctx context.Context, vehicleID uuid.UUID) (*models.CurrentLocationResponse, error) {
 	var retVehicleID uuid.UUID

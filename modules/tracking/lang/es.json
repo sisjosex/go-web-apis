@@ -186,5 +186,8 @@
   "tracking.absence.create.failed": "Error al registrar la ausencia",
   "tracking.absence.delete.failed": "Error al eliminar la ausencia",
   "tracking.rider.no-home-location": "Primero indica la ubicación del domicilio del pasajero",
-  "tracking.rider.suggestions.failed": "Error al sugerir paradas"
+  "tracking.rider.suggestions.failed": "Error al sugerir paradas",
+  "tracking.ingest.no-active-trip": "Inicia un viaje antes de enviar posiciones",
+  "tracking.ingest.invalid": "Puntos GPS no válidos",
+  "tracking.ingest.failed": "Error al aceptar los puntos GPS"
 }

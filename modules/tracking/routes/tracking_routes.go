@@ -12,6 +12,22 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
+// Ingest is the GPS ingest route (TRACK-010): its controller and the chain that authenticates either a
+// device token or a driver. Auth nil — no tenancy — leaves the route unregistered: a device token
+// names its tenant, which needs the platform database.
+type Ingest struct {
+	Controller *controllers.IngestController
+	Auth       []gin.HandlerFunc
+}
+
+// Live is the realtime surface (TRACK-025): the snapshot reads, and the WebSocket endpoint's whole
+// handler list (browser auth, auth, tenant chain, module check, upgrade) — nil when this process
+// runs no gateway.
+type Live struct {
+	Controller *controllers.LiveController
+	Socket     []gin.HandlerFunc
+}
+
 // RegisterTrackingRoutes registers all tracking module routes
 // Routes work in both single-database and multi-tenant modes
 // Controllers handle tenant validation based on config
@@ -25,6 +41,8 @@ func RegisterTrackingRoutes(
 	tenantMiddleware gin.HandlerFunc,
 	portalTenantMiddleware gin.HandlerFunc,
 	jwtService authServices.JWTService,
+	ingest Ingest,
+	live Live,
 ) {
 	trackingGroup := router.Group("/api/v1/tracking")
 
@@ -33,7 +51,15 @@ func RegisterTrackingRoutes(
 	tenancyConf := config.ModularAppConfig.Tenancy
 
 	if coreConf.IsModuleEnabled("tenancy") && tenancyConf != nil && tenancyConf.Enabled {
-		registerTenantRoutes(trackingGroup, trackingController, tenantMiddleware, portalTenantMiddleware, jwtService)
+		registerTenantRoutes(trackingGroup, trackingController, tenantMiddleware, portalTenantMiddleware, jwtService, live.Controller)
+		// Outside the groups: each carries its own chain — a device token or a driver's session for the
+		// ingest, a browser's subprotocol token and ?tenant_slug= for the socket.
+		if ingest.Auth != nil {
+			trackingGroup.POST("/ingest/positions", append(ingest.Auth, ingest.Controller.IngestPositions)...)
+		}
+		if live.Socket != nil {
+			trackingGroup.GET("/ws", live.Socket...)
+		}
 		return
 	}
 	registerOpenRoutes(trackingGroup, trackingController)
@@ -47,6 +73,7 @@ func registerTenantRoutes(
 	tenantMiddleware gin.HandlerFunc,
 	portalTenantMiddleware gin.HandlerFunc,
 	jwtService authServices.JWTService,
+	liveController *controllers.LiveController,
 ) {
 	// Multi-tenant mode: auth + tenant middleware + per-route permission checks
 	r := trackingGroup.Group("")
@@ -74,6 +101,17 @@ func registerTenantRoutes(
 	registerDocumentRoutes(r, denyOrganization, trackingController)
 	registerRiderRoutes(r, p, denyOrganization, trackingController)
 	registerTripRoutes(r, denyOrganization, trackingController)
+	registerLiveRoutes(r, denyOrganization, liveController)
+}
+
+// registerLiveRoutes are the snapshots a live screen reads on open and on every resync (TRACK-025):
+// the operator's, like the trips they show.
+func registerLiveRoutes(r *gin.RouterGroup, denyOrganization gin.HandlerFunc, live *controllers.LiveController) {
+	if live == nil {
+		return
+	}
+	r.GET("/live/fleet", denyOrganization, live.GetLiveFleet)
+	r.GET("/trips/:trip_id/live", denyOrganization, live.GetTripLive)
 }
 
 // registerFleetRoutes is what the operator owns and runs: its companies, its buses, its drivers.

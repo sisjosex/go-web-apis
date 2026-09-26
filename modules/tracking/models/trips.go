@@ -44,10 +44,14 @@ type TripListRow struct {
 }
 
 // TripDetail is GET /tracking/trips/:id and what every trip write answers: the row plus its stops
-// in order, each with its tasks.
+// in order, each with its tasks. Polyline (precision 6), DistanceKm and TraceSource are the driven
+// path stored at trip close (TRACK-010); only the GET reads them, a write answers them null.
 type TripDetail struct {
 	Trip
-	Stops []TripStop `json:"stops"`
+	Polyline    *string    `json:"polyline"`
+	DistanceKm  *float64   `json:"distance_km"`
+	TraceSource *string    `json:"trace_source"`
+	Stops       []TripStop `json:"stops"`
 }
 
 type TripStop struct {

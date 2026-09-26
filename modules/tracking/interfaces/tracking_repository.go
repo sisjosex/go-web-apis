@@ -12,7 +12,6 @@ import (
 // TrackingRepository defines the interface for tracking data access
 type TrackingRepository interface {
 	// Location operations (no tenant scope — GPS device data)
-	UpdateVehicleLocation(ctx context.Context, dto *models.UpdateLocationDto) (*models.CurrentLocationResponse, error)
 	GetVehicleCurrentLocation(ctx context.Context, vehicleID uuid.UUID) (*models.CurrentLocationResponse, error)
 
 	// Event operations

@@ -10,6 +10,7 @@ import (
 	"josex/web/config"
 	"josex/web/modules/core/jobs"
 	"josex/web/modules/core/services"
+	geoRouting "josex/web/modules/geo/services/routing"
 	tenancyRepos "josex/web/modules/tenancy/repositories"
 	trackingJobs "josex/web/modules/tracking/jobs"
 
@@ -23,6 +24,8 @@ type background struct {
 	worker    *jobs.Worker
 	relay     *jobs.OutboxRelay
 	scheduler *jobs.Scheduler
+	// positions drains the GPS streams into the tenants' databases (TRACK-010); a worker's job.
+	positions *trackingJobs.PositionsConsumer
 }
 
 // startBackground starts what the role asks for. In `all` a missing REDIS_URL only disables the jobs,
@@ -56,7 +59,7 @@ func startBackground(ctx context.Context, mode, role string, db services.Databas
 
 	registry := jobs.NewRegistry()
 	relay := jobs.NewOutboxRelay(db, valkey, tenantLister(db), coreConf.OutboxPollInterval)
-	registerJobs(registry, db, relay)
+	registerJobs(registry, db, valkey, relay)
 
 	if runsWorker {
 		worker, err := jobs.StartWorker(valkey, registry, coreConf.JobsConcurrency)
@@ -66,6 +69,10 @@ func startBackground(ctx context.Context, mode, role string, db services.Databas
 		bg.worker = worker
 		relay.Start(ctx)
 		bg.relay = relay
+		if coreConf.IsModuleEnabled("tracking") {
+			bg.positions = trackingJobs.NewPositionsConsumer(db, valkey, tenantLister(db), config.ModularAppConfig.Tracking.GPSArrivalRadiusM)
+			bg.positions.Start(ctx)
+		}
 	}
 	if runsScheduler {
 		bg.scheduler = jobs.NewScheduler(valkey, registry, jobs.SchedulerLeaseTTL, jobs.SchedulerRenewEvery)
@@ -77,7 +84,7 @@ func startBackground(ctx context.Context, mode, role string, db services.Databas
 
 // registerJobs is where every module's handlers and periodic entries are declared. Worker and
 // scheduler build the same registry: the scheduler reads the entries, the worker the handlers.
-func registerJobs(registry *jobs.Registry, db services.DatabaseService, relay *jobs.OutboxRelay) {
+func registerJobs(registry *jobs.Registry, db services.DatabaseService, valkey services.ValkeyService, relay *jobs.OutboxRelay) {
 	daily := 24 * time.Hour
 	registry.Handle(jobs.TaskOutboxPurge, relay.Purge)
 	registry.Schedule(jobs.Entry{
@@ -92,8 +99,13 @@ func registerJobs(registry *jobs.Registry, db services.DatabaseService, relay *j
 		// pass is the same SP over every route, so a missed row is caught the next morning.
 		registry.Handle(trackingJobs.TaskRouteChanged, trackingJobs.RouteChangedHandler(db, tenantLister(db)))
 		registry.Handle(trackingJobs.TaskTripsMaterialise, trackingJobs.TripsMaterialiseHandler(db, tenantLister(db)))
-		// A trip moved (TRACK-020 D1): acknowledged until TRACK-010/012 bring its consumers.
-		registry.Handle(trackingJobs.TaskTripChanged, trackingJobs.TripChangedHandler())
+		// A trip moved (TRACK-020 D1): published to everyone watching it (TRACK-025), and a completed
+		// one gets its driven path, map-matched through the geo router — the raw line when Valhalla is
+		// down (TRACK-010).
+		registry.Handle(trackingJobs.TaskTripChanged, trackingJobs.TripChangedHandler(db, tenantLister(db),
+			geoRouting.NewRouter(config.ModularAppConfig.Geo), valkey))
+		registry.Handle(trackingJobs.TaskPositionsPartitions, trackingJobs.PositionsPartitionsHandler(db, tenantLister(db),
+			config.ModularAppConfig.Tracking.LocationRetentionDays))
 		registry.Schedule(jobs.Entry{
 			Cron: trackingJobs.DocumentAlertsCron, Period: daily,
 			Task: asynq.NewTask(trackingJobs.TaskDocumentAlerts, nil),
@@ -101,6 +113,10 @@ func registerJobs(registry *jobs.Registry, db services.DatabaseService, relay *j
 		registry.Schedule(jobs.Entry{
 			Cron: trackingJobs.TripsMaterialiseCron, Period: daily,
 			Task: asynq.NewTask(trackingJobs.TaskTripsMaterialise, nil),
+		})
+		registry.Schedule(jobs.Entry{
+			Cron: trackingJobs.PositionsPartitionsCron, Period: daily,
+			Task: asynq.NewTask(trackingJobs.TaskPositionsPartitions, nil),
 		})
 	}
 }
@@ -162,6 +178,9 @@ func (bg *background) Shutdown() {
 	}
 	if bg.relay != nil {
 		bg.relay.Shutdown()
+	}
+	if bg.positions != nil {
+		bg.positions.Shutdown()
 	}
 	if bg.worker != nil {
 		bg.worker.Shutdown()

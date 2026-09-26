@@ -55,6 +55,12 @@ type Route struct {
 	Legs      []RouteLeg `json:"legs"`
 }
 
+// Trace is a recorded path matched to the roads: the line, precision 6, and its length.
+type Trace struct {
+	Polyline6 string  `json:"polyline6"`
+	DistanceM float64 `json:"distance_m"`
+}
+
 // EtaRequest is POST /geo/eta.
 type EtaRequest struct {
 	From    *LatLng `json:"from" binding:"required"`

@@ -19,11 +19,6 @@ func NewTrackingService(trackingRepo interfaces.TrackingRepository) *TrackingSer
 	}
 }
 
-// UpdateVehicleLocation updates GPS location for a vehicle
-func (s *TrackingService) UpdateVehicleLocation(ctx context.Context, dto *models.UpdateLocationDto) (*models.CurrentLocationResponse, error) {
-	return s.trackingRepo.UpdateVehicleLocation(ctx, dto)
-}
-
 // GetVehicleCurrentLocation retrieves the most recent location
 func (s *TrackingService) GetVehicleCurrentLocation(ctx context.Context, vehicleID uuid.UUID) (*models.CurrentLocationResponse, error) {
 	return s.trackingRepo.GetVehicleCurrentLocation(ctx, vehicleID)

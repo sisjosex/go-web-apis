@@ -10,19 +10,7 @@ import (
 	"github.com/google/uuid"
 )
 
-// === DTOs for Location Updates ===
-
-// UpdateLocationDto represents GPS location update from vehicle
-type UpdateLocationDto struct {
-	VehicleID  uuid.UUID `json:"vehicle_id" binding:"required,uuidv4"`
-	Latitude   float64   `json:"latitude" binding:"required,min=-90,max=90"`
-	Longitude  float64   `json:"longitude" binding:"required,min=-180,max=180"`
-	Speed      *float64  `json:"speed" binding:"omitempty,min=0"`
-	Heading    *float64  `json:"heading" binding:"omitempty,min=0,max=360"`
-	Altitude   *float64  `json:"altitude"`
-	Accuracy   *float64  `json:"accuracy" binding:"omitempty,min=0"`
-	RecordedAt *string   `json:"recorded_at"` // ISO8601 timestamp
-}
+// === DTOs for Locations ===
 
 // CurrentLocationResponse represents current vehicle location
 type CurrentLocationResponse struct {

@@ -111,9 +111,19 @@ func (r *TrackingRepository) ListTrips(ctx context.Context, tenantID uuid.UUID, 
 	return trips, totalCount, nil
 }
 
+// GetTrip is the detail plus the driven path stored at trip close.
 func (r *TrackingRepository) GetTrip(ctx context.Context, tenantID, tripID uuid.UUID) (*models.TripDetail, error) {
-	return r.queryTripDetail(ctx, trackingErrors.TripNotFound,
-		`SELECT * FROM tracking.sp_get_trip(p_tenant_id := $1, p_trip_id := $2)`, tenantID, tripID)
+	var detail models.TripDetail
+	var stops []byte
+	err := r.dbService.QueryRow(ctx, `SELECT * FROM tracking.sp_get_trip_traced(p_tenant_id := $1, p_trip_id := $2)`, tenantID, tripID).
+		Scan(append(scanTrip(&detail.Trip), &stops, &detail.Polyline, &detail.DistanceKm, &detail.TraceSource)...)
+	if err != nil {
+		return nil, mapTripError(err, trackingErrors.TripNotFound)
+	}
+	if err := json.Unmarshal(stops, &detail.Stops); err != nil {
+		return nil, &trackingErrors.TrackingError{Code: trackingErrors.TripNotFound, Err: err}
+	}
+	return &detail, nil
 }
 
 func (r *TrackingRepository) GetTripStatus(ctx context.Context, tenantID, tripID uuid.UUID) (*models.TripStatus, error) {

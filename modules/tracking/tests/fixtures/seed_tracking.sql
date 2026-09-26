@@ -364,7 +364,7 @@ INSERT INTO tracking.rider_route_assignments (
 );
 
 -- ================================================================
--- VEHICLE LOCATIONS
+-- VEHICLE LAST POSITION (TRACK-010)
 -- ================================================================
-INSERT INTO tracking.vehicle_locations (vehicle_id, latitude, longitude, speed, heading, recorded_at)
-VALUES ('cccccccc-cccc-cccc-cccc-cccccccccccc'::uuid, 40.7128, -74.0060, 45.5, 180.0, NOW());
+INSERT INTO tracking.vehicle_last_position (vehicle_id, recorded_at, location, speed, heading)
+VALUES ('cccccccc-cccc-cccc-cccc-cccccccccccc'::uuid, NOW(), ST_SetSRID(ST_MakePoint(-74.0060, 40.7128), 4326)::geography, 45.5, 180.0);

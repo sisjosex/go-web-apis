@@ -135,6 +135,35 @@ services:
       migrate-tenant:
         condition: service_completed_successfully
 
+  # ============ REALTIME GATEWAY (TRACK-025) ============
+  # GET /api/v1/tracking/ws only (Caddy routes that path here). Its /readyz is
+  # 503 while Valkey is unreachable: every socket is closed 1012 then and the
+  # clients poll the snapshots until it is back. Scale it freely.
+  api-realtime:
+    image: xanthops-api:${API_TAG:-latest}
+    restart: unless-stopped
+    env_file:
+      - .env.tenant
+    environment:
+      ENV_FILE: .env.tenant
+      APP_HOST: 0.0.0.0
+      APP_PORT: 9080
+      SKIP_MIGRATIONS: "true"
+    command: ["./app", "-mode=tenant", "-role=realtime"]
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:9080/readyz > /dev/null || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    depends_on:
+      postgres:
+        condition: service_healthy
+      valkey:
+        condition: service_healthy
+      migrate-tenant:
+        condition: service_completed_successfully
+
   # ============ WORKER & SCHEDULER (INFRA-001) ============
   # Same image, platform mode: both walk every tenant listed in the platform
   # database. They serve only /livez and /readyz, and /readyz is 503 while
@@ -243,6 +272,7 @@ services:
     depends_on:
       - api-platform
       - api-tenant
+      - api-realtime
 
 volumes:
   pgdata:

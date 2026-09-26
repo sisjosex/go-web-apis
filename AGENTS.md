@@ -45,8 +45,8 @@ sibling `cmd/cli` carries `migration` (generate), `migrate` (apply, one shot), `
 `geo import`.
 
 **Roles (INFRA-001).** `-role` (flag > `APP_ROLE` > `all`) picks what a process runs: `api`, `worker`
-(asynq handlers + outbox relay), `scheduler` (periodic entries, fired only while it holds the
-`jobs:scheduler:lease` in Valkey), `realtime` (tenant, empty until TRACK-010). Worker and scheduler exist
+(asynq handlers + outbox relay + GPS stream consumer), `scheduler` (periodic entries, fired only while it holds the
+`jobs:scheduler:lease` in Valkey), `realtime` (tenant, the WebSocket gateway alone: `GET /tracking/ws`; `all` runs it too). Worker and scheduler exist
 in platform mode only — they walk the tenants `tenancy.*` lists. Non-API roles serve only the probes.
 Wiring is `cmd/server/background.go`: a module adds a handler or a periodic entry in `registerJobs`,
 never in `core/jobs`. `REDIS_URL` unset ⇒ `all` is the API alone; Valkey down ⇒ the rate limit fails open
@@ -65,8 +65,32 @@ today..today+14 (`routes.timezone`, IANA). An SP that changes a route's plan or 
 Trips move over HTTP (TRACK-020): `POST /trips/:id/start|complete|cancel`, `/trip-stops/:id/arrive|skip`,
 `/trip-stop-tasks/:id/done|no-show` (body `client_op_id`, idempotent), `PATCH /trips/:id` (override →
 `is_overridden`). Each SP locks the trip row, writes `trip_events` + a `trip.changed` outbox row through
-`tracking.fn_trip_changed` and answers the detail; the `outbox:trip.changed` handler only acknowledges
-until TRACK-010/012 consume it.
+`tracking.fn_trip_changed` and answers the detail; the `outbox:trip.changed` handler stores a completed
+trip's driven path (`polyline`, `distance_km`, `trace_source`: Valhalla `trace_attributes`, the raw GPS
+line when it is down), which only `GET /trips/:id` answers.
+
+**GPS (TRACK-010).** `POST /tracking/ingest/positions` (≤ 500 points, 202 `{accepted, path}`) takes two
+ways in, chosen by header: `X-Device-Token: <tenant_id>.<secret>` (`tenancy.gps_devices`, sha256 only,
+issued by `cli tenant -gps-device <slug> -vehicle <uuid>`) or a driver's Bearer + slug (vehicle of their
+trip in progress, else 409). Points go to the Valkey stream `gps:{tenant}` (Valkey down → stored inline,
+`path: stored`); the worker's `PositionsConsumer` reads 1 000 at a time into `sp_ingest_positions`, the
+only writer of `vehicle_positions` (UTC-day partitions, `tracking:positions-partitions` 01:00 UTC keeps a
+week ahead and drops past `TRACKING_LOCATION_RETENTION_DAYS`) and `vehicle_last_position` (what every
+"where is it now" read looks up), marks the next stop arrived within `GPS_ARRIVAL_RADIUS_M`, then
+publishes `{type, data}` to `fleet:{tenant}`, `fleet:{tenant}:org:{id}`, `trip:{id}`, `rider:{id}` —
+a position at most every 3 s per vehicle, an arrival at once. Load: `go run ./tools/gpsload`.
+
+**Realtime (TRACK-025).** `GET /tracking/ws` (`modules/tracking/realtime`): a browser offers the JWT as the
+subprotocol pair `bearer, <jwt>` and the tenant as `?tenant_slug=`; then `{op: subscribe|unsubscribe,
+channel}` ↔ `{channel, type, seq, data}` (`type` position|stop|trip_status|task|eta, or `error` with
+`code: forbidden`, the socket kept). Each subscribe is `sp_can_subscribe`, cached 5 min per (user,
+channel): operators get `fleet:{tenant}[:org:{id}]`, `trip:{id}`, `rider:{id}`; a guardian only its own
+`rider:{id}` while it rides; organization and driver levels are refused at the upgrade. One Valkey
+SUBSCRIBE per channel per process; position and eta are latest-wins per channel, anything else queues
+and past `WS_QUEUE_MAX` closes 1013; Valkey lost or shutdown closes 1012. `outbox:trip.changed` publishes
+every transition; the hub adds `eta` on a watched `trip:{id}`. ETA is on demand (D1): one Valhalla route
+through every pending stop, cached `eta:{trip}` 30 s. Snapshots for (re)sync: `GET /tracking/live/fleet`,
+`GET /tracking/trips/:id/live`.
 
 Main DB holds `auth.*` + `tenancy.*`; one DB per tenant holds business schemas only. JWT carries
 `user_id + session_id`; tenancy middleware resolves `tenant_id` from `X-Tenant-Slug` per request.
@@ -130,7 +154,9 @@ Verified 2026-09-19 (APP-004):
 | `GET /tracking/routes/:id/exceptions` | `date_from date_to` (overlap, not containment) | array, oldest first — `kind` and a `payload` whose keys the kind defines |
 | `GET /tracking/routes/:id/preview` | `from to` (YYYY-MM-DD, both required, at most 92 days apart) | array — one row per departure the plan produces, with `service_date`, `schedule_id`, `start_time`, `version_id`, `vehicle_id`, `driver_id`, a `status` of planned/cancelled and the `exceptions` that apply; a day the route does not run has no row |
 | `GET /tracking/assignments` | `page page_size rider_id route_id date` (cap 100) | `{ assignments, total_count, page, page_size }` — `date` narrows to the assignments in force that day; every row carries `rider_name`, `route_name`, `direction`, `pickup_stop_name`, `dropoff_stop_name`; `days_of_week` is the schedules' bitmask. Writes (`POST`, `PATCH /:id`, `POST /bulk`) answer `{ assignment \| assignments, warnings }` |
-| `GET /tracking/trips` | `page page_size date route_id status organization_id` (cap 100) | `{ trips, total_count, page, page_size }` — `date` defaults to each route's local today; every row carries `route_name`, `direction`, `license_plate`, `driver_name`, `stops_count`, `tasks_total` (not cancelled), `tasks_done` (done or no_show), `delay_seconds` (list only: next pending stop overdue by, 0 not due, null once ended); `GET /:id` and every trip write answer the row plus `stops[].tasks[]` |
+| `GET /tracking/trips` | `page page_size date route_id status organization_id` (cap 100) | `{ trips, total_count, page, page_size }` — `date` defaults to each route's local today; every row carries `route_name`, `direction`, `license_plate`, `driver_name`, `stops_count`, `tasks_total` (not cancelled), `tasks_done` (done or no_show), `delay_seconds` (list only: next pending stop overdue by, 0 not due, null once ended); `GET /:id` and every trip write answer the row plus `stops[].tasks[]`; `GET /:id` also `polyline`, `distance_km`, `trace_source` (null until the trip completes) |
+| `GET /tracking/live/fleet` | `organization_id` | `{ vehicles: [{ vehicle_id, license_plate, trip_id, route_name, lat, lng, speed, heading, recorded_at }] }` — every vehicle that has reported, unpaginated; the org filter keeps vehicles whose trip carries its riders |
+| `GET /tracking/trips/:id/live` | — | the `GET /:id` detail plus `position` (the last position frame, or null) and `eta: [{ trip_stop_id, eta_at, estimate_source }]` per pending stop, empty unless the trip is in progress and has a position |
 | `GET /tracking/riders` | `page page_size search organization_id rider_type is_active` (cap 100) | `{ riders, total_count, page, page_size }` — every row carries `organization_name`; every rider shape carries `home_latitude`, `home_longitude`, `notes` |
 | `GET /tracking/riders/:id/absences` | `from to` (overlap, both optional) | array, oldest first — `direction` null is both, `reported_via` web/portal, `reported_by_name`; on the portal chain (a guardian sees own riders). `POST` answers `{ absence, cancelled_tasks }`; 409 `overlap`, `cutoff` (guardian inside the organization's `absence_cutoff_min`) |
 | `GET /tracking/riders/:id/suggestions` | `direction` (required) `days` (bitmask, 127) `max_walk_m` (800, ≤ 3000) `limit` (10, ≤ 50) | `{ suggestions }` — straight line from `home_location`, nearest first then most `free_seats`; 409 `tracking.rider.no-home-location` |

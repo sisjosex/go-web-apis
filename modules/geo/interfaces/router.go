@@ -11,6 +11,9 @@ import (
 type Router interface {
 	// Route returns the trip through locations in order, or ErrNoRoute / ErrRouteUnavailable.
 	Route(ctx context.Context, locations []models.LatLng, costing string) (*models.Route, error)
+	// Trace snaps a recorded path to the road network (map matching) and answers the matched line,
+	// or ErrNoRoute / ErrRouteUnavailable (TRACK-010).
+	Trace(ctx context.Context, points []models.LatLng, costing string) (*models.Trace, error)
 }
 
 var (

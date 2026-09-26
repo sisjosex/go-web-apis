@@ -53,6 +53,12 @@ const (
 	LocationInvalidCoords = "tracking.location.invalid-coordinates"
 	LocationNotFound      = "tracking.location.not-found"
 
+	// GPS ingest (TRACK-010): a driver posting with no trip in progress, a body out of range, and a
+	// batch neither queued nor stored.
+	IngestNoActiveTrip = "tracking.ingest.no-active-trip"
+	IngestInvalid      = "tracking.ingest.invalid"
+	IngestFailed       = "tracking.ingest.failed"
+
 	// Event errors (TR0101-TR0120)
 	EventRecordFailed = "tracking.event.record.failed"
 	EventNotFound     = "tracking.event.not-found"

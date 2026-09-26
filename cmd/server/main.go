@@ -12,6 +12,7 @@ import (
 	"josex/web/config"
 	coreRoutes "josex/web/modules/core/routes"
 	"josex/web/modules/core/services"
+	"josex/web/modules/tracking/realtime"
 	"josex/web/routes"
 	"os"
 	"os/signal"
@@ -99,23 +100,39 @@ func main() {
 		os.Exit(1)
 	}
 
+	// The WebSocket gateway (TRACK-025): the realtime role's whole job, and part of `all` so one local
+	// process serves everything. It needs Valkey — the fan-out is pub/sub.
+	var hub *realtime.Hub
+	if (role == roleAll || role == roleRealtime) && valkey != nil && coreConf.IsModuleEnabled("tracking") {
+		hub = realtime.NewHub(valkey.Client(), config.ModularAppConfig.Tracking.WSQueueMax, nil)
+		hub.Start(ctx)
+	}
+
 	webServer := services.NewWebServerService()
-	if role == roleAll || role == roleAPI {
+	switch {
+	case role == roleAll || role == roleAPI:
 		webServer.Initialize()
-		routes.SetupRoutes(webServer.Server, dbService, valkey)
-	} else {
+		routes.SetupRoutes(webServer.Server, dbService, valkey, hub)
+	case role == roleRealtime && hub != nil:
+		webServer.Initialize()
+		routes.SetupRealtimeRoutes(webServer.Server, dbService, valkey, hub)
+	default:
 		// Every other role serves only the probes: an orchestrator still needs /livez and /readyz, and
 		// nothing else may be reachable on a process that is not an API.
 		gin.SetMode(coreConf.AppMode)
 		coreRoutes.RegisterHealthRoutes(webServer.Server, dbService, valkey, role == roleWorker || role == roleScheduler)
 		if role == roleRealtime {
-			fmt.Println("ℹ️  realtime: nothing to run until TRACK-010, serving the probes only")
+			fmt.Println("ℹ️  realtime: no Valkey or no tracking module, serving the probes only")
 		}
 	}
 
 	// Shutdown order: stop taking requests, then stop the background work, then close the pools the
 	// two of them were using.
 	webServer.Serve(ctx)
+	// Hijacked sockets outlive the HTTP server's shutdown: the hub closes them 1012.
+	if hub != nil {
+		hub.Shutdown()
+	}
 	background.Shutdown()
 
 	shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 5*time.Second)

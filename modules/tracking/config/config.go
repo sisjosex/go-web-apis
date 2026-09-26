@@ -28,6 +28,16 @@ type TrackingConfig struct {
 	// a licence scan is not public content and is only reachable through the download endpoint.
 	DocumentsRoot string
 	MaxDocumentKB int
+
+	// GPS pipeline (TRACK-010 D2): the stream is trimmed to about GPSStreamMaxLen points per tenant,
+	// and a point within GPSArrivalRadiusM of the trip's next stop marks it arrived.
+	GPSStreamMaxLen   int64
+	GPSArrivalRadiusM int
+
+	// WebSocket gateway (TRACK-025): a ping every WSPingSeconds, and a connection closed 1013 once
+	// WSQueueMax frames that must all arrive are waiting for it.
+	WSPingSeconds int
+	WSQueueMax    int
 }
 
 // LoadTrackingConfig loads configuration from environment variables
@@ -53,5 +63,13 @@ func LoadTrackingConfig() *TrackingConfig {
 		// Compliance documents
 		DocumentsRoot: utils.GetEnv("TRACKING_DOCUMENTS_ROOT", "storage/tracking-documents"),
 		MaxDocumentKB: utils.GetEnvAsInt("TRACKING_MAX_DOCUMENT_KB", 5120),
+
+		// GPS pipeline
+		GPSStreamMaxLen:   int64(utils.GetEnvAsInt("GPS_STREAM_MAXLEN", 100000)),
+		GPSArrivalRadiusM: utils.GetEnvAsInt("GPS_ARRIVAL_RADIUS_M", 50),
+
+		// WebSocket gateway
+		WSPingSeconds: utils.GetEnvAsInt("WS_PING_SECONDS", 25),
+		WSQueueMax:    utils.GetEnvAsInt("WS_QUEUE_MAX", 64),
 	}
 }

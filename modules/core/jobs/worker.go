@@ -2,6 +2,7 @@ package jobs
 
 import (
 	"log"
+	"time"
 
 	coreServices "josex/web/modules/core/services"
 
@@ -20,6 +21,9 @@ func StartWorker(valkey coreServices.ValkeyService, registry *Registry, concurre
 		Concurrency: concurrency,
 		Queues:      queueWeights,
 		LogLevel:    asynq.WarnLevel,
+		// An idle worker looks for work every 200 ms rather than asynq's 1 s: a trip transition reaches
+		// a watching socket within a second (TRACK-025), for five cheap Valkey checks a second.
+		TaskCheckInterval: 200 * time.Millisecond,
 	})
 	if err := server.Start(registry.mux); err != nil {
 		return nil, err

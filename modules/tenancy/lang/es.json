@@ -30,5 +30,6 @@
   "multitenancy.disabled": "La funcionalidad de multitenancy no está habilitada en este servidor",
   "tenant.permission.denied": "No tienes permiso para realizar esta acción",
   "tenant.permission.code-required": "El código de permiso es requerido",
-  "tenant.user.portal-web-forbidden": "Esta cuenta es solo para móvil — inicia sesión desde la aplicación"
+  "tenant.user.portal-web-forbidden": "Esta cuenta es solo para móvil — inicia sesión desde la aplicación",
+  "tenant.gps-device.unauthorized": "Token de dispositivo GPS desconocido"
 }

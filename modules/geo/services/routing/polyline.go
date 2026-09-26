@@ -2,7 +2,10 @@ package routing
 
 import (
 	"errors"
+	"math"
 	"strings"
+
+	"josex/web/modules/geo/models"
 )
 
 // Valhalla encodes shapes as Google polylines at precision 6, one per leg. The trip is the legs end
@@ -77,4 +80,42 @@ func encodePolyline(points [][2]int64) string {
 		prev = p
 	}
 	return b.String()
+}
+
+// EncodePolyline6 encodes points at precision 6, as Valhalla does, for a line that did not come from
+// Valhalla: a raw GPS path while the router is down.
+func EncodePolyline6(points []models.LatLng) string {
+	encoded := make([][2]int64, len(points))
+	for i, p := range points {
+		encoded[i] = [2]int64{int64(math.Round(p.Lat * 1e6)), int64(math.Round(p.Lng * 1e6))}
+	}
+	return encodePolyline(encoded)
+}
+
+// LineLengthM is the length of a path in metres, point to point on the sphere.
+func LineLengthM(points []models.LatLng) float64 {
+	total := 0.0
+	for i := 1; i < len(points); i++ {
+		total += haversineM(points[i-1], points[i])
+	}
+	return total
+}
+
+// lineLengthM measures a decoded polyline (degrees × 1e6).
+func lineLengthM(points [][2]int64) float64 {
+	line := make([]models.LatLng, len(points))
+	for i, p := range points {
+		line[i] = models.LatLng{Lat: float64(p[0]) / 1e6, Lng: float64(p[1]) / 1e6}
+	}
+	return LineLengthM(line)
+}
+
+func haversineM(a, b models.LatLng) float64 {
+	const earthRadiusM = 6371000.0
+	rad := math.Pi / 180
+	dLat := (b.Lat - a.Lat) * rad
+	dLng := (b.Lng - a.Lng) * rad
+	h := math.Sin(dLat/2)*math.Sin(dLat/2) +
+		math.Cos(a.Lat*rad)*math.Cos(b.Lat*rad)*math.Sin(dLng/2)*math.Sin(dLng/2)
+	return 2 * earthRadiusM * math.Asin(math.Sqrt(h))
 }

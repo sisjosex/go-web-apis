@@ -11,7 +11,6 @@ import (
 // TrackingService defines the interface for tracking business logic
 type TrackingService interface {
 	// Location operations (no tenant scope — GPS device data)
-	UpdateVehicleLocation(ctx context.Context, dto *models.UpdateLocationDto) (*models.CurrentLocationResponse, error)
 	GetVehicleCurrentLocation(ctx context.Context, vehicleID uuid.UUID) (*models.CurrentLocationResponse, error)
 
 	// Event operations

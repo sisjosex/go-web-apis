@@ -28,6 +28,8 @@ const (
 	TenantUserLastOwner               = "tenant.user.last-owner"
 	// TenantUserPortalWebForbidden refuses a mobile-only guardian on the web (TRACK-015 D2).
 	TenantUserPortalWebForbidden = "tenant.user.portal-web-forbidden"
+	// GPSDeviceUnauthorized refuses a device request whose X-Device-Token no device holds (TRACK-010).
+	GPSDeviceUnauthorized = "tenant.gps-device.unauthorized"
 )
 
 // Tenant validation errors

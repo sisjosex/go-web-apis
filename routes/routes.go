@@ -1,6 +1,9 @@
 package routes
 
 import (
+	"context"
+	"encoding/json"
+
 	"josex/web/config"
 	authControllers "josex/web/modules/auth/controllers"
 	authMW "josex/web/modules/auth/middleware"
@@ -19,6 +22,7 @@ import (
 	coreRoutes "josex/web/modules/core/routes"
 	coreServices "josex/web/modules/core/services"
 	geoControllers "josex/web/modules/geo/controllers"
+	geoInterfaces "josex/web/modules/geo/interfaces"
 	geoRepos "josex/web/modules/geo/repositories"
 	geoRoutes "josex/web/modules/geo/routes"
 	geoServices "josex/web/modules/geo/services"
@@ -43,6 +47,7 @@ import (
 	tenancyRoutes "josex/web/modules/tenancy/routes"
 	tenancyServices "josex/web/modules/tenancy/services"
 	trackingControllers "josex/web/modules/tracking/controllers"
+	"josex/web/modules/tracking/realtime"
 	trackingRepos "josex/web/modules/tracking/repositories"
 	trackingRoutes "josex/web/modules/tracking/routes"
 	trackingServices "josex/web/modules/tracking/services"
@@ -64,6 +69,7 @@ import (
 
 	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
+	"github.com/google/uuid"
 	swaggerFiles "github.com/swaggo/files"
 	ginSwagger "github.com/swaggo/gin-swagger"
 	"github.com/ua-parser/uap-go/uaparser"
@@ -80,6 +86,11 @@ type routeDeps struct {
 	media          coreServices.MediaService
 	users          userInterfaces.UserService
 	userAudit      userInterfaces.UserAuditService
+	// router is the one Valhalla adapter of the process, so geo and the tracking ETA share its breaker.
+	router geoInterfaces.Router
+	valkey coreServices.ValkeyService
+	// hub is the WebSocket gateway (TRACK-025); nil when this process runs none.
+	hub *realtime.Hub
 }
 
 // tenantChains are what business routes mount behind. Without tenancy both are
@@ -88,19 +99,50 @@ type tenantChains struct {
 	tenant gin.HandlerFunc
 	// Same chain, but a portal guardian passes the mobile-only refusal (TRACK-017 D1). Only the
 	// routes a guardian may read are registered behind it.
-	portal  gin.HandlerFunc
+	portal gin.HandlerFunc
+	// The GPS ingest's two ways in (TRACK-010): a driver's session — the chain with the driver's
+	// mobile-only refusal lifted — and a device token, which replaces auth and slug altogether.
+	driver  gin.HandlerFunc
+	device  gin.HandlerFunc
 	modules tenancyInterfaces.ModuleService
 }
 
-// SetupRoutes mounts the HTTP API. valkey is nil when REDIS_URL is unset.
-func SetupRoutes(r *gin.Engine, dbService coreServices.DatabaseService, valkey coreServices.ValkeyService) {
-	// Register custom validators (must be done before any validation runs)
-	coreValidators.RegisterValidations()
+// SetupRoutes mounts the HTTP API. valkey is nil when REDIS_URL is unset; hub is nil when this
+// process runs no WebSocket gateway (every role but all and realtime).
+func SetupRoutes(r *gin.Engine, dbService coreServices.DatabaseService, valkey coreServices.ValkeyService, hub *realtime.Hub) {
+	d := baseDeps(r, dbService, valkey, hub, false)
 
-	// Health probes first: gin applies only the middleware registered before a
-	// route, so mounting /livez and /readyz here keeps the container's
-	// healthcheck out of the rate limiter (INFRA-002).
-	coreRoutes.RegisterHealthRoutes(r, dbService, valkey, false)
+	billingService := registerAuthAndBilling(d)
+	registerJobsMonitor(d, valkey)
+	chains := registerTenancy(d, billingService)
+	registerTracking(d, chains, valkey)
+	inventorySvcs := registerBusinessModules(d, chains)
+	registerImport(d, chains, inventorySvcs)
+	registerGeo(d, chains)
+
+	// Swagger documentation
+	r.GET("/swagger/*any", ginSwagger.WrapHandler(swaggerFiles.Handler))
+}
+
+// SetupRealtimeRoutes mounts what the realtime role serves (TRACK-025): the probes and the WebSocket
+// endpoint, behind the same auth and tenant chain as the API — nothing else.
+func SetupRealtimeRoutes(r *gin.Engine, dbService coreServices.DatabaseService, valkey coreServices.ValkeyService, hub *realtime.Hub) {
+	// Its readiness is Valkey's: without pub/sub a gateway has nothing to relay.
+	d := baseDeps(r, dbService, valkey, hub, true)
+	chains := tenancyChains(d)
+	if hub == nil || !config.ModularAppConfig.Core.IsModuleEnabled("tracking") {
+		return
+	}
+	socket := trackingSocket(d, chains, liveService(d, valkey))
+	d.apiV1.GET("/tracking/ws", socket...)
+}
+
+// baseDeps is what every role that serves HTTP shares: validators, the probes (registered before any
+// middleware, so a probe is never rate-limited — INFRA-002), the media files, the global middleware
+// and the services modules are built from.
+func baseDeps(r *gin.Engine, dbService coreServices.DatabaseService, valkey coreServices.ValkeyService, hub *realtime.Hub, needsValkey bool) routeDeps {
+	coreValidators.RegisterValidations()
+	coreRoutes.RegisterHealthRoutes(r, dbService, valkey, needsValkey)
 
 	authConf := config.ModularAppConfig.Auth
 	jwtService := authServices.NewJWTService(
@@ -116,7 +158,7 @@ func SetupRoutes(r *gin.Engine, dbService coreServices.DatabaseService, valkey c
 
 	useGlobalMiddleware(r, valkey)
 
-	d := routeDeps{
+	return routeDeps{
 		engine:         r,
 		apiV1:          r.Group("/api/v1"),
 		db:             dbService,
@@ -126,18 +168,10 @@ func SetupRoutes(r *gin.Engine, dbService coreServices.DatabaseService, valkey c
 		media:          coreServices.NewMediaService(),
 		users:          userServices.NewUserService(userRepos.NewUserRepository(dbService)),
 		userAudit:      userServices.NewUserAuditService(userRepos.NewUserAuditRepository(dbService)),
+		router:         geoRouting.NewRouter(config.ModularAppConfig.Geo),
+		valkey:         valkey,
+		hub:            hub,
 	}
-
-	billingService := registerAuthAndBilling(d)
-	registerJobsMonitor(d, valkey)
-	chains := registerTenancy(d, billingService)
-	registerTracking(d, chains)
-	inventorySvcs := registerBusinessModules(d, chains)
-	registerImport(d, chains, inventorySvcs)
-	registerGeo(d, chains)
-
-	// Swagger documentation
-	r.GET("/swagger/*any", ginSwagger.WrapHandler(swaggerFiles.Handler))
 }
 
 // useGlobalMiddleware applies to every route registered after it.
@@ -200,11 +234,8 @@ func registerJobsMonitor(d routeDeps, valkey coreServices.ValkeyService) {
 // registerTenancy mounts tenancy, users and the platform group when tenancy is
 // enabled, and returns the tenant chains business routes mount behind.
 func registerTenancy(d routeDeps, billingService billingInterfaces.BillingService) tenantChains {
-	noop := gin.HandlerFunc(func(c *gin.Context) { c.Next() })
-	chains := tenantChains{tenant: noop, portal: noop}
-
-	tenancyConf := config.ModularAppConfig.Tenancy
-	if !config.ModularAppConfig.Core.IsModuleEnabled("tenancy") || tenancyConf == nil || !tenancyConf.Enabled {
+	chains := tenancyChains(d)
+	if chains.modules == nil {
 		return chains
 	}
 
@@ -212,21 +243,13 @@ func registerTenancy(d routeDeps, billingService billingInterfaces.BillingServic
 	tenantController := tenancyControllers.NewTenantController(tenantService, billingService)
 	permissionController := tenancyControllers.NewPermissionController(tenancyServices.NewPermissionService())
 	roleController := tenancyControllers.NewRoleController(tenancyServices.NewRoleService(tenancyRepos.NewRoleRepository(d.db)))
-	moduleSvc := tenancyServices.NewModuleService(tenancyRepos.NewModuleRepository(d.db))
-	moduleController := tenancyControllers.NewModuleController(moduleSvc)
-	chains.modules = moduleSvc
+	moduleController := tenancyControllers.NewModuleController(chains.modules)
 
 	// Register tenant, permission, role and module routes
 	tenancyRoutes.RegisterTenantRoutes(d.apiV1, tenantController, tenantService, d.jwt)
 	tenancyRoutes.RegisterPermissionRoutes(d.apiV1, permissionController, d.jwt)
 	tenancyRoutes.RegisterRoleRoutes(d.apiV1, roleController, tenantService, d.jwt)
-	tenancyRoutes.RegisterModuleRoutes(d.apiV1, moduleController, tenantService, moduleSvc, d.jwt)
-
-	// Override tenant middleware with real implementation
-	// TenantMiddlewareFromHeader always requires X-Tenant-Slug;
-	// super_admin can switch to any tenant, regular users must be members.
-	chains.tenant = tenancyMW.TenantMiddlewareFromHeader(tenantService)
-	chains.portal = tenancyMW.TenantMiddlewareFromHeader(tenantService, tenancyModels.RolePortal)
+	tenancyRoutes.RegisterModuleRoutes(d.apiV1, moduleController, tenantService, chains.modules, d.jwt)
 
 	// Users module — tenant-scoped: requires X-Tenant-Slug + owner/admin role
 	userController := userControllers.NewUserController(d.users, d.email, d.userAudit)
@@ -243,8 +266,75 @@ func registerTenancy(d routeDeps, billingService billingInterfaces.BillingServic
 	return chains
 }
 
-// registerTracking mounts tracking behind the tenant chain plus its module check.
-func registerTracking(d routeDeps, chains tenantChains) {
+// tenancyChains builds the tenant chains without registering any route: the API and the realtime
+// role both mount behind them. Without tenancy both are no-ops and modules is nil.
+func tenancyChains(d routeDeps) tenantChains {
+	noop := gin.HandlerFunc(func(c *gin.Context) { c.Next() })
+	chains := tenantChains{tenant: noop, portal: noop}
+	tenancyConf := config.ModularAppConfig.Tenancy
+	if !config.ModularAppConfig.Core.IsModuleEnabled("tenancy") || tenancyConf == nil || !tenancyConf.Enabled {
+		return chains
+	}
+	// TenantMiddlewareFromHeader always requires X-Tenant-Slug; super_admin can switch to any
+	// tenant, regular users must be members.
+	tenantService := tenancyServices.NewTenantService(tenancyRepos.NewTenantRepository(d.db), d.db)
+	chains.modules = tenancyServices.NewModuleService(tenancyRepos.NewModuleRepository(d.db))
+	chains.tenant = tenancyMW.TenantMiddlewareFromHeader(tenantService)
+	chains.portal = tenancyMW.TenantMiddlewareFromHeader(tenantService, tenancyModels.RolePortal)
+	chains.driver = tenancyMW.TenantMiddlewareFromHeader(tenantService, tenancyModels.RoleDriver)
+	chains.device = tenancyMW.GPSDeviceMiddleware(tenancyRepos.NewGPSDeviceRepository(d.db))
+	return chains
+}
+
+// liveService is the snapshots and the ETA (TRACK-025 D1): the geo router for the one route call,
+// geo's own ETA for its fallbacks, Valkey for the 30 s cache.
+func liveService(d routeDeps, valkey coreServices.ValkeyService) *trackingServices.LiveService {
+	geoConf := config.ModularAppConfig.Geo
+	eta := trackingServices.NewEtaService(d.router, geoServices.NewGeoService(nil, d.router, nil, geoConf), valkey)
+	return trackingServices.NewLiveService(trackingRepos.NewTrackingRepository(d.db), eta)
+}
+
+// trackingSocket is GET /tracking/ws's handler list, one middleware per handler: the browser's
+// subprotocol token and ?tenant_slug= become headers, then auth, the chain that lets a guardian through,
+// the module check, and the upgrade. It also gives the hub its ETA source.
+func trackingSocket(d routeDeps, chains tenantChains, live *trackingServices.LiveService) []gin.HandlerFunc {
+	withTenant := func(ctx context.Context, session realtime.Session) context.Context {
+		if session.DatabaseURL == "" {
+			return ctx
+		}
+		return context.WithValue(ctx, coreServices.TenantDatabaseURLKey, session.DatabaseURL)
+	}
+	d.hub.SetEta(func(ctx context.Context, session realtime.Session, tripID uuid.UUID) (json.RawMessage, time.Time, bool) {
+		eta, ok := live.CachedEta(ctx, tripID)
+		if !ok {
+			var err error
+			if _, eta, err = live.Trip(withTenant(ctx, session), session.TenantID, tripID); err != nil {
+				log.Printf("⚠️  realtime: eta %s: %v", tripID, err)
+				return nil, time.Time{}, false
+			}
+		}
+		if len(eta.Eta) == 0 {
+			return nil, time.Time{}, false
+		}
+		data, err := json.Marshal(map[string]any{"trip_id": tripID, "eta": eta.Eta})
+		return data, eta.ComputedAt, err == nil
+	})
+	check := func(ctx context.Context, session realtime.Session, channel string) (bool, error) {
+		return live.CanSubscribe(withTenant(ctx, session), session.TenantID, session.UserID, session.Guardian, channel)
+	}
+	trackingConf := config.ModularAppConfig.Tracking
+	handlers := []gin.HandlerFunc{realtime.BrowserAuth(), d.authMiddleware, chains.portal}
+	if chains.modules != nil {
+		handlers = append(handlers, tenancyMW.LoadTenantModules(chains.modules), tenancyMW.RequireModule("tracking"))
+	}
+	return append(handlers, d.hub.Serve(check,
+		realtime.OriginPatterns(config.ModularAppConfig.Core.AllowedOrigins),
+		time.Duration(trackingConf.WSPingSeconds)*time.Second))
+}
+
+// registerTracking mounts tracking behind the tenant chain plus its module check. valkey is where the
+// GPS ingest queues points; nil stores them inline (TRACK-010 D2).
+func registerTracking(d routeDeps, chains tenantChains, valkey coreServices.ValkeyService) {
 	if !config.ModularAppConfig.Core.IsModuleEnabled("tracking") {
 		return
 	}
@@ -272,9 +362,47 @@ func registerTracking(d routeDeps, chains tenantChains) {
 		})
 	}
 
+	// The GPS ingest: a device token runs the device chain, anything else is a driver's session.
+	trackingConf := config.ModularAppConfig.Tracking
+	ingestController := trackingControllers.NewIngestController(trackingServices.NewPositionIngest(
+		trackingRepos.NewTrackingRepository(d.db), valkey, trackingConf.GPSStreamMaxLen, trackingConf.GPSArrivalRadiusM))
+	// Each handler below is one middleware call, so each one's c.Next() moves to the next handler as
+	// gin intends; wrapping two of them in one closure would run the controller from inside the first.
+	var ingestAuth []gin.HandlerFunc
+	if chains.device != nil {
+		isDevice := func(c *gin.Context) bool { return c.GetHeader(tenancyMW.DeviceTokenHeader) != "" }
+		ingestAuth = []gin.HandlerFunc{
+			func(c *gin.Context) {
+				if isDevice(c) {
+					chains.device(c)
+				} else {
+					d.authMiddleware(c)
+				}
+			},
+			func(c *gin.Context) {
+				if isDevice(c) {
+					c.Next()
+				} else {
+					chains.driver(c)
+				}
+			},
+		}
+		if chains.modules != nil {
+			ingestAuth = append(ingestAuth, tenancyMW.LoadTenantModules(chains.modules), tenancyMW.RequireModule("tracking"))
+		}
+	}
+
+	// The live snapshots, and the socket when this process runs the gateway (TRACK-025).
+	live := liveService(d, valkey)
+	liveRoutes := trackingRoutes.Live{Controller: trackingControllers.NewLiveController(live)}
+	if d.hub != nil {
+		liveRoutes.Socket = trackingSocket(d, chains, live)
+	}
+
 	// Register tracking routes with tenant middleware and JWT service for auth. The guardian's
 	// two reads run the same chain with the portal refusal lifted (TRACK-017 D1).
-	trackingRoutes.RegisterTrackingRoutes(d.engine, trackingController, trackingChain(chains.tenant), trackingChain(chains.portal), d.jwt)
+	trackingRoutes.RegisterTrackingRoutes(d.engine, trackingController, trackingChain(chains.tenant), trackingChain(chains.portal), d.jwt,
+		trackingRoutes.Ingest{Controller: ingestController, Auth: ingestAuth}, liveRoutes)
 	log.Println("✅ Tracking module enabled and routes registered")
 }
 
@@ -347,8 +475,7 @@ func registerGeo(d routeDeps, chains tenantChains) {
 		return
 	}
 	geoConf := config.ModularAppConfig.Geo
-	geoService := geoServices.NewGeoService(
-		geoRepos.NewPlacesRepository(d.db), geoRouting.NewRouter(geoConf), nil, geoConf)
+	geoService := geoServices.NewGeoService(geoRepos.NewPlacesRepository(d.db), d.router, nil, geoConf)
 	geoRoutes.RegisterGeoRoutes(d.apiV1, geoControllers.NewGeoController(geoService), d.authMiddleware, chains.tenant)
 	log.Println("✅ Geo module routes registered")
 }
