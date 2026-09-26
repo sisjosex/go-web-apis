@@ -15,6 +15,7 @@
   "tracking.route.invalid-schedule-type": "Invalid schedule type. Must be: morning, afternoon, or custom",
   "tracking.route.code-already-exists": "Route code already exists for this company",
   "tracking.route.timezone": "Unknown timezone: use an IANA name such as America/Lima",
+  "tracking.route.company-mismatch": "Belongs to another company than the route",
   "tracking.rider.not-found": "Rider (student/employee) not found",
   "tracking.rider.already-exists": "Rider already exists",
   "tracking.rider.create.failed": "Failed to create rider",

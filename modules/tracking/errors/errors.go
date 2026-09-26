@@ -21,6 +21,9 @@ const (
 	RouteInvalidScheduleType = "tracking.route.invalid-schedule-type"
 	RouteCodeAlreadyExists   = "tracking.route.code-already-exists"
 	RouteTimezone            = "tracking.route.timezone"
+	// RouteCompanyMismatch refuses a vehicle or default driver of another carrier; the detail names
+	// the field (TRACK-002).
+	RouteCompanyMismatch = "tracking.route.company-mismatch"
 
 	// Rider errors (TR0041-TR0060)
 	RiderNotFound      = "tracking.rider.not-found"

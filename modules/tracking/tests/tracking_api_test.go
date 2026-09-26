@@ -607,13 +607,10 @@ func TestCreateRouteSuccess(t *testing.T) {
 
 	dto := ValidRouteDto()
 	body := map[string]interface{}{
-		"company_id":           dto.CompanyID,
-		"route_name":           dto.RouteName,
-		"origin_address":       dto.OriginAddress,
-		"destination_address":  dto.DestinationAddress,
-		"schedule_type":        dto.ScheduleType,
-		"scheduled_start_time": "08:00:00",
-		"scheduled_end_time":   "18:00:00",
+		"company_id":          dto.CompanyID,
+		"route_name":          dto.RouteName,
+		"origin_address":      dto.OriginAddress,
+		"destination_address": dto.DestinationAddress,
 	}
 
 	w := helper.DoRequest("POST", "/tracking/routes", body, map[string]string{})
@@ -632,7 +629,7 @@ func TestListRoutesByCompany(t *testing.T) {
 	w := helper.DoRequest("GET", fmt.Sprintf("/tracking/routes?company_id=%s", companyID), nil, map[string]string{})
 
 	assert.Equal(t, http.StatusOK, w.Code)
-	routes := ParseListResponse(t, w.Body.Bytes())
+	routes := ParseResponse(t, w.Body.Bytes())["routes"].([]interface{})
 	// Should find 2 pre-seeded routes
 	assert.Greater(t, len(routes), 0)
 }
@@ -828,7 +825,7 @@ func TestListRoutesWithFilters(t *testing.T) {
 	w := helper.DoRequest("GET", fmt.Sprintf("/tracking/routes?company_id=%s", companyID), nil, map[string]string{})
 
 	assert.Equal(t, http.StatusOK, w.Code)
-	routes := ParseListResponse(t, w.Body.Bytes())
+	routes := ParseResponse(t, w.Body.Bytes())["routes"]
 	assert.NotNil(t, routes)
 }
 

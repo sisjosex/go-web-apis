@@ -116,8 +116,17 @@ func (s *TrackingService) UpdateRoute(ctx context.Context, tenantID uuid.UUID, r
 	return s.trackingRepo.UpdateRoute(ctx, tenantID, routeID, dto)
 }
 
-func (s *TrackingService) ListRoutes(ctx context.Context, tenantID uuid.UUID, companyID *uuid.UUID, isActive *bool, scopeUserID *uuid.UUID) ([]*models.Route, error) {
-	return s.trackingRepo.ListRoutes(ctx, tenantID, companyID, isActive, scopeUserID)
+func (s *TrackingService) ListRoutes(ctx context.Context, tenantID uuid.UUID, query models.ListRoutesQuery, scopeUserID *uuid.UUID) (*models.ListRoutesResponse, error) {
+	routes, totalCount, err := s.trackingRepo.ListRoutes(ctx, tenantID, query, scopeUserID)
+	if err != nil {
+		return nil, err
+	}
+	return &models.ListRoutesResponse{
+		Routes:     routes,
+		TotalCount: totalCount,
+		Page:       query.Page,
+		PageSize:   query.PageSize,
+	}, nil
 }
 
 func (s *TrackingService) GetRoute(ctx context.Context, tenantID uuid.UUID, routeID uuid.UUID, scopeUserID *uuid.UUID) (*models.Route, error) {

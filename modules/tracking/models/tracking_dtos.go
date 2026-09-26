@@ -252,37 +252,58 @@ type UpdateRiderDto struct {
 
 // === DTOs for Route Management ===
 
-// CreateRouteDto represents request to create route
+// ListRoutesQuery binds GET /tracking/routes (TRACK-002 D2). Every filter is optional; search matches
+// the name or the code.
+type ListRoutesQuery struct {
+	Search    string  `form:"search"`
+	CompanyID *string `form:"company_id" binding:"omitempty,uuid"`
+	Direction string  `form:"direction" binding:"omitempty,oneof=outbound inbound"`
+	IsActive  *bool   `form:"is_active"`
+	Page      int     `form:"page,default=1" binding:"min=1"`
+	PageSize  int     `form:"page_size,default=20" binding:"min=1,max=100"`
+}
+
+type ListRoutesResponse struct {
+	Routes     []*Route `json:"routes"`
+	TotalCount int64    `json:"total_count"`
+	Page       int      `json:"page"`
+	PageSize   int      `json:"page_size"`
+}
+
+// CreateRouteDto represents request to create route. Recurrence is the route's schedules
+// (TRACK-018), not fields here (TRACK-002 D3).
 type CreateRouteDto struct {
 	CompanyID                uuid.UUID  `json:"company_id" binding:"required,uuidv4"`
 	RouteName                string     `json:"route_name" binding:"required,min=3,max=255" conform:"trim"`
 	OriginAddress            string     `json:"origin_address" binding:"required,min=5,max=500" conform:"trim"`
 	DestinationAddress       string     `json:"destination_address" binding:"required,min=5,max=500" conform:"trim"`
+	Direction                *string    `json:"direction" binding:"omitempty,oneof=outbound inbound"`
 	RouteCode                *string    `json:"route_code" binding:"omitempty,max=50" conform:"trim,uppercase"`
 	VehicleID                *uuid.UUID `json:"vehicle_id" binding:"omitempty,uuidv4"`
+	DefaultDriverID          *uuid.UUID `json:"default_driver_id" binding:"omitempty,uuidv4"`
+	Timezone                 *string    `json:"timezone" binding:"omitempty,max=64"`
 	OriginLat                *float64   `json:"origin_lat" binding:"omitempty,min=-90,max=90"`
 	OriginLng                *float64   `json:"origin_lng" binding:"omitempty,min=-180,max=180"`
 	DestinationLat           *float64   `json:"destination_lat" binding:"omitempty,min=-90,max=90"`
 	DestinationLng           *float64   `json:"destination_lng" binding:"omitempty,min=-180,max=180"`
-	ScheduleType             string     `json:"schedule_type" binding:"omitempty,oneof=morning afternoon custom"`
-	ScheduledStartTime       *string    `json:"scheduled_start_time" binding:"omitempty"` // HH:MM:SS
-	ScheduledEndTime         *string    `json:"scheduled_end_time" binding:"omitempty"`   // HH:MM:SS
 	EstimatedDurationMinutes *int32     `json:"estimated_duration_minutes" binding:"omitempty,min=1,max=999"`
 }
 
-// UpdateRouteDto represents request to update route
+// UpdateRouteDto represents request to update route. company_id is immutable. VehicleID and
+// DefaultDriverID are written as sent — omitting them clears them — because the form owns both;
+// every other field keeps its value when omitted, and an empty route_code clears the code.
 type UpdateRouteDto struct {
 	RouteName                *string    `json:"route_name" binding:"omitempty,min=3,max=255" conform:"trim"`
 	RouteCode                *string    `json:"route_code" binding:"omitempty,max=50" conform:"trim,uppercase"`
+	Direction                *string    `json:"direction" binding:"omitempty,oneof=outbound inbound"`
 	VehicleID                *uuid.UUID `json:"vehicle_id" binding:"omitempty,uuidv4"`
+	DefaultDriverID          *uuid.UUID `json:"default_driver_id" binding:"omitempty,uuidv4"`
 	OriginAddress            *string    `json:"origin_address" binding:"omitempty,min=5,max=500" conform:"trim"`
 	OriginLat                *float64   `json:"origin_lat" binding:"omitempty,min=-90,max=90"`
 	OriginLng                *float64   `json:"origin_lng" binding:"omitempty,min=-180,max=180"`
 	DestinationAddress       *string    `json:"destination_address" binding:"omitempty,min=5,max=500" conform:"trim"`
 	DestinationLat           *float64   `json:"destination_lat" binding:"omitempty,min=-90,max=90"`
 	DestinationLng           *float64   `json:"destination_lng" binding:"omitempty,min=-180,max=180"`
-	ScheduledStartTime       *string    `json:"scheduled_start_time" binding:"omitempty"`
-	ScheduledEndTime         *string    `json:"scheduled_end_time" binding:"omitempty"`
 	EstimatedDurationMinutes *int32     `json:"estimated_duration_minutes" binding:"omitempty,min=1,max=999"`
 	IsActive                 *bool      `json:"is_active"`
 	// Timezone is the IANA zone the route runs in (TRACK-008 D2); the SP refuses a name PostgreSQL

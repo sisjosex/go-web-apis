@@ -51,24 +51,26 @@ type Vehicle struct {
 type Route struct {
 	ID                       uuid.UUID  `json:"id"`
 	CompanyID                uuid.UUID  `json:"company_id"`
+	CompanyName              string     `json:"company_name"`
 	VehicleID                *uuid.UUID `json:"vehicle_id"`
+	LicensePlate             *string    `json:"license_plate"`
+	DefaultDriverID          *uuid.UUID `json:"default_driver_id"`
+	DriverName               *string    `json:"driver_name"`
 	RouteName                string     `json:"route_name"`
 	RouteCode                *string    `json:"route_code"`
+	Direction                string     `json:"direction"` // outbound, inbound
 	OriginAddress            string     `json:"origin_address"`
 	OriginLat                *float64   `json:"origin_lat"`
 	OriginLng                *float64   `json:"origin_lng"`
 	DestinationAddress       string     `json:"destination_address"`
 	DestinationLat           *float64   `json:"destination_lat"`
 	DestinationLng           *float64   `json:"destination_lng"`
-	ScheduleType             string     `json:"schedule_type"` // morning, afternoon, custom
-	ScheduledStartTime       *string    `json:"scheduled_start_time"`
-	ScheduledEndTime         *string    `json:"scheduled_end_time"`
 	EstimatedDurationMinutes *int32     `json:"estimated_duration_minutes"`
-	IsActive                 bool       `json:"is_active"`
-	CreatedAt                time.Time  `json:"created_at"`
-	UpdatedAt                time.Time  `json:"updated_at"`
-	// Timezone rides on the single-route read and the update (TRACK-008 D2); the list omits it.
-	Timezone string `json:"timezone,omitempty"`
+	// Timezone is the IANA zone the route runs in (TRACK-008 D2).
+	Timezone  string    `json:"timezone"`
+	IsActive  bool      `json:"is_active"`
+	CreatedAt time.Time `json:"created_at"`
+	UpdatedAt time.Time `json:"updated_at"`
 }
 
 // StopPlace is a place a route calls at (TRACK-007 D1) — named once and shared by every route that

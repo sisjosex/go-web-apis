@@ -498,60 +498,96 @@ func (r *TrackingRepository) DeleteVehicle(ctx context.Context, tenantID uuid.UU
 
 // ==================== ROUTES CRUD ====================
 
+// scanRoute is the one scan order every route read shares — list, single and write alike — because
+// every route SP returns sp_get_route's row (TRACK-002).
+func scanRoute(rt *models.Route) []any {
+	return []any{
+		&rt.ID, &rt.CompanyID, &rt.CompanyName, &rt.VehicleID, &rt.LicensePlate, &rt.DefaultDriverID, &rt.DriverName,
+		&rt.RouteName, &rt.RouteCode, &rt.Direction, &rt.OriginAddress, &rt.OriginLat, &rt.OriginLng,
+		&rt.DestinationAddress, &rt.DestinationLat, &rt.DestinationLng, &rt.EstimatedDurationMinutes,
+		&rt.Timezone, &rt.IsActive, &rt.CreatedAt, &rt.UpdatedAt,
+	}
+}
+
+// mapRouteError turns the route SPs' own codes into module codes, falling back to fallbackCode.
+func mapRouteError(err error, fallbackCode string) error {
+	var pgErr *pgconn.PgError
+	if errors.As(err, &pgErr) {
+		switch pgErr.Message {
+		case "route.not-found":
+			return &trackingErrors.TrackingError{Code: trackingErrors.RouteNotFound, Err: pgErr}
+		case "company.not-found":
+			return &trackingErrors.TrackingError{Code: trackingErrors.CompanyNotFound, Err: pgErr}
+		case "route.company-mismatch":
+			return &trackingErrors.TrackingError{Code: trackingErrors.RouteCompanyMismatch, Err: pgErr}
+		case "route.timezone":
+			return &trackingErrors.TrackingError{Code: trackingErrors.RouteTimezone, Err: pgErr}
+		case "route.code-already-exists":
+			return &trackingErrors.TrackingError{Code: trackingErrors.RouteCodeAlreadyExists, Err: pgErr}
+		}
+	}
+	return &trackingErrors.TrackingError{Code: fallbackCode, Err: err}
+}
+
 func (r *TrackingRepository) CreateRoute(ctx context.Context, tenantID uuid.UUID, dto *models.CreateRouteDto) (*models.Route, error) {
 	var rt models.Route
-	err := r.dbService.QueryRow(ctx, `SELECT * FROM tracking.sp_create_route($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)`,
-		tenantID, dto.CompanyID, dto.RouteName, dto.OriginAddress, dto.DestinationAddress, dto.RouteCode, dto.VehicleID,
-		dto.OriginLat, dto.OriginLng, dto.DestinationLat, dto.DestinationLng, dto.ScheduleType,
-		dto.ScheduledStartTime, dto.ScheduledEndTime, dto.EstimatedDurationMinutes,
-	).Scan(&rt.ID, &rt.CompanyID, &rt.VehicleID, &rt.RouteName, &rt.RouteCode, &rt.OriginAddress, &rt.OriginLat, &rt.OriginLng, &rt.DestinationAddress, &rt.DestinationLat, &rt.DestinationLng, &rt.ScheduleType, &rt.ScheduledStartTime, &rt.ScheduledEndTime, &rt.EstimatedDurationMinutes, &rt.IsActive, &rt.CreatedAt, &rt.UpdatedAt)
+	err := r.dbService.QueryRow(ctx,
+		`SELECT * FROM tracking.sp_create_route($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)`,
+		tenantID, dto.CompanyID, dto.RouteName, dto.OriginAddress, dto.DestinationAddress, dto.Direction,
+		dto.VehicleID, dto.DefaultDriverID, dto.Timezone, dto.RouteCode,
+		dto.OriginLat, dto.OriginLng, dto.DestinationLat, dto.DestinationLng, dto.EstimatedDurationMinutes,
+	).Scan(scanRoute(&rt)...)
 	if err != nil {
-		return nil, &trackingErrors.TrackingError{Code: trackingErrors.RouteCreateFailed, Err: err}
+		return nil, mapRouteError(err, trackingErrors.RouteCreateFailed)
 	}
 	return &rt, nil
 }
 
 func (r *TrackingRepository) UpdateRoute(ctx context.Context, tenantID uuid.UUID, routeID uuid.UUID, dto *models.UpdateRouteDto) (*models.Route, error) {
 	var rt models.Route
-	err := r.dbService.QueryRow(ctx, `SELECT * FROM tracking.sp_update_route($1, $2, $3, $4, $5, $6)`,
-		tenantID, routeID, dto.RouteName, dto.VehicleID, dto.IsActive, dto.Timezone,
-	).Scan(&rt.ID, &rt.CompanyID, &rt.VehicleID, &rt.RouteName, &rt.RouteCode, &rt.OriginAddress, &rt.OriginLat, &rt.OriginLng, &rt.DestinationAddress, &rt.DestinationLat, &rt.DestinationLng, &rt.ScheduleType, &rt.ScheduledStartTime, &rt.ScheduledEndTime, &rt.EstimatedDurationMinutes, &rt.IsActive, &rt.CreatedAt, &rt.UpdatedAt, &rt.Timezone)
+	err := r.dbService.QueryRow(ctx,
+		`SELECT * FROM tracking.sp_update_route($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)`,
+		tenantID, routeID, dto.RouteName, dto.RouteCode, dto.Direction, dto.VehicleID, dto.DefaultDriverID, dto.Timezone,
+		dto.OriginAddress, dto.OriginLat, dto.OriginLng, dto.DestinationAddress, dto.DestinationLat, dto.DestinationLng,
+		dto.EstimatedDurationMinutes, dto.IsActive,
+	).Scan(scanRoute(&rt)...)
 	if err != nil {
-		var pgErr *pgconn.PgError
-		if errors.As(err, &pgErr) && pgErr.Message == "route.timezone" {
-			return nil, &trackingErrors.TrackingError{Code: trackingErrors.RouteTimezone, Err: pgErr}
-		}
-		return nil, &trackingErrors.TrackingError{Code: trackingErrors.RouteUpdateFailed, Err: err}
+		return nil, mapRouteError(err, trackingErrors.RouteUpdateFailed)
 	}
 	return &rt, nil
 }
 
-func (r *TrackingRepository) ListRoutes(ctx context.Context, tenantID uuid.UUID, companyID *uuid.UUID, isActive *bool, scopeUserID *uuid.UUID) ([]*models.Route, error) {
-	rows, err := r.dbService.Query(ctx, `SELECT * FROM tracking.sp_list_routes($1::UUID, $2::UUID, $3::BOOLEAN, $4::UUID)`, tenantID, companyID, isActive, scopeUserID)
+// ListRoutes returns one page of the tenant's routes plus the total the same filters match
+// (TRACK-002 D2); an organization user's page holds only the routes their riders ride.
+func (r *TrackingRepository) ListRoutes(ctx context.Context, tenantID uuid.UUID, query models.ListRoutesQuery, scopeUserID *uuid.UUID) ([]*models.Route, int64, error) {
+	rows, err := r.dbService.Query(ctx,
+		`SELECT * FROM tracking.sp_list_routes($1::UUID, $2::VARCHAR, $3::UUID, $4::VARCHAR, $5::BOOLEAN, $6::INT, $7::INT, $8::UUID)`,
+		tenantID, query.Search, query.CompanyID, query.Direction, query.IsActive, query.Page, query.PageSize, scopeUserID)
 	if err != nil {
-		return nil, scopedErr(err, trackingErrors.RouteListFailed)
+		return nil, 0, scopedErr(err, trackingErrors.RouteListFailed)
 	}
 	defer rows.Close()
-	var routes []*models.Route
+	routes := []*models.Route{}
+	var totalCount int64
 	for rows.Next() {
 		var rt models.Route
-		if err := rows.Scan(&rt.ID, &rt.CompanyID, &rt.VehicleID, &rt.RouteName, &rt.RouteCode, &rt.OriginAddress, &rt.OriginLat, &rt.OriginLng, &rt.DestinationAddress, &rt.DestinationLat, &rt.DestinationLng, &rt.ScheduleType, &rt.ScheduledStartTime, &rt.ScheduledEndTime, &rt.EstimatedDurationMinutes, &rt.IsActive, &rt.CreatedAt, &rt.UpdatedAt); err != nil {
-			return nil, err
+		if err := rows.Scan(append(scanRoute(&rt), &totalCount)...); err != nil {
+			return nil, 0, err
 		}
 		routes = append(routes, &rt)
 	}
 	// pgx surfaces an SP exception here, not on Query: without this the refusal would read as an
 	// empty list and answer 200.
 	if err := rows.Err(); err != nil {
-		return nil, scopedErr(err, trackingErrors.RouteListFailed)
+		return nil, 0, scopedErr(err, trackingErrors.RouteListFailed)
 	}
-	return routes, nil
+	return routes, totalCount, nil
 }
 
 func (r *TrackingRepository) GetRoute(ctx context.Context, tenantID uuid.UUID, routeID uuid.UUID, scopeUserID *uuid.UUID) (*models.Route, error) {
 	var rt models.Route
-	err := r.dbService.QueryRow(ctx, `SELECT * FROM tracking.sp_get_route($1, $2, $3)`, tenantID, routeID, scopeUserID).Scan(
-		&rt.ID, &rt.CompanyID, &rt.VehicleID, &rt.RouteName, &rt.RouteCode, &rt.OriginAddress, &rt.OriginLat, &rt.OriginLng, &rt.DestinationAddress, &rt.DestinationLat, &rt.DestinationLng, &rt.ScheduleType, &rt.ScheduledStartTime, &rt.ScheduledEndTime, &rt.EstimatedDurationMinutes, &rt.IsActive, &rt.CreatedAt, &rt.UpdatedAt, &rt.Timezone)
+	err := r.dbService.QueryRow(ctx, `SELECT * FROM tracking.sp_get_route($1, $2, $3)`, tenantID, routeID, scopeUserID).
+		Scan(scanRoute(&rt)...)
 	if err != nil {
 		return nil, scopedErr(err, trackingErrors.RouteNotFound)
 	}

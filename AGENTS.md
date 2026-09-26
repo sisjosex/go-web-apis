@@ -111,6 +111,7 @@ Verified 2026-09-19 (APP-004):
 | `GET /tracking/companies` | `page page_size search status` (cap 100) | `{ companies, total_count, page, page_size }` |
 | `GET /tracking/vehicles` | `page page_size search company_id vehicle_type status` (cap 100) | `{ vehicles, total_count, page, page_size }` — every row carries `company_name` |
 | `GET /tracking/drivers` | `page page_size search company_id status` (cap 100) | `{ drivers, total_count, page, page_size }` — every row carries `company_name` and `user_email` |
+| `GET /tracking/routes` | `page page_size search company_id direction is_active` (cap 100) | `{ routes, total_count, page, page_size }` — search is name or code; every row carries `company_name`, `license_plate`, `driver_name`; `GET/POST/PATCH` of one route answer the same row |
 | `GET /tracking/documents` | `page page_size subject_type subject_id expiring_within_days` (cap 100) | `{ documents, total_count, page, page_size }` — every row carries `type_name`, `subject_name` and a `status` of valid/expiring/expired |
 | `GET /tracking/document-types` | `applies_to is_active` | array — the tenant's whole policy, unpaginated |
 | `GET /tracking/organizations` | `page page_size search kind is_active` (cap 100) | `{ organizations, total_count, page, page_size }` |

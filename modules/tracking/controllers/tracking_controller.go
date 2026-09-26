@@ -8,6 +8,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/leebenson/conform"
 
 	"josex/web/config"
@@ -777,6 +778,9 @@ func (ctrl *TrackingController) CreateRoute(c *gin.Context) {
 	conform.Strings(&dto)
 	route, err := ctrl.trackingService.CreateRoute(c.Request.Context(), tenantID, &dto)
 	if err != nil {
+		if routeErrorResponse(c, err) {
+			return
+		}
 		c.JSON(http.StatusInternalServerError, coreErrors.BuildError(c, err))
 		return
 	}
@@ -816,13 +820,7 @@ func (ctrl *TrackingController) UpdateRoute(c *gin.Context) {
 	conform.Strings(&dto)
 	route, err := ctrl.trackingService.UpdateRoute(c.Request.Context(), tenantID, routeID, &dto)
 	if err != nil {
-		var trackingErr *trackingErrors.TrackingError
-		if errors.As(err, &trackingErr) && trackingErr.Code == trackingErrors.RouteNotFound {
-			c.JSON(http.StatusNotFound, coreErrors.BuildError(c, err))
-			return
-		}
-		if errors.As(err, &trackingErr) && trackingErr.Code == trackingErrors.RouteTimezone {
-			c.JSON(http.StatusBadRequest, coreErrors.BuildErrorSingle(c, trackingErr.Code))
+		if routeErrorResponse(c, err) {
 			return
 		}
 		c.JSON(http.StatusInternalServerError, coreErrors.BuildError(c, err))
@@ -833,12 +831,17 @@ func (ctrl *TrackingController) UpdateRoute(c *gin.Context) {
 
 // ListRoutes godoc
 // @Summary List routes
-// @Description Get all routes for a company (scoped to current tenant)
+// @Description One page of the tenant's routes by name, with company name, plate and driver name (TRACK-002 D2)
 // @Tags Tracking - Routes
 // @Produce json
 // @Security BearerAuth
-// @Param company_id query string true "Company ID (UUID)"
-// @Success 200 {array} models.Route
+// @Param search query string false "Name or code contains"
+// @Param company_id query string false "Company ID (UUID)"
+// @Param direction query string false "outbound or inbound"
+// @Param is_active query bool false "Active flag"
+// @Param page query int false "Page (default 1)"
+// @Param page_size query int false "Page size (default 20, max 100)"
+// @Success 200 {object} models.ListRoutesResponse
 // @Failure 400 {object} coreErrors.ErrorResponse
 // @Failure 500 {object} coreErrors.ErrorResponse
 // @Router /tracking/routes [get]
@@ -848,12 +851,14 @@ func (ctrl *TrackingController) ListRoutes(c *gin.Context) {
 		return
 	}
 
-	companyID, err := uuid.Parse(c.Query("company_id"))
-	if err != nil {
-		c.JSON(http.StatusBadRequest, coreErrors.BuildErrorSingle(c, coreErrors.InvalidUUID))
+	var query models.ListRoutesQuery
+	if err := c.ShouldBindQuery(&query); err != nil {
+		c.JSON(http.StatusBadRequest, coreErrors.BuildErrorDetail(c, "validation.invalid", err.Error()))
 		return
 	}
-	routes, err := ctrl.trackingService.ListRoutes(c.Request.Context(), tenantID, &companyID, nil, ctrl.scopeUserID(c))
+	query.Search = strings.TrimSpace(query.Search)
+
+	result, err := ctrl.trackingService.ListRoutes(c.Request.Context(), tenantID, query, ctrl.scopeUserID(c))
 	if err != nil {
 		if scopeRefused(c, err) {
 			return
@@ -861,7 +866,7 @@ func (ctrl *TrackingController) ListRoutes(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, coreErrors.BuildError(c, err))
 		return
 	}
-	c.JSON(http.StatusOK, routes)
+	c.JSON(http.StatusOK, result)
 }
 
 // GetRoute godoc
@@ -1933,6 +1938,35 @@ func (ctrl *TrackingController) DeleteDriver(c *gin.Context) {
 // driverErrorResponse answers the driver codes that carry a status of their own and reports whether
 // it did; anything else is the caller's 500. One map keeps the five handlers from disagreeing about
 // what a duplicate licence is.
+// routeErrorResponse answers the route SPs' own refusals. company-mismatch carries the offending
+// field (vehicle_id or default_driver_id) as its detail, so the form can put it on that field.
+func routeErrorResponse(c *gin.Context, err error) bool {
+	var trackingErr *trackingErrors.TrackingError
+	if !errors.As(err, &trackingErr) {
+		return false
+	}
+	switch trackingErr.Code {
+	case trackingErrors.RouteNotFound, trackingErrors.CompanyNotFound:
+		c.JSON(http.StatusNotFound, coreErrors.BuildErrorSingle(c, trackingErr.Code))
+		return true
+	case trackingErrors.RouteCompanyMismatch:
+		var pgErr *pgconn.PgError
+		detail := ""
+		if errors.As(err, &pgErr) {
+			detail = pgErr.Detail
+		}
+		c.JSON(http.StatusBadRequest, coreErrors.BuildErrorDetail(c, trackingErr.Code, detail))
+		return true
+	case trackingErrors.RouteTimezone:
+		c.JSON(http.StatusBadRequest, coreErrors.BuildErrorSingle(c, trackingErr.Code))
+		return true
+	case trackingErrors.RouteCodeAlreadyExists:
+		c.JSON(http.StatusConflict, coreErrors.BuildErrorSingle(c, trackingErr.Code))
+		return true
+	}
+	return false
+}
+
 func driverErrorResponse(c *gin.Context, err error) bool {
 	var trackingErr *trackingErrors.TrackingError
 	if !errors.As(err, &trackingErr) {

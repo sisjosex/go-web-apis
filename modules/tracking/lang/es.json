@@ -15,6 +15,7 @@
   "tracking.route.invalid-schedule-type": "Tipo de horario inválido. Debe ser: morning, afternoon, o custom",
   "tracking.route.code-already-exists": "El código de ruta ya existe para esta empresa",
   "tracking.route.timezone": "Zona horaria desconocida: usa un nombre IANA como America/Lima",
+  "tracking.route.company-mismatch": "Pertenece a otra empresa que la ruta",
   "tracking.rider.not-found": "Pasajero (estudiante/empleado) no encontrado",
   "tracking.rider.already-exists": "El pasajero ya existe",
   "tracking.rider.create.failed": "Error al crear pasajero",

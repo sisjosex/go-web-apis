@@ -174,9 +174,6 @@ func ValidRouteDto() models.CreateRouteDto {
 		RouteName:          "Test Route " + uuid.New().String()[:8],
 		OriginAddress:      "123 Origin St",
 		DestinationAddress: "456 Destination St",
-		ScheduleType:       "morning",
-		ScheduledStartTime: stringPtr("07:00:00"),
-		ScheduledEndTime:   stringPtr("17:00:00"),
 	}
 }
 
@@ -767,25 +764,30 @@ func CreateTestRouteAssignment(t *testing.T, helper *testhelpers.ApiTestHelper, 
 	t.Helper()
 	dto := ValidRouteDto()
 	body := map[string]interface{}{
-		"company_id":           dto.CompanyID,
-		"route_name":           dto.RouteName,
-		"origin_address":       dto.OriginAddress,
-		"destination_address":  dto.DestinationAddress,
-		"scheduled_start_time": startTime,
-		"scheduled_end_time":   endTime,
+		"company_id":          dto.CompanyID,
+		"route_name":          dto.RouteName,
+		"origin_address":      dto.OriginAddress,
+		"destination_address": dto.DestinationAddress,
+		"direction":           direction,
 	}
 	w := helper.DoRequest("POST", "/tracking/routes", body, map[string]string{})
 	if w.Code != http.StatusCreated {
 		t.Fatalf("create route: expected 201, got %d: %s", w.Code, w.Body.String())
 	}
 	routeID := ExtractID(t, ParseResponse(t, w.Body.Bytes()))
-	SetRouteDirection(t, helper, routeID, direction)
+	// The legacy hours still pick the rider's route in sp_get_rider_status, but no endpoint writes
+	// them any more (TRACK-002 D3).
+	if _, err := helper.DB().Execute(context.Background(),
+		`UPDATE tracking.routes SET scheduled_start_time = $2, scheduled_end_time = $3 WHERE id = $1`,
+		routeID, startTime, endTime); err != nil {
+		t.Fatalf("set route hours: %v", err)
+	}
 
 	CreateAssignment(t, helper, AssignmentBody(riderID, routeID, EveryDayMask))
 	return routeID
 }
 
-// SetRouteDirection writes a route's direction, which no endpoint edits yet.
+// SetRouteDirection writes a route's direction straight to the table.
 func SetRouteDirection(t *testing.T, helper *testhelpers.ApiTestHelper, routeID, direction string) {
 	t.Helper()
 	if _, err := helper.DB().Execute(context.Background(),
