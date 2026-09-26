@@ -200,6 +200,12 @@ func registerRouteRoutes(r *gin.RouterGroup, denyOrganization gin.HandlerFunc, t
 		denyOrganization,
 		tenancyMW.RequirePermission(trackingPerms.AlertsWrite),
 		trackingController.CreateRouteAlert)
+	// Reading and resolving them is the operator's too (TRACK-004 D3).
+	r.GET("/alerts", denyOrganization, trackingController.ListRouteAlerts)
+	r.PATCH("/alerts/:alert_id/resolve",
+		denyOrganization,
+		tenancyMW.RequirePermission(trackingPerms.AlertsWrite),
+		trackingController.ResolveRouteAlert)
 
 	// Routes
 	r.GET("/routes", trackingController.ListRoutes)
@@ -241,6 +247,7 @@ func registerTripRoutes(r *gin.RouterGroup, denyOrganization gin.HandlerFunc, tr
 	r.GET("/trips", denyOrganization, trackingController.ListTrips)
 	r.GET("/trips/:trip_id", denyOrganization, trackingController.GetTrip)
 	r.GET("/trips/:trip_id/status", denyOrganization, trackingController.GetTripStatus)
+	r.GET("/trips/:trip_id/events", denyOrganization, trackingController.ListTripEvents)
 	r.PATCH("/trips/:trip_id",
 		denyOrganization,
 		tenancyMW.RequirePermission(trackingPerms.RoutesWrite),
@@ -551,6 +558,8 @@ func registerOpenFleetRoutes(g *gin.RouterGroup, trackingController *controllers
 // registerOpenRouteRoutes mirrors registerRouteRoutes without the guards.
 func registerOpenRouteRoutes(g *gin.RouterGroup, trackingController *controllers.TrackingController) {
 	g.POST("/alerts", trackingController.CreateRouteAlert)
+	g.GET("/alerts", trackingController.ListRouteAlerts)
+	g.PATCH("/alerts/:alert_id/resolve", trackingController.ResolveRouteAlert)
 	g.POST("/routes", trackingController.CreateRoute)
 	g.GET("/routes", trackingController.ListRoutes)
 	g.GET("/routes/:route_id", trackingController.GetRoute)
@@ -649,6 +658,7 @@ func registerOpenTripRoutes(g *gin.RouterGroup, trackingController *controllers.
 	g.GET("/trips", trackingController.ListTrips)
 	g.GET("/trips/:trip_id", trackingController.GetTrip)
 	g.GET("/trips/:trip_id/status", trackingController.GetTripStatus)
+	g.GET("/trips/:trip_id/events", trackingController.ListTripEvents)
 	g.PATCH("/trips/:trip_id", trackingController.UpdateTrip)
 	g.POST("/trips/:trip_id/:action", trackingController.TransitionTrip)
 	g.POST("/trip-stops/:stop_id/:action", trackingController.TransitionTripStop)

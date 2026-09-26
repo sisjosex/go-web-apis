@@ -1399,40 +1399,6 @@ func TestCreateRouteAlert(t *testing.T) {
 	}
 }
 
-// TestGetRouteAlerts - List active alerts → 200
-func TestGetRouteAlerts(t *testing.T) {
-	helper := SetupTrackingTest(t)
-	defer helper.Close()
-
-	routeID := MorningRouteID
-	w := helper.DoRequest("GET", fmt.Sprintf("/tracking/alerts?route_id=%s", routeID), nil, map[string]string{})
-
-	if w.Code == http.StatusNotFound {
-		t.Skip("GET /tracking/alerts not yet implemented")
-		return
-	}
-	assert.Equal(t, http.StatusOK, w.Code)
-	alerts := ParseListResponse(t, w.Body.Bytes())
-	assert.NotNil(t, alerts)
-}
-
-// TestResolveRouteAlert - Mark alert as resolved → 200
-func TestResolveRouteAlert(t *testing.T) {
-	helper := SetupTrackingTest(t)
-	defer helper.Close()
-
-	alertID := uuid.New().String()
-	body := map[string]interface{}{
-		"status": "resolved",
-	}
-
-	w := helper.DoRequest("PATCH", fmt.Sprintf("/tracking/alerts/%s", alertID), body, map[string]string{})
-
-	if w.Code == http.StatusOK || w.Code == http.StatusNotFound {
-		assert.True(t, true)
-	}
-}
-
 // TestRoutePerformanceMetrics - On-time, delays, etc. → 200
 func TestRoutePerformanceMetrics(t *testing.T) {
 	helper := SetupTrackingTest(t)

@@ -323,21 +323,56 @@ type VehicleLocation struct {
 	CreatedAt  time.Time `json:"created_at"`
 }
 
-// RouteAlert represents route delays/incidents
+// RouteAlert is one alert as the list and the resolve answer it (TRACK-004): the route_alerts row plus
+// the route, the plate and who raised and resolved it. trip_id and lat/lng are set on a driver's
+// incident (TRACK-027); status is active or resolved.
 type RouteAlert struct {
 	ID                    uuid.UUID  `json:"id"`
 	RouteID               uuid.UUID  `json:"route_id"`
+	RouteName             string     `json:"route_name"`
 	VehicleID             *uuid.UUID `json:"vehicle_id"`
+	LicensePlate          *string    `json:"license_plate"`
+	TripID                *uuid.UUID `json:"trip_id"`
 	AlertType             string     `json:"alert_type"` // delay, breakdown, cancellation, emergency, other
-	Severity              string     `json:"severity"`   // low, medium, high, critical
 	Title                 string     `json:"title"`
-	Message               string     `json:"message"`
+	Message               *string    `json:"message"`
+	Severity              *string    `json:"severity"` // low, medium, high, critical
 	EstimatedDelayMinutes *int32     `json:"estimated_delay_minutes"`
-	IsActive              bool       `json:"is_active"`
+	Status                string     `json:"status"` // active, resolved
+	Lat                   *float64   `json:"lat"`
+	Lng                   *float64   `json:"lng"`
 	CreatedBy             *uuid.UUID `json:"created_by"`
+	CreatedByName         *string    `json:"created_by_name"`
 	CreatedAt             time.Time  `json:"created_at"`
 	ResolvedAt            *time.Time `json:"resolved_at"`
 	ResolvedBy            *uuid.UUID `json:"resolved_by"`
+	ResolvedByName        *string    `json:"resolved_by_name"`
+}
+
+// ListAlertsQuery binds GET /tracking/alerts. status defaults to active; all is every status.
+type ListAlertsQuery struct {
+	RouteID  *string `form:"route_id" binding:"omitempty,uuid"`
+	Status   string  `form:"status,default=active" binding:"oneof=active resolved all"`
+	Severity *string `form:"severity" binding:"omitempty,oneof=low medium high critical"`
+	Page     int     `form:"page,default=1" binding:"min=1"`
+	PageSize int     `form:"page_size,default=20" binding:"min=1,max=100"`
+}
+
+type ListAlertsResponse struct {
+	Alerts     []*RouteAlert `json:"alerts"`
+	TotalCount int64         `json:"total_count"`
+	Page       int           `json:"page"`
+	PageSize   int           `json:"page_size"`
+}
+
+// TripEvent is one line of a trip's log (TRACK-004 D3): a transition, an override or an incident, with
+// what it carried and who made it.
+type TripEvent struct {
+	ID            uuid.UUID       `json:"id"`
+	Type          string          `json:"type"`
+	Payload       json.RawMessage `json:"payload" swaggertype:"object"`
+	CreatedAt     time.Time       `json:"created_at"`
+	CreatedByName *string         `json:"created_by_name"`
 }
 
 // DocumentType is one line of a tenant's compliance policy (TRACK-016): what a vehicle or a driver

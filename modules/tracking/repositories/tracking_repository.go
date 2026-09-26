@@ -256,10 +256,7 @@ func (r *TrackingRepository) CreateRouteAlert(ctx context.Context, tenantID uuid
 	).Scan(&alertID, &routeID, &vehicleID, &alertType, &title, &message, &retSeverity, &estimatedDelayMinutes, &status, &retCreatedBy, &createdAt)
 
 	if err != nil {
-		if err.Error() == "TR0003" {
-			return nil, &trackingErrors.TrackingError{Code: trackingErrors.RouteNotFound}
-		}
-		return nil, &trackingErrors.TrackingError{Code: trackingErrors.AlertCreateFailed, Err: err}
+		return nil, scopedErr(err, trackingErrors.AlertCreateFailed)
 	}
 
 	return &models.AlertCreatedResponse{

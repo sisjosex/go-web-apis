@@ -313,15 +313,7 @@ func (ctrl *TrackingController) CreateRouteAlert(c *gin.Context) {
 
 	conform.Strings(&dto)
 
-	userID, exists := c.Get("user_id")
-	var createdBy *uuid.UUID
-	if exists {
-		if uid, ok := userID.(uuid.UUID); ok {
-			createdBy = &uid
-		}
-	}
-
-	response, err := ctrl.trackingService.CreateRouteAlert(c.Request.Context(), tenantID, &dto, createdBy)
+	response, err := ctrl.trackingService.CreateRouteAlert(c.Request.Context(), tenantID, &dto, ctrl.actingUserID(c))
 	if err != nil {
 		if trackingErr, ok := err.(*trackingErrors.TrackingError); ok {
 			switch trackingErr.Code {

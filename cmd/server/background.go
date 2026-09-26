@@ -104,6 +104,8 @@ func registerJobs(registry *jobs.Registry, db services.DatabaseService, valkey s
 		// down (TRACK-010).
 		registry.Handle(trackingJobs.TaskTripChanged, trackingJobs.TripChangedHandler(db, tenantLister(db),
 			geoRouting.NewRouter(config.ModularAppConfig.Geo), valkey))
+		// An alert was raised or resolved (TRACK-004 D1): an `alert` frame to the fleet and the trip.
+		registry.Handle(trackingJobs.TaskAlertChanged, trackingJobs.AlertChangedHandler(tenantLister(db), valkey))
 		registry.Handle(trackingJobs.TaskPositionsPartitions, trackingJobs.PositionsPartitionsHandler(db, tenantLister(db),
 			config.ModularAppConfig.Tracking.LocationRetentionDays))
 		registry.Schedule(jobs.Entry{

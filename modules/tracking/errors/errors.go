@@ -83,6 +83,9 @@ const (
 	AlertNotFound      = "tracking.alert.not-found"
 	AlertUpdateFailed  = "tracking.alert.update.failed"
 	AlertResolveFailed = "tracking.alert.resolve.failed"
+	// AlertAlreadyResolved is a resolve on an alert that is no longer active (TRACK-004).
+	AlertAlreadyResolved = "tracking.alert.already-resolved"
+	AlertListFailed      = "tracking.alert.list.failed"
 
 	// Company errors (TR0141-TR0160)
 	CompanyNotFound      = "tracking.company.not-found"
@@ -227,6 +230,7 @@ const (
 	TripListFailed       = "tracking.trip.list.failed"
 	TripUpdateFailed     = "tracking.trip.update.failed"
 	TripTransitionFailed = "tracking.trip.transition.failed"
+	TripEventsFailed     = "tracking.trip.events.failed"
 
 	// Absence and suggestion errors (TRACK-022). Overlap is a range meeting another absence in the
 	// same direction or in both; Cutoff a guardian inside the organization's absence_cutoff_min.

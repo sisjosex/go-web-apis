@@ -39,6 +39,23 @@ func (s *TrackingService) CreateRouteAlert(ctx context.Context, tenantID uuid.UU
 	return s.trackingRepo.CreateRouteAlert(ctx, tenantID, dto, createdBy)
 }
 
+func (s *TrackingService) ListRouteAlerts(ctx context.Context, tenantID uuid.UUID, query models.ListAlertsQuery) (*models.ListAlertsResponse, error) {
+	alerts, totalCount, err := s.trackingRepo.ListRouteAlerts(ctx, tenantID, query)
+	if err != nil {
+		return nil, err
+	}
+	return &models.ListAlertsResponse{
+		Alerts:     alerts,
+		TotalCount: totalCount,
+		Page:       query.Page,
+		PageSize:   query.PageSize,
+	}, nil
+}
+
+func (s *TrackingService) ResolveRouteAlert(ctx context.Context, tenantID, alertID uuid.UUID, userID *uuid.UUID) (*models.RouteAlert, error) {
+	return s.trackingRepo.ResolveRouteAlert(ctx, tenantID, alertID, userID)
+}
+
 // ==================== COMPANIES CRUD ====================
 
 func (s *TrackingService) CreateCompany(ctx context.Context, tenantID uuid.UUID, dto *models.CreateCompanyDto) (*models.TransportCompany, error) {
@@ -271,6 +288,10 @@ func (s *TrackingService) GetTrip(ctx context.Context, tenantID, tripID uuid.UUI
 
 func (s *TrackingService) GetTripStatus(ctx context.Context, tenantID, tripID uuid.UUID) (*models.TripStatus, error) {
 	return s.trackingRepo.GetTripStatus(ctx, tenantID, tripID)
+}
+
+func (s *TrackingService) ListTripEvents(ctx context.Context, tenantID, tripID uuid.UUID) ([]*models.TripEvent, error) {
+	return s.trackingRepo.ListTripEvents(ctx, tenantID, tripID)
 }
 
 func (s *TrackingService) UpdateTrip(ctx context.Context, tenantID, tripID uuid.UUID, dto *models.UpdateTripDto, userID *uuid.UUID) (*models.TripDetail, error) {
