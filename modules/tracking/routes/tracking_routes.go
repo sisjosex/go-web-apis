@@ -20,6 +20,14 @@ type Ingest struct {
 	Auth       []gin.HandlerFunc
 }
 
+// Driver is the driver's phone (TRACK-011): its controller and the ingest's driver chain — auth, the
+// tenant chain with the driver's mobile-only refusal lifted, the module check. Auth nil — no tenancy —
+// leaves the group unregistered.
+type Driver struct {
+	Controller *controllers.DriverController
+	Auth       []gin.HandlerFunc
+}
+
 // Live is the realtime surface (TRACK-025): the snapshot reads, and the WebSocket endpoint's whole
 // handler list (browser auth, auth, tenant chain, module check, upgrade) — nil when this process
 // runs no gateway.
@@ -43,6 +51,7 @@ func RegisterTrackingRoutes(
 	jwtService authServices.JWTService,
 	ingest Ingest,
 	live Live,
+	driver Driver,
 ) {
 	trackingGroup := router.Group("/api/v1/tracking")
 
@@ -59,6 +68,9 @@ func RegisterTrackingRoutes(
 		}
 		if live.Socket != nil {
 			trackingGroup.GET("/ws", live.Socket...)
+		}
+		if driver.Auth != nil {
+			registerDriverRoutes(router, driver)
 		}
 		return
 	}
@@ -102,6 +114,20 @@ func registerTenantRoutes(
 	registerRiderRoutes(r, p, denyOrganization, trackingController)
 	registerTripRoutes(r, denyOrganization, trackingController)
 	registerLiveRoutes(r, denyOrganization, liveController)
+}
+
+// registerDriverRoutes is /api/v1/mobile/driver: the driver level only, and no capability — as the
+// guardian's reads, what a driver may touch is their own trips, which each SP resolves from the account.
+func registerDriverRoutes(router *gin.Engine, driver Driver) {
+	g := router.Group("/api/v1/mobile/driver", driver.Auth...)
+	g.Use(tenancyMW.RequireTenantRole(tenancyModels.RoleDriver))
+	g.GET("/today", driver.Controller.Today)
+	g.POST("/trips/:trip_id/start", driver.Controller.StartTrip)
+	g.POST("/sync", driver.Controller.Sync)
+	// The rider card and the incident report (TRACK-027).
+	g.GET("/riders", driver.Controller.FindRiders)
+	g.GET("/riders/:code", driver.Controller.ResolveRider)
+	g.POST("/incidents", driver.Controller.ReportIncident)
 }
 
 // registerLiveRoutes are the snapshots a live screen reads on open and on every resync (TRACK-025):
@@ -438,6 +464,11 @@ func registerRiderRoutes(
 		tenancyMW.RequirePermission(trackingPerms.AssignmentsRead),
 		trackingController.SuggestRiderStops)
 	r.GET("/riders/:rider_id", trackingController.GetRider)
+	// The card's code (TRACK-027): read as the rider is, rotated as a rider is changed.
+	r.GET("/riders/:rider_id/qr-token", trackingController.RiderQRToken)
+	r.POST("/riders/:rider_id/qr-token",
+		tenancyMW.RequirePermission(trackingPerms.RidersWrite),
+		trackingController.RiderQRToken)
 	r.POST("/riders",
 		tenancyMW.RequirePermission(trackingPerms.RidersWrite),
 		trackingController.CreateRider)

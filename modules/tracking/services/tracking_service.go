@@ -291,6 +291,10 @@ func (s *TrackingService) TransitionTripTask(ctx context.Context, tenantID, task
 
 // ==================== ABSENCES, SUGGESTIONS (TRACK-022) ====================
 
+func (s *TrackingService) RiderQRToken(ctx context.Context, tenantID, riderID uuid.UUID, rotate bool, scopeUserID *uuid.UUID) (string, error) {
+	return s.trackingRepo.RiderQRToken(ctx, tenantID, riderID, rotate, scopeUserID)
+}
+
 func (s *TrackingService) ListRiderAbsences(ctx context.Context, tenantID, riderID uuid.UUID, query models.ListRiderAbsencesQuery, scopeUserID, guardianUserID *uuid.UUID) ([]*models.RiderAbsence, error) {
 	return s.trackingRepo.ListRiderAbsences(ctx, tenantID, riderID, query, scopeUserID, guardianUserID)
 }

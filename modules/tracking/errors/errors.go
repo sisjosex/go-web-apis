@@ -59,6 +59,21 @@ const (
 	IngestInvalid      = "tracking.ingest.invalid"
 	IngestFailed       = "tracking.ingest.failed"
 
+	// Driver's phone (TRACK-011): an account linked to no driver record, a sync body out of range, and
+	// a day read or a sync that failed.
+	DriverNotLinked   = "tracking.driver.not-linked"
+	DriverSyncInvalid = "tracking.driver.sync.invalid"
+	DriverTodayFailed = "tracking.driver.today.failed"
+	DriverSyncFailed  = "tracking.driver.sync.failed"
+
+	// Rider card and incidents (TRACK-027): a token read or rotation, a driver's rider lookup, and an
+	// incident body out of range or a report that failed.
+	RiderQRTokenFailed    = "tracking.rider.qr-token.failed"
+	DriverRiderFailed     = "tracking.driver.rider.failed"
+	DriverRiderInvalid    = "tracking.driver.rider.invalid"
+	DriverIncidentInvalid = "tracking.driver.incident.invalid"
+	DriverIncidentFailed  = "tracking.driver.incident.failed"
+
 	// Event errors (TR0101-TR0120)
 	EventRecordFailed = "tracking.event.record.failed"
 	EventNotFound     = "tracking.event.not-found"

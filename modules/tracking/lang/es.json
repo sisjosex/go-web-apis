@@ -189,5 +189,14 @@
   "tracking.rider.suggestions.failed": "Error al sugerir paradas",
   "tracking.ingest.no-active-trip": "Inicia un viaje antes de enviar posiciones",
   "tracking.ingest.invalid": "Puntos GPS no válidos",
-  "tracking.ingest.failed": "Error al aceptar los puntos GPS"
+  "tracking.ingest.failed": "Error al aceptar los puntos GPS",
+  "tracking.driver.not-linked": "Esta cuenta no está vinculada a un chofer",
+  "tracking.driver.sync.invalid": "Operaciones de sincronización no válidas",
+  "tracking.driver.today.failed": "Error al cargar los viajes de hoy",
+  "tracking.driver.sync.failed": "Error al sincronizar las operaciones",
+  "tracking.rider.qr-token.failed": "No se pudo leer el código de la tarjeta del pasajero",
+  "tracking.driver.rider.failed": "No se pudo buscar al pasajero",
+  "tracking.driver.rider.invalid": "Escribe al menos 2 caracteres del nombre o el código de la tarjeta",
+  "tracking.driver.incident.invalid": "Incidente no válido",
+  "tracking.driver.incident.failed": "No se pudo reportar el incidente"
 }

@@ -24,6 +24,8 @@ var tripStatus = map[string]int{
 	trackingErrors.TripTaskTripNotActive: http.StatusConflict,
 	trackingErrors.TripTaskOpConflict:    http.StatusConflict,
 	trackingErrors.RouteCompanyMismatch:  http.StatusBadRequest,
+	trackingErrors.DriverNotLinked:       http.StatusForbidden,
+	trackingErrors.RiderNotFound:         http.StatusNotFound,
 }
 
 // The actions each path's last segment may name, as the SPs spell them.

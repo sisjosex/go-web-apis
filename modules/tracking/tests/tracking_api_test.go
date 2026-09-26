@@ -740,6 +740,20 @@ func TestRiderStatusNamesTheStopPlace(t *testing.T) {
 	helper := SetupTrackingTest(t)
 	defer helper.Close()
 
+	// sp_get_rider_status skips a route whose end time has passed; the seeded one ends at 17:00, so
+	// open it for the length of the test to keep the result independent of the clock.
+	var endTime *string
+	if err := helper.DB().QueryRow(context.Background(),
+		`UPDATE tracking.routes r SET scheduled_end_time = NULL FROM tracking.routes old
+		 WHERE r.id = old.id AND r.id = $1 RETURNING CAST(old.scheduled_end_time AS TEXT)`,
+		MorningRouteID).Scan(&endTime); err != nil {
+		t.Fatalf("open route hours: %v", err)
+	}
+	defer func() {
+		_, _ = helper.DB().Execute(context.Background(),
+			`UPDATE tracking.routes SET scheduled_end_time = CAST($2 AS TIME) WHERE id = $1`, MorningRouteID, endTime)
+	}()
+
 	w := helper.DoRequest("GET", fmt.Sprintf("/tracking/riders/%s/status", TestRiderJohnID), nil, map[string]string{})
 
 	assert.Equal(t, http.StatusOK, w.Code, w.Body.String())

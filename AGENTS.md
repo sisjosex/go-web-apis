@@ -80,6 +80,22 @@ week ahead and drops past `TRACKING_LOCATION_RETENTION_DAYS`) and `vehicle_last_
 publishes `{type, data}` to `fleet:{tenant}`, `fleet:{tenant}:org:{id}`, `trip:{id}`, `rider:{id}` —
 a position at most every 3 s per vehicle, an arrival at once. Load: `go run ./tools/gpsload`.
 
+**Driver's phone (TRACK-011).** `/api/v1/mobile/driver/*`, the ingest's driver chain + `RequireTenantRole(driver)`,
+no capability; each SP resolves the driver from `drivers.user_id` (none → 403 `driver.not-linked`, another
+driver's trip → `trip.not-found`). `GET /today` = `sp_driver_today`, `ETag` = sha256 of the SP's JSONB
+(`generated_at` added after, outside the hash) → `If-None-Match` 304. `POST /trips/:id/start`. `POST /sync
+{ops ≤ 100}` = `sp_driver_sync`: ops by `client_recorded_at`, each in its own subtransaction, logged in
+`tracking.driver_ops` (PK `client_op_id`) — a replay answers the stored `replayed`/`rejected + code`
+without running. The transition SPs take `p_recorded_at` (clamped to [started_at, now]; NULL = now) for
+`arrived_at`/`done_at`/`ended_at`.
+
+**Rider card and incidents (TRACK-027).** `riders.qr_token` (32 base32 chars, `fn_new_qr_token()`, UNIQUE across
+the table — riders have no `tenant_id`): `GET|POST /tracking/riders/:id/qr-token` (POST rotates, riders:write).
+`GET /mobile/driver/riders/:code` (case and blanks ignored; unknown/foreign → 404 `rider.not-found`) and `GET
+/mobile/driver/riders?q=` (name or code, only riders on the driver's trips in progress) answer `{rider, task}`,
+`task` = the pending pickup on the trip in progress or null. `POST /mobile/driver/incidents` = `sp_driver_incident`:
+a `route_alerts` row with `trip_id` + `location`, plus an `incident` trip event and `trip.changed` via `fn_trip_changed`.
+
 **Realtime (TRACK-025).** `GET /tracking/ws` (`modules/tracking/realtime`): a browser offers the JWT as the
 subprotocol pair `bearer, <jwt>` and the tenant as `?tenant_slug=`; then `{op: subscribe|unsubscribe,
 channel}` ↔ `{channel, type, seq, data}` (`type` position|stop|trip_status|task|eta, or `error` with

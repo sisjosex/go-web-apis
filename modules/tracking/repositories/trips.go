@@ -48,6 +48,8 @@ var tripCodes = map[string]string{
 	"trip.task.trip-not-active": trackingErrors.TripTaskTripNotActive,
 	"trip.task.op-conflict":     trackingErrors.TripTaskOpConflict,
 	"route.company-mismatch":    trackingErrors.RouteCompanyMismatch,
+	"driver.not-linked":         trackingErrors.DriverNotLinked,
+	"rider.not-found":           trackingErrors.RiderNotFound,
 }
 
 // mapTripError maps an SP refusal to its code, falling back to fallbackCode. company-mismatch names

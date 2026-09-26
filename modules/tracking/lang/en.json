@@ -189,5 +189,14 @@
   "tracking.rider.suggestions.failed": "Failed to suggest stops",
   "tracking.ingest.no-active-trip": "Start a trip before sending positions",
   "tracking.ingest.invalid": "Invalid GPS points",
-  "tracking.ingest.failed": "Failed to accept the GPS points"
+  "tracking.ingest.failed": "Failed to accept the GPS points",
+  "tracking.driver.not-linked": "This account is not linked to a driver",
+  "tracking.driver.sync.invalid": "Invalid sync operations",
+  "tracking.driver.today.failed": "Failed to load today's trips",
+  "tracking.driver.sync.failed": "Failed to sync the operations",
+  "tracking.rider.qr-token.failed": "Failed to read the rider's card code",
+  "tracking.driver.rider.failed": "Failed to find the rider",
+  "tracking.driver.rider.invalid": "Type at least 2 characters of a name or the card code",
+  "tracking.driver.incident.invalid": "Invalid incident",
+  "tracking.driver.incident.failed": "Failed to report the incident"
 }
