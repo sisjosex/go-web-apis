@@ -147,7 +147,11 @@ automatic TLS). Neither the database nor either API is reachable from outside.
 
 Servers run with `SKIP_MIGRATIONS=true`: migrations belong to the one-shot `migrate` /
 `migrate-tenant` jobs, which the APIs wait on (`service_completed_successfully`). Locally the servers
-still migrate on start — one replica, nothing to race with. `/livez` (always 200) and `/readyz` (200
+still migrate on start — one replica, nothing to race with. Local development runs on the **native
+PostgreSQL 16 service on 5432**, which needs the PostGIS bundle installed (StackBuilder); the compose
+`platform-db` publishes 5434 and `tenant-db` 5433 (`.env.test`). A migration that fails leaves its
+module dirty and the server keeps retrying with the error in the log — it is never forced past: run
+the file's `.down.sql`, fix the cause, reset `schema_migrations_<module>`. `/livez` (always 200) and `/readyz` (200
 when the pool pings, else 503; Valkey per role, see Roles) back the healthchecks; both are registered before the CORS and rate
 limit middleware, so a probe is never rate-limited.
 
