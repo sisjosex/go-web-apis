@@ -95,6 +95,7 @@ the table — riders have no `tenant_id`): `GET|POST /tracking/riders/:id/qr-tok
 /mobile/driver/riders?q=` (name or code, only riders on the driver's trips in progress) answer `{rider, task}`,
 `task` = the pending pickup on the trip in progress or null. `POST /mobile/driver/incidents` = `sp_driver_incident`:
 a `route_alerts` row with `trip_id` + `location`, plus an `incident` trip event and `trip.changed` via `fn_trip_changed`.
+`/today`'s riders carry `qr_token` (MOBILE-006) so the phone resolves a scan offline; a rotation changes the `ETag`.
 
 **Realtime (TRACK-025).** `GET /tracking/ws` (`modules/tracking/realtime`): a browser offers the JWT as the
 subprotocol pair `bearer, <jwt>` and the tenant as `?tenant_slug=`; then `{op: subscribe|unsubscribe,

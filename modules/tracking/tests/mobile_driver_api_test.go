@@ -106,7 +106,8 @@ func TestDriverToday_ETag(t *testing.T) {
 				Lat   *float64 `json:"lat"`
 				Tasks []struct {
 					Rider *struct {
-						Name string `json:"name"`
+						Name    string `json:"name"`
+						QRToken string `json:"qr_token"`
 					} `json:"rider"`
 				} `json:"tasks"`
 			} `json:"stops"`
@@ -127,6 +128,7 @@ func TestDriverToday_ETag(t *testing.T) {
 			for _, task := range stop.Tasks {
 				if assert.NotNil(t, task.Rider) {
 					assert.NotEmpty(t, task.Rider.Name)
+					assert.Len(t, task.Rider.QRToken, 32)
 				}
 				tasks++
 			}
@@ -144,6 +146,29 @@ func TestDriverToday_ETag(t *testing.T) {
 	changed := driver.DoRequest("GET", "/mobile/driver/today", nil, map[string]string{"If-None-Match": etag})
 	assert.Equal(t, http.StatusOK, changed.Code)
 	assert.NotEqual(t, etag, changed.Header().Get("ETag"))
+}
+
+// TestDriverToday_QRTokenRotated - rotating a rider's card changes the day's ETag, and the day carries
+// the new token (MOBILE-006 D2): the phone drops a voided card on its next refresh.
+func TestDriverToday_QRTokenRotated(t *testing.T) {
+	helper := SetupTrackingTest(t)
+	defer helper.Close()
+	trip := driverTrip(t, helper, 1, false)
+	driver := SetupDriverTest(t)
+	defer driver.Close()
+
+	w := driver.DoRequest("GET", "/mobile/driver/today", nil, map[string]string{})
+	if !assert.Equal(t, http.StatusOK, w.Code, w.Body.String()) {
+		return
+	}
+	etag := w.Header().Get("ETag")
+	riderID := trip.Stops[0].Tasks[0].SubjectID.String()
+	rotated := qrToken(t, helper, "POST", riderID)
+
+	changed := driver.DoRequest("GET", "/mobile/driver/today", nil, map[string]string{"If-None-Match": etag})
+	assert.Equal(t, http.StatusOK, changed.Code)
+	assert.NotEqual(t, etag, changed.Header().Get("ETag"))
+	assert.Contains(t, changed.Body.String(), rotated)
 }
 
 // TestDriverToday_NotLinked - an account linked to no driver record → 403 driver.not-linked
