@@ -9,6 +9,9 @@
 //   - tenant scope: an SP whose body touches a table that has a tenant_id column takes p_tenant_id.
 //   - input DTOs: a *Dto struct never binds TenantID from the client (json:"-" only).
 //   - no SQL built with fmt.Sprintf; tenant identity never read from query, path, form or header.
+//   - raw SQL: a Go string holding a statement must call an SP (sp_/fn_). Tests keep their direct reads
+//     and fixtures in tests/helpers.go; cmd/ and core/testhelpers are exempt; "// check:raw-sql <why>"
+//     on the line above opts one statement out (bulk COPY staging). Only lines added against HEAD count.
 package main
 
 import (
@@ -23,6 +26,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"regexp"
+	"strconv"
 	"strings"
 )
 
@@ -32,6 +36,9 @@ var (
 	reCreateFunc    = regexp.MustCompile(`(?is)CREATE\s+(?:OR\s+REPLACE\s+)?FUNCTION\s+([a-z_]+\.)?([a-z_]+)\s*\((.*?)\)\s*RETURNS\s+(\w+).*?\$\$(.*?)\$\$`)
 	reSprintfSQL    = regexp.MustCompile(`(?i)fmt\.Sprintf\(\s*"[^"]*\b(SELECT|INSERT|UPDATE|DELETE|FROM)\b`)
 	reTenantFromReq = regexp.MustCompile(`\.(Query|Param|PostForm|GetHeader|DefaultQuery)\(\s*"(tenant_id|X-Tenant-Id|tenant)"`)
+	reSQLStatement  = regexp.MustCompile(`^\s*(SELECT\s|WITH\s|INSERT\s+INTO\s|UPDATE\s+[a-z_.]+\s+SET\s|DELETE\s+FROM\s|TRUNCATE\s|MERGE\s+INTO\s)`)
+	reSPCall        = regexp.MustCompile(`\b(sp|fn)_\w+\s*\(`)
+	reHunk          = regexp.MustCompile(`^@@ -\d+(?:,\d+)? \+(\d+)(?:,(\d+))? @@`)
 )
 
 type finding struct {
@@ -65,6 +72,7 @@ func main() {
 		switch {
 		case strings.HasSuffix(f, ".go"):
 			findings = append(findings, checkGo(f)...)
+			findings = append(findings, checkRawSQL(f, *all)...)
 		case strings.HasSuffix(f, ".up.sql"):
 			findings = append(findings, checkSQL(f, tenantTables)...)
 		}
@@ -234,4 +242,95 @@ func isNamed(field *ast.Field, name string) bool {
 		}
 	}
 	return false
+}
+
+// checkRawSQL reports a Go string holding a SQL statement that calls no SP, on the lines added against
+// HEAD (every line with -all, or when the file is untracked).
+func checkRawSQL(file string, all bool) []finding {
+	if strings.HasPrefix(file, "cmd/") || strings.HasSuffix(file, "/tests/helpers.go") || strings.Contains(file, "/core/testhelpers/") {
+		return nil
+	}
+	raw, err := os.ReadFile(file)
+	if err != nil {
+		return []finding{{file, 0, err.Error()}}
+	}
+	src := bytes.ReplaceAll(raw, []byte("\r\n"), []byte("\n"))
+	added, err := addedLines(file, all)
+	if err != nil {
+		return []finding{{file, 0, err.Error()}}
+	}
+	fset := token.NewFileSet()
+	astFile, err := parser.ParseFile(fset, file, src, 0)
+	if err != nil {
+		return nil
+	}
+	lines := strings.Split(string(src), "\n")
+	var out []finding
+	ast.Inspect(astFile, func(n ast.Node) bool {
+		lit, ok := n.(*ast.BasicLit)
+		if !ok || lit.Kind != token.STRING {
+			return true
+		}
+		line := fset.Position(lit.Pos()).Line
+		if (added == nil || added[line]) && isRawStatement(lit.Value) && !optedOut(lines, line) {
+			out = append(out, finding{file, line, rawSQLMessage(file)})
+		}
+		return true
+	})
+	return out
+}
+
+func isRawStatement(literal string) bool {
+	value, err := strconv.Unquote(literal)
+	if err != nil {
+		return false
+	}
+	return reSQLStatement.MatchString(value) && !reSPCall.MatchString(value)
+}
+
+// optedOut: one of the two lines above the statement says "// check:raw-sql <why>".
+func optedOut(lines []string, line int) bool {
+	for i := line - 2; i >= 0 && i >= line-3; i-- {
+		if strings.Contains(lines[i], "// check:raw-sql ") {
+			return true
+		}
+	}
+	return false
+}
+
+func rawSQLMessage(file string) string {
+	if strings.HasSuffix(file, "_test.go") || strings.Contains(file, "/tests/") {
+		return "direct SQL in a test — arrange through the API or an SP; a fixture or read the API cannot give is a named helper in tests/helpers.go (go-tests.md)"
+	}
+	return "direct SQL — a repository calls one SP; move the statement into a schema.sp_* (go.md)"
+}
+
+// addedLines answers the line numbers added against HEAD; nil means every line counts.
+func addedLines(file string, all bool) (map[int]bool, error) {
+	if all {
+		return nil, nil
+	}
+	if tracked, _ := git("ls-files", "--", file); len(tracked) == 0 || tracked[0] == "" {
+		return nil, nil
+	}
+	diff, err := git("diff", "-U0", "HEAD", "--", file)
+	if err != nil {
+		return nil, err
+	}
+	added := map[int]bool{}
+	for _, h := range diff {
+		m := reHunk.FindStringSubmatch(h)
+		if m == nil {
+			continue
+		}
+		start, _ := strconv.Atoi(m[1])
+		count := 1
+		if m[2] != "" {
+			count, _ = strconv.Atoi(m[2])
+		}
+		for l := start; l < start+count; l++ {
+			added[l] = true
+		}
+	}
+	return added, nil
 }
