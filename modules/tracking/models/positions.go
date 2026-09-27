@@ -28,6 +28,13 @@ type PositionPoint struct {
 	Seq        *int64    `json:"seq"`
 }
 
+// IngestRadii are the two distances a stored point is checked against, in metres: within ArrivalM of
+// the trip's next stop marks it arrived (TRACK-010), within ApproachM announces it once (TRACK-012 D4).
+type IngestRadii struct {
+	ArrivalM  int
+	ApproachM int
+}
+
 // StoredPoint is a point as the stream and sp_ingest_positions take it: the vehicle is the server's
 // answer, never the client's.
 type StoredPoint struct {

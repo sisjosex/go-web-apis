@@ -28,6 +28,14 @@ type Driver struct {
 	Auth       []gin.HandlerFunc
 }
 
+// Portal is the guardian's phone (TRACK-012): its controller and the portal chain — auth, the tenant
+// chain with the guardian's mobile-only refusal lifted, the module check. Auth nil — no tenancy —
+// leaves the group unregistered.
+type Portal struct {
+	Controller *controllers.PortalController
+	Auth       []gin.HandlerFunc
+}
+
 // Live is the realtime surface (TRACK-025): the snapshot reads, and the WebSocket endpoint's whole
 // handler list (browser auth, auth, tenant chain, module check, upgrade) — nil when this process
 // runs no gateway.
@@ -52,6 +60,7 @@ func RegisterTrackingRoutes(
 	ingest Ingest,
 	live Live,
 	driver Driver,
+	portal Portal,
 ) {
 	trackingGroup := router.Group("/api/v1/tracking")
 
@@ -71,6 +80,9 @@ func RegisterTrackingRoutes(
 		}
 		if driver.Auth != nil {
 			registerDriverRoutes(router, driver)
+		}
+		if portal.Auth != nil {
+			registerPortalRoutes(router, portal)
 		}
 		return
 	}
@@ -128,6 +140,17 @@ func registerDriverRoutes(router *gin.Engine, driver Driver) {
 	g.GET("/riders", driver.Controller.FindRiders)
 	g.GET("/riders/:code", driver.Controller.ResolveRider)
 	g.POST("/incidents", driver.Controller.ReportIncident)
+}
+
+// registerPortalRoutes is /api/v1/mobile/portal: the portal level only. The notices a guardian reads and
+// mutes are its own, which each SP resolves from the account.
+func registerPortalRoutes(router *gin.Engine, portal Portal) {
+	g := router.Group("/api/v1/mobile/portal", portal.Auth...)
+	g.Use(tenancyMW.RequireTenantRole(tenancyModels.RolePortal))
+	g.GET("/notifications", portal.Controller.ListNotifications)
+	g.POST("/notifications/read", portal.Controller.MarkNotificationsRead)
+	g.GET("/notification-settings", portal.Controller.NotificationSettings)
+	g.PUT("/notification-settings", portal.Controller.SetNotificationSettings)
 }
 
 // registerLiveRoutes are the snapshots a live screen reads on open and on every resync (TRACK-025):

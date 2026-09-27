@@ -2,6 +2,7 @@ package config
 
 import (
 	"josex/web/modules/core/utils"
+	"josex/web/modules/tracking/models"
 	"time"
 )
 
@@ -33,11 +34,18 @@ type TrackingConfig struct {
 	// and a point within GPSArrivalRadiusM of the trip's next stop marks it arrived.
 	GPSStreamMaxLen   int64
 	GPSArrivalRadiusM int
+	// Within ApproachRadiusM of the next stop a trip announces it to its riders once (TRACK-012 D4).
+	ApproachRadiusM int
 
 	// WebSocket gateway (TRACK-025): a ping every WSPingSeconds, and a connection closed 1013 once
 	// WSQueueMax frames that must all arrive are waiting for it.
 	WSPingSeconds int
 	WSQueueMax    int
+
+	// Push (TRACK-012 D2): the Firebase project and its service-account key. Either unset and notices
+	// only reach the in-app feed.
+	FCMProjectID       string
+	FCMCredentialsFile string
 }
 
 // LoadTrackingConfig loads configuration from environment variables
@@ -67,9 +75,19 @@ func LoadTrackingConfig() *TrackingConfig {
 		// GPS pipeline
 		GPSStreamMaxLen:   int64(utils.GetEnvAsInt("GPS_STREAM_MAXLEN", 100000)),
 		GPSArrivalRadiusM: utils.GetEnvAsInt("GPS_ARRIVAL_RADIUS_M", 50),
+		ApproachRadiusM:   utils.GetEnvAsInt("TRACKING_APPROACH_RADIUS_M", 800),
 
 		// WebSocket gateway
 		WSPingSeconds: utils.GetEnvAsInt("WS_PING_SECONDS", 25),
 		WSQueueMax:    utils.GetEnvAsInt("WS_QUEUE_MAX", 64),
+
+		// Push
+		FCMProjectID:       utils.GetEnv("FCM_PROJECT_ID", ""),
+		FCMCredentialsFile: utils.GetEnv("FCM_CREDENTIALS_FILE", ""),
 	}
+}
+
+// IngestRadii are the two distances every stored GPS point is checked against.
+func (c *TrackingConfig) IngestRadii() models.IngestRadii {
+	return models.IngestRadii{ArrivalM: c.GPSArrivalRadiusM, ApproachM: c.ApproachRadiusM}
 }

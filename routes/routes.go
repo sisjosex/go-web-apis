@@ -211,6 +211,8 @@ func registerAuthAndBilling(d routeDeps) billingInterfaces.BillingService {
 	sessionController := authControllers.NewSessionController(authService)
 	authRoutes.RegisterAuthRoutes(d.apiV1, authController, sessionController, d.jwt)
 	authRoutes.RegisterOtpRoutes(d.apiV1, d.db, config.ModularAppConfig.Auth, d.jwt)
+	authRoutes.RegisterPushDeviceRoutes(d.apiV1, authControllers.NewPushDeviceController(
+		authServices.NewPushDeviceService(authRepos.NewPushDeviceRepository(d.db))), d.jwt)
 
 	// Billing module — always enabled, user-scoped (no tenant required)
 	billingService := billingServices.NewBillingService(billingRepos.NewBillingRepository(d.db))
@@ -365,7 +367,7 @@ func registerTracking(d routeDeps, chains tenantChains, valkey coreServices.Valk
 	// The GPS ingest: a device token runs the device chain, anything else is a driver's session.
 	trackingConf := config.ModularAppConfig.Tracking
 	ingestController := trackingControllers.NewIngestController(trackingServices.NewPositionIngest(
-		trackingRepos.NewTrackingRepository(d.db), valkey, trackingConf.GPSStreamMaxLen, trackingConf.GPSArrivalRadiusM))
+		trackingRepos.NewTrackingRepository(d.db), valkey, trackingConf.GPSStreamMaxLen, trackingConf.IngestRadii()))
 	// Each handler below is one middleware call, so each one's c.Next() moves to the next handler as
 	// gin intends; wrapping two of them in one closure would run the controller from inside the first.
 	var ingestAuth []gin.HandlerFunc
@@ -405,6 +407,17 @@ func registerTracking(d routeDeps, chains tenantChains, valkey coreServices.Valk
 		Auth:       driverAuth,
 	}
 
+	// The guardian's phone (TRACK-012): the portal chain, one middleware per handler.
+	var portalAuth []gin.HandlerFunc
+	if chains.modules != nil {
+		portalAuth = []gin.HandlerFunc{d.authMiddleware, chains.portal,
+			tenancyMW.LoadTenantModules(chains.modules), tenancyMW.RequireModule("tracking")}
+	}
+	portalRoutes := trackingRoutes.Portal{
+		Controller: trackingControllers.NewPortalController(trackingServices.NewNotificationService(trackingRepos.NewTrackingRepository(d.db))),
+		Auth:       portalAuth,
+	}
+
 	// The live snapshots, and the socket when this process runs the gateway (TRACK-025).
 	live := liveService(d, valkey)
 	liveRoutes := trackingRoutes.Live{Controller: trackingControllers.NewLiveController(live)}
@@ -415,7 +428,7 @@ func registerTracking(d routeDeps, chains tenantChains, valkey coreServices.Valk
 	// Register tracking routes with tenant middleware and JWT service for auth. The guardian's
 	// two reads run the same chain with the portal refusal lifted (TRACK-017 D1).
 	trackingRoutes.RegisterTrackingRoutes(d.engine, trackingController, trackingChain(chains.tenant), trackingChain(chains.portal), d.jwt,
-		trackingRoutes.Ingest{Controller: ingestController, Auth: ingestAuth}, liveRoutes, driverRoutes)
+		trackingRoutes.Ingest{Controller: ingestController, Auth: ingestAuth}, liveRoutes, driverRoutes, portalRoutes)
 	log.Println("✅ Tracking module enabled and routes registered")
 }
 

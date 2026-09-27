@@ -252,7 +252,7 @@ func TestAlertChanged_FrameOnFleet(t *testing.T) {
 	defer inspector.Close()
 	registry := coreJobs.NewRegistry()
 	lister := func(context.Context) ([]coreJobs.Tenant, error) { return []coreJobs.Tenant{testTenant()}, nil }
-	registry.Handle(trackingJobs.TaskAlertChanged, trackingJobs.AlertChangedHandler(lister, helper.Valkey()))
+	registry.Handle(trackingJobs.TaskAlertChanged, trackingJobs.AlertChangedHandler(lister, helper.Valkey(), nil))
 	worker, err := coreJobs.StartWorker(helper.Valkey(), registry, 2)
 	if err != nil {
 		t.Fatalf("worker: %v", err)

@@ -68,5 +68,7 @@
   "otp.email.ignore-text": "If you did not request this code, you can safely ignore this email.",
   "otp.email.sign-off": "Best regards,<br><strong>The Xanthops Team</strong>",
   "otp.email.automated-note": "This is an automated email, please do not reply to this message.",
-  "auth.client-type.invalid": "X-Client-Type must be web or mobile"
+  "auth.client-type.invalid": "X-Client-Type must be web or mobile",
+  "auth.device.invalid": "Invalid device",
+  "auth.device.save.failed": "Failed to save the device"
 }

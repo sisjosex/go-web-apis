@@ -61,6 +61,14 @@ func RegisterAuthRoutes(
 	}
 }
 
+// RegisterPushDeviceRoutes mounts /mobile/devices (TRACK-012): auth only, no tenant — a phone is the
+// account's, whatever tenants the account belongs to.
+func RegisterPushDeviceRoutes(apiV1Group *gin.RouterGroup, controller *controllers.PushDeviceController, jwtService services.JWTService) {
+	devices := apiV1Group.Group("/mobile/devices", middleware.AuthMiddleware(jwtService))
+	devices.POST("", controller.RegisterDevice)
+	devices.DELETE("/:device_id", controller.ForgetDevice)
+}
+
 // RegisterOtpRoutes registers all OTP-related routes
 // This is called from the main routes setup with auth config and database service
 func RegisterOtpRoutes(

@@ -29,6 +29,10 @@ const (
 	// Client declaration (TRACK-015 D2)
 	ClientTypeInvalid = "auth.client-type.invalid"
 
+	// Push devices (TRACK-012): a body out of range, and a register or forget that failed.
+	DeviceInvalid    = "auth.device.invalid"
+	DeviceSaveFailed = "auth.device.save.failed"
+
 	// Token errors
 	TokenRefreshInvalid       = "token.refresh.invalid"
 	TokenRefreshExpired       = "token.refresh.expired"

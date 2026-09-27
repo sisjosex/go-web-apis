@@ -31,28 +31,34 @@ type AlertChanged struct {
 
 // AlertChangedHandler consumes alert.changed: the row goes out as it is, as an `alert` frame, to the
 // tenant's fleet — where the alerts page listens and refetches — and to the trip when it names one.
-// The tenant comes from the TaskID. valkey nil publishes nothing. Delivery is at least once: a
-// repeated frame only makes a client refetch.
-func AlertChangedHandler(tenants coreJobs.TenantLister, valkey coreServices.ValkeyService) asynq.HandlerFunc {
+// A raised alert is also a `delay` notice to the guardians of the riders it touches (TRACK-012).
+// The tenant comes from the TaskID. valkey nil publishes nothing; notify nil notifies nothing.
+// Delivery is at least once: a repeated frame only makes a client refetch, a repeated notice writes
+// nothing.
+func AlertChangedHandler(tenants coreJobs.TenantLister, valkey coreServices.ValkeyService, notify *Notifier) asynq.HandlerFunc {
 	return func(ctx context.Context, task *asynq.Task) error {
 		var payload AlertChanged
 		if err := json.Unmarshal(task.Payload(), &payload); err != nil {
 			return fmt.Errorf("alert.changed payload: %v: %w", err, asynq.SkipRetry)
 		}
-		if valkey == nil {
+		if valkey == nil && notify == nil {
 			return nil
 		}
 		tenant, ok, err := taskTenant(ctx, tenants)
 		if err != nil || !ok {
 			return err
 		}
-		channels := []string{FleetChannel(tenant.ID)}
-		if payload.TripID != nil {
-			channels = append(channels, TripChannel(*payload.TripID))
+		if valkey != nil {
+			channels := []string{FleetChannel(tenant.ID)}
+			if payload.TripID != nil {
+				channels = append(channels, TripChannel(*payload.TripID))
+			}
+			pipe := valkey.Client().Pipeline()
+			publishTo(ctx, pipe, channels, Frame{Type: FrameAlert, Data: task.Payload()})
+			if _, err := pipe.Exec(ctx); err != nil {
+				return err
+			}
 		}
-		pipe := valkey.Client().Pipeline()
-		publishTo(ctx, pipe, channels, Frame{Type: FrameAlert, Data: task.Payload()})
-		_, err = pipe.Exec(ctx)
-		return err
+		return notify.Notify(ctx, tenant, topicAlertChanged, task.Payload())
 	}
 }

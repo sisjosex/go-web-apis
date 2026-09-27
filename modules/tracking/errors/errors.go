@@ -74,6 +74,13 @@ const (
 	DriverIncidentInvalid = "tracking.driver.incident.invalid"
 	DriverIncidentFailed  = "tracking.driver.incident.failed"
 
+	// Portal notices (TRACK-012): a feed read, a mark-read, a settings read or write that failed, and
+	// a body out of range.
+	NotificationListFailed     = "tracking.notification.list.failed"
+	NotificationReadFailed     = "tracking.notification.read.failed"
+	NotificationSettingsFailed = "tracking.notification.settings.failed"
+	NotificationInvalid        = "tracking.notification.invalid"
+
 	// Event errors (TR0101-TR0120)
 	EventRecordFailed = "tracking.event.record.failed"
 	EventNotFound     = "tracking.event.not-found"

@@ -30,14 +30,14 @@ func GPSStream(tenantID string) string {
 // PositionIngest accepts batches: to the tenant's stream when Valkey is there, straight into the
 // database when it is not.
 type PositionIngest struct {
-	repo           interfaces.PositionsRepository
-	valkey         coreServices.ValkeyService
-	maxLen         int64
-	arrivalRadiusM int
+	repo   interfaces.PositionsRepository
+	valkey coreServices.ValkeyService
+	maxLen int64
+	radii  models.IngestRadii
 }
 
-func NewPositionIngest(repo interfaces.PositionsRepository, valkey coreServices.ValkeyService, maxLen int64, arrivalRadiusM int) *PositionIngest {
-	return &PositionIngest{repo: repo, valkey: valkey, maxLen: maxLen, arrivalRadiusM: arrivalRadiusM}
+func NewPositionIngest(repo interfaces.PositionsRepository, valkey coreServices.ValkeyService, maxLen int64, radii models.IngestRadii) *PositionIngest {
+	return &PositionIngest{repo: repo, valkey: valkey, maxLen: maxLen, radii: radii}
 }
 
 // DriverVehicle answers the vehicle of the driver account's trip in progress, nil when none.
@@ -60,7 +60,7 @@ func (s *PositionIngest) Ingest(ctx context.Context, tenantID uuid.UUID, points 
 	if err != nil {
 		return "", err
 	}
-	if _, err := s.repo.IngestPositions(ctx, tenantID, payload, s.arrivalRadiusM); err != nil {
+	if _, err := s.repo.IngestPositions(ctx, tenantID, payload, s.radii); err != nil {
 		return "", err
 	}
 	return models.IngestPathStored, nil

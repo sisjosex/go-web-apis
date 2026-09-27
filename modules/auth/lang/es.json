@@ -68,5 +68,7 @@
   "otp.email.ignore-text": "Si no solicitaste este código, puedes ignorar este correo de forma segura.",
   "otp.email.sign-off": "Saludos,<br><strong>El equipo de Xanthops</strong>",
   "otp.email.automated-note": "Este es un correo automático, por favor no respondas a este mensaje.",
-  "auth.client-type.invalid": "X-Client-Type debe ser web o mobile"
+  "auth.client-type.invalid": "X-Client-Type debe ser web o mobile",
+  "auth.device.invalid": "Dispositivo no válido",
+  "auth.device.save.failed": "No se pudo guardar el dispositivo"
 }

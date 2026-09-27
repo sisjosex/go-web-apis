@@ -15,11 +15,11 @@ import (
 
 // IngestPositions stores a batch — points is sp_ingest_positions' JSON array — and answers one row per
 // vehicle of it.
-func (r *TrackingRepository) IngestPositions(ctx context.Context, tenantID uuid.UUID, points []byte, arrivalRadiusM int) ([]models.IngestedVehicle, error) {
+func (r *TrackingRepository) IngestPositions(ctx context.Context, tenantID uuid.UUID, points []byte, radii models.IngestRadii) ([]models.IngestedVehicle, error) {
 	rows, err := r.dbService.Query(ctx,
 		`SELECT vehicle_id, trip_id, last, rider_ids, organization_ids, arrived_stop_id
-		 FROM tracking.sp_ingest_positions(p_tenant_id := $1, p_points := $2::JSONB, p_arrival_radius_m := $3)`,
-		tenantID, points, arrivalRadiusM)
+		 FROM tracking.sp_ingest_positions(p_tenant_id := $1, p_points := $2::JSONB, p_arrival_radius_m := $3, p_approach_radius_m := $4)`,
+		tenantID, points, radii.ArrivalM, radii.ApproachM)
 	if err != nil {
 		return nil, err
 	}

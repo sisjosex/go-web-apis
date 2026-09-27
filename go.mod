@@ -26,6 +26,7 @@ require (
 	github.com/swaggo/gin-swagger v1.6.1
 	github.com/swaggo/swag v1.16.4
 	github.com/ua-parser/uap-go v0.0.0-20250213224047-9c035f085b90
+	golang.org/x/oauth2 v0.32.0
 )
 
 require (

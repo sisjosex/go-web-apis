@@ -42,9 +42,11 @@ var frameOf = map[string]string{
 // TripChangedHandler consumes trip.changed: every transition is published to the tenant's fleet, the
 // trip, its riders and their organizations' fleets (TRACK-025), and a completed trip gets its driven
 // path stored (TRACK-010 step 4). The tenant comes from the TaskID the relay gave the row,
-// <tenant>:<id>, as route.changed's. valkey nil publishes nothing. Delivery is at least once: a
-// repeated frame makes a client refetch the same trip, a repeated trace writes the same line.
-func TripChangedHandler(db coreServices.DatabaseService, tenants coreJobs.TenantLister, router geoInterfaces.Router, valkey coreServices.ValkeyService) asynq.HandlerFunc {
+// <tenant>:<id>, as route.changed's. It then becomes the riders' guardians' notices (TRACK-012).
+// valkey nil publishes nothing; notify nil notifies nothing. Delivery is at least once: a repeated
+// frame makes a client refetch the same trip, a repeated trace writes the same line, a repeated
+// notice writes nothing.
+func TripChangedHandler(db coreServices.DatabaseService, tenants coreJobs.TenantLister, router geoInterfaces.Router, valkey coreServices.ValkeyService, notify *Notifier) asynq.HandlerFunc {
 	return func(ctx context.Context, task *asynq.Task) error {
 		var payload TripChanged
 		if err := json.Unmarshal(task.Payload(), &payload); err != nil {
@@ -68,6 +70,9 @@ func TripChangedHandler(db coreServices.DatabaseService, tenants coreJobs.Tenant
 			}
 		}
 		if err := PublishTripChanged(ctx, db, valkey, tenant, tripID, payload.Type); err != nil {
+			return err
+		}
+		if err := notify.Notify(ctx, tenant, topicTripChanged, task.Payload()); err != nil {
 			return err
 		}
 		return traceErr

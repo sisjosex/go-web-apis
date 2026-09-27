@@ -60,11 +60,11 @@ const (
 // tenant, walking the tenants as the outbox relay does, one sp_ingest_positions per read. What a read
 // stored is then published — a vehicle's position at most every gpsPublishEvery, an arrival at once.
 type PositionsConsumer struct {
-	db             coreServices.DatabaseService
-	client         *redis.Client
-	tenants        coreJobs.TenantLister
-	arrivalRadiusM int
-	name           string
+	db      coreServices.DatabaseService
+	client  *redis.Client
+	tenants coreJobs.TenantLister
+	radii   models.IngestRadii
+	name    string
 	// ClaimIdle is how long an entry stays pending before another consumer takes it over (60 s), and
 	// ClaimEvery how often a consumer looks for such entries (30 s).
 	ClaimIdle  time.Duration
@@ -76,17 +76,17 @@ type PositionsConsumer struct {
 	cancel  context.CancelFunc
 }
 
-func NewPositionsConsumer(db coreServices.DatabaseService, valkey coreServices.ValkeyService, tenants coreJobs.TenantLister, arrivalRadiusM int) *PositionsConsumer {
+func NewPositionsConsumer(db coreServices.DatabaseService, valkey coreServices.ValkeyService, tenants coreJobs.TenantLister, radii models.IngestRadii) *PositionsConsumer {
 	host, _ := os.Hostname()
 	return &PositionsConsumer{
-		db:             db,
-		client:         valkey.Client(),
-		tenants:        tenants,
-		arrivalRadiusM: arrivalRadiusM,
-		name:           fmt.Sprintf("%s-%d-%s", host, os.Getpid(), uuid.NewString()[:8]),
-		ClaimIdle:      60 * time.Second,
-		ClaimEvery:     30 * time.Second,
-		running:        map[coreJobs.Tenant]context.CancelFunc{},
+		db:         db,
+		client:     valkey.Client(),
+		tenants:    tenants,
+		radii:      radii,
+		name:       fmt.Sprintf("%s-%d-%s", host, os.Getpid(), uuid.NewString()[:8]),
+		ClaimIdle:  60 * time.Second,
+		ClaimEvery: 30 * time.Second,
+		running:    map[coreJobs.Tenant]context.CancelFunc{},
 	}
 }
 
@@ -229,7 +229,7 @@ func (pc *PositionsConsumer) store(ctx context.Context, repo *trackingRepos.Trac
 		if err != nil {
 			return err
 		}
-		stored, err := repo.IngestPositions(ctx, tenantID, payload, pc.arrivalRadiusM)
+		stored, err := repo.IngestPositions(ctx, tenantID, payload, pc.radii)
 		if err != nil {
 			return fmt.Errorf("store %d point(s) of %s: %w", len(points), stream, err)
 		}

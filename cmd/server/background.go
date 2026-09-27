@@ -13,6 +13,7 @@ import (
 	geoRouting "josex/web/modules/geo/services/routing"
 	tenancyRepos "josex/web/modules/tenancy/repositories"
 	trackingJobs "josex/web/modules/tracking/jobs"
+	trackingPush "josex/web/modules/tracking/push"
 
 	"github.com/google/uuid"
 	"github.com/hibiken/asynq"
@@ -59,7 +60,7 @@ func startBackground(ctx context.Context, mode, role string, db services.Databas
 
 	registry := jobs.NewRegistry()
 	relay := jobs.NewOutboxRelay(db, valkey, tenantLister(db), coreConf.OutboxPollInterval)
-	registerJobs(registry, db, valkey, relay)
+	registerJobs(ctx, registry, db, valkey, relay)
 
 	if runsWorker {
 		worker, err := jobs.StartWorker(valkey, registry, coreConf.JobsConcurrency)
@@ -70,7 +71,7 @@ func startBackground(ctx context.Context, mode, role string, db services.Databas
 		relay.Start(ctx)
 		bg.relay = relay
 		if coreConf.IsModuleEnabled("tracking") {
-			bg.positions = trackingJobs.NewPositionsConsumer(db, valkey, tenantLister(db), config.ModularAppConfig.Tracking.GPSArrivalRadiusM)
+			bg.positions = trackingJobs.NewPositionsConsumer(db, valkey, tenantLister(db), config.ModularAppConfig.Tracking.IngestRadii())
 			bg.positions.Start(ctx)
 		}
 	}
@@ -83,8 +84,10 @@ func startBackground(ctx context.Context, mode, role string, db services.Databas
 }
 
 // registerJobs is where every module's handlers and periodic entries are declared. Worker and
-// scheduler build the same registry: the scheduler reads the entries, the worker the handlers.
-func registerJobs(registry *jobs.Registry, db services.DatabaseService, valkey services.ValkeyService, relay *jobs.OutboxRelay) {
+// scheduler build the same registry: the scheduler reads the entries, the worker the handlers. ctx is
+// the process's: what a handler keeps for its lifetime, like the push adapter's token source, ends
+// with it.
+func registerJobs(ctx context.Context, registry *jobs.Registry, db services.DatabaseService, valkey services.ValkeyService, relay *jobs.OutboxRelay) {
 	daily := 24 * time.Hour
 	registry.Handle(jobs.TaskOutboxPurge, relay.Purge)
 	registry.Schedule(jobs.Entry{
@@ -99,13 +102,23 @@ func registerJobs(registry *jobs.Registry, db services.DatabaseService, valkey s
 		// pass is the same SP over every route, so a missed row is caught the next morning.
 		registry.Handle(trackingJobs.TaskRouteChanged, trackingJobs.RouteChangedHandler(db, tenantLister(db)))
 		registry.Handle(trackingJobs.TaskTripsMaterialise, trackingJobs.TripsMaterialiseHandler(db, tenantLister(db)))
+		// Trip and alert events become the guardians' notices (TRACK-012): the feed always, the push only
+		// with FCM credentials (D2).
+		var pushClient *asynq.Client
+		if pusher, err := trackingPush.New(ctx, config.ModularAppConfig.Tracking); err != nil {
+			log.Printf("⚠️  push disabled: %v", err)
+		} else if pusher != nil {
+			registry.Handle(trackingJobs.TaskPushSend, trackingJobs.PushSendHandler(db, pusher))
+			pushClient = jobs.NewClient(valkey)
+		}
+		notify := trackingJobs.NewNotifier(db, pushClient, config.ModularAppConfig.Tracking)
 		// A trip moved (TRACK-020 D1): published to everyone watching it (TRACK-025), and a completed
 		// one gets its driven path, map-matched through the geo router — the raw line when Valhalla is
 		// down (TRACK-010).
 		registry.Handle(trackingJobs.TaskTripChanged, trackingJobs.TripChangedHandler(db, tenantLister(db),
-			geoRouting.NewRouter(config.ModularAppConfig.Geo), valkey))
+			geoRouting.NewRouter(config.ModularAppConfig.Geo), valkey, notify))
 		// An alert was raised or resolved (TRACK-004 D1): an `alert` frame to the fleet and the trip.
-		registry.Handle(trackingJobs.TaskAlertChanged, trackingJobs.AlertChangedHandler(tenantLister(db), valkey))
+		registry.Handle(trackingJobs.TaskAlertChanged, trackingJobs.AlertChangedHandler(tenantLister(db), valkey, notify))
 		registry.Handle(trackingJobs.TaskPositionsPartitions, trackingJobs.PositionsPartitionsHandler(db, tenantLister(db),
 			config.ModularAppConfig.Tracking.LocationRetentionDays))
 		registry.Schedule(jobs.Entry{

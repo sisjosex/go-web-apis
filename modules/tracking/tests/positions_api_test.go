@@ -78,7 +78,7 @@ func pointsJSON(t *testing.T, vehicleID string, at time.Time, coords ...[2]float
 
 func ingest(t *testing.T, helper *testhelpers.ApiTestHelper, points []byte) []models.IngestedVehicle {
 	t.Helper()
-	rows, err := trackingRepos.NewTrackingRepository(helper.DB()).IngestPositions(context.Background(), uuid.MustParse(TestTenantID), points, 50)
+	rows, err := trackingRepos.NewTrackingRepository(helper.DB()).IngestPositions(context.Background(), uuid.MustParse(TestTenantID), points, models.IngestRadii{ArrivalM: 50, ApproachM: 800})
 	if err != nil {
 		t.Fatalf("sp_ingest_positions: %v", err)
 	}
@@ -297,7 +297,7 @@ func TestPositionIngest_ValkeyDownStoresInline(t *testing.T) {
 
 	for i, valkey := range []coreServices.ValkeyService{nil, dead} {
 		point := models.StoredPoint{VehicleID: uuid.MustParse(vehicleID), RecordedAt: time.Now().UTC().Add(time.Duration(i) * time.Second), Lat: -17.39, Lng: -66.15}
-		path, err := trackingServices.NewPositionIngest(repo, valkey, 1000, 50).Ingest(context.Background(), uuid.MustParse(TestTenantID), []models.StoredPoint{point})
+		path, err := trackingServices.NewPositionIngest(repo, valkey, 1000, models.IngestRadii{ArrivalM: 50, ApproachM: 800}).Ingest(context.Background(), uuid.MustParse(TestTenantID), []models.StoredPoint{point})
 		assert.NoError(t, err)
 		assert.Equal(t, models.IngestPathStored, path)
 	}
@@ -314,7 +314,7 @@ func startTestConsumer(t *testing.T, helper *testhelpers.ApiTestHelper, claimIdl
 		t.Fatal("REDIS_URL is not set in .env.test — the GPS consumer tests need Valkey (make docker-up)")
 	}
 	lister := func(context.Context) ([]coreJobs.Tenant, error) { return []coreJobs.Tenant{testTenant()}, nil }
-	consumer := trackingJobs.NewPositionsConsumer(helper.DB(), valkey, lister, 50)
+	consumer := trackingJobs.NewPositionsConsumer(helper.DB(), valkey, lister, models.IngestRadii{ArrivalM: 50, ApproachM: 800})
 	consumer.ClaimIdle = claimIdle
 	consumer.ClaimEvery = claimIdle
 	consumer.Start(context.Background())

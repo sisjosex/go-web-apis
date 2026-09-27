@@ -201,5 +201,9 @@
   "tracking.driver.rider.failed": "No se pudo buscar al pasajero",
   "tracking.driver.rider.invalid": "Escribe al menos 2 caracteres del nombre o el código de la tarjeta",
   "tracking.driver.incident.invalid": "Incidente no válido",
-  "tracking.driver.incident.failed": "No se pudo reportar el incidente"
+  "tracking.driver.incident.failed": "No se pudo reportar el incidente",
+  "tracking.notification.list.failed": "No se pudieron cargar los avisos",
+  "tracking.notification.read.failed": "No se pudieron marcar los avisos como leídos",
+  "tracking.notification.settings.failed": "No se pudo guardar la configuración de avisos",
+  "tracking.notification.invalid": "Solicitud de avisos no válida"
 }
