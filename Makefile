@@ -158,7 +158,7 @@ test-all: db-reset
 	@echo "✅ All tests done"
 
 test-auth: db-reset
-	go test $(TEST_FLAGS) ./modules/auth/tests
+	go test $(TEST_FLAGS) ./modules/auth/tests ./modules/auth/services/...
 
 test-users: db-reset
 	go test $(TEST_FLAGS) ./modules/users/tests ./modules/users/services

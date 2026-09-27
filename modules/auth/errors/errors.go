@@ -53,6 +53,8 @@ const (
 	OtpDestinationInvalid  = "otp.destination.invalid"
 	OtpChannelInvalid      = "otp.channel.invalid"
 	OtpChannelDisabled     = "otp.channel.disabled"
+	OtpProviderUnavailable = "otp.provider.unavailable"
+	OtpPhoneNotRegistered  = "otp.phone.not-registered"
 	OtpCodeInvalid         = "otp.code.invalid"
 	PhoneAlreadyRegistered = "phone.already-registered"
 )

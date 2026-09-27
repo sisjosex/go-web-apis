@@ -2,22 +2,36 @@ package services
 
 import (
 	"context"
+	"crypto/rand"
 	"errors"
 	"fmt"
 	"josex/web/modules/auth/config"
+	authErrors "josex/web/modules/auth/errors"
 	"josex/web/modules/auth/interfaces"
 	authModels "josex/web/modules/auth/models"
 	otp "josex/web/modules/auth/services/otp"
-	"math/rand"
-	"time"
+	"log"
+	"math/big"
 )
+
+// Errors the controller maps to a status; their text is the translation key the client receives.
+var (
+	// ErrChannelDisabled: no provider can carry the channel (and it cannot be relayed by email).
+	ErrChannelDisabled = errors.New(authErrors.OtpChannelDisabled)
+	// ErrProviderUnavailable: the provider failed to send; the stored code was invalidated.
+	ErrProviderUnavailable = errors.New(authErrors.OtpProviderUnavailable)
+)
+
+// relayChannel carries phone channels while they have no provider of their own (AUTH-001 D1/D2).
+const relayChannel = "email"
+
+var phoneChannels = map[string]bool{"sms": true, "whatsapp": true}
 
 // OtpServiceImpl implements the OtpService interface
 type OtpServiceImpl struct {
 	otpRepository interfaces.OtpRepository
 	providers     map[string]otp.OtpProvider
 	config        *config.AuthConfig
-	rng           *rand.Rand
 }
 
 // NewOtpService creates a new OTP service with provider registry
@@ -30,96 +44,102 @@ func NewOtpService(
 		otpRepository: otpRepository,
 		providers:     providers,
 		config:        config,
-		rng:           rand.New(rand.NewSource(time.Now().UnixNano())),
 	}
 }
 
-// RequestOtp orchestrates OTP request process
+// RequestOtp orchestrates OTP request process: pick the provider, store the code, send it.
+// The SP validates destination and channel; a failed send invalidates the stored code.
 func (s *OtpServiceImpl) RequestOtp(
 	ctx context.Context,
 	dto authModels.RequestOtpDto,
 ) (*authModels.RequestOtpResponse, error) {
-	// TODO: move channel validation to sp_request_otp — the SP should raise an error
-	// if the channel is invalid or disabled, avoiding this Go-level check entirely.
-	provider, exists := s.providers[dto.Channel]
-	if !exists {
-		return nil, errors.New("Invalid OTP channel: " + dto.Channel)
+	provider, relay, err := s.pickProvider(dto.Channel)
+	if err != nil {
+		return nil, err
 	}
 
-	// Note: IsEnabled() check is omitted here; the SP is the authoritative source
-	// for whether a channel may be used. If the SP does not yet validate this,
-	// add the validation to sp_request_otp and remove the provider map lookup above.
-	_ = provider
+	otpCode, err := generateOtpCode()
+	if err != nil {
+		return nil, fmt.Errorf("generate OTP code: %w", err)
+	}
 
-	// Generate 6-digit OTP code
-	otpCode := fmt.Sprintf("%06d", s.rng.Intn(1000000))
+	otpRecord, err := s.otpRepository.RequestOtp(ctx, dto.Destination, dto.Channel, otpCode, relay)
+	if err != nil {
+		return nil, err
+	}
 
-	// Get language from context (set by LanguageMiddleware)
-	// Default to "en" if not found
-	lang := "en"
-	if langValue := ctx.Value("lang"); langValue != nil {
-		if langStr, ok := langValue.(string); ok {
-			lang = langStr
+	sendTo := otpRecord.Destination
+	if relay {
+		sendTo = *otpRecord.RelayEmail
+	}
+	maskedDestination := maskDestination(sendTo)
+
+	if err := provider.SendOtp(ctx, sendTo, otpCode, langFrom(ctx)); err != nil {
+		log.Printf("OTP %s: sending via %s to %s failed: %v", otpRecord.Id, provider.GetChannelName(), maskedDestination, err)
+		if invErr := s.otpRepository.InvalidateOtp(ctx, otpRecord.Id); invErr != nil {
+			log.Printf("OTP %s: invalidating after a failed send: %v", otpRecord.Id, invErr)
 		}
+		return nil, ErrProviderUnavailable
 	}
-
-	// Send OTP via provider
-	expiresAt, err := provider.SendOtp(ctx, dto.Destination, otpCode, lang)
-	if err != nil {
-		return nil, fmt.Errorf("failed to send OTP via %s: %w", dto.Channel, err)
-	}
-
-	// Store OTP in database
-	otpRecord, err := s.otpRepository.RequestOtp(
-		ctx,
-		dto.Destination,
-		dto.Channel,
-		otpCode,
-	)
-	if err != nil {
-		return nil, fmt.Errorf("failed to store OTP request: %w", err)
-	}
-
-	// Mask destination for security (show only last 2 digits)
-	maskedDestination := maskDestination(dto.Destination)
 
 	return &authModels.RequestOtpResponse{
-		OtpId:       otpRecord.Id.String(),
-		Destination: maskedDestination,
-		Channel:     dto.Channel,
-		ExpiresAt:   expiresAt,
-		Message:     fmt.Sprintf("OTP sent to %s via %s", maskedDestination, dto.Channel),
+		OtpId:        otpRecord.Id.String(),
+		Destination:  maskedDestination,
+		Channel:      otpRecord.OtpChannel,
+		DeliveredVia: provider.GetChannelName(),
+		ExpiresAt:    otpRecord.ExpiresAt,
+		Message:      fmt.Sprintf("OTP sent to %s via %s", maskedDestination, provider.GetChannelName()),
 	}, nil
 }
 
-// VerifyOtp orchestrates OTP verification process
+// pickProvider returns the channel's own provider, or the email provider for a phone channel that has
+// none yet (relay = true).
+func (s *OtpServiceImpl) pickProvider(channel string) (provider otp.OtpProvider, relay bool, err error) {
+	if p, ok := s.providers[channel]; ok && p.IsEnabled() {
+		return p, false, nil
+	}
+	if p, ok := s.providers[relayChannel]; ok && p.IsEnabled() && phoneChannels[channel] {
+		return p, true, nil
+	}
+	return nil, false, ErrChannelDisabled
+}
+
+// VerifyOtp orchestrates OTP verification process; the SP matches destination, channel and code.
 func (s *OtpServiceImpl) VerifyOtp(
 	ctx context.Context,
 	dto authModels.VerifyOtpDto,
 ) (*authModels.VerifyOtpResponse, error) {
-	// TODO: move channel validation to sp_verify_otp — see note in RequestOtp.
-	_, exists := s.providers[dto.Channel]
-	if !exists {
-		return nil, errors.New("Invalid OTP channel: " + dto.Channel)
-	}
-
-	// Verify OTP in database
 	sessionUser, err := s.otpRepository.VerifyOtp(ctx, dto)
 	if err != nil {
 		return nil, err
 	}
 
-	response := &authModels.VerifyOtpResponse{
+	return &authModels.VerifyOtpResponse{
 		SessionId:  sessionUser.SessionId,
 		UserId:     sessionUser.UserId,
 		SystemRole: sessionUser.SystemRole,
-	}
+	}, nil
+}
 
-	return response, nil
+// generateOtpCode returns a uniformly random 6-digit code from crypto/rand.
+func generateOtpCode() (string, error) {
+	n, err := rand.Int(rand.Reader, big.NewInt(1_000_000))
+	if err != nil {
+		return "", err
+	}
+	return fmt.Sprintf("%06d", n.Int64()), nil
+}
+
+// langFrom reads the language set by LanguageMiddleware, defaulting to "en".
+func langFrom(ctx context.Context) string {
+	if lang, ok := ctx.Value("lang").(string); ok && lang != "" {
+		return lang
+	}
+	return "en"
 }
 
 // maskDestination masks a phone number or email for security
-// Examples: +1234567890 → +1234****90, user@example.com → u****m@example.com
+// Examples: +1234567890 → +12****90, user@example.com → u****r@example.com
 func maskDestination(destination string) string {
 	if len(destination) <= 4 {
 		return "***"

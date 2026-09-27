@@ -41,12 +41,6 @@ type AuthConfig struct {
 	OTPMaxAttempts     int
 	OTPEnabledChannels []string // "whatsapp", "sms", "email"
 	OTPDefaultChannel  string   // "whatsapp"
-
-	// Twilio Configuration (for SMS and WhatsApp)
-	TwilioAccountSID     string
-	TwilioAuthToken      string
-	TwilioSmsNumber      string
-	TwilioWhatsAppNumber string
 }
 
 // LoadAuthConfig loads auth configuration from environment
@@ -86,11 +80,5 @@ func LoadAuthConfig() *AuthConfig {
 		OTPMaxAttempts:     utils.GetEnvAsInt("OTP_MAX_ATTEMPTS", 5),
 		OTPEnabledChannels: utils.GetEnvAsStringSlice("OTP_ENABLED_CHANNELS", []string{"whatsapp", "sms", "email"}),
 		OTPDefaultChannel:  utils.GetEnv("OTP_DEFAULT_CHANNEL", "whatsapp"),
-
-		// Twilio Configuration
-		TwilioAccountSID:     utils.GetEnv("TWILIO_ACCOUNT_SID", ""),
-		TwilioAuthToken:      utils.GetEnv("TWILIO_AUTH_TOKEN", ""),
-		TwilioSmsNumber:      utils.GetEnv("TWILIO_SMS_NUMBER", ""),
-		TwilioWhatsAppNumber: utils.GetEnv("TWILIO_WHATSAPP_NUMBER", ""),
 	}
 }

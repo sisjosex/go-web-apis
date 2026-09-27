@@ -20,16 +20,12 @@ func SetupOtpRoutes(
 	authConfig *config.AuthConfig,
 	jwtService otpServices.JWTService,
 ) {
-	// Initialize OTP providers (WhatsApp, SMS, Email)
-	whatsappProvider := otpProviders.NewWhatsAppProvider(authConfig)
-	smsProvider := otpProviders.NewSmsProvider(authConfig)
+	// Provider registry, one entry per channel that can send on its own. SMS and WhatsApp have no paid
+	// sender yet (AUTH-001 D2), so the service relays them to the account's email; registering a
+	// provider for "sms" or "whatsapp" here ends the relay for that channel.
 	emailProvider := otpProviders.NewEmailProvider(authConfig)
-
-	// Create provider registry
 	providers := map[string]otpProviders.OtpProvider{
-		"whatsapp": whatsappProvider,
-		"sms":      smsProvider,
-		"email":    emailProvider,
+		emailProvider.GetChannelName(): emailProvider,
 	}
 
 	// Initialize repository

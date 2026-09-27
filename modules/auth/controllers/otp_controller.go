@@ -1,6 +1,8 @@
 package controllers
 
 import (
+	"errors"
+	"log"
 	"net/http"
 	"strings"
 
@@ -12,6 +14,7 @@ import (
 	coreUtils "josex/web/modules/core/utils"
 
 	"github.com/gin-gonic/gin"
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/ua-parser/uap-go/uaparser"
 )
 
@@ -36,103 +39,33 @@ func NewOtpController(
 }
 
 // RequestOtpWhatsApp godoc
-// @Summary Request OTP via WhatsApp
+// @Summary Request OTP via WhatsApp (relayed by email while it has no provider)
 // @Tags Auth - OTP
 // @Accept  json
 // @Produce json
 // @Param   request body authModels.RequestOtpRequestDto true "Request OTP"
 // @Success 200 {object} authModels.RequestOtpResponse
-// @Failure 400 {object} object "Validation error or channel disabled"
+// @Failure 400 {object} object "Invalid destination or channel, or phone without an account"
+// @Failure 503 {object} object "Channel disabled or provider unavailable"
 // @Failure 500 {object} object "Server error"
 // @Router  /auth/otp/whatsapp/request [post]
 func (uc *OtpController) RequestOtpWhatsApp(c *gin.Context) {
-	var requestDto authModels.RequestOtpRequestDto
-
-	if err := c.ShouldBindJSON(&requestDto); err != nil {
-		c.JSON(http.StatusBadRequest, coreErrors.BuildErrorDetail(c, authErrors.OtpRequestFailed, coreUtils.ExtractValidationError(c, err)))
-		return
-	}
-
-	// Force channel to whatsapp
-	requestDto.Channel = "whatsapp"
-
-	userAgent := c.GetHeader("User-Agent")
-	var deviceInfo, deviceOs, browser string
-	if uc.parser != nil {
-		client := uc.parser.Parse(userAgent)
-		deviceInfo = strings.TrimSpace(client.Device.Family)
-		deviceOs = strings.TrimSpace(client.Os.Family)
-		browser = strings.TrimSpace(client.UserAgent.Family)
-	}
-
-	otpDto := authModels.RequestOtpDto{
-		Destination: requestDto.Destination,
-		Channel:     requestDto.Channel,
-		DeviceId:    requestDto.DeviceId,
-		IpAddress:   coreUtils.GetClientIp(c),
-		DeviceInfo:  deviceInfo,
-		DeviceOs:    deviceOs,
-		Browser:     browser,
-		UserAgent:   userAgent,
-	}
-
-	response, err := uc.otpService.RequestOtp(c.Request.Context(), otpDto)
-	if err != nil {
-		c.JSON(http.StatusBadRequest, coreErrors.BuildError(c, err))
-		return
-	}
-
-	c.JSON(http.StatusOK, response)
+	uc.requestOtp(c, "whatsapp")
 }
 
 // RequestOtpSms godoc
-// @Summary Request OTP via SMS
+// @Summary Request OTP via SMS (relayed by email while it has no provider)
 // @Tags Auth - OTP
 // @Accept  json
 // @Produce json
 // @Param   request body authModels.RequestOtpRequestDto true "Request OTP"
 // @Success 200 {object} authModels.RequestOtpResponse
-// @Failure 400 {object} object "Validation error or channel disabled"
+// @Failure 400 {object} object "Invalid destination or channel, or phone without an account"
+// @Failure 503 {object} object "Channel disabled or provider unavailable"
 // @Failure 500 {object} object "Server error"
 // @Router  /auth/otp/sms/request [post]
 func (uc *OtpController) RequestOtpSms(c *gin.Context) {
-	var requestDto authModels.RequestOtpRequestDto
-
-	if err := c.ShouldBindJSON(&requestDto); err != nil {
-		c.JSON(http.StatusBadRequest, coreErrors.BuildErrorDetail(c, authErrors.OtpRequestFailed, coreUtils.ExtractValidationError(c, err)))
-		return
-	}
-
-	// Force channel to sms
-	requestDto.Channel = "sms"
-
-	userAgent := c.GetHeader("User-Agent")
-	var deviceInfo, deviceOs, browser string
-	if uc.parser != nil {
-		client := uc.parser.Parse(userAgent)
-		deviceInfo = strings.TrimSpace(client.Device.Family)
-		deviceOs = strings.TrimSpace(client.Os.Family)
-		browser = strings.TrimSpace(client.UserAgent.Family)
-	}
-
-	otpDto := authModels.RequestOtpDto{
-		Destination: requestDto.Destination,
-		Channel:     requestDto.Channel,
-		DeviceId:    requestDto.DeviceId,
-		IpAddress:   coreUtils.GetClientIp(c),
-		DeviceInfo:  deviceInfo,
-		DeviceOs:    deviceOs,
-		Browser:     browser,
-		UserAgent:   userAgent,
-	}
-
-	response, err := uc.otpService.RequestOtp(c.Request.Context(), otpDto)
-	if err != nil {
-		c.JSON(http.StatusBadRequest, coreErrors.BuildError(c, err))
-		return
-	}
-
-	c.JSON(http.StatusOK, response)
+	uc.requestOtp(c, "sms")
 }
 
 // RequestOtpEmail godoc
@@ -142,19 +75,22 @@ func (uc *OtpController) RequestOtpSms(c *gin.Context) {
 // @Produce json
 // @Param   request body authModels.RequestOtpRequestDto true "Request OTP"
 // @Success 200 {object} authModels.RequestOtpResponse
-// @Failure 400 {object} object "Validation error or channel disabled"
+// @Failure 400 {object} object "Invalid destination or channel, or phone without an account"
+// @Failure 503 {object} object "Channel disabled or provider unavailable"
 // @Failure 500 {object} object "Server error"
 // @Router  /auth/otp/email/request [post]
 func (uc *OtpController) RequestOtpEmail(c *gin.Context) {
+	uc.requestOtp(c, "email")
+}
+
+// requestOtp is the body of the three request handlers; the route names the channel.
+func (uc *OtpController) requestOtp(c *gin.Context, channel string) {
 	var requestDto authModels.RequestOtpRequestDto
 
 	if err := c.ShouldBindJSON(&requestDto); err != nil {
 		c.JSON(http.StatusBadRequest, coreErrors.BuildErrorDetail(c, authErrors.OtpRequestFailed, coreUtils.ExtractValidationError(c, err)))
 		return
 	}
-
-	// Force channel to email
-	requestDto.Channel = "email"
 
 	userAgent := c.GetHeader("User-Agent")
 	var deviceInfo, deviceOs, browser string
@@ -167,7 +103,7 @@ func (uc *OtpController) RequestOtpEmail(c *gin.Context) {
 
 	otpDto := authModels.RequestOtpDto{
 		Destination: requestDto.Destination,
-		Channel:     requestDto.Channel,
+		Channel:     channel,
 		DeviceId:    requestDto.DeviceId,
 		IpAddress:   coreUtils.GetClientIp(c),
 		DeviceInfo:  deviceInfo,
@@ -178,11 +114,26 @@ func (uc *OtpController) RequestOtpEmail(c *gin.Context) {
 
 	response, err := uc.otpService.RequestOtp(c.Request.Context(), otpDto)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, coreErrors.BuildError(c, err))
+		status, body := requestOtpError(c, err)
+		c.JSON(status, body)
 		return
 	}
 
 	c.JSON(http.StatusOK, response)
+}
+
+// requestOtpError maps a request error to its response: the caller's input (an SP code) is 400 with
+// that code, a channel that cannot send is 503, anything else 500 without internals.
+func requestOtpError(c *gin.Context, err error) (int, *coreErrors.ErrorResponse) {
+	if errors.Is(err, services.ErrChannelDisabled) || errors.Is(err, services.ErrProviderUnavailable) {
+		return http.StatusServiceUnavailable, coreErrors.BuildErrorSingle(c, err.Error())
+	}
+	var pgErr *pgconn.PgError
+	if errors.As(err, &pgErr) && strings.HasPrefix(pgErr.Code, "O") {
+		return http.StatusBadRequest, coreErrors.BuildError(c, err)
+	}
+	log.Printf("OTP request failed: %v", err)
+	return http.StatusInternalServerError, coreErrors.BuildErrorSingle(c, authErrors.OtpRequestFailed)
 }
 
 // VerifyOtp godoc

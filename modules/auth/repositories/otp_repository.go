@@ -26,22 +26,22 @@ func (r *OtpRepository) RequestOtp(
 	destination string,
 	channel string,
 	otpCode string,
+	relayToEmail bool,
 ) (*authModels.OtpRequest, error) {
 	otpRecord := &authModels.OtpRequest{}
 
 	query := `
-		SELECT * FROM auth.sp_request_otp($1, $2, $3)
+		SELECT * FROM auth.sp_request_otp($1, $2, $3, $4)
 	`
 
-	row := r.dbService.QueryRow(ctx, query, destination, channel, otpCode)
+	row := r.dbService.QueryRow(ctx, query, destination, channel, otpCode, relayToEmail)
 
-	var message string // SP returns a message we can ignore
 	err := row.Scan(
 		&otpRecord.Id,
 		&otpRecord.Destination,
 		&otpRecord.OtpChannel,
 		&otpRecord.ExpiresAt,
-		&message,
+		&otpRecord.RelayEmail,
 	)
 
 	if err != nil {
@@ -49,6 +49,12 @@ func (r *OtpRepository) RequestOtp(
 	}
 
 	return otpRecord, nil
+}
+
+// InvalidateOtp closes a stored code whose delivery failed
+func (r *OtpRepository) InvalidateOtp(ctx context.Context, otpId uuid.UUID) error {
+	_, err := r.dbService.Execute(ctx, `SELECT auth.sp_invalidate_otp($1)`, otpId)
+	return err
 }
 
 // VerifyOtp verifies an OTP code against the database

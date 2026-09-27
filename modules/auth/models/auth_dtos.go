@@ -202,11 +202,12 @@ type RequestOtpDto struct {
 
 // RequestOtpResponse is the response after successfully requesting an OTP
 type RequestOtpResponse struct {
-	OtpId       string    `json:"otp_id"`
-	Destination string    `json:"destination"` // masked for security (e.g., "+12345****90")
-	Channel     string    `json:"channel"`
-	ExpiresAt   time.Time `json:"expires_at"`
-	Message     string    `json:"message"`
+	OtpId        string    `json:"otp_id"`
+	Destination  string    `json:"destination"` // masked for security (e.g., "+12345****90")
+	Channel      string    `json:"channel"`
+	DeliveredVia string    `json:"delivered_via"` // channel that carried the code; "email" when a phone login is relayed
+	ExpiresAt    time.Time `json:"expires_at"`
+	Message      string    `json:"message"`
 }
 
 // VerifyOtpRequestDto is the request DTO for verifying an OTP code
@@ -248,6 +249,7 @@ type OtpRequest struct {
 	Destination string     `db:"destination"`
 	OtpChannel  string     `db:"otp_channel"`
 	OtpCode     string     `db:"otp_code"`
+	RelayEmail  *string    `db:"relay_email"` // set only when a phone channel is relayed by email
 	UserId      *uuid.UUID `db:"user_id"`
 	IsVerified  bool       `db:"is_verified"`
 	VerifiedAt  *time.Time `db:"verified_at"`

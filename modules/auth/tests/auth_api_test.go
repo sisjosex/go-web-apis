@@ -848,40 +848,39 @@ func TestOtpVerifyInvalidCode(t *testing.T) {
 		fmt.Sprintf("Expected 400/401/404, got %d: %s", w.Code, w.Body.String()))
 }
 
-// TestOtpSmsRequestSuccess tests SMS OTP request
-func TestOtpSmsRequestSuccess(t *testing.T) {
+// TestOtpPhoneRequestUnknownPhone: SMS and WhatsApp relay a phone login to the account's email
+// (AUTH-001), so a phone no account holds is refused before anything is stored or sent.
+func TestOtpPhoneRequestUnknownPhone(t *testing.T) {
 	helper := testhelpers.SetupApiTest(t)
 	defer helper.Close()
 
-	body := map[string]interface{}{
-		"destination": "+1234567890",
-		"channel":     "sms",
+	for _, channel := range []string{"sms", "whatsapp"} {
+		body := map[string]interface{}{
+			"destination": "+59170009999",
+			"channel":     channel,
+		}
+
+		w := helper.DoRequest("POST", "/auth/otp/"+channel+"/request", body, map[string]string{})
+
+		assert.Equal(t, http.StatusBadRequest, w.Code, "%s: %s", channel, w.Body.String())
+		assert.Contains(t, w.Body.String(), `"error":"otp.phone.not-registered"`, channel)
 	}
-
-	w := helper.DoRequest("POST", "/auth/otp/sms/request", body, map[string]string{})
-
-	// SMS may be disabled in test environment
-	assert.True(t, w.Code == http.StatusOK || w.Code == http.StatusCreated ||
-		w.Code == http.StatusServiceUnavailable || w.Code == http.StatusBadRequest,
-		fmt.Sprintf("Got status %d: %s", w.Code, w.Body.String()))
 }
 
-// TestOtpWhatsAppRequestSuccess tests WhatsApp OTP request
-func TestOtpWhatsAppRequestSuccess(t *testing.T) {
+// TestOtpVerifyInvalidChannel: a channel outside whatsapp|sms|email never reaches the SP.
+func TestOtpVerifyInvalidChannel(t *testing.T) {
 	helper := testhelpers.SetupApiTest(t)
 	defer helper.Close()
 
 	body := map[string]interface{}{
-		"destination": "+1234567890",
-		"channel":     "whatsapp",
+		"destination": "+59170009999",
+		"otp_code":    "123456",
+		"channel":     "fax",
 	}
 
-	w := helper.DoRequest("POST", "/auth/otp/whatsapp/request", body, map[string]string{})
+	w := helper.DoRequest("POST", "/auth/otp/verify", body, map[string]string{})
 
-	// WhatsApp may be disabled in test environment
-	assert.True(t, w.Code == http.StatusOK || w.Code == http.StatusCreated ||
-		w.Code == http.StatusServiceUnavailable || w.Code == http.StatusBadRequest,
-		fmt.Sprintf("Got status %d: %s", w.Code, w.Body.String()))
+	assert.Equal(t, http.StatusBadRequest, w.Code, w.Body.String())
 }
 
 // ============================================================================

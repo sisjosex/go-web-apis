@@ -38,6 +38,8 @@
   "otp.destination.invalid": "Destino inválido (teléfono o correo)",
   "otp.channel.invalid": "Canal OTP inválido",
   "otp.channel.disabled": "Canal OTP no está habilitado",
+  "otp.provider.unavailable": "No se pudo enviar el código ahora. Intenta de nuevo en unos minutos",
+  "otp.phone.not-registered": "Este número no tiene una cuenta. Ingresa con tu email",
   "otp.code.invalid": "Formato de código OTP inválido",
   "phone.already-registered": "Este número de teléfono ya está registrado",
   "password-reset.email.subject": "Restablecé tu contraseña",
