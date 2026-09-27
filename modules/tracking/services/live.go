@@ -3,6 +3,7 @@ package services
 import (
 	"context"
 	"encoding/json"
+	"time"
 
 	"josex/web/modules/tracking/interfaces"
 	"josex/web/modules/tracking/models"
@@ -32,9 +33,8 @@ func (s *LiveService) Trip(ctx context.Context, tenantID, tripID uuid.UUID) (*mo
 		return nil, TripEta{}, err
 	}
 	var position *models.LivePosition
-	if live.Status == "in_progress" && len(live.Position) > 0 && string(live.Position) != "null" {
-		position = &models.LivePosition{}
-		if err := json.Unmarshal(live.Position, position); err != nil {
+	if live.Status == "in_progress" {
+		if position, err = livePosition(live.Position); err != nil {
 			return nil, TripEta{}, err
 		}
 	}
@@ -44,6 +44,46 @@ func (s *LiveService) Trip(ctx context.Context, tenantID, tripID uuid.UUID) (*mo
 	}
 	live.Eta = eta.Eta
 	return live, eta, nil
+}
+
+// Rider is the rider's live snapshot (MOBILE-010): one query, and the trip's ETA from the same
+// eta:{trip} cache as Trip, cut to the rider's own stops. It also answers when that ETA was computed,
+// which the gateway compares before sending an eta frame.
+func (s *LiveService) Rider(ctx context.Context, tenantID, riderID uuid.UUID, scopeUserID, guardianUserID *uuid.UUID) (*models.RiderLive, time.Time, error) {
+	live, pending, err := s.repo.RiderLive(ctx, tenantID, riderID, scopeUserID, guardianUserID)
+	if err != nil || live.TripID == nil {
+		return live, time.Time{}, err
+	}
+	position, err := livePosition(live.Position)
+	if err != nil {
+		return nil, time.Time{}, err
+	}
+	eta, err := s.eta.ForTrip(ctx, *live.TripID, position, pending)
+	if err != nil {
+		return nil, time.Time{}, err
+	}
+	mine := make(map[uuid.UUID]bool, len(live.Stops))
+	for _, stop := range live.Stops {
+		mine[stop.TripStopID] = true
+	}
+	for _, e := range eta.Eta {
+		if mine[e.TripStopID] {
+			live.Eta = append(live.Eta, e)
+		}
+	}
+	return live, eta.ComputedAt, nil
+}
+
+// livePosition reads the position the ETA runs from; nil when the vehicle has not reported.
+func livePosition(raw json.RawMessage) (*models.LivePosition, error) {
+	if len(raw) == 0 || string(raw) == "null" {
+		return nil, nil
+	}
+	position := &models.LivePosition{}
+	if err := json.Unmarshal(raw, position); err != nil {
+		return nil, err
+	}
+	return position, nil
 }
 
 // CachedEta is the trip's ETA while its cache entry lives — what the gateway tries first on every

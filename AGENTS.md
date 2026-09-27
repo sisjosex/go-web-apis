@@ -106,9 +106,13 @@ channel): operators get `fleet:{tenant}[:org:{id}]`, `trip:{id}`, `rider:{id}`; 
 `rider:{id}` while it rides; organization and driver levels are refused at the upgrade. One Valkey
 SUBSCRIBE per channel per process; position and eta are latest-wins per channel, anything else queues
 and past `WS_QUEUE_MAX` closes 1013; Valkey lost or shutdown closes 1012. `outbox:trip.changed` publishes
-every transition; the hub adds `eta` on a watched `trip:{id}`. ETA is on demand (D1): one Valhalla route
+every transition; the hub adds `eta` on a watched `trip:{id}`, and on a watched `rider:{id}` the same
+trip ETA cut to that rider's stops (MOBILE-010). ETA is on demand (D1): one Valhalla route
 through every pending stop, cached `eta:{trip}` 30 s. Snapshots for (re)sync: `GET /tracking/live/fleet`,
-`GET /tracking/trips/:id/live`.
+`GET /tracking/trips/:id/live` (its stops carry `lat`/`lng`), and the guardian's `GET /tracking/riders/:id/live`
+(portal chain, scoped as the rider's status; no trip in progress → `trip_id: null`, no stops, no position).
+`GET /routes/:id/status` does not name the trip: a client finds it with `GET /trips?route_id=&status=in_progress`.
+The gateway logs one line per socket open and close.
 
 Main DB holds `auth.*` + `tenancy.*`; one DB per tenant holds business schemas only. JWT carries
 `user_id + session_id`; tenancy middleware resolves `tenant_id` from `X-Tenant-Slug` per request.

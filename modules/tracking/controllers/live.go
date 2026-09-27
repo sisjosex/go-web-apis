@@ -5,6 +5,7 @@ import (
 
 	coreErrors "josex/web/modules/core/errors"
 	"josex/web/modules/core/utils"
+	tenancyModels "josex/web/modules/tenancy/models"
 	trackingErrors "josex/web/modules/tracking/errors"
 	"josex/web/modules/tracking/models"
 	"josex/web/modules/tracking/services"
@@ -77,6 +78,39 @@ func (ctrl *LiveController) GetTripLive(c *gin.Context) {
 	live, _, err := ctrl.live.Trip(c.Request.Context(), tenantID, tripID)
 	if err != nil {
 		tripErrorResponse(c, err)
+		return
+	}
+	c.JSON(http.StatusOK, live)
+}
+
+// GetRiderLive godoc
+// @Summary A rider's trip now: the rider's stops, the vehicle's position and the ETA to them
+// @Description The guardian's map (MOBILE-010). Scoped as the rider's status; no trip in progress → trip_id null, no stops, no position
+// @Tags Tracking - Live
+// @Produce json
+// @Security BearerAuth
+// @Param rider_id path string true "Rider ID (UUID)"
+// @Success 200 {object} models.RiderLive
+// @Failure 400 {object} coreErrors.ErrorResponse
+// @Failure 403 {object} coreErrors.ErrorResponse
+// @Failure 404 {object} coreErrors.ErrorResponse
+// @Router /tracking/riders/{rider_id}/live [get]
+func (ctrl *LiveController) GetRiderLive(c *gin.Context) {
+	tenantID, err := uuid.Parse(c.GetString("tenant_id"))
+	if err != nil {
+		c.JSON(http.StatusForbidden, coreErrors.BuildErrorSingle(c, trackingErrors.TenantRequired))
+		return
+	}
+	riderID, ok := pathUUID(c, "rider_id")
+	if !ok {
+		return
+	}
+	live, _, err := ctrl.live.Rider(c.Request.Context(), tenantID, riderID,
+		userIDAtLevel(c, tenancyModels.RoleOrganization), userIDAtLevel(c, tenancyModels.RolePortal))
+	if err != nil {
+		if !scopeRefused(c, err) {
+			tripErrorResponse(c, err)
+		}
 		return
 	}
 	c.JSON(http.StatusOK, live)

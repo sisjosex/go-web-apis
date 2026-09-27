@@ -24,8 +24,10 @@ type Session struct {
 }
 
 // EtaSource answers a watched trip's ETA frame data and when it was computed; ok false when there is
-// nothing to send (no position, no pending stop, or a failure the caller logs).
-type EtaSource func(ctx context.Context, session Session, tripID uuid.UUID) (data json.RawMessage, computedAt time.Time, ok bool)
+// nothing to send (no position, no pending stop, or a failure the caller logs). riderID set is a rider
+// channel: the ETA to that rider's stops only (MOBILE-010). sentAt is when the estimate last sent on
+// the channel was computed, so a source can answer ok false before any read when nothing is newer.
+type EtaSource func(ctx context.Context, session Session, tripID uuid.UUID, riderID *uuid.UUID, sentAt time.Time) (data json.RawMessage, computedAt time.Time, ok bool)
 
 // healthEvery is how often the receive loop proves Valkey is still there when nothing arrives.
 const healthEvery = 15 * time.Second
@@ -210,8 +212,8 @@ func (h *Hub) closeAll(reason string) {
 	}
 }
 
-// dispatch hands one published frame to every listener of its channel. A position on a trip channel
-// someone is watching also refreshes that trip's ETA (D1).
+// dispatch hands one published frame to every listener of its channel. A position on a trip or rider
+// channel someone is watching also refreshes that trip's ETA (D1, MOBILE-010).
 func (h *Hub) dispatch(channel, payload string) {
 	var frame Frame
 	if err := json.Unmarshal([]byte(payload), &frame); err != nil {
@@ -226,25 +228,48 @@ func (h *Hub) dispatch(channel, payload string) {
 	for _, c := range listeners {
 		c.Deliver(channel, frame)
 	}
-	if frame.Type == "position" && strings.HasPrefix(channel, "trip:") && len(listeners) > 0 && h.eta != nil {
-		h.refreshEta(channel, listeners[0].Session)
+	if frame.Type == "position" && len(listeners) > 0 && h.eta != nil {
+		if tripID, riderID, ok := etaTarget(channel, frame.Data); ok {
+			h.refreshEta(channel, listeners[0].Session, tripID, riderID)
+		}
 	}
 }
 
-// refreshEta computes the trip's ETA off the receive loop, one computation per trip at a time, and
-// sends it to the trip's listeners when it is newer than the last one sent. The ETA source caches 30 s,
-// so a position every 3 s costs a Valkey read, not a route call.
-func (h *Hub) refreshEta(channel string, session Session) {
-	tripID, err := uuid.Parse(strings.TrimPrefix(channel, "trip:"))
-	if err != nil {
-		return
+// etaTarget is the trip a position frame's ETA is for: the channel's own on trip:{id}, the frame's
+// trip_id on rider:{id}, which also names the rider. ok false on any other channel.
+func etaTarget(channel string, data json.RawMessage) (tripID uuid.UUID, riderID *uuid.UUID, ok bool) {
+	if id, found := strings.CutPrefix(channel, "trip:"); found {
+		tripID, err := uuid.Parse(id)
+		return tripID, nil, err == nil
 	}
+	id, found := strings.CutPrefix(channel, "rider:")
+	if !found {
+		return uuid.Nil, nil, false
+	}
+	rider, err := uuid.Parse(id)
+	if err != nil {
+		return uuid.Nil, nil, false
+	}
+	var position struct {
+		TripID *uuid.UUID `json:"trip_id"`
+	}
+	if json.Unmarshal(data, &position) != nil || position.TripID == nil {
+		return uuid.Nil, nil, false
+	}
+	return *position.TripID, &rider, true
+}
+
+// refreshEta computes the channel's ETA off the receive loop, one computation per channel at a time,
+// and sends it to the channel's listeners when it is newer than the last one sent. The ETA source
+// caches 30 s, so a position every 3 s costs a Valkey read, not a route call.
+func (h *Hub) refreshEta(channel string, session Session, tripID uuid.UUID, riderID *uuid.UUID) {
 	h.mu.Lock()
 	if h.etaBusy[channel] {
 		h.mu.Unlock()
 		return
 	}
 	h.etaBusy[channel] = true
+	sentAt := h.etaSent[channel]
 	h.mu.Unlock()
 
 	h.wg.Add(1)
@@ -255,7 +280,7 @@ func (h *Hub) refreshEta(channel string, session Session) {
 			delete(h.etaBusy, channel)
 			h.mu.Unlock()
 		}()
-		data, computedAt, ok := h.eta(h.ctx, session, tripID)
+		data, computedAt, ok := h.eta(h.ctx, session, tripID, riderID, sentAt)
 		if !ok {
 			return
 		}

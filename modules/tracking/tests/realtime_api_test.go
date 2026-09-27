@@ -39,6 +39,14 @@ import (
 // stop. It answers the trip and the vehicle.
 func cochabambaTrip(t *testing.T, helper *testhelpers.ApiTestHelper) (string, string) {
 	t.Helper()
+	routeID, _ := cochabambaRoute(t, helper)
+	return startCochabambaTrip(t, helper, routeID)
+}
+
+// cochabambaRoute is a fresh route through two new stops in central Cochabamba, running every day
+// at 07:00. It answers the route and its stops.
+func cochabambaRoute(t *testing.T, helper *testhelpers.ApiTestHelper) (string, []string) {
+	t.Helper()
 	stops := make([]string, 2)
 	for i, c := range [][2]float64{{-17.3950, -66.1550}, {-17.3890, -66.1480}} {
 		w := helper.DoRequest("POST", "/tracking/stop-places", map[string]interface{}{
@@ -55,11 +63,18 @@ func cochabambaTrip(t *testing.T, helper *testhelpers.ApiTestHelper) (string, st
 		{"stop_place_id": stops[1], "sequence": 2, "planned_offset_min": 20},
 	})
 	CreateRouteSchedule(t, helper, routeID, map[string]interface{}{"days_of_week": EveryDayMask, "start_time": "07:00", "valid_from": "2026-01-01"})
+	return routeID, stops
+}
+
+// startCochabambaTrip starts today's trip of routeID on a fresh vehicle and ingests a point before
+// its first stop. It answers the trip and the vehicle.
+func startCochabambaTrip(t *testing.T, helper *testhelpers.ApiTestHelper, routeID string) (string, string) {
+	t.Helper()
 	today := dayOffset(t, "UTC", 0)
 	materialiseRoute(t, helper, routeID, today, today)
 	tripID, _ := tripOn(t, helper, routeID, today, "07:00")
 	vehicleID := CreateTestVehicleOf(t, helper, MainCompanyID)
-	execSQL(t, helper, `UPDATE tracking.trips SET vehicle_id = $2 WHERE id = $1`, tripID, vehicleID)
+	tripRequest(t, helper, "PATCH", "/tracking/trips/"+tripID, map[string]interface{}{"vehicle_id": vehicleID}, http.StatusOK)
 	tripRequest(t, helper, "POST", "/tracking/trips/"+tripID+"/start", nil, http.StatusOK)
 	ingest(t, helper, pointsJSON(t, vehicleID, time.Now().UTC(), [2]float64{-17.3935, -66.1570}))
 	return tripID, vehicleID
@@ -348,5 +363,135 @@ func TestRealtimeSocket_TripChangedFanOut(t *testing.T) {
 	refusal := other.waitFrame(rider, "error", 2*time.Second)
 	if assert.NotNil(t, refusal) {
 		assert.Equal(t, "forbidden", refusal["code"])
+	}
+}
+
+// ---- MOBILE-010: the guardian's map ----
+
+// guardianRiding is a fresh rider on today's started Cochabamba trip, linked to the seeded guardian,
+// on a fresh vehicle that has just reported. It answers the rider, the trip and the vehicle.
+func guardianRiding(t *testing.T, helper *testhelpers.ApiTestHelper) (string, string, string) {
+	t.Helper()
+	routeID, stops := cochabambaRoute(t, helper)
+	riderID := CreateTestRider(t, helper)
+	body := AssignmentBody(riderID, routeID, EveryDayMask)
+	body["pickup_stop_place_id"] = stops[0]
+	body["dropoff_stop_place_id"] = stops[1]
+	CreateAssignment(t, helper, body)
+	LinkPortalGuardian(t, helper, riderID)
+	tripID, vehicleID := startCochabambaTrip(t, helper, routeID)
+	return riderID, tripID, vehicleID
+}
+
+// TestRiderLive_GuardianSnapshot - while the rider rides, the guardian's snapshot answers the trip,
+// the rider's two stops with coordinates and the vehicle's position; someone else's guardian → 404;
+// once the trip is completed, no trip and no position.
+func TestRiderLive_GuardianSnapshot(t *testing.T) {
+	helper := SetupTrackingTest(t)
+	defer helper.Close()
+	riderID, tripID, vehicleID := guardianRiding(t, helper)
+
+	portal := SetupPortalTest(t)
+	defer portal.Close()
+	w := portal.DoRequest("GET", "/tracking/riders/"+riderID+"/live", nil, map[string]string{})
+	if w.Code != http.StatusOK {
+		t.Fatalf("rider live: %d %s", w.Code, w.Body.String())
+	}
+	var live models.RiderLive
+	decodeBody(t, w, &live)
+	if assert.NotNil(t, live.TripID) {
+		assert.Equal(t, tripID, live.TripID.String())
+	}
+	if assert.Len(t, live.Stops, 2) {
+		assert.Equal(t, "pickup", live.Stops[0].Kind)
+		assert.NotZero(t, live.Stops[0].Lat)
+		assert.NotZero(t, live.Stops[0].Lng)
+	}
+	var position struct {
+		VehicleID string  `json:"vehicle_id"`
+		Lat       float64 `json:"lat"`
+	}
+	if assert.NoError(t, json.Unmarshal(live.Position, &position)) {
+		assert.Equal(t, vehicleID, position.VehicleID)
+		assert.InDelta(t, -17.3935, position.Lat, 1e-6)
+	}
+	assert.NotEmpty(t, live.Eta, "the ETA to the rider's pending stops")
+	for _, e := range live.Eta {
+		assert.Contains(t, []uuid.UUID{live.Stops[0].TripStopID, live.Stops[1].TripStopID}, e.TripStopID)
+	}
+
+	stranger := SetupUnlinkedPortalTest(t)
+	defer stranger.Close()
+	w = stranger.DoRequest("GET", "/tracking/riders/"+riderID+"/live", nil, map[string]string{})
+	assert.Equal(t, http.StatusNotFound, w.Code, w.Body.String())
+
+	tripRequest(t, helper, "POST", "/tracking/trips/"+tripID+"/complete", nil, http.StatusOK)
+	w = portal.DoRequest("GET", "/tracking/riders/"+riderID+"/live", nil, map[string]string{})
+	if w.Code != http.StatusOK {
+		t.Fatalf("rider live after the trip: %d %s", w.Code, w.Body.String())
+	}
+	live = models.RiderLive{}
+	decodeBody(t, w, &live)
+	assert.Nil(t, live.TripID)
+	assert.Empty(t, live.Stops)
+	assert.Equal(t, "null", string(live.Position))
+}
+
+// TestTripLive_StopsCarryCoordinates - the staff snapshot's stops carry where they are.
+func TestTripLive_StopsCarryCoordinates(t *testing.T) {
+	helper := SetupTrackingTest(t)
+	defer helper.Close()
+	tripID, _ := cochabambaTrip(t, helper)
+	w := helper.DoRequest("GET", "/tracking/trips/"+tripID+"/live", nil, map[string]string{})
+	if w.Code != http.StatusOK {
+		t.Fatalf("trip live: %d %s", w.Code, w.Body.String())
+	}
+	var live models.TripLive
+	decodeBody(t, w, &live)
+	if assert.Len(t, live.Stops, 2) && assert.NotNil(t, live.Stops[0].Lat) {
+		assert.InDelta(t, -17.3950, *live.Stops[0].Lat, 1e-6)
+		assert.InDelta(t, -66.1550, *live.Stops[0].Lng, 1e-6)
+	}
+}
+
+// TestRealtimeSocket_RiderEta - a position of the rider's trip reaches the guardian's rider channel
+// with an eta frame for that trip, holding only the rider's stops.
+func TestRealtimeSocket_RiderEta(t *testing.T) {
+	helper := SetupTrackingTest(t)
+	defer helper.Close()
+	ctx := context.Background()
+	if err := helper.Valkey().Client().FlushDB(ctx).Err(); err != nil {
+		t.Fatalf("Valkey unreachable: %v", err)
+	}
+	riderID, tripID, vehicleID := guardianRiding(t, helper)
+	server := httptest.NewServer(helper.Engine())
+	defer server.Close()
+
+	portal := SetupPortalTest(t)
+	defer portal.Close()
+	guardian := dialWS(t, server, portal)
+	defer guardian.conn.CloseNow()
+	rider := trackingJobs.RiderChannel(riderID)
+	guardian.send(t, "subscribe", rider)
+	time.Sleep(200 * time.Millisecond)
+
+	consumer := startTestConsumer(t, helper, time.Minute)
+	defer consumer.Shutdown()
+	xadd(t, helper, models.StoredPoint{VehicleID: uuid.MustParse(vehicleID), RecordedAt: time.Now().UTC(), Lat: -17.3930, Lng: -66.1560})
+
+	assert.NotNil(t, guardian.waitFrame(rider, "position", 5*time.Second), "the position reaches the rider channel")
+	frame := guardian.waitFrame(rider, "eta", 5*time.Second)
+	if !assert.NotNil(t, frame, "an eta frame follows the position") {
+		return
+	}
+	var data struct {
+		TripID string           `json:"trip_id"`
+		Eta    []models.StopEta `json:"eta"`
+	}
+	raw, _ := json.Marshal(frame["data"])
+	if assert.NoError(t, json.Unmarshal(raw, &data)) {
+		assert.Equal(t, tripID, data.TripID)
+		assert.NotEmpty(t, data.Eta)
+		assert.LessOrEqual(t, len(data.Eta), 2, "the rider's stops only")
 	}
 }

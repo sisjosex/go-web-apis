@@ -811,6 +811,22 @@ func RegisterTestPhone(t *testing.T, helper *testhelpers.ApiTestHelper, userID, 
 	})
 }
 
+// LinkPortalGuardian makes the seeded guardian (portal@test.local) a guardian of riderID too, and
+// unlinks them when the test ends — the seeded guardian has exactly one rider everywhere else.
+func LinkPortalGuardian(t *testing.T, helper *testhelpers.ApiTestHelper, riderID string) {
+	t.Helper()
+	ctx := context.Background()
+	if _, err := helper.DB().Execute(ctx, `INSERT INTO tracking.rider_contacts (rider_id, relation, name, phone, email, user_id, is_primary)
+		SELECT $1, 'guardian', 'Portal Guardian', '+3333333333', u.email, u.id, FALSE FROM auth.users u WHERE u.email = 'portal@test.local'`, riderID); err != nil {
+		t.Fatalf("link guardian: %v", err)
+	}
+	t.Cleanup(func() {
+		if _, err := helper.DB().Execute(ctx, `DELETE FROM tracking.rider_contacts WHERE rider_id = $1`, riderID); err != nil {
+			t.Errorf("unlink guardian: %v", err)
+		}
+	})
+}
+
 // CleanTrackingDatabase cleans only tracking tables while preserving auth and system data
 // This is the proper cleanup for tracking-specific tests
 func CleanTrackingDatabase(helper *testhelpers.ApiTestHelper) error {

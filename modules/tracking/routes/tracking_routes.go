@@ -125,7 +125,7 @@ func registerTenantRoutes(
 	registerDocumentRoutes(r, denyOrganization, trackingController)
 	registerRiderRoutes(r, p, denyOrganization, trackingController)
 	registerTripRoutes(r, denyOrganization, trackingController)
-	registerLiveRoutes(r, denyOrganization, liveController)
+	registerLiveRoutes(r, p, denyOrganization, liveController)
 }
 
 // registerDriverRoutes is /api/v1/mobile/driver: the driver level only, and no capability — as the
@@ -154,13 +154,15 @@ func registerPortalRoutes(router *gin.Engine, portal Portal) {
 }
 
 // registerLiveRoutes are the snapshots a live screen reads on open and on every resync (TRACK-025):
-// the operator's, like the trips they show.
-func registerLiveRoutes(r *gin.RouterGroup, denyOrganization gin.HandlerFunc, live *controllers.LiveController) {
+// the operator's, like the trips they show. A rider's is also the guardian's map (MOBILE-010), so it
+// hangs off the portal-permissive chain p and the SP resolves the scope, as the rider's status does.
+func registerLiveRoutes(r, p *gin.RouterGroup, denyOrganization gin.HandlerFunc, live *controllers.LiveController) {
 	if live == nil {
 		return
 	}
 	r.GET("/live/fleet", denyOrganization, live.GetLiveFleet)
 	r.GET("/trips/:trip_id/live", denyOrganization, live.GetTripLive)
+	p.GET("/riders/:rider_id/live", live.GetRiderLive)
 }
 
 // registerFleetRoutes is what the operator owns and runs: its companies, its buses, its drivers.

@@ -51,6 +51,32 @@ func (r *TrackingRepository) TripLive(ctx context.Context, tenantID, tripID uuid
 	return &live, pendingStops, nil
 }
 
+// RiderLive answers the rider's trip in progress with the rider's stops and the vehicle's position,
+// and the trip's pending stops the ETA runs through. Scope as GetRiderStatus: out of it, not-found.
+func (r *TrackingRepository) RiderLive(ctx context.Context, tenantID, riderID uuid.UUID, scopeUserID, guardianUserID *uuid.UUID) (*models.RiderLive, []models.PendingStop, error) {
+	var live models.RiderLive
+	var stops, position, pending []byte
+	err := r.dbService.QueryRow(ctx,
+		`SELECT * FROM tracking.sp_rider_live(p_tenant_id := $1, p_rider_id := $2, p_scope_user_id := $3, p_guardian_user_id := $4)`,
+		tenantID, riderID, scopeUserID, guardianUserID).
+		Scan(&live.RiderID, &live.TripID, &live.RouteName, &live.LicensePlate, &stops, &position, &pending)
+	if err != nil {
+		return nil, nil, scopedErr(err, trackingErrors.TrackingInternalError)
+	}
+	if err := json.Unmarshal(stops, &live.Stops); err != nil {
+		return nil, nil, err
+	}
+	var pendingStops []models.PendingStop
+	if err := json.Unmarshal(pending, &pendingStops); err != nil {
+		return nil, nil, err
+	}
+	if position != nil {
+		live.Position = position
+	}
+	live.Eta = []models.StopEta{}
+	return &live, pendingStops, nil
+}
+
 // CanSubscribe answers whether the user may listen to channel; guardian is the portal level.
 func (r *TrackingRepository) CanSubscribe(ctx context.Context, tenantID, userID uuid.UUID, guardian bool, channel string) (bool, error) {
 	var ok bool

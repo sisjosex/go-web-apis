@@ -64,6 +64,9 @@ type TripStop struct {
 	DepartedAt  *time.Time `json:"departed_at"`
 	Status      string     `json:"status"`
 	Tasks       []TripTask `json:"tasks"`
+	// Lat and Lng come with the live snapshot only (MOBILE-010): the map draws the stops from it.
+	Lat *float64 `json:"lat,omitempty"`
+	Lng *float64 `json:"lng,omitempty"`
 }
 
 type TripTask struct {

@@ -306,7 +306,10 @@ func trackingSocket(d routeDeps, chains tenantChains, live *trackingServices.Liv
 		}
 		return context.WithValue(ctx, coreServices.TenantDatabaseURLKey, session.DatabaseURL)
 	}
-	d.hub.SetEta(func(ctx context.Context, session realtime.Session, tripID uuid.UUID) (json.RawMessage, time.Time, bool) {
+	d.hub.SetEta(func(ctx context.Context, session realtime.Session, tripID uuid.UUID, riderID *uuid.UUID, sentAt time.Time) (json.RawMessage, time.Time, bool) {
+		if riderID != nil {
+			return riderEta(withTenant(ctx, session), live, session, tripID, *riderID, sentAt)
+		}
 		eta, ok := live.CachedEta(ctx, tripID)
 		if !ok {
 			var err error
@@ -332,6 +335,25 @@ func trackingSocket(d routeDeps, chains tenantChains, live *trackingServices.Liv
 	return append(handlers, d.hub.Serve(check,
 		realtime.OriginPatterns(config.ModularAppConfig.Core.AllowedOrigins),
 		time.Duration(trackingConf.WSPingSeconds)*time.Second))
+}
+
+// riderEta is a rider channel's ETA frame: the trip's estimate cut to the rider's pending stops. The
+// subscribe check already scoped the channel, so the snapshot is read unscoped; it is read only when
+// the cached estimate is newer than the one sent — one query per 30 s per watched rider.
+func riderEta(ctx context.Context, live *trackingServices.LiveService, session realtime.Session, tripID, riderID uuid.UUID, sentAt time.Time) (json.RawMessage, time.Time, bool) {
+	if cached, ok := live.CachedEta(ctx, tripID); ok && cached.ComputedAt.Equal(sentAt) {
+		return nil, time.Time{}, false
+	}
+	rider, computedAt, err := live.Rider(ctx, session.TenantID, riderID, nil, nil)
+	if err != nil {
+		log.Printf("⚠️  realtime: rider eta %s: %v", riderID, err)
+		return nil, time.Time{}, false
+	}
+	if rider.TripID == nil || *rider.TripID != tripID || len(rider.Eta) == 0 {
+		return nil, time.Time{}, false
+	}
+	data, err := json.Marshal(map[string]any{"trip_id": tripID, "eta": rider.Eta})
+	return data, computedAt, err == nil
 }
 
 // registerTracking mounts tracking behind the tenant chain plus its module check. valkey is where the

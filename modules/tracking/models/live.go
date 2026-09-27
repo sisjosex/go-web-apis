@@ -47,6 +47,30 @@ type TripLive struct {
 	Eta      []StopEta       `json:"eta"`
 }
 
+// RiderLive is GET /tracking/riders/:id/live (MOBILE-010): the rider's trip in progress, the rider's own
+// stops on it, the vehicle's last position (a position frame's shape) and the ETA to the rider's
+// pending stops. No trip in progress: TripID nil, no stops, no position.
+type RiderLive struct {
+	RiderID      uuid.UUID       `json:"rider_id"`
+	TripID       *uuid.UUID      `json:"trip_id"`
+	RouteName    *string         `json:"route_name"`
+	LicensePlate *string         `json:"license_plate"`
+	Stops        []RiderLiveStop `json:"stops"`
+	Position     json.RawMessage `json:"position" swaggertype:"object"`
+	Eta          []StopEta       `json:"eta"`
+}
+
+// RiderLiveStop is one of the rider's stops on the trip: where it is and whether it is pickup or dropoff.
+type RiderLiveStop struct {
+	TripStopID uuid.UUID  `json:"trip_stop_id"`
+	StopName   string     `json:"stop_name"`
+	Lat        float64    `json:"lat"`
+	Lng        float64    `json:"lng"`
+	Kind       string     `json:"kind"`
+	Status     string     `json:"status"`
+	PlannedAt  *time.Time `json:"planned_at"`
+}
+
 // PendingStop is a stop the ETA is computed to, in sequence.
 type PendingStop struct {
 	TripStopID uuid.UUID `json:"trip_stop_id"`

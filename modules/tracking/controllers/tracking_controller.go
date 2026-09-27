@@ -87,16 +87,7 @@ func (ctrl *TrackingController) requireTenantID(c *gin.Context) (uuid.UUID, bool
 // themselves, one round-trip, so no path list lives here. Every other level — operator, super_admin
 // — gets nil and reads the whole tenant, exactly as before.
 func (ctrl *TrackingController) scopeUserID(c *gin.Context) *uuid.UUID {
-	role, exists := c.Get("tenant_user_role")
-	if !exists || role != tenancyModels.RoleOrganization {
-		return nil
-	}
-
-	userID, err := uuid.Parse(c.GetString("user_id"))
-	if err != nil {
-		return nil
-	}
-	return &userID
+	return userIDAtLevel(c, tenancyModels.RoleOrganization)
 }
 
 // guardianUserID is the user a guardian's read is narrowed by (TRACK-017 D2). Only a `portal`
@@ -107,11 +98,16 @@ func (ctrl *TrackingController) scopeUserID(c *gin.Context) *uuid.UUID {
 // Unlike scopeUserID, an empty scope is not a refusal: a parent the school has not linked yet reads
 // an empty list, which is what the app has copy for.
 func (ctrl *TrackingController) guardianUserID(c *gin.Context) *uuid.UUID {
-	role, exists := c.Get("tenant_user_role")
-	if !exists || role != tenancyModels.RolePortal {
+	return userIDAtLevel(c, tenancyModels.RolePortal)
+}
+
+// userIDAtLevel is the signed-in user when their level in the tenant is role, nil otherwise — what
+// scopeUserID and guardianUserID narrow a read by.
+func userIDAtLevel(c *gin.Context, role string) *uuid.UUID {
+	level, exists := c.Get("tenant_user_role")
+	if !exists || level != role {
 		return nil
 	}
-
 	userID, err := uuid.Parse(c.GetString("user_id"))
 	if err != nil {
 		return nil
