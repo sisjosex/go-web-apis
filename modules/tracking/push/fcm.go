@@ -108,11 +108,14 @@ type fcmMessage struct {
 
 type fcmAndroid struct {
 	CollapseKey  string `json:"collapse_key,omitempty"`
+	Priority     string `json:"priority"`
 	Notification struct {
-		TitleLocKey string   `json:"title_loc_key"`
-		BodyLocKey  string   `json:"body_loc_key"`
-		BodyLocArgs []string `json:"body_loc_args,omitempty"`
-		Tag         string   `json:"tag,omitempty"`
+		TitleLocKey  string   `json:"title_loc_key"`
+		TitleLocArgs []string `json:"title_loc_args,omitempty"`
+		BodyLocKey   string   `json:"body_loc_key"`
+		BodyLocArgs  []string `json:"body_loc_args,omitempty"`
+		Tag          string   `json:"tag,omitempty"`
+		ChannelID    string   `json:"channel_id,omitempty"`
 	} `json:"notification"`
 }
 
@@ -121,9 +124,10 @@ type fcmAPNS struct {
 	Payload struct {
 		Aps struct {
 			Alert struct {
-				TitleLocKey string   `json:"title-loc-key"`
-				LocKey      string   `json:"loc-key"`
-				LocArgs     []string `json:"loc-args,omitempty"`
+				TitleLocKey  string   `json:"title-loc-key"`
+				TitleLocArgs []string `json:"title-loc-args,omitempty"`
+				LocKey       string   `json:"loc-key"`
+				LocArgs      []string `json:"loc-args,omitempty"`
 			} `json:"alert"`
 		} `json:"aps"`
 	} `json:"payload"`
@@ -185,7 +189,13 @@ func toFCM(msg interfaces.PushMessage) fcmMessage {
 	title, body := "notice_"+msg.Type, "notice_"+msg.Type+"_body"
 	m := fcmMessage{Token: msg.Token, Data: msg.Data}
 	m.Android.CollapseKey = msg.CollapseID
+	// HIGH wakes a dozing phone: a notice about the bus is only worth it now.
+	m.Android.Priority = "HIGH"
+	m.Android.Notification.ChannelID = msg.Channel
 	m.Android.Notification.TitleLocKey = title
+	// The title names the rider too ("%1$s is on board"): it takes the body's args, and a string
+	// that does not use them ignores them.
+	m.Android.Notification.TitleLocArgs = msg.Args
 	m.Android.Notification.BodyLocKey = body
 	m.Android.Notification.BodyLocArgs = msg.Args
 	m.Android.Notification.Tag = msg.CollapseID
@@ -193,6 +203,7 @@ func toFCM(msg interfaces.PushMessage) fcmMessage {
 		m.APNS.Headers = map[string]string{"apns-collapse-id": msg.CollapseID}
 	}
 	m.APNS.Payload.Aps.Alert.TitleLocKey = title
+	m.APNS.Payload.Aps.Alert.TitleLocArgs = msg.Args
 	m.APNS.Payload.Aps.Alert.LocKey = body
 	m.APNS.Payload.Aps.Alert.LocArgs = msg.Args
 	return m

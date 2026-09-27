@@ -5,18 +5,22 @@ package tracking_test
 
 import (
 	"context"
+	"encoding/json"
 	"net/http"
+	"net/http/httptest"
 	"testing"
 	"time"
 
 	"github.com/google/uuid"
 	"github.com/hibiken/asynq"
 	"github.com/stretchr/testify/assert"
+	"golang.org/x/oauth2"
 
 	"josex/web/config"
 	coreJobs "josex/web/modules/core/jobs"
 	"josex/web/modules/core/testhelpers"
 	trackingJobs "josex/web/modules/tracking/jobs"
+	"josex/web/modules/tracking/push"
 )
 
 // noticeRows answers the feed rows of type for rider, per recipient email.
@@ -85,8 +89,11 @@ func TestNotifyEvents_TaskDone(t *testing.T) {
 	})
 	assert.Len(t, noticeRows(t, helper, riderID, "trip_started"), 2, "the start is a notice too")
 
-	_, err = inspector.GetTaskInfo(coreJobs.QueueCritical, boarded["portal@test.local"])
+	info, err := inspector.GetTaskInfo(coreJobs.QueueCritical, boarded["portal@test.local"])
 	assert.NoError(t, err, "the guardian who did not mute it gets a push-send")
+	if info != nil {
+		assertPushedToTrip(t, helper, info.Payload, tripID, riderID)
+	}
 	_, err = inspector.GetTaskInfo(coreJobs.QueueCritical, boarded["portal-unlinked@test.local"])
 	assert.ErrorIs(t, err, asynq.ErrTaskNotFound, "the guardian who muted it gets the row only")
 
@@ -101,4 +108,45 @@ func TestNotifyEvents_TaskDone(t *testing.T) {
 	}
 	assert.Equal(t, 0, replayed)
 	assert.Len(t, noticeRows(t, helper, riderID, "boarded"), 2)
+}
+
+// assertPushedToTrip sends an enqueued push-send through a fake FCM - MOBILE-004 step 1: the message
+// names the tenant for the tap, shows on the `trip` channel at high priority, and is tagged with the
+// trip and rider so the next notice of that trip replaces it.
+func assertPushedToTrip(t *testing.T, helper *testhelpers.ApiTestHelper, payload []byte, tripID, riderID string) {
+	t.Helper()
+	RegisterTestPhone(t, helper, portalUserID(t, helper, "portal@test.local"), "tok-trip")
+	fcm := &fakeFCM{status: http.StatusOK, body: `{"name":"projects/test-project/messages/1"}`}
+	server := httptest.NewServer(fcm)
+	defer server.Close()
+	pusher := push.NewFCM("test-project", oauth2.StaticTokenSource(&oauth2.Token{AccessToken: "t"}), server.URL)
+	assert.NoError(t, trackingJobs.PushSendHandler(helper.DB(), pusher)(t.Context(), asynq.NewTask(trackingJobs.TaskPushSend, payload)))
+
+	var sent struct {
+		Message struct {
+			Data    map[string]string `json:"data"`
+			Android struct {
+				Priority     string `json:"priority"`
+				CollapseKey  string `json:"collapse_key"`
+				Notification struct {
+					Tag       string `json:"tag"`
+					ChannelID string `json:"channel_id"`
+				} `json:"notification"`
+			} `json:"android"`
+			APNS struct {
+				Headers map[string]string `json:"headers"`
+			} `json:"apns"`
+		} `json:"message"`
+	}
+	raw, _ := fcm.last.Load().(string)
+	assert.NoError(t, json.Unmarshal([]byte(raw), &sent))
+	assert.Equal(t, "test-tenant", sent.Message.Data["tenant_slug"])
+	assert.Equal(t, riderID, sent.Message.Data["rider_id"])
+	assert.Equal(t, "HIGH", sent.Message.Android.Priority)
+	assert.Equal(t, "trip", sent.Message.Android.Notification.ChannelID)
+	rider := uuid.MustParse(riderID)
+	collapse := uuid.NewSHA1(uuid.MustParse(tripID), rider[:]).String()
+	assert.Equal(t, collapse, sent.Message.Android.Notification.Tag, "a later notice of the trip replaces it")
+	assert.Equal(t, collapse, sent.Message.Android.CollapseKey)
+	assert.LessOrEqual(t, len(sent.Message.APNS.Headers["apns-collapse-id"]), 64, "APNs refuses a longer collapse id")
 }

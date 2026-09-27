@@ -33,6 +33,13 @@ func (s *notificationService) Settings(ctx context.Context, tenantID, userID uui
 }
 
 func (s *notificationService) SetSettings(ctx context.Context, tenantID, userID uuid.UUID, settings []models.NotificationSetting) ([]models.NotificationSetting, error) {
+	// A rider sent without `muted` has every notice on: nil would marshal to null, which the SP
+	// cannot iterate (MOBILE-004 — the phone leaves an empty list out).
+	for i := range settings {
+		if settings[i].Muted == nil {
+			settings[i].Muted = []string{}
+		}
+	}
 	payload, err := json.Marshal(settings)
 	if err != nil {
 		return nil, &trackingErrors.TrackingError{Code: trackingErrors.NotificationSettingsFailed, Err: err}

@@ -39,9 +39,11 @@ func OutboxTask(topic string) string {
 	return outboxTaskPrefix + topic
 }
 
-// Tenant is what the relay needs of a tenant: whose database it is, and where.
+// Tenant is what the relay needs of a tenant: whose database it is, and where. Slug names it to a
+// phone, which selects the tenant from a push before it opens the rider.
 type Tenant struct {
 	ID          string
+	Slug        string
 	DatabaseURL string
 }
 

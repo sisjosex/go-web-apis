@@ -796,6 +796,21 @@ func SetRouteDirection(t *testing.T, helper *testhelpers.ApiTestHelper, routeID,
 	}
 }
 
+// RegisterTestPhone gives userID a phone that receives pushes at token — through the SP the device
+// endpoint calls — and takes it away when the test ends.
+func RegisterTestPhone(t *testing.T, helper *testhelpers.ApiTestHelper, userID, token string) {
+	t.Helper()
+	ctx := context.Background()
+	if _, err := helper.DB().Execute(ctx, `SELECT auth.sp_upsert_push_device($1, 'test-phone', 'android', $2)`, userID, token); err != nil {
+		t.Fatalf("register phone: %v", err)
+	}
+	t.Cleanup(func() {
+		if _, err := helper.DB().Execute(ctx, `DELETE FROM auth.push_devices WHERE device_id = 'test-phone'`); err != nil {
+			t.Errorf("forget phone: %v", err)
+		}
+	})
+}
+
 // CleanTrackingDatabase cleans only tracking tables while preserving auth and system data
 // This is the proper cleanup for tracking-specific tests
 func CleanTrackingDatabase(helper *testhelpers.ApiTestHelper) error {

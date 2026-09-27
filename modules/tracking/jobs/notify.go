@@ -57,22 +57,29 @@ func (n *Notifier) Notify(ctx context.Context, tenant coreJobs.Tenant, topic str
 		return err
 	}
 	for _, notice := range notices {
-		if err := n.enqueue(ctx, notice); err != nil {
+		if err := n.enqueue(ctx, tenant.Slug, notice); err != nil {
 			return err
 		}
 	}
 	return nil
 }
 
-func (n *Notifier) enqueue(ctx context.Context, notice models.NewNotice) error {
+// enqueue pushes one feed row. tenantSlug rides in the data so a tap selects the tenant before the
+// rider; a trip's later notice for the same rider replaces the earlier one on the phone (D4).
+func (n *Notifier) enqueue(ctx context.Context, tenantSlug string, notice models.NewNotice) error {
 	var body map[string]any
 	_ = json.Unmarshal(notice.Payload, &body)
-	data := map[string]string{"notification_id": notice.ID.String(), "rider_id": notice.RiderID.String(), "type": notice.Type}
+	data := map[string]string{
+		"notification_id": notice.ID.String(), "rider_id": notice.RiderID.String(), "type": notice.Type, "tenant_slug": tenantSlug,
+	}
+	collapseID := notice.ID.String()
 	if trip, ok := body["trip_id"].(string); ok {
 		data["trip_id"] = trip
+		collapseID = tripCollapseID(trip, notice.RiderID)
 	}
 	payload, err := json.Marshal(PushSend{
 		NotificationID: notice.ID.String(), UserID: notice.UserID.String(), Type: notice.Type, Args: pushArgs(body), Data: data,
+		CollapseID: collapseID, Channel: noticeChannel(notice.Type),
 	})
 	if err != nil {
 		return err
@@ -83,6 +90,30 @@ func (n *Notifier) enqueue(ctx context.Context, notice models.NewNotice) error {
 		return nil
 	}
 	return err
+}
+
+// tripCollapseID names one rider's notices of one trip: the same for each, so the next replaces the
+// last. A UUID v5 of the rider in the trip's namespace, because the plain `<trip>:<rider>` is 73 bytes
+// and APNs refuses an apns-collapse-id over 64 — FCM then rejects the message for Android too.
+func tripCollapseID(tripID string, riderID uuid.UUID) string {
+	trip, err := uuid.Parse(tripID)
+	if err != nil {
+		return riderID.String()
+	}
+	return uuid.NewSHA1(trip, riderID[:]).String()
+}
+
+// noticeChannel is the Android channel a type shows on — the three the phone creates, so a guardian
+// can silence one kind of notice from the system settings.
+func noticeChannel(noticeType string) string {
+	switch noticeType {
+	case "trip_started", "boarded", "dropped_off":
+		return "trip"
+	case "approaching":
+		return "approaching"
+	default:
+		return "problems"
+	}
 }
 
 // pushArgs are the body's placeholders, in the order every notice string takes them: the rider, the

@@ -135,6 +135,16 @@ func TestPortalNotificationSettings_Scope(t *testing.T) {
 	}, map[string]string{})
 	assert.Equal(t, http.StatusBadRequest, w.Code, w.Body.String())
 
+	// MOBILE-004: a rider sent without `muted` — what the phone sends for "every notice on" — clears it.
+	w = helper.DoRequest("PUT", "/mobile/portal/notification-settings", []map[string]interface{}{
+		{"rider_id": TestRiderJohnID},
+	}, map[string]string{})
+	assert.Equal(t, http.StatusOK, w.Code, w.Body.String())
+	assert.NoError(t, json.Unmarshal(w.Body.Bytes(), &settings))
+	if assert.Len(t, settings, 1) {
+		assert.Empty(t, settings[0].Muted, "no muted list is every notice on")
+	}
+
 	// The operator's account is not the portal level.
 	admin := SetupTrackingTest(t)
 	defer admin.Close()

@@ -21,6 +21,7 @@ make build                            # compile to bin/
 make gate MODULES="tracking"          # check + lint (changed code) + build + tests of MODULES, quiet
 make check-all | lint-all             # the whole-tree baseline, when asked for
 make docker-up | docker-down          # PostgreSQL + Valkey containers (tests need them up)
+make seed-dev                         # emulator dev accounts on tenant mi-negocio (cmd/cli/seed_dev.sql), idempotent
 make test-<module>                    # auth core users tenancy tracking inventory sales purchasing billing geo
 make test-all                         # every module (db-reset first)
 make migrate MODULE=x NAME=y          # .up.sql + .down.sql pair

@@ -42,7 +42,7 @@ func (f *fakeFCM) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 func pushSendFixture(t *testing.T, helper *testhelpers.ApiTestHelper, token string) (*asynq.Task, string) {
 	t.Helper()
 	guardian := portalUserID(t, helper, "portal@test.local")
-	execSQL(t, helper, `SELECT auth.sp_upsert_push_device($1, 'test-phone', 'android', $2)`, guardian, token)
+	RegisterTestPhone(t, helper, guardian, token)
 	var id string
 	if err := helper.DB().QueryRow(t.Context(), `INSERT INTO tracking.notifications (user_id, rider_id, type, dedupe_key)
 		VALUES ($1, $2, 'boarded', $3) RETURNING id`, guardian, TestRiderJohnID, token).Scan(&id); err != nil {
@@ -50,7 +50,6 @@ func pushSendFixture(t *testing.T, helper *testhelpers.ApiTestHelper, token stri
 	}
 	t.Cleanup(func() {
 		execSQL(t, helper, `DELETE FROM tracking.notifications WHERE id = $1`, id)
-		execSQL(t, helper, `DELETE FROM auth.push_devices WHERE device_id = 'test-phone'`)
 	})
 	payload, _ := json.Marshal(trackingJobs.PushSend{
 		NotificationID: id, UserID: guardian, Type: "boarded",
@@ -91,9 +90,10 @@ func TestPushSend_FCMAnswers(t *testing.T) {
 				Token   string `json:"token"`
 				Android struct {
 					Notification struct {
-						TitleLocKey string   `json:"title_loc_key"`
-						BodyLocArgs []string `json:"body_loc_args"`
-						Tag         string   `json:"tag"`
+						TitleLocKey  string   `json:"title_loc_key"`
+						TitleLocArgs []string `json:"title_loc_args"`
+						BodyLocArgs  []string `json:"body_loc_args"`
+						Tag          string   `json:"tag"`
 					} `json:"notification"`
 				} `json:"android"`
 			} `json:"message"`
@@ -102,6 +102,7 @@ func TestPushSend_FCMAnswers(t *testing.T) {
 		assert.Equal(t, "tok-ok", sent.Message.Token)
 		assert.Equal(t, "notice_boarded", sent.Message.Android.Notification.TitleLocKey)
 		assert.Equal(t, []string{"John Doe", "Morning Route"}, sent.Message.Android.Notification.BodyLocArgs)
+		assert.Equal(t, []string{"John Doe", "Morning Route"}, sent.Message.Android.Notification.TitleLocArgs, "the title names the rider too")
 		assert.Equal(t, id, sent.Message.Android.Notification.Tag, "a resend replaces the notice shown")
 	})
 

@@ -6,6 +6,7 @@
 //   - tenant:    Manage tenant instances and run tenant-specific migrations (requires .env.platform)
 //   - jobs:      Run one scheduled job and exit (requires .env.platform)
 //   - geo:       Import the address-search places of a geo build (.env.tenant)
+//   - seed-dev:  Write the emulator's dev accounts into the .env.platform database
 //
 // Each subcommand has its own handler file:
 //   - migration.go:    Migration generation logic
@@ -13,6 +14,7 @@
 //   - tenant_mgmt.go:  Tenant management and operations
 //   - jobs.go:         Scheduled jobs cron runs one at a time
 //   - geo.go:          Geo places import
+//   - seed_dev.go:     Dev accounts (seed_dev.sql)
 //   - main.go:         CLI routing and help (this file)
 package main
 
@@ -41,6 +43,8 @@ func main() {
 		CmdJobs(args)
 	case "geo":
 		CmdGeo(args)
+	case "seed-dev":
+		CmdSeedDev(args)
 	case "help", "h", "-h", "--help":
 		printMainUsage()
 	default:
@@ -61,6 +65,7 @@ func printMainUsage() {
 	fmt.Println("  tenant, t       Manage tenant instances and run tenant migrations")
 	fmt.Println("  jobs, j         Run a scheduled job once (cron calls these)")
 	fmt.Println("  geo             Import a geo build's places into geo.places")
+	fmt.Println("  seed-dev        Write the emulator's dev accounts (idempotent)")
 	fmt.Println("  help, -h        Show this help message")
 	fmt.Println("\nExamples:")
 	fmt.Println("  go run ./cmd/cli migration -module=auth -name=add_refresh_tokens")

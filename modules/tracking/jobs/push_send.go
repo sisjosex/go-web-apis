@@ -31,6 +31,10 @@ type PushSend struct {
 	Type           string            `json:"type"`
 	Args           []string          `json:"args"`
 	Data           map[string]string `json:"data"`
+	// CollapseID and Channel are empty on a task enqueued before MOBILE-004: the notice id collapses
+	// it and the phone's default channel shows it.
+	CollapseID string `json:"collapse_id,omitempty"`
+	Channel    string `json:"channel,omitempty"`
 }
 
 // PushSendHandler sends one notice to each of the recipient's phones. A token FCM answers UNREGISTERED
@@ -51,10 +55,14 @@ func PushSendHandler(db coreServices.DatabaseService, pusher interfaces.Pusher) 
 		if err != nil {
 			return err
 		}
+		collapseID := payload.CollapseID
+		if collapseID == "" {
+			collapseID = payload.NotificationID
+		}
 		var outage error
 		for _, token := range tokens {
 			err := pusher.Send(ctx, interfaces.PushMessage{
-				Token: token, Type: payload.Type, Args: payload.Args, Data: payload.Data, CollapseID: payload.NotificationID,
+				Token: token, Type: payload.Type, Args: payload.Args, Data: payload.Data, CollapseID: collapseID, Channel: payload.Channel,
 			})
 			switch {
 			case err == nil:

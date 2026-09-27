@@ -83,7 +83,7 @@ func runDocumentAlerts() error {
 	tenants := make([]coreJobs.Tenant, 0, len(listed))
 	for _, t := range listed {
 		if t.DatabaseURL != nil && *t.DatabaseURL != "" {
-			tenants = append(tenants, coreJobs.Tenant{ID: t.ID.String(), DatabaseURL: *t.DatabaseURL})
+			tenants = append(tenants, coreJobs.Tenant{ID: t.ID.String(), Slug: t.Slug, DatabaseURL: *t.DatabaseURL})
 		}
 	}
 

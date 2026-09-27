@@ -152,7 +152,7 @@ func tenantLister(db services.DatabaseService) jobs.TenantLister {
 		out := make([]jobs.Tenant, 0, len(tenants))
 		for _, t := range tenants {
 			if t.DatabaseURL != nil && *t.DatabaseURL != "" {
-				out = append(out, jobs.Tenant{ID: t.ID.String(), DatabaseURL: *t.DatabaseURL})
+				out = append(out, jobs.Tenant{ID: t.ID.String(), Slug: t.Slug, DatabaseURL: *t.DatabaseURL})
 			}
 		}
 		return out, nil

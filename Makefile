@@ -1,5 +1,5 @@
 .PHONY: help swagger build run \
-        dev \
+        dev seed-dev \
         migrate migrate-list tenant-list tenant-migrate \
         test test-auth test-users test-core test-tenancy test-tracking test-inventory test-sales test-purchasing test-billing test-import test-geo test-all \
         geo-build geo-switch geo-rollback geo-up \
@@ -127,6 +127,10 @@ run: build
 dev:
 	@echo "💻 Dev mode → http://localhost:8080"
 	go run ./cmd/server
+
+# The emulator's dev accounts (cmd/cli/seed_dev.sql) in the .env.platform database; idempotent.
+seed-dev:
+	go run ./cmd/cli seed-dev
 
 # ════════════════════════════════════════════════════════════════
 # TESTS

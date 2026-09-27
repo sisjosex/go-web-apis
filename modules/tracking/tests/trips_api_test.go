@@ -27,7 +27,7 @@ const EveryDayMask = 127
 
 // testTenant is the seeded tenant as the job walk sees it.
 func testTenant() coreJobs.Tenant {
-	return coreJobs.Tenant{ID: TestTenantID, DatabaseURL: config.ModularAppConfig.Core.DatabaseURL}
+	return coreJobs.Tenant{ID: TestTenantID, Slug: "test-tenant", DatabaseURL: config.ModularAppConfig.Core.DatabaseURL}
 }
 
 // dayOffset is the route-local date n days from today, for a route in zone.
