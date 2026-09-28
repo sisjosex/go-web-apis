@@ -237,6 +237,8 @@ func registerRouteRoutes(r *gin.RouterGroup, denyOrganization gin.HandlerFunc, t
 	r.GET("/routes/:route_id", trackingController.GetRoute)
 	r.GET("/routes/:route_id/status", trackingController.GetRouteRealtimeStatus)
 	r.GET("/routes/:route_id/stops", trackingController.ListRouteStops)
+	// The planned line (TRACK-028): read as the stops are, scoped the same way by its SP.
+	r.GET("/routes/:route_id/path", trackingController.GetRoutePath)
 	r.POST("/routes",
 		denyOrganization,
 		tenancyMW.RequirePermission(trackingPerms.RoutesWrite),
@@ -590,6 +592,7 @@ func registerOpenRouteRoutes(g *gin.RouterGroup, trackingController *controllers
 	g.GET("/routes/:route_id", trackingController.GetRoute)
 	g.GET("/routes/:route_id/status", trackingController.GetRouteRealtimeStatus)
 	g.GET("/routes/:route_id/stops", trackingController.ListRouteStops)
+	g.GET("/routes/:route_id/path", trackingController.GetRoutePath)
 	g.PATCH("/routes/:route_id", trackingController.UpdateRoute)
 	g.DELETE("/routes/:route_id", trackingController.DeleteRoute)
 	g.GET("/routes/:route_id/versions", trackingController.ListRouteVersions)

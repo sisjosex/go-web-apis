@@ -6,6 +6,7 @@
 //   - tenant:    Manage tenant instances and run tenant-specific migrations (requires .env.platform)
 //   - jobs:      Run one scheduled job and exit (requires .env.platform)
 //   - geo:       Import the address-search places of a geo build (.env.tenant)
+//   - tracking:  Tracking maintenance: queue the planned route lines (requires .env.platform)
 //   - seed-dev:  Write the emulator's dev accounts into the .env.platform database
 //
 // Each subcommand has its own handler file:
@@ -14,6 +15,7 @@
 //   - tenant_mgmt.go:  Tenant management and operations
 //   - jobs.go:         Scheduled jobs cron runs one at a time
 //   - geo.go:          Geo places import
+//   - tracking.go:     Tracking maintenance
 //   - seed_dev.go:     Dev accounts (seed_dev.sql)
 //   - main.go:         CLI routing and help (this file)
 package main
@@ -43,6 +45,8 @@ func main() {
 		CmdJobs(args)
 	case "geo":
 		CmdGeo(args)
+	case "tracking":
+		CmdTracking(args)
 	case "seed-dev":
 		CmdSeedDev(args)
 	case "help", "h", "-h", "--help":
@@ -65,6 +69,7 @@ func printMainUsage() {
 	fmt.Println("  tenant, t       Manage tenant instances and run tenant migrations")
 	fmt.Println("  jobs, j         Run a scheduled job once (cron calls these)")
 	fmt.Println("  geo             Import a geo build's places into geo.places")
+	fmt.Println("  tracking        Tracking maintenance (paths backfill)")
 	fmt.Println("  seed-dev        Write the emulator's dev accounts (idempotent)")
 	fmt.Println("  help, -h        Show this help message")
 	fmt.Println("\nExamples:")
@@ -74,5 +79,6 @@ func printMainUsage() {
 	fmt.Println("  go run ./cmd/cli tenant -migrate all")
 	fmt.Println("  go run ./cmd/cli jobs document-alerts")
 	fmt.Println("  go run ./cmd/cli geo import docker/geo/data/current/places.geojsonl")
+	fmt.Println("  go run ./cmd/cli tracking paths backfill")
 	fmt.Println("\nRun 'go run ./cmd/cli <subcommand> -h' for subcommand help")
 }

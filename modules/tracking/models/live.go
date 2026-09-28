@@ -19,6 +19,7 @@ type LiveVehicle struct {
 	VehicleID    uuid.UUID  `json:"vehicle_id"`
 	LicensePlate string     `json:"license_plate"`
 	TripID       *uuid.UUID `json:"trip_id"`
+	RouteID      *uuid.UUID `json:"route_id"`
 	RouteName    *string    `json:"route_name"`
 	Lat          float64    `json:"lat"`
 	Lng          float64    `json:"lng"`

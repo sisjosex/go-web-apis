@@ -42,8 +42,8 @@ Setup is human-only: copy `.env.example` → `.env.platform` / `.env.tenant`, th
 | Tenant | `cmd/server -mode=tenant` | `.env.tenant` | 9080 | core auth users tracking inventory sales purchasing geo |
 
 One binary, one `-mode` flag: `cmd/platform` and `cmd/tenant` have not existed for some time. The
-sibling `cmd/cli` carries `migration` (generate), `migrate` (apply, one shot), `tenant`, `jobs` and
-`geo import`.
+sibling `cmd/cli` carries `migration` (generate), `migrate` (apply, one shot), `tenant`, `jobs`,
+`geo import` and `tracking paths backfill`.
 
 **Roles (INFRA-001).** `-role` (flag > `APP_ROLE` > `all`) picks what a process runs: `api`, `worker`
 (asynq handlers + outbox relay + GPS stream consumer), `scheduler` (periodic entries, fired only while it holds the
@@ -62,6 +62,15 @@ makes the change, in its transaction. The relay publishes it as asynq task `outb
 `tracking:trips-materialise` entry (02:00 UTC) for every route. Both are clamped to each route's local
 today..today+14 (`routes.timezone`, IANA). An SP that changes a route's plan or riders writes
 `route.changed` via `tracking.fn_route_changed` and never touches trips itself.
+
+**Planned route line (TRACK-028).** `route_versions` keeps the line by streets (`planned_polyline`
+precision 6, `planned_distance_m`, `planned_legs [{distance_m, duration_s}]`, `path_source`
+valhalla|fallback, `path_points_hash`, `path_computed_at`). The `outbox:route.changed` handler, after the
+trips, recomputes every version in force from `date_from` (`jobs.PathPlanner`): an unchanged points hash
+costs no router call; router down or no route → straight line `fallback` and the task fails, so asynq
+retries it. `GET /tracking/routes/:id/path?date=` (`sp_get_route_path`, scoped as the stops) →
+`{path | null}`, `ETag` = version + `path_computed_at`, `If-None-Match` → 304 (CORS allows it and exposes
+`ETag`). `cli tracking paths backfill` writes a `route.changed` row per route with an uncomputed version.
 
 Trips move over HTTP (TRACK-020): `POST /trips/:id/start|complete|cancel`, `/trip-stops/:id/arrive|skip`,
 `/trip-stop-tasks/:id/done|no-show` (body `client_op_id`, idempotent), `PATCH /trips/:id` (override →

@@ -107,6 +107,7 @@ const (
 	VehicleListFailed    = "tracking.vehicle.list.failed"
 	RouteListFailed      = "tracking.route.list.failed"
 	RouteStopListFailed  = "tracking.route-stop.list.failed"
+	RoutePathReadFailed  = "tracking.route-path.read.failed"
 	RiderListFailed      = "tracking.rider.list.failed"
 	AssignmentListFailed = "tracking.assignment.list.failed"
 

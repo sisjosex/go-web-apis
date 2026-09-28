@@ -43,11 +43,12 @@ func (ws *WebServerService) setupServer() {
 	ws.Server.SetTrustedProxies([]string{"127.0.0.1"})
 
 	// CORS — origins via ALLOWED_ORIGINS env var (default: http://localhost:3000)
+	// If-None-Match in, ETag out: a cached read (TRACK-028's route line) is revalidated by the page itself.
 	ws.Server.Use(cors.New(cors.Config{
 		AllowOrigins:     coreConf.AllowedOrigins,
 		AllowMethods:     []string{"GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"},
-		AllowHeaders:     []string{"Origin", "Content-Type", "Authorization", "Accept-Language", "X-Tenant-Slug"},
-		ExposeHeaders:    []string{"Content-Length"},
+		AllowHeaders:     []string{"Origin", "Content-Type", "Authorization", "Accept-Language", "X-Tenant-Slug", "If-None-Match"},
+		ExposeHeaders:    []string{"Content-Length", "ETag"},
 		AllowCredentials: true,
 	}))
 }

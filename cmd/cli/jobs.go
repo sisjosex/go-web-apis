@@ -76,15 +76,9 @@ func runDocumentAlerts() error {
 	dbService.InitDatabase(ctx)
 	defer dbService.CloseDatabase(ctx)
 
-	listed, err := tenancyRepos.NewTenantRepository(dbService).ListTenantsWithCustomDB(ctx)
+	tenants, err := jobTenants(ctx, dbService)
 	if err != nil {
-		return fmt.Errorf("failed to list tenants: %w", err)
-	}
-	tenants := make([]coreJobs.Tenant, 0, len(listed))
-	for _, t := range listed {
-		if t.DatabaseURL != nil && *t.DatabaseURL != "" {
-			tenants = append(tenants, coreJobs.Tenant{ID: t.ID.String(), Slug: t.Slug, DatabaseURL: *t.DatabaseURL})
-		}
+		return err
 	}
 
 	failed := 0
@@ -103,4 +97,19 @@ func runDocumentAlerts() error {
 	}
 	fmt.Printf("✅ Document alerts complete (%d tenants)\n", len(tenants))
 	return nil
+}
+
+// jobTenants answers every tenant with its own database: the walk the worker and scheduler make.
+func jobTenants(ctx context.Context, dbService coreServices.DatabaseService) ([]coreJobs.Tenant, error) {
+	listed, err := tenancyRepos.NewTenantRepository(dbService).ListTenantsWithCustomDB(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("failed to list tenants: %w", err)
+	}
+	tenants := make([]coreJobs.Tenant, 0, len(listed))
+	for _, t := range listed {
+		if t.DatabaseURL != nil && *t.DatabaseURL != "" {
+			tenants = append(tenants, coreJobs.Tenant{ID: t.ID.String(), Slug: t.Slug, DatabaseURL: *t.DatabaseURL})
+		}
+	}
+	return tenants, nil
 }

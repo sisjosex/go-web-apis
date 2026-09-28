@@ -832,3 +832,16 @@ func LinkPortalGuardian(t *testing.T, helper *testhelpers.ApiTestHelper, riderID
 func CleanTrackingDatabase(helper *testhelpers.ApiTestHelper) error {
 	return helper.CleanDatabaseForSchemas("tracking")
 }
+
+// BackfillRowsFor counts the route.changed outbox rows the paths backfill wrote for a route — dateless
+// ones (TRACK-028). No endpoint reads the outbox.
+func BackfillRowsFor(t *testing.T, helper *testhelpers.ApiTestHelper, routeID string) int {
+	t.Helper()
+	var n int
+	if err := helper.DB().QueryRow(context.Background(),
+		`SELECT count(*) FROM tracking.outbox WHERE topic = 'route.changed' AND payload->>'route_id' = $1 AND payload->>'date_from' IS NULL`,
+		routeID).Scan(&n); err != nil {
+		t.Fatalf("count backfill rows: %v", err)
+	}
+	return n
+}

@@ -1292,6 +1292,66 @@ func (ctrl *TrackingController) ListRouteStops(c *gin.Context) {
 	c.JSON(http.StatusOK, stops)
 }
 
+// GetRoutePath godoc
+// @Summary The planned line of a route on a date
+// @Description The line by streets through the stops of the route version in force on `date` — the route's local today when unset (TRACK-028). `path` is null while no line is stored. ETag is the version and when its line was stored; sending it back as If-None-Match answers 304
+// @Tags Tracking - Route Stops
+// @Produce json
+// @Security BearerAuth
+// @Param route_id path string true "Route ID (UUID)"
+// @Param date query string false "The day whose version is wanted (YYYY-MM-DD); defaults to the route's today"
+// @Param If-None-Match header string false "ETag of the line the client holds"
+// @Success 200 {object} models.RoutePathResponse
+// @Success 304
+// @Failure 400 {object} coreErrors.ErrorResponse
+// @Failure 403 {object} coreErrors.ErrorResponse
+// @Failure 404 {object} coreErrors.ErrorResponse
+// @Failure 500 {object} coreErrors.ErrorResponse
+// @Router /tracking/routes/{route_id}/path [get]
+func (ctrl *TrackingController) GetRoutePath(c *gin.Context) {
+	tenantID, ok := ctrl.requireTenantID(c)
+	if !ok {
+		return
+	}
+
+	routeID, err := uuid.Parse(c.Param("route_id"))
+	if err != nil {
+		c.JSON(http.StatusBadRequest, coreErrors.BuildErrorSingle(c, coreErrors.InvalidUUID))
+		return
+	}
+	var query models.RoutePathQuery
+	if err := c.ShouldBindQuery(&query); err != nil {
+		c.JSON(http.StatusBadRequest, coreErrors.BuildErrorDetail(c, "validation.invalid", err.Error()))
+		return
+	}
+
+	version, err := ctrl.trackingService.GetRoutePath(c.Request.Context(), tenantID, routeID, query.Date, ctrl.scopeUserID(c))
+	if err != nil {
+		if scopeRefused(c, err) {
+			return
+		}
+		var trackingErr *trackingErrors.TrackingError
+		if errors.As(err, &trackingErr) && trackingErr.Code == trackingErrors.RouteNotFound {
+			c.JSON(http.StatusNotFound, coreErrors.BuildError(c, err))
+			return
+		}
+		c.JSON(http.StatusInternalServerError, coreErrors.BuildError(c, err))
+		return
+	}
+	etag := version.ETag()
+	c.Header("ETag", etag)
+	c.Header("Cache-Control", "private, max-age=0, must-revalidate")
+	if c.GetHeader("If-None-Match") == etag {
+		c.Status(http.StatusNotModified)
+		return
+	}
+	response := models.RoutePathResponse{}
+	if version != nil {
+		response.Path = version.Path
+	}
+	c.JSON(http.StatusOK, response)
+}
+
 // ==================== RIDERS CRUD ====================
 
 // CreateRider godoc

@@ -200,6 +200,10 @@ func (s *TrackingService) ListRouteStops(ctx context.Context, tenantID uuid.UUID
 	return s.trackingRepo.ListRouteStops(ctx, tenantID, routeID, date, scopeUserID)
 }
 
+func (s *TrackingService) GetRoutePath(ctx context.Context, tenantID, routeID uuid.UUID, date *string, scopeUserID *uuid.UUID) (*models.RoutePathVersion, error) {
+	return s.trackingRepo.GetRoutePath(ctx, tenantID, routeID, date, scopeUserID)
+}
+
 // ==================== RIDERS CRUD ====================
 
 func (s *TrackingService) CreateRider(ctx context.Context, tenantID uuid.UUID, dto *models.CreateRiderDto, scopeUserID *uuid.UUID) (*models.Rider, error) {

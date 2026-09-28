@@ -57,8 +57,11 @@ func ApplyRouteChanged(ctx context.Context, db coreServices.DatabaseService, ten
 
 // RouteChangedHandler is the TaskRouteChanged handler. The row carries no tenant — it lives in the
 // tenant's own database — so the tenant comes from the TaskID the relay gave it, <tenant>:<id>.
-// Delivery is at least once and the materialiser is idempotent, so a repeat is harmless.
-func RouteChangedHandler(db coreServices.DatabaseService, tenants coreJobs.TenantLister) asynq.HandlerFunc {
+// It rebuilds the trips, then the planned line of every version in force from date_from (TRACK-028):
+// a line that fell back to straight fails the task, so asynq retries both with backoff. Delivery is
+// at least once, the materialiser is idempotent and unchanged points cost no router call, so a repeat
+// is harmless.
+func RouteChangedHandler(db coreServices.DatabaseService, tenants coreJobs.TenantLister, paths PathPlanner) asynq.HandlerFunc {
 	return func(ctx context.Context, task *asynq.Task) error {
 		var payload RouteChanged
 		if err := json.Unmarshal(task.Payload(), &payload); err != nil {
@@ -72,8 +75,12 @@ func RouteChangedHandler(db coreServices.DatabaseService, tenants coreJobs.Tenan
 		}
 		for _, tenant := range list {
 			if tenant.ID == tenantID {
-				_, err := ApplyRouteChanged(ctx, db, tenant, payload)
-				return err
+				if _, err := ApplyRouteChanged(ctx, db, tenant, payload); err != nil {
+					return err
+				}
+				routeID, _ := uuid.Parse(payload.RouteID)
+				from, _ := optionalDate(payload.DateFrom)
+				return paths.ApplyRoutePaths(ctx, db, tenant, routeID, from)
 			}
 		}
 		// The tenant is gone: there is nothing left to rebuild.

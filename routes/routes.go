@@ -178,10 +178,12 @@ func baseDeps(r *gin.Engine, dbService coreServices.DatabaseService, valkey core
 func useGlobalMiddleware(r *gin.Engine, valkey coreServices.ValkeyService) {
 	// CORS — must be registered before the rate limiter so preflight OPTIONS
 	// requests are handled before they hit the limiter.
+	// If-None-Match in, ETag out: a cached read (TRACK-028's route line) is revalidated by the page itself.
 	r.Use(cors.New(cors.Config{
 		AllowOrigins:     config.ModularAppConfig.Core.AllowedOrigins,
 		AllowMethods:     []string{"GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"},
-		AllowHeaders:     []string{"Origin", "Content-Type", "Authorization", "Accept-Language", "X-Tenant-Slug"},
+		AllowHeaders:     []string{"Origin", "Content-Type", "Authorization", "Accept-Language", "X-Tenant-Slug", "If-None-Match"},
+		ExposeHeaders:    []string{"ETag"},
 		AllowCredentials: true,
 		MaxAge:           12 * time.Hour,
 	}))

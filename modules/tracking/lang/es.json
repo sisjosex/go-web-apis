@@ -50,6 +50,7 @@
   "tracking.vehicle.list.failed": "Error al obtener vehículos",
   "tracking.route.list.failed": "Error al obtener rutas",
   "tracking.route-stop.list.failed": "Error al obtener paradas de la ruta",
+  "tracking.route-path.read.failed": "Error al obtener el recorrido de la ruta",
   "tracking.rider.list.failed": "Error al obtener pasajeros",
   "tracking.assignment.list.failed": "Error al obtener asignaciones de pasajeros",
   "tracking.organization.not-found": "OrganizaciÃ³n no encontrada",

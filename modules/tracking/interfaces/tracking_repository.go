@@ -79,6 +79,8 @@ type TrackingRepository interface {
 
 	// Route Stops — the list a route runs on one date, read from its version (TRACK-007 D1)
 	ListRouteStops(ctx context.Context, tenantID uuid.UUID, routeID uuid.UUID, date *string, scopeUserID *uuid.UUID) ([]*models.RouteStop, error)
+	// The planned line of the version in force that day (TRACK-028)
+	GetRoutePath(ctx context.Context, tenantID, routeID uuid.UUID, date *string, scopeUserID *uuid.UUID) (*models.RoutePathVersion, error)
 
 	// Riders CRUD
 	CreateRider(ctx context.Context, tenantID uuid.UUID, dto *models.CreateRiderDto, scopeUserID *uuid.UUID) (*models.Rider, error)

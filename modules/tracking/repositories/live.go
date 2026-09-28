@@ -22,7 +22,7 @@ func (r *TrackingRepository) LiveFleet(ctx context.Context, tenantID uuid.UUID, 
 	}
 	return pgx.CollectRows(rows, func(row pgx.CollectableRow) (models.LiveVehicle, error) {
 		var v models.LiveVehicle
-		err := row.Scan(&v.VehicleID, &v.LicensePlate, &v.TripID, &v.RouteName, &v.Lat, &v.Lng, &v.Speed, &v.Heading, &v.RecordedAt)
+		err := row.Scan(&v.VehicleID, &v.LicensePlate, &v.TripID, &v.RouteID, &v.RouteName, &v.Lat, &v.Lng, &v.Speed, &v.Heading, &v.RecordedAt)
 		return v, err
 	})
 }

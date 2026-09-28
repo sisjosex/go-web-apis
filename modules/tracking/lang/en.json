@@ -50,6 +50,7 @@
   "tracking.vehicle.list.failed": "Failed to retrieve vehicles",
   "tracking.route.list.failed": "Failed to retrieve routes",
   "tracking.route-stop.list.failed": "Failed to retrieve route stops",
+  "tracking.route-path.read.failed": "Failed to retrieve the route line",
   "tracking.rider.list.failed": "Failed to retrieve riders",
   "tracking.assignment.list.failed": "Failed to retrieve rider assignments",
   "tracking.organization.not-found": "Organization not found",
