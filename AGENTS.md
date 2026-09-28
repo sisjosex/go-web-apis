@@ -117,6 +117,12 @@ The gateway logs one line per socket open and close.
 Main DB holds `auth.*` + `tenancy.*`; one DB per tenant holds business schemas only. JWT carries
 `user_id + session_id`; tenancy middleware resolves `tenant_id` from `X-Tenant-Slug` per request.
 
+**Sessions (MOBILE-011).** The access token is not checked against the session per request: an ended
+session goes at its next `POST /auth/refresh_token`, which validates it, stamps `last_active` and returns a
+new `refresh_token` too (lifetime restarts, so a client in use never signs in again). `PUT /auth/password`
+ends every other session, a reset ends all. `POST /auth/password/reset` answers `true` for any email and
+never the token; `POST /auth/otp/verify` for an email without an active account is `otp.invalid`.
+
 Middleware order: CORS → rate limit → language (`lang`) → auth (`user_id`) → tenant (`tenant_id`) →
 optional `require-module-access`.
 
@@ -242,6 +248,9 @@ bottom of `.env.example`. PITR, PgBouncer and monitoring are INFRA-004.
   connection and never answer, so go-redis times out while `valkey-cli` inside the container works.
 - Docker Desktop cannot run Valhalla's tile build on a Windows bind mount (its memory-mapped scratch
   files segfault): `docker/geo/build.sh` builds on the container's disk and copies results out.
+- `.env.platform` has SMTP off, so OTP requests answer 503. To sign in by code locally, point `SMTP_*`
+  at any sink that accepts `AUTH` (`net/smtp` refuses a server without it) and start with
+  `SMTP_ENABLED=true` in the environment — env wins over the file.
 - In `modules/tracking/tests/` and `modules/geo/tests/` a test file must sort after `helpers.go`
   (`helpers.go` declares the `_test` package; an earlier `_test.go` file is read as an external test and
   the package fails to load).

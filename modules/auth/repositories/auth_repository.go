@@ -474,7 +474,8 @@ func (r *authRepository) ChangePassword(changePasswordDto authModels.ChangePassw
 SELECT * FROM auth.sp_change_password(
 p_user_id := $1,
 p_password_current := $2,
-p_password_new := $3
+p_password_new := $3,
+p_current_session_id := $4
 )
 `
 
@@ -482,6 +483,7 @@ p_password_new := $3
 		changePasswordDto.UserId,
 		changePasswordDto.PasswordCurrent,
 		changePasswordDto.PasswordNew,
+		changePasswordDto.CurrentSessionId,
 	}
 
 	row := r.dbService.QueryRow(context.Background(), query, params...)

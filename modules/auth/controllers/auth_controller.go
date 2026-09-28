@@ -1,6 +1,7 @@
 package controllers
 
 import (
+	"errors"
 	"josex/web/config"
 	authErrors "josex/web/modules/auth/errors"
 	authInterfaces "josex/web/modules/auth/interfaces"
@@ -16,6 +17,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/ua-parser/uap-go/uaparser"
 )
 
@@ -270,8 +272,21 @@ func (uc *AuthController) RefreshToken(c *gin.Context) {
 		return
 	}
 
+	// A new refresh token rides along (MOBILE-011 D4): its lifetime restarts on every refresh, so a
+	// session ends after JWT_REFRESH_EXPIRATION_HOURS of disuse, never while it is being used.
+	systemRole := coreModels.SystemRoleUser
+	if role, ok := claims["system_role"].(string); ok {
+		systemRole = role
+	}
+	newRefreshToken, err := uc.jwtService.GenerateRefreshToken(userID, sessionID, systemRole)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, coreErrors.BuildError(c, err))
+		return
+	}
+
 	c.JSON(http.StatusOK, &authModels.RefreshTokenResponse{
-		AccessToken: newAccessToken,
+		AccessToken:  newAccessToken,
+		RefreshToken: newRefreshToken,
 	})
 }
 
@@ -587,6 +602,10 @@ func (uc *AuthController) ChangePassword(ctx *gin.Context) {
 		PasswordCurrent: changePasswordEequestDto.PasswordCurrent,
 		PasswordNew:     changePasswordEequestDto.PasswordNew,
 	}
+	// The session making the change stays signed in; every other one ends in the same SP call.
+	if sessionID, err := uuid.Parse(ctx.GetString("session_id")); err == nil {
+		changePasswordDto.CurrentSessionId = &sessionID
+	}
 
 	changed, err := uc.authService.ChangePassword(changePasswordDto)
 	if err != nil {
@@ -604,7 +623,9 @@ func (uc *AuthController) ChangePassword(ctx *gin.Context) {
 // @Accept  json
 // @Produce  json
 // @Param request body authModels.PasswordResetRequestDto true "Account data"
-// @Success 200 {object} authModels.PasswordResetTokenRequestDto
+// @Description The answer is `true` whether or not the email has an account, and never carries the
+// @Description token: the link in the email is the only way to it.
+// @Success 200 {object} bool
 // @Failure 400 {object} coreErrors.ErrorResponse
 // @Router /auth/password/reset [post]
 // @Security ApiKeyAuth
@@ -624,8 +645,14 @@ func (uc *AuthController) GeneratePasswordResetToken(ctx *gin.Context) {
 
 	token, err := uc.authService.GeneratePasswordResetToken(passwordResetRequestDto, tx)
 	if err != nil {
-		ctx.JSON(http.StatusBadRequest, coreErrors.BuildError(ctx, err))
 		tx.Rollback(ctx)
+		// An unknown email gets the answer a known one does, and no email.
+		var pgErr *pgconn.PgError
+		if errors.As(err, &pgErr) && pgErr.Message == authErrors.UserPasswordResetAccountMissing {
+			ctx.JSON(http.StatusOK, true)
+			return
+		}
+		ctx.JSON(http.StatusBadRequest, coreErrors.BuildError(ctx, err))
 		return
 	}
 
@@ -658,7 +685,7 @@ func (uc *AuthController) GeneratePasswordResetToken(ctx *gin.Context) {
 		return
 	}
 
-	ctx.JSON(http.StatusOK, token)
+	ctx.JSON(http.StatusOK, true)
 }
 
 // ValidateResetToken godoc

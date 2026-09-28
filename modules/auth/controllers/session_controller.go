@@ -1,11 +1,14 @@
 package controllers
 
 import (
+	"errors"
 	"net/http"
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5/pgconn"
 
+	authErrors "josex/web/modules/auth/errors"
 	authInterfaces "josex/web/modules/auth/interfaces"
 	authModels "josex/web/modules/auth/models"
 	coreErrors "josex/web/modules/core/errors"
@@ -50,6 +53,15 @@ func (sc *SessionController) GetActiveSessions(c *gin.Context) {
 		return
 	}
 
+	// None is `[]`, never `null`; the session this request came with says so.
+	if sessions == nil {
+		sessions = []authModels.UserSession{}
+	}
+	current := c.GetString("session_id")
+	for i := range sessions {
+		sessions[i].IsCurrent = sessions[i].SessionID.String() == current
+	}
+
 	c.JSON(http.StatusOK, sessions)
 }
 
@@ -62,8 +74,9 @@ func (sc *SessionController) GetActiveSessions(c *gin.Context) {
 // @Param Authorization header string true "Bearer Token"
 // @Param id path string true "Session ID (UUID)"
 // @Success 200 {object} map[string]bool
-// @Failure 400 {object} coreErrors.ErrorResponse
+// @Failure 400 {object} coreErrors.ErrorResponse "Already signed out"
 // @Failure 401 {object} coreErrors.ErrorResponse
+// @Failure 404 {object} coreErrors.ErrorResponse "No such session for this user"
 // @Router /auth/sessions/{id} [delete]
 // @Security ApiKeyAuth
 func (sc *SessionController) LogoutSession(c *gin.Context) {
@@ -83,7 +96,7 @@ func (sc *SessionController) LogoutSession(c *gin.Context) {
 
 	err = sc.authService.LogoutSession(userID, sessionID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, coreErrors.BuildError(c, err))
+		c.JSON(logoutSessionStatus(err), coreErrors.BuildError(c, err))
 		return
 	}
 
@@ -127,4 +140,20 @@ func (sc *SessionController) LogoutAllSessions(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, gin.H{"logged_out_count": count})
+}
+
+// logoutSessionStatus maps the SP's session errors: another user's session is as absent as a missing
+// one (404), a session already signed out is the caller's mistake (400), anything else is ours.
+func logoutSessionStatus(err error) int {
+	var pgErr *pgconn.PgError
+	if !errors.As(err, &pgErr) {
+		return http.StatusInternalServerError
+	}
+	switch pgErr.Message {
+	case authErrors.SessionNotFound, authErrors.SessionUnauthorized:
+		return http.StatusNotFound
+	case authErrors.SessionAlreadyLoggedOut:
+		return http.StatusBadRequest
+	}
+	return http.StatusInternalServerError
 }

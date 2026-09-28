@@ -41,6 +41,8 @@
   "otp.provider.unavailable": "No se pudo enviar el código ahora. Intenta de nuevo en unos minutos",
   "otp.phone.not-registered": "Este número no tiene una cuenta. Ingresa con tu email",
   "otp.code.invalid": "Formato de código OTP inválido",
+  "otp.invalid": "El código no es correcto",
+  "otp.expired": "El código venció. Pedí uno nuevo",
   "phone.already-registered": "Este número de teléfono ya está registrado",
   "password-reset.email.subject": "Restablecé tu contraseña",
   "password-reset.email.title": "Restablecé tu contraseña",

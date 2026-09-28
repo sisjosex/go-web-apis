@@ -581,16 +581,10 @@ func TestGeneratePasswordResetTokenSuccess(t *testing.T) {
 
 	w := helper.DoRequest("POST", "/auth/password/reset", body, map[string]string{})
 
-	// Should return 200 OK with token
-	if w.Code == http.StatusOK {
-		var response map[string]interface{}
-		err := json.Unmarshal(w.Body.Bytes(), &response)
-		assert.NoError(t, err, "Should unmarshal response")
-		assert.NotEmpty(t, response["token"], "Response should contain token")
-		t.Logf("✅ Password reset token generated successfully")
-	} else {
-		assert.Equal(t, http.StatusOK, w.Code, fmt.Sprintf("Expected 200, got %d: %s", w.Code, w.Body.String()))
-	}
+	// 200 `true`: the token goes out by email only, never in the answer (MOBILE-011)
+	assert.Equal(t, http.StatusOK, w.Code, fmt.Sprintf("Expected 200, got %d: %s", w.Code, w.Body.String()))
+	assert.Equal(t, "true", w.Body.String())
+	assert.NotEmpty(t, resetTokenFor(t, helper, testEmail), "a reset token should be stored")
 }
 
 // TestGeneratePasswordResetTokenUserNotFound tests reset for non-existent user
@@ -604,9 +598,9 @@ func TestGeneratePasswordResetTokenUserNotFound(t *testing.T) {
 
 	w := helper.DoRequest("POST", "/auth/password/reset", body, map[string]string{})
 
-	// May return various codes depending on implementation and email template
-	assert.True(t, w.Code == http.StatusOK || w.Code == http.StatusNotFound || w.Code == http.StatusBadRequest,
-		fmt.Sprintf("Expected 200/404/400, got %d", w.Code))
+	// The same answer a known email gets: the endpoint does not tell which emails exist
+	assert.Equal(t, http.StatusOK, w.Code, w.Body.String())
+	assert.Equal(t, "true", w.Body.String())
 }
 
 // TestResetPasswordWithTokenSuccess tests resetting password with token
@@ -644,12 +638,7 @@ func TestValidateResetTokenSuccess(t *testing.T) {
 	if genW.Code != http.StatusOK {
 		t.Skipf("POST /auth/password/reset returned %d — skipping validate test", genW.Code)
 	}
-
-	var genResp map[string]interface{}
-	err := json.Unmarshal(genW.Body.Bytes(), &genResp)
-	assert.NoError(t, err)
-	token, ok := genResp["token"].(string)
-	assert.True(t, ok && token != "", "Expected non-empty token in response")
+	token := resetTokenFor(t, helper, testEmail)
 
 	// Validate the freshly generated token
 	w := helper.DoRequest("GET", "/auth/password/reset?token="+token, nil, map[string]string{})
@@ -691,12 +680,7 @@ func TestValidateResetTokenUsed(t *testing.T) {
 	if genW.Code != http.StatusOK {
 		t.Skipf("POST /auth/password/reset returned %d — skipping used-token test", genW.Code)
 	}
-
-	var genResp map[string]interface{}
-	err := json.Unmarshal(genW.Body.Bytes(), &genResp)
-	assert.NoError(t, err)
-	token, ok := genResp["token"].(string)
-	assert.True(t, ok && token != "", "Expected non-empty token in response")
+	token := resetTokenFor(t, helper, testEmail)
 
 	// Consume the token
 	resetBody := map[string]interface{}{

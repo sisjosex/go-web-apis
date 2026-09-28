@@ -24,6 +24,7 @@ const (
 	UserChangePasswordError             = "user.change-password.failed"
 	UserPasswordResetError              = "user.password-reset.failed"
 	UserPasswordResetTokenInvalid       = "reset-password.token-invalid"
+	UserPasswordResetAccountMissing     = "password.reset.account-not-exists"
 	UserForgorPasswordEmailSendingError = "user.forgot-password.sending-email-failed"
 
 	// Client declaration (TRACK-015 D2)
@@ -60,5 +61,7 @@ const (
 	OtpProviderUnavailable = "otp.provider.unavailable"
 	OtpPhoneNotRegistered  = "otp.phone.not-registered"
 	OtpCodeInvalid         = "otp.code.invalid"
+	// OtpCodeWrong is the SP's own wrong-code error, also said for a code that opens no account.
+	OtpCodeWrong           = "otp.invalid"
 	PhoneAlreadyRegistered = "phone.already-registered"
 )

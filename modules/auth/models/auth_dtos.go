@@ -70,6 +70,9 @@ type RefreshTokenRequestDto struct {
 // RefreshTokenResponse after successful refresh
 type RefreshTokenResponse struct {
 	AccessToken *string `json:"access_token"` // JWT token
+	// RefreshToken replaces the one sent: each refresh restarts its lifetime, so a client in use
+	// never has to sign in again (MOBILE-011 D4). The old one stays valid until it expires.
+	RefreshToken *string `json:"refresh_token"`
 }
 
 // LogoutSessionDto for logging out a specific session
@@ -105,6 +108,8 @@ type ChangePasswordDto struct {
 	UserId          *uuid.UUID `json:"user_id,omitempty" binding:"omitempty,uuidv4"`
 	PasswordCurrent string     `json:"password_current" binding:"required"`
 	PasswordNew     string     `json:"password_new" binding:"required"`
+	// The caller's session: it survives the change, every other session of the user ends.
+	CurrentSessionId *uuid.UUID `json:"-"`
 }
 
 // PasswordResetRequestDto to request password reset
@@ -173,6 +178,8 @@ type UserSession struct {
 	LastActive coreModels.DateTime  `json:"last_active"`
 	LogoutTime *coreModels.DateTime `json:"logout_time,omitempty"`
 	IsActive   bool                 `json:"is_active"`
+	// IsCurrent marks the session the request was made with (MOBILE-011: "This device").
+	IsCurrent bool `json:"is_current"`
 }
 
 // ============================================================================

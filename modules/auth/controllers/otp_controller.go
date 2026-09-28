@@ -14,6 +14,7 @@ import (
 	coreUtils "josex/web/modules/core/utils"
 
 	"github.com/gin-gonic/gin"
+	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/ua-parser/uap-go/uaparser"
 )
@@ -112,7 +113,9 @@ func (uc *OtpController) requestOtp(c *gin.Context, channel string) {
 		UserAgent:   userAgent,
 	}
 
-	response, err := uc.otpService.RequestOtp(c.Request.Context(), otpDto)
+	// The gin context, not c.Request.Context(): LanguageMiddleware keeps `lang` in gin's keys, and
+	// the code's email is written in it.
+	response, err := uc.otpService.RequestOtp(c, otpDto)
 	if err != nil {
 		status, body := requestOtpError(c, err)
 		c.JSON(status, body)
@@ -184,6 +187,12 @@ func (uc *OtpController) VerifyOtp(c *gin.Context) {
 	response, err := uc.otpService.VerifyOtp(c.Request.Context(), otpVerifyDto)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, coreErrors.BuildError(c, err))
+		return
+	}
+	// A right code for an email with no active account opens nothing, and says so the way a wrong
+	// code does — the answer must not tell which emails exist.
+	if response.UserId == uuid.Nil {
+		c.JSON(http.StatusBadRequest, coreErrors.BuildErrorSingle(c, authErrors.OtpCodeWrong))
 		return
 	}
 
