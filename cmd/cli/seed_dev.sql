@@ -43,3 +43,53 @@ BEGIN
         END IF;
     END LOOP;
 END $$;
+
+-- mobile.school@test.local   / School123*    — role `organization`, admin of Colegio Santa Rosa.
+-- mobile.employer@test.local / Employer123*  — role `organization`, admin of Minera Andina S.A.
+-- An organization that does not exist is skipped: both were made by hand, like the tenant.
+DO $$
+DECLARE
+    v_tenant  UUID;
+    v_user    UUID;
+    v_org     UUID;
+    v_account RECORD;
+BEGIN
+    SELECT id INTO v_tenant FROM tenancy.tenants WHERE slug = 'mi-negocio';
+    IF v_tenant IS NULL THEN
+        RETURN;
+    END IF;
+
+    FOR v_account IN
+        SELECT * FROM (VALUES
+            ('mobile.school@test.local', 'School123*', 'Colegio', 'Dev', 'Colegio Santa Rosa'),
+            ('mobile.employer@test.local', 'Employer123*', 'Empleador', 'Dev', 'Minera Andina S.A.')
+        ) AS a(email, password, first_name, last_name, organization)
+    LOOP
+        SELECT id INTO v_org FROM tracking.organizations
+        WHERE tenant_id = v_tenant AND name = v_account.organization;
+        IF v_org IS NULL THEN
+            RAISE NOTICE 'seed-dev: no organization %, % not seeded', v_account.organization, v_account.email;
+            CONTINUE;
+        END IF;
+
+        SELECT id INTO v_user FROM auth.users WHERE LOWER(email) = v_account.email;
+        IF v_user IS NULL THEN
+            INSERT INTO auth.users (first_name, last_name, email, password)
+            VALUES (v_account.first_name, v_account.last_name, v_account.email,
+                    crypt(v_account.password, gen_salt('bf')))
+            RETURNING id INTO v_user;
+        ELSE
+            UPDATE auth.users
+            SET password = crypt(v_account.password, gen_salt('bf')), is_active = TRUE, deleted_at = NULL
+            WHERE id = v_user;
+        END IF;
+
+        INSERT INTO tenancy.tenant_users (tenant_id, user_id, role)
+        VALUES (v_tenant, v_user, 'organization')
+        ON CONFLICT (tenant_id, user_id) DO UPDATE SET role = 'organization', is_active = TRUE;
+
+        INSERT INTO tracking.organization_members (organization_id, user_id, role)
+        VALUES (v_org, v_user, 'admin')
+        ON CONFLICT (organization_id, user_id) DO UPDATE SET role = 'admin';
+    END LOOP;
+END $$;
