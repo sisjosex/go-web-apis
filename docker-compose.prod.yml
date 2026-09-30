@@ -5,6 +5,10 @@
 # per-server settings from `.env.platform` / `.env.tenant`. Both of those must
 # point DATABASE_URL at the `postgres` service, not at localhost.
 #
+# Default: the platform server alone (PostgreSQL, Valkey, api-platform, worker,
+# scheduler, backup, Caddy). The tenant server — api-tenant, api-realtime,
+# Valhalla, its migrate job — starts with COMPOSE_PROFILES=tenant in `.env`.
+#
 # The API image comes from GHCR, built by CI on every push to master; API_TAG in
 # `.env` pins the commit that runs (docker/README.md → Deploy).
 #
@@ -133,6 +137,7 @@ services:
 
   migrate-tenant:
     image: ghcr.io/sisjosex/api:${API_TAG:-latest}
+    profiles: [tenant]
     restart: "no"
     logging: *logging
     env_file:
@@ -189,6 +194,7 @@ services:
   # ============ TENANT API (Business) ============
   api-tenant:
     image: ghcr.io/sisjosex/api:${API_TAG:-latest}
+    profiles: [tenant]
     restart: unless-stopped
     env_file:
       - .env.tenant
@@ -226,6 +232,7 @@ services:
   # clients poll the snapshots until it is back. Scale it freely.
   api-realtime:
     image: ghcr.io/sisjosex/api:${API_TAG:-latest}
+    profiles: [tenant]
     restart: unless-stopped
     env_file:
       - .env.tenant
@@ -350,6 +357,7 @@ services:
   # box wants 2 GB of swap for the peaks (docker/geo/README.md).
   valhalla:
     image: ghcr.io/valhalla/valhalla:3.9.0
+    profiles: [tenant]
     restart: unless-stopped
     command: ["valhalla_service", "/valhalla/valhalla.json", "2"]
     mem_limit: 1g
@@ -376,8 +384,10 @@ services:
       - "443:443"
       - "443:443/udp"
     environment:
+      # A host given as http://… (an IP with no domain yet) is served on :80 only, no
+      # certificate. Without the tenant profile its site answers a name nobody resolves.
       PLATFORM_HOST: ${PLATFORM_HOST}
-      TENANT_HOST: ${TENANT_HOST}
+      TENANT_HOST: ${TENANT_HOST:-http://tenant.invalid}
       ACME_EMAIL: ${ACME_EMAIL}
     volumes:
       - ./docker/caddy/Caddyfile:/etc/caddy/Caddyfile:ro
@@ -386,10 +396,9 @@ services:
       - ${GEO_DATA_DIR:-./docker/geo/data}:/srv/geo:ro
       - caddy_data:/data
       - caddy_config:/config
+    # Only what every server runs: the tenant upstreams resolve per request.
     depends_on:
       - api-platform
-      - api-tenant
-      - api-realtime
 
 volumes:
   pgdata:
