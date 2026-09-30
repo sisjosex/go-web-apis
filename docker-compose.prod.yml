@@ -5,7 +5,11 @@
 # per-server settings from `.env.platform` / `.env.tenant`. Both of those must
 # point DATABASE_URL at the `postgres` service, not at localhost.
 #
-#   docker compose -f docker-compose.prod.yml up -d --build
+# The API image comes from GHCR, built by CI on every push to master; API_TAG in
+# `.env` pins the commit that runs (docker/README.md → Deploy).
+#
+#   docker compose -f docker-compose.prod.yml pull --ignore-buildable
+#   docker compose -f docker-compose.prod.yml up -d
 
 name: xanthops
 
@@ -114,10 +118,7 @@ services:
   # once, exit non-zero on failure, and the servers wait for them.
 
   migrate:
-    build:
-      context: .
-      dockerfile: Dockerfile
-    image: xanthops-api:${API_TAG:-latest}
+    image: ghcr.io/sisjosex/api:${API_TAG:-latest}
     restart: "no"
     logging: *logging
     env_file:
@@ -131,7 +132,7 @@ services:
         condition: service_healthy
 
   migrate-tenant:
-    image: xanthops-api:${API_TAG:-latest}
+    image: ghcr.io/sisjosex/api:${API_TAG:-latest}
     restart: "no"
     logging: *logging
     env_file:
@@ -152,7 +153,7 @@ services:
   # TENANCY_DATABASE_POOL_SIZE per tenant database it touches. Idle connections
   # close after 5 min, so the budget is spent on the tenants in use.
   api-platform:
-    image: xanthops-api:${API_TAG:-latest}
+    image: ghcr.io/sisjosex/api:${API_TAG:-latest}
     restart: unless-stopped
     env_file:
       - .env.platform
@@ -187,7 +188,7 @@ services:
 
   # ============ TENANT API (Business) ============
   api-tenant:
-    image: xanthops-api:${API_TAG:-latest}
+    image: ghcr.io/sisjosex/api:${API_TAG:-latest}
     restart: unless-stopped
     env_file:
       - .env.tenant
@@ -224,7 +225,7 @@ services:
   # 503 while Valkey is unreachable: every socket is closed 1012 then and the
   # clients poll the snapshots until it is back. Scale it freely.
   api-realtime:
-    image: xanthops-api:${API_TAG:-latest}
+    image: ghcr.io/sisjosex/api:${API_TAG:-latest}
     restart: unless-stopped
     env_file:
       - .env.tenant
@@ -262,7 +263,7 @@ services:
   # Valkey is unreachable. Scale api-worker freely; any number of schedulers
   # fire each periodic task once, since only the lease holder fires.
   api-worker:
-    image: xanthops-api:${API_TAG:-latest}
+    image: ghcr.io/sisjosex/api:${API_TAG:-latest}
     restart: unless-stopped
     env_file:
       - .env.platform
@@ -297,7 +298,7 @@ services:
         condition: service_completed_successfully
 
   api-scheduler:
-    image: xanthops-api:${API_TAG:-latest}
+    image: ghcr.io/sisjosex/api:${API_TAG:-latest}
     restart: unless-stopped
     env_file:
       - .env.platform

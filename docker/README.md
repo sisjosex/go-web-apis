@@ -132,10 +132,24 @@ echo '0 4 * * 0 cd /srv/xanthops && docker compose -f docker-compose.prod.yml pu
 
 ## Deploy
 
+The API image is built by CI (`.github/workflows/build.yml`) on every push to `master`
+and published as `ghcr.io/sisjosex/api:<commit sha>` and `:latest`. The package is
+private like the repo, so the box logs in once with a classic token that has only
+`read:packages`:
+
 ```sh
-cd /srv/xanthops && git pull && docker compose -f docker-compose.prod.yml up -d --build
+echo "$GHCR_TOKEN" | docker login ghcr.io -u sisjosex --password-stdin
 ```
 
-The image builds on the box: the module download layer is cached, only the compile
-step reruns. `docker compose ps` shows every service `healthy`; `docker stats` shows
-each one under its limit.
+A deploy pins the commit in `.env` and pulls; nothing compiles on the box:
+
+```sh
+cd /srv/xanthops && git pull \
+  && sed -i "s/^API_TAG=.*/API_TAG=<commit sha>/" .env \
+  && docker compose -f docker-compose.prod.yml pull --ignore-buildable \
+  && docker compose -f docker-compose.prod.yml up -d
+```
+
+Rollback is the same with the previous sha. `git pull` still brings the compose file,
+the Caddyfile and the init scripts; the image carries the code. `docker compose ps`
+shows every service `healthy`; `docker stats` shows each one under its limit.
