@@ -5,6 +5,13 @@
 web*
 bin/
 
+# Not part of the image (INFRA-004): the geo builds under docker/geo/data are
+# gigabytes the server would otherwise send to the builder on every deploy; the
+# backup image has its own context; history is never read by a layer. docs/ stays:
+# it is the swagger package routes.go imports.
+.git/
+docker/
+
 # Secrets never enter the build context — compose passes them at run time
 # through env_file, and a layer that once held them cannot be unmade.
 .env

@@ -123,7 +123,7 @@ through every pending stop, cached `eta:{trip}` 30 s. Snapshots for (re)sync: `G
 `GET /tracking/trips/:id/live` (its stops carry `lat`/`lng`), and the guardian's `GET /tracking/riders/:id/live`
 (portal chain, scoped as the rider's status; no trip in progress → `trip_id: null`, no stops, no position).
 `GET /routes/:id/status` does not name the trip: a client finds it with `GET /trips?route_id=&status=in_progress`.
-The gateway logs one line per socket open and close.
+The gateway logs one line per socket open and close, at debug level.
 
 Main DB holds `auth.*` + `tenancy.*`; one DB per tenant holds business schemas only. JWT carries
 `user_id + session_id`; tenancy middleware resolves `tenant_id` from `X-Tenant-Slug` per request.
@@ -245,7 +245,15 @@ the same image in `-role=worker|scheduler`; the two APIs run `-role=api`. A seco
 builds are made off the server and put live by `docker/geo/switch.sh` (`docker/geo/README.md`).
 
 `docker/backup/README.md` has the nightly dump and the restore steps; deploy variables are at the
-bottom of `.env.example`. PITR, PgBouncer and monitoring are INFRA-004.
+bottom of `.env.example`. PITR, PgBouncer and monitoring are INFRA-005.
+
+**One box (INFRA-004).** `docker/README.md` is the server runbook: the memory split of the 12 GB, the
+connection budget (`DATABASE_POOL_SIZE` + `TENANCY_DATABASE_POOL_SIZE` per service, idle connections
+close after 5 min, `max_connections=200` covers 7 concurrently active tenants), the Postgres settings on
+the compose command line, log caps (json-file, 5 × 20 MB per container) and the Debian host prep. Every
+`api-*` runs `APP_MODE=release` with a `mem_limit` and `GOMEMLIMIT`; `LOG_LEVEL` (info) comes from the
+compose `.env`, `LOG_FORMAT` (text|json) from the server env file. Per-event lines — socket open/close,
+outbox purge, partitions, one translation file — are debug; failures stay at info or above.
 
 ## Gotchas not visible in code
 

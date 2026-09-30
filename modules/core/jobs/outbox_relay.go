@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"log/slog"
 	"strconv"
 	"sync"
 	"time"
@@ -269,7 +270,7 @@ func (r *OutboxRelay) Purge(ctx context.Context, _ *asynq.Task) error {
 			var n int
 			err = pool.QueryRow(ctx, `SELECT tracking.sp_outbox_purge(p_older_than := $1)`, outboxRetention).Scan(&n)
 			if err == nil && n > 0 {
-				log.Printf("🧹 outbox %s: %d published row(s) purged", t.ID, n)
+				slog.Debug("outbox purge", "tenant", t.ID, "purged", n)
 			}
 		}
 		if err != nil {

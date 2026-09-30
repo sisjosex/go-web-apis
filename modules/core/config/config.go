@@ -25,8 +25,9 @@ type CoreConfig struct {
 	AppName     string // Display name used in emails and UI
 	FrontendURL string // Used for email links and CORS
 
-	// Logging
-	LogLevel string
+	// Logging — LOG_LEVEL debug|info|warn|error, LOG_FORMAT text|json (INFRA-004)
+	LogLevel  string
+	LogFormat string
 
 	// CORS
 	AllowedOrigins []string
@@ -51,6 +52,7 @@ func DefaultCoreConfig() *CoreConfig {
 		AppHost:          "127.0.0.1",
 		AppPort:          "8080",
 		LogLevel:         "info",
+		LogFormat:        "text",
 		AllowedOrigins:   []string{"http://localhost:3000"},
 
 		RateLimitPerSecond: 10,
@@ -84,7 +86,8 @@ func LoadCoreConfig() *CoreConfig {
 		FrontendURL: utils.GetEnv("FRONTEND_URL", "http://localhost:3000"),
 
 		// Logging
-		LogLevel: utils.GetEnv("LOG_LEVEL", "info"),
+		LogLevel:  utils.GetEnv("LOG_LEVEL", "info"),
+		LogFormat: utils.GetEnv("LOG_FORMAT", "text"),
 
 		// CORS - comma-separated list
 		AllowedOrigins: utils.GetEnvAsStringSlice("ALLOWED_ORIGINS", []string{"http://localhost:3000"}),

@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"log"
+	"log/slog"
 	"net/http"
 	"net/url"
 	"strings"
@@ -103,12 +104,12 @@ func (h *Hub) Serve(check SubscribeChecker, origins []string, pingEvery time.Dur
 		ctx, cancel := context.WithCancel(h.ctx)
 		defer cancel()
 		defer h.Remove(conn)
-		// One line per connection, open and close: whether a client lets go of its socket when its
-		// screens do (MOBILE-010) is otherwise invisible.
+		// One line per connection, open and close, at debug: whether a client lets go of its socket
+		// when its screens do (MOBILE-010) is otherwise invisible, and a production log has no use for it.
 		opened := time.Now()
-		log.Printf("realtime: socket open user=%s guardian=%t", session.UserID, session.Guardian)
+		slog.Debug("realtime: socket open", "user", session.UserID, "guardian", session.Guardian)
 		defer func() {
-			log.Printf("realtime: socket closed user=%s after %s", session.UserID, time.Since(opened).Round(time.Second))
+			slog.Debug("realtime: socket closed", "user", session.UserID, "after", time.Since(opened).Round(time.Second))
 		}()
 
 		go h.read(ctx, ws, conn, check, cache)

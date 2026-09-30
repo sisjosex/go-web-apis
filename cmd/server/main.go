@@ -12,6 +12,7 @@ import (
 	"josex/web/config"
 	coreRoutes "josex/web/modules/core/routes"
 	"josex/web/modules/core/services"
+	"josex/web/modules/core/utils"
 	"josex/web/modules/tracking/realtime"
 	"josex/web/routes"
 	"os"
@@ -66,6 +67,7 @@ func main() {
 	// Initialize the global modular config (reads ENV_FILE) before anything uses it.
 	config.GetConfig()
 	coreConf := config.ModularAppConfig.Core
+	utils.SetupLogging(coreConf.LogLevel, coreConf.LogFormat)
 
 	// Resolve role: flag > APP_ROLE > all
 	role := *roleFlag

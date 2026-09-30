@@ -1,4 +1,5 @@
 {
+  "core.internal-error": "Something went wrong, please try again",
   "validation.invalid-uuid": "Invalid UUID format",
   "validation.required": "This field is required",
   "validation.email": "Invalid email format",

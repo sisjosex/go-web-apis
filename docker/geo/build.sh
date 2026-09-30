@@ -65,6 +65,8 @@ stage "routing tiles" docker run --rm -v "$DATA/$WORK:/work" -v "$DATA/$WORK/val
 		--mjolnir-tile-dir /valhalla/tiles --mjolnir-tile-extract /valhalla/tiles.tar \
 		--mjolnir-admin /valhalla/admins.sqlite --mjolnir-timezone "" \
 		--mjolnir-traffic-extract "" --additional-data-elevation "" \
+		--loki-logging-level warn --thor-logging-level warn \
+		--odin-logging-level warn --meili-logging-level warn \
 		--httpd-service-listen "tcp://*:8002" > /valhalla/valhalla.json
 	mkdir /build
 	sed "s|/valhalla/|/build/|g" /valhalla/valhalla.json > /build/valhalla.json

@@ -9,10 +9,66 @@
 
 name: xanthops
 
+# Sized for one box, 6 vCPU / 12 GB (INFRA-004, docker/README.md has the table):
+# PostgreSQL 2 GB of buffers and ~1 GB of connection work, Valhalla 1 GB, Valkey
+# 0.5 GB, the five Go processes 2.8 GB under a hard limit each with GOMEMLIMIT
+# just below it, Caddy 0.25 GB — ~4 GB stay with the kernel as page cache.
+# No CPU quotas: a quota on 6 cores leaves cores idle; cpu_shares only weigh
+# who wins under contention (PostgreSQL 2048, APIs 1024, the rest 512).
+
+# Every container logs through json-file with a cap (D3): at most 5 × 20 MB
+# each, compressed, so the disk never fills and nothing else has to rotate.
+x-logging: &logging
+  driver: json-file
+  options:
+    max-size: "20m"
+    max-file: "5"
+    compress: "true"
+
 services:
   postgres:
     image: postgis/postgis:17-3.5
     restart: unless-stopped
+    # Memory and I/O settings for this box (D2): 2 GB of buffers, 6 GB the planner may
+    # assume cached, NVMe costs, no JIT for short SP calls, checkpoints every 2 GB of
+    # WAL, 200 connections for the pool budget (D1), a 500 ms slow-query line and
+    # pg_stat_statements as the profiler. Parallel workers share memory through
+    # /dev/shm, which Docker caps at 64 MB unless shm_size says otherwise.
+    command:
+      - postgres
+      - -c
+      - shared_buffers=2GB
+      - -c
+      - effective_cache_size=6GB
+      - -c
+      - work_mem=16MB
+      - -c
+      - maintenance_work_mem=256MB
+      - -c
+      - max_connections=200
+      - -c
+      - max_wal_size=2GB
+      - -c
+      - min_wal_size=512MB
+      - -c
+      - wal_compression=lz4
+      - -c
+      - random_page_cost=1.1
+      - -c
+      - effective_io_concurrency=200
+      - -c
+      - max_parallel_workers=4
+      - -c
+      - max_parallel_workers_per_gather=2
+      - -c
+      - jit=off
+      - -c
+      - log_min_duration_statement=500ms
+      - -c
+      - shared_preload_libraries=pg_stat_statements
+    shm_size: 256m
+    cpu_shares: 2048
+    logging: *logging
     environment:
       POSTGRES_USER: ${POSTGRES_USER}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
@@ -33,10 +89,15 @@ services:
   # ============ VALKEY (queues, rate limit — INFRA-001) ============
   # Nothing here is the only copy of business data (the outbox is in PostgreSQL),
   # but AOF everysec keeps queued jobs across a restart, losing at most a second.
+  # maxmemory noeviction: a queue or a GPS stream is never silently dropped — a full
+  # Valkey refuses writes, the ingest stores inline and /readyz says degraded.
   valkey:
     image: valkey/valkey:8-alpine
     restart: unless-stopped
-    command: ["valkey-server", "--appendonly", "yes", "--appendfsync", "everysec", "--requirepass", "${VALKEY_PASSWORD}"]
+    command: ["valkey-server", "--appendonly", "yes", "--appendfsync", "everysec", "--maxmemory", "512mb", "--maxmemory-policy", "noeviction", "--requirepass", "${VALKEY_PASSWORD}"]
+    mem_limit: 640m
+    cpu_shares: 512
+    logging: *logging
     volumes:
       - valkeydata:/data
     healthcheck:
@@ -58,6 +119,7 @@ services:
       dockerfile: Dockerfile
     image: xanthops-api:${API_TAG:-latest}
     restart: "no"
+    logging: *logging
     env_file:
       - .env.platform
     environment:
@@ -71,6 +133,7 @@ services:
   migrate-tenant:
     image: xanthops-api:${API_TAG:-latest}
     restart: "no"
+    logging: *logging
     env_file:
       - .env.tenant
     environment:
@@ -83,6 +146,11 @@ services:
         condition: service_completed_successfully
 
   # ============ PLATFORM API (Admin) ============
+  # Every api-* below: release mode always, LOG_LEVEL from .env (info unless said
+  # otherwise), a memory limit with GOMEMLIMIT just under it, and its share of the
+  # connection budget (D1): DATABASE_POOL_SIZE to its own database plus
+  # TENANCY_DATABASE_POOL_SIZE per tenant database it touches. Idle connections
+  # close after 5 min, so the budget is spent on the tenants in use.
   api-platform:
     image: xanthops-api:${API_TAG:-latest}
     restart: unless-stopped
@@ -92,7 +160,15 @@ services:
       ENV_FILE: .env.platform
       APP_HOST: 0.0.0.0
       APP_PORT: 8080
+      APP_MODE: release
+      LOG_LEVEL: ${LOG_LEVEL:-info}
       SKIP_MIGRATIONS: "true"
+      GOMEMLIMIT: 420MiB
+      DATABASE_POOL_SIZE: "12"
+      TENANCY_DATABASE_POOL_SIZE: "4"
+    mem_limit: 512m
+    cpu_shares: 1024
+    logging: *logging
     # The worker and the scheduler run as their own services below.
     command: ["./app", "-mode=platform", "-role=api"]
     volumes:
@@ -119,7 +195,15 @@ services:
       ENV_FILE: .env.tenant
       APP_HOST: 0.0.0.0
       APP_PORT: 9080
+      APP_MODE: release
+      LOG_LEVEL: ${LOG_LEVEL:-info}
       SKIP_MIGRATIONS: "true"
+      GOMEMLIMIT: 640MiB
+      DATABASE_POOL_SIZE: "8"
+      TENANCY_DATABASE_POOL_SIZE: "8"
+    mem_limit: 768m
+    cpu_shares: 1024
+    logging: *logging
     command: ["./app", "-mode=tenant", "-role=api"]
     volumes:
       - media:/app/storage/media
@@ -148,7 +232,15 @@ services:
       ENV_FILE: .env.tenant
       APP_HOST: 0.0.0.0
       APP_PORT: 9080
+      APP_MODE: release
+      LOG_LEVEL: ${LOG_LEVEL:-info}
       SKIP_MIGRATIONS: "true"
+      GOMEMLIMIT: 420MiB
+      DATABASE_POOL_SIZE: "2"
+      TENANCY_DATABASE_POOL_SIZE: "3"
+    mem_limit: 512m
+    cpu_shares: 1024
+    logging: *logging
     command: ["./app", "-mode=tenant", "-role=realtime"]
     healthcheck:
       test: ["CMD-SHELL", "wget -qO- http://localhost:9080/readyz > /dev/null || exit 1"]
@@ -178,7 +270,16 @@ services:
       ENV_FILE: .env.platform
       APP_HOST: 0.0.0.0
       APP_PORT: 8080
+      APP_MODE: release
+      LOG_LEVEL: ${LOG_LEVEL:-info}
       SKIP_MIGRATIONS: "true"
+      GOMEMLIMIT: 640MiB
+      DATABASE_POOL_SIZE: "4"
+      # Plus one LISTEN connection per tenant, outside the pool (outbox relay).
+      TENANCY_DATABASE_POOL_SIZE: "6"
+    mem_limit: 768m
+    cpu_shares: 1024
+    logging: *logging
     command: ["./app", "-mode=platform", "-role=worker"]
     # asynq waits up to 8 s for the tasks in flight; the default 10 s stop grace covers it.
     healthcheck: &probe
@@ -204,7 +305,15 @@ services:
       ENV_FILE: .env.platform
       APP_HOST: 0.0.0.0
       APP_PORT: 8080
+      APP_MODE: release
+      LOG_LEVEL: ${LOG_LEVEL:-info}
       SKIP_MIGRATIONS: "true"
+      GOMEMLIMIT: 200MiB
+      DATABASE_POOL_SIZE: "2"
+      TENANCY_DATABASE_POOL_SIZE: "2"
+    mem_limit: 256m
+    cpu_shares: 512
+    logging: *logging
     command: ["./app", "-mode=platform", "-role=scheduler"]
     healthcheck: *probe
     depends_on: *jobs-deps
@@ -216,6 +325,8 @@ services:
     build:
       context: ./docker/backup
     restart: unless-stopped
+    cpu_shares: 512
+    logging: *logging
     environment:
       POSTGRES_HOST: postgres
       POSTGRES_USER: ${POSTGRES_USER}
@@ -241,6 +352,8 @@ services:
     restart: unless-stopped
     command: ["valhalla_service", "/valhalla/valhalla.json", "2"]
     mem_limit: 1g
+    cpu_shares: 512
+    logging: *logging
     volumes:
       - ${GEO_DATA_DIR:-./docker/geo/data}/current/valhalla:/valhalla:ro
     healthcheck:
@@ -254,6 +367,9 @@ services:
   caddy:
     image: caddy:2.8-alpine
     restart: unless-stopped
+    mem_limit: 256m
+    cpu_shares: 512
+    logging: *logging
     ports:
       - "80:80"
       - "443:443"

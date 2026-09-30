@@ -2,11 +2,16 @@
 # Matches the `go` directive in go.mod — 1.23 no longer builds this module.
 FROM golang:1.25-alpine AS builder
 WORKDIR /app
-COPY . .
+# Modules first (INFRA-004): a source change rebuilds from the compile step on, the download
+# layer stays cached across deploys on the server.
+COPY go.mod go.sum ./
 RUN go mod download
+COPY . .
 # One image serves both servers and the migrate job: ./cmd/server picks platform
 # or tenant from -mode, ./cmd/cli carries `migrate` and `tenant -migrate all`.
-RUN go build -o app ./cmd/server && go build -o cli ./cmd/cli
+# Static and stripped: no libc at runtime, no symbol table, no build paths.
+RUN CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o app ./cmd/server \
+ && CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o cli ./cmd/cli
 
 # Runner
 FROM alpine:3.20

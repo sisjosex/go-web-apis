@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"log/slog"
 
 	coreJobs "josex/web/modules/core/jobs"
 	coreServices "josex/web/modules/core/services"
@@ -42,7 +43,7 @@ func PositionsPartitionsHandler(db coreServices.DatabaseService, tenants coreJob
 				continue
 			}
 			if created > 0 || dropped > 0 {
-				log.Printf("🗂️  positions partitions %s: %d created, %d dropped", t.ID, created, dropped)
+				slog.Debug("positions partitions", "tenant", t.ID, "created", created, "dropped", dropped)
 			}
 		}
 		if failed > 0 {

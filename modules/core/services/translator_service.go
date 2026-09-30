@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"josex/web/modules/core/utils"
 	"log"
+	"log/slog"
 	"os"
 )
 
@@ -48,7 +49,7 @@ func LoadAllTranslations(languages []string) error {
 				merged[key] = value
 			}
 
-			log.Printf("✅ Loaded %d translations from %s", len(translations), filePath)
+			slog.Debug("translations file", "file", filePath, "count", len(translations))
 		}
 
 		utils.Translations[lang] = merged

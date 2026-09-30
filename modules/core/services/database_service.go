@@ -97,6 +97,9 @@ func connectDatabase(ctx context.Context, dbURL string, poolSize int32, appName 
 	}
 
 	config.MaxConns = poolSize
+	// A tenant nobody is using hands its connections back within minutes, so the budget of
+	// max_connections (INFRA-004 D1) is spent on the tenants that are active, not on every pool ever opened.
+	config.MaxConnIdleTime = 5 * time.Minute
 	if appName != "" {
 		config.ConnConfig.RuntimeParams["application_name"] = appName
 	}

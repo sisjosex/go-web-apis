@@ -3,6 +3,7 @@ package services
 import (
 	"context"
 	"josex/web/config"
+	"josex/web/modules/core/errors"
 	"josex/web/modules/core/validators"
 	"log"
 	"net/http"
@@ -17,6 +18,8 @@ type WebServerService struct {
 }
 
 func NewWebServerService() *WebServerService {
+	// The mode is set before the engine exists: gin.New() itself prints the debug-mode warning.
+	gin.SetMode(config.ModularAppConfig.Core.AppMode)
 	return &WebServerService{
 		Server: gin.New(),
 	}
@@ -35,9 +38,13 @@ func (ws *WebServerService) Initialize() {
 }
 
 func (ws *WebServerService) setupServer() {
-	// Configurar modo de Gin
 	coreConf := config.ModularAppConfig.Core
-	gin.SetMode(coreConf.AppMode)
+
+	// A panicking handler answers 500 instead of dropping the connection (INFRA-004). First, so it
+	// wraps everything registered after it; the stack still goes to stderr through gin's writer.
+	ws.Server.Use(gin.CustomRecovery(func(c *gin.Context, _ any) {
+		c.AbortWithStatusJSON(http.StatusInternalServerError, errors.BuildErrorSingle(c, "core.internal-error"))
+	}))
 
 	// Configurar proxies de confianza
 	ws.Server.SetTrustedProxies([]string{"127.0.0.1"})
@@ -63,9 +70,13 @@ func (ws *WebServerService) setupRoutes() {
 // the caller can stop what the handlers depend on only once no request is using it.
 func (ws *WebServerService) Serve(ctx context.Context) {
 	coreConf := config.ModularAppConfig.Core
+	// Header and idle bounds only (INFRA-004): the realtime role hijacks its sockets through this
+	// same server, and Caddy already bounds the client side, so no Read/Write timeout here.
 	srv := &http.Server{
-		Addr:    coreConf.AppHost + ":" + coreConf.AppPort,
-		Handler: ws.Server,
+		Addr:              coreConf.AppHost + ":" + coreConf.AppPort,
+		Handler:           ws.Server,
+		ReadHeaderTimeout: 10 * time.Second,
+		IdleTimeout:       120 * time.Second,
 	}
 
 	go func() {
