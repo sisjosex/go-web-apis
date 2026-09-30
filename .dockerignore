@@ -11,6 +11,10 @@ bin/
 # it is the swagger package routes.go imports.
 .git/
 docker/
+# Tests (and their media fixtures) are never compiled into ./cmd/*: a test edit then
+# leaves the compile layer cached.
+**/*_test.go
+modules/*/tests/
 
 # Secrets never enter the build context — compose passes them at run time
 # through env_file, and a layer that once held them cannot be unmade.

@@ -10,8 +10,14 @@ COPY . .
 # One image serves both servers and the migrate job: ./cmd/server picks platform
 # or tenant from -mode, ./cmd/cli carries `migrate` and `tenant -migrate all`.
 # Static and stripped: no libc at runtime, no symbol table, no build paths.
-RUN CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o app ./cmd/server \
- && CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o cli ./cmd/cli
+# noswagger: no /swagger in production, and ~9 MB less binary (routes/swagger.go).
+RUN CGO_ENABLED=0 go build -trimpath -tags noswagger -ldflags="-s -w" -o app ./cmd/server \
+ && CGO_ENABLED=0 go build -trimpath -tags noswagger -ldflags="-s -w" -o cli ./cmd/cli
+# The only files either binary reads from disk: migrations, translations, e-mail templates.
+# The Go sources and the test media under modules/ stay behind.
+RUN mkdir /assets \
+ && find modules -type f \( -path '*/migrations/*' -o -path '*/lang/*' -o -path '*/templates/*' \) \
+  | tar -cf - -T - | tar -xf - -C /assets
 
 # Runner
 FROM alpine:3.20
@@ -21,7 +27,7 @@ WORKDIR /app
 RUN apk add --no-cache ca-certificates
 COPY --from=builder /app/app ./app
 COPY --from=builder /app/cli ./cli
-COPY --from=builder /app/modules ./modules
+COPY --from=builder /assets/modules ./modules
 COPY config/regexes.yaml ./config/regexes.yaml
 
 EXPOSE 8080 9080

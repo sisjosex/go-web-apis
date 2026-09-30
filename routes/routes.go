@@ -59,7 +59,6 @@ import (
 	"log"
 	"time"
 
-	_ "josex/web/docs"
 	coreValidators "josex/web/modules/core/validators"
 	_ "josex/web/modules/inventory"
 	_ "josex/web/modules/purchasing"
@@ -70,8 +69,6 @@ import (
 	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
-	swaggerFiles "github.com/swaggo/files"
-	ginSwagger "github.com/swaggo/gin-swagger"
 	"github.com/ua-parser/uap-go/uaparser"
 )
 
@@ -120,8 +117,7 @@ func SetupRoutes(r *gin.Engine, dbService coreServices.DatabaseService, valkey c
 	registerImport(d, chains, inventorySvcs)
 	registerGeo(d, chains)
 
-	// Swagger documentation
-	r.GET("/swagger/*any", ginSwagger.WrapHandler(swaggerFiles.Handler))
+	registerSwagger(r)
 }
 
 // SetupRealtimeRoutes mounts what the realtime role serves (TRACK-025): the probes and the WebSocket
