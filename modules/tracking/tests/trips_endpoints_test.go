@@ -311,8 +311,9 @@ func TestTripCancel_KeptByMaterialiser(t *testing.T) {
 	assert.Equal(t, []string{"dropoff:cancelled", "pickup:cancelled"}, taskStatuses(t, helper, tripID))
 }
 
-// TestTripStopSkip_SettlesItsTasks - D3: skipping the first stop turns its pickup into a no_show;
-// a task at a skipped stop can no longer be marked.
+// TestTripStopSkip_SettlesItsTasks - D3: skipping the first stop turns its pickup into a no_show and
+// cancels that rider's dropoff at the other stop (MOBILE-015 A1); a task at a skipped stop can no
+// longer be marked.
 func TestTripStopSkip_SettlesItsTasks(t *testing.T) {
 	helper := SetupTrackingTest(t)
 	defer helper.Close()
@@ -323,7 +324,7 @@ func TestTripStopSkip_SettlesItsTasks(t *testing.T) {
 
 	assert.Equal(t, "skipped", skipped.Stops[0].Status)
 	assert.Equal(t, "no_show", skipped.Stops[0].Tasks[0].Status)
-	assert.Equal(t, "pending", skipped.Stops[1].Tasks[0].Status, "the dropoff is at the other stop")
+	assert.Equal(t, "cancelled", skipped.Stops[1].Tasks[0].Status, "a rider who did not board does not get off")
 	w := helper.DoRequest("POST", "/tracking/trip-stop-tasks/"+taskOf(t, detail, riderID, "pickup")+"/done",
 		map[string]interface{}{"client_op_id": uuid.NewString()}, map[string]string{})
 	assert.Equal(t, http.StatusConflict, w.Code, w.Body.String())

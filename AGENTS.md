@@ -71,6 +71,8 @@ costs no router call; router down or no route → straight line `fallback` and t
 retries it. `GET /tracking/routes/:id/path?date=` (`sp_get_route_path`, scoped as the stops) →
 `{path | null}`, `ETag` = version + `path_computed_at`, `If-None-Match` → 304 (CORS allows it and exposes
 `ETag`). `cli tracking paths backfill` writes a `route.changed` row per route with an uncomputed version.
+`/mobile/driver/today`'s trips carry the same line as `planned_path {polyline6, distance_m, legs, source} |
+null`, read through `trips.route_version_id` in the SP's statement (MOBILE-015); a stored line moves its `ETag`.
 
 Trips move over HTTP (TRACK-020): `POST /trips/:id/start|complete|cancel`, `/trip-stops/:id/arrive|skip`,
 `/trip-stop-tasks/:id/done|no-show` (body `client_op_id`, idempotent), `PATCH /trips/:id` (override →

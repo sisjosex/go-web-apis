@@ -845,3 +845,70 @@ func BackfillRowsFor(t *testing.T, helper *testhelpers.ApiTestHelper, routeID st
 	}
 	return n
 }
+
+// TripVersionID answers the route version a trip was materialised from, whose line a test stores
+// (MOBILE-015). No endpoint names it.
+func TripVersionID(t *testing.T, helper *testhelpers.ApiTestHelper, tripID string) string {
+	t.Helper()
+	var versionID string
+	if err := helper.DB().QueryRow(context.Background(),
+		`SELECT route_version_id::text FROM tracking.trips WHERE id = $1`, tripID).Scan(&versionID); err != nil {
+		t.Fatalf("trip version: %v", err)
+	}
+	return versionID
+}
+
+// ArriveStopByGPS marks a stop arrived the way sp_ingest_positions does from the positions, with no
+// driver op behind it, and answers the arrived_at it stored (MOBILE-015 A1).
+func ArriveStopByGPS(t *testing.T, helper *testhelpers.ApiTestHelper, stopID uuid.UUID) time.Time {
+	t.Helper()
+	if _, err := helper.DB().Execute(context.Background(),
+		`SELECT 1 FROM tracking.sp_trip_stop_transition($1, $2, 'arrive', NULL)`, TestTenantID, stopID); err != nil {
+		t.Fatalf("arrive stop: %v", err)
+	}
+	return StopArrivedAt(t, helper, stopID)
+}
+
+// StopArrivedAt answers a stop's stored arrived_at; the driver's API rounds it for display.
+func StopArrivedAt(t *testing.T, helper *testhelpers.ApiTestHelper, stopID uuid.UUID) time.Time {
+	t.Helper()
+	var at time.Time
+	if err := helper.DB().QueryRow(context.Background(),
+		`SELECT arrived_at FROM tracking.trip_stops WHERE id = $1`, stopID).Scan(&at); err != nil {
+		t.Fatalf("read arrived_at: %v", err)
+	}
+	return at
+}
+
+// TripEventCount counts a trip's events of one type. No endpoint lists the trip's events.
+func TripEventCount(t *testing.T, helper *testhelpers.ApiTestHelper, tripID uuid.UUID, eventType string) int {
+	t.Helper()
+	var n int
+	if err := helper.DB().QueryRow(context.Background(),
+		`SELECT count(*) FROM tracking.trip_events WHERE trip_id = $1 AND type = $2`, tripID, eventType).Scan(&n); err != nil {
+		t.Fatalf("count trip events: %v", err)
+	}
+	return n
+}
+
+// RiderDropoffStatuses answers the statuses of one rider's drop-offs on a trip.
+func RiderDropoffStatuses(t *testing.T, helper *testhelpers.ApiTestHelper, tripID, subjectID uuid.UUID) []string {
+	t.Helper()
+	rows, err := helper.DB().Query(context.Background(), `
+		SELECT k.status FROM tracking.trip_stop_tasks k
+		JOIN tracking.trip_stops s ON s.id = k.trip_stop_id
+		WHERE s.trip_id = $1 AND k.kind = 'dropoff' AND k.subject_id = $2 ORDER BY 1`, tripID, subjectID)
+	if err != nil {
+		t.Fatalf("read dropoffs: %v", err)
+	}
+	defer rows.Close()
+	statuses := []string{}
+	for rows.Next() {
+		var s string
+		if err := rows.Scan(&s); err != nil {
+			t.Fatalf("scan dropoff: %v", err)
+		}
+		statuses = append(statuses, s)
+	}
+	return statuses
+}

@@ -171,6 +171,54 @@ func TestDriverToday_QRTokenRotated(t *testing.T) {
 	assert.Contains(t, changed.Body.String(), rotated)
 }
 
+// TestDriverToday_PlannedPath - a trip whose version has no line answers planned_path null; storing
+// the line changes the day's ETag and the trip carries it (MOBILE-015 D2).
+func TestDriverToday_PlannedPath(t *testing.T) {
+	helper := SetupTrackingTest(t)
+	defer helper.Close()
+	trip := driverTrip(t, helper, 1, false)
+	driver := SetupDriverTest(t)
+	defer driver.Close()
+	type day struct {
+		Trips []struct {
+			PlannedPath *struct {
+				Polyline6 string                `json:"polyline6"`
+				DistanceM int                   `json:"distance_m"`
+				Legs      []models.RoutePathLeg `json:"legs"`
+				Source    string                `json:"source"`
+			} `json:"planned_path"`
+		} `json:"trips"`
+	}
+
+	w := driver.DoRequest("GET", "/mobile/driver/today", nil, map[string]string{})
+	if !assert.Equal(t, http.StatusOK, w.Code, w.Body.String()) {
+		return
+	}
+	var before day
+	decodeBody(t, w, &before)
+	if assert.Len(t, before.Trips, 1) {
+		assert.Nil(t, before.Trips[0].PlannedPath)
+	}
+	etag := w.Header().Get("ETag")
+
+	storePath(t, helper, TripVersionID(t, helper, trip.ID.String()), "abc")
+
+	changed := driver.DoRequest("GET", "/mobile/driver/today", nil, map[string]string{"If-None-Match": etag})
+	if !assert.Equal(t, http.StatusOK, changed.Code) {
+		return
+	}
+	assert.NotEqual(t, etag, changed.Header().Get("ETag"))
+	var after day
+	decodeBody(t, changed, &after)
+	if assert.Len(t, after.Trips, 1) && assert.NotNil(t, after.Trips[0].PlannedPath) {
+		path := after.Trips[0].PlannedPath
+		assert.Equal(t, "abc", path.Polyline6)
+		assert.Equal(t, 650, path.DistanceM)
+		assert.Equal(t, "valhalla", path.Source)
+		assert.Equal(t, []models.RoutePathLeg{{DistanceM: 320, DurationS: 60}, {DistanceM: 330, DurationS: 65}}, path.Legs)
+	}
+}
+
 // TestDriverToday_NotLinked - an account linked to no driver record → 403 driver.not-linked
 func TestDriverToday_NotLinked(t *testing.T) {
 	helper := SetupTrackingTest(t)
@@ -332,6 +380,46 @@ func TestDriverSync_Conflict(t *testing.T) {
 	}
 	assert.Equal(t, 1, countRows(t, helper, `SELECT count(*) FROM tracking.driver_ops WHERE client_op_id = $1 AND status = 'rejected'`, *queued.ClientOpID))
 	assert.Equal(t, 0, countRows(t, helper, `SELECT count(*) FROM tracking.trip_events WHERE trip_id = $1 AND type = 'done'`, trip.ID))
+}
+
+// TestDriverSync_ArriveAfterGPS - the server marks the stop arrived from the positions (as
+// sp_ingest_positions does) before the phone's own stop.arrive syncs: the op is applied, arrived_at
+// keeps the first arrival and the trip has one arrive event (MOBILE-015 A1).
+func TestDriverSync_ArriveAfterGPS(t *testing.T) {
+	helper := SetupTrackingTest(t)
+	defer helper.Close()
+	trip := driverTrip(t, helper, 1, true)
+	driver := SetupDriverTest(t)
+	defer driver.Close()
+	stopID := trip.Stops[0].ID
+	gpsAt := ArriveStopByGPS(t, helper, stopID)
+
+	results := sync(t, driver, op(models.DriverOpStopArrive, models.DriverSyncArgs{TripStopID: &stopID}, time.Now().UTC().Add(-time.Minute)))
+
+	if assert.Len(t, results, 1) {
+		assert.Equal(t, models.DriverOpApplied, results[0].Status, "%v", results[0].Code)
+	}
+	assert.Equal(t, 1, TripEventCount(t, helper, trip.ID, "arrive"))
+	assert.True(t, gpsAt.Equal(StopArrivedAt(t, helper, stopID)), "arrived_at moved")
+}
+
+// TestDriverSync_NoShowCancelsDropoff - a pickup's no_show cancels that rider's dropoff on the trip and
+// leaves the other rider's pending (MOBILE-015 A1).
+func TestDriverSync_NoShowCancelsDropoff(t *testing.T) {
+	helper := SetupTrackingTest(t)
+	defer helper.Close()
+	trip := driverTrip(t, helper, 2, true)
+	driver := SetupDriverTest(t)
+	defer driver.Close()
+	absent := trip.Stops[0].Tasks[0]
+
+	results := sync(t, driver, taskOp(models.DriverOpTaskNoShow, absent.ID, time.Now().UTC().Add(-time.Minute)))
+
+	if assert.Len(t, results, 1) {
+		assert.Equal(t, models.DriverOpApplied, results[0].Status, "%v", results[0].Code)
+	}
+	assert.Equal(t, []string{"cancelled"}, RiderDropoffStatuses(t, helper, trip.ID, absent.SubjectID))
+	assert.ElementsMatch(t, []string{"dropoff:cancelled", "dropoff:pending", "pickup:no_show", "pickup:pending"}, taskStatuses(t, helper, trip.ID.String()))
 }
 
 // TestDriverSync_NotMyTrip - an op on another driver's task is rejected trip.not-found and moves
