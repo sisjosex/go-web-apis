@@ -529,8 +529,10 @@ func (uc *AuthController) GenerateEmailVerificationToken(ctx *gin.Context) {
 	templatePath := coreServices.GetTemplatePath("auth", "verify-email.html")
 	err = uc.emailService.SendEmail(*verifyEmailRequest.Email, subject, templatePath, emailData)
 	if err != nil {
-		ctx.JSON(http.StatusBadRequest, coreErrors.BuildErrorDetail(ctx, authErrors.UserChangeEmailSendingError, err.Error()))
+		// Not sent → no token (AUTH-002): the user is told and can retry at once. The cause stays in the
+		// log; SMTP details are not the client's business.
 		tx.Rollback(ctx)
+		ctx.JSON(http.StatusServiceUnavailable, coreErrors.BuildErrorSingle(ctx, authErrors.UserChangeEmailSendingError))
 		return
 	}
 
@@ -674,8 +676,9 @@ func (uc *AuthController) GeneratePasswordResetToken(ctx *gin.Context) {
 	templatePath := coreServices.GetTemplatePath("auth", "password-reset.html")
 	err = uc.emailService.SendEmail(*passwordResetRequestDto.Email, subject, templatePath, emailData)
 	if err != nil {
-		ctx.JSON(http.StatusBadRequest, coreErrors.BuildErrorDetail(ctx, authErrors.UserForgorPasswordEmailSendingError, err.Error()))
+		// Not sent → no token (AUTH-002), so the next try is not refused as "already sent".
 		tx.Rollback(ctx)
+		ctx.JSON(http.StatusServiceUnavailable, coreErrors.BuildErrorSingle(ctx, authErrors.UserForgorPasswordEmailSendingError))
 		return
 	}
 

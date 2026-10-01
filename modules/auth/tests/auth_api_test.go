@@ -11,6 +11,7 @@ import (
 	"net/http"
 	"testing"
 
+	"josex/web/config"
 	"josex/web/modules/core/testhelpers"
 
 	"github.com/google/uuid"
@@ -585,6 +586,50 @@ func TestGeneratePasswordResetTokenSuccess(t *testing.T) {
 	assert.Equal(t, http.StatusOK, w.Code, fmt.Sprintf("Expected 200, got %d: %s", w.Code, w.Body.String()))
 	assert.Equal(t, "true", w.Body.String())
 	assert.NotEmpty(t, resetTokenFor(t, helper, testEmail), "a reset token should be stored")
+}
+
+// TestGeneratePasswordResetToken_EmailNotSent - a reset email that could not go out stores no token and
+// answers 503 with the retry message, so the next try goes through instead of "already sent" (AUTH-002).
+func TestGeneratePasswordResetToken_EmailNotSent(t *testing.T) {
+	helper := testhelpers.SetupApiTest(t)
+	defer helper.Close()
+
+	testEmail := "reset-down-" + uuid.New().String() + "@test.com"
+	helper.Register(testEmail, "$Password2025", "Reset", "Down")
+	body := map[string]interface{}{"email": testEmail}
+
+	// The email service reads the SMTP settings per send, so the shared router sees the server go down.
+	authConf := config.ModularAppConfig.Auth
+	port := authConf.SMTPPort
+	authConf.SMTPPort = 1 // nothing listens there
+	w := helper.DoRequest("POST", "/auth/password/reset", body, map[string]string{})
+	authConf.SMTPPort = port
+
+	assert.Equal(t, http.StatusServiceUnavailable, w.Code, w.Body.String())
+	assert.Contains(t, w.Body.String(), "user.forgot-password.sending-email-failed")
+	assert.NotContains(t, w.Body.String(), "dial tcp", "the SMTP cause stays in the log")
+	assert.Equal(t, 0, resetTokenCount(t, helper, testEmail), "an unsent email leaves no token")
+
+	// The same request once email works: sent, one token, no "already sent".
+	w = helper.DoRequest("POST", "/auth/password/reset", body, map[string]string{})
+	assert.Equal(t, http.StatusOK, w.Code, w.Body.String())
+	assert.Equal(t, 1, resetTokenCount(t, helper, testEmail))
+}
+
+func resetTokenCount(t *testing.T, helper *testhelpers.ApiTestHelper, email string) int {
+	t.Helper()
+	var n int
+	// check:raw-sql the token only ever leaves by email; no endpoint or SP hands it back
+	err := helper.DB().QueryRow(context.Background(), `
+		SELECT count(*)
+		FROM auth.password_reset_tokens t
+		INNER JOIN auth.users u ON u.id = t.user_id
+		WHERE LOWER(u.email) = LOWER($1)
+	`, email).Scan(&n)
+	if err != nil {
+		t.Fatalf("count reset tokens for %s: %v", email, err)
+	}
+	return n
 }
 
 // TestGeneratePasswordResetTokenUserNotFound tests reset for non-existent user

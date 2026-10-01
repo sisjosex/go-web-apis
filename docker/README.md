@@ -203,8 +203,9 @@ openssl rand -base64 32   # once each: POSTGRES_PASSWORD, VALKEY_PASSWORD, JWT_S
   `PLATFORM_HOST=api.taypi24.com`, `TILES_HOST=tiles.taypi24.com`, `ACME_EMAIL`, `API_TAG=<sha>`,
   `GEO_DATA_DIR=/srv/geo`, and the backup block of step 11.
 - `.env.platform`: the "on the box" block of `.env.example` — `DATABASE_URL` and `REDIS_URL` at the
-  `postgres` and `valkey` services with the passwords above, the JWT pair, `SMTP_*` from the mail
-  provider, `FCM_PROJECT_ID`.
+  `postgres` and `valkey` services with the passwords above, the JWT pair, `SMTP_ENABLED=true` and
+  `SMTP_*` from the mail provider (without `SMTP_ENABLED` every reset, verification and OTP email
+  fails with 503), `FCM_PROJECT_ID`.
 - `chmod 600 .env .env.platform`.
 
 **5. FCM key.** The Firebase service-account JSON (project `xanthops-push`), copied from the PC:
