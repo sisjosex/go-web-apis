@@ -241,8 +241,11 @@ Valkey (AOF `everysec`, `valkeydata` volume, `VALKEY_PASSWORD`) backs `api-worke
 the same image in `-role=worker|scheduler`; the two APIs run `-role=api`. A second scheduler is safe
 (lease), a second worker scales throughput.
 
-`valhalla` serves routing from `${GEO_DATA_DIR}/current`, Caddy the basemap under `TENANT_HOST/tiles/`;
-builds are made off the server and put live by `docker/geo/switch.sh` (`docker/geo/README.md`).
+`valhalla` serves routing from `${GEO_DATA_DIR}/current`, Caddy the basemap at the root of `TILES_HOST`;
+builds are made off the server and put live by `docker/geo/switch.sh` (`docker/geo/README.md`). The
+default stack is the whole product on one box (INFRA-006): `api-realtime` runs in platform mode and
+Caddy routes `PLATFORM_HOST/api/v1/tracking/ws` to it; the `tenant` profile is a tenant-mode server
+for a dedicated box.
 
 `docker/backup/README.md` has the nightly dump and the restore steps; deploy variables are at the
 bottom of `.env.example`. PITR, PgBouncer and monitoring are INFRA-005.
@@ -250,7 +253,8 @@ bottom of `.env.example`. PITR, PgBouncer and monitoring are INFRA-005.
 **One box (INFRA-004).** `docker/README.md` is the server runbook: the memory split of the 12 GB, the
 connection budget (`DATABASE_POOL_SIZE` + `TENANCY_DATABASE_POOL_SIZE` per service, idle connections
 close after 5 min, `max_connections=200` covers 7 concurrently active tenants), the Postgres settings on
-the compose command line, log caps (json-file, 5 × 20 MB per container) and the Debian host prep. Every
+the compose command line, log caps (json-file, 5 × 20 MB per container), the Debian host prep and
+**First deploy** — the ordered runbook from an empty box to `api.taypi24.com`. Every
 `api-*` runs `APP_MODE=release` with a `mem_limit` and `GOMEMLIMIT`; `LOG_LEVEL` (info) comes from the
 compose `.env`, `LOG_FORMAT` (text|json) from the server env file. Per-event lines — socket open/close,
 outbox purge, partitions, one translation file — are debug; failures stay at info or above.

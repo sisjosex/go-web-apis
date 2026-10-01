@@ -95,6 +95,10 @@ echo "deb [arch=amd64 signed-by=/etc/apt/keyrings/docker.asc] https://download.d
 apt-get update && apt-get install -y docker-ce docker-ce-cli containerd.io docker-compose-plugin
 printf '{ "live-restore": true }\n' > /etc/docker/daemon.json && systemctl restart docker
 
+# SSH by key only: the box is on the internet and root passwords get guessed.
+printf 'PasswordAuthentication no\nKbdInteractiveAuthentication no\nPermitRootLogin prohibit-password\n' \
+  > /etc/ssh/sshd_config.d/90-keys-only.conf && systemctl reload ssh
+
 # 2 GB of swap as the safety margin for peaks (Valhalla, a vacuum), rarely touched.
 fallocate -l 2G /swapfile && chmod 600 /swapfile && mkswap /swapfile && swapon /swapfile
 echo '/swapfile none swap sw 0 0' >> /etc/fstab
@@ -108,9 +112,12 @@ EOF
 sysctl --system
 
 # Firewall: only SSH and Caddy. Docker manages the forwarding rules for its own
-# published ports (80/443 are the only ones), so this covers the host itself.
+# published ports (80/443 are the only ones), so this covers the host itself. It
+# resets only its own table: `flush ruleset` would also wipe Docker's NAT rules
+# and cut every container off until the daemon restarts.
 apt-get install -y nftables && cat > /etc/nftables.conf <<'EOF'
-flush ruleset
+table inet filter
+delete table inet filter
 table inet filter {
   chain input {
     type filter hook input priority 0; policy drop;
@@ -127,7 +134,7 @@ systemctl enable --now nftables
 
 # Security updates for the host on their own; the pinned images weekly.
 apt-get install -y unattended-upgrades && dpkg-reconfigure -plow unattended-upgrades
-echo '0 4 * * 0 cd /srv/xanthops && docker compose -f docker-compose.prod.yml pull --ignore-buildable -q && docker compose -f docker-compose.prod.yml up -d' > /etc/cron.d/xanthops-images
+echo '0 4 * * 0 cd /srv/taypi24 && docker compose -f docker-compose.prod.yml pull --ignore-buildable -q && docker compose -f docker-compose.prod.yml up -d' > /etc/cron.d/xanthops-images
 ```
 
 ## Deploy
@@ -144,7 +151,7 @@ echo "$GHCR_TOKEN" | docker login ghcr.io -u sisjosex --password-stdin
 A deploy pins the commit in `.env` and pulls; nothing compiles on the box:
 
 ```sh
-cd /srv/xanthops && git pull \
+cd /srv/taypi24 && git pull \
   && sed -i "s/^API_TAG=.*/API_TAG=<commit sha>/" .env \
   && docker compose -f docker-compose.prod.yml pull --ignore-buildable \
   && docker compose -f docker-compose.prod.yml up -d
@@ -153,3 +160,136 @@ cd /srv/xanthops && git pull \
 Rollback is the same with the previous sha. `git pull` still brings the compose file,
 the Caddyfile and the init scripts; the image carries the code. `docker compose ps`
 shows every service `healthy`; `docker stats` shows each one under its limit.
+
+## First deploy (INFRA-006)
+
+From an empty Contabo box to `https://api.taypi24.com`, in order. Every step is a command; a step
+that needs something by hand on the box is a gap in this list — fix the list, not the box.
+
+**1. DNS** (Cloudflare, zone `taypi24.com`). Records in grey cloud (DNS only): Caddy needs the
+direct connection to obtain its certificates.
+
+| Type | Name | Value |
+|---|---|---|
+| A | `api` | the box's IPv4 |
+| A | `tiles` | the box's IPv4 |
+| TXT | `@` | the mail provider's SPF (`v=spf1 include:… ~all`) |
+| CNAME / TXT | the provider's | its DKIM record |
+
+Without SPF and DKIM the password-reset mail lands in spam. `dig +short api.taypi24.com` must answer
+the box before step 7, or Let's Encrypt refuses the certificate.
+
+**2. Host prep** — the block above, as root, with your SSH public key already in
+`/root/.ssh/authorized_keys` (Contabo's panel or `ssh-copy-id`). Then log in again in a second
+terminal before closing the first: password logins are off from now on.
+
+**3. Code.** A read-only deploy key, so the box can pull and never push:
+
+```sh
+ssh-keygen -t ed25519 -N '' -f /root/.ssh/deploy_api && cat /root/.ssh/deploy_api.pub
+# GitHub → sisjosex/api → Settings → Deploy keys → Add (read-only), paste the line above
+printf 'Host github.com\n  IdentityFile /root/.ssh/deploy_api\n' >> /root/.ssh/config
+git clone git@github.com:sisjosex/api.git /srv/taypi24 && cd /srv/taypi24
+```
+
+**4. Env files.** `.env` (compose) and `.env.platform` (the servers), from the DEPLOY section of
+`.env.example`; nothing else is needed (no `.env.tenant` without the tenant profile).
+
+```sh
+openssl rand -base64 32   # once each: POSTGRES_PASSWORD, VALKEY_PASSWORD, JWT_SECRET_KEY, JWT_REFRESH_KEY
+```
+
+- `.env`: `POSTGRES_USER`, `POSTGRES_PASSWORD`, `POSTGRES_DB=web`, `VALKEY_PASSWORD`,
+  `PLATFORM_HOST=api.taypi24.com`, `TILES_HOST=tiles.taypi24.com`, `ACME_EMAIL`, `API_TAG=<sha>`,
+  `GEO_DATA_DIR=/srv/geo`, and the backup block of step 11.
+- `.env.platform`: the "on the box" block of `.env.example` — `DATABASE_URL` and `REDIS_URL` at the
+  `postgres` and `valkey` services with the passwords above, the JWT pair, `SMTP_*` from the mail
+  provider, `FCM_PROJECT_ID`.
+- `chmod 600 .env .env.platform`.
+
+**5. FCM key.** The Firebase service-account JSON (project `xanthops-push`), copied from the PC:
+
+```sh
+# on the PC
+scp ~/.secrets/fcm-xanthops.json root@<box>:/srv/taypi24/secrets/fcm.json
+# on the box
+chmod 600 /srv/taypi24/secrets/fcm.json
+```
+
+Create `secrets/` first (`mkdir -m 700 /srv/taypi24/secrets`): if the file is missing at `up`, Docker
+mounts an empty directory in its place and pushes stay off.
+
+**6. Registry.** `echo "$GHCR_TOKEN" | docker login ghcr.io -u sisjosex --password-stdin` — a classic
+token with `read:packages` only (Deploy, below). `API_TAG` must be a sha whose `build` workflow on
+`sisjosex/api` is green.
+
+**7. Up.**
+
+```sh
+docker compose -f docker-compose.prod.yml pull --ignore-buildable
+docker compose -f docker-compose.prod.yml up -d
+docker compose -f docker-compose.prod.yml ps   # migrate exited 0, the rest healthy but valhalla
+```
+
+`valhalla` restarts until step 8 gives it a build; `/geo/eta` falls back to a straight line meanwhile.
+
+**8. Geo data.** Built on the PC, never on the box (`geo/README.md`). After step 7, because the
+places import needs the schema `migrate` created:
+
+```sh
+# on the PC, from api/
+GEO_REGIONS=south-america/bolivia TILES_URL=https://tiles.taypi24.com docker/geo/build.sh <date>
+rsync -a docker/geo/data/<date> root@<box>:/srv/geo/
+# on the box, from /srv/taypi24 — checks the build, makes it current, imports the places
+GEO_DATA_DIR=/srv/geo docker/geo/switch.sh <date>
+docker compose -f docker-compose.prod.yml ps   # now every service healthy
+```
+
+**9. First admin.** Register through the API, then promote the account in the database:
+
+```sh
+curl -sS https://api.taypi24.com/api/v1/auth/register -H 'Content-Type: application/json' \
+  -d '{"first_name":"…","last_name":"…","email":"<you>","password":"…"}'
+docker compose -f docker-compose.prod.yml exec postgres sh -c \
+  "psql -U \"\$POSTGRES_USER\" -d web -c \"UPDATE auth.users SET system_role='super_admin' WHERE email='<you>'\""
+```
+
+**10. First tenant** (one database per business, made by hand — INFRA-006 D2):
+
+```sh
+docker compose -f docker-compose.prod.yml exec postgres sh -c 'createdb -U "$POSTGRES_USER" <slug>'
+# as the admin: POST /api/v1/tenants {"slug":"<slug>","name":"…",
+#   "database_url":"postgres://<POSTGRES_USER>:<POSTGRES_PASSWORD>@postgres:5432/<slug>?sslmode=disable"}
+docker compose -f docker-compose.prod.yml run --rm migrate ./cli t -migrate <slug>
+```
+
+**11. Backups to R2** (D3). Cloudflare → R2: a private bucket `taypi24-backups`, and an API token
+with Object Read & Write on that bucket only. A heartbeat check (healthchecks.io's free plan) with a
+one-day period and a grace of a few hours. In `.env`:
+
+```sh
+BACKUP_S3_BUCKET=taypi24-backups
+BACKUP_S3_ENDPOINT=https://<account id>.r2.cloudflarestorage.com
+BACKUP_S3_REGION=auto
+BACKUP_S3_ACCESS_KEY=<token access key>
+BACKUP_S3_SECRET_KEY=<token secret>
+BACKUP_KEEP_DAYS=7
+BACKUP_HEARTBEAT_URL=https://hc-ping.com/<uuid>
+```
+
+Then `docker compose -f docker-compose.prod.yml up -d backup`, one backup now
+(`docker compose -f docker-compose.prod.yml run --rm backup /backup.sh`), and the scratch-database
+restore check of `backup/README.md` on that dump. The heartbeat shows the ping.
+
+**12. Off the box.** Copy `.env`, `.env.platform` and `secrets/` to the password manager or an
+encrypted disk: they are the only things on the box that no backup and no repo holds.
+
+**Check from outside** (any machine but the box):
+
+```sh
+curl -i https://api.taypi24.com/readyz                                      # 200
+curl -sI -H 'Range: bytes=0-15' https://tiles.taypi24.com/basemap.pmtiles   # 206
+curl -sI https://tiles.taypi24.com/style-light.json | grep -i cache-control # max-age=300
+nc -zv -w 3 api.taypi24.com 5432                                            # refused / timed out
+ssh -o PubkeyAuthentication=no root@api.taypi24.com                         # Permission denied
+```

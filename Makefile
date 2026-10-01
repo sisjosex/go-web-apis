@@ -218,7 +218,7 @@ docker-down:
 # GEO (INFRA-003) — the dev side of docker/geo; on the server the scripts run
 # directly against docker-compose.prod.yml (docker/geo/README.md)
 # ════════════════════════════════════════════════════════════════
-GEO_DEV := GEO_COMPOSE=docker-compose.yml ENV_FILE=.env.tenant \
+GEO_DEV := GEO_COMPOSE=docker-compose.yml ENV_FILE=.env.platform \
 	GEO_IMPORT="go run ./cmd/cli geo import docker/geo/data/current/places.geojsonl"
 
 geo-build:

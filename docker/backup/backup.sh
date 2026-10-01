@@ -6,6 +6,9 @@
 # from pg_database at run time — tenants add databases after this container
 # started, so the list can never be baked in.
 #
+# BACKUP_HEARTBEAT_URL, when set, gets one GET after the upload and the prune: a
+# heartbeat service alerts when a night's ping is missing.
+#
 # Restore steps: docker/backup/README.md
 set -eu
 
@@ -79,3 +82,7 @@ for prefix in $(aws s3 ls "s3://${BACKUP_S3_BUCKET}/" $S3_ARGS | awk '$1 == "PRE
 done
 
 echo "✅ Backup $DATE complete"
+
+if [ -n "${BACKUP_HEARTBEAT_URL:-}" ]; then
+	wget -q -T 10 -O /dev/null "$BACKUP_HEARTBEAT_URL" || echo "⚠️  heartbeat ping failed"
+fi

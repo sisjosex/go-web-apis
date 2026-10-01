@@ -4,9 +4,9 @@ One OpenStreetMap extract feeds three things, all served from our own boxes:
 
 | Piece | Built into | Served by |
 |---|---|---|
-| Routing tiles | `valhalla/tiles.tar` | the `valhalla` service (`/geo/route`, `/geo/eta` in the tenant API) |
-| Basemap, styles, fonts, sprites | `tiles/` | Caddy, at `https://$TENANT_HOST/tiles/` (dev: `http://127.0.0.1:8090/tiles/`) |
-| Named streets, places, POIs | `places.geojsonl` | `geo.places` in the tenant server's database (`/geo/geocode`, `/geo/reverse`) |
+| Routing tiles | `valhalla/tiles.tar` | the `valhalla` service (`/geo/route`, `/geo/eta` in the API) |
+| Basemap, styles, fonts, sprites | `tiles/` | Caddy, at the root of `https://$TILES_HOST/` (dev: `http://127.0.0.1:8090/tiles/`) |
+| Named streets, places, POIs | `places.geojsonl` | `geo.places` in the platform database (`/geo/geocode`, `/geo/reverse`) |
 
 The server never builds: a build peaks at 2-4 GB of RAM and downloads a few GB. It runs on any
 machine with Docker, the result is uploaded, and the server only switches to it.
@@ -28,7 +28,7 @@ previous/       the build before it — rollback.sh swaps the two
 On the build machine, from `api/`:
 
 ```bash
-GEO_REGIONS=south-america/bolivia TILES_URL=https://tenant.example.com/tiles \
+GEO_REGIONS=south-america/bolivia TILES_URL=https://tiles.taypi24.com \
   docker/geo/build.sh 2026-10-01          # ~15 min warm, longer the first time
 rsync -a docker/geo/data/2026-10-01 server:/srv/geo/
 ```
@@ -63,10 +63,10 @@ Running it twice returns to where it started.
 | `GEO_BUILD_MEMORY` | build | `3g` | JVM heap for the basemap |
 | `GEO_DATA_DIR` | all | `docker/geo/data` | the layout above; compose mounts it too |
 | `GEO_COMPOSE` | switch, rollback | `docker-compose.prod.yml` | the compose file that runs `valhalla` |
-| `GEO_IMPORT` | switch, rollback | `docker compose … run migrate-tenant ./cli geo import …` | the command that loads `current/places.geojsonl` |
+| `GEO_IMPORT` | switch, rollback | `docker compose … run migrate ./cli geo import …` | the command that loads `current/places.geojsonl` |
 | `GEO_CHECK_ROUTE` | switch | `-17.3935,-66.1570;-17.3700,-66.1450` | two points inside the region, `lat,lng;lat,lng` |
 
-The tenant API's own `GEO_VALHALLA_URL`, `GEO_TIMEOUT`, `GEO_FALLBACK_SPEED_KMH` are in `.env.example`.
+The API's own `GEO_VALHALLA_URL`, `GEO_TIMEOUT`, `GEO_FALLBACK_SPEED_KMH` are in `.env.example`.
 
 ## Sizing
 
@@ -83,7 +83,7 @@ echo '/swapfile none swap sw 0 0' >> /etc/fstab
 
 From `api/`: `make geo-build`, `make geo-switch DATE=<date>`, `make geo-up` (valhalla on :8002,
 tiles on :8090, behind the compose `geo` profile so `make docker-up` works without a build). The
-dev switch imports into `.env.tenant`'s database, which must exist and be migrated. Use
+dev switch imports into `.env.platform`'s database. Use
 `127.0.0.1`, never `localhost`: Docker Desktop's IPv6 forward can accept a connection and never
 answer.
 

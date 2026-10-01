@@ -1,10 +1,10 @@
 # Dev only: the basemap on :8090, as docker-compose.yml's `tiles` serves it.
-# Production serves the same snippet under {$TENANT_HOST}/tiles/ (Caddyfile).
+# Production serves the same snippet at the root of {$TILES_HOST} (Caddyfile).
 {
 	admin off
 	auto_https off
 }
 
 :8090 {
-	import tiles.caddy
+	import tiles.caddy /tiles/
 }

@@ -36,6 +36,7 @@ docker/geo/data/
 .env.production
 .env.platform
 .env.tenant
+/secrets/
 .env.*.local
 
 # Database files (if using SQLite locally)

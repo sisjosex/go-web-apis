@@ -25,8 +25,8 @@ func CmdGeo(args []string) {
 		fmt.Println("  go run ./cmd/cli geo import <places.geojsonl>")
 		fmt.Println("\nReplaces geo.places with the file's features in one transaction; a search")
 		fmt.Println("sees the old set or the new one. Non-zero exit on failure, nothing changed.")
-		fmt.Println("\nThe database is chosen by ENV_FILE (default: .env.tenant):")
-		fmt.Println("  ENV_FILE=.env.tenant go run ./cmd/cli geo import docker/geo/data/current/places.geojsonl")
+		fmt.Println("\nThe database is chosen by ENV_FILE (default: .env.platform, whose server reads geo.places):")
+		fmt.Println("  go run ./cmd/cli geo import docker/geo/data/current/places.geojsonl")
 	}
 
 	_ = fs.Parse(args)
@@ -37,7 +37,7 @@ func CmdGeo(args []string) {
 	}
 
 	if os.Getenv("ENV_FILE") == "" {
-		_ = os.Setenv("ENV_FILE", ".env.tenant")
+		_ = os.Setenv("ENV_FILE", ".env.platform")
 	}
 	utils.LoadEnv()
 

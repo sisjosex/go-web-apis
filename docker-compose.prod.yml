@@ -5,9 +5,10 @@
 # per-server settings from `.env.platform` / `.env.tenant`. Both of those must
 # point DATABASE_URL at the `postgres` service, not at localhost.
 #
-# Default: the platform server alone (PostgreSQL, Valkey, api-platform, worker,
-# scheduler, backup, Caddy). The tenant server — api-tenant, api-realtime,
-# Valhalla, its migrate job — starts with COMPOSE_PROFILES=tenant in `.env`.
+# Default: the platform server and everything it needs on one box (INFRA-006):
+# PostgreSQL, Valkey, api-platform, api-realtime, worker, scheduler, Valhalla,
+# backup, Caddy. The tenant-mode server — api-tenant and its migrate job — is
+# for a dedicated box and starts with COMPOSE_PROFILES=tenant in `.env`.
 #
 # The API image comes from GHCR, built by CI on every push to master; API_TAG in
 # `.env` pins the commit that runs (docker/README.md → Deploy).
@@ -172,6 +173,8 @@ services:
       GOMEMLIMIT: 420MiB
       DATABASE_POOL_SIZE: "12"
       TENANCY_DATABASE_POOL_SIZE: "4"
+      # Compliance scans, behind auth — not under media (.env.example → tracking documents).
+      TRACKING_DOCUMENTS_ROOT: /app/storage/tracking-documents
     mem_limit: 512m
     cpu_shares: 1024
     logging: *logging
@@ -179,6 +182,7 @@ services:
     command: ["./app", "-mode=platform", "-role=api"]
     volumes:
       - media:/app/storage/media
+      - documents:/app/storage/tracking-documents
     healthcheck:
       test: ["CMD-SHELL", "wget -qO- http://localhost:8080/readyz > /dev/null || exit 1"]
       interval: 15s
@@ -227,19 +231,19 @@ services:
         condition: service_completed_successfully
 
   # ============ REALTIME GATEWAY (TRACK-025) ============
-  # GET /api/v1/tracking/ws only (Caddy routes that path here). Its /readyz is
-  # 503 while Valkey is unreachable: every socket is closed 1012 then and the
+  # GET /api/v1/tracking/ws only (Caddy routes that path of PLATFORM_HOST here).
+  # It resolves each session's tenant database as api-platform does. Its /readyz
+  # is 503 while Valkey is unreachable: every socket is closed 1012 then and the
   # clients poll the snapshots until it is back. Scale it freely.
   api-realtime:
     image: ghcr.io/sisjosex/api:${API_TAG:-latest}
-    profiles: [tenant]
     restart: unless-stopped
     env_file:
-      - .env.tenant
+      - .env.platform
     environment:
-      ENV_FILE: .env.tenant
+      ENV_FILE: .env.platform
       APP_HOST: 0.0.0.0
-      APP_PORT: 9080
+      APP_PORT: 8080
       APP_MODE: release
       LOG_LEVEL: ${LOG_LEVEL:-info}
       SKIP_MIGRATIONS: "true"
@@ -249,19 +253,19 @@ services:
     mem_limit: 512m
     cpu_shares: 1024
     logging: *logging
-    command: ["./app", "-mode=tenant", "-role=realtime"]
-    healthcheck:
-      test: ["CMD-SHELL", "wget -qO- http://localhost:9080/readyz > /dev/null || exit 1"]
+    command: ["./app", "-mode=platform", "-role=realtime"]
+    healthcheck: &probe
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8080/readyz > /dev/null || exit 1"]
       interval: 15s
       timeout: 5s
       retries: 5
       start_period: 30s
-    depends_on:
+    depends_on: &jobs-deps
       postgres:
         condition: service_healthy
       valkey:
         condition: service_healthy
-      migrate-tenant:
+      migrate:
         condition: service_completed_successfully
 
   # ============ WORKER & SCHEDULER (INFRA-001) ============
@@ -285,24 +289,17 @@ services:
       DATABASE_POOL_SIZE: "4"
       # Plus one LISTEN connection per tenant, outside the pool (outbox relay).
       TENANCY_DATABASE_POOL_SIZE: "6"
+      # Only the worker sends pushes (TRACK-012); FCM_PROJECT_ID is in .env.platform.
+      FCM_CREDENTIALS_FILE: /run/secrets/fcm.json
     mem_limit: 768m
     cpu_shares: 1024
     logging: *logging
     command: ["./app", "-mode=platform", "-role=worker"]
+    volumes:
+      - ./secrets/fcm.json:/run/secrets/fcm.json:ro
     # asynq waits up to 8 s for the tasks in flight; the default 10 s stop grace covers it.
-    healthcheck: &probe
-      test: ["CMD-SHELL", "wget -qO- http://localhost:8080/readyz > /dev/null || exit 1"]
-      interval: 15s
-      timeout: 5s
-      retries: 5
-      start_period: 30s
-    depends_on: &jobs-deps
-      postgres:
-        condition: service_healthy
-      valkey:
-        condition: service_healthy
-      migrate:
-        condition: service_completed_successfully
+    healthcheck: *probe
+    depends_on: *jobs-deps
 
   api-scheduler:
     image: ghcr.io/sisjosex/api:${API_TAG:-latest}
@@ -343,6 +340,7 @@ services:
       BACKUP_KEEP_DAYS: ${BACKUP_KEEP_DAYS:-14}
       BACKUP_S3_BUCKET: ${BACKUP_S3_BUCKET}
       BACKUP_S3_ENDPOINT: ${BACKUP_S3_ENDPOINT:-}
+      BACKUP_HEARTBEAT_URL: ${BACKUP_HEARTBEAT_URL:-}
       AWS_ACCESS_KEY_ID: ${BACKUP_S3_ACCESS_KEY}
       AWS_SECRET_ACCESS_KEY: ${BACKUP_S3_SECRET_KEY}
       AWS_DEFAULT_REGION: ${BACKUP_S3_REGION:-us-east-1}
@@ -353,11 +351,10 @@ services:
   # ============ GEO (INFRA-003) ============
   # Routing on the build in ${GEO_DATA_DIR}/current, uploaded and put live by
   # docker/geo/switch.sh — the server never builds (D3). Read-only and
-  # stateless; the tenant API reaches it on the compose network only. A 4 GB
+  # stateless; the API reaches it on the compose network only. A 4 GB
   # box wants 2 GB of swap for the peaks (docker/geo/README.md).
   valhalla:
     image: ghcr.io/valhalla/valhalla:3.9.0
-    profiles: [tenant]
     restart: unless-stopped
     command: ["valhalla_service", "/valhalla/valhalla.json", "2"]
     mem_limit: 1g
@@ -387,12 +384,13 @@ services:
       # A host given as http://… (an IP with no domain yet) is served on :80 only, no
       # certificate. Without the tenant profile its site answers a name nobody resolves.
       PLATFORM_HOST: ${PLATFORM_HOST}
+      TILES_HOST: ${TILES_HOST}
       TENANT_HOST: ${TENANT_HOST:-http://tenant.invalid}
       ACME_EMAIL: ${ACME_EMAIL}
     volumes:
       - ./docker/caddy/Caddyfile:/etc/caddy/Caddyfile:ro
       - ./docker/caddy/tiles.caddy:/etc/caddy/tiles.caddy:ro
-      # The basemap under TENANT_HOST/tiles/ (docker/caddy/tiles.caddy).
+      # The basemap at the root of TILES_HOST (docker/caddy/tiles.caddy).
       - ${GEO_DATA_DIR:-./docker/geo/data}:/srv/geo:ro
       - caddy_data:/data
       - caddy_config:/config
@@ -404,5 +402,6 @@ volumes:
   pgdata:
   valkeydata:
   media:
+  documents:
   caddy_data:
   caddy_config:

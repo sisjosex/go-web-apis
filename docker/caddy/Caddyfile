@@ -1,8 +1,8 @@
 # Xanthops edge — the only container that publishes a host port.
 #
 # Caddy terminates TLS (certificates obtained and renewed automatically from
-# Let's Encrypt) and forwards to the two API containers over the compose
-# network. Neither API nor PostgreSQL is reachable from outside.
+# Let's Encrypt) and forwards to the API containers over the compose network.
+# Neither API nor PostgreSQL is reachable from outside.
 #
 # The SPA is not part of this compose: it is hosted separately and reaches the
 # API cross-origin, which is what ALLOWED_ORIGINS / FRONTEND_URL configure.
@@ -14,21 +14,25 @@
 {$PLATFORM_HOST} {
 	encode zstd gzip
 
+	# The WebSocket gateway (TRACK-025) is its own process: deploying the API never drops a socket,
+	# and a second api-realtime only adds connections (fan-out is Valkey pub/sub, no sticky sessions).
+	@realtime path /api/v1/tracking/ws
+	reverse_proxy @realtime api-realtime:8080
+
 	# X-Forwarded-For is set by Caddy; the API's rate limiter reads it, so the
 	# limit applies per real client and not once for the whole proxy.
 	reverse_proxy api-platform:8080
 }
 
+# The basemap at the root of its own host, off the geo data dir (docker/geo/README.md): moving it to
+# a CDN later (INFRA-008) changes the DNS record only, never an installed app.
+{$TILES_HOST} {
+	encode zstd gzip
+	import tiles.caddy /
+}
+
+# The tenant-mode server (COMPOSE_PROFILES=tenant), meant for a dedicated box.
 {$TENANT_HOST} {
 	encode zstd gzip
-
-	# The basemap, off the geo data dir (docker/geo/README.md).
-	import tiles.caddy
-
-	# The WebSocket gateway (TRACK-025) is its own process: deploying the API never drops a socket,
-	# and a second api-realtime only adds connections (fan-out is Valkey pub/sub, no sticky sessions).
-	@realtime path /api/v1/tracking/ws
-	reverse_proxy @realtime api-realtime:9080
-
 	reverse_proxy api-tenant:9080
 }

@@ -33,9 +33,10 @@ const (
 )
 
 // modeRoles is what each mode may run (D2): the worker and the scheduler walk every tenant, which
-// only the platform database lists; realtime is the tenant's WebSocket gateway (TRACK-010).
+// only the platform database lists; realtime is the WebSocket gateway (TRACK-010), which resolves the
+// tenant database per session exactly as `all` does, so it runs in either mode (INFRA-006).
 var modeRoles = map[string][]string{
-	"platform": {roleAll, roleAPI, roleWorker, roleScheduler},
+	"platform": {roleAll, roleAPI, roleRealtime, roleWorker, roleScheduler},
 	"tenant":   {roleAll, roleAPI, roleRealtime},
 }
 

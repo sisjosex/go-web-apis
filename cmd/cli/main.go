@@ -5,7 +5,7 @@
 //   - migrate:   Run the modular migrations on the ENV_FILE database once and exit
 //   - tenant:    Manage tenant instances and run tenant-specific migrations (requires .env.platform)
 //   - jobs:      Run one scheduled job and exit (requires .env.platform)
-//   - geo:       Import the address-search places of a geo build (.env.tenant)
+//   - geo:       Import the address-search places of a geo build (.env.platform)
 //   - tracking:  Tracking maintenance: queue the planned route lines (requires .env.platform)
 //   - seed-dev:  Write the emulator's dev accounts into the .env.platform database
 //

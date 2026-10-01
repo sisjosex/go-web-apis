@@ -88,10 +88,11 @@ start_valhalla() {
 }
 
 # import_places — load current/places.geojsonl into geo.places. GEO_IMPORT is the
-# whole command; the default runs the cli in the prod image against the tenant
-# server's database, with the data dir mounted at /geo.
+# whole command; the default runs the cli in the prod image as the `migrate` job
+# (the platform database, where the server reads geo.places), with the data dir
+# mounted at /geo.
 import_places() {
-	: "${GEO_IMPORT:=docker compose -f docker-compose.prod.yml run --rm -v $DATA:/geo:ro migrate-tenant ./cli geo import /geo/current/places.geojsonl}"
+	: "${GEO_IMPORT:=docker compose -f docker-compose.prod.yml run --rm -v $DATA:/geo:ro migrate ./cli geo import /geo/current/places.geojsonl}"
 	# shellcheck disable=SC2086 # a command line, split on purpose
 	$GEO_IMPORT
 }

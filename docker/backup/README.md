@@ -27,7 +27,8 @@ is pruned at the end of each run.
 | `BACKUP_S3_BUCKET` | — | required |
 | `BACKUP_S3_ENDPOINT` | — | MinIO / R2 / Spaces / Backblaze; empty = real AWS S3 |
 | `BACKUP_S3_ACCESS_KEY` / `BACKUP_S3_SECRET_KEY` | — | credentials |
-| `BACKUP_S3_REGION` | `us-east-1` | |
+| `BACKUP_S3_REGION` | `us-east-1` | `auto` for R2 |
+| `BACKUP_HEARTBEAT_URL` | — | one GET after a complete run; a heartbeat service alerts on a missing night |
 | `POSTGRES_HOST` / `POSTGRES_PORT` | `postgres` / `5432` | |
 | `POSTGRES_USER` / `POSTGRES_PASSWORD` | — | must be a superuser for `--globals-only` |
 
