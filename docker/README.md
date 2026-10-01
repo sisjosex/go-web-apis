@@ -148,18 +148,17 @@ private like the repo, so the box logs in once with a classic token that has onl
 echo "$GHCR_TOKEN" | docker login ghcr.io -u sisjosex --password-stdin
 ```
 
-A deploy pins the commit in `.env` and pulls; nothing compiles on the box:
+A deploy checks the clone out at a commit, pins it in `.env` and pulls; nothing compiles on
+the box:
 
 ```sh
-cd /srv/taypi24 && git pull \
-  && sed -i "s/^API_TAG=.*/API_TAG=<commit sha>/" .env \
-  && docker compose -f docker-compose.prod.yml pull --ignore-buildable \
-  && docker compose -f docker-compose.prod.yml up -d
+cd /srv/taypi24 && sh docker/deploy.sh <commit sha>   # no sha: the current origin/master
 ```
 
-Rollback is the same with the previous sha. `git pull` still brings the compose file,
-the Caddyfile and the init scripts; the image carries the code. `docker compose ps`
-shows every service `healthy`; `docker stats` shows each one under its limit.
+It refuses a sha whose image is not published, waits for every service `healthy`, restarts
+Caddy when `docker/caddy` changed, and prints the previous sha: rollback is the same command
+with it. The checkout brings the compose file, the Caddyfile and the scripts; the image carries
+the code. `docker stats` shows each service under its limit.
 
 ## First deploy (INFRA-006)
 
@@ -255,7 +254,8 @@ docker compose -f docker-compose.prod.yml exec postgres sh -c \
   "psql -U \"\$POSTGRES_USER\" -d web -c \"UPDATE auth.users SET system_role='super_admin' WHERE email='<you>'\""
 ```
 
-**10. First tenant** (one database per business, made by hand — INFRA-006 D2):
+**10. Tenants** (INFRA-006 D2). A business created through self-service lives in the shared `web`
+database and needs nothing here. A business on an upgraded plan gets its own database, by hand:
 
 ```sh
 docker compose -f docker-compose.prod.yml exec postgres sh -c 'createdb -U "$POSTGRES_USER" <slug>'
