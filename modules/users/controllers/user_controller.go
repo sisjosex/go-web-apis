@@ -70,7 +70,11 @@ func (uc *UserController) Create(c *gin.Context) {
 			if requesterIDStr, ok := c.Get("user_id"); ok {
 				if requesterID, err := uuid.Parse(requesterIDStr.(string)); err == nil {
 					if newUserID, err := uuid.Parse(user.ID); err == nil {
-						_ = uc.userService.AssignToTenant(tenantID, requesterID, newUserID, tenancyModels.RoleMember)
+						tenantRole := newUser.TenantRole
+						if tenantRole == "" {
+							tenantRole = tenancyModels.RoleMember
+						}
+						_ = uc.userService.AssignToTenant(tenantID, requesterID, newUserID, tenantRole)
 					}
 				}
 			}

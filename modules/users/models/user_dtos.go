@@ -17,6 +17,9 @@ type CreateUserDto struct {
 	ProfilePictureUrl string               `json:"profile_picture_url"`
 	Bio               string               `json:"bio"`
 	WebsiteUrl        string               `json:"website_url"`
+	// TenantRole is the access level the user joins the tenant with; empty means member (USERS-011).
+	// Owner is a promotion with its own confirmation and portal comes from the guardian flow, so neither is accepted here.
+	TenantRole string `json:"tenant_role" binding:"omitempty,oneof=admin member organization driver"`
 }
 
 // UpdateUserDto for updating a user (admin operation)

@@ -614,3 +614,79 @@ func TestImportUsers_NoRolesColumnStillImports(t *testing.T) {
 
 	t.Logf("✅ Users: a CSV with no roles column is unaffected")
 }
+
+// ============================================================================
+// Access level on create (USERS-011)
+// ============================================================================
+
+// listedTenantRole returns the access level the list reports for the user with that email, or "" when
+// the user is not listed.
+func listedTenantRole(t *testing.T, helper *testhelpers.ApiTestHelper, email string) (string, bool) {
+	t.Helper()
+	list := helper.DoRequest("GET", "/users?search="+email, nil, map[string]string{"X-Tenant-Slug": "test-company"})
+	var listed struct {
+		Users []struct {
+			Email      string  `json:"email"`
+			TenantRole *string `json:"tenant_role"`
+		} `json:"users"`
+	}
+	json.Unmarshal(list.Body.Bytes(), &listed)
+	for _, u := range listed.Users {
+		if u.Email == email {
+			if u.TenantRole == nil {
+				return "", true
+			}
+			return *u.TenantRole, true
+		}
+	}
+	return "", false
+}
+
+// TestCreateUser_TenantRoleIsApplied - the level sent on create is the level the user joins with.
+func TestCreateUser_TenantRoleIsApplied(t *testing.T) {
+	helper := setupSuperAdmin(t)
+	defer helper.Close()
+
+	email := fmt.Sprintf("level-driver-%d@example.com", time.Now().UnixNano())
+	body := models.CreateUserDto{FirstName: "Level", LastName: "Driver", Email: email, TenantRole: "driver"}
+	w := helper.DoRequest("POST", "/users", body, map[string]string{"X-Tenant-Slug": "test-company"})
+	if w.Code != http.StatusCreated {
+		t.Fatalf("create with tenant_role=driver should return 201, got %d: %s", w.Code, w.Body.String())
+	}
+
+	role, found := listedTenantRole(t, helper, email)
+	assert.True(t, found, "the new user should be listed")
+	assert.Equal(t, "driver", role, "the new user should join as driver")
+}
+
+// TestCreateUser_TenantRoleDefaultsToMember - clients that send no level keep today's member.
+func TestCreateUser_TenantRoleDefaultsToMember(t *testing.T) {
+	helper := setupSuperAdmin(t)
+	defer helper.Close()
+
+	email := fmt.Sprintf("level-default-%d@example.com", time.Now().UnixNano())
+	body := models.CreateUserDto{FirstName: "Level", LastName: "Default", Email: email}
+	w := helper.DoRequest("POST", "/users", body, map[string]string{"X-Tenant-Slug": "test-company"})
+	if w.Code != http.StatusCreated {
+		t.Fatalf("create without tenant_role should return 201, got %d: %s", w.Code, w.Body.String())
+	}
+
+	role, found := listedTenantRole(t, helper, email)
+	assert.True(t, found, "the new user should be listed")
+	assert.Equal(t, "member", role, "a user created without a level should join as member")
+}
+
+// TestCreateUser_TenantRoleOwnerRejected - owner is a promotion, never a create-time level; the
+// request fails validation before any user is inserted.
+func TestCreateUser_TenantRoleOwnerRejected(t *testing.T) {
+	helper := setupSuperAdmin(t)
+	defer helper.Close()
+
+	email := fmt.Sprintf("level-owner-%d@example.com", time.Now().UnixNano())
+	body := models.CreateUserDto{FirstName: "Level", LastName: "Owner", Email: email, TenantRole: "owner"}
+	w := helper.DoRequest("POST", "/users", body, map[string]string{"X-Tenant-Slug": "test-company"})
+	assert.Equal(t, http.StatusBadRequest, w.Code, "tenant_role=owner should be refused: %s", w.Body.String())
+
+	_, found := listedTenantRole(t, helper, email)
+	assert.False(t, found, "no user should exist for a refused create")
+}
