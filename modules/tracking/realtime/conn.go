@@ -15,10 +15,12 @@ import (
 var latestWins = map[string]bool{"position": true, "eta": true}
 
 // Close codes (RFC 6455 registry): 1012 the server is restarting or lost Valkey — reconnect;
-// 1013 this connection fell too far behind — reconnect and resync.
+// 1013 this connection fell too far behind — reconnect and resync. 4401 (private range) the
+// session's token expired — reconnect at once with a fresh one, every channel is authorised again.
 const (
 	StatusServiceRestart = websocket.StatusCode(1012)
 	StatusTryAgainLater  = websocket.StatusCode(1013)
+	StatusTokenExpired   = websocket.StatusCode(4401)
 )
 
 // Frame is what the hub receives from Valkey: the publisher's {type, data}.

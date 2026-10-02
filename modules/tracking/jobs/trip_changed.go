@@ -23,13 +23,14 @@ const topicTripChanged = "trip.changed"
 // TaskTripChanged is the outbox task one of those rows becomes.
 var TaskTripChanged = coreJobs.OutboxTask(topicTripChanged)
 
-// TripChanged is one such row: which trip moved, on which route and day, and how — the action, or
-// "override".
+// TripChanged is one such row: which trip moved, on which route and day, how — the action, or
+// "override" — and the task or stop it moved, when one.
 type TripChanged struct {
 	TripID      string `json:"trip_id"`
 	RouteID     string `json:"route_id"`
 	ServiceDate string `json:"service_date"`
 	Type        string `json:"type"`
+	SubjectID   string `json:"subject_id"`
 }
 
 // frameOf is the frame type a transition is published as (TRACK-025 step 4).
@@ -43,10 +44,11 @@ var frameOf = map[string]string{
 // trip, its riders and their organizations' fleets (TRACK-025), and a completed trip gets its driven
 // path stored (TRACK-010 step 4). The tenant comes from the TaskID the relay gave the row,
 // <tenant>:<id>, as route.changed's. It then becomes the riders' guardians' notices (TRACK-012).
-// valkey nil publishes nothing; notify nil notifies nothing. Delivery is at least once: a repeated
-// frame makes a client refetch the same trip, a repeated trace writes the same line, a repeated
-// notice writes nothing.
-func TripChangedHandler(db coreServices.DatabaseService, tenants *coreJobs.TenantDirectory, router geoInterfaces.Router, valkey coreServices.ValkeyService, notify *Notifier) asynq.HandlerFunc {
+// The trip's driver is told its day changed (TRACK-030), but for an approach, which changes nothing
+// the driver's day shows. valkey nil publishes nothing; notify and signal nil notify and signal
+// nothing. Delivery is at least once: a repeated frame makes a client refetch the same trip, a
+// repeated trace writes the same line, a repeated notice writes nothing.
+func TripChangedHandler(db coreServices.DatabaseService, tenants *coreJobs.TenantDirectory, router geoInterfaces.Router, valkey coreServices.ValkeyService, notify *Notifier, signal *DriverSignal) asynq.HandlerFunc {
 	return func(ctx context.Context, task *asynq.Task) error {
 		var payload TripChanged
 		if err := json.Unmarshal(task.Payload(), &payload); err != nil {
@@ -69,19 +71,26 @@ func TripChangedHandler(db coreServices.DatabaseService, tenants *coreJobs.Tenan
 				log.Printf("⚠️  trip.changed %s: trace: %v", tripID, traceErr)
 			}
 		}
-		if err := PublishTripChanged(ctx, db, valkey, tenant, tripID, payload.Type); err != nil {
+		subjectID, _ := uuid.Parse(payload.SubjectID)
+		if err := PublishTripChanged(ctx, db, valkey, tenant, tripID, payload.Type, subjectID); err != nil {
 			return err
 		}
 		if err := notify.Notify(ctx, tenant, topicTripChanged, task.Payload()); err != nil {
 			return err
+		}
+		if payload.Type != "approach" {
+			if err := signal.Signal(ctx, tenant, nil, &tripID, nil, nil); err != nil {
+				return err
+			}
 		}
 		return traceErr
 	}
 }
 
 // PublishTripChanged sends one transition as a {type, data: {trip_id, type}} frame to everyone
-// watching the trip.
-func PublishTripChanged(ctx context.Context, db coreServices.DatabaseService, valkey coreServices.ValkeyService, tenant coreJobs.Tenant, tripID uuid.UUID, transition string) error {
+// watching the trip: its riders not yet off it, and the ones whose task or stop subjectID is
+// (uuid.Nil when none) — a rider's own dropoff still reaches its channel (TRACK-030 D1).
+func PublishTripChanged(ctx context.Context, db coreServices.DatabaseService, valkey coreServices.ValkeyService, tenant coreJobs.Tenant, tripID uuid.UUID, transition string, subjectID uuid.UUID) error {
 	frameType, ok := frameOf[transition]
 	if !ok || valkey == nil {
 		return nil
@@ -91,7 +100,7 @@ func PublishTripChanged(ctx context.Context, db coreServices.DatabaseService, va
 		return err
 	}
 	tenantCtx := context.WithValue(ctx, coreServices.TenantDatabaseURLKey, tenant.DatabaseURL)
-	riders, organizations, err := trackingRepos.NewTrackingRepository(db).TripAudience(tenantCtx, tenantID, tripID)
+	riders, organizations, err := trackingRepos.NewTrackingRepository(db).TripAudience(tenantCtx, tenantID, tripID, subjectID)
 	if err != nil {
 		return err
 	}

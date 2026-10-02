@@ -56,10 +56,11 @@ func ApplyRouteChanged(ctx context.Context, db coreServices.DatabaseService, ten
 // RouteChangedHandler is the TaskRouteChanged handler. The row carries no tenant — it lives in the
 // tenant's own database — so the tenant comes from the TaskID the relay gave it, <tenant>:<id>.
 // It rebuilds the trips, then the planned line of every version in force from date_from (TRACK-028):
-// a line that fell back to straight fails the task, so asynq retries both with backoff. Delivery is
-// at least once, the materialiser is idempotent and unchanged points cost no router call, so a repeat
-// is harmless.
-func RouteChangedHandler(db coreServices.DatabaseService, tenants *coreJobs.TenantDirectory, paths PathPlanner) asynq.HandlerFunc {
+// a line that fell back to straight fails the task, so asynq retries both with backoff. Then the
+// drivers with a trip today on the route are told their day changed (TRACK-030), whether or not the
+// line was stored — the trips were. Delivery is at least once, the materialiser is idempotent and
+// unchanged points cost no router call, so a repeat is harmless.
+func RouteChangedHandler(db coreServices.DatabaseService, tenants *coreJobs.TenantDirectory, paths PathPlanner, signal *DriverSignal) asynq.HandlerFunc {
 	return func(ctx context.Context, task *asynq.Task) error {
 		var payload RouteChanged
 		if err := json.Unmarshal(task.Payload(), &payload); err != nil {
@@ -75,7 +76,12 @@ func RouteChangedHandler(db coreServices.DatabaseService, tenants *coreJobs.Tena
 		}
 		routeID, _ := uuid.Parse(payload.RouteID)
 		from, _ := optionalDate(payload.DateFrom)
-		return paths.ApplyRoutePaths(ctx, db, tenant, routeID, from)
+		to, _ := optionalDate(payload.DateTo)
+		pathErr := paths.ApplyRoutePaths(ctx, db, tenant, routeID, from)
+		if err := signal.Signal(ctx, tenant, &routeID, nil, from, to); err != nil {
+			return err
+		}
+		return pathErr
 	}
 }
 

@@ -15,12 +15,15 @@ import (
 )
 
 // Session is who a connection is: the tenant it opened under, the user, whether that user is a
-// guardian (the portal level), and the tenant's database for anything read on its behalf.
+// guardian (the portal level) or a driver (its own channel only), the tenant's database for anything
+// read on its behalf, and when its token expires — the socket is closed 4401 then (TRACK-030 D2).
 type Session struct {
 	TenantID    uuid.UUID
 	UserID      uuid.UUID
 	Guardian    bool
+	Driver      bool
 	DatabaseURL string
+	ExpiresAt   time.Time
 }
 
 // EtaSource answers a watched trip's ETA frame data and when it was computed; ok false when there is

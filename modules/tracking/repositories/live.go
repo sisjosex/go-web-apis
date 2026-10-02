@@ -3,6 +3,7 @@ package repositories
 import (
 	"context"
 	"encoding/json"
+	"time"
 
 	trackingErrors "josex/web/modules/tracking/errors"
 	"josex/web/modules/tracking/models"
@@ -86,10 +87,42 @@ func (r *TrackingRepository) CanSubscribe(ctx context.Context, tenantID, userID 
 	return ok, err
 }
 
-// TripAudience answers the trip's riders and their organizations: who its changes are published to.
-func (r *TrackingRepository) TripAudience(ctx context.Context, tenantID, tripID uuid.UUID) (riders, organizations []uuid.UUID, err error) {
+// TripAudience answers the trip's riders not yet off it — plus those with a task on subjectID, the
+// task or stop that moved (uuid.Nil: none) — and their organizations: who its changes are published to.
+func (r *TrackingRepository) TripAudience(ctx context.Context, tenantID, tripID, subjectID uuid.UUID) (riders, organizations []uuid.UUID, err error) {
+	var subject *uuid.UUID
+	if subjectID != uuid.Nil {
+		subject = &subjectID
+	}
 	err = r.dbService.QueryRow(ctx,
-		`SELECT rider_ids, organization_ids FROM tracking.sp_trip_audience(p_tenant_id := $1, p_trip_id := $2)`,
-		tenantID, tripID).Scan(&riders, &organizations)
+		`SELECT rider_ids, organization_ids FROM tracking.sp_trip_audience(p_tenant_id := $1, p_trip_id := $2, p_subject_id := $3)`,
+		tenantID, tripID, subject).Scan(&riders, &organizations)
 	return riders, organizations, err
+}
+
+// DayAudience is one driver a day_changed goes to, and the user it is linked to (nil: none).
+type DayAudience struct {
+	DriverID uuid.UUID
+	UserID   *uuid.UUID
+}
+
+// DriverAudience answers the drivers with a trip today on routeID (within from..to) or on tripID —
+// either may be nil.
+func (r *TrackingRepository) DriverAudience(ctx context.Context, tenantID uuid.UUID, routeID, tripID *uuid.UUID, from, to *time.Time) ([]DayAudience, error) {
+	rows, err := r.dbService.Query(ctx,
+		`SELECT driver_id, user_id FROM tracking.sp_driver_audience(p_tenant_id := $1, p_route_id := $2, p_trip_id := $3, p_date_from := $4, p_date_to := $5)`,
+		tenantID, routeID, tripID, from, to)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []DayAudience
+	for rows.Next() {
+		var a DayAudience
+		if err := rows.Scan(&a.DriverID, &a.UserID); err != nil {
+			return nil, err
+		}
+		out = append(out, a)
+	}
+	return out, rows.Err()
 }

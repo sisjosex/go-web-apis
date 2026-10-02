@@ -117,8 +117,8 @@ func (h *Hub) Serve(check SubscribeChecker, origins []string, pingEvery time.Dur
 	}
 }
 
-// sessionOf reads who is connecting from the tenant chain. Operators and guardians listen; the
-// organization and driver levels have no channel of their own yet.
+// sessionOf reads who is connecting from the tenant chain. Operators and guardians listen, a driver
+// only to its own channel; the organization level has no channel of its own yet.
 func sessionOf(c *gin.Context) (Session, bool) {
 	tenantID, err := uuid.Parse(c.GetString("tenant_id"))
 	if err != nil {
@@ -129,10 +129,13 @@ func sessionOf(c *gin.Context) (Session, bool) {
 		return Session{}, false
 	}
 	role := c.GetString("tenant_user_role")
-	if role == tenancyModels.RoleOrganization || role == tenancyModels.RoleDriver {
+	if role == tenancyModels.RoleOrganization {
 		return Session{}, false
 	}
-	session := Session{TenantID: tenantID, UserID: userID, Guardian: role == tenancyModels.RolePortal}
+	session := Session{TenantID: tenantID, UserID: userID, Guardian: role == tenancyModels.RolePortal, Driver: role == tenancyModels.RoleDriver}
+	if exp, ok := c.Get("token_exp"); ok {
+		session.ExpiresAt, _ = exp.(time.Time)
+	}
 	if raw, ok := c.Get("tenant_database_url"); ok {
 		if dbURL, ok := raw.(*string); ok && dbURL != nil {
 			session.DatabaseURL = *dbURL
@@ -157,6 +160,10 @@ func (h *Hub) read(ctx context.Context, ws *websocket.Conn, conn *Conn, check Su
 		}
 		switch op.Op {
 		case "subscribe":
+			if conn.Session.Driver && !strings.HasPrefix(op.Channel, "driver:") {
+				conn.Refuse(op.Channel, "forbidden")
+				continue
+			}
 			allowed, err := cache.allowed(ctx, conn.Session, op.Channel, check)
 			if err != nil {
 				log.Printf("⚠️  realtime: subscribe check %s: %v", op.Channel, err)
@@ -179,12 +186,21 @@ func (h *Hub) read(ctx context.Context, ws *websocket.Conn, conn *Conn, check Su
 }
 
 // write sends what the connection queued, pings on schedule, and closes the socket with the
-// connection's code when it is closed — by the hub (1012, 1013), the reader, or a failed ping.
+// connection's code when it is closed — by the hub (1012, 1013), the reader, a failed ping, or the
+// session's token expiring (4401): a permission revoked meanwhile holds at most until then.
 func (h *Hub) write(ctx context.Context, ws *websocket.Conn, conn *Conn, pingEvery time.Duration) {
 	ping := time.NewTicker(pingEvery)
 	defer ping.Stop()
+	var expired <-chan time.Time
+	if exp := conn.Session.ExpiresAt; !exp.IsZero() {
+		timer := time.NewTimer(time.Until(exp))
+		defer timer.Stop()
+		expired = timer.C
+	}
 	for {
 		select {
+		case <-expired:
+			conn.Close(StatusTokenExpired, "token expired")
 		case <-conn.Done():
 			code, reason, _ := conn.Closed()
 			_ = ws.Close(code, reason)

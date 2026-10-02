@@ -103,8 +103,10 @@ type tenantChains struct {
 	portal gin.HandlerFunc
 	// The GPS ingest's two ways in (TRACK-010): a driver's session — the chain with the driver's
 	// mobile-only refusal lifted — and a device token, which replaces auth and slug altogether.
-	driver  gin.HandlerFunc
-	device  gin.HandlerFunc
+	driver gin.HandlerFunc
+	device gin.HandlerFunc
+	// The realtime socket's: guardians and drivers both pass, each to its own channels (TRACK-030).
+	socket  gin.HandlerFunc
 	modules tenancyInterfaces.ModuleService
 }
 
@@ -280,7 +282,7 @@ func registerTenancy(d routeDeps, billingService billingInterfaces.BillingServic
 // role both mount behind them. Without tenancy both are no-ops and modules is nil.
 func tenancyChains(d routeDeps) tenantChains {
 	noop := gin.HandlerFunc(func(c *gin.Context) { c.Next() })
-	chains := tenantChains{tenant: noop, portal: noop}
+	chains := tenantChains{tenant: noop, portal: noop, socket: noop}
 	tenancyConf := config.ModularAppConfig.Tenancy
 	if !config.ModularAppConfig.Core.IsModuleEnabled("tenancy") || tenancyConf == nil || !tenancyConf.Enabled {
 		return chains
@@ -292,6 +294,7 @@ func tenancyChains(d routeDeps) tenantChains {
 	chains.tenant = tenancyMW.TenantMiddlewareFromHeader(tenantService)
 	chains.portal = tenancyMW.TenantMiddlewareFromHeader(tenantService, tenancyModels.RolePortal)
 	chains.driver = tenancyMW.TenantMiddlewareFromHeader(tenantService, tenancyModels.RoleDriver)
+	chains.socket = tenancyMW.TenantMiddlewareFromHeader(tenantService, tenancyModels.RolePortal, tenancyModels.RoleDriver)
 	chains.device = tenancyMW.GPSDeviceMiddleware(tenancyRepos.NewGPSDeviceRepository(d.db))
 	return chains
 }
@@ -305,8 +308,8 @@ func liveService(d routeDeps, valkey coreServices.ValkeyService) *trackingServic
 }
 
 // trackingSocket is GET /tracking/ws's handler list, one middleware per handler: the browser's
-// subprotocol token and ?tenant_slug= become headers, then auth, the chain that lets a guardian through,
-// the module check, and the upgrade. It also gives the hub its ETA source.
+// subprotocol token and ?tenant_slug= become headers, then auth, the chain that lets a guardian and a
+// driver through, the module check, and the upgrade. It also gives the hub its ETA source.
 func trackingSocket(d routeDeps, chains tenantChains, live *trackingServices.LiveService) []gin.HandlerFunc {
 	withTenant := func(ctx context.Context, session realtime.Session) context.Context {
 		if session.DatabaseURL == "" {
@@ -336,7 +339,7 @@ func trackingSocket(d routeDeps, chains tenantChains, live *trackingServices.Liv
 		return live.CanSubscribe(withTenant(ctx, session), session.TenantID, session.UserID, session.Guardian, channel)
 	}
 	trackingConf := config.ModularAppConfig.Tracking
-	handlers := []gin.HandlerFunc{realtime.BrowserAuth(), d.authMiddleware, chains.portal}
+	handlers := []gin.HandlerFunc{realtime.BrowserAuth(), d.authMiddleware, chains.socket}
 	if chains.modules != nil {
 		handlers = append(handlers, tenancyMW.LoadTenantModules(chains.modules), tenancyMW.RequireModule("tracking"))
 	}

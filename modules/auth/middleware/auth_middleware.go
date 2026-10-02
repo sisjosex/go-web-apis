@@ -7,6 +7,7 @@ import (
 	coreModels "josex/web/modules/core/models"
 	"net/http"
 	"strings"
+	"time"
 
 	"github.com/gin-gonic/gin"
 )
@@ -30,6 +31,10 @@ func AuthMiddleware(jwtService services.JWTService) gin.HandlerFunc {
 		// Guardar datos en el contexto de la request
 		c.Set("user_id", claims["user_id"])
 		c.Set("session_id", claims["session_id"])
+		// When the token stops being valid: a long-lived connection (the realtime socket) ends there.
+		if exp, ok := claims["exp"].(float64); ok {
+			c.Set("token_exp", time.Unix(int64(exp), 0))
+		}
 
 		// Set system_role if present (backward compatible with old tokens)
 		if systemRole, ok := claims["system_role"].(string); ok {

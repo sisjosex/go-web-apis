@@ -660,6 +660,30 @@ func CreateTestDriver(t *testing.T, helper *testhelpers.ApiTestHelper) string {
 	return ParseResponse(t, w.Body.Bytes())["id"].(string)
 }
 
+// LinkDriverAccount links the seeded driver account (driver@test.local) to driverID, and frees it
+// again at cleanup: the API has no endpoint that links an account to a driver.
+func LinkDriverAccount(t *testing.T, helper *testhelpers.ApiTestHelper, driverID string) {
+	t.Helper()
+	ctx := context.Background()
+	unlink := `UPDATE tracking.drivers SET user_id = NULL WHERE user_id = (SELECT id FROM auth.users WHERE email = 'driver@test.local')`
+	if _, err := helper.DB().Execute(ctx, unlink); err != nil {
+		t.Fatalf("unlink driver account: %v", err)
+	}
+	t.Cleanup(func() { _, _ = helper.DB().Execute(ctx, unlink) })
+	if _, err := helper.DB().Execute(ctx, `UPDATE tracking.drivers SET user_id = (SELECT id FROM auth.users WHERE email = 'driver@test.local') WHERE id = $1`, driverID); err != nil {
+		t.Fatalf("link driver account: %v", err)
+	}
+}
+
+// SetRouteDefaultDriver sets the driver a route's trips are built with, without the route.changed a
+// PATCH writes: a test counting the signals of one later change must not see this one.
+func SetRouteDefaultDriver(t *testing.T, helper *testhelpers.ApiTestHelper, routeID, driverID string) {
+	t.Helper()
+	if _, err := helper.DB().Execute(context.Background(), `UPDATE tracking.routes SET default_driver_id = $2 WHERE id = $1`, routeID, driverID); err != nil {
+		t.Fatalf("route default driver: %v", err)
+	}
+}
+
 // ============================================================================
 // DOCUMENT TEST BUILDERS (TRACK-016)
 // ============================================================================

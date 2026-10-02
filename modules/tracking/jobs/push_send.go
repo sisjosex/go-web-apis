@@ -50,32 +50,39 @@ func PushSendHandler(db coreServices.DatabaseService, pusher interfaces.Pusher) 
 		if err != nil {
 			return fmt.Errorf("push-send user_id %q: %v: %w", payload.UserID, err, asynq.SkipRetry)
 		}
-		repo := trackingRepos.NewTrackingRepository(db)
-		tokens, err := repo.PushTokens(ctx, userID)
-		if err != nil {
-			return err
-		}
 		collapseID := payload.CollapseID
 		if collapseID == "" {
 			collapseID = payload.NotificationID
 		}
-		var outage error
-		for _, token := range tokens {
-			err := pusher.Send(ctx, interfaces.PushMessage{
-				Token: token, Type: payload.Type, Args: payload.Args, Data: payload.Data, CollapseID: collapseID, Channel: payload.Channel,
-			})
-			switch {
-			case err == nil:
-			case errors.Is(err, interfaces.ErrPushUnregistered):
-				if err := repo.ForgetPushToken(ctx, token); err != nil {
-					return err
-				}
-			case errors.Is(err, interfaces.ErrPushRejected):
-				log.Printf("⚠️  push-send %s: %v", payload.NotificationID, err)
-			default:
-				outage = err
-			}
-		}
-		return outage
+		return pushToUser(ctx, db, pusher, userID, interfaces.PushMessage{
+			Type: payload.Type, Args: payload.Args, Data: payload.Data, CollapseID: collapseID, Channel: payload.Channel,
+		}, payload.NotificationID)
 	}
+}
+
+// pushToUser sends msg to each of the user's phones. A token FCM answers UNREGISTERED is deleted; a
+// refused message is logged under what and dropped; an outage is answered so the task retries.
+func pushToUser(ctx context.Context, db coreServices.DatabaseService, pusher interfaces.Pusher, userID uuid.UUID, msg interfaces.PushMessage, what string) error {
+	repo := trackingRepos.NewTrackingRepository(db)
+	tokens, err := repo.PushTokens(ctx, userID)
+	if err != nil {
+		return err
+	}
+	var outage error
+	for _, token := range tokens {
+		msg.Token = token
+		err := pusher.Send(ctx, msg)
+		switch {
+		case err == nil:
+		case errors.Is(err, interfaces.ErrPushUnregistered):
+			if err := repo.ForgetPushToken(ctx, token); err != nil {
+				return err
+			}
+		case errors.Is(err, interfaces.ErrPushRejected):
+			log.Printf("⚠️  push %s: %v", what, err)
+		default:
+			outage = err
+		}
+	}
+	return outage
 }

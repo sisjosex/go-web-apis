@@ -8,7 +8,9 @@ import (
 // PushMessage is one notice on its way to one phone (TRACK-012). The phone translates it: Type picks
 // its strings and Args fill them, so the server never renders a language. Data rides along for the
 // tap; CollapseID makes a later notice replace the one already shown instead of stacking a second
-// one; Channel is the Android channel the phone created for it (MOBILE-004).
+// one; Channel is the Android channel the phone created for it (MOBILE-004). Silent is a data-only
+// message the app handles without showing anything — Type, Args and Channel are then unused, and a
+// newer one with the same CollapseID replaces one still waiting for the phone (TRACK-030 D3).
 type PushMessage struct {
 	Token      string
 	Type       string
@@ -16,6 +18,7 @@ type PushMessage struct {
 	Data       map[string]string
 	CollapseID string
 	Channel    string
+	Silent     bool
 }
 
 // Pusher is the push port (TRACK-012 D2): FCM today, for Android and iOS alike.

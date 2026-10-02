@@ -24,6 +24,9 @@ func StartWorker(valkey coreServices.ValkeyService, registry *Registry, concurre
 		// An idle worker looks for work every 200 ms rather than asynq's 1 s: a trip transition reaches
 		// a watching socket within a second (TRACK-025), for five cheap Valkey checks a second.
 		TaskCheckInterval: 200 * time.Millisecond,
+		// A delayed task (a driver's grouped day_changed, TRACK-030) is moved to its queue within
+		// 500 ms of its time rather than asynq's 5 s.
+		DelayedTaskCheckInterval: 500 * time.Millisecond,
 	})
 	if err := server.Start(registry.mux); err != nil {
 		return nil, err

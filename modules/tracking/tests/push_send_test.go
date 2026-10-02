@@ -127,3 +127,36 @@ func TestPushSend_FCMAnswers(t *testing.T) {
 		assert.Equal(t, 1, feed, "and the feed row")
 	})
 }
+
+// TestDayChanged_SilentPush - TRACK-030 D3: the driver's signal reaches its phone as a data-only
+// message — no notification, collapsed per driver, NORMAL priority, the tenant in the data.
+func TestDayChanged_SilentPush(t *testing.T) {
+	helper := SetupTrackingTest(t)
+	defer helper.Close()
+	fcm := &fakeFCM{status: http.StatusOK, body: `{"name":"projects/test-project/messages/1"}`}
+	server := httptest.NewServer(fcm)
+	defer server.Close()
+	pusher := push.NewFCM("test-project", oauth2.StaticTokenSource(&oauth2.Token{AccessToken: "t"}), server.URL)
+	user := portalUserID(t, helper, "driver@test.local")
+	RegisterTestPhone(t, helper, user, "tok-driver")
+
+	payload, _ := json.Marshal(trackingJobs.DayChanged{TenantSlug: "test-company", DriverID: "d-1", UserID: user})
+	assert.NoError(t, trackingJobs.DayChangedHandler(helper.DB(), nil, pusher)(t.Context(), asynq.NewTask(trackingJobs.TaskDayChanged, payload)))
+	var sent struct {
+		Message struct {
+			Data    map[string]string `json:"data"`
+			Android struct {
+				CollapseKey  string          `json:"collapse_key"`
+				Priority     string          `json:"priority"`
+				Notification json.RawMessage `json:"notification"`
+			} `json:"android"`
+		} `json:"message"`
+	}
+	raw, _ := fcm.last.Load().(string)
+	if assert.NoError(t, json.Unmarshal([]byte(raw), &sent), raw) {
+		assert.Nil(t, sent.Message.Android.Notification, "data only")
+		assert.Equal(t, "day:d-1", sent.Message.Android.CollapseKey)
+		assert.Equal(t, "NORMAL", sent.Message.Android.Priority)
+		assert.Equal(t, map[string]string{"type": "day_changed", "tenant_slug": "test-company"}, sent.Message.Data)
+	}
+}

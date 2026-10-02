@@ -106,24 +106,29 @@ func registerJobs(ctx context.Context, registry *jobs.Registry, db services.Data
 		// A route's plan changed: rebuild its trips that have not started (TRACK-008 D4) and its planned
 		// line by streets (TRACK-028). The daily pass is the same SP over every route, so a missed row is
 		// caught the next morning.
+		// A driver's day changed (TRACK-030 D3): a frame on its channel, and a silent push when FCM is set.
+		jobsClient := jobs.NewClient(valkey)
+		signal := trackingJobs.NewDriverSignal(db, jobsClient)
 		registry.Handle(trackingJobs.TaskRouteChanged, trackingJobs.RouteChangedHandler(db, directory,
-			trackingJobs.PathPlanner{Router: router, FallbackKmh: float64(geoConf.FallbackSpeedKmh)}))
+			trackingJobs.PathPlanner{Router: router, FallbackKmh: float64(geoConf.FallbackSpeedKmh)}, signal))
 		registry.Handle(trackingJobs.TaskTripsMaterialise, trackingJobs.TripsMaterialiseHandler(db, directory))
 		// Trip and alert events become the guardians' notices (TRACK-012): the feed always, the push only
 		// with FCM credentials (D2).
 		var pushClient *asynq.Client
-		if pusher, err := trackingPush.New(ctx, config.ModularAppConfig.Tracking); err != nil {
+		pusher, err := trackingPush.New(ctx, config.ModularAppConfig.Tracking)
+		if err != nil {
 			log.Printf("⚠️  push disabled: %v", err)
 		} else if pusher != nil {
 			registry.Handle(trackingJobs.TaskPushSend, trackingJobs.PushSendHandler(db, pusher))
-			pushClient = jobs.NewClient(valkey)
+			pushClient = jobsClient
 		}
+		registry.Handle(trackingJobs.TaskDayChanged, trackingJobs.DayChangedHandler(db, valkey, pusher))
 		notify := trackingJobs.NewNotifier(db, pushClient, config.ModularAppConfig.Tracking)
 		// A trip moved (TRACK-020 D1): published to everyone watching it (TRACK-025), and a completed
 		// one gets its driven path, map-matched through the geo router — the raw line when Valhalla is
 		// down (TRACK-010).
 		registry.Handle(trackingJobs.TaskTripChanged, trackingJobs.TripChangedHandler(db, directory,
-			router, valkey, notify))
+			router, valkey, notify, signal))
 		// An alert was raised or resolved (TRACK-004 D1): an `alert` frame to the fleet and the trip.
 		registry.Handle(trackingJobs.TaskAlertChanged, trackingJobs.AlertChangedHandler(directory, valkey, notify))
 		registry.Handle(trackingJobs.TaskPositionsPartitions, trackingJobs.PositionsPartitionsHandler(db, directory,
