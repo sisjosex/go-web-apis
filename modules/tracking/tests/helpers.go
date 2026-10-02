@@ -16,6 +16,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5"
 	"github.com/stretchr/testify/assert"
 
 	"josex/web/modules/core/testhelpers"
@@ -960,4 +961,67 @@ func RiderDropoffStatuses(t *testing.T, helper *testhelpers.ApiTestHelper, tripI
 		statuses = append(statuses, s)
 	}
 	return statuses
+}
+
+// InsertOutboxRow writes one outbox row as an SP would, answering its id and the tenant the trigger
+// gave it (INFRA-009); err is the trigger's refusal when the payload names neither tenant nor route.
+// No endpoint writes a bare row.
+func InsertOutboxRow(helper *testhelpers.ApiTestHelper, topic string, payload map[string]interface{}) (int64, string, error) {
+	raw, err := json.Marshal(payload)
+	if err != nil {
+		return 0, "", err
+	}
+	var id int64
+	var tenantID string
+	err = helper.DB().QueryRow(context.Background(),
+		`INSERT INTO tracking.outbox (topic, payload) VALUES ($1, $2) RETURNING id, tenant_id`, topic, raw).Scan(&id, &tenantID)
+	return id, tenantID, err
+}
+
+// InsertOutboxRowIn writes one outbox row inside a transaction the test owns — the rolled-back case.
+func InsertOutboxRowIn(tx pgx.Tx, topic string, payload map[string]interface{}) error {
+	raw, err := json.Marshal(payload)
+	if err != nil {
+		return err
+	}
+	_, err = tx.Exec(context.Background(), `INSERT INTO tracking.outbox (topic, payload) VALUES ($1, $2)`, topic, raw)
+	return err
+}
+
+// SeedOtherTenantFleet seeds a second tenant inside the test database — a carrier, a route and a bus —
+// as a tenant sharing `web` would have (INFRA-009). The API scopes every write to the session's
+// tenant, so it cannot create another tenant's rows.
+func SeedOtherTenantFleet(t *testing.T, helper *testhelpers.ApiTestHelper) (tenantID, routeID, vehicleID string) {
+	t.Helper()
+	ctx := context.Background()
+	tenantID, companyID := uuid.NewString(), uuid.NewString()
+	routeID, vehicleID = uuid.NewString(), uuid.NewString()
+	statements := []struct {
+		sql  string
+		args []interface{}
+	}{
+		{`INSERT INTO tracking.transport_companies (id, tenant_id, name, registration_number, status)
+		  VALUES ($1, $2, 'Other Transit', $3, 'active')`, []interface{}{companyID, tenantID, "REG-" + companyID[:8]}},
+		{`INSERT INTO tracking.routes (id, company_id, route_name, origin_address, destination_address, direction, status)
+		  VALUES ($1, $2, 'Other Route', 'A', 'B', 'outbound', 'active')`, []interface{}{routeID, companyID}},
+		{`INSERT INTO tracking.vehicles (id, company_id, plate_number, vehicle_type, capacity, status)
+		  VALUES ($1, $2, $3, 'bus', 20, 'active')`, []interface{}{vehicleID, companyID, "OTH-" + vehicleID[:6]}},
+	}
+	for _, s := range statements {
+		if _, err := helper.DB().Execute(ctx, s.sql, s.args...); err != nil {
+			t.Fatalf("seed the other tenant: %v", err)
+		}
+	}
+	return tenantID, routeID, vehicleID
+}
+
+// VehiclePositionCount is how many stored points a vehicle has.
+func VehiclePositionCount(t *testing.T, helper *testhelpers.ApiTestHelper, vehicleID string) int {
+	t.Helper()
+	var n int
+	if err := helper.DB().QueryRow(context.Background(),
+		`SELECT count(*) FROM tracking.vehicle_positions WHERE vehicle_id = $1`, vehicleID).Scan(&n); err != nil {
+		t.Fatalf("count positions: %v", err)
+	}
+	return n
 }

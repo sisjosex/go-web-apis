@@ -63,9 +63,9 @@ func RunDocumentAlertsPass(ctx context.Context, db coreServices.DatabaseService,
 }
 
 // PassHandler is the TaskDocumentAlerts handler: the pass over whatever tenants exist when it fires.
-func PassHandler(db coreServices.DatabaseService, tenants coreJobs.TenantLister) asynq.HandlerFunc {
+func PassHandler(db coreServices.DatabaseService, tenants *coreJobs.TenantDirectory) asynq.HandlerFunc {
 	return func(ctx context.Context, _ *asynq.Task) error {
-		list, err := tenants(ctx)
+		list, err := tenants.List(ctx)
 		if err != nil {
 			return err
 		}

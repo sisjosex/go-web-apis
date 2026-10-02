@@ -35,7 +35,7 @@ func startTestRelay(t *testing.T, helper *testhelpers.ApiTestHelper, tenantID st
 	}
 
 	tenant := jobs.Tenant{ID: tenantID, DatabaseURL: config.ModularAppConfig.Core.DatabaseURL}
-	lister := func(context.Context) ([]jobs.Tenant, error) { return []jobs.Tenant{tenant}, nil }
+	lister := jobs.NewTenantDirectory(func(context.Context) ([]jobs.Tenant, error) { return []jobs.Tenant{tenant}, nil })
 	relay := jobs.NewOutboxRelay(helper.DB(), valkey, lister, time.Minute)
 	relay.Start(ctx)
 
@@ -67,7 +67,7 @@ func TestOutboxRelay_CommittedRowOnly(t *testing.T) {
 	helper := SetupTrackingTest(t)
 	defer helper.Close()
 	ctx := context.Background()
-	tenantID := uuid.NewString()
+	tenantID := TestTenantID
 	relay, inspector := startTestRelay(t, helper, tenantID)
 	defer relay.Shutdown()
 	defer inspector.Close()
@@ -77,14 +77,14 @@ func TestOutboxRelay_CommittedRowOnly(t *testing.T) {
 	if err != nil {
 		t.Fatalf("begin: %v", err)
 	}
-	if _, err := tx.Exec(ctx, `INSERT INTO tracking.outbox (topic, payload) VALUES ('document.alerts', jsonb_build_object('marker', $1::text))`, rolledBack); err != nil {
+	if err := InsertOutboxRowIn(tx, "document.alerts", map[string]interface{}{"marker": rolledBack, "tenant_id": tenantID}); err != nil {
 		t.Fatalf("insert in the rolled-back transaction: %v", err)
 	}
 	if err := tx.Rollback(ctx); err != nil {
 		t.Fatalf("rollback: %v", err)
 	}
-	var id int64
-	if err := helper.DB().QueryRow(ctx, `INSERT INTO tracking.outbox (topic, payload) VALUES ('document.alerts', '{"marker":"committed"}') RETURNING id`).Scan(&id); err != nil {
+	id, _, err := InsertOutboxRow(helper, "document.alerts", map[string]interface{}{"marker": "committed", "tenant_id": tenantID})
+	if err != nil {
 		t.Fatalf("insert committed row: %v", err)
 	}
 
@@ -142,7 +142,7 @@ func TestOutboxRouteChanged_OneRowPerAcceptedWrite(t *testing.T) {
 		{"stop_place_id": SchoolAStopID, "sequence": 2},
 	})
 
-	tenantID := uuid.NewString()
+	tenantID := TestTenantID
 	relay, inspector := startTestRelay(t, helper, tenantID)
 	defer relay.Shutdown()
 	defer inspector.Close()
@@ -208,7 +208,7 @@ func TestOutboxRouteChanged_ExceptionsAndSchedules(t *testing.T) {
 	routeID := CreateTestRoute(t, helper)
 	CreateRouteSchedule(t, helper, routeID, WeekdayScheduleBody("07:00", "2027-09-01"))
 
-	tenantID := uuid.NewString()
+	tenantID := TestTenantID
 	relay, inspector := startTestRelay(t, helper, tenantID)
 	defer relay.Shutdown()
 	defer inspector.Close()

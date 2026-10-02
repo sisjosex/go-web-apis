@@ -322,7 +322,7 @@ func TestRealtimeSocket_TripChangedFanOut(t *testing.T) {
 	defer relay.Shutdown()
 	defer inspector.Close()
 	registry := coreJobs.NewRegistry()
-	lister := func(context.Context) ([]coreJobs.Tenant, error) { return []coreJobs.Tenant{testTenant()}, nil }
+	lister := coreJobs.NewTenantDirectory(func(context.Context) ([]coreJobs.Tenant, error) { return []coreJobs.Tenant{testTenant()}, nil })
 	registry.Handle(trackingJobs.TaskTripChanged, trackingJobs.TripChangedHandler(helper.DB(), lister, nil, helper.Valkey(), nil))
 	worker, err := coreJobs.StartWorker(helper.Valkey(), registry, 2)
 	if err != nil {

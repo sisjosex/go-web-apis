@@ -163,7 +163,7 @@ func TestPositionsPartitions_DropsPastRetention(t *testing.T) {
 	execSQL(t, helper, ddl)
 	assert.Equal(t, 1, countRows(t, helper, `SELECT count(*) FROM pg_class WHERE relname = $1`, name))
 
-	lister := func(context.Context) ([]coreJobs.Tenant, error) { return []coreJobs.Tenant{testTenant()}, nil }
+	lister := coreJobs.NewTenantDirectory(func(context.Context) ([]coreJobs.Tenant, error) { return []coreJobs.Tenant{testTenant()}, nil })
 	if err := trackingJobs.PositionsPartitionsHandler(helper.DB(), lister, 30)(context.Background(), asynq.NewTask(trackingJobs.TaskPositionsPartitions, nil)); err != nil {
 		t.Fatalf("positions partitions: %v", err)
 	}
@@ -229,7 +229,8 @@ func TestIngestEndpoint_Driver(t *testing.T) {
 	assert.Contains(t, w.Body.String(), "tracking.ingest.no-active-trip")
 
 	_, vehicleID := liveTrip(t, admin)
-	stream := trackingServices.GPSStream(TestTenantID)
+	// The test tenant lives in the shared database: its points go to gps:shared, tagged (INFRA-009 D3).
+	stream := trackingServices.GPSSharedStream
 	before := driver.Valkey().Client().XLen(context.Background(), stream).Val()
 	w = driver.DoRequest("POST", "/tracking/ingest/positions", ingestBody(-17.39, -66.15), map[string]string{})
 	assert.Equal(t, http.StatusAccepted, w.Code, w.Body.String())
@@ -240,6 +241,7 @@ func TestIngestEndpoint_Driver(t *testing.T) {
 	entries := driver.Valkey().Client().XRevRangeN(context.Background(), stream, "+", "-", 1).Val()
 	if assert.Len(t, entries, 1) {
 		assert.Contains(t, entries[0].Values[trackingServices.GPSStreamField], vehicleID)
+		assert.Equal(t, TestTenantID, entries[0].Values[trackingServices.GPSTenantField])
 	}
 }
 
@@ -313,7 +315,7 @@ func startTestConsumer(t *testing.T, helper *testhelpers.ApiTestHelper, claimIdl
 	if valkey == nil {
 		t.Fatal("REDIS_URL is not set in .env.test — the GPS consumer tests need Valkey (make docker-up)")
 	}
-	lister := func(context.Context) ([]coreJobs.Tenant, error) { return []coreJobs.Tenant{testTenant()}, nil }
+	lister := coreJobs.NewTenantDirectory(func(context.Context) ([]coreJobs.Tenant, error) { return []coreJobs.Tenant{testTenant()}, nil })
 	consumer := trackingJobs.NewPositionsConsumer(helper.DB(), valkey, lister, models.IngestRadii{ArrivalM: 50, ApproachM: 800})
 	consumer.ClaimIdle = claimIdle
 	consumer.ClaimEvery = claimIdle

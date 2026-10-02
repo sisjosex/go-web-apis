@@ -377,7 +377,7 @@ func TestTripChanged_PublishedAndAcknowledged(t *testing.T) {
 	defer helper.Close()
 	ctx := context.Background()
 	_, _, tripID := todaysTrip(t, helper)
-	tenantID := uuid.NewString()
+	tenantID := TestTenantID
 	relay, inspector := startTestRelay(t, helper, tenantID)
 	defer relay.Shutdown()
 	defer inspector.Close()
@@ -403,7 +403,7 @@ func TestTripChanged_PublishedAndAcknowledged(t *testing.T) {
 		return err == nil && published
 	})
 
-	lister := func(context.Context) ([]jobs.Tenant, error) { return []jobs.Tenant{testTenant()}, nil }
+	lister := jobs.NewTenantDirectory(func(context.Context) ([]jobs.Tenant, error) { return []jobs.Tenant{testTenant()}, nil })
 	err = trackingJobs.TripChangedHandler(helper.DB(), lister, nil, nil, nil)(ctx, asynq.NewTask(info.Type, info.Payload))
 
 	assert.NoError(t, err)

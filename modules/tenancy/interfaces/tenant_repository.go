@@ -36,6 +36,9 @@ type TenantRepository interface {
 
 	// List all tenants with custom database URLs (for CLI migrations)
 	ListTenantsWithCustomDB(ctx context.Context) ([]*models.Tenant, error)
+	// ListTenantDirectory answers every active tenant and its database, nil for the shared one — what
+	// the background workers walk (INFRA-009).
+	ListTenantDirectory(ctx context.Context) ([]*models.Tenant, error)
 	// ListTenantAdminEmails answers who an operational digest goes to (TRACK-016 D1).
 	ListTenantAdminEmails(ctx context.Context, tenantID uuid.UUID) ([]*models.TenantAdminEmail, error)
 

@@ -357,6 +357,26 @@ func (r *tenantRepository) ListTenantsWithCustomDB(ctx context.Context) ([]*mode
 	return tenants, nil
 }
 
+// ListTenantDirectory lists every active tenant with its database URL, nil for the shared platform
+// database (INFRA-009).
+func (r *tenantRepository) ListTenantDirectory(ctx context.Context) ([]*models.Tenant, error) {
+	rows, err := r.dbService.Query(ctx, `SELECT id, slug, name, database_url FROM tenancy.sp_list_tenant_directory()`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var tenants []*models.Tenant
+	for rows.Next() {
+		var tenant models.Tenant
+		if err := rows.Scan(&tenant.ID, &tenant.Slug, &tenant.Name, &tenant.DatabaseURL); err != nil {
+			return nil, err
+		}
+		tenants = append(tenants, &tenant)
+	}
+	return tenants, rows.Err()
+}
+
 // UpdateUserRole updates a user's role within a tenant
 func (r *tenantRepository) UpdateUserRole(ctx context.Context, tenantID uuid.UUID, requesterUserID uuid.UUID, userID uuid.UUID, role string) error {
 	query := `

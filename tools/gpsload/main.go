@@ -74,7 +74,7 @@ func main() {
 	}
 
 	tenantID, tenantCtx, fleet := setup(ctx, db, *slug, *count)
-	stream := trackingServices.GPSStream(tenantID.String())
+	stream := trackingServices.GPSStreamIn(tenantCtx, tenantID.String())
 	log.Printf("🚌 %d vehicles, one point every %s for %s → %s", len(fleet), *interval, *duration, *apiURL)
 
 	start := time.Now()

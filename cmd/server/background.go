@@ -59,8 +59,10 @@ func startBackground(ctx context.Context, mode, role string, db services.Databas
 	}
 
 	registry := jobs.NewRegistry()
-	relay := jobs.NewOutboxRelay(db, valkey, tenantLister(db), coreConf.OutboxPollInterval)
-	registerJobs(ctx, registry, db, valkey, relay)
+	// One directory per process: every walker and handler resolves tenants from this copy (INFRA-009 D5).
+	directory := jobs.NewTenantDirectory(tenantLister(db))
+	relay := jobs.NewOutboxRelay(db, valkey, directory, coreConf.OutboxPollInterval)
+	registerJobs(ctx, registry, db, valkey, relay, directory)
 
 	if runsWorker {
 		worker, err := jobs.StartWorker(valkey, registry, coreConf.JobsConcurrency)
@@ -71,7 +73,7 @@ func startBackground(ctx context.Context, mode, role string, db services.Databas
 		relay.Start(ctx)
 		bg.relay = relay
 		if coreConf.IsModuleEnabled("tracking") {
-			bg.positions = trackingJobs.NewPositionsConsumer(db, valkey, tenantLister(db), config.ModularAppConfig.Tracking.IngestRadii())
+			bg.positions = trackingJobs.NewPositionsConsumer(db, valkey, directory, config.ModularAppConfig.Tracking.IngestRadii())
 			bg.positions.Start(ctx)
 		}
 	}
@@ -87,7 +89,7 @@ func startBackground(ctx context.Context, mode, role string, db services.Databas
 // scheduler build the same registry: the scheduler reads the entries, the worker the handlers. ctx is
 // the process's: what a handler keeps for its lifetime, like the push adapter's token source, ends
 // with it.
-func registerJobs(ctx context.Context, registry *jobs.Registry, db services.DatabaseService, valkey services.ValkeyService, relay *jobs.OutboxRelay) {
+func registerJobs(ctx context.Context, registry *jobs.Registry, db services.DatabaseService, valkey services.ValkeyService, relay *jobs.OutboxRelay, directory *jobs.TenantDirectory) {
 	daily := 24 * time.Hour
 	registry.Handle(jobs.TaskOutboxPurge, relay.Purge)
 	registry.Schedule(jobs.Entry{
@@ -96,17 +98,17 @@ func registerJobs(ctx context.Context, registry *jobs.Registry, db services.Data
 	})
 
 	if config.ModularAppConfig.Core.IsModuleEnabled("tracking") {
-		registry.Handle(trackingJobs.TaskDocumentAlerts, trackingJobs.PassHandler(db, tenantLister(db)))
-		registry.Handle(trackingJobs.TaskDocumentDigest, trackingJobs.DigestHandler(services.NewEmailService(), tenantDirectory(db)))
+		registry.Handle(trackingJobs.TaskDocumentAlerts, trackingJobs.PassHandler(db, directory))
+		registry.Handle(trackingJobs.TaskDocumentDigest, trackingJobs.DigestHandler(services.NewEmailService(), tenantDirectory(db, directory)))
 		// One router for every job, so route and trace calls share its breaker.
 		geoConf := config.ModularAppConfig.Geo
 		router := geoRouting.NewRouter(geoConf)
 		// A route's plan changed: rebuild its trips that have not started (TRACK-008 D4) and its planned
 		// line by streets (TRACK-028). The daily pass is the same SP over every route, so a missed row is
 		// caught the next morning.
-		registry.Handle(trackingJobs.TaskRouteChanged, trackingJobs.RouteChangedHandler(db, tenantLister(db),
+		registry.Handle(trackingJobs.TaskRouteChanged, trackingJobs.RouteChangedHandler(db, directory,
 			trackingJobs.PathPlanner{Router: router, FallbackKmh: float64(geoConf.FallbackSpeedKmh)}))
-		registry.Handle(trackingJobs.TaskTripsMaterialise, trackingJobs.TripsMaterialiseHandler(db, tenantLister(db)))
+		registry.Handle(trackingJobs.TaskTripsMaterialise, trackingJobs.TripsMaterialiseHandler(db, directory))
 		// Trip and alert events become the guardians' notices (TRACK-012): the feed always, the push only
 		// with FCM credentials (D2).
 		var pushClient *asynq.Client
@@ -120,11 +122,11 @@ func registerJobs(ctx context.Context, registry *jobs.Registry, db services.Data
 		// A trip moved (TRACK-020 D1): published to everyone watching it (TRACK-025), and a completed
 		// one gets its driven path, map-matched through the geo router — the raw line when Valhalla is
 		// down (TRACK-010).
-		registry.Handle(trackingJobs.TaskTripChanged, trackingJobs.TripChangedHandler(db, tenantLister(db),
+		registry.Handle(trackingJobs.TaskTripChanged, trackingJobs.TripChangedHandler(db, directory,
 			router, valkey, notify))
 		// An alert was raised or resolved (TRACK-004 D1): an `alert` frame to the fleet and the trip.
-		registry.Handle(trackingJobs.TaskAlertChanged, trackingJobs.AlertChangedHandler(tenantLister(db), valkey, notify))
-		registry.Handle(trackingJobs.TaskPositionsPartitions, trackingJobs.PositionsPartitionsHandler(db, tenantLister(db),
+		registry.Handle(trackingJobs.TaskAlertChanged, trackingJobs.AlertChangedHandler(directory, valkey, notify))
+		registry.Handle(trackingJobs.TaskPositionsPartitions, trackingJobs.PositionsPartitionsHandler(db, directory,
 			config.ModularAppConfig.Tracking.LocationRetentionDays))
 		registry.Schedule(jobs.Entry{
 			Cron: trackingJobs.DocumentAlertsCron, Period: daily,
@@ -141,8 +143,8 @@ func registerJobs(ctx context.Context, registry *jobs.Registry, db services.Data
 	}
 }
 
-// tenantLister answers every tenant with its own database, from the platform database — the walk
-// `cli jobs` does too (D2).
+// tenantLister answers every active tenant from the platform database, shared ones (in the platform
+// database, DatabaseURL "") included — what the directory holds and `cli jobs` walks too (INFRA-009).
 func tenantLister(db services.DatabaseService) jobs.TenantLister {
 	repo := tenancyRepos.NewTenantRepository(db)
 	return func(ctx context.Context) ([]jobs.Tenant, error) {
@@ -150,34 +152,34 @@ func tenantLister(db services.DatabaseService) jobs.TenantLister {
 		if db.GetPrimaryPool() == nil {
 			return nil, errors.New("platform database not connected yet")
 		}
-		tenants, err := repo.ListTenantsWithCustomDB(ctx)
+		tenants, err := repo.ListTenantDirectory(ctx)
 		if err != nil {
 			return nil, err
 		}
 		out := make([]jobs.Tenant, 0, len(tenants))
 		for _, t := range tenants {
-			if t.DatabaseURL != nil && *t.DatabaseURL != "" {
-				out = append(out, jobs.Tenant{ID: t.ID.String(), Slug: t.Slug, DatabaseURL: *t.DatabaseURL})
+			tenant := jobs.Tenant{ID: t.ID.String(), Slug: t.Slug, Name: t.Name}
+			if t.DatabaseURL != nil {
+				tenant.DatabaseURL = *t.DatabaseURL
 			}
+			out = append(out, tenant)
 		}
 		return out, nil
 	}
 }
 
-// tenantDirectory answers a tenant's name and its owners' and admins' addresses. The name comes from
-// the same listing the relay walks — one query per digest, the lookup `cli jobs` used to do.
-func tenantDirectory(db services.DatabaseService) trackingJobs.TenantDirectory {
+// tenantDirectory answers a tenant's name, from the directory in memory, and its owners' and admins'
+// addresses — one query per digest.
+func tenantDirectory(db services.DatabaseService, directory *jobs.TenantDirectory) trackingJobs.TenantDirectory {
 	repo := tenancyRepos.NewTenantRepository(db)
 	return func(ctx context.Context, tenantID uuid.UUID) (*trackingJobs.TenantContact, error) {
-		tenants, err := repo.ListTenantsWithCustomDB(ctx)
+		contact := &trackingJobs.TenantContact{Name: tenantID.String()}
+		tenant, ok, err := directory.Find(ctx, tenantID.String())
 		if err != nil {
 			return nil, err
 		}
-		contact := &trackingJobs.TenantContact{Name: tenantID.String()}
-		for _, t := range tenants {
-			if t.ID == tenantID {
-				contact.Name = t.Name
-			}
+		if ok && tenant.Name != "" {
+			contact.Name = tenant.Name
 		}
 		admins, err := repo.ListTenantAdminEmails(ctx, tenantID)
 		if err != nil {

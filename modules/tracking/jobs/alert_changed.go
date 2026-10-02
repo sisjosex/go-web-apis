@@ -35,7 +35,7 @@ type AlertChanged struct {
 // The tenant comes from the TaskID. valkey nil publishes nothing; notify nil notifies nothing.
 // Delivery is at least once: a repeated frame only makes a client refetch, a repeated notice writes
 // nothing.
-func AlertChangedHandler(tenants coreJobs.TenantLister, valkey coreServices.ValkeyService, notify *Notifier) asynq.HandlerFunc {
+func AlertChangedHandler(tenants *coreJobs.TenantDirectory, valkey coreServices.ValkeyService, notify *Notifier) asynq.HandlerFunc {
 	return func(ctx context.Context, task *asynq.Task) error {
 		var payload AlertChanged
 		if err := json.Unmarshal(task.Payload(), &payload); err != nil {

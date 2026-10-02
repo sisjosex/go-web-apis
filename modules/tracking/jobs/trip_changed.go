@@ -46,7 +46,7 @@ var frameOf = map[string]string{
 // valkey nil publishes nothing; notify nil notifies nothing. Delivery is at least once: a repeated
 // frame makes a client refetch the same trip, a repeated trace writes the same line, a repeated
 // notice writes nothing.
-func TripChangedHandler(db coreServices.DatabaseService, tenants coreJobs.TenantLister, router geoInterfaces.Router, valkey coreServices.ValkeyService, notify *Notifier) asynq.HandlerFunc {
+func TripChangedHandler(db coreServices.DatabaseService, tenants *coreJobs.TenantDirectory, router geoInterfaces.Router, valkey coreServices.ValkeyService, notify *Notifier) asynq.HandlerFunc {
 	return func(ctx context.Context, task *asynq.Task) error {
 		var payload TripChanged
 		if err := json.Unmarshal(task.Payload(), &payload); err != nil {
@@ -106,19 +106,15 @@ func PublishTripChanged(ctx context.Context, db coreServices.DatabaseService, va
 	return err
 }
 
-// taskTenant answers the tenant an outbox task belongs to, from its TaskID; ok false when that tenant
-// is no longer listed — nothing is left to do for it.
-func taskTenant(ctx context.Context, tenants coreJobs.TenantLister) (coreJobs.Tenant, bool, error) {
+// taskTenant answers the tenant an outbox task belongs to, from its TaskID (the row's tenant_id,
+// INFRA-009), out of the directory held in memory; ok false when that tenant is no longer listed —
+// nothing is left to do for it.
+func taskTenant(ctx context.Context, tenants *coreJobs.TenantDirectory) (coreJobs.Tenant, bool, error) {
 	taskID, _ := asynq.GetTaskID(ctx)
 	tenantID, _, _ := strings.Cut(taskID, ":")
-	list, err := tenants(ctx)
-	if err != nil {
-		return coreJobs.Tenant{}, false, err
-	}
-	for _, tenant := range list {
-		if tenant.ID == tenantID {
-			return tenant, true, nil
-		}
+	tenant, ok, err := tenants.Find(ctx, tenantID)
+	if err != nil || ok {
+		return tenant, ok, err
 	}
 	log.Printf("⚠️  outbox task %s: tenant %q is not listed, dropped", taskID, tenantID)
 	return coreJobs.Tenant{}, false, nil

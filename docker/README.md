@@ -40,23 +40,26 @@ all six. `cpu_shares` only decide who wins when everyone wants CPU at once: Post
 
 ## Connections — the budget behind `max_connections=200`
 
-Every process opens its own pool per database: `DATABASE_POOL_SIZE` to its own,
-`TENANCY_DATABASE_POOL_SIZE` to each tenant database it touches, plus the worker's one
-`LISTEN` connection per tenant. Idle connections close after 5 min, so a tenant nobody
-uses costs nothing.
+Every process opens one pool per **database**, not per tenant: `DATABASE_POOL_SIZE` to the
+platform database, which every shared tenant lives in (INFRA-006 D2), and
+`TENANCY_DATABASE_POOL_SIZE` to each dedicated database it touches. The worker adds one
+`LISTEN` connection per database and holds one blocking Valkey read per database for GPS
+(`gps:shared`, `gps:{tenant}` for a dedicated one) — INFRA-009. A tenant added to the shared
+database costs no connection. Idle connections close after 5 min.
 
-| Service | own | per tenant |
+| Service | platform database | per dedicated database |
 |---|---|---|
 | api-platform | 12 | 4 |
 | api-tenant | 8 | 8 |
 | api-realtime | 2 | 3 |
-| api-worker | 4 | 6 + 1 |
+| api-worker | 4 + 1 | 6 + 1 |
 | api-scheduler | 2 | 2 |
-| **ceiling** | **28** | **+ 24 × tenants** |
+| **ceiling** | **29** | **+ 24 × dedicated databases** |
 
-28 + 24 × 7 = 196: seven tenants busy at the same moment fit. Past that, either raise
-`max_connections` (each connection is ~5-10 MB when active — take it from the page cache
-line above) or put PgBouncer in front (INFRA-005; it costs the relay its `LISTEN`).
+29 + 24 × 7 = 197: seven dedicated databases busy at the same moment fit, however many
+tenants share the platform one. Past that, either raise `max_connections` (each connection
+is ~5-10 MB when active — take it from the page cache line above) or put PgBouncer in front
+(INFRA-005; the relay's `LISTEN` must keep a direct connection).
 
 ## PostgreSQL
 

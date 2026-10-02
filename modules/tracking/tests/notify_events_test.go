@@ -69,7 +69,7 @@ func TestNotifyEvents_TaskDone(t *testing.T) {
 	defer relay.Shutdown()
 	defer inspector.Close()
 	registry := coreJobs.NewRegistry()
-	lister := func(context.Context) ([]coreJobs.Tenant, error) { return []coreJobs.Tenant{testTenant()}, nil }
+	lister := coreJobs.NewTenantDirectory(func(context.Context) ([]coreJobs.Tenant, error) { return []coreJobs.Tenant{testTenant()}, nil })
 	notify := trackingJobs.NewNotifier(helper.DB(), coreJobs.NewClient(helper.Valkey()), config.ModularAppConfig.Tracking)
 	registry.Handle(trackingJobs.TaskTripChanged, trackingJobs.TripChangedHandler(helper.DB(), lister, nil, nil, notify))
 	worker, err := coreJobs.StartWorker(helper.Valkey(), registry, 2)

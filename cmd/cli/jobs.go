@@ -99,17 +99,20 @@ func runDocumentAlerts() error {
 	return nil
 }
 
-// jobTenants answers every tenant with its own database: the walk the worker and scheduler make.
+// jobTenants answers every active tenant, shared ones included (DatabaseURL ""): the walk the worker
+// and scheduler make (INFRA-009).
 func jobTenants(ctx context.Context, dbService coreServices.DatabaseService) ([]coreJobs.Tenant, error) {
-	listed, err := tenancyRepos.NewTenantRepository(dbService).ListTenantsWithCustomDB(ctx)
+	listed, err := tenancyRepos.NewTenantRepository(dbService).ListTenantDirectory(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("failed to list tenants: %w", err)
 	}
 	tenants := make([]coreJobs.Tenant, 0, len(listed))
 	for _, t := range listed {
-		if t.DatabaseURL != nil && *t.DatabaseURL != "" {
-			tenants = append(tenants, coreJobs.Tenant{ID: t.ID.String(), Slug: t.Slug, DatabaseURL: *t.DatabaseURL})
+		tenant := coreJobs.Tenant{ID: t.ID.String(), Slug: t.Slug, Name: t.Name}
+		if t.DatabaseURL != nil {
+			tenant.DatabaseURL = *t.DatabaseURL
 		}
+		tenants = append(tenants, tenant)
 	}
 	return tenants, nil
 }

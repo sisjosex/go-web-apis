@@ -24,30 +24,31 @@ const (
 	positionsAheadDays = 7
 )
 
-// PositionsPartitionsHandler runs sp_positions_partitions once per tenant. A tenant that fails is
-// logged and the walk continues; the task fails, and asynq retries it, only if one did.
-func PositionsPartitionsHandler(db coreServices.DatabaseService, tenants coreJobs.TenantLister, retentionDays int) asynq.HandlerFunc {
+// PositionsPartitionsHandler runs sp_positions_partitions once per database — partitions belong to the
+// table, which tenants sharing a database share (INFRA-009 D4). A database that fails is logged and the
+// walk continues; the task fails, and asynq retries it, only if one did.
+func PositionsPartitionsHandler(db coreServices.DatabaseService, tenants *coreJobs.TenantDirectory, retentionDays int) asynq.HandlerFunc {
 	return func(ctx context.Context, _ *asynq.Task) error {
-		list, err := tenants(ctx)
+		dbs, err := tenants.Databases(ctx)
 		if err != nil {
 			return err
 		}
 		repo := trackingRepos.NewTrackingRepository(db)
 		failed := 0
-		for _, t := range list {
-			tenantCtx := context.WithValue(ctx, coreServices.TenantDatabaseURLKey, t.DatabaseURL)
-			created, dropped, err := repo.PositionsPartitions(tenantCtx, positionsAheadDays, retentionDays)
+		for _, d := range dbs {
+			dbCtx := context.WithValue(ctx, coreServices.TenantDatabaseURLKey, d.URL)
+			created, dropped, err := repo.PositionsPartitions(dbCtx, positionsAheadDays, retentionDays)
 			if err != nil {
-				log.Printf("⚠️  positions partitions %s: %v", t.ID, err)
+				log.Printf("⚠️  positions partitions (tenant %s's database): %v", d.Tenants[0].ID, err)
 				failed++
 				continue
 			}
 			if created > 0 || dropped > 0 {
-				slog.Debug("positions partitions", "tenant", t.ID, "created", created, "dropped", dropped)
+				slog.Debug("positions partitions", "tenant", d.Tenants[0].ID, "created", created, "dropped", dropped)
 			}
 		}
 		if failed > 0 {
-			return fmt.Errorf("positions partitions failed for %d of %d tenants", failed, len(list))
+			return fmt.Errorf("positions partitions failed for %d of %d databases", failed, len(dbs))
 		}
 		return nil
 	}

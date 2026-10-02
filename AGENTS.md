@@ -54,8 +54,12 @@ never in `core/jobs`. `REDIS_URL` unset ⇒ `all` is the API alone; Valkey down 
 and `/readyz` answers 200 `degraded` (503 for worker/scheduler). asynqmon is at `/admin/jobs`, super_admin.
 
 **Outbox.** A side effect that must survive a crash is a row in `tracking.outbox`, inserted by the SP that
-makes the change, in its transaction. The relay publishes it as asynq task `outbox:<topic>` (TaskID
-`<tenant>:<id>`); handle the topic in `registerJobs`. Delivery is at least once — handlers are idempotent.
+makes the change, in its transaction. Each row names its tenant: a BEFORE INSERT trigger fills `tenant_id`
+from `payload.tenant_id` or `payload.route_id`, and refuses a row with neither (`outbox.tenant`) — a new
+topic carries one of the two. The relay runs one `LISTEN` per **database** (the shared platform one and
+each dedicated one, INFRA-009) and publishes each row as asynq task `outbox:<topic>` (TaskID
+`<row tenant_id>:<id>`); handle the topic in `registerJobs` and resolve the tenant with `taskTenant`, which
+reads the in-memory `jobs.TenantDirectory`. Delivery is at least once — handlers are idempotent.
 
 **Trips (TRACK-008).** `tracking.sp_materialise_trips` is the only writer of planned trips: the
 `outbox:route.changed` handler calls it for one route (tenant taken from the TaskID), the daily

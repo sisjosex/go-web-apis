@@ -14,17 +14,34 @@ import (
 	"github.com/redis/go-redis/v9"
 )
 
-// GPSStreamField is the one field of a stream entry: the point as sp_ingest_positions takes it.
+// GPSStreamField is an entry's point, as sp_ingest_positions takes it.
 const GPSStreamField = "p"
 
 // queueTimeout bounds the XADD pipeline: past it the batch is stored inline instead (D2), so a Valkey
 // that hangs costs a request this much, not go-redis' default timeouts.
 const queueTimeout = 500 * time.Millisecond
 
-// GPSStream is the tenant's stream key (D2): one per tenant, so one consumer goroutine per tenant
-// drains it into that tenant's database.
+// GPSTenantField names an entry's tenant on the shared stream, where tenants sharing the database
+// share the stream (INFRA-009 D3).
+const GPSTenantField = "t"
+
+// GPSSharedStream carries the points of every tenant in the shared platform database: one consumer
+// loop, one blocked Valkey connection, however many tenants live there (INFRA-009 D3).
+const GPSSharedStream = "gps:shared"
+
+// GPSStream is a dedicated database's stream: its one tenant's points, untagged. Before INFRA-009 every
+// tenant had one; a shared tenant's is drained once and deleted.
 func GPSStream(tenantID string) string {
 	return "gps:" + tenantID
+}
+
+// GPSStreamIn is where a tenant's points go: the shared stream when the request runs on the platform
+// database, the tenant's own when it carries a database of its own.
+func GPSStreamIn(ctx context.Context, tenantID string) string {
+	if url, _ := ctx.Value(coreServices.TenantDatabaseURLKey).(string); url != "" {
+		return GPSStream(tenantID)
+	}
+	return GPSSharedStream
 }
 
 // PositionIngest accepts batches: to the tenant's stream when Valkey is there, straight into the
@@ -69,18 +86,22 @@ func (s *PositionIngest) Ingest(ctx context.Context, tenantID uuid.UUID, points 
 func (s *PositionIngest) queue(ctx context.Context, tenantID uuid.UUID, points []models.StoredPoint) error {
 	ctx, cancel := context.WithTimeout(ctx, queueTimeout)
 	defer cancel()
-	stream := GPSStream(tenantID.String())
+	stream := GPSStreamIn(ctx, tenantID.String())
 	pipe := s.valkey.Client().Pipeline()
 	for _, p := range points {
 		encoded, err := json.Marshal(p)
 		if err != nil {
 			return err
 		}
+		values := []string{GPSStreamField, string(encoded)}
+		if stream == GPSSharedStream {
+			values = append(values, GPSTenantField, tenantID.String())
+		}
 		pipe.XAdd(ctx, &redis.XAddArgs{
 			Stream: stream,
 			MaxLen: s.maxLen,
 			Approx: true,
-			Values: []string{GPSStreamField, string(encoded)},
+			Values: values,
 		})
 	}
 	_, err := pipe.Exec(ctx)
