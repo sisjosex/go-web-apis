@@ -52,7 +52,7 @@ func LoadTrackingConfig() *TrackingConfig {
 	return &TrackingConfig{
 		// GPS settings
 		MaxLocationBatchSize:       utils.GetEnvAsInt("TRACKING_MAX_LOCATION_BATCH_SIZE", 100),
-		LocationRetentionDays:      utils.GetEnvAsInt("TRACKING_LOCATION_RETENTION_DAYS", 90),
+		LocationRetentionDays:      utils.GetEnvAsInt("TRACKING_LOCATION_RETENTION_DAYS", 2),
 		LocationUpdateRateLimitSec: utils.GetEnvAsInt("TRACKING_LOCATION_RATE_LIMIT_SEC", 5),
 
 		// Notification settings
