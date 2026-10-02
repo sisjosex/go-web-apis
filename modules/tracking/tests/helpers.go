@@ -987,6 +987,28 @@ func RiderDropoffStatuses(t *testing.T, helper *testhelpers.ApiTestHelper, tripI
 	return statuses
 }
 
+// RiderTasks answers one rider's tasks on a trip, sequence:kind:status per task.
+func RiderTasks(t *testing.T, helper *testhelpers.ApiTestHelper, tripID, riderID string) []string {
+	t.Helper()
+	rows, err := helper.DB().Query(context.Background(), `
+		SELECT s.sequence || ':' || k.kind || ':' || k.status FROM tracking.trip_stop_tasks k
+		JOIN tracking.trip_stops s ON s.id = k.trip_stop_id
+		WHERE s.trip_id = $1 AND k.subject_id = $2 ORDER BY 1`, tripID, riderID)
+	if err != nil {
+		t.Fatalf("read rider tasks: %v", err)
+	}
+	defer rows.Close()
+	tasks := []string{}
+	for rows.Next() {
+		var s string
+		if err := rows.Scan(&s); err != nil {
+			t.Fatalf("scan rider task: %v", err)
+		}
+		tasks = append(tasks, s)
+	}
+	return tasks
+}
+
 // InsertOutboxRow writes one outbox row as an SP would, answering its id and the tenant the trigger
 // gave it (INFRA-009); err is the trigger's refusal when the payload names neither tenant nor route.
 // No endpoint writes a bare row.
