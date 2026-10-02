@@ -32,7 +32,7 @@ func scheduleErrorResponse(c *gin.Context, err error) bool {
 	case trackingErrors.ScheduleOverlap:
 		c.JSON(http.StatusConflict, coreErrors.BuildErrorSingle(c, trackingErr.Code))
 		return true
-	case trackingErrors.ScheduleSplitDate, trackingErrors.ScheduleDaysOfWeek:
+	case trackingErrors.ScheduleSplitDate, trackingErrors.ScheduleDaysOfWeek, trackingErrors.ScheduleRange:
 		c.JSON(http.StatusBadRequest, coreErrors.BuildErrorSingle(c, trackingErr.Code))
 		return true
 	}
@@ -350,6 +350,40 @@ func (ctrl *TrackingController) UpdateCalendar(c *gin.Context) {
 	}
 
 	calendar, err := ctrl.trackingService.UpdateCalendar(c.Request.Context(), tenantID, calendarID, &dto)
+	if err != nil {
+		if calendarErrorResponse(c, err) {
+			return
+		}
+		c.JSON(http.StatusInternalServerError, coreErrors.BuildError(c, err))
+		return
+	}
+	c.JSON(http.StatusOK, calendar)
+}
+
+// GetCalendar godoc
+// @Summary Get a calendar
+// @Description One calendar with how many dates it holds
+// @Tags Tracking - Calendars
+// @Produce json
+// @Security BearerAuth
+// @Param calendar_id path string true "Calendar ID (UUID)"
+// @Success 200 {object} models.Calendar
+// @Failure 400 {object} coreErrors.ErrorResponse
+// @Failure 404 {object} coreErrors.ErrorResponse
+// @Failure 500 {object} coreErrors.ErrorResponse
+// @Router /tracking/calendars/{calendar_id} [get]
+func (ctrl *TrackingController) GetCalendar(c *gin.Context) {
+	tenantID, ok := ctrl.requireTenantID(c)
+	if !ok {
+		return
+	}
+	calendarID, err := uuid.Parse(c.Param("calendar_id"))
+	if err != nil {
+		c.JSON(http.StatusBadRequest, coreErrors.BuildErrorSingle(c, coreErrors.InvalidUUID))
+		return
+	}
+
+	calendar, err := ctrl.trackingService.GetCalendar(c.Request.Context(), tenantID, calendarID)
 	if err != nil {
 		if calendarErrorResponse(c, err) {
 			return

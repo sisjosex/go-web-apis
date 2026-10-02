@@ -152,6 +152,41 @@ func TestUpdateRouteScheduleUnknown(t *testing.T) {
 	assert.Contains(t, w.Body.String(), "tracking.schedule.not-found")
 }
 
+// TestUpdateRouteScheduleClearsEndAndCalendar - the clear flags take the end date and the calendar
+// away, which a null could not say (TRACK-029 D4)
+func TestUpdateRouteScheduleClearsEndAndCalendar(t *testing.T) {
+	helper := SetupTrackingTest(t)
+	defer helper.Close()
+	routeID := CreateTestRoute(t, helper)
+	body := WeekdayScheduleBody("07:00", "2026-09-01")
+	body["valid_until"] = "2027-06-30"
+	body["calendar_id"] = CreateTestCalendar(t, helper)
+	scheduleID := CreateRouteSchedule(t, helper, routeID, body)
+
+	w := helper.DoRequest("PATCH", "/tracking/routes/"+routeID+"/schedules/"+scheduleID,
+		map[string]interface{}{"clear_valid_until": true, "clear_calendar": true}, map[string]string{})
+
+	assert.Equal(t, http.StatusOK, w.Code, w.Body.String())
+	updated := ParseResponse(t, w.Body.Bytes())
+	assert.Nil(t, updated["valid_until"])
+	assert.Nil(t, updated["calendar_id"])
+	assert.Equal(t, "07:00", updated["start_time"], "a field not sent keeps its value")
+}
+
+// TestCreateRouteScheduleEndBeforeStart - an end before the start is the caller's mistake → 400, not 500
+func TestCreateRouteScheduleEndBeforeStart(t *testing.T) {
+	helper := SetupTrackingTest(t)
+	defer helper.Close()
+	routeID := CreateTestRoute(t, helper)
+	body := WeekdayScheduleBody("07:00", "2026-09-01")
+	body["valid_until"] = "2026-08-01"
+
+	w := helper.DoRequest("POST", "/tracking/routes/"+routeID+"/schedules", body, map[string]string{})
+
+	assert.Equal(t, http.StatusBadRequest, w.Code, w.Body.String())
+	assert.Contains(t, w.Body.String(), "tracking.schedule.range")
+}
+
 func TestDeleteRouteSchedule(t *testing.T) {
 	helper := SetupTrackingTest(t)
 	defer helper.Close()
@@ -372,6 +407,32 @@ func TestUpdateCalendarRenamesIt(t *testing.T) {
 
 // TestDeleteCalendarInUse - a calendar a schedule still reads is not deleted: the schedule would
 // silently start running on the holidays → 409
+func TestGetCalendarCountsItsDates(t *testing.T) {
+	helper := SetupTrackingTest(t)
+	defer helper.Close()
+	calendarID := CreateTestCalendar(t, helper)
+	helper.DoRequest("PUT", "/tracking/calendars/"+calendarID+"/dates", []map[string]interface{}{
+		{"date": "2026-12-25", "kind": "no_service", "label": "Navidad"},
+	}, map[string]string{})
+
+	w := helper.DoRequest("GET", "/tracking/calendars/"+calendarID, nil, map[string]string{})
+
+	assert.Equal(t, http.StatusOK, w.Code, w.Body.String())
+	calendar := ParseResponse(t, w.Body.Bytes())
+	assert.Equal(t, calendarID, calendar["id"])
+	assert.Equal(t, float64(1), calendar["dates_count"])
+}
+
+func TestGetCalendarUnknown(t *testing.T) {
+	helper := SetupTrackingTest(t)
+	defer helper.Close()
+
+	w := helper.DoRequest("GET", "/tracking/calendars/"+uuid.New().String(), nil, map[string]string{})
+
+	assert.Equal(t, http.StatusNotFound, w.Code, w.Body.String())
+	assert.Contains(t, w.Body.String(), "tracking.calendar.not-found")
+}
+
 func TestDeleteCalendarInUse(t *testing.T) {
 	helper := SetupTrackingTest(t)
 	defer helper.Close()

@@ -512,6 +512,10 @@ func (s *TrackingService) UpdateCalendar(ctx context.Context, tenantID uuid.UUID
 	return s.trackingRepo.UpdateCalendar(ctx, tenantID, calendarID, dto)
 }
 
+func (s *TrackingService) GetCalendar(ctx context.Context, tenantID uuid.UUID, calendarID uuid.UUID) (*models.Calendar, error) {
+	return s.trackingRepo.GetCalendar(ctx, tenantID, calendarID)
+}
+
 func (s *TrackingService) DeleteCalendar(ctx context.Context, tenantID uuid.UUID, calendarID uuid.UUID) error {
 	return s.trackingRepo.DeleteCalendar(ctx, tenantID, calendarID)
 }

@@ -39,10 +39,14 @@ func scanRouteSchedule(s *models.RouteSchedule) []any {
 }
 
 // mapScheduleError turns the SP's own codes into module codes, falling back to fallbackCode for
-// anything else. The controller maps the module code to a status.
+// anything else. The controller maps the module code to a status. The guard raises schedule.range;
+// the table's CHECK is the backstop, told apart by constraint name.
 func mapScheduleError(err error, fallbackCode string) error {
 	var pgErr *pgconn.PgError
 	if errors.As(err, &pgErr) {
+		if pgErr.ConstraintName == "chk_route_schedule_range" {
+			return &trackingErrors.TrackingError{Code: trackingErrors.ScheduleRange, Err: pgErr}
+		}
 		switch pgErr.Message {
 		case "route.not-found":
 			return &trackingErrors.TrackingError{Code: trackingErrors.RouteNotFound, Err: pgErr}
@@ -52,6 +56,8 @@ func mapScheduleError(err error, fallbackCode string) error {
 			return &trackingErrors.TrackingError{Code: trackingErrors.ScheduleOverlap, Err: pgErr}
 		case "schedule.split-date":
 			return &trackingErrors.TrackingError{Code: trackingErrors.ScheduleSplitDate, Err: pgErr}
+		case "schedule.range":
+			return &trackingErrors.TrackingError{Code: trackingErrors.ScheduleRange, Err: pgErr}
 		case "schedule.days-of-week":
 			return &trackingErrors.TrackingError{Code: trackingErrors.ScheduleDaysOfWeek, Err: pgErr}
 		case "calendar.not-found":
@@ -112,10 +118,12 @@ func (r *TrackingRepository) UpdateRouteSchedule(ctx context.Context, tenantID u
 			p_start_time   := $4,
 			p_valid_from   := $5,
 			p_valid_until  := $6,
-			p_calendar_id  := $7
+			p_calendar_id  := $7,
+			p_clear_valid_until := $8,
+			p_clear_calendar    := $9
 		)
 	`, tenantID, scheduleID, dto.DaysOfWeek, dto.StartTime, dateArg(dto.ValidFrom),
-		dateArg(dto.ValidUntil), dto.CalendarID,
+		dateArg(dto.ValidUntil), dto.CalendarID, dto.ClearValidUntil, dto.ClearCalendar,
 	).Scan(scanRouteSchedule(&schedule)...)
 	if err != nil {
 		return nil, mapScheduleError(err, trackingErrors.ScheduleUpdateFailed)
@@ -257,6 +265,17 @@ func (r *TrackingRepository) UpdateCalendar(ctx context.Context, tenantID uuid.U
 	`, tenantID, calendarID, dto.Name, dto.OrganizationID).Scan(scanCalendar(&calendar)...)
 	if err != nil {
 		return nil, mapCalendarError(err, trackingErrors.CalendarUpdateFailed)
+	}
+	return &calendar, nil
+}
+
+// GetCalendar is one calendar with its date count — what a calendar's own page opens on (TRACK-029).
+func (r *TrackingRepository) GetCalendar(ctx context.Context, tenantID uuid.UUID, calendarID uuid.UUID) (*models.Calendar, error) {
+	var calendar models.Calendar
+	err := r.dbService.QueryRow(ctx, `SELECT * FROM tracking.sp_get_calendar($1, $2)`, tenantID, calendarID).
+		Scan(scanCalendar(&calendar)...)
+	if err != nil {
+		return nil, mapCalendarError(err, trackingErrors.CalendarNotFound)
 	}
 	return &calendar, nil
 }

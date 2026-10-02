@@ -92,6 +92,20 @@ func TestCreateRouteExceptionWrongPayloadKeys(t *testing.T) {
 	assert.Empty(t, ListRouteExceptions(t, helper, routeID, ""))
 }
 
+// TestCreateRouteExceptionEndBeforeStart - a range that ends before it starts → 400, not 500
+func TestCreateRouteExceptionEndBeforeStart(t *testing.T) {
+	helper := SetupTrackingTest(t)
+	defer helper.Close()
+	routeID := CreateTestRoute(t, helper)
+
+	w := helper.DoRequest("POST", "/tracking/routes/"+routeID+"/exceptions", map[string]interface{}{
+		"date_from": "2026-11-03", "date_to": "2026-11-02", "kind": "cancel", "payload": map[string]interface{}{},
+	}, map[string]string{})
+
+	assert.Equal(t, http.StatusBadRequest, w.Code, w.Body.String())
+	assert.Contains(t, w.Body.String(), "tracking.exception.range")
+}
+
 func TestCreateRouteExceptionRejectsUnknownKind(t *testing.T) {
 	helper := SetupTrackingTest(t)
 	defer helper.Close()

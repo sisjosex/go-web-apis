@@ -156,6 +156,8 @@ const (
 	// ScheduleDaysOfWeek refuses a weekday bitmask outside 1..127 arriving through a split's changes,
 	// which the DTO cannot reach.
 	ScheduleDaysOfWeek = "tracking.schedule.days-of-week"
+	// ScheduleRange refuses an end date before the start date (the table's CHECK).
+	ScheduleRange = "tracking.schedule.range"
 
 	// Calendar errors (TR0281-TR0300)
 	CalendarNotFound     = "tracking.calendar.not-found"
@@ -179,6 +181,8 @@ const (
 	// ExceptionPayload refuses a payload that does not carry exactly the keys its kind defines: an
 	// extra key is a caller saying something the SP will not read.
 	ExceptionPayload = "tracking.exception.payload"
+	// ExceptionRange refuses a date_to before date_from (the table's CHECK).
+	ExceptionRange = "tracking.exception.range"
 
 	// Preview errors
 	RoutePreviewFailed = "tracking.route.preview.failed"

@@ -30,6 +30,9 @@ func scanRouteException(e *models.RouteException) []any {
 func mapExceptionError(err error, fallbackCode string) error {
 	var pgErr *pgconn.PgError
 	if errors.As(err, &pgErr) {
+		if pgErr.ConstraintName == "chk_route_exception_range" {
+			return &trackingErrors.TrackingError{Code: trackingErrors.ExceptionRange, Err: pgErr}
+		}
 		switch pgErr.Message {
 		case "route.not-found":
 			return &trackingErrors.TrackingError{Code: trackingErrors.RouteNotFound, Err: pgErr}

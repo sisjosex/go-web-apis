@@ -357,6 +357,10 @@ func registerCalendarRoutes(r *gin.RouterGroup, denyOrganization gin.HandlerFunc
 		denyOrganization,
 		tenancyMW.RequirePermission(trackingPerms.RoutesWrite),
 		trackingController.CreateCalendar)
+	r.GET("/calendars/:calendar_id",
+		denyOrganization,
+		tenancyMW.RequirePermission(trackingPerms.RoutesRead),
+		trackingController.GetCalendar)
 	r.PATCH("/calendars/:calendar_id",
 		denyOrganization,
 		tenancyMW.RequirePermission(trackingPerms.RoutesWrite),
@@ -622,6 +626,7 @@ func registerOpenScheduleRoutes(g *gin.RouterGroup, trackingController *controll
 func registerOpenCalendarRoutes(g *gin.RouterGroup, trackingController *controllers.TrackingController) {
 	g.GET("/calendars", trackingController.ListCalendars)
 	g.POST("/calendars", trackingController.CreateCalendar)
+	g.GET("/calendars/:calendar_id", trackingController.GetCalendar)
 	g.PATCH("/calendars/:calendar_id", trackingController.UpdateCalendar)
 	g.DELETE("/calendars/:calendar_id", trackingController.DeleteCalendar)
 	g.GET("/calendars/:calendar_id/dates", trackingController.ListCalendarDates)

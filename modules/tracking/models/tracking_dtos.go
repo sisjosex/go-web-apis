@@ -349,13 +349,16 @@ type CreateRouteScheduleDto struct {
 
 // UpdateRouteScheduleDto edits a schedule in place. Every field is optional: the SP keeps what it is
 // not sent. Moving the validity of a schedule that is already running is what a split is for — this
-// is for fixing a schedule that was entered wrong.
+// is for fixing a schedule that was entered wrong. A null cannot say "remove", so the two clear flags
+// do: they take the end date or the calendar away and win over the matching field (TRACK-029 D4).
 type UpdateRouteScheduleDto struct {
-	DaysOfWeek *int16               `json:"days_of_week" binding:"omitempty,min=1,max=127"`
-	StartTime  *string              `json:"start_time" binding:"omitempty,datetime=15:04"`
-	ValidFrom  *coreModels.DateOnly `json:"valid_from" binding:"omitempty" time_format:"2006-01-02"`
-	ValidUntil *coreModels.DateOnly `json:"valid_until" binding:"omitempty" time_format:"2006-01-02"`
-	CalendarID *uuid.UUID           `json:"calendar_id" binding:"omitempty,uuidv4"`
+	DaysOfWeek      *int16               `json:"days_of_week" binding:"omitempty,min=1,max=127"`
+	StartTime       *string              `json:"start_time" binding:"omitempty,datetime=15:04"`
+	ValidFrom       *coreModels.DateOnly `json:"valid_from" binding:"omitempty" time_format:"2006-01-02"`
+	ValidUntil      *coreModels.DateOnly `json:"valid_until" binding:"omitempty" time_format:"2006-01-02"`
+	CalendarID      *uuid.UUID           `json:"calendar_id" binding:"omitempty,uuidv4"`
+	ClearValidUntil bool                 `json:"clear_valid_until"`
+	ClearCalendar   bool                 `json:"clear_calendar"`
 }
 
 // RouteScheduleChangesDto is what the new half of a split carries. A field left out keeps what the

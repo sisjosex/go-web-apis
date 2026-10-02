@@ -27,7 +27,7 @@ func exceptionErrorResponse(c *gin.Context, err error) bool {
 		trackingErrors.VehicleNotFound, trackingErrors.DriverNotFound, trackingErrors.StopPlaceNotFound:
 		c.JSON(http.StatusNotFound, coreErrors.BuildErrorSingle(c, trackingErr.Code))
 		return true
-	case trackingErrors.ExceptionPayload, trackingErrors.RoutePreviewRange:
+	case trackingErrors.ExceptionPayload, trackingErrors.ExceptionRange, trackingErrors.RoutePreviewRange:
 		c.JSON(http.StatusBadRequest, coreErrors.BuildErrorSingle(c, trackingErr.Code))
 		return true
 	}
