@@ -120,7 +120,7 @@ services:
       retries: 5
       start_period: 20s
 
-  # The basemap on :8090 — prod serves the same snippet under TENANT_HOST/tiles/.
+  # The basemap on :8090 — prod serves it from R2 (docker/geo/publish.sh).
   tiles:
     image: caddy:2.8-alpine
     profiles: [geo]

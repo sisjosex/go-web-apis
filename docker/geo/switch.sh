@@ -6,8 +6,9 @@
 # 1. Serve <date> from a throwaway Valhalla and route across the region
 #    (GEO_CHECK_ROUTE); on failure nothing has changed.
 # 2. previous/ is deleted, current/ becomes previous/, <date> becomes current/.
-# 3. Recreate `valhalla` on current/ and wait for healthy. Caddy reads tiles/
-#    per request, so the basemap flips with the rename.
+# 3. Recreate `valhalla` on current/ and wait for healthy. The basemap is not
+#    here: publish.sh puts it on R2 (INFRA-008); in dev, Caddy reads tiles/ per
+#    request, so it flips with the rename.
 # 4. Replace geo.places with current/places.geojsonl (GEO_IMPORT).
 . "$(dirname "$0")/lib.sh"
 
@@ -17,7 +18,7 @@ ensure_tools
 
 echo "🔎 Checking $DATE"
 tools sh -ec "cd /data/$DATE
-	for f in valhalla/tiles.tar tiles/basemap.pmtiles tiles/style-light.json tiles/style-dark.json places.geojsonl; do
+	for f in valhalla/tiles.tar places.geojsonl; do
 		[ -s \$f ] || { echo \"❌ $DATE/\$f is missing or empty\"; exit 1; }
 	done"
 check_valhalla "$DATE" || { echo "❌ $DATE fails the route check — nothing switched"; exit 1; }

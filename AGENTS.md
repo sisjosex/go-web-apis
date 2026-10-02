@@ -251,8 +251,9 @@ Valkey (AOF `everysec`, `valkeydata` volume, `VALKEY_PASSWORD`) backs `api-worke
 the same image in `-role=worker|scheduler`; the two APIs run `-role=api`. A second scheduler is safe
 (lease), a second worker scales throughput.
 
-`valhalla` serves routing from `${GEO_DATA_DIR}/current`, Caddy the basemap at the root of `TILES_HOST`;
-builds are made off the server and put live by `docker/geo/switch.sh` (`docker/geo/README.md`). The
+`valhalla` serves routing from `${GEO_DATA_DIR}/current`; the basemap is on R2 behind
+`tiles.taypi24.com` (INFRA-008). Builds are made off the server: `docker/geo/publish.sh` puts the
+basemap live, `docker/geo/switch.sh` routing and places (`docker/geo/README.md`). The
 default stack is the whole product on one box (INFRA-006): `api-realtime` runs in platform mode and
 Caddy routes `PLATFORM_HOST/api/v1/tracking/ws` to it; the `tenant` profile is a tenant-mode server
 for a dedicated box.

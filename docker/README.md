@@ -171,7 +171,7 @@ direct connection to obtain its certificates.
 | Type | Name | Value |
 |---|---|---|
 | A | `api` | the box's IPv4 |
-| A | `tiles` | the box's IPv4 |
+| R2 custom domain | `tiles` | bucket `tiles` (`geo/README.md` → Basemap on R2) |
 | TXT | `@` | the mail provider's SPF (`v=spf1 include:… ~all`) |
 | CNAME / TXT | the provider's | its DKIM record |
 
@@ -199,7 +199,7 @@ openssl rand -base64 32   # once each: POSTGRES_PASSWORD, VALKEY_PASSWORD, JWT_S
 ```
 
 - `.env`: `POSTGRES_USER`, `POSTGRES_PASSWORD`, `POSTGRES_DB=web`, `VALKEY_PASSWORD`,
-  `PLATFORM_HOST=api.taypi24.com`, `TILES_HOST=tiles.taypi24.com`, `ACME_EMAIL`, `API_TAG=<sha>`,
+  `PLATFORM_HOST=api.taypi24.com`, `ACME_EMAIL`, `API_TAG=<sha>`,
   `GEO_DATA_DIR=/srv/geo`, and the backup block of step 11.
 - `.env.platform`: the "on the box" block of `.env.example` — `DATABASE_URL` and `REDIS_URL` at the
   `postgres` and `valkey` services with the passwords above, the JWT pair, `SMTP_ENABLED=true` and
@@ -237,11 +237,13 @@ docker compose -f docker-compose.prod.yml ps   # migrate exited 0, the rest heal
 places import needs the schema `migrate` created:
 
 ```sh
-# on the PC, from api/
+# on the PC, from api/ — the basemap goes to R2, never to the box
 GEO_REGIONS=south-america/bolivia TILES_URL=https://tiles.taypi24.com docker/geo/build.sh <date>
-rsync -a docker/geo/data/<date> root@<box>:/srv/geo/
+rsync -a --exclude tiles/ docker/geo/data/<date> root@<box>:/srv/geo/
 # on the box, from /srv/taypi24 — checks the build, makes it current, imports the places
 GEO_DATA_DIR=/srv/geo docker/geo/switch.sh <date>
+# back on the PC — the basemap to R2 (geo/README.md → Basemap on R2 for the bucket itself)
+docker/geo/publish.sh <date>
 docker compose -f docker-compose.prod.yml ps   # now every service healthy
 ```
 
@@ -338,8 +340,9 @@ encrypted disk: they are the only things on the box that no backup and no repo h
 
 ```sh
 curl -i https://api.taypi24.com/readyz                                      # 200
-curl -sI -H 'Range: bytes=0-15' https://tiles.taypi24.com/basemap.pmtiles   # 206
 curl -sI https://tiles.taypi24.com/style-light.json | grep -i cache-control # max-age=300
+curl -s https://tiles.taypi24.com/style-light.json | grep -o '[0-9-]*/basemap.pmtiles'  # the live date
+curl -sI -H 'Range: bytes=0-16383' https://tiles.taypi24.com/<date>/basemap.pmtiles   # 206; twice → Cf-Cache-Status: HIT
 curl -sI https://media.taypi24.com/<a stored key> | grep -iE 'cache-control|nosniff'  # immutable, nosniff
 nc -zv -w 3 api.taypi24.com 5432                                            # refused / timed out
 ssh -o PubkeyAuthentication=no root@api.taypi24.com                         # Permission denied

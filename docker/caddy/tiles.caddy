@@ -1,7 +1,8 @@
-# Static basemap for MapView and the mobile apps (INFRA-003): the current
-# build's tiles/ — basemap.pmtiles (read by HTTP range), the light and dark
-# styles, fonts and sprites. The path is resolved per request, so the rename in
-# docker/geo/switch.sh flips the basemap with no reload.
+# Dev basemap for MapView and the mobile apps (INFRA-003): the current build's
+# tiles/ — basemap.pmtiles (read by HTTP range), the light and dark styles,
+# fonts and sprites. The path is resolved per request, so the rename in
+# docker/geo/switch.sh flips the basemap with no reload. Production serves the
+# same files from R2 (docker/geo/publish.sh, INFRA-008), with this CORS policy.
 #
 # Its one argument is the path it is served under: `import tiles.caddy /tiles/`.
 handle_path {args[0]}* {
@@ -12,8 +13,7 @@ handle_path {args[0]}* {
 		Access-Control-Allow-Headers "Range, If-Match"
 		Access-Control-Expose-Headers "ETag, Content-Range, Content-Length"
 	}
-	# The styles name the tile URLs, so they expire in minutes: a cut-over of the tiles' host
-	# (INFRA-008) reaches every client within 5 min. Tiles, fonts and sprites keep a day.
+	# The styles name the tile URLs, so they expire in minutes. Tiles, fonts and sprites keep a day.
 	@styles path /style-*.json
 	@static not path /style-*.json
 	header @styles Cache-Control "public, max-age=300"

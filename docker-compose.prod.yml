@@ -344,7 +344,8 @@ services:
 
   # ============ GEO (INFRA-003) ============
   # Routing on the build in ${GEO_DATA_DIR}/current, uploaded and put live by
-  # docker/geo/switch.sh — the server never builds (D3). Read-only and
+  # docker/geo/switch.sh — the server never builds (D3). The basemap is not
+  # here: it is served from R2 (docker/geo/publish.sh, INFRA-008). Read-only and
   # stateless; the API reaches it on the compose network only. A 4 GB
   # box wants 2 GB of swap for the peaks (docker/geo/README.md).
   valhalla:
@@ -378,14 +379,10 @@ services:
       # A host given as http://… (an IP with no domain yet) is served on :80 only, no
       # certificate. Without the tenant profile its site answers a name nobody resolves.
       PLATFORM_HOST: ${PLATFORM_HOST}
-      TILES_HOST: ${TILES_HOST}
       TENANT_HOST: ${TENANT_HOST:-http://tenant.invalid}
       ACME_EMAIL: ${ACME_EMAIL}
     volumes:
       - ./docker/caddy/Caddyfile:/etc/caddy/Caddyfile:ro
-      - ./docker/caddy/tiles.caddy:/etc/caddy/tiles.caddy:ro
-      # The basemap at the root of TILES_HOST (docker/caddy/tiles.caddy).
-      - ${GEO_DATA_DIR:-./docker/geo/data}:/srv/geo:ro
       - caddy_data:/data
       - caddy_config:/config
     # Only what every server runs: the tenant upstreams resolve per request.

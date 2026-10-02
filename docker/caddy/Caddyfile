@@ -24,13 +24,6 @@
 	reverse_proxy api-platform:8080
 }
 
-# The basemap at the root of its own host, off the geo data dir (docker/geo/README.md): moving it to
-# a CDN later (INFRA-008) changes the DNS record only, never an installed app.
-{$TILES_HOST} {
-	encode zstd gzip
-	import tiles.caddy /
-}
-
 # The tenant-mode server (COMPOSE_PROFILES=tenant), meant for a dedicated box.
 {$TENANT_HOST} {
 	encode zstd gzip
