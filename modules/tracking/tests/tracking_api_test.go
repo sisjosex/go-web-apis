@@ -1624,13 +1624,15 @@ func TestDeleteOrganizationEmpty(t *testing.T) {
 	assert.Equal(t, http.StatusNotFound, w.Code)
 }
 
-// TestOrganizationMembersLifecycle - PUT adds a member, PUT again re-roles them, DELETE removes them
+// TestOrganizationMembersLifecycle - PUT adds a member, PUT again re-roles them, DELETE removes them.
+// The member is the seeded organization user: a member must hold the organization level (TRACK-032),
+// and it stays a member of MainSchoolID, so the DELETE leaves its membership in place.
 func TestOrganizationMembersLifecycle(t *testing.T) {
 	helper := SetupTrackingTest(t)
 	defer helper.Close()
 
 	organizationID := createOrganization(t, helper)
-	userID := helper.GetUserID()
+	userID := UserIDByEmail(t, helper, "orguser@test.local")
 	memberPath := fmt.Sprintf("/tracking/organizations/%s/members/%s", organizationID, userID)
 
 	w := helper.DoRequest("PUT", memberPath, map[string]interface{}{"role": "admin"}, map[string]string{})
@@ -1639,7 +1641,7 @@ func TestOrganizationMembersLifecycle(t *testing.T) {
 	}
 	member := ParseResponse(t, w.Body.Bytes())
 	assert.Equal(t, userID, member["user_id"])
-	assert.Equal(t, "admin", member["role"])
+	assert.Equal(t, "linked", member["status"])
 	assert.NotNil(t, member["email"])
 
 	members := listMembers(t, helper, organizationID)
@@ -1825,40 +1827,30 @@ func TestListDriversBySearchAndCompany(t *testing.T) {
 	assert.Equal(t, float64(0), ParseResponse(t, otherCarrier.Body.Bytes())["total_count"])
 }
 
-// TestUpdateDriverKeepsCompanyAndUnlinksAccount - PATCH changes what it sends, the carrier is
-// immutable, and clear_user_id is the one thing no user_id value can say.
-func TestUpdateDriverKeepsCompanyAndUnlinksAccount(t *testing.T) {
+// TestUpdateDriverKeepsCompanyAndIgnoresAccount - PATCH changes what it sends, the carrier is
+// immutable, and an account id is ignored: accounts link through PUT /account (TRACK-032).
+func TestUpdateDriverKeepsCompanyAndIgnoresAccount(t *testing.T) {
 	helper := SetupTrackingTest(t)
 	defer helper.Close()
 
 	driverID := CreateTestDriver(t, helper)
 
-	var accountID string
-	if err := helper.DB().QueryRow(context.Background(),
-		`SELECT id::text FROM auth.users WHERE email = 'driver@test.local'`).Scan(&accountID); err != nil {
-		t.Fatalf("read the driver account: %v", err)
-	}
-
-	linked := helper.DoRequest("PATCH", "/tracking/drivers/"+driverID, map[string]interface{}{
-		"user_id":    accountID,
+	updated := helper.DoRequest("PATCH", "/tracking/drivers/"+driverID, map[string]interface{}{
+		"user_id":    helper.GetUserID(), // ignored: a web account is never a driver
 		"company_id": SecondaryCompanyID, // ignored: the carrier never moves
 		"status":     "suspended",
 	}, map[string]string{})
-	assert.Equal(t, http.StatusOK, linked.Code, linked.Body.String())
-	driver := ParseResponse(t, linked.Body.Bytes())
-	assert.Equal(t, accountID, driver["user_id"])
-	assert.Equal(t, "driver@test.local", driver["user_email"])
+	assert.Equal(t, http.StatusOK, updated.Code, updated.Body.String())
+	driver := ParseResponse(t, updated.Body.Bytes())
+	assert.Nil(t, driver["user_id"])
 	assert.Equal(t, MainCompanyID, driver["company_id"])
 	assert.Equal(t, "suspended", driver["status"])
 
-	unlinked := helper.DoRequest("PATCH", "/tracking/drivers/"+driverID, map[string]interface{}{
-		"clear_user_id": true,
+	renamed := helper.DoRequest("PATCH", "/tracking/drivers/"+driverID, map[string]interface{}{
+		"first_name": "Renamed",
 	}, map[string]string{})
-	assert.Equal(t, http.StatusOK, unlinked.Code, unlinked.Body.String())
-	after := ParseResponse(t, unlinked.Body.Bytes())
-	assert.Nil(t, after["user_id"])
-	assert.Nil(t, after["user_email"])
-	assert.Equal(t, "suspended", after["status"], "a field PATCH did not send keeps its value")
+	assert.Equal(t, http.StatusOK, renamed.Code, renamed.Body.String())
+	assert.Equal(t, "suspended", ParseResponse(t, renamed.Body.Bytes())["status"], "a field PATCH did not send keeps its value")
 }
 
 // TestGetDriverNotFound - A driver of another tenant reads as absent, never as forbidden.

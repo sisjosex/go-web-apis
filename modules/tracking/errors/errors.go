@@ -210,6 +210,15 @@ const (
 	// DriverHasRoutes refuses a delete while a route still names the driver as its default.
 	DriverHasRoutes = "tracking.driver.has-routes"
 
+	// App access granted from Tracking (TRACK-032). A web account or another app level is refused
+	// (D4): one level per person and tenant.
+	AccessWebAccount      = "tracking.access.web-account"
+	AccessLevelMismatch   = "tracking.access.level-mismatch"
+	AccessUserNotFound    = "tracking.access.user-not-found"
+	AccessUserDeleted     = "tracking.access.user-deleted"
+	AccessGrantFailed     = "tracking.access.grant.failed"
+	RiderGuardianNotFound = "tracking.rider.guardian-not-found"
+
 	// Document errors (TR0201-TR0220)
 	DocumentNotFound          = "tracking.document.not-found"
 	DocumentCreateFailed      = "tracking.document.create.failed"

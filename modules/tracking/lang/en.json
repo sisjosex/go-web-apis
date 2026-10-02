@@ -208,5 +208,11 @@
   "tracking.notification.list.failed": "Failed to load the notifications",
   "tracking.notification.read.failed": "Failed to mark the notifications read",
   "tracking.notification.settings.failed": "Failed to save the notification settings",
-  "tracking.notification.invalid": "Invalid notification request"
+  "tracking.notification.invalid": "Invalid notification request",
+  "tracking.access.web-account": "This email already has web access; use another one",
+  "tracking.access.level-mismatch": "This account already has another kind of app access in this organization",
+  "tracking.access.user-not-found": "User not found",
+  "tracking.access.user-deleted": "This email belongs to a deleted account",
+  "tracking.access.grant.failed": "Failed to grant app access",
+  "tracking.rider.guardian-not-found": "This account is not a guardian of the rider"
 }

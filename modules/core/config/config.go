@@ -24,6 +24,8 @@ type CoreConfig struct {
 	// Frontend
 	AppName     string // Display name used in emails and UI
 	FrontendURL string // Used for email links and CORS
+	// MobileLandingURL is where an app-access notice sends people: the store links and news (TRACK-032 D2).
+	MobileLandingURL string
 
 	// Logging — LOG_LEVEL debug|info|warn|error, LOG_FORMAT text|json (INFRA-004)
 	LogLevel  string
@@ -91,6 +93,8 @@ func LoadCoreConfig() *CoreConfig {
 		AppName: utils.GetEnv("APP_NAME", "Platform"),
 		// Frontend URL (for email links and redirects)
 		FrontendURL: utils.GetEnv("FRONTEND_URL", "http://localhost:3000"),
+		// The page the app-access notice links to (TRACK-032 D2)
+		MobileLandingURL: utils.GetEnv("MOBILE_LANDING_URL", "https://taypi24.com"),
 
 		// Logging
 		LogLevel:  utils.GetEnv("LOG_LEVEL", "info"),

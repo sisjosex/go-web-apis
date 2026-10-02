@@ -461,7 +461,8 @@ func registerTracking(d routeDeps, chains tenantChains, valkey coreServices.Valk
 	// Register tracking routes with tenant middleware and JWT service for auth. The guardian's
 	// two reads run the same chain with the portal refusal lifted (TRACK-017 D1).
 	trackingRoutes.RegisterTrackingRoutes(d.engine, trackingController, trackingChain(chains.tenant), trackingChain(chains.portal), d.jwt,
-		trackingRoutes.Ingest{Controller: ingestController, Auth: ingestAuth}, liveRoutes, driverRoutes, portalRoutes)
+		trackingRoutes.Ingest{Controller: ingestController, Auth: ingestAuth}, liveRoutes, driverRoutes, portalRoutes,
+		trackingControllers.NewAccessController(trackingServices.NewAccessService(trackingRepos.NewTrackingRepository(d.db), d.email)))
 	log.Println("✅ Tracking module enabled and routes registered")
 }
 

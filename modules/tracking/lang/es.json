@@ -208,5 +208,11 @@
   "tracking.notification.list.failed": "No se pudieron cargar los avisos",
   "tracking.notification.read.failed": "No se pudieron marcar los avisos como leídos",
   "tracking.notification.settings.failed": "No se pudo guardar la configuración de avisos",
-  "tracking.notification.invalid": "Solicitud de avisos no válida"
+  "tracking.notification.invalid": "Solicitud de avisos no válida",
+  "tracking.access.web-account": "Este correo ya tiene acceso a la web; usa otro",
+  "tracking.access.level-mismatch": "Esta cuenta ya tiene otro tipo de acceso a la app en esta organización",
+  "tracking.access.user-not-found": "Usuario no encontrado",
+  "tracking.access.user-deleted": "Este correo pertenece a una cuenta eliminada",
+  "tracking.access.grant.failed": "No se pudo dar acceso a la app",
+  "tracking.rider.guardian-not-found": "Esta cuenta no es apoderado del pasajero"
 }

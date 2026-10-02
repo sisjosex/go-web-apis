@@ -187,6 +187,10 @@ func (r *userRepository) ListUsers(query userModels.UserListQuery) (*userModels.
 	if query.Order != "" {
 		orderVal = &query.Order
 	}
+	var levelVal *string
+	if query.Level != "" {
+		levelVal = &query.Level
+	}
 
 	sqlQuery := `
         SELECT * FROM users.sp_list_users(
@@ -197,11 +201,12 @@ func (r *userRepository) ListUsers(query userModels.UserListQuery) (*userModels.
             p_status          := $5,
             p_sort            := $6,
             p_order           := $7,
-            p_exclude_user_id := $8
+            p_exclude_user_id := $8,
+            p_level           := $9
         )
     `
 
-	rows, err := r.dbService.Query(ctx, sqlQuery, query.TenantID, page, limit, searchVal, statusVal, sortVal, orderVal, query.ExcludeUserID)
+	rows, err := r.dbService.Query(ctx, sqlQuery, query.TenantID, page, limit, searchVal, statusVal, sortVal, orderVal, query.ExcludeUserID, levelVal)
 	if err != nil {
 		var pgErr *pgconn.PgError
 		if errors.As(err, &pgErr) {

@@ -61,6 +61,7 @@ func RegisterTrackingRoutes(
 	live Live,
 	driver Driver,
 	portal Portal,
+	access *controllers.AccessController,
 ) {
 	trackingGroup := router.Group("/api/v1/tracking")
 
@@ -69,7 +70,7 @@ func RegisterTrackingRoutes(
 	tenancyConf := config.ModularAppConfig.Tenancy
 
 	if coreConf.IsModuleEnabled("tenancy") && tenancyConf != nil && tenancyConf.Enabled {
-		registerTenantRoutes(trackingGroup, trackingController, tenantMiddleware, portalTenantMiddleware, jwtService, live.Controller)
+		registerTenantRoutes(trackingGroup, trackingController, tenantMiddleware, portalTenantMiddleware, jwtService, live.Controller, access)
 		// Outside the groups: each carries its own chain — a device token or a driver's session for the
 		// ingest, a browser's subprotocol token and ?tenant_slug= for the socket.
 		if ingest.Auth != nil {
@@ -98,6 +99,7 @@ func registerTenantRoutes(
 	portalTenantMiddleware gin.HandlerFunc,
 	jwtService authServices.JWTService,
 	liveController *controllers.LiveController,
+	access *controllers.AccessController,
 ) {
 	// Multi-tenant mode: auth + tenant middleware + per-route permission checks
 	r := trackingGroup.Group("")
@@ -121,11 +123,35 @@ func registerTenantRoutes(
 	registerScheduleRoutes(r, denyOrganization, trackingController)
 	registerCalendarRoutes(r, denyOrganization, trackingController)
 	registerExceptionRoutes(r, denyOrganization, trackingController)
-	registerOrganizationRoutes(r, denyOrganization, trackingController)
+	registerOrganizationRoutes(r, denyOrganization, trackingController, access)
 	registerDocumentRoutes(r, denyOrganization, trackingController)
 	registerRiderRoutes(r, p, denyOrganization, trackingController)
 	registerTripRoutes(r, denyOrganization, trackingController)
 	registerLiveRoutes(r, p, denyOrganization, liveController)
+	registerAccessRoutes(r, denyOrganization, access)
+}
+
+// registerAccessRoutes is app access granted where a person is managed (TRACK-032): a rider's
+// family, a driver. The level is fixed by the route. An organization user manages its riders, so it
+// may give their families the app, in its scope; the driver stays the operator's.
+func registerAccessRoutes(r *gin.RouterGroup, denyOrganization gin.HandlerFunc, access *controllers.AccessController) {
+	r.GET("/riders/:rider_id/guardians",
+		tenancyMW.RequirePermission(trackingPerms.RidersRead),
+		access.ListRiderGuardians)
+	r.POST("/riders/:rider_id/guardians",
+		tenancyMW.RequirePermission(trackingPerms.RidersWrite),
+		access.AddRiderGuardian)
+	r.DELETE("/riders/:rider_id/guardians/:user_id",
+		tenancyMW.RequirePermission(trackingPerms.RidersWrite),
+		access.RemoveRiderGuardian)
+	r.PUT("/drivers/:driver_id/account",
+		denyOrganization,
+		tenancyMW.RequirePermission(trackingPerms.DriversWrite),
+		access.SetDriverAccount)
+	r.DELETE("/drivers/:driver_id/account",
+		denyOrganization,
+		tenancyMW.RequirePermission(trackingPerms.DriversWrite),
+		access.ClearDriverAccount)
 }
 
 // registerDriverRoutes is /api/v1/mobile/driver: the driver level only, and no capability — as the
@@ -401,7 +427,7 @@ func registerExceptionRoutes(r *gin.RouterGroup, denyOrganization gin.HandlerFun
 }
 
 // registerOrganizationRoutes covers the schools and employers, and who belongs to them.
-func registerOrganizationRoutes(r *gin.RouterGroup, denyOrganization gin.HandlerFunc, trackingController *controllers.TrackingController) {
+func registerOrganizationRoutes(r *gin.RouterGroup, denyOrganization gin.HandlerFunc, trackingController *controllers.TrackingController, access *controllers.AccessController) {
 	// Organizations
 	r.GET("/organizations",
 		denyOrganization,
@@ -424,19 +450,24 @@ func registerOrganizationRoutes(r *gin.RouterGroup, denyOrganization gin.Handler
 		tenancyMW.RequirePermission(trackingPerms.OrganizationsDelete),
 		trackingController.DeleteOrganization)
 
-	// Organization members
+	// Organization members. Every write goes through the access grant (TRACK-032), so a member is
+	// always an account at the organization level.
 	r.GET("/organizations/:organization_id/members",
 		denyOrganization,
 		tenancyMW.RequirePermission(trackingPerms.OrganizationsRead),
 		trackingController.ListOrganizationMembers)
+	r.POST("/organizations/:organization_id/members",
+		denyOrganization,
+		tenancyMW.RequirePermission(trackingPerms.OrganizationsWrite),
+		access.InviteOrganizationMember)
 	r.PUT("/organizations/:organization_id/members/:user_id",
 		denyOrganization,
 		tenancyMW.RequirePermission(trackingPerms.OrganizationsWrite),
-		trackingController.UpsertOrganizationMember)
+		access.UpsertOrganizationMember)
 	r.DELETE("/organizations/:organization_id/members/:user_id",
 		denyOrganization,
 		tenancyMW.RequirePermission(trackingPerms.OrganizationsWrite),
-		trackingController.DeleteOrganizationMember)
+		access.RemoveOrganizationMember)
 }
 
 // registerDocumentRoutes covers compliance documents and the policy behind them.

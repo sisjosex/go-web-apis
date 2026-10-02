@@ -176,6 +176,7 @@ func (uc *UserController) Update(c *gin.Context) {
 // @Param status query string false "Filter by status" Enums(active, inactive, expired)
 // @Param sort query string false "Sort field (default: created_at)" Enums(created_at, email, first_name, last_name)
 // @Param order query string false "Sort order (default: desc)" Enums(asc, desc)
+// @Param level query string false "Access level" Enums(portal, driver, organization, web)
 // @Success 200 {object} userModels.UserListResponse
 // @Failure 400 {object} coreErrors.ErrorResponse
 // @Failure 401 {object} coreErrors.ErrorResponse
@@ -232,6 +233,13 @@ func (uc *UserController) ListUsers(c *gin.Context) {
 		Status: c.Query("status"),
 		Sort:   c.Query("sort"),
 		Order:  c.Query("order"),
+		Level:  c.Query("level"),
+	}
+	switch query.Level {
+	case "", "portal", "driver", "organization", "web":
+	default:
+		c.JSON(http.StatusBadRequest, coreErrors.BuildErrorSingle(c, usersErrors.UserValidationFailed))
+		return
 	}
 
 	// Scope results to the current tenant (set by tenancy middleware)

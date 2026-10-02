@@ -209,40 +209,38 @@ type ListRidersResponse struct {
 
 // CreateRiderDto represents request to create rider
 type CreateRiderDto struct {
-	OrganizationID        uuid.UUID  `json:"organization_id" binding:"required,uuidv4"`
-	RiderType             string     `json:"rider_type" binding:"required,oneof=student employee"`
-	FirstName             string     `json:"first_name" binding:"required,min=2,max=255" conform:"trim"`
-	LastName              string     `json:"last_name" binding:"required,min=2,max=255" conform:"trim"`
-	IdentificationNumber  *string    `json:"identification_number" binding:"omitempty,max=100" conform:"trim"`
-	Phone                 *string    `json:"phone" binding:"omitempty,max=50" conform:"trim"`
-	Email                 *string    `json:"email" binding:"omitempty,email-valid" conform:"trim,lowercase"`
-	EmergencyContactName  *string    `json:"emergency_contact_name" binding:"omitempty,max=255" conform:"trim"`
-	EmergencyContactPhone *string    `json:"emergency_contact_phone" binding:"omitempty,max=50" conform:"trim"`
-	GuardianUserID        *uuid.UUID `json:"guardian_user_id" binding:"omitempty,uuidv4"`
-	GuardianName          *string    `json:"guardian_name" binding:"omitempty,max=255" conform:"trim"`
-	GuardianPhone         *string    `json:"guardian_phone" binding:"omitempty,max=50" conform:"trim"`
-	GuardianEmail         *string    `json:"guardian_email" binding:"omitempty,email-valid" conform:"trim,lowercase"`
-	Address               *string    `json:"address" binding:"omitempty,max=500" conform:"trim"`
-	HomeLatitude          *float64   `json:"home_latitude" binding:"required_with=HomeLongitude,omitempty,min=-90,max=90"`
-	HomeLongitude         *float64   `json:"home_longitude" binding:"required_with=HomeLatitude,omitempty,min=-180,max=180"`
-	Notes                 *string    `json:"notes" binding:"omitempty,max=2000" conform:"trim"`
+	OrganizationID        uuid.UUID `json:"organization_id" binding:"required,uuidv4"`
+	RiderType             string    `json:"rider_type" binding:"required,oneof=student employee"`
+	FirstName             string    `json:"first_name" binding:"required,min=2,max=255" conform:"trim"`
+	LastName              string    `json:"last_name" binding:"required,min=2,max=255" conform:"trim"`
+	IdentificationNumber  *string   `json:"identification_number" binding:"omitempty,max=100" conform:"trim"`
+	Phone                 *string   `json:"phone" binding:"omitempty,max=50" conform:"trim"`
+	Email                 *string   `json:"email" binding:"omitempty,email-valid" conform:"trim,lowercase"`
+	EmergencyContactName  *string   `json:"emergency_contact_name" binding:"omitempty,max=255" conform:"trim"`
+	EmergencyContactPhone *string   `json:"emergency_contact_phone" binding:"omitempty,max=50" conform:"trim"`
+	GuardianName          *string   `json:"guardian_name" binding:"omitempty,max=255" conform:"trim"`
+	GuardianPhone         *string   `json:"guardian_phone" binding:"omitempty,max=50" conform:"trim"`
+	GuardianEmail         *string   `json:"guardian_email" binding:"omitempty,email-valid" conform:"trim,lowercase"`
+	Address               *string   `json:"address" binding:"omitempty,max=500" conform:"trim"`
+	HomeLatitude          *float64  `json:"home_latitude" binding:"required_with=HomeLongitude,omitempty,min=-90,max=90"`
+	HomeLongitude         *float64  `json:"home_longitude" binding:"required_with=HomeLatitude,omitempty,min=-180,max=180"`
+	Notes                 *string   `json:"notes" binding:"omitempty,max=2000" conform:"trim"`
 }
 
 // UpdateRiderDto represents request to update rider
 type UpdateRiderDto struct {
-	Phone                 *string    `json:"phone" binding:"omitempty,max=50" conform:"trim"`
-	Email                 *string    `json:"email" binding:"omitempty,email-valid" conform:"trim,lowercase"`
-	EmergencyContactName  *string    `json:"emergency_contact_name" binding:"omitempty,max=255" conform:"trim"`
-	EmergencyContactPhone *string    `json:"emergency_contact_phone" binding:"omitempty,max=50" conform:"trim"`
-	GuardianUserID        *uuid.UUID `json:"guardian_user_id" binding:"omitempty,uuidv4"`
-	GuardianName          *string    `json:"guardian_name" binding:"omitempty,max=255" conform:"trim"`
-	GuardianPhone         *string    `json:"guardian_phone" binding:"omitempty,max=50" conform:"trim"`
-	GuardianEmail         *string    `json:"guardian_email" binding:"omitempty,email-valid" conform:"trim,lowercase"`
-	Address               *string    `json:"address" binding:"omitempty,max=500" conform:"trim"`
-	HomeLatitude          *float64   `json:"home_latitude" binding:"required_with=HomeLongitude,omitempty,min=-90,max=90"`
-	HomeLongitude         *float64   `json:"home_longitude" binding:"required_with=HomeLatitude,omitempty,min=-180,max=180"`
-	Notes                 *string    `json:"notes" binding:"omitempty,max=2000" conform:"trim"`
-	IsActive              *bool      `json:"is_active"`
+	Phone                 *string  `json:"phone" binding:"omitempty,max=50" conform:"trim"`
+	Email                 *string  `json:"email" binding:"omitempty,email-valid" conform:"trim,lowercase"`
+	EmergencyContactName  *string  `json:"emergency_contact_name" binding:"omitempty,max=255" conform:"trim"`
+	EmergencyContactPhone *string  `json:"emergency_contact_phone" binding:"omitempty,max=50" conform:"trim"`
+	GuardianName          *string  `json:"guardian_name" binding:"omitempty,max=255" conform:"trim"`
+	GuardianPhone         *string  `json:"guardian_phone" binding:"omitempty,max=50" conform:"trim"`
+	GuardianEmail         *string  `json:"guardian_email" binding:"omitempty,email-valid" conform:"trim,lowercase"`
+	Address               *string  `json:"address" binding:"omitempty,max=500" conform:"trim"`
+	HomeLatitude          *float64 `json:"home_latitude" binding:"required_with=HomeLongitude,omitempty,min=-90,max=90"`
+	HomeLongitude         *float64 `json:"home_longitude" binding:"required_with=HomeLatitude,omitempty,min=-180,max=180"`
+	Notes                 *string  `json:"notes" binding:"omitempty,max=2000" conform:"trim"`
+	IsActive              *bool    `json:"is_active"`
 }
 
 // === DTOs for Route Management ===
@@ -632,7 +630,6 @@ type UpsertOrganizationMemberDto struct {
 // default driver are dealt with deliberately rather than re-scoped behind the operator's back.
 type CreateDriverDto struct {
 	CompanyID        uuid.UUID            `json:"company_id" binding:"required,uuidv4"`
-	UserID           *uuid.UUID           `json:"user_id" binding:"omitempty,uuidv4"`
 	FirstName        string               `json:"first_name" binding:"required,min=2,max=255" conform:"trim"`
 	LastName         string               `json:"last_name" binding:"required,min=2,max=255" conform:"trim"`
 	Phone            *string              `json:"phone" binding:"omitempty,max=50" conform:"trim"`
@@ -643,11 +640,9 @@ type CreateDriverDto struct {
 }
 
 // UpdateDriverDto represents request to update a driver. Every field is optional: the SP keeps what
-// it is not sent. ClearUserID is the one thing no value of UserID can say — "unlink the account" —
-// and the driver screen's Unlink is what sends it.
+// it is not sent. The account is not here: it is linked through PUT /drivers/:id/account, which
+// holds it to the driver level (TRACK-032).
 type UpdateDriverDto struct {
-	UserID           *uuid.UUID           `json:"user_id" binding:"omitempty,uuidv4"`
-	ClearUserID      bool                 `json:"clear_user_id"`
 	FirstName        *string              `json:"first_name" binding:"omitempty,min=2,max=255" conform:"trim"`
 	LastName         *string              `json:"last_name" binding:"omitempty,min=2,max=255" conform:"trim"`
 	Phone            *string              `json:"phone" binding:"omitempty,max=50" conform:"trim"`

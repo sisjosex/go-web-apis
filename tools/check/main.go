@@ -38,6 +38,7 @@ var (
 	reTenantFromReq = regexp.MustCompile(`\.(Query|Param|PostForm|GetHeader|DefaultQuery)\(\s*"(tenant_id|X-Tenant-Id|tenant)"`)
 	reSQLStatement  = regexp.MustCompile(`^\s*(SELECT\s|WITH\s|INSERT\s+INTO\s|UPDATE\s+[a-z_.]+\s+SET\s|DELETE\s+FROM\s|TRUNCATE\s|MERGE\s+INTO\s)`)
 	reSPCall        = regexp.MustCompile(`\b(sp|fn)_\w+\s*\(`)
+	reUserScoped    = regexp.MustCompile(`(?i)\buser_id\s*=\s*p_user_id\b`)
 	reHunk          = regexp.MustCompile(`^@@ -\d+(?:,\d+)? \+(\d+)(?:,(\d+))? @@`)
 )
 
@@ -163,6 +164,11 @@ func checkSQL(file string, tenantTables map[string]bool) []finding {
 		body := text[loc[10]:loc[11]]
 		// Trigger functions take no parameters; the row they see is already tenant-scoped.
 		if strings.Contains(params, "p_tenant_id") || returns == "TRIGGER" {
+			continue
+		}
+		// A user-scoped membership read — the caller's own tenants — has no tenant to take: its scope is
+		// p_user_id, and the body must filter by it (TRACK-032, tenancy.sp_get_user_tenants).
+		if strings.Contains(params, "p_user_id") && reUserScoped.MatchString(body) {
 			continue
 		}
 		for table := range tenantTables {

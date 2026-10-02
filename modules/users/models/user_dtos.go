@@ -18,8 +18,9 @@ type CreateUserDto struct {
 	Bio               string               `json:"bio"`
 	WebsiteUrl        string               `json:"website_url"`
 	// TenantRole is the access level the user joins the tenant with; empty means member (USERS-011).
-	// Owner is a promotion with its own confirmation and portal comes from the guardian flow, so neither is accepted here.
-	TenantRole string `json:"tenant_role" binding:"omitempty,oneof=admin member organization driver"`
+	// Owner is a promotion with its own confirmation, and the app levels (portal, driver, organization)
+	// are granted from Tracking, where they are linked (TRACK-032) — so only the two web levels are accepted.
+	TenantRole string `json:"tenant_role" binding:"omitempty,oneof=admin member"`
 }
 
 // UpdateUserDto for updating a user (admin operation)
@@ -43,12 +44,15 @@ type UpdateUserDto struct {
 
 // UserListQuery represents query parameters for listing users
 type UserListQuery struct {
-	Page          int        `form:"page" json:"page" binding:"omitempty,min=1"`
-	Limit         int        `form:"limit" json:"limit" binding:"omitempty,min=1,max=100"`
-	Search        string     `form:"search" json:"search"`
-	Status        string     `form:"status" json:"status" binding:"omitempty,oneof=active inactive expired"`
-	Sort          string     `form:"sort" json:"sort" binding:"omitempty,oneof=created_at email first_name last_name"`
-	Order         string     `form:"order" json:"order" binding:"omitempty,oneof=asc desc"`
+	Page   int    `form:"page" json:"page" binding:"omitempty,min=1"`
+	Limit  int    `form:"limit" json:"limit" binding:"omitempty,min=1,max=100"`
+	Search string `form:"search" json:"search"`
+	Status string `form:"status" json:"status" binding:"omitempty,oneof=active inactive expired"`
+	Sort   string `form:"sort" json:"sort" binding:"omitempty,oneof=created_at email first_name last_name"`
+	Order  string `form:"order" json:"order" binding:"omitempty,oneof=asc desc"`
+	// Level narrows to one access level: portal, driver, organization, or web (owner, admin, member,
+	// viewer) — the Tracking access picker lists the accounts at the level it grants (TRACK-032).
+	Level         string     `form:"level" json:"level" binding:"omitempty,oneof=portal driver organization web"`
 	TenantID      uuid.UUID  `json:"-"` // Set server-side from tenancy middleware; not exposed to clients
 	ExcludeUserID *uuid.UUID `json:"-"` // Set server-side from JWT; not exposed to clients
 }

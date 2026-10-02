@@ -647,16 +647,68 @@ func TestCreateUser_TenantRoleIsApplied(t *testing.T) {
 	helper := setupSuperAdmin(t)
 	defer helper.Close()
 
-	email := fmt.Sprintf("level-driver-%d@example.com", time.Now().UnixNano())
-	body := models.CreateUserDto{FirstName: "Level", LastName: "Driver", Email: email, TenantRole: "driver"}
+	email := fmt.Sprintf("level-admin-%d@example.com", time.Now().UnixNano())
+	body := models.CreateUserDto{FirstName: "Level", LastName: "Admin", Email: email, TenantRole: "admin"}
 	w := helper.DoRequest("POST", "/users", body, map[string]string{"X-Tenant-Slug": "test-company"})
 	if w.Code != http.StatusCreated {
-		t.Fatalf("create with tenant_role=driver should return 201, got %d: %s", w.Code, w.Body.String())
+		t.Fatalf("create with tenant_role=admin should return 201, got %d: %s", w.Code, w.Body.String())
 	}
 
 	role, found := listedTenantRole(t, helper, email)
 	assert.True(t, found, "the new user should be listed")
-	assert.Equal(t, "driver", role, "the new user should join as driver")
+	assert.Equal(t, "admin", role, "the new user should join as admin")
+}
+
+// TestCreateUser_TenantRoleAppLevelRejected - portal, driver and organization are granted from
+// Tracking, where the account is linked (TRACK-032); Users creates web levels only.
+func TestCreateUser_TenantRoleAppLevelRejected(t *testing.T) {
+	helper := setupSuperAdmin(t)
+	defer helper.Close()
+
+	for _, level := range []string{"driver", "organization", "portal"} {
+		email := fmt.Sprintf("level-%s-%d@example.com", level, time.Now().UnixNano())
+		body := models.CreateUserDto{FirstName: "Level", LastName: "App", Email: email, TenantRole: level}
+		w := helper.DoRequest("POST", "/users", body, map[string]string{"X-Tenant-Slug": "test-company"})
+		assert.Equal(t, http.StatusBadRequest, w.Code, "tenant_role=%s should be refused: %s", level, w.Body.String())
+	}
+}
+
+// TestListUsers_LevelFilter - level narrows the list to one access level; web is every staff level.
+func TestListUsers_LevelFilter(t *testing.T) {
+	helper := setupSuperAdmin(t)
+	defer helper.Close()
+
+	read := func(level string) []string {
+		w := helper.DoRequest("GET", "/users?limit=100&level="+level, nil, map[string]string{"X-Tenant-Slug": "test-company"})
+		if w.Code != http.StatusOK {
+			t.Fatalf("list level=%s: expected 200, got %d: %s", level, w.Code, w.Body.String())
+		}
+		var listed struct {
+			Users []struct {
+				TenantRole *string `json:"tenant_role"`
+			} `json:"users"`
+		}
+		json.Unmarshal(w.Body.Bytes(), &listed)
+		roles := make([]string, 0, len(listed.Users))
+		for _, u := range listed.Users {
+			if u.TenantRole != nil {
+				roles = append(roles, *u.TenantRole)
+			}
+		}
+		return roles
+	}
+
+	portal := read("portal")
+	assert.NotEmpty(t, portal, "the seeded guardian is a portal account")
+	for _, role := range portal {
+		assert.Equal(t, "portal", role)
+	}
+	for _, role := range read("web") {
+		assert.Contains(t, []string{"owner", "admin", "member", "viewer"}, role)
+	}
+
+	w := helper.DoRequest("GET", "/users?level=nope", nil, map[string]string{"X-Tenant-Slug": "test-company"})
+	assert.Equal(t, http.StatusBadRequest, w.Code, w.Body.String())
 }
 
 // TestCreateUser_TenantRoleDefaultsToMember - clients that send no level keep today's member.

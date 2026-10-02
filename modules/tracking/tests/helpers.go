@@ -675,6 +675,43 @@ func LinkDriverAccount(t *testing.T, helper *testhelpers.ApiTestHelper, driverID
 	}
 }
 
+// TenantMembership reads an account's level in the test tenant and whether it is active ("" when it
+// has none): the API answers access grants, never the tenant_users row they write (TRACK-032).
+func TenantMembership(t *testing.T, helper *testhelpers.ApiTestHelper, userID string) (string, bool) {
+	t.Helper()
+	var role string
+	var active bool
+	err := helper.DB().QueryRow(context.Background(),
+		`SELECT role, is_active FROM tenancy.tenant_users WHERE tenant_id = $1 AND user_id = $2`,
+		TestTenantID, userID).Scan(&role, &active)
+	if err != nil {
+		return "", false
+	}
+	return role, active
+}
+
+// UserIDByEmail is the id of the account holding email, "" when there is none.
+func UserIDByEmail(t *testing.T, helper *testhelpers.ApiTestHelper, email string) string {
+	t.Helper()
+	var id string
+	if err := helper.DB().QueryRow(context.Background(),
+		`SELECT id::text FROM auth.users WHERE email = $1`, email).Scan(&id); err != nil {
+		return ""
+	}
+	return id
+}
+
+// CountUsersByEmail counts the accounts holding email — one, after any number of grants (TRACK-032).
+func CountUsersByEmail(t *testing.T, helper *testhelpers.ApiTestHelper, email string) int {
+	t.Helper()
+	var n int
+	if err := helper.DB().QueryRow(context.Background(),
+		`SELECT COUNT(*) FROM auth.users WHERE email = $1`, email).Scan(&n); err != nil {
+		t.Fatalf("count users: %v", err)
+	}
+	return n
+}
+
 // SetRouteDefaultDriver sets the driver a route's trips are built with, without the route.changed a
 // PATCH writes: a test counting the signals of one later change must not see this one.
 func SetRouteDefaultDriver(t *testing.T, helper *testhelpers.ApiTestHelper, routeID, driverID string) {

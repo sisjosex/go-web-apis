@@ -807,12 +807,17 @@ func (r *TrackingRepository) ListRouteStops(ctx context.Context, tenantID uuid.U
 
 // ==================== RIDERS CRUD ====================
 
+// noAccount is what the rider and driver writes pass for the account they used to accept: an account
+// is linked only through the access endpoints, which hold it to its level (TRACK-032). NULL keeps
+// whatever is stored.
+var noAccount *uuid.UUID
+
 func (r *TrackingRepository) CreateRider(ctx context.Context, tenantID uuid.UUID, dto *models.CreateRiderDto, scopeUserID *uuid.UUID) (*models.Rider, error) {
 	var rider models.Rider
 	err := r.dbService.QueryRow(ctx, `SELECT * FROM tracking.sp_create_rider($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17::DECIMAL, $18::DECIMAL, $19::TEXT)`,
 		tenantID, dto.OrganizationID, dto.RiderType, dto.FirstName, dto.LastName, dto.IdentificationNumber,
 		dto.Phone, dto.Email, dto.EmergencyContactName, dto.EmergencyContactPhone,
-		dto.GuardianUserID, dto.GuardianName, dto.GuardianPhone, dto.GuardianEmail, dto.Address, scopeUserID,
+		noAccount, dto.GuardianName, dto.GuardianPhone, dto.GuardianEmail, dto.Address, scopeUserID,
 		dto.HomeLatitude, dto.HomeLongitude, dto.Notes,
 	).Scan(&rider.ID, &rider.OrganizationID, &rider.RiderType, &rider.FirstName, &rider.LastName,
 		&rider.IdentificationNumber, &rider.Phone, &rider.Email, &rider.EmergencyContactName,
@@ -829,7 +834,7 @@ func (r *TrackingRepository) UpdateRider(ctx context.Context, tenantID uuid.UUID
 	var rider models.Rider
 	err := r.dbService.QueryRow(ctx, `SELECT * FROM tracking.sp_update_rider($1, $2, $3::VARCHAR(50), $4::VARCHAR(255), $5::VARCHAR(255), $6::VARCHAR(50), $7::UUID, $8::VARCHAR(255), $9::VARCHAR(50), $10::VARCHAR(255), $11::VARCHAR(500), $12::BOOLEAN, $13::UUID, $14::DECIMAL, $15::DECIMAL, $16::TEXT)`,
 		tenantID, riderID, dto.Phone, dto.Email, dto.EmergencyContactName, dto.EmergencyContactPhone,
-		dto.GuardianUserID, dto.GuardianName, dto.GuardianPhone, dto.GuardianEmail,
+		noAccount, dto.GuardianName, dto.GuardianPhone, dto.GuardianEmail,
 		dto.Address, dto.IsActive, scopeUserID, dto.HomeLatitude, dto.HomeLongitude, dto.Notes,
 	).Scan(&rider.ID, &rider.OrganizationID, &rider.RiderType, &rider.FirstName, &rider.LastName,
 		&rider.IdentificationNumber, &rider.Phone, &rider.Email, &rider.EmergencyContactName,
@@ -1070,7 +1075,7 @@ func (r *TrackingRepository) CreateDriver(ctx context.Context, tenantID uuid.UUI
 			p_license_expires_on := $9,
 			p_status             := $10
 		)
-	`, tenantID, dto.CompanyID, dto.UserID, dto.FirstName, dto.LastName, dto.Phone,
+	`, tenantID, dto.CompanyID, noAccount, dto.FirstName, dto.LastName, dto.Phone,
 		dto.LicenseNumber, dto.LicenseClass, dto.LicenseExpiresOn, dto.Status,
 	).Scan(scanDriver(&driver)...)
 	if err != nil {
@@ -1095,7 +1100,7 @@ func (r *TrackingRepository) UpdateDriver(ctx context.Context, tenantID uuid.UUI
 			p_license_expires_on := $10,
 			p_status             := $11
 		)
-	`, tenantID, driverID, dto.UserID, dto.ClearUserID, dto.FirstName, dto.LastName, dto.Phone,
+	`, tenantID, driverID, noAccount, false, dto.FirstName, dto.LastName, dto.Phone,
 		dto.LicenseNumber, dto.LicenseClass, dto.LicenseExpiresOn, dto.Status,
 	).Scan(scanDriver(&driver)...)
 	if err != nil {

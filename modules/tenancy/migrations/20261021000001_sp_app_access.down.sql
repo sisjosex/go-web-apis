@@ -1,0 +1,3 @@
+DROP FUNCTION IF EXISTS tenancy.sp_get_tenant_name(UUID);
+DROP FUNCTION IF EXISTS tenancy.sp_revoke_app_access(UUID, UUID, VARCHAR);
+DROP FUNCTION IF EXISTS tenancy.sp_grant_app_access(UUID, UUID, VARCHAR, VARCHAR, VARCHAR, VARCHAR, VARCHAR);
