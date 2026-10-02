@@ -20,7 +20,7 @@ make dev-platform | dev-tenant        # hot reload, ports 8080 / 9081
 make build                            # compile to bin/
 make gate MODULES="tracking"          # check + lint (changed code) + build + tests of MODULES, quiet
 make check-all | lint-all             # the whole-tree baseline, when asked for
-make docker-up | docker-down          # PostgreSQL + Valkey containers (tests need them up)
+make docker-up | docker-down          # PostgreSQL + Valkey + local S3 (:8333) containers (tests need them up)
 make seed-dev                         # emulator dev accounts on tenant mi-negocio (cmd/cli/seed_dev.sql), idempotent
 make test-<module>                    # auth core users tenancy tracking inventory sales purchasing billing geo
 make test-all                         # every module (db-reset first)
@@ -159,6 +159,16 @@ databases never get the schema (`tenant_service.go` excludes it). Routing goes t
 `interfaces.Router` port (Valhalla adapter, gobreaker: 5 failures → open 30 s); a 4xx from Valhalla is
 `ErrNoRoute` (422) and never opens the breaker. `/geo/eta` always answers: Valhalla → observed
 durations (nil until TRACK-010) → straight line × 1.3, flagged in `estimate_source`.
+
+**Stored files (INFRA-007).** `core/services/storage`: the `ObjectStore` port (one bucket; one
+minio-go client per process), R2 in prod, the compose's SeaweedFS in dev and tests (`.env.test` uses the
+`-test` buckets; `storagetest.Media|Documents(t)` hands them to a test). No byte goes through the API:
+`POST /storage/uploads {purpose, content_type, size}` signs a 5-min PUT to `pending/<tenant>/<uuid>.<ext>`,
+type and length in the signature; the owning module's endpoint claims the key (range read 0-511 → sniff +
+total size, copy to the final key, pending deleted after the answer, lifecycle sweeps the rest). A module
+adds an upload by registering a `storage.Purpose` on `routeDeps.purposes` in `routes.go`. Private files go
+out as 60 s `PresignGet` links. `MediaService` writes public images to the media bucket server-side (the
+imports), type from the extension allow-list, `immutable` cache; the row stores the full URL.
 
 ## REST conventions
 

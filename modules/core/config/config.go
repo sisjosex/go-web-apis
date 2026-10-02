@@ -40,6 +40,13 @@ type CoreConfig struct {
 	RedisURL           string        // empty = no Valkey: in-memory rate limit, no jobs
 	JobsConcurrency    int           // asynq worker goroutines
 	OutboxPollInterval time.Duration // relay fallback when a NOTIFY is missed
+
+	// Stored files (INFRA-007): R2 in production, the dev compose's SeaweedFS otherwise (D3).
+	StorageEndpoint        string // a URL: https://<account>.r2.cloudflarestorage.com
+	StorageAccessKey       string
+	StorageSecretKey       string
+	StorageMediaBucket     string // public images, served from MediaPublicBaseURL (D4)
+	StorageDocumentsBucket string // private files, reached only through signed links (D2)
 }
 
 // DefaultCoreConfig returns default configuration for core module
@@ -100,6 +107,13 @@ func LoadCoreConfig() *CoreConfig {
 		RedisURL:           utils.GetEnv("REDIS_URL", ""),
 		JobsConcurrency:    utils.GetEnvAsInt("JOBS_CONCURRENCY", 10),
 		OutboxPollInterval: utils.GetEnvAsDuration("OUTBOX_POLL_INTERVAL", 5*time.Second),
+
+		// Stored files — the defaults are the dev compose's local S3.
+		StorageEndpoint:        utils.GetEnv("STORAGE_S3_ENDPOINT", "http://127.0.0.1:8333"),
+		StorageAccessKey:       utils.GetEnv("STORAGE_S3_ACCESS_KEY", "dev-access-key"),
+		StorageSecretKey:       utils.GetEnv("STORAGE_S3_SECRET_KEY", "dev-secret-key"),
+		StorageMediaBucket:     utils.GetEnv("STORAGE_MEDIA_BUCKET", "taypi24-media"),
+		StorageDocumentsBucket: utils.GetEnv("STORAGE_DOCUMENTS_BUCKET", "taypi24-documents"),
 	}
 }
 
@@ -111,16 +125,11 @@ const (
 	sectionMedia   = "media"
 )
 
-// MediaRoot is the directory stored files are written under. It must live
-// outside the build context so an image survives a redeploy.
-func MediaRoot() string {
-	return utils.GetSetting(settingsModule, sectionMedia, "root", "./storage/media")
-}
-
-// MediaPublicBaseURL is the origin prepended to a stored file's path to make the
-// URL persisted on the record (e.g. profile_picture_url).
+// MediaPublicBaseURL is the origin a stored image's key is appended to, making the URL persisted on
+// the record (e.g. profile_picture_url): media.taypi24.com in production (D4), the dev bucket's
+// path on the local S3 otherwise.
 func MediaPublicBaseURL() string {
-	return utils.GetSetting(settingsModule, sectionMedia, "public_base_url", "http://localhost:8080")
+	return utils.GetSetting(settingsModule, sectionMedia, "public_base_url", "http://127.0.0.1:8333/taypi24-media")
 }
 
 // IsModuleEnabled checks if a module is enabled

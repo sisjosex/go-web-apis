@@ -232,14 +232,14 @@ func (r *ProductRepository) AddProductMedia(ctx context.Context, tenantID uuid.U
 	return &models.AddProductMediaResponse{MediaID: mediaID, Message: message}, nil
 }
 
-func (r *ProductRepository) RemoveProductMedia(ctx context.Context, tenantID uuid.UUID, mediaID string) error {
-	var message string
+func (r *ProductRepository) RemoveProductMedia(ctx context.Context, tenantID uuid.UUID, mediaID string) (string, error) {
+	var url string
 
 	err := r.dbService.QueryRow(
 		ctx,
-		`SELECT message FROM inventory.sp_remove_product_media($1, $2)`,
+		`SELECT media_url FROM inventory.sp_remove_product_media($1, $2)`,
 		tenantID, mediaID,
-	).Scan(&message)
+	).Scan(&url)
 
 	if err != nil {
 		if r.logger != nil {
@@ -247,12 +247,12 @@ func (r *ProductRepository) RemoveProductMedia(ctx context.Context, tenantID uui
 		}
 		var pgErr *pgconn.PgError
 		if errors.As(err, &pgErr) {
-			return pgErr
+			return "", pgErr
 		}
-		return err
+		return "", err
 	}
 
-	return nil
+	return url, nil
 }
 
 // ListProducts returns one page of active products plus the total the same filters match.

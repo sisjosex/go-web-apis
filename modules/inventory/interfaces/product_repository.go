@@ -37,5 +37,6 @@ type ProductRepository interface {
 	GetProductBySkU(ctx context.Context, tenantID uuid.UUID, sku string) (*models.ProductDetail, error)
 	ListProducts(ctx context.Context, tenantID uuid.UUID, query models.ListProductsQuery) ([]models.Product, int64, error)
 	AddProductMedia(ctx context.Context, tenantID uuid.UUID, productID string, dto models.AddProductMediaDto) (*models.AddProductMediaResponse, error)
-	RemoveProductMedia(ctx context.Context, tenantID uuid.UUID, mediaID string) error
+	// RemoveProductMedia deletes the row and answers its URL, so the stored object can follow it.
+	RemoveProductMedia(ctx context.Context, tenantID uuid.UUID, mediaID string) (string, error)
 }

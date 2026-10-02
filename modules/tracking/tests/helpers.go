@@ -5,10 +5,13 @@
 package tracking_test
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -693,12 +696,58 @@ func CreateTestDocument(t *testing.T, helper *testhelpers.ApiTestHelper, subject
 	return ParseResponse(t, w.Body.Bytes())
 }
 
-// UploadDocumentFile sends one file to PUT /tracking/documents/:id/file and returns the recorder,
-// so a test can assert the status as well as the body.
-func UploadDocumentFile(_ *testing.T, helper *testhelpers.ApiTestHelper, documentID, filename string, content []byte) *httptest.ResponseRecorder {
-	return helper.DoMultipartRequest("PUT", "/tracking/documents/"+documentID+"/file", nil,
-		[]testhelpers.MultipartFile{{Field: "file", Filename: filename, Content: content}},
-		map[string]string{})
+// UploadDocumentFile runs the app's whole upload (INFRA-007 D1): a ticket declaring the type the
+// extension implies and the content's size, the PUT straight to the bucket, then the claim. It returns
+// the ticket's recorder when the ticket is refused and the claim's otherwise, so a test can assert
+// the status as well as the body.
+func UploadDocumentFile(t *testing.T, helper *testhelpers.ApiTestHelper, documentID, filename string, content []byte) *httptest.ResponseRecorder {
+	t.Helper()
+	contentType := map[string]string{".pdf": "application/pdf", ".jpg": "image/jpeg", ".png": "image/png"}[strings.ToLower(filepath.Ext(filename))]
+	if contentType == "" {
+		contentType = "text/plain"
+	}
+	ticket := helper.DoRequest("POST", "/storage/uploads", map[string]interface{}{
+		"purpose": "tracking-document", "content_type": contentType, "size": len(content),
+	}, map[string]string{})
+	if ticket.Code != http.StatusCreated {
+		return ticket
+	}
+	var issued struct {
+		Key       string            `json:"key"`
+		UploadURL string            `json:"upload_url"`
+		Headers   map[string]string `json:"headers"`
+	}
+	if err := json.Unmarshal(ticket.Body.Bytes(), &issued); err != nil {
+		t.Fatalf("ticket: %v", err)
+	}
+	PutToTicket(t, issued.UploadURL, issued.Headers, content)
+	return ClaimDocumentFile(helper, documentID, issued.Key, filename)
+}
+
+// PutToTicket uploads content to a signed URL the way the browser does, and fails on anything but 200.
+func PutToTicket(t *testing.T, uploadURL string, headers map[string]string, content []byte) {
+	t.Helper()
+	req, err := http.NewRequest(http.MethodPut, uploadURL, bytes.NewReader(content))
+	if err != nil {
+		t.Fatalf("upload request: %v", err)
+	}
+	for name, value := range headers {
+		req.Header.Set(name, value)
+	}
+	res, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatalf("upload: %v", err)
+	}
+	_ = res.Body.Close()
+	if res.StatusCode != http.StatusOK {
+		t.Fatalf("upload: expected 200 from the bucket, got %d", res.StatusCode)
+	}
+}
+
+// ClaimDocumentFile sends PUT /tracking/documents/:id/file for an uploaded key.
+func ClaimDocumentFile(helper *testhelpers.ApiTestHelper, documentID, key, filename string) *httptest.ResponseRecorder {
+	return helper.DoRequest("PUT", "/tracking/documents/"+documentID+"/file",
+		map[string]interface{}{"key": key, "filename": filename}, map[string]string{})
 }
 
 // PdfBytes returns n bytes that sniff as a PDF — a real header followed by padding, so a size test

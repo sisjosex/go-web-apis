@@ -5433,6 +5433,36 @@ func TestImportProducts_ProductImageFromTheArchiveIsAttached(t *testing.T) {
 	}
 }
 
+// TestRemoveProductMedia_DeletesTheStoredImage - removing an imported image's row takes the image out
+// of the bucket with it; nothing is left that no row points at (INFRA-007 step 6).
+func TestRemoveProductMedia_DeletesTheStoredImage(t *testing.T) {
+	helper := SetupInventoryTest(t)
+	defer helper.Close()
+
+	prefix := importPrefix("IMPDEL")
+	csv := fmt.Sprintf("sku,name,price,image\n%s-A,Mate,1200,mate.png\n", prefix)
+	importInventoryCSV(t, helper, "/import", "products", csv, "", archiveWith(t, "mate.png", []byte("mate-bytes")))
+	product := productBySku(t, helper, prefix+"-A")
+	if !assert.Len(t, product.Media, 1) {
+		return
+	}
+	stored := product.Media[0]
+	served, err := http.Get(stored.URL)
+	if assert.NoError(t, err) {
+		_ = served.Body.Close()
+		assert.Equal(t, http.StatusOK, served.StatusCode, "the imported image is served before the removal")
+	}
+
+	w := helper.DoRequest("DELETE", fmt.Sprintf("/inventory/products/%s/media/%s", product.ID, stored.ID), nil, map[string]string{})
+	assert.Equal(t, http.StatusOK, w.Code, w.Body.String())
+
+	gone, err := http.Get(stored.URL)
+	if assert.NoError(t, err) {
+		_ = gone.Body.Close()
+		assert.Equal(t, http.StatusNotFound, gone.StatusCode, "the image must go with its row")
+	}
+}
+
 func TestImportProducts_MissingImageIsAWarningNotAFailure(t *testing.T) {
 	helper := SetupInventoryTest(t)
 	defer helper.Close()

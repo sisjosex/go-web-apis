@@ -74,6 +74,30 @@ services:
     ports:
       - "6379:6379"
 
+  # ============ STORAGE (INFRA-007 D3) ============
+  # A local S3 standing in for Cloudflare R2: the same client, keys and signed URLs. The browser
+  # reaches it straight on :8333, as it reaches R2 in production. Anonymous reads cover the media
+  # buckets only (docker/seaweedfs/s3.json); storage-init creates the buckets once.
+  storage:
+    image: chrislusf/seaweedfs:4.48
+    restart: always
+    container_name: storage
+    command: ["server", "-s3", "-s3.config=/etc/seaweedfs/s3.json", "-dir=/data", "-volume.max=0"]
+    ports:
+      - "8333:8333"
+    volumes:
+      - ./docker/seaweedfs/s3.json:/etc/seaweedfs/s3.json:ro
+      - storage-data:/data
+
+  storage-init:
+    image: chrislusf/seaweedfs:4.48
+    depends_on:
+      - storage
+    restart: "no"
+    entrypoint: ["sh", "/init.sh"]
+    volumes:
+      - ./docker/seaweedfs/init.sh:/init.sh:ro
+
   # ============ GEO (INFRA-003) ============
   # Both serve the build in ${GEO_DATA_DIR}/current (docker/geo/README.md), so
   # they sit behind the `geo` profile: `make docker-up` works before any build
@@ -107,3 +131,6 @@ services:
       - ./docker/caddy/Caddyfile.tiles:/etc/caddy/Caddyfile:ro
       - ./docker/caddy/tiles.caddy:/etc/caddy/tiles.caddy:ro
       - ${GEO_DATA_DIR:-./docker/geo/data}:/srv/geo:ro
+
+volumes:
+  storage-data:

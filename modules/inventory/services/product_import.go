@@ -681,7 +681,7 @@ func (d *productsImportDescriptor) attachOptionImages(ctx importModels.ImportCon
 			continue
 		}
 
-		url, err := d.mediaService.Save(productsMediaCategory, coreServices.MediaFile{Filename: image.Filename, Content: content})
+		url, err := d.mediaService.Save(ctx.Context(), productsMediaCategory, coreServices.MediaFile{Filename: image.Filename, Content: content})
 		if err != nil {
 			warnings = append(warnings, inventoryErrors.ImportMediaFailed)
 			continue
@@ -699,6 +699,7 @@ func (d *productsImportDescriptor) attachOptionImages(ctx importModels.ImportCon
 		}
 
 		if _, err := d.productService.AddProductMedia(ctx.Context(), ctx.TenantID, parsed.Product.ProductID, dto); err != nil {
+			d.discardImage(ctx, url)
 			warnings = append(warnings, inventoryErrors.ImportMediaFailed)
 		}
 	}
@@ -856,7 +857,7 @@ func (d *productsImportDescriptor) attachProductImage(ctx importModels.ImportCon
 		return nil
 	}
 
-	url, err := d.mediaService.Save(productsMediaCategory, coreServices.MediaFile{Filename: filename, Content: content})
+	url, err := d.mediaService.Save(ctx.Context(), productsMediaCategory, coreServices.MediaFile{Filename: filename, Content: content})
 	if err != nil {
 		return []string{inventoryErrors.ImportMediaFailed}
 	}
@@ -871,9 +872,18 @@ func (d *productsImportDescriptor) attachProductImage(ctx importModels.ImportCon
 	}
 
 	if _, err := d.productService.AddProductMedia(ctx.Context(), ctx.TenantID, productID, dto); err != nil {
+		d.discardImage(ctx, url)
 		return []string{inventoryErrors.ImportMediaFailed}
 	}
 	return nil
+}
+
+// discardImage deletes a stored image no media row ended up holding. Best-effort: a failure leaves
+// one orphaned image, never a failed row.
+func (d *productsImportDescriptor) discardImage(ctx importModels.ImportContext, url string) {
+	if err := d.mediaService.Delete(ctx.Context(), url); err != nil {
+		log.Printf("⚠️  products import: delete unused image %s: %v", url, err)
+	}
 }
 
 // codeTaken is the read-only preview of what the create SPs enforce, so the dry

@@ -4,6 +4,7 @@ import (
 	"errors"
 	"strconv"
 	"strings"
+	"time"
 
 	coreModels "josex/web/modules/core/models"
 
@@ -717,6 +718,19 @@ type UpdateDocumentDto struct {
 	IssuedOn  *coreModels.DateOnly `json:"issued_on" time_format:"2006-01-02"`
 	ExpiresOn *coreModels.DateOnly `json:"expires_on" time_format:"2006-01-02"`
 	Notes     *string              `json:"notes" binding:"omitempty,max=2000" conform:"trim"`
+}
+
+// ClaimDocumentFileDto binds PUT /tracking/documents/:id/file (INFRA-007 D1): the key a ticket from
+// POST /storage/uploads issued, and what the client called its file — shown, never part of a key.
+type ClaimDocumentFileDto struct {
+	Key      string `json:"key" binding:"required,max=200"`
+	Filename string `json:"filename" binding:"max=1000"`
+}
+
+// DocumentFileLink is a signed link to a document's file, good for a minute (INFRA-007 D2).
+type DocumentFileLink struct {
+	URL       string    `json:"url"`
+	ExpiresAt time.Time `json:"expires_at"`
 }
 
 // ListDocumentsQuery binds GET /tracking/documents. ExpiringWithinDays narrows to what needs acting

@@ -52,7 +52,7 @@ help:
 	@echo "  make test-billing     - Billing module"
 	@echo "  make test-tracking    - Tracking module"
 	@echo "  make test-users       - Users module"
-	@echo "  make test-core        - Core module (jobs tests need Valkey up)"
+	@echo "  make test-core        - Core module (jobs tests need Valkey, storage tests the local S3)"
 	@echo "  make test-import      - Import engine (unit, no DB)"
 	@echo "  make test-geo         - Geo module (address search, routing breaker, ETA fallback)"
 	@echo ""
@@ -142,7 +142,7 @@ test: db-reset
 		./modules/auth/tests \
 		./modules/tenancy/tests \
 		./modules/tenancy/middleware \
-		./modules/core/services \
+		./modules/core/services/... \
 		./modules/inventory/tests \
 		./modules/sales/tests
 
@@ -171,7 +171,7 @@ test-import:
 	go test $(TEST_FLAGS) ./modules/import/services
 
 test-core: db-reset
-	go test $(TEST_FLAGS) ./modules/core/tests ./modules/core/services
+	go test $(TEST_FLAGS) ./modules/core/tests ./modules/core/services/...
 
 test-tenancy: db-reset
 	go test $(TEST_FLAGS) ./modules/tenancy/tests ./modules/tenancy/middleware
@@ -180,7 +180,7 @@ test-tracking: db-reset
 	go test $(TEST_FLAGS) ./modules/tracking/tests
 
 test-inventory: db-reset
-	go test $(TEST_FLAGS) ./modules/inventory/tests
+	go test $(TEST_FLAGS) ./modules/inventory/tests ./modules/inventory/services
 
 test-sales: db-reset
 	go test $(TEST_FLAGS) ./modules/sales/tests

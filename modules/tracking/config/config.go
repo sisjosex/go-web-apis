@@ -25,9 +25,8 @@ type TrackingConfig struct {
 	EnableLocationPartitioning bool
 	MaxEventsPerRider          int
 
-	// Compliance document scans (TRACK-016 D3). DocumentsRoot is deliberately not under MEDIA_ROOT:
-	// a licence scan is not public content and is only reachable through the download endpoint.
-	DocumentsRoot string
+	// Compliance document scans (TRACK-016 D3): the biggest one a ticket signs and a claim accepts.
+	// They live in the private documents bucket (INFRA-007).
 	MaxDocumentKB int
 
 	// GPS pipeline (TRACK-010 D2): the stream is trimmed to about GPSStreamMaxLen points per tenant,
@@ -69,7 +68,6 @@ func LoadTrackingConfig() *TrackingConfig {
 		MaxEventsPerRider:          utils.GetEnvAsInt("TRACKING_MAX_EVENTS_PER_RIDER", 1000),
 
 		// Compliance documents
-		DocumentsRoot: utils.GetEnv("TRACKING_DOCUMENTS_ROOT", "storage/tracking-documents"),
 		MaxDocumentKB: utils.GetEnvAsInt("TRACKING_MAX_DOCUMENT_KB", 5120),
 
 		// GPS pipeline

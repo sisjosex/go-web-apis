@@ -1,28 +1,23 @@
 package services
 
 import (
-	"os"
-	"path/filepath"
+	"net/http"
 	"slices"
 	"strings"
 	"testing"
 
 	coreServices "josex/web/modules/core/services"
+	"josex/web/modules/core/services/storage/storagetest"
 	importModels "josex/web/modules/import/models"
 	usersErrors "josex/web/modules/users/errors"
 )
 
 // newTestDescriptor builds the descriptor with only the dependency checkFormat
-// and buildDto actually use: the media service, pointed at a throwaway MEDIA_ROOT.
-// No database, no HTTP — this is a white-box test of the field mapping (D4).
-func newTestDescriptor(t *testing.T) (*usersImportDescriptor, string) {
+// and buildDto actually use: the media service, on the test media bucket.
+// No database, no HTTP route — this is a white-box test of the field mapping (D4).
+func newTestDescriptor(t *testing.T) *usersImportDescriptor {
 	t.Helper()
-
-	root := t.TempDir()
-	t.Setenv("CORE_MEDIA_ROOT", root)
-	t.Setenv("CORE_MEDIA_PUBLIC_BASE_URL", "http://localhost:8080")
-
-	return &usersImportDescriptor{mediaService: coreServices.NewMediaService()}, root
+	return &usersImportDescriptor{mediaService: coreServices.NewMediaService(storagetest.Media(t))}
 }
 
 // completeRow is a row filling every column the descriptor declares except
@@ -46,7 +41,7 @@ func contextWithImages(images map[string][]byte) importModels.ImportContext {
 }
 
 func TestCheckFormat_CompleteRowHasNoErrorsOrWarnings(t *testing.T) {
-	descriptor, _ := newTestDescriptor(t)
+	descriptor := newTestDescriptor(t)
 	ctx := contextWithImages(map[string][]byte{"ana.png": []byte("ana-bytes")})
 
 	fieldErrors, warnings, _ := descriptor.checkFormat(ctx, completeRow())
@@ -60,7 +55,7 @@ func TestCheckFormat_CompleteRowHasNoErrorsOrWarnings(t *testing.T) {
 }
 
 func TestBuildDto_CompleteRowMapsEveryColumn(t *testing.T) {
-	descriptor, root := newTestDescriptor(t)
+	descriptor := newTestDescriptor(t)
 	ctx := contextWithImages(map[string][]byte{"ana.png": []byte("ana-bytes")})
 
 	dto, warnings := descriptor.buildDto(ctx, completeRow())
@@ -90,17 +85,21 @@ func TestBuildDto_CompleteRowMapsEveryColumn(t *testing.T) {
 		t.Error("expected a generated password so the create SP accepts the row")
 	}
 
-	if !strings.HasPrefix(dto.ProfilePictureUrl, "http://localhost:8080/media/avatars/") {
+	if !strings.Contains(dto.ProfilePictureUrl, "/avatars/") {
 		t.Fatalf("expected a stored picture URL, got %q", dto.ProfilePictureUrl)
 	}
-	name := dto.ProfilePictureUrl[strings.LastIndex(dto.ProfilePictureUrl, "/")+1:]
-	if _, err := os.Stat(filepath.Join(root, "avatars", name)); err != nil {
-		t.Errorf("expected the picture written under MEDIA_ROOT: %v", err)
+	res, err := http.Get(dto.ProfilePictureUrl)
+	if err != nil {
+		t.Fatalf("GET the picture: %v", err)
+	}
+	_ = res.Body.Close()
+	if res.StatusCode != http.StatusOK || res.Header.Get("Content-Type") != "image/png" {
+		t.Errorf("expected the picture served as image/png, got %d %q", res.StatusCode, res.Header.Get("Content-Type"))
 	}
 }
 
 func TestBuildDto_BlankOptionalColumnsStayUnset(t *testing.T) {
-	descriptor, _ := newTestDescriptor(t)
+	descriptor := newTestDescriptor(t)
 	row := map[string]string{
 		"first_name": "Ana",
 		"last_name":  "Ruiz",
@@ -123,7 +122,7 @@ func TestBuildDto_BlankOptionalColumnsStayUnset(t *testing.T) {
 }
 
 func TestCheckFormat_MissingRequiredFieldsAreErrors(t *testing.T) {
-	descriptor, _ := newTestDescriptor(t)
+	descriptor := newTestDescriptor(t)
 	row := map[string]string{"first_name": "", "last_name": "", "email": "not-an-email"}
 
 	fieldErrors, _, _ := descriptor.checkFormat(contextWithImages(nil), row)
@@ -140,7 +139,7 @@ func TestCheckFormat_MissingRequiredFieldsAreErrors(t *testing.T) {
 }
 
 func TestCheckFormat_InvalidWebsiteWarnsAndTheFieldIsDropped(t *testing.T) {
-	descriptor, _ := newTestDescriptor(t)
+	descriptor := newTestDescriptor(t)
 	row := completeRow()
 	row["website_url"] = "ana.example.com" // no scheme
 	row["profile_picture"] = ""
@@ -163,7 +162,7 @@ func TestCheckFormat_InvalidWebsiteWarnsAndTheFieldIsDropped(t *testing.T) {
 }
 
 func TestCheckFormat_InvalidBirthdayWarnsAndTheFieldIsDropped(t *testing.T) {
-	descriptor, _ := newTestDescriptor(t)
+	descriptor := newTestDescriptor(t)
 	row := completeRow()
 	row["birthday"] = "17/04/1990"
 	row["profile_picture"] = ""
@@ -183,7 +182,7 @@ func TestCheckFormat_InvalidBirthdayWarnsAndTheFieldIsDropped(t *testing.T) {
 }
 
 func TestCheckFormat_PictureAbsentFromArchiveWarnsAndTheRowIsStillBuilt(t *testing.T) {
-	descriptor, _ := newTestDescriptor(t)
+	descriptor := newTestDescriptor(t)
 	ctx := contextWithImages(map[string][]byte{"someone-else.png": []byte("bytes")})
 	row := completeRow()
 
@@ -208,7 +207,7 @@ func TestCheckFormat_PictureAbsentFromArchiveWarnsAndTheRowIsStillBuilt(t *testi
 }
 
 func TestCheckFormat_PictureIsMatchedCaseInsensitively(t *testing.T) {
-	descriptor, _ := newTestDescriptor(t)
+	descriptor := newTestDescriptor(t)
 	ctx := contextWithImages(map[string][]byte{"ana.png": []byte("ana-bytes")})
 	row := completeRow()
 	row["profile_picture"] = " Ana.PNG "
@@ -246,7 +245,7 @@ func TestParseRoleNames_BlankCellYieldsNothing(t *testing.T) {
 // newTestDescriptor has no dbService, so every name here is unresolvable — the
 // resolution itself is covered by the integration test.
 func TestCheckFormat_UnresolvableRoleIsAFieldErrorNamingTheRole(t *testing.T) {
-	descriptor, _ := newTestDescriptor(t)
+	descriptor := newTestDescriptor(t)
 	row := completeRow()
 	row["profile_picture"] = ""
 	row["roles"] = "SampleRole"
@@ -265,7 +264,7 @@ func TestCheckFormat_UnresolvableRoleIsAFieldErrorNamingTheRole(t *testing.T) {
 }
 
 func TestCheckFormat_BlankRolesCellResolvesNothingAndIsClean(t *testing.T) {
-	descriptor, _ := newTestDescriptor(t)
+	descriptor := newTestDescriptor(t)
 	row := completeRow()
 	row["profile_picture"] = ""
 	row["roles"] = "  "
@@ -281,7 +280,7 @@ func TestCheckFormat_BlankRolesCellResolvesNothingAndIsClean(t *testing.T) {
 }
 
 func TestColumns_RolesIsDeclaredOptionalWithAHint(t *testing.T) {
-	descriptor, _ := newTestDescriptor(t)
+	descriptor := newTestDescriptor(t)
 
 	index := slices.IndexFunc(descriptor.Columns(), func(spec importModels.ColumnSpec) bool {
 		return spec.Key == "roles"
@@ -303,7 +302,7 @@ func TestColumns_RolesIsDeclaredOptionalWithAHint(t *testing.T) {
 }
 
 func TestColumns_CarryTheProfileFieldsAndTheirTypes(t *testing.T) {
-	descriptor, _ := newTestDescriptor(t)
+	descriptor := newTestDescriptor(t)
 
 	specs := map[string]importModels.ColumnSpec{}
 	for _, spec := range descriptor.Columns() {

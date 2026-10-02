@@ -1,8 +1,9 @@
 package services
 
 import (
+	"bytes"
+	"context"
 	"fmt"
-	"os"
 	"path/filepath"
 	"strings"
 	"sync"
@@ -10,6 +11,7 @@ import (
 	"github.com/google/uuid"
 
 	coreConfig "josex/web/modules/core/config"
+	"josex/web/modules/core/services/storage"
 )
 
 // MediaFile is one file handed to the media service for storage.
@@ -19,55 +21,59 @@ type MediaFile struct {
 	Content  []byte
 }
 
-// MediaService stores binary files under MEDIA_ROOT and returns the public URL
-// each one is served at. It is the app's first stored-file path (D5): local
-// disk, one flat directory per category, opaque UUID names.
+// MediaService stores public images in the media bucket and returns the URL each one is served at
+// (INFRA-007 D4): one flat prefix per category, opaque UUID names that never change.
 type MediaService interface {
-	// Save writes one file into a category directory (e.g. "avatars") and
-	// returns its public URL.
-	Save(category string, file MediaFile) (string, error)
-	// SaveAll writes many files concurrently and returns the public URL of each,
-	// keyed by the caller's own key. A file that fails to write is absent from
+	// Save stores one file under a category (e.g. "avatars") and returns its public URL.
+	Save(ctx context.Context, category string, file MediaFile) (string, error)
+	// SaveAll stores many files concurrently and returns the public URL of each,
+	// keyed by the caller's own key. A file that fails to store is absent from
 	// the result and reported in errs, keyed the same way, so a bulk import can
 	// carry on with the files that did land.
-	SaveAll(category string, files map[string]MediaFile) (urls map[string]string, errs map[string]error)
+	SaveAll(ctx context.Context, category string, files map[string]MediaFile) (urls map[string]string, errs map[string]error)
+	// Delete removes the image a URL from Save points at, once no row holds it. A URL this service
+	// did not issue (a product's external image, say) is not its to delete and is left alone.
+	Delete(ctx context.Context, url string) error
 }
 
 // saveWorkers bounds the concurrency of a bulk write so a 500-image import does
-// not open 500 files at once.
+// not open 500 uploads at once.
 const saveWorkers = 8
 
-type mediaService struct{}
+// immutableCache is safe because a key is a fresh UUID and is never written twice (D4): the second
+// view comes from the browser or Cloudflare's edge, never from the bucket.
+const immutableCache = "public, max-age=31536000, immutable"
 
-// NewMediaService creates the local-disk media service.
-func NewMediaService() MediaService {
-	return &mediaService{}
+// mediaTypes is the allow-list of what the media bucket holds. The type is the extension's, never
+// sniffed from the bytes: the bucket serves exactly what this map says, behind nosniff.
+var mediaTypes = map[string]string{
+	"jpg":  "image/jpeg",
+	"jpeg": "image/jpeg",
+	"png":  "image/png",
+	"gif":  "image/gif",
+	"webp": "image/webp",
 }
 
-func (s *mediaService) Save(category string, file MediaFile) (string, error) {
-	directory, err := s.categoryDir(category)
-	if err != nil {
-		return "", err
-	}
-	return s.write(category, directory, file)
+type mediaService struct {
+	store storage.ObjectStore
 }
 
-func (s *mediaService) SaveAll(category string, files map[string]MediaFile) (map[string]string, map[string]error) {
+// NewMediaService creates the media service over the media bucket.
+func NewMediaService(store storage.ObjectStore) MediaService {
+	return &mediaService{store: store}
+}
+
+func (s *mediaService) Save(ctx context.Context, category string, file MediaFile) (string, error) {
+	return s.put(ctx, category, file)
+}
+
+func (s *mediaService) SaveAll(ctx context.Context, category string, files map[string]MediaFile) (map[string]string, map[string]error) {
 	urls := make(map[string]string, len(files))
 	errs := make(map[string]error)
 	if len(files) == 0 {
 		return urls, errs
 	}
 
-	directory, err := s.categoryDir(category)
-	if err != nil {
-		for key := range files {
-			errs[key] = err
-		}
-		return urls, errs
-	}
-
-	// The directory is created once above, so the workers only write files.
 	type job struct {
 		key  string
 		file MediaFile
@@ -81,11 +87,11 @@ func (s *mediaService) SaveAll(category string, files map[string]MediaFile) (map
 		go func() {
 			defer wg.Done()
 			for j := range jobs {
-				url, writeErr := s.write(category, directory, j.file)
+				url, putErr := s.put(ctx, category, j.file)
 
 				mu.Lock()
-				if writeErr != nil {
-					errs[j.key] = writeErr
+				if putErr != nil {
+					errs[j.key] = putErr
 				} else {
 					urls[j.key] = url
 				}
@@ -103,36 +109,37 @@ func (s *mediaService) SaveAll(category string, files map[string]MediaFile) (map
 	return urls, errs
 }
 
-// categoryDir resolves and creates the directory a category is stored in.
-func (s *mediaService) categoryDir(category string) (string, error) {
-	directory := filepath.Join(coreConfig.MediaRoot(), sanitizeCategory(category))
-	if err := os.MkdirAll(directory, 0o755); err != nil {
-		return "", err
+func (s *mediaService) Delete(ctx context.Context, url string) error {
+	key, ok := strings.CutPrefix(url, strings.TrimSuffix(coreConfig.MediaPublicBaseURL(), "/")+"/")
+	if !ok || key == "" {
+		return nil
 	}
-	return directory, nil
+	return s.store.Delete(ctx, key)
 }
 
-// write stores one file under an opaque UUID name, keeping only the original
+// put stores one file under an opaque UUID name, keeping only the original
 // extension, and returns the URL it is served at.
-func (s *mediaService) write(category, directory string, file MediaFile) (string, error) {
-	name := uuid.NewString()
-	if ext := mediaExtension(file.Filename); ext != "" {
-		name += "." + ext
+func (s *mediaService) put(ctx context.Context, category string, file MediaFile) (string, error) {
+	ext := mediaExtension(file.Filename)
+	contentType, ok := mediaTypes[ext]
+	if !ok {
+		return "", fmt.Errorf("media: %q is not an image type the media bucket holds", ext)
 	}
 
-	if err := os.WriteFile(filepath.Join(directory, name), file.Content, 0o644); err != nil {
+	key := sanitizeCategory(category) + "/" + uuid.NewString() + "." + ext
+	err := s.store.Put(ctx, key, bytes.NewReader(file.Content), int64(len(file.Content)), storage.PutOptions{
+		ContentType:  contentType,
+		CacheControl: immutableCache,
+	})
+	if err != nil {
 		return "", err
 	}
 
-	return fmt.Sprintf("%s/media/%s/%s",
-		strings.TrimSuffix(coreConfig.MediaPublicBaseURL(), "/"),
-		sanitizeCategory(category),
-		name,
-	), nil
+	return strings.TrimSuffix(coreConfig.MediaPublicBaseURL(), "/") + "/" + key, nil
 }
 
-// sanitizeCategory keeps a category to a single safe path segment: the caller is
-// internal, but this is the boundary where a path is built, so it holds the line.
+// sanitizeCategory keeps a category to a single safe key segment: the caller is
+// internal, but this is the boundary where a key is built, so it holds the line.
 func sanitizeCategory(category string) string {
 	cleaned := strings.Map(func(r rune) rune {
 		switch {

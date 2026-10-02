@@ -23,8 +23,10 @@ go.work
 # vendor/
 
 # Stored files: uploaded media and compliance document scans, plus whatever a test
-# run leaves behind. These are volumes in production and never source.
+# run leaves behind. Before INFRA-007 these were volumes; they are never source.
 storage/
+# ...but the stored-file port is.
+!modules/core/services/storage/
 
 # Geo builds and their download cache (INFRA-003): gigabytes, rebuilt monthly.
 docker/geo/data/

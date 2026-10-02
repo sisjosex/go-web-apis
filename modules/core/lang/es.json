@@ -1,5 +1,6 @@
 {
   "core.internal-error": "Algo salió mal, inténtalo de nuevo",
+  "storage.upload-invalid": "Este archivo no se puede subir: revisa su tipo y tamaño",
   "validation.invalid-uuid": "Formato de UUID inválido",
   "validation.required": "Este campo es obligatorio",
   "validation.email": "Formato de correo electrónico inválido",

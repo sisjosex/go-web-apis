@@ -2,7 +2,6 @@ package controllers
 
 import (
 	"errors"
-	"io"
 	"net/http"
 	"strings"
 
@@ -23,12 +22,12 @@ import (
 
 type TrackingController struct {
 	trackingService interfaces.TrackingService
-	// documentFiles keeps compliance document scans on disk (TRACK-016 D3). It is the controller's
-	// and not the service's: the SPs own the rows, the filesystem is the handler's to touch.
-	documentFiles *trackingServices.DocumentFileStore
+	// documentFiles keeps compliance document scans in the documents bucket (INFRA-007). It is the
+	// controller's and not the service's: the SPs own the rows, the bucket is the handler's to touch.
+	documentFiles *trackingServices.DocumentFiles
 }
 
-func NewTrackingController(trackingService interfaces.TrackingService, documentFiles *trackingServices.DocumentFileStore) *TrackingController {
+func NewTrackingController(trackingService interfaces.TrackingService, documentFiles *trackingServices.DocumentFiles) *TrackingController {
 	return &TrackingController{
 		trackingService: trackingService,
 		documentFiles:   documentFiles,
@@ -2292,23 +2291,24 @@ func (ctrl *TrackingController) DeleteDocument(c *gin.Context) {
 	}
 	// The row is gone either way; a file that cannot be removed is a leak to clean up, never a
 	// reason to tell the caller the delete failed.
-	ctrl.documentFiles.Remove(tenantID, documentID, fileExt)
+	ctrl.documentFiles.Remove(c.Request.Context(), tenantID, documentID, fileExt)
 
 	c.Status(http.StatusNoContent)
 }
 
 // UploadDocumentFile godoc
 // @Summary Attach a document's file
-// @Description Upload the scan of a compliance document; PDF, JPG or PNG within the size limit
+// @Description Claim a scan uploaded on a ticket from POST /storage/uploads; PDF, JPG or PNG within the size limit
 // @Tags Tracking - Documents
-// @Accept multipart/form-data
+// @Accept json
 // @Produce json
 // @Security BearerAuth
 // @Param document_id path string true "Document ID (UUID)"
-// @Param file formData file true "The scan — pdf, jpg or png"
+// @Param file body models.ClaimDocumentFileDto true "The uploaded key and the file's own name"
 // @Success 200 {object} models.ComplianceDocument
 // @Failure 400 {object} coreErrors.ErrorResponse
 // @Failure 404 {object} coreErrors.ErrorResponse
+// @Failure 422 {object} coreErrors.ErrorResponse
 // @Failure 500 {object} coreErrors.ErrorResponse
 // @Router /tracking/documents/{document_id}/file [put]
 func (ctrl *TrackingController) UploadDocumentFile(c *gin.Context) {
@@ -2323,23 +2323,15 @@ func (ctrl *TrackingController) UploadDocumentFile(c *gin.Context) {
 		return
 	}
 
-	// The document is read first: an upload against one that is not this tenant's must be a 404
-	// before a single byte is written anywhere.
-	if _, err := ctrl.trackingService.GetDocument(c.Request.Context(), tenantID, documentID); err != nil {
-		if documentErrorResponse(c, err) {
-			return
-		}
-		c.JSON(http.StatusInternalServerError, coreErrors.BuildError(c, err))
+	var dto models.ClaimDocumentFileDto
+	if err := c.ShouldBindJSON(&dto); err != nil {
+		c.JSON(http.StatusBadRequest, coreErrors.BuildErrorDetail(c, trackingErrors.DocumentFileInvalid, utils.ExtractValidationError(c, err)))
 		return
 	}
 
-	header, err := c.FormFile("file")
-	if err != nil {
-		c.JSON(http.StatusBadRequest, coreErrors.BuildErrorSingle(c, trackingErrors.DocumentFileInvalid))
-		return
-	}
-
-	name, size, ext, err := ctrl.documentFiles.Save(tenantID, documentID, header)
+	// The document is read first: a claim against one that is not this tenant's must be a 404
+	// before a single object is touched. Its current extension says what the claim replaces.
+	previous, err := ctrl.trackingService.GetDocument(c.Request.Context(), tenantID, documentID)
 	if err != nil {
 		if documentErrorResponse(c, err) {
 			return
@@ -2348,10 +2340,20 @@ func (ctrl *TrackingController) UploadDocumentFile(c *gin.Context) {
 		return
 	}
 
-	document, err := ctrl.trackingService.SetDocumentFile(c.Request.Context(), tenantID, documentID, name, size, ext)
+	ext, size, err := ctrl.documentFiles.Claim(c.Request.Context(), tenantID, documentID, dto.Key)
 	if err != nil {
-		// The row never learnt about the bytes, so the bytes are litter — take them back out.
-		ctrl.documentFiles.Remove(tenantID, documentID, &ext)
+		if documentErrorResponse(c, err) {
+			return
+		}
+		c.JSON(http.StatusInternalServerError, coreErrors.BuildError(c, err))
+		return
+	}
+
+	document, err := ctrl.trackingService.SetDocumentFile(c.Request.Context(), tenantID, documentID,
+		trackingServices.DisplayName(dto.Filename), size, ext)
+	if err != nil {
+		// The row never learnt about the copy, so the copy is litter — take it back out.
+		ctrl.documentFiles.Discard(c.Request.Context(), tenantID, documentID, dto.Key, previous.FileExt, ext)
 		if documentErrorResponse(c, err) {
 			return
 		}
@@ -2359,16 +2361,17 @@ func (ctrl *TrackingController) UploadDocumentFile(c *gin.Context) {
 		return
 	}
 	c.JSON(http.StatusOK, document)
+	ctrl.documentFiles.AfterClaim(c.Request.Context(), tenantID, documentID, dto.Key, previous.FileExt, ext)
 }
 
 // DownloadDocumentFile godoc
 // @Summary Download a document's file
-// @Description Stream the stored scan behind auth; it is never served from a public URL
+// @Description A 60-second signed link to the stored scan, issued behind auth; the scan is never public
 // @Tags Tracking - Documents
-// @Produce octet-stream
+// @Produce json
 // @Security BearerAuth
 // @Param document_id path string true "Document ID (UUID)"
-// @Success 200 {file} binary
+// @Success 200 {object} models.DocumentFileLink
 // @Failure 400 {object} coreErrors.ErrorResponse
 // @Failure 404 {object} coreErrors.ErrorResponse
 // @Failure 500 {object} coreErrors.ErrorResponse
@@ -2394,7 +2397,7 @@ func (ctrl *TrackingController) DownloadDocumentFile(c *gin.Context) {
 		return
 	}
 
-	file, err := ctrl.documentFiles.Open(tenantID, documentID, document.FileExt)
+	url, expiresAt, err := ctrl.documentFiles.DownloadURL(c.Request.Context(), tenantID, documentID, document.FileExt, downloadFilename(document))
 	if err != nil {
 		if documentErrorResponse(c, err) {
 			return
@@ -2402,17 +2405,7 @@ func (ctrl *TrackingController) DownloadDocumentFile(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, coreErrors.BuildError(c, err))
 		return
 	}
-	defer func() { _ = file.Close() }()
-
-	c.Header("Content-Disposition", "attachment; filename=\""+downloadFilename(document)+"\"")
-	c.Header("X-Content-Type-Options", "nosniff")
-	// Never the browser's guess and never the uploader's claim: the extension is one this server
-	// accepted, so the type it maps to is the only one worth sending.
-	c.Header("Content-Type", downloadContentType(document.FileExt))
-	if _, err := io.Copy(c.Writer, file); err != nil {
-		// The status and part of the body are already out; there is nothing left to tell the client.
-		_ = c.Error(err)
-	}
+	c.JSON(http.StatusOK, models.DocumentFileLink{URL: url, ExpiresAt: expiresAt})
 }
 
 // downloadFilename names the file after what it is — "Insurance-POL-1.pdf" — rather than after what
@@ -2447,22 +2440,6 @@ func safeFilenamePart(value string) string {
 	return out.String()
 }
 
-// downloadContentType maps the extension this server accepted to what it is served as.
-func downloadContentType(ext *string) string {
-	if ext == nil {
-		return "application/octet-stream"
-	}
-	switch *ext {
-	case "pdf":
-		return "application/pdf"
-	case "jpg", "jpeg":
-		return "image/jpeg"
-	case "png":
-		return "image/png"
-	}
-	return "application/octet-stream"
-}
-
 // documentErrorResponse answers the document codes that carry a status of their own and reports
 // whether it did; anything else is the caller's 500.
 func documentErrorResponse(c *gin.Context, err error) bool {
@@ -2479,7 +2456,7 @@ func documentErrorResponse(c *gin.Context, err error) bool {
 		c.JSON(http.StatusConflict, coreErrors.BuildErrorSingle(c, trackingErr.Code))
 		return true
 	case trackingErrors.DocumentFileInvalid:
-		c.JSON(http.StatusBadRequest, coreErrors.BuildErrorSingle(c, trackingErr.Code))
+		c.JSON(http.StatusUnprocessableEntity, coreErrors.BuildErrorSingle(c, trackingErr.Code))
 		return true
 	}
 	return false

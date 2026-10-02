@@ -2,6 +2,7 @@
 package main
 
 import (
+	"context"
 	"database/sql"
 	"flag"
 	"fmt"
@@ -10,9 +11,11 @@ import (
 	"os"
 	"os/exec"
 	"strings"
+	"time"
 
 	coreConfig "josex/web/modules/core/config"
 	coreServices "josex/web/modules/core/services"
+	"josex/web/modules/core/services/storage"
 	coreUtils "josex/web/modules/core/utils"
 
 	_ "github.com/jackc/pgx/v5/stdlib"
@@ -56,7 +59,27 @@ func prepareTestDB(startMsg, doneMsg string) {
 	recreateDatabase(dbName)
 	runMigrations()
 	seedDatabase()
+	emptyTestBuckets()
 	fmt.Println(doneMsg)
+}
+
+// emptyTestBuckets leaves the test buckets as empty as the database just recreated (INFRA-007): every
+// object in them belonged to a row that is gone. Storage down is a warning, not a failed reset — the
+// suites that need it fail on their own, and the rest do not need it.
+func emptyTestBuckets() {
+	cfg := coreConfig.LoadCoreConfig()
+	client, err := storage.NewClient(cfg.StorageEndpoint, cfg.StorageAccessKey, cfg.StorageSecretKey)
+	if err != nil {
+		log.Printf("⚠️  test buckets not emptied: %v", err)
+		return
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	for _, bucket := range []string{cfg.StorageMediaBucket, cfg.StorageDocumentsBucket} {
+		if err := client.EmptyTestBucket(ctx, bucket); err != nil {
+			log.Printf("⚠️  test bucket not emptied: %v", err)
+		}
+	}
 }
 
 func cleanTestDB() {

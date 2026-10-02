@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log"
 	"regexp"
 	"strings"
 	"time"
@@ -167,6 +168,8 @@ func (d *usersImportDescriptor) ProcessRow(ctx importModels.ImportContext, line 
 
 	user, err := d.userService.InsertUser(dto)
 	if err != nil {
+		// The picture went up before the row it was for; with no row, nothing points at it.
+		d.discardPicture(ctx, dto.ProfilePictureUrl)
 		var pgErr *pgconn.PgError
 		if errors.As(err, &pgErr) && pgErr.Message == "user.create.email.already-exists" {
 			result.Status = importModels.RowStatusSkipped
@@ -379,13 +382,24 @@ func (d *usersImportDescriptor) buildDto(ctx importModels.ImportContext, row map
 	}
 
 	var warnings []string
-	if url, warning := d.storePicture(ctx, row["profile_picture"]); warning != "" {
+	if url, warning := d.storePicture(ctx, strings.TrimSpace(row["profile_picture"])); warning != "" {
 		warnings = append(warnings, warning)
 	} else {
 		dto.ProfilePictureUrl = url
 	}
 
 	return dto, warnings
+}
+
+// discardPicture deletes a stored picture no user ended up holding. Best-effort: a failure leaves one
+// orphaned image, never a failed row.
+func (d *usersImportDescriptor) discardPicture(ctx importModels.ImportContext, url string) {
+	if url == "" || d.mediaService == nil {
+		return
+	}
+	if err := d.mediaService.Delete(ctx.Context(), url); err != nil {
+		log.Printf("⚠️  users import: delete unused picture %s: %v", url, err)
+	}
 }
 
 // storePicture writes the archive entry a row names and returns its public URL.
@@ -402,7 +416,7 @@ func (d *usersImportDescriptor) storePicture(ctx importModels.ImportContext, fil
 		return "", ""
 	}
 
-	url, err := d.mediaService.Save(avatarsCategory, coreServices.MediaFile{Filename: filename, Content: content})
+	url, err := d.mediaService.Save(ctx.Context(), avatarsCategory, coreServices.MediaFile{Filename: filename, Content: content})
 	if err != nil {
 		return "", usersErrors.UserImportImageInvalid
 	}

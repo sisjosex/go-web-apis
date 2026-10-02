@@ -31,7 +31,8 @@ type InventoryServices struct {
 
 // NewInventoryServices wires the module's repositories and services over one
 // database service.
-func NewInventoryServices(dbService coreServices.DatabaseService) InventoryServices {
+// media is where the product images live, so removing a media row removes its image (INFRA-007).
+func NewInventoryServices(dbService coreServices.DatabaseService, media coreServices.MediaService) InventoryServices {
 	productRepo := repositories.NewProductRepository(dbService, nil)
 	movementRepo := repositories.NewMovementRepository(dbService, nil)
 	stockRepo := repositories.NewStockRepository(dbService, nil)
@@ -40,7 +41,7 @@ func NewInventoryServices(dbService coreServices.DatabaseService) InventoryServi
 	batchRepo := repositories.NewBatchRepository(dbService)
 
 	return InventoryServices{
-		Product:  inventoryServices.NewProductService(productRepo, appConfig.GetConfig().Inventory, nil),
+		Product:  inventoryServices.NewProductService(productRepo, appConfig.GetConfig().Inventory, nil, media),
 		Category: inventoryServices.NewCategoryService(categoryRepo, nil),
 		Movement: inventoryServices.NewMovementService(movementRepo, nil),
 		Stock:    inventoryServices.NewStockService(stockRepo),

@@ -5,12 +5,13 @@
 package tracking_test
 
 import (
+	"bytes"
 	"context"
+	"errors"
 	"fmt"
+	"io"
 	"net/http"
 	"net/url"
-	"os"
-	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -18,7 +19,11 @@ import (
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 
+	"josex/web/modules/core/services/storage"
+	"josex/web/modules/core/services/storage/storagetest"
 	"josex/web/modules/core/testhelpers"
+	trackingConfig "josex/web/modules/tracking/config"
+	trackingServices "josex/web/modules/tracking/services"
 )
 
 func init() {
@@ -2163,8 +2168,9 @@ func driverRowByID(t *testing.T, helper *testhelpers.ApiTestHelper, driverID str
 // DOCUMENT FILES AND THE EXPIRY DIGEST (TRACK-016 D1, D3)
 // ============================================================================
 
-// TestUploadDocumentFileRoundTrip - a real PDF is accepted, recorded on the row, and streamed back
-// under a name built from the document rather than from whatever the uploader called it.
+// TestUploadDocumentFileRoundTrip - a real PDF goes up on a ticket, is claimed, recorded on the row,
+// and comes back on a signed link under a name built from the document rather than from whatever
+// the uploader called it (INFRA-007 D1, D2).
 func TestUploadDocumentFileRoundTrip(t *testing.T) {
 	helper := SetupTrackingTest(t)
 	defer helper.Close()
@@ -2181,35 +2187,128 @@ func TestUploadDocumentFileRoundTrip(t *testing.T) {
 	assert.Equal(t, float64(len(content)), saved["file_size"])
 	assert.Equal(t, "pdf", saved["file_ext"])
 
-	downloaded := helper.DoRequest("GET", "/tracking/documents/"+documentID+"/file", nil, map[string]string{})
-	assert.Equal(t, http.StatusOK, downloaded.Code)
-	assert.Equal(t, content, downloaded.Body.Bytes(), "the bytes must come back unchanged")
-	assert.Equal(t, "application/pdf", downloaded.Header().Get("Content-Type"))
-	disposition := downloaded.Header().Get("Content-Disposition")
+	link := helper.DoRequest("GET", "/tracking/documents/"+documentID+"/file", nil, map[string]string{})
+	assert.Equal(t, http.StatusOK, link.Code, link.Body.String())
+	url, _ := ParseResponse(t, link.Body.Bytes())["url"].(string)
+	res, err := http.Get(url)
+	if err != nil {
+		t.Fatalf("GET the signed link: %v", err)
+	}
+	defer func() { _ = res.Body.Close() }()
+	body, _ := io.ReadAll(res.Body)
+	assert.Equal(t, http.StatusOK, res.StatusCode)
+	assert.Equal(t, content, body, "the bytes must come back unchanged")
+	assert.Equal(t, "application/pdf", res.Header.Get("Content-Type"))
+	disposition := res.Header.Get("Content-Disposition")
+	assert.Contains(t, disposition, "attachment")
 	assert.Contains(t, disposition, ".pdf")
 	assert.NotContains(t, disposition, "my licence scan",
 		"the uploader's filename must never reach a header")
 }
 
-// TestUploadDocumentFileRejectsDisguisedExecutable - the extension is the uploader's claim; the
-// bytes are what decide. A .exe renamed .pdf is refused (D3).
-func TestUploadDocumentFileRejectsDisguisedExecutable(t *testing.T) {
+// countingStore counts the calls a claim makes on the bucket.
+type countingStore struct {
+	storage.ObjectStore
+	calls int
+}
+
+func (s *countingStore) GetRange(ctx context.Context, key string, offset, length int64) ([]byte, int64, error) {
+	s.calls++
+	return s.ObjectStore.GetRange(ctx, key, offset, length)
+}
+
+func (s *countingStore) Copy(ctx context.Context, src, dst string) error {
+	s.calls++
+	return s.ObjectStore.Copy(ctx, src, dst)
+}
+
+func (s *countingStore) Delete(ctx context.Context, key string) error {
+	s.calls++
+	return s.ObjectStore.Delete(ctx, key)
+}
+
+// TestClaimDocumentFileCostsTwoStoreCalls - D1's price: a range read for the bytes and the size, a
+// copy to the document's key, and nothing else before the answer.
+func TestClaimDocumentFileCostsTwoStoreCalls(t *testing.T) {
+	ctx := context.Background()
+	store := &countingStore{ObjectStore: storagetest.Documents(t)}
+	files := trackingServices.NewDocumentFiles(store, &trackingConfig.TrackingConfig{MaxDocumentKB: 5120})
+	tenantID := uuid.MustParse(TestTenantID)
+	documentID := uuid.New()
+	content := PdfBytes(4096)
+	key := storage.PendingKey(tenantID, "pdf")
+	final := TestTenantID + "/" + documentID.String() + ".pdf"
+	t.Cleanup(func() {
+		_ = store.ObjectStore.Delete(ctx, key)
+		_ = store.ObjectStore.Delete(ctx, final)
+	})
+
+	url, headers, err := store.PresignPut(ctx, key, "application/pdf", int64(len(content)), time.Minute)
+	if err != nil {
+		t.Fatalf("presign: %v", err)
+	}
+	PutToTicket(t, url, map[string]string{"Content-Type": headers.Get("Content-Type")}, content)
+
+	ext, size, err := files.Claim(ctx, tenantID, documentID, key)
+	if err != nil {
+		t.Fatalf("claim: %v", err)
+	}
+	assert.Equal(t, "pdf", ext)
+	assert.Equal(t, int64(len(content)), size, "the size comes from the range read's Content-Range")
+	assert.Equal(t, 2, store.calls, "a claim is one range read and one copy")
+
+	copied, _, err := store.ObjectStore.GetRange(ctx, final, 0, 8)
+	assert.NoError(t, err)
+	assert.Equal(t, content[:8], copied)
+}
+
+// TestUploadDocumentFileRejectsDisguisedHTML - the declared type is the uploader's claim; the bytes
+// are what decide. HTML sent as a PDF is refused and its pending object deleted before the answer.
+func TestUploadDocumentFileRejectsDisguisedHTML(t *testing.T) {
+	helper := SetupTrackingTest(t)
+	defer helper.Close()
+
+	typeID := CreateTestDocumentType(t, helper, "vehicle", false)
+	documentID := CreateTestDocument(t, helper, "vehicle", TestBusID, typeID, 120)["id"].(string)
+	html := []byte("<!DOCTYPE html><html><script>alert(1)</script></html>")
+
+	ticket := helper.DoRequest("POST", "/storage/uploads", map[string]interface{}{
+		"purpose": "tracking-document", "content_type": "application/pdf", "size": len(html),
+	}, map[string]string{})
+	assert.Equal(t, http.StatusCreated, ticket.Code, ticket.Body.String())
+	issued := ParseResponse(t, ticket.Body.Bytes())
+	key := issued["key"].(string)
+	PutToTicket(t, issued["upload_url"].(string), map[string]string{"Content-Type": "application/pdf"}, html)
+
+	w := ClaimDocumentFile(helper, documentID, key, "invoice.pdf")
+	assert.Equal(t, http.StatusUnprocessableEntity, w.Code, w.Body.String())
+	assert.Contains(t, w.Body.String(), "tracking.document.file-invalid")
+
+	_, _, err := storagetest.Documents(t).GetRange(context.Background(), key, 0, 8)
+	assert.ErrorIs(t, err, storage.ErrNotFound, "a refused upload's pending object is deleted before the answer")
+}
+
+// TestClaimDocumentFileRejectsAnotherTenantsKey - the key names its tenant, and a claim only takes
+// its own: anyone else's, or anything that is not a pending key, reads as not found.
+func TestClaimDocumentFileRejectsAnotherTenantsKey(t *testing.T) {
 	helper := SetupTrackingTest(t)
 	defer helper.Close()
 
 	typeID := CreateTestDocumentType(t, helper, "vehicle", false)
 	documentID := CreateTestDocument(t, helper, "vehicle", TestBusID, typeID, 120)["id"].(string)
 
-	// "MZ" is the DOS header every Windows executable starts with.
-	w := UploadDocumentFile(t, helper, documentID, "payload.pdf", []byte("MZ\x90\x00\x03\x00\x00\x00"))
-
-	assert.Equal(t, http.StatusBadRequest, w.Code, w.Body.String())
-	assert.Contains(t, w.Body.String(), "tracking.document.file-invalid")
+	for _, key := range []string{
+		storage.PendingKey(uuid.New(), "pdf"),
+		TestTenantID + "/" + documentID + ".pdf",
+		storage.PendingPrefix(uuid.MustParse(TestTenantID)) + "../" + uuid.NewString() + ".pdf",
+	} {
+		w := ClaimDocumentFile(helper, documentID, key, "scan.pdf")
+		assert.Equal(t, http.StatusNotFound, w.Code, key+": "+w.Body.String())
+	}
 }
 
-// TestUploadDocumentFileRejectsWrongExtension - an extension the server does not accept is refused
-// before its bytes are looked at.
-func TestUploadDocumentFileRejectsWrongExtension(t *testing.T) {
+// TestUploadDocumentFileRejectsWrongType - a type the purpose does not take gets no ticket.
+func TestUploadDocumentFileRejectsWrongType(t *testing.T) {
 	helper := SetupTrackingTest(t)
 	defer helper.Close()
 
@@ -2219,23 +2318,30 @@ func TestUploadDocumentFileRejectsWrongExtension(t *testing.T) {
 	w := UploadDocumentFile(t, helper, documentID, "notes.txt", []byte("just text"))
 
 	assert.Equal(t, http.StatusBadRequest, w.Code, w.Body.String())
-	assert.Contains(t, w.Body.String(), "tracking.document.file-invalid")
+	assert.Contains(t, w.Body.String(), "storage.upload-invalid")
 }
 
-// TestUploadDocumentFileRejectsOversized - a PDF past the cap is refused, and the row keeps saying
-// it has no file.
+// TestUploadDocumentFileRejectsOversized - a PDF past the cap gets no ticket, and one that reaches
+// the bucket anyway is refused by the claim, the backstop; the row keeps saying it has no file.
 func TestUploadDocumentFileRejectsOversized(t *testing.T) {
 	helper := SetupTrackingTest(t)
 	defer helper.Close()
 
 	typeID := CreateTestDocumentType(t, helper, "vehicle", false)
 	documentID := CreateTestDocument(t, helper, "vehicle", TestBusID, typeID, 120)["id"].(string)
+	// The default cap is 5120 KB; 6 MB is over it.
+	huge := PdfBytes(6 * 1024 * 1024)
 
-	// The default cap is 5120 KB; 6 MB is over it however the header is read.
-	w := UploadDocumentFile(t, helper, documentID, "huge.pdf", PdfBytes(6*1024*1024))
-
+	w := UploadDocumentFile(t, helper, documentID, "huge.pdf", huge)
 	assert.Equal(t, http.StatusBadRequest, w.Code, w.Body.String())
-	assert.Contains(t, w.Body.String(), "tracking.document.file-invalid")
+	assert.Contains(t, w.Body.String(), "storage.upload-invalid")
+
+	key := storage.PendingKey(uuid.MustParse(TestTenantID), "pdf")
+	if err := storagetest.Documents(t).Put(context.Background(), key, bytes.NewReader(huge), int64(len(huge)), storage.PutOptions{ContentType: "application/pdf"}); err != nil {
+		t.Fatalf("put: %v", err)
+	}
+	claimed := ClaimDocumentFile(helper, documentID, key, "huge.pdf")
+	assert.Equal(t, http.StatusUnprocessableEntity, claimed.Code, claimed.Body.String())
 
 	after := helper.DoRequest("GET", "/tracking/documents/"+documentID, nil, map[string]string{})
 	assert.Nil(t, ParseResponse(t, after.Body.Bytes())["file_name"], "a refused upload leaves no trace")
@@ -2256,7 +2362,7 @@ func TestDownloadDocumentFileWithoutOne(t *testing.T) {
 }
 
 // TestDeleteDocumentRemovesItsFile - withdrawing a document takes its scan with it, so nothing is
-// left on disk that no row points at.
+// left in the bucket that no row points at. The delete runs after the answer, so it is polled for.
 func TestDeleteDocumentRemovesItsFile(t *testing.T) {
 	helper := SetupTrackingTest(t)
 	defer helper.Close()
@@ -2265,16 +2371,19 @@ func TestDeleteDocumentRemovesItsFile(t *testing.T) {
 	documentID := CreateTestDocument(t, helper, "vehicle", TestBusID, typeID, 120)["id"].(string)
 	assert.Equal(t, http.StatusOK, UploadDocumentFile(t, helper, documentID, "scan.pdf", PdfBytes(1024)).Code)
 
-	stored := filepath.Join("storage", "tracking-documents", TestTenantID, documentID+".pdf")
-	if _, err := os.Stat(stored); err != nil {
-		t.Fatalf("the upload should have written %s: %v", stored, err)
+	store := storagetest.Documents(t)
+	stored := TestTenantID + "/" + documentID + ".pdf"
+	if _, _, err := store.GetRange(context.Background(), stored, 0, 8); err != nil {
+		t.Fatalf("the claim should have stored %s: %v", stored, err)
 	}
 
 	removed := helper.DoRequest("DELETE", "/tracking/documents/"+documentID, nil, map[string]string{})
 	assert.Equal(t, http.StatusNoContent, removed.Code, removed.Body.String())
 
-	_, err := os.Stat(stored)
-	assert.True(t, os.IsNotExist(err), "the stored scan must go with its row")
+	assert.Eventually(t, func() bool {
+		_, _, err := store.GetRange(context.Background(), stored, 0, 8)
+		return errors.Is(err, storage.ErrNotFound)
+	}, 5*time.Second, 50*time.Millisecond, "the stored scan must go with its row")
 }
 
 // TestRaiseDocumentAlertsClaimsEachDocumentOnce - the whole of D1's promise: the claim and the

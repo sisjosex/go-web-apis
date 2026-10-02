@@ -15,12 +15,13 @@ import (
 	billingRepos "josex/web/modules/billing/repositories"
 	billingRoutes "josex/web/modules/billing/routes"
 	billingServices "josex/web/modules/billing/services"
-	coreConfig "josex/web/modules/core/config"
+	coreControllers "josex/web/modules/core/controllers"
 	coreJobs "josex/web/modules/core/jobs"
 	coreMiddleware "josex/web/modules/core/middleware"
 	coreModels "josex/web/modules/core/models"
 	coreRoutes "josex/web/modules/core/routes"
 	coreServices "josex/web/modules/core/services"
+	"josex/web/modules/core/services/storage"
 	geoControllers "josex/web/modules/geo/controllers"
 	geoInterfaces "josex/web/modules/geo/interfaces"
 	geoRepos "josex/web/modules/geo/repositories"
@@ -83,6 +84,9 @@ type routeDeps struct {
 	media          coreServices.MediaService
 	users          userInterfaces.UserService
 	userAudit      userInterfaces.UserAuditService
+	// documents is the private bucket (INFRA-007 D2); purposes are what an upload ticket may be for.
+	documents storage.ObjectStore
+	purposes  *storage.Purposes
 	// router is the one Valhalla adapter of the process, so geo and the tracking ETA share its breaker.
 	router geoInterfaces.Router
 	valkey coreServices.ValkeyService
@@ -116,6 +120,7 @@ func SetupRoutes(r *gin.Engine, dbService coreServices.DatabaseService, valkey c
 	inventorySvcs := registerBusinessModules(d, chains)
 	registerImport(d, chains, inventorySvcs)
 	registerGeo(d, chains)
+	coreRoutes.RegisterStorageRoutes(d.apiV1, coreControllers.NewStorageController(d.purposes), d.authMiddleware, chains.tenant)
 
 	registerSwagger(r)
 }
@@ -134,7 +139,7 @@ func SetupRealtimeRoutes(r *gin.Engine, dbService coreServices.DatabaseService, 
 }
 
 // baseDeps is what every role that serves HTTP shares: validators, the probes (registered before any
-// middleware, so a probe is never rate-limited — INFRA-002), the media files, the global middleware
+// middleware, so a probe is never rate-limited — INFRA-002), the stored-file client, the global middleware
 // and the services modules are built from.
 func baseDeps(r *gin.Engine, dbService coreServices.DatabaseService, valkey coreServices.ValkeyService, hub *realtime.Hub, needsValkey bool) routeDeps {
 	coreValidators.RegisterValidations()
@@ -148,9 +153,12 @@ func baseDeps(r *gin.Engine, dbService coreServices.DatabaseService, valkey core
 		authConf.JWTRefreshExpiration,
 	)
 
-	// Stored files (D5): served straight off MEDIA_ROOT, which is why the media
-	// service writes opaque UUID names and never the uploader's own filename.
-	r.Static("/media", coreConfig.MediaRoot())
+	// Stored files (INFRA-007): one client, so every bucket shares its keep-alive pool to the store.
+	coreConf := config.ModularAppConfig.Core
+	store, err := storage.NewClient(coreConf.StorageEndpoint, coreConf.StorageAccessKey, coreConf.StorageSecretKey)
+	if err != nil {
+		log.Fatalf("❌ %v", err)
+	}
 
 	useGlobalMiddleware(r, valkey)
 
@@ -161,7 +169,9 @@ func baseDeps(r *gin.Engine, dbService coreServices.DatabaseService, valkey core
 		jwt:            jwtService,
 		authMiddleware: authMW.AuthMiddleware(jwtService),
 		email:          coreServices.NewEmailService(),
-		media:          coreServices.NewMediaService(),
+		media:          coreServices.NewMediaService(store.Bucket(coreConf.StorageMediaBucket)),
+		documents:      store.Bucket(coreConf.StorageDocumentsBucket),
+		purposes:       storage.NewPurposes(),
 		users:          userServices.NewUserService(userRepos.NewUserRepository(dbService)),
 		userAudit:      userServices.NewUserAuditService(userRepos.NewUserAuditRepository(dbService)),
 		router:         geoRouting.NewRouter(config.ModularAppConfig.Geo),
@@ -361,9 +371,9 @@ func registerTracking(d routeDeps, chains tenantChains, valkey coreServices.Valk
 		return
 	}
 	trackingService := trackingServices.NewTrackingService(trackingRepos.NewTrackingRepository(d.db))
-	// The document file store is config, not state: where scans live and how big one may be
-	// (TRACK-016 D3).
-	trackingDocumentFiles := trackingServices.NewDocumentFileStore(config.ModularAppConfig.Tracking)
+	// Scans live in the documents bucket (INFRA-007); the upload ticket learns their types and cap here.
+	trackingDocumentFiles := trackingServices.NewDocumentFiles(d.documents, config.ModularAppConfig.Tracking)
+	d.purposes.Register(trackingDocumentFiles.Purpose())
 	trackingController := trackingControllers.NewTrackingController(trackingService, trackingDocumentFiles)
 
 	// Build a composite tenant+module middleware chain for tracking
@@ -459,7 +469,7 @@ func registerBusinessModules(d routeDeps, chains tenantChains) inventoryRoutes.I
 
 	var inventorySvcs inventoryRoutes.InventoryServices
 	if coreConf.IsModuleEnabled("inventory") {
-		inventorySvcs = inventoryRoutes.NewInventoryServices(d.db)
+		inventorySvcs = inventoryRoutes.NewInventoryServices(d.db, d.media)
 		inventoryRoutes.RegisterInventoryRoutes(d.apiV1, inventorySvcs, d.authMiddleware, chains.tenant)
 		log.Println("✅ Inventory module (with Batches) enabled and routes registered")
 	}

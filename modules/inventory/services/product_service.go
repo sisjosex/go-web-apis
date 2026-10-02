@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"log"
 
+	coreServices "josex/web/modules/core/services"
 	inventoryConfig "josex/web/modules/inventory/config"
 	"josex/web/modules/inventory/interfaces"
 	"josex/web/modules/inventory/models"
@@ -16,17 +17,21 @@ type ProductService struct {
 	repository interfaces.ProductRepository
 	config     *inventoryConfig.InventoryConfig
 	logger     *log.Logger
+	// media deletes the stored image a removed row pointed at (INFRA-007); nil deletes nothing.
+	media coreServices.MediaService
 }
 
 func NewProductService(
 	repository interfaces.ProductRepository,
 	config *inventoryConfig.InventoryConfig,
 	logger *log.Logger,
+	media coreServices.MediaService,
 ) *ProductService {
 	return &ProductService{
 		repository: repository,
 		config:     config,
 		logger:     logger,
+		media:      media,
 	}
 }
 
@@ -127,6 +132,17 @@ func (s *ProductService) AddProductMedia(ctx context.Context, tenantID uuid.UUID
 	return s.repository.AddProductMedia(ctx, tenantID, productID, dto)
 }
 
+// RemoveProductMedia deletes the row, then the stored image behind it. The row is what the caller
+// asked about, so an image that cannot be deleted is logged, never a failed removal.
 func (s *ProductService) RemoveProductMedia(ctx context.Context, tenantID uuid.UUID, mediaID string) error {
-	return s.repository.RemoveProductMedia(ctx, tenantID, mediaID)
+	url, err := s.repository.RemoveProductMedia(ctx, tenantID, mediaID)
+	if err != nil {
+		return err
+	}
+	if s.media != nil {
+		if err := s.media.Delete(ctx, url); err != nil {
+			log.Printf("⚠️  inventory: delete image of removed media %s: %v", mediaID, err)
+		}
+	}
+	return nil
 }

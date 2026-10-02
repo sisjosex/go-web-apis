@@ -204,7 +204,7 @@ openssl rand -base64 32   # once each: POSTGRES_PASSWORD, VALKEY_PASSWORD, JWT_S
 - `.env.platform`: the "on the box" block of `.env.example` — `DATABASE_URL` and `REDIS_URL` at the
   `postgres` and `valkey` services with the passwords above, the JWT pair, `SMTP_ENABLED=true` and
   `SMTP_*` from the mail provider (without `SMTP_ENABLED` every reset, verification and OTP email
-  fails with 503), `FCM_PROJECT_ID`.
+  fails with 503), `FCM_PROJECT_ID`, and the `STORAGE_*` block of step 11b.
 - `chmod 600 .env .env.platform`.
 
 **5. FCM key.** The Firebase service-account JSON (project `xanthops-push`), copied from the PC:
@@ -282,6 +282,55 @@ Then `docker compose -f docker-compose.prod.yml up -d backup`, one backup now
 (`docker compose -f docker-compose.prod.yml run --rm backup /backup.sh`), and the scratch-database
 restore check of `backup/README.md` on that dump. The heartbeat shows the ping.
 
+**11b. Stored files on R2** (INFRA-007). Every image and document lives in R2; the box holds none,
+and the browser uploads and downloads straight to and from the bucket on signed URLs.
+
+- Cloudflare → R2 → Create bucket, twice: `taypi24-media` and `taypi24-documents`, each with the
+  location hint of the box's region (Contabo EU → Western Europe), so the API's range reads and
+  copies stay short.
+- **CORS on both buckets** (Settings → CORS policy). `taypi24-media` needs it too: MEDIA-001 uploads
+  avatars there from the browser.
+
+  ```json
+  [{ "AllowedOrigins": ["https://app.taypi24.com", "http://localhost:4000"],
+     "AllowedMethods": ["PUT", "GET"], "AllowedHeaders": ["Content-Type"], "MaxAgeSeconds": 3600 }]
+  ```
+
+- **Lifecycle on both** (Settings → Object lifecycle rules): prefix `pending/`, delete after 1 day.
+  An upload nobody claimed is gone the next day; the API deletes the rest after each claim.
+- **`media.taypi24.com`**: `taypi24-media` → Settings → Custom domains → Connect. Cloudflare adds the
+  proxied record itself. Then Rules → Transform Rules → Modify response header, hostname
+  `media.taypi24.com`: set `X-Content-Type-Options: nosniff`. An object is served with the type the
+  API stored it under (an image's extension), and nothing makes the browser guess another.
+  `taypi24-documents` gets no domain and no public access: signed links are its only way out.
+- **One API token**: R2 → Manage API tokens → Object Read & Write, applied to those two buckets only.
+  In `.env.platform` (and `.env.tenant` if the tenant profile runs):
+
+  ```sh
+  STORAGE_S3_ENDPOINT=https://<account id>.r2.cloudflarestorage.com
+  STORAGE_S3_ACCESS_KEY=<token access key>
+  STORAGE_S3_SECRET_KEY=<token secret>
+  STORAGE_MEDIA_BUCKET=taypi24-media
+  STORAGE_DOCUMENTS_BUCKET=taypi24-documents
+  CORE_MEDIA_PUBLIC_BASE_URL=https://media.taypi24.com
+  ```
+
+- **A box that ran before INFRA-007** keeps its scans on the `documents` volume. Copy them up before
+  the new compose drops the volume, with the same `<tenant>/<document>.<ext>` layout the API reads:
+
+  ```sh
+  env() { sed -n "s/^$1=//p" .env.platform; }
+  docker run --rm -v xanthops_documents:/src:ro \
+    -e AWS_ACCESS_KEY_ID="$(env STORAGE_S3_ACCESS_KEY)" -e AWS_SECRET_ACCESS_KEY="$(env STORAGE_S3_SECRET_KEY)" \
+    amazon/aws-cli s3 sync /src s3://taypi24-documents --endpoint-url "$(env STORAGE_S3_ENDPOINT)"
+  docker compose -f docker-compose.prod.yml up -d       # the new compose: no media, no documents volume
+  docker volume rm xanthops_media xanthops_documents    # once a download of a migrated scan works
+  ```
+
+  The media volume needs no copy: production stored no image before R2.
+- **Manual safety copy**, whenever wanted, from the PC, with a second token that is Object Read only:
+  `aws s3 sync s3://taypi24-documents ./documents-<date> --endpoint-url https://<account id>.r2.cloudflarestorage.com`.
+
 **12. Off the box.** Copy `.env`, `.env.platform` and `secrets/` to the password manager or an
 encrypted disk: they are the only things on the box that no backup and no repo holds.
 
@@ -291,6 +340,7 @@ encrypted disk: they are the only things on the box that no backup and no repo h
 curl -i https://api.taypi24.com/readyz                                      # 200
 curl -sI -H 'Range: bytes=0-15' https://tiles.taypi24.com/basemap.pmtiles   # 206
 curl -sI https://tiles.taypi24.com/style-light.json | grep -i cache-control # max-age=300
+curl -sI https://media.taypi24.com/<a stored key> | grep -iE 'cache-control|nosniff'  # immutable, nosniff
 nc -zv -w 3 api.taypi24.com 5432                                            # refused / timed out
 ssh -o PubkeyAuthentication=no root@api.taypi24.com                         # Permission denied
 ```

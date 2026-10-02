@@ -157,7 +157,8 @@ services:
   # otherwise), a memory limit with GOMEMLIMIT just under it, and its share of the
   # connection budget (D1): DATABASE_POOL_SIZE to its own database plus
   # TENANCY_DATABASE_POOL_SIZE per tenant database it touches. Idle connections
-  # close after 5 min, so the budget is spent on the tenants in use.
+  # close after 5 min, so the budget is spent on the tenants in use. Stored files
+  # live on R2 (INFRA-007): STORAGE_* come in with the env file, no volume holds any.
   api-platform:
     image: ghcr.io/sisjosex/api:${API_TAG:-latest}
     restart: unless-stopped
@@ -173,16 +174,11 @@ services:
       GOMEMLIMIT: 420MiB
       DATABASE_POOL_SIZE: "12"
       TENANCY_DATABASE_POOL_SIZE: "4"
-      # Compliance scans, behind auth — not under media (.env.example → tracking documents).
-      TRACKING_DOCUMENTS_ROOT: /app/storage/tracking-documents
     mem_limit: 512m
     cpu_shares: 1024
     logging: *logging
     # The worker and the scheduler run as their own services below.
     command: ["./app", "-mode=platform", "-role=api"]
-    volumes:
-      - media:/app/storage/media
-      - documents:/app/storage/tracking-documents
     healthcheck:
       test: ["CMD-SHELL", "wget -qO- http://localhost:8080/readyz > /dev/null || exit 1"]
       interval: 15s
@@ -216,8 +212,6 @@ services:
     cpu_shares: 1024
     logging: *logging
     command: ["./app", "-mode=tenant", "-role=api"]
-    volumes:
-      - media:/app/storage/media
     healthcheck:
       test: ["CMD-SHELL", "wget -qO- http://localhost:9080/readyz > /dev/null || exit 1"]
       interval: 15s
@@ -401,7 +395,5 @@ services:
 volumes:
   pgdata:
   valkeydata:
-  media:
-  documents:
   caddy_data:
   caddy_config:

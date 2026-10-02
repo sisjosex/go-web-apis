@@ -1,5 +1,6 @@
 {
   "core.internal-error": "Something went wrong, please try again",
+  "storage.upload-invalid": "This file cannot be uploaded: check its type and size",
   "validation.invalid-uuid": "Invalid UUID format",
   "validation.required": "This field is required",
   "validation.email": "Invalid email format",

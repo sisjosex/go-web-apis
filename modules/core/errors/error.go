@@ -39,6 +39,12 @@ const (
 	RequestRateLimited = "request.rate-limited"
 )
 
+// Stored-file errors (INFRA-007): an upload ticket for an unknown purpose, a type the purpose does
+// not take or a size over its limit.
+const (
+	StorageUploadInvalid = "storage.upload-invalid"
+)
+
 // BuildErrorSingle creates an error response with just an error code and translates it
 func BuildErrorSingle(c *gin.Context, errorCode string) *ErrorResponse {
 	lang := getLangFromContext(c)
