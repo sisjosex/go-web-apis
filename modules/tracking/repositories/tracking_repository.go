@@ -400,7 +400,7 @@ func (r *TrackingRepository) ListVehicles(ctx context.Context, tenantID uuid.UUI
 	var totalCount int64
 	for rows.Next() {
 		var v models.Vehicle
-		if err := rows.Scan(&v.ID, &v.CompanyID, &v.CompanyName, &v.PlateNumber, &v.VehicleType, &v.Brand, &v.Model, &v.Year, &v.Capacity, &v.GPSDeviceID, &v.Status, &v.ServiceBlocked, &v.CreatedAt, &v.UpdatedAt, &totalCount); err != nil {
+		if err := rows.Scan(&v.ID, &v.CompanyID, &v.CompanyName, &v.PlateNumber, &v.VehicleType, &v.Brand, &v.Model, &v.Year, &v.Capacity, &v.GPSDeviceID, &v.Status, &v.ServiceBlocked, &v.CreatedAt, &v.UpdatedAt, &v.DefaultDriverID, &v.DriverName, &totalCount); err != nil {
 			return nil, 0, err
 		}
 		vehicles = append(vehicles, &v)
@@ -414,11 +414,58 @@ func (r *TrackingRepository) ListVehicles(ctx context.Context, tenantID uuid.UUI
 func (r *TrackingRepository) GetVehicle(ctx context.Context, tenantID uuid.UUID, vehicleID uuid.UUID) (*models.Vehicle, error) {
 	var v models.Vehicle
 	err := r.dbService.QueryRow(ctx, `SELECT * FROM tracking.sp_get_vehicle($1, $2)`, tenantID, vehicleID).Scan(
-		&v.ID, &v.CompanyID, &v.PlateNumber, &v.VehicleType, &v.Brand, &v.Model, &v.Year, &v.Capacity, &v.GPSDeviceID, &v.Status, &v.CreatedAt, &v.UpdatedAt)
+		&v.ID, &v.CompanyID, &v.PlateNumber, &v.VehicleType, &v.Brand, &v.Model, &v.Year, &v.Capacity, &v.GPSDeviceID, &v.Status, &v.CreatedAt, &v.UpdatedAt,
+		&v.DefaultDriverID, &v.DriverName)
 	if err != nil {
 		return nil, &trackingErrors.TrackingError{Code: trackingErrors.VehicleNotFound, Err: err}
 	}
 	return &v, nil
+}
+
+// SetVehicleDriver sets (nil clears) who usually drives a vehicle; its routes without their own
+// driver are replanned from today in the same transaction (TRACK-034 D1).
+func (r *TrackingRepository) SetVehicleDriver(ctx context.Context, tenantID, vehicleID uuid.UUID, driverID *uuid.UUID) error {
+	_, err := r.dbService.Execute(ctx, `SELECT tracking.sp_set_vehicle_driver($1, $2, $3)`, tenantID, vehicleID, driverID)
+	var pgErr *pgconn.PgError
+	if errors.As(err, &pgErr) {
+		switch pgErr.Message {
+		case "vehicle.not-found":
+			return &trackingErrors.TrackingError{Code: trackingErrors.VehicleNotFound, Err: pgErr}
+		case "vehicle.driver-company-mismatch":
+			return &trackingErrors.TrackingError{Code: trackingErrors.VehicleDriverCompanyMismatch, Err: pgErr}
+		}
+	}
+	if err != nil {
+		return &trackingErrors.TrackingError{Code: trackingErrors.VehicleDriverFailed, Err: err}
+	}
+	return nil
+}
+
+// VehicleScheduleConflicts answers the runs that would overlap if routeID (nil: the vehicle's own
+// routes) ran on the vehicle, driverID's other routes included when set (TRACK-034 D2).
+func (r *TrackingRepository) VehicleScheduleConflicts(ctx context.Context, tenantID, vehicleID uuid.UUID, routeID, driverID *uuid.UUID) ([]*models.VehicleScheduleConflict, error) {
+	rows, err := r.dbService.Query(ctx, `SELECT * FROM tracking.sp_vehicle_schedule_conflicts($1, $2, $3, $4)`,
+		tenantID, vehicleID, routeID, driverID)
+	if err != nil {
+		var pgErr *pgconn.PgError
+		if errors.As(err, &pgErr) && pgErr.Message == "vehicle.not-found" {
+			return nil, &trackingErrors.TrackingError{Code: trackingErrors.VehicleNotFound, Err: pgErr}
+		}
+		return nil, &trackingErrors.TrackingError{Code: trackingErrors.VehicleConflictsFailed, Err: err}
+	}
+	defer rows.Close()
+	conflicts := []*models.VehicleScheduleConflict{}
+	for rows.Next() {
+		var c models.VehicleScheduleConflict
+		if err := rows.Scan(&c.RouteID, &c.RouteName, &c.Reason, &c.Days, &c.StartTime, &c.EndTime); err != nil {
+			return nil, err
+		}
+		conflicts = append(conflicts, &c)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, &trackingErrors.TrackingError{Code: trackingErrors.VehicleConflictsFailed, Err: err}
+	}
+	return conflicts, nil
 }
 
 func (r *TrackingRepository) DeleteVehicle(ctx context.Context, tenantID uuid.UUID, vehicleID uuid.UUID) error {
@@ -495,8 +542,8 @@ func (r *TrackingRepository) UpdateRoute(ctx context.Context, tenantID uuid.UUID
 // (TRACK-002 D2); an organization user's page holds only the routes their riders ride.
 func (r *TrackingRepository) ListRoutes(ctx context.Context, tenantID uuid.UUID, query models.ListRoutesQuery, scopeUserID *uuid.UUID) ([]*models.Route, int64, error) {
 	rows, err := r.dbService.Query(ctx,
-		`SELECT * FROM tracking.sp_list_routes($1::UUID, $2::VARCHAR, $3::UUID, $4::VARCHAR, $5::BOOLEAN, $6::INT, $7::INT, $8::UUID)`,
-		tenantID, query.Search, query.CompanyID, query.Direction, query.IsActive, query.Page, query.PageSize, scopeUserID)
+		`SELECT * FROM tracking.sp_list_routes($1::UUID, $2::VARCHAR, $3::UUID, $4::VARCHAR, $5::BOOLEAN, $6::INT, $7::INT, $8::UUID, $9::UUID)`,
+		tenantID, query.Search, query.CompanyID, query.Direction, query.IsActive, query.Page, query.PageSize, scopeUserID, query.VehicleID)
 	if err != nil {
 		return nil, 0, scopedErr(err, trackingErrors.RouteListFailed)
 	}
@@ -685,6 +732,8 @@ func mapRouteVersionError(err error, fallbackCode string) error {
 			return &trackingErrors.TrackingError{Code: trackingErrors.RouteVersionClosed, Err: pgErr}
 		case "stop-place.not-found":
 			return &trackingErrors.TrackingError{Code: trackingErrors.StopPlaceNotFound, Err: pgErr}
+		case "stop-place.invalid":
+			return &trackingErrors.TrackingError{Code: trackingErrors.StopPlaceInvalid, Err: pgErr}
 		}
 	}
 	return &trackingErrors.TrackingError{Code: fallbackCode, Err: err}

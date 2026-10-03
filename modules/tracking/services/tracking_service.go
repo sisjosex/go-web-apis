@@ -114,6 +114,18 @@ func (s *TrackingService) GetVehicle(ctx context.Context, tenantID uuid.UUID, ve
 	return s.trackingRepo.GetVehicle(ctx, tenantID, vehicleID)
 }
 
+// SetVehicleDriver sets who usually drives the vehicle and answers the vehicle as it now reads.
+func (s *TrackingService) SetVehicleDriver(ctx context.Context, tenantID, vehicleID uuid.UUID, driverID *uuid.UUID) (*models.Vehicle, error) {
+	if err := s.trackingRepo.SetVehicleDriver(ctx, tenantID, vehicleID, driverID); err != nil {
+		return nil, err
+	}
+	return s.trackingRepo.GetVehicle(ctx, tenantID, vehicleID)
+}
+
+func (s *TrackingService) VehicleScheduleConflicts(ctx context.Context, tenantID, vehicleID uuid.UUID, routeID, driverID *uuid.UUID) ([]*models.VehicleScheduleConflict, error) {
+	return s.trackingRepo.VehicleScheduleConflicts(ctx, tenantID, vehicleID, routeID, driverID)
+}
+
 func (s *TrackingService) DeleteVehicle(ctx context.Context, tenantID uuid.UUID, vehicleID uuid.UUID) error {
 	return s.trackingRepo.DeleteVehicle(ctx, tenantID, vehicleID)
 }

@@ -11,6 +11,10 @@ const (
 	VehicleUpdateFailed       = "tracking.vehicle.update.failed"
 	VehicleDeleteFailed       = "tracking.vehicle.delete.failed"
 	VehicleInvalidLicense     = "tracking.vehicle.invalid-license"
+	// VehicleDriverCompanyMismatch refuses a usual driver of another carrier (TRACK-034 D1).
+	VehicleDriverCompanyMismatch = "tracking.vehicle.driver-company-mismatch"
+	VehicleDriverFailed          = "tracking.vehicle.driver.failed"
+	VehicleConflictsFailed       = "tracking.vehicle.conflicts.failed"
 
 	// Route errors (TR0021-TR0040)
 	RouteNotFound            = "tracking.route.not-found"
@@ -198,6 +202,8 @@ const (
 	// StopPlaceInUse refuses a delete while a route version still names the stop place: the version
 	// is the record of what a route ran, and removing a stop from it rewrites history.
 	StopPlaceInUse = "tracking.stop-place.in-use"
+	// StopPlaceInvalid refuses a place added from the map without its name or coordinates (TRACK-034 D3).
+	StopPlaceInvalid = "tracking.stop-place.invalid"
 
 	// Driver errors (TR0181-TR0200)
 	DriverNotFound             = "tracking.driver.not-found"

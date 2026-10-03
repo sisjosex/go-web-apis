@@ -45,6 +45,21 @@ type Vehicle struct {
 	Status      string    `json:"status"` // active, inactive, maintenance
 	CreatedAt   time.Time `json:"created_at"`
 	UpdatedAt   time.Time `json:"updated_at"`
+	// DefaultDriverID is who usually drives it (TRACK-034 D1); a route without its own driver runs with
+	// this one. It and DriverName ride on the get and list rows, not on create/update responses.
+	DefaultDriverID *uuid.UUID `json:"default_driver_id,omitempty"`
+	DriverName      *string    `json:"driver_name,omitempty"`
+}
+
+// VehicleScheduleConflict is a run that would overlap another on the same vehicle or driver
+// (TRACK-034 D2). Days is the bitmask of weekdays both runs share; the hours are the other run's.
+type VehicleScheduleConflict struct {
+	RouteID   uuid.UUID `json:"route_id"`
+	RouteName string    `json:"route_name"`
+	Reason    string    `json:"reason"` // vehicle, driver
+	Days      int16     `json:"days_of_week"`
+	StartTime string    `json:"start_time"`
+	EndTime   string    `json:"end_time"`
 }
 
 // Route represents a transport route with origin and destination

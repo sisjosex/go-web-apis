@@ -225,6 +225,11 @@ func registerFleetRoutes(r *gin.RouterGroup, denyOrganization gin.HandlerFunc, t
 		denyOrganization,
 		tenancyMW.RequirePermission(trackingPerms.VehiclesDelete),
 		trackingController.DeleteVehicle)
+	r.PUT("/vehicles/:vehicle_id/driver",
+		denyOrganization,
+		tenancyMW.RequirePermission(trackingPerms.VehiclesWrite),
+		trackingController.SetVehicleDriver)
+	r.GET("/vehicles/:vehicle_id/conflicts", denyOrganization, trackingController.VehicleConflicts)
 
 	// Drivers — the carrier's staff, so the operator's alone, like the rest of the fleet.
 	r.GET("/drivers", denyOrganization, trackingController.ListDrivers)
@@ -610,6 +615,8 @@ func registerOpenFleetRoutes(g *gin.RouterGroup, trackingController *controllers
 	g.GET("/vehicles/:vehicle_id/location", trackingController.GetVehicleCurrentLocation)
 	g.PATCH("/vehicles/:vehicle_id", trackingController.UpdateVehicle)
 	g.DELETE("/vehicles/:vehicle_id", trackingController.DeleteVehicle)
+	g.PUT("/vehicles/:vehicle_id/driver", trackingController.SetVehicleDriver)
+	g.GET("/vehicles/:vehicle_id/conflicts", trackingController.VehicleConflicts)
 	g.POST("/drivers", trackingController.CreateDriver)
 	g.GET("/drivers", trackingController.ListDrivers)
 	g.GET("/drivers/:driver_id", trackingController.GetDriver)

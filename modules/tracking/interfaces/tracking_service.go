@@ -36,6 +36,8 @@ type TrackingService interface {
 	UpdateVehicle(ctx context.Context, tenantID uuid.UUID, vehicleID uuid.UUID, dto *models.UpdateVehicleDto) (*models.Vehicle, error)
 	ListVehicles(ctx context.Context, tenantID uuid.UUID, query models.ListVehiclesQuery) (*models.ListVehiclesResponse, error)
 	GetVehicle(ctx context.Context, tenantID uuid.UUID, vehicleID uuid.UUID) (*models.Vehicle, error)
+	SetVehicleDriver(ctx context.Context, tenantID, vehicleID uuid.UUID, driverID *uuid.UUID) (*models.Vehicle, error)
+	VehicleScheduleConflicts(ctx context.Context, tenantID, vehicleID uuid.UUID, routeID, driverID *uuid.UUID) ([]*models.VehicleScheduleConflict, error)
 	DeleteVehicle(ctx context.Context, tenantID uuid.UUID, vehicleID uuid.UUID) error
 
 	// Routes CRUD

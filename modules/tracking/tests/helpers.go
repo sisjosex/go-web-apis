@@ -1185,3 +1185,50 @@ func VehiclePositionCount(t *testing.T, helper *testhelpers.ApiTestHelper, vehic
 	}
 	return n
 }
+
+// ============================================================================
+// ROUTE SETUP AND IMPORT (TRACK-034, APP-009)
+// ============================================================================
+
+// SetRouteVehicle puts a route on a vehicle without the PATCH's route.changed.
+func SetRouteVehicle(t *testing.T, helper *testhelpers.ApiTestHelper, routeID, vehicleID string) {
+	t.Helper()
+	if _, err := helper.DB().Execute(context.Background(),
+		`UPDATE tracking.routes SET vehicle_id = $2 WHERE id = $1`, routeID, vehicleID); err != nil {
+		t.Fatalf("route vehicle: %v", err)
+	}
+}
+
+// StopPlacePoint is a stop place's latitude and longitude: the API answers them rounded.
+func StopPlacePoint(t *testing.T, helper *testhelpers.ApiTestHelper, id string) (float64, float64) {
+	t.Helper()
+	var lat, lng float64
+	if err := helper.DB().QueryRow(context.Background(),
+		`SELECT ST_Y(location::geometry), ST_X(location::geometry) FROM tracking.stop_places WHERE id = $1`,
+		id).Scan(&lat, &lng); err != nil {
+		t.Fatalf("stop place point: %v", err)
+	}
+	return lat, lng
+}
+
+// CountStopPlaces counts the test tenant's places, which the paged list does not total cheaply.
+func CountStopPlaces(t *testing.T, helper *testhelpers.ApiTestHelper) int {
+	t.Helper()
+	var n int
+	if err := helper.DB().QueryRow(context.Background(),
+		`SELECT COUNT(*) FROM tracking.stop_places WHERE tenant_id = $1`, TestTenantID).Scan(&n); err != nil {
+		t.Fatalf("count stop places: %v", err)
+	}
+	return n
+}
+
+// TripDriverOn is the driver a route's trip of one day was built with.
+func TripDriverOn(t *testing.T, helper *testhelpers.ApiTestHelper, routeID, day string) string {
+	t.Helper()
+	var driver string
+	if err := helper.DB().QueryRow(context.Background(),
+		`SELECT driver_id::text FROM tracking.trips WHERE route_id = $1 AND service_date = $2`, routeID, day).Scan(&driver); err != nil {
+		t.Fatalf("trip driver: %v", err)
+	}
+	return driver
+}

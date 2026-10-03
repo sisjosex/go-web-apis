@@ -906,6 +906,9 @@ func routeVersionErrorResponse(c *gin.Context, err error) bool {
 	case trackingErrors.RouteVersionOverlap, trackingErrors.RouteVersionClosed:
 		c.JSON(http.StatusConflict, coreErrors.BuildErrorSingle(c, trackingErr.Code))
 		return true
+	case trackingErrors.StopPlaceInvalid:
+		c.JSON(http.StatusUnprocessableEntity, coreErrors.BuildErrorSingle(c, trackingErr.Code))
+		return true
 	}
 	return false
 }

@@ -250,6 +250,8 @@ type UpdateRiderDto struct {
 type ListRoutesQuery struct {
 	Search    string  `form:"search"`
 	CompanyID *string `form:"company_id" binding:"omitempty,uuid"`
+	// VehicleID narrows to the routes one vehicle runs: the vehicle's Routes tab (TRACK-034).
+	VehicleID *string `form:"vehicle_id" binding:"omitempty,uuid"`
 	Direction string  `form:"direction" binding:"omitempty,oneof=outbound inbound"`
 	IsActive  *bool   `form:"is_active"`
 	Page      int     `form:"page,default=1" binding:"min=1"`
@@ -313,11 +315,34 @@ type UpdateRouteDto struct {
 // RouteVersionStopDto is one line of the editor's list. Sequence is a sort key, not the stored
 // number: the SP renumbers the list 1..n in the order asked for, so a reorder is one request and
 // cannot collide with itself halfway through.
+//
+// A line without StopPlaceID is a place added from the route's map (TRACK-034 D3): the SP reuses the
+// tenant's place within 30 m of it, or creates it, in the same statement that writes the list.
 type RouteVersionStopDto struct {
-	StopPlaceID      uuid.UUID `json:"stop_place_id" binding:"required,uuidv4"`
-	Sequence         int32     `json:"sequence" binding:"required,min=1"`
-	PlannedOffsetMin *int32    `json:"planned_offset_min" binding:"omitempty,min=0,max=1440"`
-	DwellSec         *int32    `json:"dwell_sec" binding:"omitempty,min=0,max=3600"`
+	StopPlaceID      *uuid.UUID `json:"stop_place_id,omitempty" binding:"omitempty,uuidv4"`
+	Name             *string    `json:"name,omitempty" binding:"required_without=StopPlaceID,omitempty,max=255"`
+	Address          *string    `json:"address,omitempty" binding:"omitempty,max=500"`
+	Latitude         *float64   `json:"latitude,omitempty" binding:"required_without=StopPlaceID,omitempty,min=-90,max=90"`
+	Longitude        *float64   `json:"longitude,omitempty" binding:"required_without=StopPlaceID,omitempty,min=-180,max=180"`
+	Sequence         int32      `json:"sequence" binding:"required,min=1"`
+	PlannedOffsetMin *int32     `json:"planned_offset_min" binding:"omitempty,min=0,max=1440"`
+	DwellSec         *int32     `json:"dwell_sec" binding:"omitempty,min=0,max=3600"`
+}
+
+// SetVehicleDriverDto sets who usually drives a vehicle (TRACK-034 D1); a null DriverID clears it.
+type SetVehicleDriverDto struct {
+	DriverID *uuid.UUID `json:"driver_id" binding:"omitempty,uuidv4"`
+}
+
+// VehicleConflictsQuery asks which runs would overlap: RouteID being assigned to the vehicle, or —
+// without it — the vehicle's own routes, with DriverID about to drive them (TRACK-034 D2).
+type VehicleConflictsQuery struct {
+	RouteID  *string `form:"route_id" binding:"omitempty,uuid"`
+	DriverID *string `form:"driver_id" binding:"omitempty,uuid"`
+}
+
+type VehicleConflictsResponse struct {
+	Conflicts []*VehicleScheduleConflict `json:"conflicts"`
 }
 
 // CreateRouteVersionDto publishes a route's next stop list. The version in force is closed the day
