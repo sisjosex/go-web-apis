@@ -46,8 +46,11 @@ func (ws *WebServerService) setupServer() {
 		c.AbortWithStatusJSON(http.StatusInternalServerError, errors.BuildErrorSingle(c, "core.internal-error"))
 	}))
 
-	// Configurar proxies de confianza
-	ws.Server.SetTrustedProxies([]string{"127.0.0.1"})
+	// Proxies de confianza (TRUSTED_PROXIES): solo de ellos se cree el X-Forwarded-For, así
+	// ClientIP — y la clave del limitador — es la IP real del cliente detrás de Caddy (INFRA-010).
+	if err := ws.Server.SetTrustedProxies(coreConf.TrustedProxies); err != nil {
+		log.Fatalf("TRUSTED_PROXIES: %v", err)
+	}
 
 	// CORS — origins via ALLOWED_ORIGINS env var (default: http://localhost:3000)
 	// If-None-Match in, ETag out: a cached read (TRACK-028's route line) is revalidated by the page itself.

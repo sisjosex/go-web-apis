@@ -34,8 +34,13 @@ type CoreConfig struct {
 	// CORS
 	AllowedOrigins []string
 
-	// Rate limiting — requests per second per IP
+	// Rate limiting — requests per second per IP, and how many may arrive at once (INFRA-010 D2)
 	RateLimitPerSecond int
+	RateLimitBurst     int
+
+	// TrustedProxies — CIDRs whose X-Forwarded-For names the real client (INFRA-010 D1). Only the
+	// proxy in front of the API may be listed: anyone else could pick their own rate-limit key.
+	TrustedProxies []string
 
 	// Runtime roles and Valkey (INFRA-001)
 	AppRole            string        // all | api | realtime | worker | scheduler; the -role flag wins
@@ -65,6 +70,8 @@ func DefaultCoreConfig() *CoreConfig {
 		AllowedOrigins:   []string{"http://localhost:3000"},
 
 		RateLimitPerSecond: 10,
+		RateLimitBurst:     20,
+		TrustedProxies:     []string{"127.0.0.1"},
 
 		AppRole:            "all",
 		JobsConcurrency:    10,
@@ -74,6 +81,7 @@ func DefaultCoreConfig() *CoreConfig {
 
 // LoadCoreConfig loads core configuration from environment
 func LoadCoreConfig() *CoreConfig {
+	rateLimit := utils.GetEnvAsInt("RATE_LIMIT_PER_SECOND", 10)
 	return &CoreConfig{
 		// Database
 		DatabaseURL:      utils.GetEnv("DATABASE_URL", "postgres://postgres:postgres@localhost:5432/web?sslmode=disable"),
@@ -104,7 +112,9 @@ func LoadCoreConfig() *CoreConfig {
 		AllowedOrigins: utils.GetEnvAsStringSlice("ALLOWED_ORIGINS", []string{"http://localhost:3000"}),
 
 		// Rate limiting - requests per second per IP
-		RateLimitPerSecond: utils.GetEnvAsInt("RATE_LIMIT_PER_SECOND", 10),
+		RateLimitPerSecond: rateLimit,
+		RateLimitBurst:     utils.GetEnvAsInt("RATE_LIMIT_BURST", 2*rateLimit),
+		TrustedProxies:     utils.GetEnvAsStringSlice("TRUSTED_PROXIES", []string{"127.0.0.1"}),
 
 		// Runtime roles and Valkey
 		AppRole:            utils.GetEnv("APP_ROLE", "all"),

@@ -20,22 +20,24 @@ import (
 // request.
 const rateLimitWarnEvery = time.Minute
 
-// RateLimit caps requests per client IP at perSecond. With Valkey the window is shared by every
+// RateLimit caps requests per client IP at perSecond sustained, with bursts of up to burst at once
+// (INFRA-010 D2: a page firing a dozen reads together still loads). With Valkey the window is shared by every
 // replica (GCRA, one round-trip per request); without it the limit is the in-memory tollbooth one
 // and holds per process only.
 //
 // A Valkey error lets the request through (INFRA-001 D5): the limit protects the API, and refusing
 // every request because the limiter is down would be the outage it exists to prevent.
-func RateLimit(valkey coreServices.ValkeyService, perSecond int) gin.HandlerFunc {
+func RateLimit(valkey coreServices.ValkeyService, perSecond, burst int) gin.HandlerFunc {
 	if valkey == nil {
 		limiter := tollbooth.NewLimiter(float64(perSecond), nil)
 		limiter.SetTokenBucketExpirationTTL(time.Second)
+		limiter.SetBurst(burst)
 		limiter.SetIPLookups([]string{"RemoteAddr", "X-Forwarded-For", "X-Real-IP"})
 		return tollbooth_gin.LimitHandler(limiter)
 	}
 
 	limiter := redis_rate.NewLimiter(valkey.Client())
-	limit := redis_rate.PerSecond(perSecond)
+	limit := redis_rate.Limit{Rate: perSecond, Burst: burst, Period: time.Second}
 	var lastWarn atomic.Int64
 
 	return func(c *gin.Context) {

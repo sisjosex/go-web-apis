@@ -176,6 +176,9 @@ services:
       GOMEMLIMIT: 420MiB
       DATABASE_POOL_SIZE: "12"
       TENANCY_DATABASE_POOL_SIZE: "4"
+      # Caddy reaches the API over the Docker network; its X-Forwarded-For is the
+      # client the rate limit keys on (INFRA-010 D1).
+      TRUSTED_PROXIES: 172.16.0.0/12
     mem_limit: 512m
     cpu_shares: 1024
     logging: *logging
@@ -210,6 +213,7 @@ services:
       GOMEMLIMIT: 640MiB
       DATABASE_POOL_SIZE: "8"
       TENANCY_DATABASE_POOL_SIZE: "8"
+      TRUSTED_PROXIES: 172.16.0.0/12
     mem_limit: 768m
     cpu_shares: 1024
     logging: *logging
@@ -246,6 +250,7 @@ services:
       GOMEMLIMIT: 420MiB
       DATABASE_POOL_SIZE: "2"
       TENANCY_DATABASE_POOL_SIZE: "3"
+      TRUSTED_PROXIES: 172.16.0.0/12
     mem_limit: 512m
     cpu_shares: 1024
     logging: *logging

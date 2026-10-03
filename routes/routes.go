@@ -196,10 +196,11 @@ func useGlobalMiddleware(r *gin.Engine, valkey coreServices.ValkeyService) {
 		MaxAge:           12 * time.Hour,
 	}))
 
-	// Limitador de solicitudes — RATE_LIMIT_PER_SECOND por IP, compartido entre
+	// Limitador de solicitudes — RATE_LIMIT_PER_SECOND por IP con ráfagas de RATE_LIMIT_BURST, compartido entre
 	// réplicas cuando hay Valkey. La suite de tests comparte un solo router entre
 	// todos los tests, así que necesita un límite alto para no rechazarse a sí misma.
-	r.Use(coreMiddleware.RateLimit(valkey, config.ModularAppConfig.Core.RateLimitPerSecond))
+	coreConf := config.ModularAppConfig.Core
+	r.Use(coreMiddleware.RateLimit(valkey, coreConf.RateLimitPerSecond, coreConf.RateLimitBurst))
 
 	// Language middleware - detects lang from ?lang=es or Accept-Language header
 	r.Use(coreMiddleware.LanguageMiddleware())
