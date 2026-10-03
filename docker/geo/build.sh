@@ -25,7 +25,7 @@ is_build "$DATE" || { echo "❌ '$DATE' is not a YYYY-MM-DD date"; exit 1; }
 : "${GEO_BUILD_MEMORY:=3g}"                   # JVM heap for the basemap
 
 BASEMAP_REF=ca93fc06efbaff1c5f069d06edbe5de18839c1c8 # protomaps/basemaps, tiles 4.15.2
-BASEMAP_IMAGE=xanthops-geo-basemap:4.15.2
+BASEMAP_IMAGE=taypi-geo-basemap:4.15.2
 ASSETS_REF=028c18f713baecad011301ff7a69acc39bcc2ae7  # protomaps/basemaps-assets
 
 [ -e "$GEO_DATA_DIR/$DATE" ] && { echo "❌ $GEO_DATA_DIR/$DATE already exists"; exit 1; }

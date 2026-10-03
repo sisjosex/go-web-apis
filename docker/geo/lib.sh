@@ -18,7 +18,7 @@ DATA=$(cd "$GEO_DATA_DIR" && (pwd -W 2>/dev/null || pwd))
 : "${GEO_COMPOSE:=docker-compose.prod.yml}"
 
 VALHALLA_IMAGE=ghcr.io/valhalla/valhalla:3.9.0
-TOOLS_IMAGE=xanthops-geo-tools:1
+TOOLS_IMAGE=taypi-geo-tools:1
 
 # tools <cmd...> — run in the tools image with the data dir at /data.
 tools() {
@@ -40,7 +40,7 @@ is_build() {
 # check_valhalla <dir-under-data> — serve that build from a throwaway container and
 # ask it for a real route; the serving stack is not touched.
 check_valhalla() {
-	name=xanthops-geo-check
+	name=taypi-geo-check
 	docker rm -f "$name" > /dev/null 2>&1 || true
 	docker run -d --name "$name" -v "$DATA/$1/valhalla:/valhalla:ro" "$VALHALLA_IMAGE" \
 		valhalla_service /valhalla/valhalla.json 1 > /dev/null

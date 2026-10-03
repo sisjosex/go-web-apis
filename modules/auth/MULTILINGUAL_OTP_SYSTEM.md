@@ -114,7 +114,7 @@ response, err := uc.otpService.RequestOtp(ctx, otpDto)
   "otp.email.expiration": "This code expires in 10 minutes",
   "otp.email.security-warning": "Security: Never share this code with anyone...",
   "otp.email.ignore-text": "If you did not request this code, you can safely ignore this email.",
-  "otp.email.sign-off": "Best regards,<br><strong>The Xanthops Team</strong>",
+  "otp.email.sign-off": "Best regards,<br><strong>The Taypi Team</strong>",
   "otp.email.automated-note": "This is an automated email, please do not reply to this message."
 }
 ```
@@ -130,7 +130,7 @@ response, err := uc.otpService.RequestOtp(ctx, otpDto)
   "otp.email.expiration": "Este código expira en 10 minutos",
   "otp.email.security-warning": "Seguridad: Nunca compartas este código con nadie...",
   "otp.email.ignore-text": "Si no solicitaste este código, puedes ignorar este correo de forma segura.",
-  "otp.email.sign-off": "Saludos,<br><strong>El equipo de Xanthops</strong>",
+  "otp.email.sign-off": "Saludos,<br><strong>El equipo de Taypi</strong>",
   "otp.email.automated-note": "Este es un correo automático, por favor no respondas a este mensaje."
 }
 ```

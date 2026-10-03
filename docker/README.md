@@ -107,7 +107,7 @@ fallocate -l 2G /swapfile && chmod 600 /swapfile && mkswap /swapfile && swapon /
 echo '/swapfile none swap sw 0 0' >> /etc/fstab
 
 # Kernel: swap late, let Valkey fork for its AOF rewrite, a deeper accept queue.
-cat > /etc/sysctl.d/90-xanthops.conf <<'EOF'
+cat > /etc/sysctl.d/90-taypi.conf <<'EOF'
 vm.swappiness=10
 vm.overcommit_memory=1
 net.core.somaxconn=1024
@@ -137,7 +137,7 @@ systemctl enable --now nftables
 
 # Security updates for the host on their own; the pinned images weekly.
 apt-get install -y unattended-upgrades && dpkg-reconfigure -plow unattended-upgrades
-echo '0 4 * * 0 cd /srv/taypi24 && docker compose -f docker-compose.prod.yml pull --ignore-buildable -q && docker compose -f docker-compose.prod.yml up -d' > /etc/cron.d/xanthops-images
+echo '0 4 * * 0 cd /srv/taypi24 && docker compose -f docker-compose.prod.yml pull --ignore-buildable -q && docker compose -f docker-compose.prod.yml up -d' > /etc/cron.d/taypi-images
 ```
 
 ## Deploy
@@ -210,11 +210,11 @@ openssl rand -base64 32   # once each: POSTGRES_PASSWORD, VALKEY_PASSWORD, JWT_S
   fails with 503), `FCM_PROJECT_ID`, and the `STORAGE_*` block of step 11b.
 - `chmod 600 .env .env.platform`.
 
-**5. FCM key.** The Firebase service-account JSON (project `xanthops-push`), copied from the PC:
+**5. FCM key.** The Firebase service-account JSON (project `taypi-push`), copied from the PC:
 
 ```sh
 # on the PC
-scp ~/.secrets/fcm-xanthops.json root@<box>:/srv/taypi24/secrets/fcm.json
+scp ~/.secrets/fcm-taypi.json root@<box>:/srv/taypi24/secrets/fcm.json
 # on the box
 chmod 600 /srv/taypi24/secrets/fcm.json
 ```

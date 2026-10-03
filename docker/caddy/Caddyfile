@@ -1,4 +1,4 @@
-# Xanthops edge — the only container that publishes a host port.
+# Taypi edge — the only container that publishes a host port.
 #
 # Caddy terminates TLS (certificates obtained and renewed automatically from
 # Let's Encrypt) and forwards to the API containers over the compose network.

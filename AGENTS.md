@@ -1,4 +1,4 @@
-# AGENTS.md — Xanthops API
+# AGENTS.md — Taypi API
 
 Orientation for agents working in `/api`. Coding rules load on their own by file type from
 `.claude/rules/` (`go.md`, `sql.md`, `go-tests.md`, `security.md`) — this file is only what you need

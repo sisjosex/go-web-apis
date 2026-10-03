@@ -16,6 +16,8 @@
 #   docker compose -f docker-compose.prod.yml pull --ignore-buildable
 #   docker compose -f docker-compose.prod.yml up -d
 
+# The pre-Taypi name stays (BRAND-001): it prefixes every volume on the box, Postgres data
+# included, and a new name would start the stack on empty volumes.
 name: xanthops
 
 # Sized for one box, 6 vCPU / 12 GB (INFRA-004, docker/README.md has the table):
