@@ -842,6 +842,83 @@ func AssignmentBody(riderID, routeID string, daysOfWeek int) map[string]interfac
 	}
 }
 
+// seedRouteAssignment writes an assignment straight to the table — past the API's overlap check — and
+// answers its id; validUntil "" is open-ended.
+func seedRouteAssignment(t *testing.T, helper *testhelpers.ApiTestHelper, routeID, riderID string, daysOfWeek int, validFrom, validUntil string) string {
+	t.Helper()
+	var id string
+	err := helper.DB().QueryRow(context.Background(), `
+		INSERT INTO tracking.rider_route_assignments (rider_id, route_id, days_of_week, valid_from, valid_until)
+		VALUES ($1, $2, $3, $4::DATE, NULLIF($5, '')::DATE) RETURNING id`,
+		riderID, routeID, daysOfWeek, validFrom, validUntil).Scan(&id)
+	if err != nil {
+		t.Fatalf("seed assignment: %v", err)
+	}
+	return id
+}
+
+// alertNotices answers the feed rows one alert wrote, payload per rider and recipient email.
+func alertNotices(t *testing.T, helper *testhelpers.ApiTestHelper, alertID string) map[string]map[string]map[string]interface{} {
+	t.Helper()
+	rows, err := helper.DB().Query(t.Context(), `
+		SELECT n.rider_id, u.email, n.payload FROM tracking.notifications n JOIN auth.users u ON u.id = n.user_id
+		WHERE n.type = 'delay' AND n.payload->>'alert_id' = $1`, alertID)
+	if err != nil {
+		t.Fatalf("read alert notices: %v", err)
+	}
+	defer rows.Close()
+	byRider := map[string]map[string]map[string]interface{}{}
+	for rows.Next() {
+		var rider, email string
+		var payload map[string]interface{}
+		if err := rows.Scan(&rider, &email, &payload); err != nil {
+			t.Fatalf("scan alert notice: %v", err)
+		}
+		if byRider[rider] == nil {
+			byRider[rider] = map[string]map[string]interface{}{}
+		}
+		byRider[rider][email] = payload
+	}
+	return byRider
+}
+
+// notifyAlertRaised runs what the alert.changed worker runs for a raise and answers how many rows it
+// gave to push.
+func notifyAlertRaised(t *testing.T, helper *testhelpers.ApiTestHelper, alertID string) int {
+	t.Helper()
+	var pushed int
+	if err := helper.DB().QueryRow(t.Context(), `
+		SELECT count(*) FROM tracking.sp_notify_event($1, 'alert.changed', jsonb_build_object('type', 'raised', 'alert_id', $2::TEXT), NULL)`,
+		TestTenantID, alertID).Scan(&pushed); err != nil {
+		t.Fatalf("notify alert: %v", err)
+	}
+	return pushed
+}
+
+// addGuardians makes each seeded account a guardian contact of riderID, and on cleanup removes the
+// rider's contacts and notices.
+func addGuardians(t *testing.T, helper *testhelpers.ApiTestHelper, riderID string, emails ...string) {
+	t.Helper()
+	execSQL(t, helper, `INSERT INTO tracking.rider_contacts (rider_id, relation, name, email, user_id, is_primary)
+		SELECT $1, 'guardian', u.email, u.email, u.id, FALSE FROM auth.users u WHERE u.email = ANY($2::TEXT[])`, riderID, emails)
+	t.Cleanup(func() {
+		execSQL(t, helper, `DELETE FROM tracking.rider_contacts WHERE rider_id = $1`, riderID)
+		execSQL(t, helper, `DELETE FROM tracking.notifications WHERE rider_id = $1`, riderID)
+	})
+}
+
+// raiseTripAlert writes an alert on one trip, as the driver's incident does, and answers its id.
+func raiseTripAlert(t *testing.T, helper *testhelpers.ApiTestHelper, routeID, tripID, alertType, title string) string {
+	t.Helper()
+	var id string
+	if err := helper.DB().QueryRow(t.Context(), `
+		INSERT INTO tracking.route_alerts (route_id, trip_id, alert_type, title) VALUES ($1, $2, $3, $4) RETURNING id`,
+		routeID, tripID, alertType, title).Scan(&id); err != nil {
+		t.Fatalf("trip alert: %v", err)
+	}
+	return id
+}
+
 // CreateAssignment posts an assignment and returns the response body's assignment.
 func CreateAssignment(t *testing.T, helper *testhelpers.ApiTestHelper, body map[string]interface{}) map[string]interface{} {
 	t.Helper()

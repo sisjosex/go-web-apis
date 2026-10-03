@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 
@@ -150,4 +151,49 @@ func TestPortalNotificationSettings_Scope(t *testing.T) {
 	defer admin.Close()
 	w = admin.DoRequest("GET", "/mobile/portal/notification-settings", nil, map[string]string{})
 	assert.Equal(t, http.StatusForbidden, w.Code, w.Body.String())
+}
+
+// TestNotifyRouteAlert_AssignedFamilies - TRACK-033 D1: a route alert with no trip of the route today
+// reaches the guardians of every rider assigned to the route today, riding today or not, with the
+// route's name and no trip; an assignment that ended yesterday gets nothing, and a second run writes
+// nothing. A trip alert on the same route still reaches that trip's passengers only.
+func TestNotifyRouteAlert_AssignedFamilies(t *testing.T) {
+	helper := SetupTrackingTest(t)
+	defer helper.Close()
+	routeID, riderID := createTripRoute(t, helper, "07:00")
+	// Assigned today but not on today's weekday: on the route's list, on no trip of today's.
+	weekday := int(time.Now().UTC().Weekday()+6) % 7
+	offDay := CreateTestRider(t, helper)
+	seedRouteAssignment(t, helper, routeID, offDay, EveryDayMask&^(1<<weekday), "2026-01-01", "")
+	expired := CreateTestRider(t, helper)
+	seedRouteAssignment(t, helper, routeID, expired, EveryDayMask, "2026-01-01", dayOffset(t, "UTC", -1))
+	addGuardians(t, helper, riderID, "portal@test.local", "portal-unlinked@test.local")
+	addGuardians(t, helper, offDay, "portal@test.local")
+	addGuardians(t, helper, expired, "portal@test.local")
+
+	routeAlert := raiseAlert(t, helper, routeID, "delay", "high", "Bus delayed")
+	assert.Equal(t, 3, notifyAlertRaised(t, helper, routeAlert), "two guardians of the rider, one of the off-day rider")
+	got := alertNotices(t, helper, routeAlert)
+	assert.Len(t, got[riderID], 2)
+	assert.Len(t, got[offDay], 1, "assigned today, riding today or not")
+	assert.Empty(t, got[expired], "an assignment that ended yesterday")
+	for _, payload := range got[riderID] {
+		assert.NotEmpty(t, payload["route_name"])
+		assert.Equal(t, "Bus delayed", payload["title"])
+		assert.NotContains(t, payload, "trip_id")
+		assert.NotContains(t, payload, "service_date")
+	}
+	assert.Equal(t, 0, notifyAlertRaised(t, helper, routeAlert), "the same raise again writes nothing")
+	assert.Len(t, alertNotices(t, helper, routeAlert)[riderID], 2)
+
+	today := dayOffset(t, "UTC", 0)
+	materialiseRoute(t, helper, routeID, today, today)
+	tripID, _ := tripOn(t, helper, routeID, today, "07:00")
+	tripAlert := raiseTripAlert(t, helper, routeID, tripID, "breakdown", "Flat tyre")
+	assert.Equal(t, 2, notifyAlertRaised(t, helper, tripAlert))
+	got = alertNotices(t, helper, tripAlert)
+	assert.Len(t, got, 1, "the trip's passengers only")
+	for _, payload := range got[riderID] {
+		assert.Equal(t, tripID, payload["trip_id"])
+	}
 }
