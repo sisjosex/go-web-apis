@@ -100,7 +100,7 @@ func (f *DocumentFiles) Claim(ctx context.Context, tenantID, documentID uuid.UUI
 		return "", 0, &trackingErrors.TrackingError{Code: trackingErrors.DocumentFileInvalid}
 	}
 
-	if err := f.store.Copy(ctx, pendingKey, key(tenantID, documentID, ext)); err != nil {
+	if err := f.store.Copy(ctx, pendingKey, key(tenantID, documentID, ext), storage.PutOptions{}); err != nil {
 		return "", 0, &trackingErrors.TrackingError{Code: trackingErrors.DocumentFileFailed, Err: err}
 	}
 	return ext, total, nil

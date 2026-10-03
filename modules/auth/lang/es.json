@@ -8,6 +8,7 @@
   "user.profile.get.failed": "Error al obtener el perfil de usuario",
   "user.profile.update.failed": "Error al actualizar el perfil de usuario",
   "user.profile.validation-failed": "Error de validación en el perfil",
+  "auth.profile.picture_url": "La foto de perfil debe ser una subida aquí",
   "user.email.request.failed": "Error al solicitar correo electrónico",
   "user.email.verification.failed": "Error en la verificación del correo electrónico",
   "user.change-password.failed": "Error al cambiar la contraseña",

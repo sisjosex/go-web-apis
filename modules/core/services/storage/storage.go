@@ -18,8 +18,9 @@ type ObjectStore interface {
 	// GetRange reads length bytes from offset and reports the object's total size, taken from the
 	// Content-Range of the same response — so knowing the size never costs a separate Head.
 	GetRange(ctx context.Context, key string, offset, length int64) (data []byte, total int64, err error)
-	// Copy duplicates src to dst inside the bucket, server side, overwriting dst.
-	Copy(ctx context.Context, src, dst string) error
+	// Copy duplicates src to dst inside the bucket, server side, overwriting dst. Empty opts keep src's
+	// headers; set ones replace them, so a claim can store the type it checked and the cache it wants.
+	Copy(ctx context.Context, src, dst string, opts PutOptions) error
 	// Delete removes an object; a key that is not there is not an error.
 	Delete(ctx context.Context, key string) error
 	// PresignPut signs a PUT whose Content-Type and Content-Length are part of the signature, so the

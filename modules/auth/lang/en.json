@@ -8,6 +8,7 @@
   "user.profile.get.failed": "Failed to retrieve user profile",
   "user.profile.update.failed": "Failed to update user profile",
   "user.profile.validation-failed": "Profile validation failed",
+  "auth.profile.picture_url": "The profile photo must be one uploaded here",
   "user.email.request.failed": "Failed to request email",
   "user.email.verification.failed": "Email verification failed",
   "user.change-password.failed": "Failed to change password",

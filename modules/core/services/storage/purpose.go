@@ -14,6 +14,10 @@ type Purpose struct {
 	// Types maps each content type the client may declare to the extension the key gets.
 	Types    map[string]string
 	MaxBytes int64
+	// Public purposes are a user's images in the media bucket (an avatar, MEDIA-001): the ticket needs
+	// no tenant, the pending key is under the user, and POST /storage/uploads/claim publishes them.
+	// The others belong to a tenant and are claimed by their own module's endpoint.
+	Public bool
 }
 
 // PendingKey is where a ticket's upload lands until its owner claims it: under pending/, which the
@@ -23,9 +27,16 @@ func PendingKey(tenantID uuid.UUID, ext string) string {
 	return PendingPrefix(tenantID) + uuid.NewString() + "." + ext
 }
 
-// PendingPrefix is the part of a pending key that names its tenant.
+// PendingPrefix is the part of a pending key that names its owner: a tenant, or the user of a
+// public purpose.
 func PendingPrefix(tenantID uuid.UUID) string {
 	return "pending/" + tenantID.String() + "/"
+}
+
+// PublicPendingKey is a public purpose's pending key: pending/<user>/<purpose>/<uuid>.<ext>. The
+// purpose is part of it so the claim, which takes only the key, knows where to publish it.
+func PublicPendingKey(userID uuid.UUID, purpose, ext string) string {
+	return PendingPrefix(userID) + purpose + "/" + uuid.NewString() + "." + ext
 }
 
 // Purposes is the registry the ticket endpoint looks purposes up in.

@@ -102,10 +102,20 @@ func (s *s3Store) GetRange(ctx context.Context, key string, offset, length int64
 	return data, total, nil
 }
 
-func (s *s3Store) Copy(ctx context.Context, src, dst string) error {
-	_, err := s.core.Client.CopyObject(ctx,
-		minio.CopyDestOptions{Bucket: s.bucket, Object: dst},
-		minio.CopySrcOptions{Bucket: s.bucket, Object: src})
+func (s *s3Store) Copy(ctx context.Context, src, dst string, opts PutOptions) error {
+	dest := minio.CopyDestOptions{Bucket: s.bucket, Object: dst}
+	if opts != (PutOptions{}) {
+		// REPLACE drops every header src had; minio-go sends these two as standard headers, not x-amz-meta-.
+		dest.ReplaceMetadata = true
+		dest.UserMetadata = map[string]string{}
+		if opts.ContentType != "" {
+			dest.UserMetadata["Content-Type"] = opts.ContentType
+		}
+		if opts.CacheControl != "" {
+			dest.UserMetadata["Cache-Control"] = opts.CacheControl
+		}
+	}
+	_, err := s.core.Client.CopyObject(ctx, dest, minio.CopySrcOptions{Bucket: s.bucket, Object: src})
 	return mapErr(err)
 }
 

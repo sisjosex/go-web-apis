@@ -12,6 +12,7 @@ import (
 	"testing"
 
 	"josex/web/config"
+	coreServices "josex/web/modules/core/services"
 	"josex/web/modules/core/testhelpers"
 
 	"github.com/google/uuid"
@@ -305,6 +306,30 @@ func TestUpdateProfileUnauthorized(t *testing.T) {
 	w := helper.DoRequest("PATCH", "/auth/profile", body, map[string]string{})
 
 	assert.Equal(t, http.StatusUnauthorized, w.Code)
+}
+
+// TestUpdateProfilePictureOnlyFromMedia - a profile links a photo published to the media bucket or
+// none: an outside URL would track whoever views it (MEDIA-001 D5).
+func TestUpdateProfilePictureOnlyFromMedia(t *testing.T) {
+	helper := testhelpers.SetupApiTest(t)
+	defer helper.Close()
+	helper.Register("picture@test.com", "$Password2025", "John", "Doe")
+	helper.Login("picture@test.com", "$Password2025")
+	for _, url := range []string{
+		"https://evil.example/x.png",
+		coreServices.MediaURL("../taypi24-documents-test/x.pdf"),
+		coreServices.MediaURL("pending/x.webp"),
+	} {
+		w := helper.DoRequest("PATCH", "/auth/profile", map[string]interface{}{"profile_picture_url": url}, map[string]string{})
+		assert.Equal(t, http.StatusUnprocessableEntity, w.Code, url+": "+w.Body.String())
+		assert.Contains(t, w.Body.String(), "auth.profile.picture_url")
+	}
+
+	published := coreServices.MediaURL("avatar/" + uuid.NewString() + ".webp")
+	for _, url := range []string{published, ""} {
+		w := helper.DoRequest("PATCH", "/auth/profile", map[string]interface{}{"profile_picture_url": url}, map[string]string{})
+		assert.Equal(t, http.StatusOK, w.Code, url+": "+w.Body.String())
+	}
 }
 
 // ============================================================================

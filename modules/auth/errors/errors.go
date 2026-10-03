@@ -14,6 +14,8 @@ const (
 	UserProfileGetFailed        = "user.profile.get.failed"
 	UserProfileUpdateFailed     = "user.profile.update.failed"
 	UserProfileValidationFailed = "user.profile.validation-failed"
+	// A profile_picture_url outside the media bucket (MEDIA-001 D5).
+	ProfilePictureURLInvalid = "auth.profile.picture_url"
 
 	// Email verification
 	UserRequestEmailError       = "user.email.request.failed"

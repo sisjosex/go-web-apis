@@ -40,9 +40,12 @@ const (
 )
 
 // Stored-file errors (INFRA-007): an upload ticket for an unknown purpose, a type the purpose does
-// not take or a size over its limit.
+// not take or a size over its limit; a claimed key that is not the caller's pending upload, and
+// uploaded bytes that are not the signed type or too many (MEDIA-001).
 const (
-	StorageUploadInvalid = "storage.upload-invalid"
+	StorageUploadInvalid  = "storage.upload-invalid"
+	StorageUploadNotFound = "storage.upload-not-found"
+	StorageFileInvalid    = "storage.file-invalid"
 )
 
 // BuildErrorSingle creates an error response with just an error code and translates it

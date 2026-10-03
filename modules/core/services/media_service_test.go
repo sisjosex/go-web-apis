@@ -46,7 +46,7 @@ func TestMediaSave_StoredFileIsServedAtItsReturnedURL(t *testing.T) {
 	if got := header.Get("Content-Type"); got != "image/png" {
 		t.Errorf("expected image/png, got %q", got)
 	}
-	if got := header.Get("Cache-Control"); got != immutableCache {
+	if got := header.Get("Cache-Control"); got != ImmutableCache {
 		t.Errorf("expected the immutable cache, got %q", got)
 	}
 }

@@ -455,6 +455,12 @@ func (uc *AuthController) UpdateProfile(ctx *gin.Context) {
 		ctx.JSON(http.StatusBadRequest, coreErrors.BuildErrorDetail(ctx, authErrors.UserProfileValidationFailed, utils.ExtractValidationError(ctx, err)))
 		return
 	}
+	// A photo is one published to the media bucket, or none (MEDIA-001 D5): an outside link would
+	// let its host track whoever views the profile.
+	if picture := updateUser.ProfilePictureUrl; picture != nil && *picture != "" && !coreServices.IsMediaURL(*picture) {
+		ctx.JSON(http.StatusUnprocessableEntity, coreErrors.BuildErrorSingle(ctx, authErrors.ProfilePictureURLInvalid))
+		return
+	}
 
 	user, err := uc.authService.UpdateProfile(updateUser)
 	if err != nil {

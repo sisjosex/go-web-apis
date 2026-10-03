@@ -47,7 +47,7 @@ func TestS3Store_RoundTrip(t *testing.T) {
 		t.Fatalf("expected the whole body for a long range, got %q, %d, %v", whole, total, err)
 	}
 
-	if err := store.Copy(ctx, src, dst); err != nil {
+	if err := store.Copy(ctx, src, dst, storage.PutOptions{}); err != nil {
 		t.Fatalf("copy: %v", err)
 	}
 	copied, _, err := store.GetRange(ctx, dst, 0, 512)

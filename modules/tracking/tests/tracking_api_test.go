@@ -2209,9 +2209,9 @@ func (s *countingStore) GetRange(ctx context.Context, key string, offset, length
 	return s.ObjectStore.GetRange(ctx, key, offset, length)
 }
 
-func (s *countingStore) Copy(ctx context.Context, src, dst string) error {
+func (s *countingStore) Copy(ctx context.Context, src, dst string, opts storage.PutOptions) error {
 	s.calls++
-	return s.ObjectStore.Copy(ctx, src, dst)
+	return s.ObjectStore.Copy(ctx, src, dst, opts)
 }
 
 func (s *countingStore) Delete(ctx context.Context, key string) error {

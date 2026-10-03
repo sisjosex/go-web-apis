@@ -164,6 +164,10 @@ func baseDeps(r *gin.Engine, dbService coreServices.DatabaseService, valkey core
 
 	useGlobalMiddleware(r, valkey)
 
+	media := store.Bucket(coreConf.StorageMediaBucket)
+	purposes := storage.NewPurposes()
+	purposes.Register(coreServices.NewAvatarPurpose(media))
+
 	return routeDeps{
 		engine:         r,
 		apiV1:          r.Group("/api/v1"),
@@ -171,9 +175,9 @@ func baseDeps(r *gin.Engine, dbService coreServices.DatabaseService, valkey core
 		jwt:            jwtService,
 		authMiddleware: authMW.AuthMiddleware(jwtService),
 		email:          coreServices.NewEmailService(),
-		media:          coreServices.NewMediaService(store.Bucket(coreConf.StorageMediaBucket)),
+		media:          coreServices.NewMediaService(media),
 		documents:      store.Bucket(coreConf.StorageDocumentsBucket),
-		purposes:       storage.NewPurposes(),
+		purposes:       purposes,
 		users:          userServices.NewUserService(userRepos.NewUserRepository(dbService)),
 		userAudit:      userServices.NewUserAuditService(userRepos.NewUserAuditRepository(dbService)),
 		router:         geoRouting.NewRouter(config.ModularAppConfig.Geo),

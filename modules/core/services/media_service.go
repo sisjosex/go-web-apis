@@ -40,9 +40,41 @@ type MediaService interface {
 // not open 500 uploads at once.
 const saveWorkers = 8
 
-// immutableCache is safe because a key is a fresh UUID and is never written twice (D4): the second
+// ImmutableCache is safe because a key is a fresh UUID and is never written twice (D4): the second
 // view comes from the browser or Cloudflare's edge, never from the bucket.
-const immutableCache = "public, max-age=31536000, immutable"
+const ImmutableCache = "public, max-age=31536000, immutable"
+
+// AvatarPurpose is the upload ticket for a profile photo (MEDIA-001). Clients shrink it to a 512 px
+// WebP before uploading (D1), some 30-60 KB, so 1 MB leaves room for a JPEG or PNG fallback.
+const AvatarPurpose = "avatar"
+
+// NewAvatarPurpose registers avatars as a public purpose of the media bucket.
+func NewAvatarPurpose(media storage.ObjectStore) storage.Purpose {
+	return storage.Purpose{
+		Name:     AvatarPurpose,
+		Store:    media,
+		Types:    map[string]string{"image/webp": "webp", "image/jpeg": "jpg", "image/png": "png"},
+		MaxBytes: 1 << 20,
+		Public:   true,
+	}
+}
+
+// MediaURL is the public URL a media-bucket key is served at.
+func MediaURL(key string) string {
+	return mediaBase() + key
+}
+
+// IsMediaURL reports whether url names a published object of the media bucket. A profile only links
+// those, never an outside URL that would track whoever views it (MEDIA-001 D5), nor a pending upload.
+func IsMediaURL(url string) bool {
+	key, ok := strings.CutPrefix(url, mediaBase())
+	return ok && key != "" && !strings.HasPrefix(key, "pending/") &&
+		!strings.Contains(key, "..") && !strings.ContainsAny(key, "?#\\")
+}
+
+func mediaBase() string {
+	return strings.TrimSuffix(coreConfig.MediaPublicBaseURL(), "/") + "/"
+}
 
 // mediaTypes is the allow-list of what the media bucket holds. The type is the extension's, never
 // sniffed from the bytes: the bucket serves exactly what this map says, behind nosniff.
@@ -110,7 +142,7 @@ func (s *mediaService) SaveAll(ctx context.Context, category string, files map[s
 }
 
 func (s *mediaService) Delete(ctx context.Context, url string) error {
-	key, ok := strings.CutPrefix(url, strings.TrimSuffix(coreConfig.MediaPublicBaseURL(), "/")+"/")
+	key, ok := strings.CutPrefix(url, mediaBase())
 	if !ok || key == "" {
 		return nil
 	}
@@ -129,13 +161,13 @@ func (s *mediaService) put(ctx context.Context, category string, file MediaFile)
 	key := sanitizeCategory(category) + "/" + uuid.NewString() + "." + ext
 	err := s.store.Put(ctx, key, bytes.NewReader(file.Content), int64(len(file.Content)), storage.PutOptions{
 		ContentType:  contentType,
-		CacheControl: immutableCache,
+		CacheControl: ImmutableCache,
 	})
 	if err != nil {
 		return "", err
 	}
 
-	return strings.TrimSuffix(coreConfig.MediaPublicBaseURL(), "/") + "/" + key, nil
+	return MediaURL(key), nil
 }
 
 // sanitizeCategory keeps a category to a single safe key segment: the caller is

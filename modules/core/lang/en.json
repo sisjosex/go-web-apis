@@ -1,6 +1,8 @@
 {
   "core.internal-error": "Something went wrong, please try again",
   "storage.upload-invalid": "This file cannot be uploaded: check its type and size",
+  "storage.upload-not-found": "That upload was not found or has expired: upload the file again",
+  "storage.file-invalid": "This file is not the image it claims to be, or it is too large",
   "validation.invalid-uuid": "Invalid UUID format",
   "validation.required": "This field is required",
   "validation.email": "Invalid email format",
