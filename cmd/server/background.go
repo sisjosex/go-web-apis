@@ -191,7 +191,7 @@ func tenantDirectory(db services.DatabaseService, directory *jobs.TenantDirector
 			return nil, err
 		}
 		for _, a := range admins {
-			contact.Emails = append(contact.Emails, a.Email)
+			contact.Recipients = append(contact.Recipients, trackingJobs.Recipient{Email: a.Email, Locale: a.Locale})
 		}
 		return contact, nil
 	}

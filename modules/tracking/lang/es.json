@@ -218,5 +218,10 @@
   "tracking.access.user-not-found": "Usuario no encontrado",
   "tracking.access.user-deleted": "Este correo pertenece a una cuenta eliminada",
   "tracking.access.grant.failed": "No se pudo dar acceso a la app",
-  "tracking.rider.guardian-not-found": "Esta cuenta no es apoderado del pasajero"
+  "tracking.rider.guardian-not-found": "Esta cuenta no es apoderado del pasajero",
+  "document-digest.email.subject": "%d documento(s) requieren atención en %s",
+  "document-digest.email.description": "Estos documentos entraron en su periodo de aviso. Cada documento se nombra aquí una vez; al renovarlo vuelve a vigilarse.",
+  "document-digest.email.button-text": "Abrir documentos",
+  "document-digest.email.sign-off": "El equipo de %s",
+  "document-digest.email.automated-note": "Este es un mensaje automático. Por favor no respondas."
 }

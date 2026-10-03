@@ -74,6 +74,12 @@ func (r *authRepository) InsertUser(userDTO authModels.CreateUserDto) (*coreMode
 	return user, nil
 }
 
+// SetLocale records the language a person switched the app to (APP-009 D2).
+func (r *authRepository) SetLocale(ctx context.Context, userID uuid.UUID, locale string) error {
+	_, err := r.dbService.Execute(ctx, `SELECT auth.sp_set_user_locale($1, $2)`, userID, locale)
+	return err
+}
+
 func (r *authRepository) UpdateProfile(userDTO authModels.UpdateProfileDto) (*coreModels.User, error) {
 	user := &coreModels.User{}
 	query := `

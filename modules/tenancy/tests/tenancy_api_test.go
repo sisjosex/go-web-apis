@@ -160,25 +160,20 @@ func TestCreateTenantDuplicateSlugError(t *testing.T) {
 		fmt.Sprintf("Expected 409/400/403, got %d: %s", w2.Code, w2.Body.String()))
 }
 
-// TestCreateTenantMissingSlugError tests validation for tenant creation
-func TestCreateTenantMissingSlugError(t *testing.T) {
+// TestCreateTenantWithoutSlugDerivesIt - a tenant created without a slug gets one from its name.
+func TestCreateTenantWithoutSlugDerivesIt(t *testing.T) {
 	helper := testhelpers.SetupApiTest(t)
 	defer helper.Close()
 
-	// Register and login
 	helper.Register("user4@test.com", "$Password2025", "Test", "User")
 	helper.Login("user4@test.com", "$Password2025")
 
-	// Try to create tenant without slug
-	body := map[string]interface{}{
-		"name": "No Slug Tenant",
-	}
-
-	w := helper.DoRequest("POST", "/tenants/self-service", body, map[string]string{})
-
-	// Should get validation error
-	assert.True(t, w.Code == http.StatusBadRequest,
-		fmt.Sprintf("Expected 400, got %d", w.Code))
+	// No slug: the server derives it from the name (APP-009 D3) instead of refusing the request.
+	w := helper.DoRequest("POST", "/tenants/self-service", map[string]interface{}{"name": "No Slug Tenant"}, map[string]string{})
+	assert.Equal(t, http.StatusCreated, w.Code, w.Body.String())
+	var response map[string]interface{}
+	_ = json.Unmarshal(w.Body.Bytes(), &response)
+	assert.Regexp(t, `^no-slug-tenant(-[0-9]+)?$`, response["slug"])
 }
 
 // TestCreateTenantMissingNameError tests validation for tenant creation
@@ -713,4 +708,32 @@ func TestAddUserToTenant_AccessLevels_Organization_And_Portal(t *testing.T) {
 		assert.Equal(t, http.StatusOK, w.Code,
 			fmt.Sprintf("level %q expected 200, got %d: %s", level, w.Code, w.Body.String()))
 	}
+}
+
+// TestCreateTenantSelfService_SlugFromName - onboarding sends no slug: the server derives it from the
+// name, accents out, and suffixes the second business of that name (APP-009 D3).
+func TestCreateTenantSelfService_SlugFromName(t *testing.T) {
+	helper := testhelpers.SetupApiTest(t)
+	defer helper.Close()
+	name := fmt.Sprintf("Colegio Ñandú %d", time.Now().UnixNano()%100000)
+
+	create := func() string {
+		t.Helper()
+		email := fmt.Sprintf("slug-%s@test.com", uuid.New().String()[:8])
+		helper.Register(email, "$Password2025", "Slug", "Owner")
+		helper.Login(email, "$Password2025")
+		w := helper.DoRequest("POST", "/tenants/self-service", map[string]interface{}{"name": name}, map[string]string{})
+		if w.Code != http.StatusCreated && w.Code != http.StatusOK {
+			t.Fatalf("create tenant: %d %s", w.Code, w.Body.String())
+		}
+		var response map[string]interface{}
+		_ = json.Unmarshal(w.Body.Bytes(), &response)
+		slug, _ := response["slug"].(string)
+		return slug
+	}
+
+	first := create()
+	second := create()
+	assert.Regexp(t, `^colegio-nandu-[0-9]+$`, first, "accents out, spaces as hyphens")
+	assert.Equal(t, first+"-2", second, "the second business of that name")
 }

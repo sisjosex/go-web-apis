@@ -528,6 +528,15 @@ func registerImport(d routeDeps, chains tenantChains, inventorySvcs inventoryRou
 		importRegistry.Register("inventory", inventoryServices.NewProductBatchesImportDescriptor(
 			inventorySvcs.Batch, inventorySvcs.ImportLookup))
 	}
+	if coreConf.IsModuleEnabled("tracking") {
+		// What a transport tenant loads by the dozen when it starts (APP-009): the policy and the
+		// places first, then the fleet and the people.
+		tracking := trackingServices.NewTrackingService(trackingRepos.NewTrackingRepository(d.db))
+		importRegistry.Register("tracking", trackingServices.NewDocumentTypesImportDescriptor(tracking))
+		importRegistry.Register("tracking", trackingServices.NewStopPlacesImportDescriptor(tracking))
+		importRegistry.Register("tracking", trackingServices.NewVehiclesImportDescriptor(tracking))
+		importRegistry.Register("tracking", trackingServices.NewRidersImportDescriptor(tracking))
+	}
 	importController := importControllers.NewImportController(importServices.NewImportService(importRegistry))
 	importRoutes.RegisterImportRoutes(d.apiV1, importController, d.jwt, chains.tenant)
 	log.Println("✅ Import module routes registered")

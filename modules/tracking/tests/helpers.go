@@ -1232,3 +1232,25 @@ func TripDriverOn(t *testing.T, helper *testhelpers.ApiTestHelper, routeID, day 
 	}
 	return driver
 }
+
+// CompanyName is a seeded carrier's name, which an import names it by.
+func CompanyName(t *testing.T, helper *testhelpers.ApiTestHelper, id string) string {
+	t.Helper()
+	var name string
+	if err := helper.DB().QueryRow(context.Background(),
+		`SELECT name FROM tracking.transport_companies WHERE id = $1`, id).Scan(&name); err != nil {
+		t.Fatalf("company name: %v", err)
+	}
+	return name
+}
+
+// OrganizationName is a seeded organization's name, which an import names it by.
+func OrganizationName(t *testing.T, helper *testhelpers.ApiTestHelper, id string) string {
+	t.Helper()
+	var name string
+	if err := helper.DB().QueryRow(context.Background(),
+		`SELECT name FROM tracking.organizations WHERE id = $1`, id).Scan(&name); err != nil {
+		t.Fatalf("organization name: %v", err)
+	}
+	return name
+}

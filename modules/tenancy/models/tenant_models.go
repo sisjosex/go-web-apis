@@ -33,7 +33,8 @@ type TenantUser struct {
 
 // CreateTenantDto for creating a new tenant
 type CreateTenantDto struct {
-	Slug        string  `json:"slug" binding:"required" conform:"trim,lowercase"`
+	// Slug is derived from the name when empty (APP-009 D3); the platform may still set one.
+	Slug        string  `json:"slug" conform:"trim,lowercase"`
 	Name        string  `json:"name" binding:"required" conform:"trim"`
 	DatabaseURL *string `json:"database_url,omitempty" conform:"trim"`
 	SchemaName  *string `json:"schema_name,omitempty" conform:"trim,lowercase"`
@@ -133,4 +134,6 @@ type TenantAdminEmail struct {
 	Email     string    `json:"email"`
 	FirstName *string   `json:"first_name"`
 	LastName  *string   `json:"last_name"`
+	// Locale is the language they read (APP-009 D2): a digest is written in it.
+	Locale string `json:"locale"`
 }

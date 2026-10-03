@@ -1105,3 +1105,28 @@ func TestOtpVerifyDeclaresMobileClient(t *testing.T) {
 
 	assert.Equal(t, "mobile", sessionClientType(t, helper, email, deviceID))
 }
+
+// TestUpdateProfileLocale - switching the app's language records it for the emails sent to this
+// person (APP-009 D2); a language the app does not have is refused.
+func TestUpdateProfileLocale(t *testing.T) {
+	helper := testhelpers.SetupApiTest(t)
+	defer helper.Close()
+
+	helper.Register("locale@test.com", "$Password2025", "Ana", "Rojas")
+	helper.Login("locale@test.com", "$Password2025")
+	locale := func() string {
+		value, err := helper.UserLocale("locale@test.com")
+		if err != nil {
+			t.Fatalf("read locale: %v", err)
+		}
+		return value
+	}
+	assert.Equal(t, "es", locale(), "Spanish until switched")
+
+	w := helper.DoRequest("PATCH", "/auth/profile", map[string]interface{}{"locale": "en"}, map[string]string{})
+	assert.Equal(t, http.StatusOK, w.Code, w.Body.String())
+	assert.Equal(t, "en", locale())
+
+	w = helper.DoRequest("PATCH", "/auth/profile", map[string]interface{}{"locale": "fr"}, map[string]string{})
+	assert.Equal(t, http.StatusBadRequest, w.Code)
+}

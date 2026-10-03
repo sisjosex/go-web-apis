@@ -4,14 +4,18 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
+	"html"
 	"html/template"
 	"josex/web/config"
 	authConfig "josex/web/modules/auth/config"
 	coreConfig "josex/web/modules/core/config"
 	"log"
+	"mime"
 	"net/smtp"
 	"os"
 	"path/filepath"
+	"regexp"
+	"strings"
 )
 
 // EmailService handles email sending operations
@@ -62,8 +66,8 @@ func (s *emailService) SendEmail(to string, subject string, templatePath string,
 		return fmt.Errorf("error executing email template: %w", err)
 	}
 
-	// Send the email
-	return s.send(to, subject, body.String())
+	// Send the email, with the same words as plain text for clients that read that part (APP-009).
+	return s.send(to, subject, textFromHTML(body.String()), body.String())
 }
 
 // SendPlainEmail sends a plain text email
@@ -71,7 +75,7 @@ func (s *emailService) SendPlainEmail(to string, subject string, body string) er
 	if !s.auth.SMTPEnabled {
 		return s.skip(to, subject, body)
 	}
-	return s.send(to, subject, body)
+	return s.send(to, subject, body, "")
 }
 
 // skip is SMTP_ENABLED=false (D1): outside release the email goes to the log — the link or code in data
@@ -85,18 +89,52 @@ func (s *emailService) skip(to string, subject string, data interface{}) error {
 	return nil
 }
 
-// send handles the actual SMTP sending
-func (s *emailService) send(to string, subject string, body string) error {
+// mimeBoundary separates the parts of a multipart/alternative message; no body contains it.
+const mimeBoundary = "taypi-alt-7f3c9e1b"
+
+// message is the RFC 5322 message: text alone, or text and HTML as alternatives of one another. The
+// subject is RFC 2047-encoded, so its accents survive any relay.
+func message(from, to, subject, text, htmlBody string) []byte {
+	var b strings.Builder
+	b.WriteString("From: " + from + "\r\nTo: " + to + "\r\n")
+	b.WriteString("Subject: " + mime.QEncoding.Encode("utf-8", subject) + "\r\nMIME-Version: 1.0\r\n")
+	if htmlBody == "" {
+		b.WriteString("Content-Type: text/plain; charset=UTF-8\r\n\r\n" + text + "\r\n")
+		return []byte(b.String())
+	}
+	b.WriteString("Content-Type: multipart/alternative; boundary=\"" + mimeBoundary + "\"\r\n\r\n")
+	b.WriteString("--" + mimeBoundary + "\r\nContent-Type: text/plain; charset=UTF-8\r\n\r\n" + text + "\r\n")
+	b.WriteString("--" + mimeBoundary + "\r\nContent-Type: text/html; charset=UTF-8\r\n\r\n" + htmlBody + "\r\n")
+	b.WriteString("--" + mimeBoundary + "--\r\n")
+	return []byte(b.String())
+}
+
+var (
+	htmlDropped   = regexp.MustCompile(`(?is)<(head|style|script)[^>]*>.*?</(head|style|script)>`)
+	htmlLink      = regexp.MustCompile(`(?is)<a\s[^>]*href="([^"]+)"[^>]*>(.*?)</a>`)
+	htmlBreak     = regexp.MustCompile(`(?i)<br\s*/?>|</?(p|div|h[1-6]|li|tr|table)(\s[^>]*)?>`)
+	htmlTag       = regexp.MustCompile(`<[^>]+>`)
+	blankLines    = regexp.MustCompile(`\n(\s*\n)+`)
+	spacesInLines = regexp.MustCompile(`[ \t]+`)
+)
+
+// textFromHTML is a rendered template as plain text: a link becomes "text: url", a block ends its line.
+func textFromHTML(body string) string {
+	text := htmlDropped.ReplaceAllString(body, "")
+	text = htmlLink.ReplaceAllString(text, "$2: $1")
+	text = htmlBreak.ReplaceAllString(text, "\n")
+	text = html.UnescapeString(htmlTag.ReplaceAllString(text, ""))
+	lines := strings.Split(text, "\n")
+	for i, line := range lines {
+		lines[i] = strings.TrimSpace(spacesInLines.ReplaceAllString(line, " "))
+	}
+	return strings.TrimSpace(blankLines.ReplaceAllString(strings.Join(lines, "\n"), "\n\n"))
+}
+
+// send handles the actual SMTP sending: the text alone when htmlBody is empty.
+func (s *emailService) send(to, subject, text, htmlBody string) error {
 	c := s.auth
-	// Build email message
-	msg := []byte(
-		"From: " + c.SMTPFrom + "\r\n" +
-			"To: " + to + "\r\n" +
-			"Subject: " + subject + "\r\n" +
-			"MIME-Version: 1.0\r\n" +
-			"Content-Type: text/html; charset=UTF-8\r\n" +
-			"\r\n" +
-			body + "\r\n")
+	msg := message(c.SMTPFrom, to, subject, text, htmlBody)
 
 	// SMTP authentication
 	auth := smtp.PlainAuth("", c.SMTPUser, c.SMTPPass, c.SMTPHost)

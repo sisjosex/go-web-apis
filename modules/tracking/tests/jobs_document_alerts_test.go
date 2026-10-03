@@ -5,6 +5,9 @@ package tracking_test
 
 import (
 	"context"
+	"encoding/json"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -14,6 +17,7 @@ import (
 	"josex/web/config"
 	coreJobs "josex/web/modules/core/jobs"
 	"josex/web/modules/core/testhelpers"
+	coreUtils "josex/web/modules/core/utils"
 	trackingJobs "josex/web/modules/tracking/jobs"
 )
 
@@ -86,15 +90,40 @@ func TestDocumentAlertsPass_OneRowThenNone(t *testing.T) {
 		t.Fatalf("second pass: claimed %d, %d new rows, err %v — want nothing", second[0].Claimed, len(afterSecond)-len(afterFirst), second[0].Err)
 	}
 
+	loadTrackingTranslations(t)
 	mail := &mailRecorder{}
 	directory := func(_ context.Context, id uuid.UUID) (*trackingJobs.TenantContact, error) {
-		return &trackingJobs.TenantContact{Name: "Test tenant " + id.String()[:4], Emails: []string{"owner@test.local", "admin@test.local"}}, nil
+		return &trackingJobs.TenantContact{Name: "Test tenant " + id.String()[:4], Recipients: []trackingJobs.Recipient{{Email: "owner@test.local", Locale: "es"}, {Email: "admin@test.local", Locale: "en"}}}, nil
 	}
 	task := asynq.NewTask(trackingJobs.TaskDocumentDigest, []byte(row))
 	if err := trackingJobs.DigestHandler(mail, directory)(ctx, task); err != nil {
 		t.Fatalf("digest handler: %v", err)
 	}
-	if len(mail.sent) != 2 || !strings.Contains(mail.sent[0].subject, "need attention") {
-		t.Fatalf("digest sent %+v, want one mail to each of the two admins", mail.sent)
+	// Each admin in the language they read (APP-009 D2): the owner Spanish, the admin English.
+	if len(mail.sent) != 2 || !strings.Contains(mail.sent[0].subject, "requieren atención") ||
+		!strings.Contains(mail.sent[1].subject, "need attention") {
+		t.Fatalf("digest sent %+v, want one mail to each of the two admins, each in their language", mail.sent)
+	}
+}
+
+// loadTrackingTranslations puts this module's lang files where the email code reads them; the server
+// loads every module's at start, a test runs from its own directory.
+func loadTrackingTranslations(t *testing.T) {
+	t.Helper()
+	for _, lang := range []string{"en", "es"} {
+		raw, err := os.ReadFile(filepath.Join("..", "lang", lang+".json"))
+		if err != nil {
+			t.Fatalf("read %s translations: %v", lang, err)
+		}
+		values := map[string]string{}
+		if err := json.Unmarshal(raw, &values); err != nil {
+			t.Fatalf("parse %s translations: %v", lang, err)
+		}
+		if coreUtils.Translations[lang] == nil {
+			coreUtils.Translations[lang] = map[string]string{}
+		}
+		for key, value := range values {
+			coreUtils.Translations[lang][key] = value
+		}
 	}
 }

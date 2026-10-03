@@ -46,6 +46,13 @@ func (r *tenantRepository) CreateTenant(ctx context.Context, dto *models.CreateT
 		settings = *dto.Settings
 	}
 
+	// Onboarding sends no slug: the business's name gives it (APP-009 D3).
+	if dto.Slug == "" {
+		if err := r.dbService.QueryRow(ctx, `SELECT tenancy.sp_free_tenant_slug($1)`, dto.Name).Scan(&dto.Slug); err != nil {
+			return nil, err
+		}
+	}
+
 	params := []interface{}{
 		dto.Slug,
 		dto.Name,
@@ -413,7 +420,7 @@ func (r *tenantRepository) ListTenantAdminEmails(ctx context.Context, tenantID u
 	recipients := []*models.TenantAdminEmail{}
 	for rows.Next() {
 		var recipient models.TenantAdminEmail
-		if err := rows.Scan(&recipient.UserID, &recipient.Email, &recipient.FirstName, &recipient.LastName); err != nil {
+		if err := rows.Scan(&recipient.UserID, &recipient.Email, &recipient.FirstName, &recipient.LastName, &recipient.Locale); err != nil {
 			return nil, err
 		}
 		recipients = append(recipients, &recipient)

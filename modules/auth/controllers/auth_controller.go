@@ -462,6 +462,14 @@ func (uc *AuthController) UpdateProfile(ctx *gin.Context) {
 		return
 	}
 
+	// The language switch is its own statement, run only when one was sent (APP-009 D2).
+	if updateUser.Locale != nil {
+		if err := uc.authService.SetLocale(ctx.Request.Context(), userID, *updateUser.Locale); err != nil {
+			ctx.JSON(http.StatusBadRequest, coreErrors.BuildError(ctx, err))
+			return
+		}
+	}
+
 	user, err := uc.authService.UpdateProfile(updateUser)
 	if err != nil {
 		ctx.JSON(http.StatusBadRequest, coreErrors.BuildError(ctx, err))

@@ -14,6 +14,7 @@ import (
 	coreJobs "josex/web/modules/core/jobs"
 	coreModels "josex/web/modules/core/models"
 	coreServices "josex/web/modules/core/services"
+	coreUtils "josex/web/modules/core/utils"
 	trackingRepos "josex/web/modules/tracking/repositories"
 
 	"github.com/google/uuid"
@@ -85,8 +86,14 @@ func PassHandler(db coreServices.DatabaseService, tenants *coreJobs.TenantDirect
 
 // TenantContact is who a tenant's digest goes to, and the name it is addressed in.
 type TenantContact struct {
-	Name   string
-	Emails []string
+	Name       string
+	Recipients []Recipient
+}
+
+// Recipient is one address and the language its owner reads (APP-009 D2).
+type Recipient struct {
+	Email  string
+	Locale string
 }
 
 // TenantDirectory looks a tenant up in the platform database. cmd/server builds it from the tenancy
@@ -121,7 +128,7 @@ func DigestHandler(email coreServices.EmailService, directory TenantDirectory) a
 		if err != nil {
 			return err
 		}
-		if contact == nil || len(contact.Emails) == 0 {
+		if contact == nil || len(contact.Recipients) == 0 {
 			// A tenant with no owner is a misconfiguration to fix, not a reason to send later.
 			log.Printf("⚠️  document digest %s: no owner or admin to mail", payload.TenantID)
 			return nil
@@ -130,29 +137,19 @@ func DigestHandler(email coreServices.EmailService, directory TenantDirectory) a
 	}
 }
 
-// sendDocumentDigest mails one digest per recipient. It fails — and asynq retries — only when nobody
-// got it: a retry after a partial send would mail the recipients who already have it a second time.
+// sendDocumentDigest mails one digest per recipient, each in the language they read (APP-009 D2). It
+// fails — and asynq retries — only when nobody got it: a retry after a partial send would mail the
+// recipients who already have it a second time.
 func sendDocumentDigest(email coreServices.EmailService, contact *TenantContact, documents []digestDocument) error {
-	appConf := config.ModularAppConfig.Core
-	subject := fmt.Sprintf("%d document(s) need attention in %s", len(documents), contact.Name)
 	templatePath := coreServices.GetTemplatePath("tracking", "document-expiry-digest.html")
-
-	data := map[string]interface{}{
-		"Title":         subject,
-		"TenantName":    contact.Name,
-		"Description":   "These compliance documents have entered their warning window. A document is named here once; renew it and it will be watched again.",
-		"Documents":     digestLines(documents),
-		"ButtonText":    "Open documents",
-		"DocumentsURL":  fmt.Sprintf("%s/tracking/documents", appConf.FrontendURL),
-		"SignOff":       fmt.Sprintf("The %s team", appConf.AppName),
-		"AutomatedNote": "This is an automated message. Please do not reply.",
-	}
+	lines := digestLines(documents)
 
 	sent := 0
 	var lastErr error
-	for _, to := range contact.Emails {
-		if err := email.SendEmail(to, subject, templatePath, data); err != nil {
-			log.Printf("⚠️  document digest %s: could not mail %s: %v", contact.Name, to, err)
+	for _, to := range contact.Recipients {
+		subject, data := digestMail(to.Locale, contact.Name, len(documents), lines)
+		if err := email.SendEmail(to.Email, subject, templatePath, data); err != nil {
+			log.Printf("⚠️  document digest %s: could not mail %s: %v", contact.Name, to.Email, err)
 			lastErr = err
 			continue
 		}
@@ -163,6 +160,22 @@ func sendDocumentDigest(email coreServices.EmailService, contact *TenantContact,
 	}
 	log.Printf("📧 document digest %s: %d document(s) mailed to %d recipient(s)", contact.Name, len(documents), sent)
 	return nil
+}
+
+// digestMail is the subject and the template data of one digest in one language.
+func digestMail(lang, tenantName string, count int, lines []map[string]string) (string, map[string]interface{}) {
+	appConf := config.ModularAppConfig.Core
+	subject := fmt.Sprintf(coreUtils.GetTranslation(lang, "document-digest.email.subject"), count, tenantName)
+	return subject, map[string]interface{}{
+		"Title":         subject,
+		"TenantName":    tenantName,
+		"Description":   coreUtils.GetTranslation(lang, "document-digest.email.description"),
+		"Documents":     lines,
+		"ButtonText":    coreUtils.GetTranslation(lang, "document-digest.email.button-text"),
+		"DocumentsURL":  fmt.Sprintf("%s/tracking/documents", appConf.FrontendURL),
+		"SignOff":       fmt.Sprintf(coreUtils.GetTranslation(lang, "document-digest.email.sign-off"), appConf.AppName),
+		"AutomatedNote": coreUtils.GetTranslation(lang, "document-digest.email.automated-note"),
+	}
 }
 
 // digestLines turns the payload into what the template renders, so the template holds no logic.

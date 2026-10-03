@@ -150,6 +150,8 @@ type UpdateProfileDto struct {
 	ProfilePictureUrl *string              `json:"profile_picture_url"`
 	Bio               *string              `json:"bio"`
 	WebsiteUrl        *string              `json:"website_url"`
+	// Locale is the language the app was switched to (APP-009 D2); emails to this person use it.
+	Locale *string `json:"locale" binding:"omitempty,oneof=es en"`
 }
 
 // SessionToken for access token

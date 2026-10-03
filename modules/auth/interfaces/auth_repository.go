@@ -1,6 +1,8 @@
 package interfaces
 
 import (
+	"context"
+
 	authModels "josex/web/modules/auth/models"
 	coreModels "josex/web/modules/core/models"
 
@@ -21,6 +23,7 @@ type AuthRepository interface {
 	// Profile management
 	GetProfile(userDTO authModels.GetProfileDto) (*coreModels.User, error)
 	UpdateProfile(userDTO authModels.UpdateProfileDto) (*coreModels.User, error)
+	SetLocale(ctx context.Context, userID uuid.UUID, locale string) error
 
 	// Session management
 	ValidateSession(userID uuid.UUID, sessionID uuid.UUID) error

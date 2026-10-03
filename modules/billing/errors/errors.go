@@ -2,7 +2,7 @@ package errors
 
 const (
 	// Subscription errors
-	SubscriptionNotFound   = "billing.subscription.not-found"
+	SubscriptionNotFound      = "billing.subscription.not-found"
 	SubscriptionInvalidPlan   = "billing.subscription.invalid-plan"
 	SubscriptionInvalidStatus = "billing.subscription.invalid-status"
 	SubscriptionLimitReached  = "billing.subscription.limit-reached"
@@ -14,4 +14,7 @@ const (
 
 	// General
 	BillingValidationFailed = "billing.validation-failed"
+	// PlanContactSales refuses a plan change or a payment written by anyone but the platform while
+	// there is no checkout: without it any account could move itself to a paid plan (APP-009 D4).
+	PlanContactSales = "billing.plan.contact-sales"
 )

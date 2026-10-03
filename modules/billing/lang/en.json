@@ -6,5 +6,6 @@
   "billing.subscription.limit-reached": "Subscription limit reached",
   "billing.payment.subscription-not-found": "Subscription not found for this user",
   "billing.payment.create-failed": "Failed to record payment",
-  "billing.payment.list-failed": "Failed to retrieve payment history"
+  "billing.payment.list-failed": "Failed to retrieve payment history",
+  "billing.plan.contact-sales": "Contact us to change your plan"
 }

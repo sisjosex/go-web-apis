@@ -1,6 +1,8 @@
 package services
 
 import (
+	"context"
+
 	"josex/web/modules/auth/interfaces"
 	authModels "josex/web/modules/auth/models"
 	coreModels "josex/web/modules/core/models"
@@ -39,6 +41,10 @@ func (s *authService) GetProfile(userDTO authModels.GetProfileDto) (*coreModels.
 
 func (s *authService) UpdateProfile(userDTO authModels.UpdateProfileDto) (*coreModels.User, error) {
 	return s.authRepository.UpdateProfile(userDTO)
+}
+
+func (s *authService) SetLocale(ctx context.Context, userID uuid.UUID, locale string) error {
+	return s.authRepository.SetLocale(ctx, userID, locale)
 }
 
 func (s *authService) ValidateSession(userID uuid.UUID, sessionID uuid.UUID) error {

@@ -6,5 +6,6 @@
   "billing.subscription.limit-reached": "Límite de suscripción alcanzado",
   "billing.payment.subscription-not-found": "Suscripción no encontrada para este usuario",
   "billing.payment.create-failed": "Error al registrar el pago",
-  "billing.payment.list-failed": "Error al obtener el historial de pagos"
+  "billing.payment.list-failed": "Error al obtener el historial de pagos",
+  "billing.plan.contact-sales": "Contáctanos para cambiar de plan"
 }

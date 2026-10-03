@@ -4,6 +4,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	authConfig "josex/web/modules/auth/config"
@@ -55,5 +56,32 @@ func TestSendPlainEmail_SmtpOffInRelease(t *testing.T) {
 	}
 	if err := smtpOff("debug").SendPlainEmail("someone@example.com", "s", "b"); err != nil {
 		t.Fatalf("want nil outside release, got %v", err)
+	}
+}
+
+// The text part says what the HTML says (APP-009): a link keeps its address, a block ends its line,
+// entities are read, and nothing of the head or the markup is left.
+func TestTextFromHTML(t *testing.T) {
+	body := `<html><head><style>p{color:red}</style></head><body><h2>Hola,</h2>` +
+		`<p>Hac&eacute; clic:</p><a class="b" href="https://app.example/reset?token=1">Restablecer</a>` +
+		`<p>Saludos, el equipo de Taypi</p></body></html>`
+	want := "Hola,\n\nHacé clic:\nRestablecer: https://app.example/reset?token=1\nSaludos, el equipo de Taypi"
+	if got := textFromHTML(body); got != want {
+		t.Fatalf("textFromHTML:\n got %q\nwant %q", got, want)
+	}
+}
+
+// An HTML email is multipart/alternative with the text first; its subject is encoded word by word.
+func TestMessage_Alternative(t *testing.T) {
+	msg := string(message("from@x", "to@x", "Atención", "texto", "<p>html</p>"))
+	for _, part := range []string{
+		"Subject: =?utf-8?q?Atenci=C3=B3n?=",
+		"Content-Type: multipart/alternative",
+		"Content-Type: text/plain; charset=UTF-8\r\n\r\ntexto",
+		"Content-Type: text/html; charset=UTF-8\r\n\r\n<p>html</p>",
+	} {
+		if !strings.Contains(msg, part) {
+			t.Fatalf("message lacks %q:\n%s", part, msg)
+		}
 	}
 }

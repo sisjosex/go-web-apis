@@ -572,3 +572,16 @@ func AssertErrorMessage(t *testing.T, response map[string]interface{}, expectedM
 	}
 	t.Error("Response does not contain expected error structure")
 }
+
+// SetSystemRole gives an account a platform role (super_admin): no endpoint grants one.
+func (h *ApiTestHelper) SetSystemRole(email, role string) error {
+	_, err := h.DB().Execute(h.ctx, `UPDATE auth.users SET system_role = $2 WHERE email = $1`, email, role)
+	return err
+}
+
+// UserLocale is the language an account's emails are written in (APP-009 D2); no endpoint reads it.
+func (h *ApiTestHelper) UserLocale(email string) (string, error) {
+	var locale string
+	err := h.DB().QueryRow(h.ctx, `SELECT locale FROM auth.users WHERE email = $1`, email).Scan(&locale)
+	return locale, err
+}

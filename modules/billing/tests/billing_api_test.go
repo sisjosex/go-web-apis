@@ -20,18 +20,57 @@ func init() {
 	testhelpers.InitTestEnvironment()
 }
 
-// billingUser registers and logs in a unique user so tests don't share state.
+// billingUser registers and logs in a unique user so tests don't share state. Writing a plan or a
+// payment is the platform's (APP-009 D4), so the user is a super_admin; billingMember is not.
 func billingUser(t *testing.T, helper *testhelpers.ApiTestHelper) {
+	t.Helper()
+	billingAccount(t, helper, true)
+}
+
+func billingMember(t *testing.T, helper *testhelpers.ApiTestHelper) {
+	t.Helper()
+	billingAccount(t, helper, false)
+}
+
+func billingAccount(t *testing.T, helper *testhelpers.ApiTestHelper, platform bool) {
 	t.Helper()
 	email := fmt.Sprintf("billing-%s@test.com", uuid.New().String()[:8])
 	_, err := helper.Register(email, "$Password2025", "Billing", "Test")
 	if err != nil {
 		t.Fatalf("register failed: %v", err)
 	}
+	if platform {
+		promote(t, helper, email)
+	}
 	_, err = helper.Login(email, "$Password2025")
 	if err != nil {
 		t.Fatalf("login failed: %v", err)
 	}
+}
+
+// promote makes an account a super_admin, the only one that writes plans and payments.
+func promote(t *testing.T, helper *testhelpers.ApiTestHelper, email string) {
+	t.Helper()
+	if err := helper.SetSystemRole(email, "super_admin"); err != nil {
+		t.Fatalf("promote: %v", err)
+	}
+}
+
+// TestBilling_PlanAndPaymentArePlatformOnly - with no checkout, an account cannot move itself to a
+// paid plan nor record its own payment (APP-009 D4).
+func TestBilling_PlanAndPaymentArePlatformOnly(t *testing.T) {
+	helper := SetupBillingTest(t)
+	defer helper.Close()
+	billingMember(t, helper)
+
+	w := helper.DoRequest("PUT", "/billing/subscription", map[string]interface{}{"plan": "pro"}, map[string]string{})
+	assert.Equal(t, http.StatusForbidden, w.Code, w.Body.String())
+	w = helper.DoRequest("POST", "/billing/payments", map[string]interface{}{
+		"subscription_id": uuid.New().String(), "amount": 10, "status": "completed",
+	}, map[string]string{})
+	assert.Equal(t, http.StatusForbidden, w.Code, w.Body.String())
+	w = helper.DoRequest("GET", "/billing/plan", nil, map[string]string{})
+	assert.Equal(t, http.StatusOK, w.Code, "reading the plan stays open")
 }
 
 // upsertSub calls PUT /billing/subscription and asserts success.
@@ -584,6 +623,7 @@ func TestRecordPayment_WrongUserSubscriptionNotFound(t *testing.T) {
 	emailA := fmt.Sprintf("billing-a-%s@test.com", uuid.New().String()[:8])
 	_, err := helper.Register(emailA, "$Password2025", "User", "A")
 	assert.NoError(t, err)
+	promote(t, helper, emailA)
 	_, err = helper.Login(emailA, "$Password2025")
 	assert.NoError(t, err)
 	subA := upsertSub(t, helper, "pro")
@@ -593,6 +633,7 @@ func TestRecordPayment_WrongUserSubscriptionNotFound(t *testing.T) {
 	emailB := fmt.Sprintf("billing-b-%s@test.com", uuid.New().String()[:8])
 	_, err = helper.Register(emailB, "$Password2025", "User", "B")
 	assert.NoError(t, err)
+	promote(t, helper, emailB)
 	_, err = helper.Login(emailB, "$Password2025")
 	assert.NoError(t, err)
 
