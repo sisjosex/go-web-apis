@@ -41,15 +41,16 @@ func scanTrip(t *models.Trip) []any {
 
 // tripCodes turns the trip SPs' own refusals into module codes.
 var tripCodes = map[string]string{
-	"trip.not-found":            trackingErrors.TripNotFound,
-	"trip.stop.not-found":       trackingErrors.TripStopNotFound,
-	"trip.task.not-found":       trackingErrors.TripTaskNotFound,
-	"trip.invalid-transition":   trackingErrors.TripInvalidTransition,
-	"trip.task.trip-not-active": trackingErrors.TripTaskTripNotActive,
-	"trip.task.op-conflict":     trackingErrors.TripTaskOpConflict,
-	"route.company-mismatch":    trackingErrors.RouteCompanyMismatch,
-	"driver.not-linked":         trackingErrors.DriverNotLinked,
-	"rider.not-found":           trackingErrors.RiderNotFound,
+	"trip.not-found":                       trackingErrors.TripNotFound,
+	"trip.stop.not-found":                  trackingErrors.TripStopNotFound,
+	"trip.task.not-found":                  trackingErrors.TripTaskNotFound,
+	"trip.invalid-transition":              trackingErrors.TripInvalidTransition,
+	"trip.task.trip-not-active":            trackingErrors.TripTaskTripNotActive,
+	"trip.task.op-conflict":                trackingErrors.TripTaskOpConflict,
+	"route.company-mismatch":               trackingErrors.RouteCompanyMismatch,
+	"driver.not-linked":                    trackingErrors.DriverNotLinked,
+	"rider.not-found":                      trackingErrors.RiderNotFound,
+	trackingErrors.OrganizationScopeDenied: trackingErrors.OrganizationScopeDenied,
 }
 
 // mapTripError maps an SP refusal to its code, falling back to fallbackCode. company-mismatch names
@@ -91,9 +92,10 @@ func (r *TrackingRepository) ListTrips(ctx context.Context, tenantID uuid.UUID, 
 			p_status          := $4,
 			p_organization_id := $5::UUID,
 			p_page            := $6,
-			p_page_size       := $7
+			p_page_size       := $7,
+			p_scope_user_id   := $8
 		)
-	`, tenantID, query.Date, query.RouteID, query.Status, query.OrganizationID, query.Page, query.PageSize)
+	`, tenantID, query.Date, query.RouteID, query.Status, query.OrganizationID, query.Page, query.PageSize, query.ScopeUserID)
 	if err != nil {
 		return nil, 0, mapTripError(err, trackingErrors.TripListFailed)
 	}

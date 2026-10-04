@@ -87,6 +87,16 @@ func (r *TrackingRepository) CanSubscribe(ctx context.Context, tenantID, userID 
 	return ok, err
 }
 
+// TripVisibleToUser answers whether an organization user may watch the trip: it carries a passenger
+// of one of their organizations (MOBILE-020 D2).
+func (r *TrackingRepository) TripVisibleToUser(ctx context.Context, tenantID, tripID, userID uuid.UUID) (bool, error) {
+	var ok bool
+	err := r.dbService.QueryRow(ctx,
+		`SELECT tracking.sp_trip_visible_to_user(p_tenant_id := $1, p_trip_id := $2, p_user_id := $3)`,
+		tenantID, tripID, userID).Scan(&ok)
+	return ok, err
+}
+
 // TripAudience answers the trip's riders not yet off it — plus those with a task on subjectID, the
 // task or stop that moved (uuid.Nil: none) — and their organizations: who its changes are published to.
 func (r *TrackingRepository) TripAudience(ctx context.Context, tenantID, tripID, subjectID uuid.UUID) (riders, organizations []uuid.UUID, err error) {

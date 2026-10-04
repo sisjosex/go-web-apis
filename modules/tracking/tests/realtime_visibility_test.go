@@ -177,3 +177,49 @@ func TestRealtimeSocket_DriverDayChanged(t *testing.T) {
 		assert.NotEqual(t, trackingJobs.FrameDayChanged, f["type"], "one signal per burst")
 	}
 }
+
+// TestRealtimeSocket_OrganizationTrip - an organization user watches a trip carrying a passenger of
+// their school — on its board, its live read and its channel, with positions — while a trip without
+// one, and the fleet, are refused (MOBILE-020 D2).
+func TestRealtimeSocket_OrganizationTrip(t *testing.T) {
+	helper := SetupTrackingTest(t)
+	defer helper.Close()
+	if err := helper.Valkey().Client().FlushDB(context.Background()).Err(); err != nil {
+		t.Fatalf("Valkey unreachable: %v", err)
+	}
+	_, tripID, vehicleID := guardianRiding(t, helper)
+	otherRoute, _ := cochabambaRoute(t, helper)
+	otherTrip, _ := startCochabambaTrip(t, helper, otherRoute)
+	server := httptest.NewServer(helper.Engine())
+	defer server.Close()
+
+	org := SetupOrganizationTest(t)
+	defer org.Close()
+	var board models.ListTripsResponse
+	decodeBody(t, org.DoRequest("GET", "/tracking/trips?status=in_progress&page_size=100", nil, map[string]string{}), &board)
+	listed := map[string]bool{}
+	for _, trip := range board.Trips {
+		listed[trip.ID.String()] = true
+	}
+	assert.True(t, listed[tripID], "the school's trip is on its board")
+	assert.False(t, listed[otherTrip], "a trip without its riders is not")
+	assert.Equal(t, http.StatusOK, org.DoRequest("GET", "/tracking/trips/"+tripID+"/live", nil, map[string]string{}).Code)
+	assert.Equal(t, http.StatusNotFound, org.DoRequest("GET", "/tracking/trips/"+otherTrip+"/live", nil, map[string]string{}).Code)
+
+	socket := dialWS(t, server, org)
+	defer socket.conn.CloseNow()
+	own := trackingJobs.TripChannel(tripID)
+	socket.send(t, "subscribe", own)
+	for _, channel := range []string{trackingJobs.TripChannel(otherTrip), trackingJobs.FleetChannel(TestTenantID)} {
+		socket.send(t, "subscribe", channel)
+		refusal := socket.waitFrame(channel, "error", 2*time.Second)
+		if assert.NotNil(t, refusal, channel) {
+			assert.Equal(t, "forbidden", refusal["code"], channel)
+		}
+	}
+
+	consumer := startTestConsumer(t, helper, time.Minute)
+	defer consumer.Shutdown()
+	xadd(t, helper, models.StoredPoint{VehicleID: uuid.MustParse(vehicleID), RecordedAt: time.Now().UTC(), Lat: -17.3930, Lng: -66.1560})
+	assert.NotNil(t, socket.waitFrame(own, "position", 5*time.Second), "the position reaches the school's trip channel")
+}

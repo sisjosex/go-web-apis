@@ -18,12 +18,15 @@ import (
 // guardian (the portal level) or a driver (its own channel only), the tenant's database for anything
 // read on its behalf, and when its token expires — the socket is closed 4401 then (TRACK-030 D2).
 type Session struct {
-	TenantID    uuid.UUID
-	UserID      uuid.UUID
-	Guardian    bool
-	Driver      bool
-	DatabaseURL string
-	ExpiresAt   time.Time
+	TenantID uuid.UUID
+	UserID   uuid.UUID
+	Guardian bool
+	Driver   bool
+	// Organization is a school or company user: trip:{id} channels only, of trips carrying its
+	// passengers (MOBILE-020 D2).
+	Organization bool
+	DatabaseURL  string
+	ExpiresAt    time.Time
 }
 
 // EtaSource answers a watched trip's ETA frame data and when it was computed; ok false when there is

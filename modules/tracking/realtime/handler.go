@@ -118,7 +118,7 @@ func (h *Hub) Serve(check SubscribeChecker, origins []string, pingEvery time.Dur
 }
 
 // sessionOf reads who is connecting from the tenant chain. Operators and guardians listen, a driver
-// only to its own channel; the organization level has no channel of its own yet.
+// only to its own channel, an organization user only to the trips carrying its passengers.
 func sessionOf(c *gin.Context) (Session, bool) {
 	tenantID, err := uuid.Parse(c.GetString("tenant_id"))
 	if err != nil {
@@ -129,10 +129,11 @@ func sessionOf(c *gin.Context) (Session, bool) {
 		return Session{}, false
 	}
 	role := c.GetString("tenant_user_role")
-	if role == tenancyModels.RoleOrganization {
-		return Session{}, false
+	session := Session{
+		TenantID: tenantID, UserID: userID,
+		Guardian: role == tenancyModels.RolePortal, Driver: role == tenancyModels.RoleDriver,
+		Organization: role == tenancyModels.RoleOrganization,
 	}
-	session := Session{TenantID: tenantID, UserID: userID, Guardian: role == tenancyModels.RolePortal, Driver: role == tenancyModels.RoleDriver}
 	if exp, ok := c.Get("token_exp"); ok {
 		session.ExpiresAt, _ = exp.(time.Time)
 	}
@@ -142,6 +143,18 @@ func sessionOf(c *gin.Context) (Session, bool) {
 		}
 	}
 	return session, true
+}
+
+// channelOfLevel refuses, before any query, a channel outside the session's level: a driver listens
+// to driver:{id} only, an organization user to trip:{id} only.
+func channelOfLevel(session Session, channel string) bool {
+	switch {
+	case session.Driver:
+		return strings.HasPrefix(channel, "driver:")
+	case session.Organization:
+		return strings.HasPrefix(channel, "trip:")
+	}
+	return true
 }
 
 // read handles the client's ops until the socket fails; a refused subscribe answers an error frame
@@ -160,7 +173,7 @@ func (h *Hub) read(ctx context.Context, ws *websocket.Conn, conn *Conn, check Su
 		}
 		switch op.Op {
 		case "subscribe":
-			if conn.Session.Driver && !strings.HasPrefix(op.Channel, "driver:") {
+			if !channelOfLevel(conn.Session, op.Channel) {
 				conn.Refuse(op.Channel, "forbidden")
 				continue
 			}

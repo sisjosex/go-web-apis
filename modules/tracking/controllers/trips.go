@@ -17,15 +17,16 @@ import (
 
 // tripStatus is the status each trip code answers; a code not listed is a 500.
 var tripStatus = map[string]int{
-	trackingErrors.TripNotFound:          http.StatusNotFound,
-	trackingErrors.TripStopNotFound:      http.StatusNotFound,
-	trackingErrors.TripTaskNotFound:      http.StatusNotFound,
-	trackingErrors.TripInvalidTransition: http.StatusConflict,
-	trackingErrors.TripTaskTripNotActive: http.StatusConflict,
-	trackingErrors.TripTaskOpConflict:    http.StatusConflict,
-	trackingErrors.RouteCompanyMismatch:  http.StatusBadRequest,
-	trackingErrors.DriverNotLinked:       http.StatusForbidden,
-	trackingErrors.RiderNotFound:         http.StatusNotFound,
+	trackingErrors.TripNotFound:            http.StatusNotFound,
+	trackingErrors.TripStopNotFound:        http.StatusNotFound,
+	trackingErrors.TripTaskNotFound:        http.StatusNotFound,
+	trackingErrors.TripInvalidTransition:   http.StatusConflict,
+	trackingErrors.TripTaskTripNotActive:   http.StatusConflict,
+	trackingErrors.TripTaskOpConflict:      http.StatusConflict,
+	trackingErrors.RouteCompanyMismatch:    http.StatusBadRequest,
+	trackingErrors.DriverNotLinked:         http.StatusForbidden,
+	trackingErrors.RiderNotFound:           http.StatusNotFound,
+	trackingErrors.OrganizationScopeDenied: http.StatusForbidden,
 }
 
 // The actions each path's last segment may name, as the SPs spell them.
@@ -98,6 +99,7 @@ func (ctrl *TrackingController) ListTrips(c *gin.Context) {
 		return
 	}
 
+	query.ScopeUserID = ctrl.scopeUserID(c)
 	result, err := ctrl.trackingService.ListTrips(c.Request.Context(), tenantID, query)
 	if err != nil {
 		tripErrorResponse(c, err)

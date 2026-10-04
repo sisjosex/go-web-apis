@@ -190,7 +190,7 @@ func registerLiveRoutes(r, p *gin.RouterGroup, denyOrganization gin.HandlerFunc,
 		return
 	}
 	r.GET("/live/fleet", denyOrganization, live.GetLiveFleet)
-	r.GET("/trips/:trip_id/live", denyOrganization, live.GetTripLive)
+	r.GET("/trips/:trip_id/live", live.GetTripLive)
 	p.GET("/riders/:rider_id/live", live.GetRiderLive)
 }
 
@@ -305,7 +305,8 @@ func registerRouteRoutes(r *gin.RouterGroup, denyOrganization gin.HandlerFunc, t
 // route status, moving one is recording what happened (events:write), and overriding its vehicle,
 // driver or start is editing the plan (routes:write). All of it is the operator's.
 func registerTripRoutes(r *gin.RouterGroup, denyOrganization gin.HandlerFunc, trackingController *controllers.TrackingController) {
-	r.GET("/trips", denyOrganization, trackingController.ListTrips)
+	// An organization user reads its own trips: the SP scopes the board (MOBILE-020).
+	r.GET("/trips", trackingController.ListTrips)
 	r.GET("/overview", tenancyMW.RequirePermission(trackingPerms.RoutesRead), trackingController.TrackingOverview)
 	r.GET("/trips/:trip_id", denyOrganization, trackingController.GetTrip)
 	r.GET("/trips/:trip_id/status", denyOrganization, trackingController.GetTripStatus)

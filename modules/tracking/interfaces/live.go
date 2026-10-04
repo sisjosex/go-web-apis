@@ -15,4 +15,5 @@ type LiveRepository interface {
 	TripLive(ctx context.Context, tenantID, tripID uuid.UUID) (*models.TripLive, []models.PendingStop, error)
 	RiderLive(ctx context.Context, tenantID, riderID uuid.UUID, scopeUserID, guardianUserID *uuid.UUID) (*models.RiderLive, []models.PendingStop, error)
 	CanSubscribe(ctx context.Context, tenantID, userID uuid.UUID, guardian bool, channel string) (bool, error)
+	TripVisibleToUser(ctx context.Context, tenantID, tripID, userID uuid.UUID) (bool, error)
 }

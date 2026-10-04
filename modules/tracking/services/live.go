@@ -3,6 +3,7 @@ package services
 import (
 	"context"
 	"encoding/json"
+	"strings"
 	"time"
 
 	"josex/web/modules/tracking/interfaces"
@@ -92,6 +93,21 @@ func (s *LiveService) CachedEta(ctx context.Context, tripID uuid.UUID) (TripEta,
 	return s.eta.Cached(ctx, tripID)
 }
 
-func (s *LiveService) CanSubscribe(ctx context.Context, tenantID, userID uuid.UUID, guardian bool, channel string) (bool, error) {
-	return s.repo.CanSubscribe(ctx, tenantID, userID, guardian, channel)
+// TripVisibleToUser answers whether an organization user may watch the trip (MOBILE-020 D2).
+func (s *LiveService) TripVisibleToUser(ctx context.Context, tenantID, tripID, userID uuid.UUID) (bool, error) {
+	return s.repo.TripVisibleToUser(ctx, tenantID, tripID, userID)
+}
+
+// CanSubscribe answers whether the user may listen to channel; guardian is the portal level, and an
+// organization user may only watch a trip carrying a passenger of theirs (MOBILE-020 D2).
+func (s *LiveService) CanSubscribe(ctx context.Context, tenantID, userID uuid.UUID, guardian, organization bool, channel string) (bool, error) {
+	if !organization {
+		return s.repo.CanSubscribe(ctx, tenantID, userID, guardian, channel)
+	}
+	id, found := strings.CutPrefix(channel, "trip:")
+	tripID, err := uuid.Parse(id)
+	if !found || err != nil {
+		return false, nil
+	}
+	return s.TripVisibleToUser(ctx, tenantID, tripID, userID)
 }

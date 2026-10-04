@@ -341,7 +341,7 @@ func trackingSocket(d routeDeps, chains tenantChains, live *trackingServices.Liv
 		return data, eta.ComputedAt, err == nil
 	})
 	check := func(ctx context.Context, session realtime.Session, channel string) (bool, error) {
-		return live.CanSubscribe(withTenant(ctx, session), session.TenantID, session.UserID, session.Guardian, channel)
+		return live.CanSubscribe(withTenant(ctx, session), session.TenantID, session.UserID, session.Guardian, session.Organization, channel)
 	}
 	trackingConf := config.ModularAppConfig.Tracking
 	handlers := []gin.HandlerFunc{realtime.BrowserAuth(), d.authMiddleware, chains.socket}

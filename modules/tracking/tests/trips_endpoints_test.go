@@ -224,12 +224,13 @@ func TestTripStatus_MatchesRouteStatus(t *testing.T) {
 	}
 }
 
-// TestTrips_OrganizationDenied - the board is the operator's (D3).
+// TestTrips_OrganizationDenied - a trip's detail is the operator's (D3); an organization user reads
+// only its scoped board and live map (MOBILE-020, TestRealtimeSocket_OrganizationTrip).
 func TestTrips_OrganizationDenied(t *testing.T) {
 	helper := SetupOrganizationTest(t)
 	defer helper.Close()
 
-	w := helper.DoRequest("GET", "/tracking/trips", nil, map[string]string{})
+	w := helper.DoRequest("GET", "/tracking/trips/"+uuid.NewString(), nil, map[string]string{})
 	assert.Equal(t, http.StatusForbidden, w.Code, w.Body.String())
 }
 

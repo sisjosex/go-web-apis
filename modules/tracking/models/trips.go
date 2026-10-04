@@ -117,6 +117,9 @@ type ListTripsQuery struct {
 	OrganizationID *string `form:"organization_id" binding:"omitempty,uuid"`
 	Page           int     `form:"page,default=1" binding:"min=1"`
 	PageSize       int     `form:"page_size,default=20" binding:"min=1,max=100"`
+	// ScopeUserID narrows the board to an organization user's trips (MOBILE-020); set by the
+	// controller from the access level, never bound from the query.
+	ScopeUserID *uuid.UUID `form:"-"`
 }
 
 type ListTripsResponse struct {

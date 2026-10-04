@@ -54,6 +54,15 @@ func (ctrl *LiveController) GetLiveFleet(c *gin.Context) {
 	c.JSON(http.StatusOK, models.LiveFleetResponse{Vehicles: vehicles})
 }
 
+// orNotFound is err, or a trip not found when there is none: a trip the user may not see is answered
+// as one that does not exist.
+func orNotFound(err error) error {
+	if err != nil {
+		return err
+	}
+	return &trackingErrors.TrackingError{Code: trackingErrors.TripNotFound}
+}
+
 // GetTripLive godoc
 // @Summary A trip now: detail, vehicle position and ETA per pending stop
 // @Description The ETA is computed on demand and cached 30 s per trip; estimate_source says whether it is valhalla, historical or fallback
@@ -74,6 +83,15 @@ func (ctrl *LiveController) GetTripLive(c *gin.Context) {
 	tripID, ok := pathUUID(c, "trip_id")
 	if !ok {
 		return
+	}
+	// An organization user sees only a trip carrying a passenger of theirs (MOBILE-020 D2): one
+	// indexed check for that level, none for the operator.
+	if userID := userIDAtLevel(c, tenancyModels.RoleOrganization); userID != nil {
+		visible, err := ctrl.live.TripVisibleToUser(c.Request.Context(), tenantID, tripID, *userID)
+		if err != nil || !visible {
+			tripErrorResponse(c, orNotFound(err))
+			return
+		}
 	}
 	live, _, err := ctrl.live.Trip(c.Request.Context(), tenantID, tripID)
 	if err != nil {
