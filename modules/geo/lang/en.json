@@ -6,5 +6,6 @@
   "geo.reverse.failed": "Reverse lookup failed",
   "geo.route.unavailable": "Routing is unavailable right now, try again shortly",
   "geo.route.not-found": "No route joins those locations",
-  "geo.eta.failed": "Could not estimate the travel time"
+  "geo.eta.failed": "Could not estimate the travel time",
+  "geo.optimizer-unavailable": "Route planning is unavailable right now, try again shortly"
 }

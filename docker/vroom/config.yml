@@ -1,0 +1,26 @@
+# VROOM (TRACK-014 D1): vroom-express on :3000, routing through the compose `valhalla` with the bus
+# costing the rest of the platform uses. Mounted read-only at /conf/config.yml.
+cliArgs:
+  geometry: false
+  planmode: false
+  threads: 2
+  explore: 5
+  limit: '5mb'
+  logdir: '/..'
+  logsize: '100M'
+  maxlocations: 2000
+  maxvehicles: 200
+  override: true
+  path: ''
+  port: 3000
+  router: 'valhalla'
+  timeout: 120000
+  baseurl: '/'
+routingServers:
+  valhalla:
+    bus:
+      host: 'valhalla'
+      port: '8002'
+    auto:
+      host: 'valhalla'
+      port: '8002'

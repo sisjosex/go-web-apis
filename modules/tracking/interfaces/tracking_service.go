@@ -95,6 +95,12 @@ type TrackingService interface {
 	CreateAssignment(ctx context.Context, tenantID uuid.UUID, dto *models.AssignRiderDto) (*models.AssignmentResponse, error)
 	CreateAssignments(ctx context.Context, tenantID uuid.UUID, dtos []models.AssignRiderDto) (*models.BulkAssignmentResponse, error)
 	BulkAssignRiders(ctx context.Context, tenantID, routeID uuid.UUID, dto *models.BulkAssignRidersDto) (*models.BulkAssignRidersResponse, error)
+
+	// Planning and route proposals (TRACK-014)
+	PlanningOverview(ctx context.Context, tenantID, organizationID uuid.UUID, query *models.PlanningQuery) (*models.PlanningOverview, error)
+	CreateOptimizationRun(ctx context.Context, tenantID, organizationID uuid.UUID, dto *models.CreateOptimizationRunDto, userID *uuid.UUID) (*models.OptimizationRunCreated, error)
+	GetOptimizationRun(ctx context.Context, tenantID, runID uuid.UUID) (*models.OptimizationRun, error)
+	ApplyOptimizationRun(ctx context.Context, tenantID, runID uuid.UUID, dto *models.ApplyOptimizationRunDto, userID *uuid.UUID) (*models.ApplyOptimizationRunResponse, error)
 	ListRiderGroups(ctx context.Context, tenantID uuid.UUID, organizationID *string) ([]string, error)
 	TrackingOverview(ctx context.Context, tenantID uuid.UUID, date *string, scopeUserID *uuid.UUID) (*models.TrackingOverview, error)
 	UpdateAssignment(ctx context.Context, tenantID uuid.UUID, assignmentID uuid.UUID, dto *models.UpdateAssignmentDto) (*models.AssignmentResponse, error)

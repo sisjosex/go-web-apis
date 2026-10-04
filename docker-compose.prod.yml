@@ -371,6 +371,18 @@ services:
       retries: 5
       start_period: 20s
 
+  # The route optimizer (TRACK-014 D1): ~100 MB at rest, routing through valhalla; the API reaches
+  # it on the compose network only.
+  vroom:
+    image: ghcr.io/vroom-project/vroom-docker:v1.14.0
+    restart: unless-stopped
+    mem_limit: 512m
+    cpu_shares: 256
+    logging: *logging
+    depends_on: [valhalla]
+    volumes:
+      - ./docker/vroom/config.yml:/conf/config.yml:ro
+
   # ============ EDGE ============
   caddy:
     image: caddy:2.8-alpine

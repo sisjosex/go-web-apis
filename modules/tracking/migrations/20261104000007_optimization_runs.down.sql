@@ -1,0 +1,10 @@
+DROP FUNCTION IF EXISTS tracking.sp_apply_optimization_run(UUID, UUID, JSONB, DATE, UUID);
+DROP FUNCTION IF EXISTS tracking.sp_get_optimization_run(UUID, UUID);
+DROP FUNCTION IF EXISTS tracking.sp_finish_optimization_run(UUID, UUID, VARCHAR, VARCHAR, JSONB);
+DROP FUNCTION IF EXISTS tracking.sp_claim_optimization_run(UUID, UUID);
+DROP FUNCTION IF EXISTS tracking.sp_create_optimization_run(UUID, UUID, JSONB, UUID);
+DROP FUNCTION IF EXISTS tracking.sp_fleet_availability(UUID, SMALLINT, TIME, TIME, INT);
+DROP FUNCTION IF EXISTS tracking.sp_planning_defaults(UUID, UUID);
+DROP FUNCTION IF EXISTS tracking.sp_planning_overview(UUID, UUID, SMALLINT);
+DELETE FROM tracking.outbox WHERE topic = 'optimization.requested';
+DROP TABLE IF EXISTS tracking.optimization_runs;

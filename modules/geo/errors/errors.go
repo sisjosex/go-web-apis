@@ -15,4 +15,6 @@ const (
 	// RouteNotFound is Valhalla answering that no route joins the locations.
 	RouteNotFound = "geo.route.not-found"
 	EtaFailed     = "geo.eta.failed"
+	// OptimizerUnavailable is VROOM down, slow, refusing the problem or behind an open breaker (TRACK-014).
+	OptimizerUnavailable = "geo.optimizer-unavailable"
 )

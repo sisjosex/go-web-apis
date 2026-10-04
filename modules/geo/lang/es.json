@@ -6,5 +6,6 @@
   "geo.reverse.failed": "La búsqueda inversa falló",
   "geo.route.unavailable": "El cálculo de rutas no está disponible ahora, inténtalo en un momento",
   "geo.route.not-found": "Ninguna ruta une esos puntos",
-  "geo.eta.failed": "No se pudo estimar el tiempo de viaje"
+  "geo.eta.failed": "No se pudo estimar el tiempo de viaje",
+  "geo.optimizer-unavailable": "La planificación de rutas no está disponible ahora, inténtalo en un momento"
 }

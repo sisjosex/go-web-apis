@@ -129,6 +129,28 @@ func registerTenantRoutes(
 	registerTripRoutes(r, denyOrganization, trackingController)
 	registerLiveRoutes(r, p, denyOrganization, liveController)
 	registerAccessRoutes(r, denyOrganization, access)
+	registerPlanningRoutes(r, denyOrganization, trackingController)
+}
+
+// registerPlanningRoutes is the planning screen per destination (TRACK-014): the operator's only — it
+// reads the whole fleet and writes routes.
+func registerPlanningRoutes(r *gin.RouterGroup, denyOrganization gin.HandlerFunc, trackingController *controllers.TrackingController) {
+	r.GET("/organizations/:organization_id/planning",
+		denyOrganization,
+		tenancyMW.RequirePermission(trackingPerms.RoutesRead),
+		trackingController.GetPlanning)
+	r.POST("/organizations/:organization_id/optimization-runs",
+		denyOrganization,
+		tenancyMW.RequirePermission(trackingPerms.RoutesWrite),
+		trackingController.CreateOptimizationRun)
+	r.GET("/optimization-runs/:run_id",
+		denyOrganization,
+		tenancyMW.RequirePermission(trackingPerms.RoutesRead),
+		trackingController.GetOptimizationRun)
+	r.POST("/optimization-runs/:run_id/apply",
+		denyOrganization,
+		tenancyMW.RequirePermission(trackingPerms.RoutesWrite),
+		trackingController.ApplyOptimizationRun)
 }
 
 // registerAccessRoutes is app access granted where a person is managed (TRACK-032): a rider's

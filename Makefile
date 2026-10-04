@@ -67,7 +67,7 @@ help:
 	@echo "  make geo-build [DATE=YYYY-MM-DD]   - Build routing, basemap, places into docker/geo/data/<date>"
 	@echo "  make geo-switch DATE=YYYY-MM-DD    - Check that build, make it current, import places"
 	@echo "  make geo-rollback                  - Swap current and previous"
-	@echo "  make geo-up                        - Start valhalla (:8002) and the tiles server (:8090)"
+	@echo "  make geo-up                        - Start valhalla (:8002), vroom (:3000) and the tiles server (:8090)"
 	@echo ""
 	@echo "🧹 CLEANUP"
 	@echo "  make clean            - Remove built binary"
@@ -232,7 +232,7 @@ geo-rollback:
 	$(GEO_DEV) docker/geo/rollback.sh
 
 geo-up:
-	docker compose --profile geo up -d valhalla tiles
+	docker compose --profile geo up -d valhalla vroom tiles
 
 # ════════════════════════════════════════════════════════════════
 # QUALITY GATE — quiet: one line per step, the tail of the log on failure

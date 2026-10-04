@@ -281,6 +281,19 @@ const (
 	TrackingForbidden     = "tracking.forbidden"
 	TrackingInternalError = "tracking.internal-error"
 	TenantRequired        = "tracking.tenant.required"
+
+	// Planning and route proposals (TRACK-014)
+	PlanningFailed              = "tracking.planning.failed"
+	OptimizationFailed          = "tracking.optimization.failed"
+	OptimizationApplyFailed     = "tracking.optimization.apply.failed"
+	OptimizationNotFound        = "tracking.optimization.not-found"
+	OptimizationNoRiders        = "tracking.optimization.no-riders"
+	OptimizationNoVehicles      = "tracking.optimization.no-vehicles"
+	OptimizationApplied         = "tracking.optimization.applied"
+	OptimizationNotReady        = "tracking.optimization.not-ready"
+	OptimizationVehicleRepeated = "tracking.optimization.vehicle-repeated"
+	// OptimizationStale names, as its detail, the rider that can no longer be assigned as proposed.
+	OptimizationStale = "tracking.optimization.stale"
 )
 
 // TrackingError represents a tracking module error

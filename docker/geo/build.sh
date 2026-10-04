@@ -55,6 +55,9 @@ done
 # shellcheck disable=SC2086
 stage "merge" tools osmium merge --overwrite --no-progress -o "/data/$WORK/region.osm.pbf" $PBFS
 
+# The matrix limit is raised from 2500 pairs (~50 points) to 40 000 (~200): VROOM asks one matrix
+# over every rider of a proposal and the destination, and a proposal takes at most 100 riders — a
+# 500-point bus matrix already exhausts the container's 1 GB and restarts it (TRACK-014).
 # valhalla.json holds the paths the serving container mounts (/valhalla). The
 # build itself runs on the container's own disk — its memory-mapped scratch
 # files segfault on a Docker Desktop bind mount — and only the results are
@@ -67,7 +70,9 @@ stage "routing tiles" docker run --rm -v "$DATA/$WORK:/work" -v "$DATA/$WORK/val
 		--mjolnir-traffic-extract "" --additional-data-elevation "" \
 		--loki-logging-level warn --thor-logging-level warn \
 		--odin-logging-level warn --meili-logging-level warn \
-		--httpd-service-listen "tcp://*:8002" > /valhalla/valhalla.json
+		--httpd-service-listen "tcp://*:8002" \
+		--service-limits-bus-max-matrix-location-pairs 40000 \
+		--service-limits-auto-max-matrix-location-pairs 40000 > /valhalla/valhalla.json
 	mkdir /build
 	sed "s|/valhalla/|/build/|g" /valhalla/valhalla.json > /build/valhalla.json
 	valhalla_build_admins -c /build/valhalla.json /work/region.osm.pbf
