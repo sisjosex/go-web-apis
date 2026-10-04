@@ -52,3 +52,34 @@ func TestUserTenantsHideAppLevelsWhileTrackingOff(t *testing.T) {
 		assert.Equal(t, "test-company", tenants[0]["slug"])
 	}
 }
+
+// TestUserTenantsCarryPermissions - TRACK-041 D1: a member's tenant row lists its roles' permission
+// codes, an admin's lists "*".
+func TestUserTenantsCarryPermissions(t *testing.T) {
+	permissionsOf := func(email, password string) []interface{} {
+		helper := testhelpers.SetupApiTest(t)
+		defer helper.Close()
+		helper.Login(email, password)
+		w := helper.DoRequest("GET", "/tenants/me", nil, map[string]string{})
+		if w.Code != http.StatusOK {
+			t.Fatalf("my tenants: expected 200, got %d: %s", w.Code, w.Body.String())
+		}
+		var tenants []map[string]interface{}
+		_ = json.Unmarshal(w.Body.Bytes(), &tenants)
+		for _, tenant := range tenants {
+			if tenant["slug"] == "test-company" {
+				perms, _ := tenant["permissions"].([]interface{})
+				return perms
+			}
+		}
+		t.Fatalf("%s has no test-company membership", email)
+		return nil
+	}
+
+	assert.Equal(t, []interface{}{"*"}, permissionsOf("admin@test.local", "Admin123!"))
+	staff := permissionsOf("orguser@test.local", "OrgUser123!")
+	assert.Contains(t, staff, "tracking:riders:read")
+	assert.Contains(t, staff, "tracking:routes:read")
+	assert.NotContains(t, staff, "tracking:vehicles:read")
+	assert.NotContains(t, staff, "*")
+}

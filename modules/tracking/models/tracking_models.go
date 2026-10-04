@@ -99,6 +99,25 @@ type Route struct {
 	AssignedCount    int32      `json:"assigned_count"`
 }
 
+// TrackingOverview is the tracking home (TRACK-041 D2): the day's trips by state, the riders absent,
+// the most late trips, and whether there is any route yet (the first-run state).
+type TrackingOverview struct {
+	TripsInProgress int32         `json:"trips_in_progress"`
+	TripsPlanned    int32         `json:"trips_planned"`
+	ArrivalsDone    int32         `json:"arrivals_done"`
+	AbsencesToday   int32         `json:"absences_today"`
+	TripsDelayed    []DelayedTrip `json:"trips_delayed"`
+	HasRoutes       bool          `json:"has_routes"`
+}
+
+// DelayedTrip is one late trip of the home, by minutes.
+type DelayedTrip struct {
+	TripID           uuid.UUID `json:"trip_id"`
+	RouteName        string    `json:"route_name"`
+	OrganizationName *string   `json:"organization_name"`
+	DelayMinutes     int32     `json:"delay_minutes"`
+}
+
 // VehicleSeatsShort is a route a vehicle would run with more riders than seats (TRACK-038 D3).
 type VehicleSeatsShort struct {
 	RouteID   uuid.UUID `json:"route_id"`

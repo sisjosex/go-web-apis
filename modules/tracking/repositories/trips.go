@@ -207,3 +207,19 @@ func (r *TrackingRepository) TransitionTripTask(ctx context.Context, tenantID, t
 		)
 	`, tenantID, taskID, action, userID, dto.ClientOpID, proof)
 }
+
+// TrackingOverview reads the tracking home in one call (TRACK-041 D2).
+func (r *TrackingRepository) TrackingOverview(ctx context.Context, tenantID uuid.UUID, date *string, scopeUserID *uuid.UUID) (*models.TrackingOverview, error) {
+	var o models.TrackingOverview
+	var delayed []byte
+	err := r.dbService.QueryRow(ctx, `SELECT * FROM tracking.sp_tracking_overview($1, $2::DATE, $3)`, tenantID, date, scopeUserID).
+		Scan(&o.TripsInProgress, &o.TripsPlanned, &o.ArrivalsDone, &o.AbsencesToday, &delayed, &o.HasRoutes)
+	if err != nil {
+		return nil, scopedErr(err, trackingErrors.TripListFailed)
+	}
+	o.TripsDelayed = []models.DelayedTrip{}
+	if err := json.Unmarshal(delayed, &o.TripsDelayed); err != nil {
+		return nil, &trackingErrors.TrackingError{Code: trackingErrors.TripListFailed, Err: err}
+	}
+	return &o, nil
+}

@@ -96,6 +96,7 @@ type TrackingService interface {
 	CreateAssignments(ctx context.Context, tenantID uuid.UUID, dtos []models.AssignRiderDto) (*models.BulkAssignmentResponse, error)
 	BulkAssignRiders(ctx context.Context, tenantID, routeID uuid.UUID, dto *models.BulkAssignRidersDto) (*models.BulkAssignRidersResponse, error)
 	ListRiderGroups(ctx context.Context, tenantID uuid.UUID, organizationID *string) ([]string, error)
+	TrackingOverview(ctx context.Context, tenantID uuid.UUID, date *string, scopeUserID *uuid.UUID) (*models.TrackingOverview, error)
 	UpdateAssignment(ctx context.Context, tenantID uuid.UUID, assignmentID uuid.UUID, dto *models.UpdateAssignmentDto) (*models.AssignmentResponse, error)
 	DeleteAssignment(ctx context.Context, tenantID uuid.UUID, assignmentID uuid.UUID) error
 	ListAssignments(ctx context.Context, tenantID uuid.UUID, query models.ListAssignmentsQuery, scopeUserID *uuid.UUID) (*models.ListAssignmentsResponse, error)

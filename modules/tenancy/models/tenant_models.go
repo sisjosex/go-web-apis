@@ -97,6 +97,8 @@ type UserTenantResponse struct {
 	IsSuspended bool      `json:"is_suspended"`
 	UserRole    string    `json:"user_role"`
 	JoinedAt    time.Time `json:"joined_at"`
+	// Permissions are what the web may show (TRACK-041 D1): the roles' codes, or "*" for owner and admin.
+	Permissions []string `json:"permissions"`
 }
 
 // TenantAccessInfo - stored in context by middleware

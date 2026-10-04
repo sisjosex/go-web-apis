@@ -306,6 +306,7 @@ func registerRouteRoutes(r *gin.RouterGroup, denyOrganization gin.HandlerFunc, t
 // driver or start is editing the plan (routes:write). All of it is the operator's.
 func registerTripRoutes(r *gin.RouterGroup, denyOrganization gin.HandlerFunc, trackingController *controllers.TrackingController) {
 	r.GET("/trips", denyOrganization, trackingController.ListTrips)
+	r.GET("/overview", tenancyMW.RequirePermission(trackingPerms.RoutesRead), trackingController.TrackingOverview)
 	r.GET("/trips/:trip_id", denyOrganization, trackingController.GetTrip)
 	r.GET("/trips/:trip_id/status", denyOrganization, trackingController.GetTripStatus)
 	r.GET("/trips/:trip_id/events", denyOrganization, trackingController.ListTripEvents)

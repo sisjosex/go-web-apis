@@ -1257,3 +1257,13 @@ func OrganizationName(t *testing.T, helper *testhelpers.ApiTestHelper, id string
 	}
 	return name
 }
+
+// SetTripStopsDueAgo moves every stop of a trip to be due minutesAgo before now, so a test reads a
+// late trip whatever the hour it runs at (TRACK-041).
+func SetTripStopsDueAgo(t *testing.T, helper *testhelpers.ApiTestHelper, tripID string, minutesAgo int) {
+	t.Helper()
+	if _, err := helper.DB().Execute(context.Background(),
+		`UPDATE tracking.trip_stops SET planned_at = now() - make_interval(mins => $2) WHERE trip_id = $1`, tripID, minutesAgo); err != nil {
+		t.Fatalf("set trip stops due: %v", err)
+	}
+}

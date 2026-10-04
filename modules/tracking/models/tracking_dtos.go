@@ -208,6 +208,11 @@ type ListRidersQuery struct {
 	MissingLocation *bool `form:"missing_location"`
 }
 
+// TrackingOverviewQuery binds GET /tracking/overview: the day, each route's own today when empty.
+type TrackingOverviewQuery struct {
+	Date *string `form:"date" binding:"omitempty,datetime=2006-01-02"`
+}
+
 // ListRiderGroupsQuery binds GET /tracking/riders/groups.
 type ListRiderGroupsQuery struct {
 	OrganizationID *string `form:"organization_id" binding:"omitempty,uuid"`

@@ -317,3 +317,33 @@ func (ctrl *TrackingController) TransitionTripTask(c *gin.Context) {
 	}
 	c.JSON(http.StatusOK, result)
 }
+
+// TrackingOverview godoc
+// @Summary The tracking home
+// @Description The day's trips in progress, planned and completed, the riders absent, the ten most late trips with their route, destination and minutes, and whether any route exists (TRACK-041 D2); an organization user's numbers are their organizations'
+// @Tags Tracking - Trips
+// @Produce json
+// @Security BearerAuth
+// @Param date query string false "Day (YYYY-MM-DD); each route's own today when empty"
+// @Success 200 {object} models.TrackingOverview
+// @Router /tracking/overview [get]
+func (ctrl *TrackingController) TrackingOverview(c *gin.Context) {
+	tenantID, ok := ctrl.requireTenantID(c)
+	if !ok {
+		return
+	}
+	var query models.TrackingOverviewQuery
+	if err := c.ShouldBindQuery(&query); err != nil {
+		c.JSON(http.StatusBadRequest, coreErrors.BuildErrorDetail(c, trackingErrors.TripListFailed, utils.ExtractValidationError(c, err)))
+		return
+	}
+	overview, err := ctrl.trackingService.TrackingOverview(c.Request.Context(), tenantID, query.Date, ctrl.scopeUserID(c))
+	if err != nil {
+		if scopeRefused(c, err) {
+			return
+		}
+		c.JSON(http.StatusInternalServerError, coreErrors.BuildError(c, err))
+		return
+	}
+	c.JSON(http.StatusOK, overview)
+}

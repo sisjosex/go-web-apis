@@ -315,6 +315,10 @@ func (s *TrackingService) BulkAssignRiders(ctx context.Context, tenantID, routeI
 	return &models.BulkAssignRidersResponse{Results: results, AssignedCount: assigned, Seats: route.Seats, Warnings: warnings}, nil
 }
 
+func (s *TrackingService) TrackingOverview(ctx context.Context, tenantID uuid.UUID, date *string, scopeUserID *uuid.UUID) (*models.TrackingOverview, error) {
+	return s.trackingRepo.TrackingOverview(ctx, tenantID, date, scopeUserID)
+}
+
 func (s *TrackingService) ListRiderGroups(ctx context.Context, tenantID uuid.UUID, organizationID *string) ([]string, error) {
 	return s.trackingRepo.ListRiderGroups(ctx, tenantID, organizationID)
 }
