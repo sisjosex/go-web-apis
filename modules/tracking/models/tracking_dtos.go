@@ -273,10 +273,12 @@ type ListRoutesQuery struct {
 	CompanyID *string `form:"company_id" binding:"omitempty,uuid"`
 	// VehicleID narrows to the routes one vehicle runs: the vehicle's Routes tab (TRACK-034).
 	VehicleID *string `form:"vehicle_id" binding:"omitempty,uuid"`
-	Direction string  `form:"direction" binding:"omitempty,oneof=outbound inbound"`
-	IsActive  *bool   `form:"is_active"`
-	Page      int     `form:"page,default=1" binding:"min=1"`
-	PageSize  int     `form:"page_size,default=20" binding:"min=1,max=100"`
+	// OrganizationID narrows to one destination's routes (TRACK-038).
+	OrganizationID *string `form:"organization_id" binding:"omitempty,uuid"`
+	Direction      string  `form:"direction" binding:"omitempty,oneof=outbound inbound"`
+	IsActive       *bool   `form:"is_active"`
+	Page           int     `form:"page,default=1" binding:"min=1"`
+	PageSize       int     `form:"page_size,default=20" binding:"min=1,max=100"`
 }
 
 type ListRoutesResponse struct {
@@ -291,8 +293,8 @@ type ListRoutesResponse struct {
 type CreateRouteDto struct {
 	CompanyID                uuid.UUID  `json:"company_id" binding:"required,uuidv4"`
 	RouteName                string     `json:"route_name" binding:"required,min=3,max=255" conform:"trim"`
-	OriginAddress            string     `json:"origin_address" binding:"required,min=5,max=500" conform:"trim"`
-	DestinationAddress       string     `json:"destination_address" binding:"required,min=5,max=500" conform:"trim"`
+	OriginAddress            string     `json:"origin_address" binding:"required_without=OrganizationID,omitempty,min=5,max=500" conform:"trim"`
+	DestinationAddress       string     `json:"destination_address" binding:"required_without=OrganizationID,omitempty,min=5,max=500" conform:"trim"`
 	Direction                *string    `json:"direction" binding:"omitempty,oneof=outbound inbound"`
 	RouteCode                *string    `json:"route_code" binding:"omitempty,max=50" conform:"trim,uppercase"`
 	VehicleID                *uuid.UUID `json:"vehicle_id" binding:"omitempty,uuidv4"`
@@ -305,6 +307,23 @@ type CreateRouteDto struct {
 	EstimatedDurationMinutes *int32     `json:"estimated_duration_minutes" binding:"omitempty,min=1,max=999"`
 	// Capacity overrides the vehicle's seats for this route (TRACK-023 D2); 0 clears the override.
 	Capacity *int32 `json:"capacity" binding:"omitempty,min=0,max=200"`
+
+	// A destination route (TRACK-038): with organization_id the route ends at that school or company
+	// and, with with_return (the default), its return is created beside it. Origin and destination
+	// come from the stops and the organization, so neither address is asked.
+	OrganizationID  *uuid.UUID       `json:"organization_id" binding:"omitempty,uuidv4"`
+	WithReturn      *bool            `json:"with_return"`
+	ArrivalTime     *string          `json:"arrival_time" binding:"omitempty,datetime=15:04"`
+	DepartureTime   *string          `json:"departure_time" binding:"omitempty,datetime=15:04"`
+	DaysOfWeek      *int16           `json:"days_of_week" binding:"omitempty,min=1,max=127"`
+	Stops           []map[string]any `json:"stops" binding:"omitempty,max=100"`
+	ReturnRouteName *string          `json:"return_route_name" binding:"omitempty,min=3,max=255" conform:"trim"`
+}
+
+// CreatedRoute is the 201 of POST /tracking/routes: the route, and its return when one was created.
+type CreatedRoute struct {
+	*Route
+	ReturnRoute *Route `json:"return_route"`
 }
 
 // UpdateRouteDto represents request to update route. company_id is immutable. VehicleID and
@@ -364,6 +383,8 @@ type VehicleConflictsQuery struct {
 
 type VehicleConflictsResponse struct {
 	Conflicts []*VehicleScheduleConflict `json:"conflicts"`
+	// SeatsShort are the routes the vehicle would carry with more riders than seats (TRACK-038 D3).
+	SeatsShort []*VehicleSeatsShort `json:"seats_short"`
 }
 
 // CreateRouteVersionDto publishes a route's next stop list. The version in force is closed the day
@@ -580,6 +601,8 @@ type AssignRiderDto struct {
 	DropoffStopPlaceID *uuid.UUID           `json:"dropoff_stop_place_id,omitempty" binding:"omitempty,uuidv4"`
 	ValidFrom          coreModels.DateOnly  `json:"valid_from" binding:"required" time_format:"2006-01-02"`
 	ValidUntil         *coreModels.DateOnly `json:"valid_until,omitempty" binding:"omitempty" time_format:"2006-01-02"`
+	// Legs on a paired route (TRACK-038 D1): both (the default) also writes the twin on the other route.
+	Legs *string `json:"legs,omitempty" binding:"omitempty,oneof=both outbound return"`
 }
 
 // UpdateAssignmentDto edits an assignment in place. Every field is optional and a field left out
@@ -630,10 +653,14 @@ type BulkAssignmentResponse struct {
 type CreateOrganizationDto struct {
 	Name     string `json:"name" binding:"required,min=2,max=255" conform:"trim"`
 	Kind     string `json:"kind" binding:"required,oneof=school company other" conform:"trim,lowercase"`
-	Timezone string `json:"timezone" binding:"required,max=64" conform:"trim"`
+	Timezone string `json:"timezone" binding:"omitempty,max=64" conform:"trim"`
 	IsActive *bool  `json:"is_active"`
 	// Minutes before a pickup up to which a guardian may report an absence (TRACK-022 D1); 60 when unset.
 	AbsenceCutoffMin *int32 `json:"absence_cutoff_min" binding:"omitempty,min=0,max=1440"`
+	// The destination its routes take (TRACK-038 D2): both halves of the pin, or neither.
+	Latitude  *float64 `json:"latitude" binding:"required_with=Longitude,omitempty,min=-90,max=90"`
+	Longitude *float64 `json:"longitude" binding:"required_with=Latitude,omitempty,min=-180,max=180"`
+	Address   *string  `json:"address" binding:"omitempty,max=500" conform:"trim"`
 }
 
 // UpdateOrganizationDto represents request to update an organization. Every field is optional: the
@@ -644,7 +671,10 @@ type UpdateOrganizationDto struct {
 	Timezone *string `json:"timezone" binding:"omitempty,max=64" conform:"trim"`
 	IsActive *bool   `json:"is_active"`
 	// Minutes before a pickup up to which a guardian may report an absence (TRACK-022 D1).
-	AbsenceCutoffMin *int32 `json:"absence_cutoff_min" binding:"omitempty,min=0,max=1440"`
+	AbsenceCutoffMin *int32   `json:"absence_cutoff_min" binding:"omitempty,min=0,max=1440"`
+	Latitude         *float64 `json:"latitude" binding:"required_with=Longitude,omitempty,min=-90,max=90"`
+	Longitude        *float64 `json:"longitude" binding:"required_with=Latitude,omitempty,min=-180,max=180"`
+	Address          *string  `json:"address" binding:"omitempty,max=500" conform:"trim"`
 }
 
 // ListOrganizationsQuery binds GET /tracking/organizations.

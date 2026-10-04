@@ -90,6 +90,21 @@ type Route struct {
 	// neither. CapacityOverride is what the route itself holds (TRACK-023 D2).
 	Capacity         *int32 `json:"capacity"`
 	CapacityOverride *int32 `json:"capacity_override"`
+	// The destination school or company, the other leg of an outbound/return pair, the vehicle's
+	// seats and the riders it carries today (TRACK-038).
+	OrganizationID   *uuid.UUID `json:"organization_id"`
+	OrganizationName *string    `json:"organization_name"`
+	PairedRouteID    *uuid.UUID `json:"paired_route_id"`
+	Seats            *int32     `json:"seats"`
+	AssignedCount    int32      `json:"assigned_count"`
+}
+
+// VehicleSeatsShort is a route a vehicle would run with more riders than seats (TRACK-038 D3).
+type VehicleSeatsShort struct {
+	RouteID   uuid.UUID `json:"route_id"`
+	RouteName string    `json:"route_name"`
+	Assigned  int32     `json:"assigned"`
+	Seats     int32     `json:"seats"`
 }
 
 // StopPlace is a place a route calls at (TRACK-007 D1) — named once and shared by every route that
@@ -221,6 +236,10 @@ type Organization struct {
 	// AbsenceCutoffMin is how many minutes before a pickup a guardian may still report an absence
 	// from the portal (TRACK-022 D1).
 	AbsenceCutoffMin int32 `json:"absence_cutoff_min"`
+	// Where it is: the destination of its routes (TRACK-038 D2).
+	Latitude  *float64 `json:"latitude"`
+	Longitude *float64 `json:"longitude"`
+	Address   *string  `json:"address"`
 }
 
 // OrganizationMember is a tenant user on an organization, with the identity joined from auth.users.

@@ -43,6 +43,8 @@ type TrackingRepository interface {
 
 	// Routes CRUD
 	CreateRoute(ctx context.Context, tenantID uuid.UUID, dto *models.CreateRouteDto) (*models.Route, error)
+	CreateRoutePair(ctx context.Context, tenantID uuid.UUID, dto *models.CreateRouteDto, createdBy *uuid.UUID) (uuid.UUID, *uuid.UUID, error)
+	VehicleSeatsShort(ctx context.Context, tenantID, vehicleID uuid.UUID, routeID *uuid.UUID) ([]*models.VehicleSeatsShort, error)
 	UpdateRoute(ctx context.Context, tenantID uuid.UUID, routeID uuid.UUID, dto *models.UpdateRouteDto) (*models.Route, error)
 	ListRoutes(ctx context.Context, tenantID uuid.UUID, query models.ListRoutesQuery, scopeUserID *uuid.UUID) ([]*models.Route, int64, error)
 	GetRoute(ctx context.Context, tenantID uuid.UUID, routeID uuid.UUID, scopeUserID *uuid.UUID) (*models.Route, error)

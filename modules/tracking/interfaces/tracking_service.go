@@ -37,11 +37,11 @@ type TrackingService interface {
 	ListVehicles(ctx context.Context, tenantID uuid.UUID, query models.ListVehiclesQuery) (*models.ListVehiclesResponse, error)
 	GetVehicle(ctx context.Context, tenantID uuid.UUID, vehicleID uuid.UUID) (*models.Vehicle, error)
 	SetVehicleDriver(ctx context.Context, tenantID, vehicleID uuid.UUID, driverID *uuid.UUID) (*models.Vehicle, error)
-	VehicleScheduleConflicts(ctx context.Context, tenantID, vehicleID uuid.UUID, routeID, driverID *uuid.UUID) ([]*models.VehicleScheduleConflict, error)
+	VehicleScheduleConflicts(ctx context.Context, tenantID, vehicleID uuid.UUID, routeID, driverID *uuid.UUID) (*models.VehicleConflictsResponse, error)
 	DeleteVehicle(ctx context.Context, tenantID uuid.UUID, vehicleID uuid.UUID) error
 
 	// Routes CRUD
-	CreateRoute(ctx context.Context, tenantID uuid.UUID, dto *models.CreateRouteDto) (*models.Route, error)
+	CreateRoute(ctx context.Context, tenantID uuid.UUID, dto *models.CreateRouteDto, createdBy *uuid.UUID) (*models.CreatedRoute, error)
 	UpdateRoute(ctx context.Context, tenantID uuid.UUID, routeID uuid.UUID, dto *models.UpdateRouteDto) (*models.Route, error)
 	ListRoutes(ctx context.Context, tenantID uuid.UUID, query models.ListRoutesQuery, scopeUserID *uuid.UUID) (*models.ListRoutesResponse, error)
 	GetRoute(ctx context.Context, tenantID uuid.UUID, routeID uuid.UUID, scopeUserID *uuid.UUID) (*models.Route, error)

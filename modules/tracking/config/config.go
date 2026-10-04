@@ -13,6 +13,9 @@ type TrackingConfig struct {
 	LocationRetentionDays      int
 	LocationUpdateRateLimitSec int
 
+	// DefaultTimezone is the zone a route or organization gets when the form sends none (TRACK-038 D4).
+	DefaultTimezone string
+
 	// Real-time notification settings
 	EnableRealtimeNotifications bool
 	NotificationDelayThreshold  time.Duration
@@ -54,6 +57,7 @@ func LoadTrackingConfig() *TrackingConfig {
 		MaxLocationBatchSize:       utils.GetEnvAsInt("TRACKING_MAX_LOCATION_BATCH_SIZE", 100),
 		LocationRetentionDays:      utils.GetEnvAsInt("TRACKING_LOCATION_RETENTION_DAYS", 2),
 		LocationUpdateRateLimitSec: utils.GetEnvAsInt("TRACKING_LOCATION_RATE_LIMIT_SEC", 5),
+		DefaultTimezone:            utils.GetEnv("TRACKING_DEFAULT_TIMEZONE", "America/La_Paz"),
 
 		// Notification settings
 		EnableRealtimeNotifications: utils.GetEnvAsBool("TRACKING_ENABLE_REALTIME_NOTIFICATIONS", true),

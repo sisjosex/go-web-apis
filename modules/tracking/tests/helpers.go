@@ -178,6 +178,8 @@ func ValidRouteDto() models.CreateRouteDto {
 		RouteName:          "Test Route " + uuid.New().String()[:8],
 		OriginAddress:      "123 Origin St",
 		DestinationAddress: "456 Destination St",
+		// The fixtures' dates are UTC days; the deployment default (TRACK-038 D4) is tested on its own.
+		Timezone: stringPtr("UTC"),
 	}
 }
 
@@ -445,6 +447,7 @@ func CreateTestRoute(t *testing.T, helper *testhelpers.ApiTestHelper) string {
 		"route_name":          dto.RouteName,
 		"origin_address":      dto.OriginAddress,
 		"destination_address": dto.DestinationAddress,
+		"timezone":            *dto.Timezone,
 	}, map[string]string{})
 	if w.Code != http.StatusCreated {
 		t.Fatalf("create route: expected 201, got %d: %s", w.Code, w.Body.String())

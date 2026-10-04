@@ -723,7 +723,7 @@ func (ctrl *TrackingController) CreateRoute(c *gin.Context) {
 		return
 	}
 	conform.Strings(&dto)
-	route, err := ctrl.trackingService.CreateRoute(c.Request.Context(), tenantID, &dto)
+	route, err := ctrl.trackingService.CreateRoute(c.Request.Context(), tenantID, &dto, ctrl.actingUserID(c))
 	if err != nil {
 		if routeErrorResponse(c, err) {
 			return
@@ -1946,8 +1946,11 @@ func routeErrorResponse(c *gin.Context, err error) bool {
 		return false
 	}
 	switch trackingErr.Code {
-	case trackingErrors.RouteNotFound, trackingErrors.CompanyNotFound:
+	case trackingErrors.RouteNotFound, trackingErrors.CompanyNotFound, trackingErrors.OrganizationNotFound:
 		c.JSON(http.StatusNotFound, coreErrors.BuildErrorSingle(c, trackingErr.Code))
+		return true
+	case trackingErrors.RouteDestinationRequired, trackingErrors.RouteDepartureRequired, trackingErrors.StopPlaceInvalid:
+		c.JSON(http.StatusBadRequest, coreErrors.BuildErrorSingle(c, trackingErr.Code))
 		return true
 	case trackingErrors.RouteCompanyMismatch:
 		var pgErr *pgconn.PgError

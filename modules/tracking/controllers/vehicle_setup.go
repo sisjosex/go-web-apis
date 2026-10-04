@@ -119,10 +119,10 @@ func (ctrl *TrackingController) VehicleConflicts(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, coreErrors.BuildErrorSingle(c, coreErrors.InvalidUUID))
 		return
 	}
-	conflicts, err := ctrl.trackingService.VehicleScheduleConflicts(c.Request.Context(), tenantID, vehicleID, routeID, driverID)
+	response, err := ctrl.trackingService.VehicleScheduleConflicts(c.Request.Context(), tenantID, vehicleID, routeID, driverID)
 	if err != nil {
 		vehicleSetupError(c, err)
 		return
 	}
-	c.JSON(http.StatusOK, models.VehicleConflictsResponse{Conflicts: conflicts})
+	c.JSON(http.StatusOK, response)
 }

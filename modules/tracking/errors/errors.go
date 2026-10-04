@@ -25,6 +25,8 @@ const (
 	RouteInvalidScheduleType = "tracking.route.invalid-schedule-type"
 	RouteCodeAlreadyExists   = "tracking.route.code-already-exists"
 	RouteTimezone            = "tracking.route.timezone"
+	RouteDestinationRequired = "tracking.route.destination-required"
+	RouteDepartureRequired   = "tracking.route.departure-required"
 	// RouteCompanyMismatch refuses a vehicle or default driver of another carrier; the detail names
 	// the field (TRACK-002).
 	RouteCompanyMismatch = "tracking.route.company-mismatch"

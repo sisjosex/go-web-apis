@@ -3,6 +3,7 @@ package services
 import (
 	"context"
 
+	"josex/web/config"
 	"josex/web/modules/tracking/interfaces"
 	"josex/web/modules/tracking/models"
 
@@ -122,8 +123,18 @@ func (s *TrackingService) SetVehicleDriver(ctx context.Context, tenantID, vehicl
 	return s.trackingRepo.GetVehicle(ctx, tenantID, vehicleID)
 }
 
-func (s *TrackingService) VehicleScheduleConflicts(ctx context.Context, tenantID, vehicleID uuid.UUID, routeID, driverID *uuid.UUID) ([]*models.VehicleScheduleConflict, error) {
-	return s.trackingRepo.VehicleScheduleConflicts(ctx, tenantID, vehicleID, routeID, driverID)
+// VehicleScheduleConflicts answers the overlapping runs and, with seats in mind, the routes the vehicle
+// would leave short (TRACK-034 D2, TRACK-038 D3).
+func (s *TrackingService) VehicleScheduleConflicts(ctx context.Context, tenantID, vehicleID uuid.UUID, routeID, driverID *uuid.UUID) (*models.VehicleConflictsResponse, error) {
+	conflicts, err := s.trackingRepo.VehicleScheduleConflicts(ctx, tenantID, vehicleID, routeID, driverID)
+	if err != nil {
+		return nil, err
+	}
+	short, err := s.trackingRepo.VehicleSeatsShort(ctx, tenantID, vehicleID, routeID)
+	if err != nil {
+		return nil, err
+	}
+	return &models.VehicleConflictsResponse{Conflicts: conflicts, SeatsShort: short}, nil
 }
 
 func (s *TrackingService) DeleteVehicle(ctx context.Context, tenantID uuid.UUID, vehicleID uuid.UUID) error {
@@ -132,8 +143,34 @@ func (s *TrackingService) DeleteVehicle(ctx context.Context, tenantID uuid.UUID,
 
 // ==================== ROUTES CRUD ====================
 
-func (s *TrackingService) CreateRoute(ctx context.Context, tenantID uuid.UUID, dto *models.CreateRouteDto) (*models.Route, error) {
-	return s.trackingRepo.CreateRoute(ctx, tenantID, dto)
+// CreateRoute creates a plain route, or — with organization_id — a destination's outbound route and
+// its return (TRACK-038). The zone is the deployment's default when the form sends none (D4).
+func (s *TrackingService) CreateRoute(ctx context.Context, tenantID uuid.UUID, dto *models.CreateRouteDto, createdBy *uuid.UUID) (*models.CreatedRoute, error) {
+	if dto.Timezone == nil {
+		zone := config.ModularAppConfig.Tracking.DefaultTimezone
+		dto.Timezone = &zone
+	}
+	if dto.OrganizationID == nil {
+		route, err := s.trackingRepo.CreateRoute(ctx, tenantID, dto)
+		if err != nil {
+			return nil, err
+		}
+		return &models.CreatedRoute{Route: route}, nil
+	}
+	outbound, inbound, err := s.trackingRepo.CreateRoutePair(ctx, tenantID, dto, createdBy)
+	if err != nil {
+		return nil, err
+	}
+	created := &models.CreatedRoute{}
+	if created.Route, err = s.trackingRepo.GetRoute(ctx, tenantID, outbound, nil); err != nil {
+		return nil, err
+	}
+	if inbound != nil {
+		if created.ReturnRoute, err = s.trackingRepo.GetRoute(ctx, tenantID, *inbound, nil); err != nil {
+			return nil, err
+		}
+	}
+	return created, nil
 }
 
 func (s *TrackingService) UpdateRoute(ctx context.Context, tenantID uuid.UUID, routeID uuid.UUID, dto *models.UpdateRouteDto) (*models.Route, error) {
@@ -354,7 +391,11 @@ func (s *TrackingService) SuggestRiderStops(ctx context.Context, tenantID, rider
 
 // ==================== ORGANIZATIONS CRUD ====================
 
+// CreateOrganization takes the deployment's zone when the form sends none (TRACK-038 D4).
 func (s *TrackingService) CreateOrganization(ctx context.Context, tenantID uuid.UUID, dto *models.CreateOrganizationDto) (*models.Organization, error) {
+	if dto.Timezone == "" {
+		dto.Timezone = config.ModularAppConfig.Tracking.DefaultTimezone
+	}
 	return s.trackingRepo.CreateOrganization(ctx, tenantID, dto)
 }
 

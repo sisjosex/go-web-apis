@@ -469,6 +469,28 @@ func (r *TrackingRepository) VehicleScheduleConflicts(ctx context.Context, tenan
 	return conflicts, nil
 }
 
+// VehicleSeatsShort answers the routes the vehicle would run (routeID, or its own) whose riders
+// today outnumber its seats (TRACK-038 D3).
+func (r *TrackingRepository) VehicleSeatsShort(ctx context.Context, tenantID, vehicleID uuid.UUID, routeID *uuid.UUID) ([]*models.VehicleSeatsShort, error) {
+	rows, err := r.dbService.Query(ctx, `SELECT * FROM tracking.sp_vehicle_seats_short($1, $2, $3)`, tenantID, vehicleID, routeID)
+	if err != nil {
+		return nil, &trackingErrors.TrackingError{Code: trackingErrors.VehicleConflictsFailed, Err: err}
+	}
+	defer rows.Close()
+	short := []*models.VehicleSeatsShort{}
+	for rows.Next() {
+		var s models.VehicleSeatsShort
+		if err := rows.Scan(&s.RouteID, &s.RouteName, &s.Assigned, &s.Seats); err != nil {
+			return nil, err
+		}
+		short = append(short, &s)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, &trackingErrors.TrackingError{Code: trackingErrors.VehicleConflictsFailed, Err: err}
+	}
+	return short, nil
+}
+
 func (r *TrackingRepository) DeleteVehicle(ctx context.Context, tenantID uuid.UUID, vehicleID uuid.UUID) error {
 	var deleted bool
 	err := r.dbService.QueryRow(ctx, `SELECT tracking.sp_delete_vehicle($1, $2)`, tenantID, vehicleID).Scan(&deleted)
@@ -488,7 +510,13 @@ func scanRoute(rt *models.Route) []any {
 		&rt.RouteName, &rt.RouteCode, &rt.Direction, &rt.OriginAddress, &rt.OriginLat, &rt.OriginLng,
 		&rt.DestinationAddress, &rt.DestinationLat, &rt.DestinationLng, &rt.EstimatedDurationMinutes,
 		&rt.Timezone, &rt.IsActive, &rt.CreatedAt, &rt.UpdatedAt, &rt.Capacity, &rt.CapacityOverride,
+		&rt.OrganizationID, &rt.OrganizationName, &rt.PairedRouteID, &rt.Seats, &rt.AssignedCount,
 	}
+}
+
+// scanOrganization is the one scan order every organization read and write shares.
+func scanOrganization(org *models.Organization) []any {
+	return []any{&org.ID, &org.TenantID, &org.Kind, &org.Name, &org.Timezone, &org.IsActive, &org.CreatedAt, &org.UpdatedAt, &org.AbsenceCutoffMin, &org.Latitude, &org.Longitude, &org.Address}
 }
 
 // mapRouteError turns the route SPs' own codes into module codes, falling back to fallbackCode.
@@ -506,6 +534,14 @@ func mapRouteError(err error, fallbackCode string) error {
 			return &trackingErrors.TrackingError{Code: trackingErrors.RouteTimezone, Err: pgErr}
 		case "route.code-already-exists":
 			return &trackingErrors.TrackingError{Code: trackingErrors.RouteCodeAlreadyExists, Err: pgErr}
+		case "organization.not-found":
+			return &trackingErrors.TrackingError{Code: trackingErrors.OrganizationNotFound, Err: pgErr}
+		case "route.destination-required":
+			return &trackingErrors.TrackingError{Code: trackingErrors.RouteDestinationRequired, Err: pgErr}
+		case "route.departure-required":
+			return &trackingErrors.TrackingError{Code: trackingErrors.RouteDepartureRequired, Err: pgErr}
+		case "stop-place.invalid":
+			return &trackingErrors.TrackingError{Code: trackingErrors.StopPlaceInvalid, Err: pgErr}
 		}
 	}
 	return &trackingErrors.TrackingError{Code: fallbackCode, Err: err}
@@ -523,6 +559,34 @@ func (r *TrackingRepository) CreateRoute(ctx context.Context, tenantID uuid.UUID
 		return nil, mapRouteError(err, trackingErrors.RouteCreateFailed)
 	}
 	return &rt, nil
+}
+
+// CreateRoutePair creates a destination's outbound route and, unless with_return is false, its
+// return, in one statement (TRACK-038 D1); it answers both ids, the return's nil without one.
+func (r *TrackingRepository) CreateRoutePair(ctx context.Context, tenantID uuid.UUID, dto *models.CreateRouteDto, createdBy *uuid.UUID) (uuid.UUID, *uuid.UUID, error) {
+	stops, err := json.Marshal(dto.Stops)
+	if err != nil {
+		return uuid.Nil, nil, &trackingErrors.TrackingError{Code: trackingErrors.RouteCreateFailed, Err: err}
+	}
+	var outbound uuid.UUID
+	var inbound *uuid.UUID
+	err = r.dbService.QueryRow(ctx,
+		`SELECT * FROM tracking.sp_create_route_pair($1, $2, $3, $4, $5, $6, $7::TIME, $8::TIME, $9::SMALLINT, $10::JSONB, $11, $12, $13, $14, $15, $16)`,
+		tenantID, dto.CompanyID, dto.OrganizationID, dto.RouteName, dto.VehicleID, dto.WithReturn,
+		dto.ArrivalTime, dto.DepartureTime, dto.DaysOfWeek, string(stops), dto.Timezone, dto.ReturnRouteName,
+		dto.DestinationLat, dto.DestinationLng, nilIfEmpty(dto.DestinationAddress), createdBy,
+	).Scan(&outbound, &inbound)
+	if err != nil {
+		return uuid.Nil, nil, mapRouteError(err, trackingErrors.RouteCreateFailed)
+	}
+	return outbound, inbound, nil
+}
+
+func nilIfEmpty(value string) *string {
+	if value == "" {
+		return nil
+	}
+	return &value
 }
 
 func (r *TrackingRepository) UpdateRoute(ctx context.Context, tenantID uuid.UUID, routeID uuid.UUID, dto *models.UpdateRouteDto) (*models.Route, error) {
@@ -543,8 +607,8 @@ func (r *TrackingRepository) UpdateRoute(ctx context.Context, tenantID uuid.UUID
 // (TRACK-002 D2); an organization user's page holds only the routes their riders ride.
 func (r *TrackingRepository) ListRoutes(ctx context.Context, tenantID uuid.UUID, query models.ListRoutesQuery, scopeUserID *uuid.UUID) ([]*models.Route, int64, error) {
 	rows, err := r.dbService.Query(ctx,
-		`SELECT * FROM tracking.sp_list_routes($1::UUID, $2::VARCHAR, $3::UUID, $4::VARCHAR, $5::BOOLEAN, $6::INT, $7::INT, $8::UUID, $9::UUID)`,
-		tenantID, query.Search, query.CompanyID, query.Direction, query.IsActive, query.Page, query.PageSize, scopeUserID, query.VehicleID)
+		`SELECT * FROM tracking.sp_list_routes($1::UUID, $2::VARCHAR, $3::UUID, $4::VARCHAR, $5::BOOLEAN, $6::INT, $7::INT, $8::UUID, $9::UUID, $10::UUID)`,
+		tenantID, query.Search, query.CompanyID, query.Direction, query.IsActive, query.Page, query.PageSize, scopeUserID, query.VehicleID, query.OrganizationID)
 	if err != nil {
 		return nil, 0, scopedErr(err, trackingErrors.RouteListFailed)
 	}
@@ -978,10 +1042,13 @@ func (r *TrackingRepository) CreateOrganization(ctx context.Context, tenantID uu
 			p_name      := $3,
 			p_timezone  := $4,
 			p_is_active := $5,
-			p_absence_cutoff_min := $6
+			p_absence_cutoff_min := $6,
+			p_latitude  := $7,
+			p_longitude := $8,
+			p_address   := $9
 		)
-	`, tenantID, dto.Kind, dto.Name, dto.Timezone, dto.IsActive, dto.AbsenceCutoffMin,
-	).Scan(&org.ID, &org.TenantID, &org.Kind, &org.Name, &org.Timezone, &org.IsActive, &org.CreatedAt, &org.UpdatedAt, &org.AbsenceCutoffMin)
+	`, tenantID, dto.Kind, dto.Name, dto.Timezone, dto.IsActive, dto.AbsenceCutoffMin, dto.Latitude, dto.Longitude, dto.Address,
+	).Scan(scanOrganization(&org)...)
 	if err != nil {
 		return nil, &trackingErrors.TrackingError{Code: trackingErrors.OrganizationCreateFailed, Err: err}
 	}
@@ -998,10 +1065,13 @@ func (r *TrackingRepository) UpdateOrganization(ctx context.Context, tenantID uu
 			p_name            := $4,
 			p_timezone        := $5,
 			p_is_active       := $6,
-			p_absence_cutoff_min := $7
+			p_absence_cutoff_min := $7,
+			p_latitude        := $8,
+			p_longitude       := $9,
+			p_address         := $10
 		)
-	`, tenantID, organizationID, dto.Kind, dto.Name, dto.Timezone, dto.IsActive, dto.AbsenceCutoffMin,
-	).Scan(&org.ID, &org.TenantID, &org.Kind, &org.Name, &org.Timezone, &org.IsActive, &org.CreatedAt, &org.UpdatedAt, &org.AbsenceCutoffMin)
+	`, tenantID, organizationID, dto.Kind, dto.Name, dto.Timezone, dto.IsActive, dto.AbsenceCutoffMin, dto.Latitude, dto.Longitude, dto.Address,
+	).Scan(scanOrganization(&org)...)
 	if err != nil {
 		return nil, mapOrganizationError(err, trackingErrors.OrganizationUpdateFailed)
 	}
@@ -1022,8 +1092,7 @@ func (r *TrackingRepository) ListOrganizations(ctx context.Context, tenantID uui
 	var totalCount int64
 	for rows.Next() {
 		var org models.Organization
-		if err := rows.Scan(&org.ID, &org.TenantID, &org.Kind, &org.Name, &org.Timezone, &org.IsActive,
-			&org.CreatedAt, &org.UpdatedAt, &org.AbsenceCutoffMin, &totalCount); err != nil {
+		if err := rows.Scan(append(scanOrganization(&org), &totalCount)...); err != nil {
 			return nil, 0, err
 		}
 		organizations = append(organizations, &org)
@@ -1036,8 +1105,8 @@ func (r *TrackingRepository) ListOrganizations(ctx context.Context, tenantID uui
 
 func (r *TrackingRepository) GetOrganization(ctx context.Context, tenantID uuid.UUID, organizationID uuid.UUID) (*models.Organization, error) {
 	var org models.Organization
-	err := r.dbService.QueryRow(ctx, `SELECT * FROM tracking.sp_get_organization($1, $2)`, tenantID, organizationID).Scan(
-		&org.ID, &org.TenantID, &org.Kind, &org.Name, &org.Timezone, &org.IsActive, &org.CreatedAt, &org.UpdatedAt, &org.AbsenceCutoffMin)
+	err := r.dbService.QueryRow(ctx, `SELECT * FROM tracking.sp_get_organization($1, $2)`, tenantID, organizationID).
+		Scan(scanOrganization(&org)...)
 	if err != nil {
 		return nil, &trackingErrors.TrackingError{Code: trackingErrors.OrganizationNotFound, Err: err}
 	}
