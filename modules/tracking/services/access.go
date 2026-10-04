@@ -2,6 +2,8 @@ package services
 
 import (
 	"context"
+	"encoding/json"
+	"errors"
 	"fmt"
 	"log"
 	"strings"
@@ -11,12 +13,14 @@ import (
 	"josex/web/config"
 	coreServices "josex/web/modules/core/services"
 	tenancyModels "josex/web/modules/tenancy/models"
+	trackingErrors "josex/web/modules/tracking/errors"
 	"josex/web/modules/tracking/models"
 )
 
 // AccessRepository is what the access slice needs from the tracking repository (TRACK-032).
 type AccessRepository interface {
 	GrantAppAccess(ctx context.Context, tenantID uuid.UUID, dto *models.GrantAccessDto, level string) (*models.AppAccessGrant, error)
+	CreateRider(ctx context.Context, tenantID uuid.UUID, dto *models.CreateRiderDto, scopeUserID *uuid.UUID) (*models.Rider, error)
 	RevokeAppAccess(ctx context.Context, tenantID, userID uuid.UUID, level string) error
 	TenantName(ctx context.Context, tenantID uuid.UUID) (string, error)
 	UserLinked(ctx context.Context, tenantID, userID uuid.UUID) (bool, error)
@@ -66,6 +70,109 @@ func (s *AccessService) AddRiderGuardian(ctx context.Context, tenantID, riderID 
 	return s.grant(ctx, tenantID, dto, tenancyModels.RolePortal, lang, func(g *models.AppAccessGrant) error {
 		return s.repo.AddRiderGuardian(ctx, tenantID, riderID, g, dto.Phone, scopeUserID)
 	})
+}
+
+// CreateRider creates a rider with its guardians in one request (TRACK-037 D2). The accounts are
+// granted first, in the main database; the rider and every link are then one statement in the
+// tenant's. A refused item names its index, and a failed create takes back every membership this call
+// added, so nothing is left half-made. The access emails go out only once the rider exists.
+func (s *AccessService) CreateRider(ctx context.Context, tenantID uuid.UUID, dto *models.CreateRiderDto, scopeUserID *uuid.UUID, lang string) (*models.CreatedRider, error) {
+	grants := make([]*models.AppAccessGrant, 0, len(dto.Guardians))
+	takeBack := func() {
+		for _, g := range grants {
+			if g.MembershipAdded {
+				if err := s.repo.RevokeAppAccess(ctx, tenantID, g.UserID, tenancyModels.RolePortal); err != nil {
+					log.Printf("⚠️  access: could not take back portal membership of %s: %v", g.UserID, err)
+				}
+			}
+		}
+	}
+
+	links := make([]map[string]any, 0, len(dto.Guardians))
+	for i := range dto.Guardians {
+		link, g, err := s.guardianLink(ctx, tenantID, i, &dto.Guardians[i])
+		if err != nil {
+			takeBack()
+			return nil, err
+		}
+		if g != nil {
+			grants = append(grants, g)
+		}
+		links = append(links, link)
+	}
+
+	raw, err := json.Marshal(links)
+	if err != nil {
+		takeBack()
+		return nil, err
+	}
+	dto.LinkedGuardians = raw
+	rider, err := s.repo.CreateRider(ctx, tenantID, dto, scopeUserID)
+	if err != nil {
+		takeBack()
+		return nil, err
+	}
+
+	granted := make([]*models.AccessGranted, 0, len(grants))
+	for _, g := range grants {
+		notice := accessNotice(lang, g.FirstName, g.TenantName, g.Email)
+		if g.MembershipAdded {
+			go s.mailNotice(lang, g, notice)
+		}
+		granted = append(granted, &models.AccessGranted{
+			UserID: g.UserID, Email: g.Email, FirstName: g.FirstName, LastName: g.LastName, Status: g.Status, Notice: notice,
+		})
+	}
+	return &models.CreatedRider{Rider: rider, Guardians: granted}, nil
+}
+
+// guardianLink is one guardian as fn_rider_guardians_link reads it. A contact (no account, no email)
+// needs a name to show and a phone to call (D3); anyone else is granted the portal level first and
+// comes back with the grant a failed create must take back.
+func (s *AccessService) guardianLink(ctx context.Context, tenantID uuid.UUID, index int, item *models.NewRiderGuardianDto) (map[string]any, *models.AppAccessGrant, error) {
+	if item.UserID == nil && item.Email == nil {
+		if blank(item.FirstName) || blank(item.Phone) {
+			return nil, nil, guardianInvalid(index, nil)
+		}
+		return map[string]any{"name": joinNames(item.FirstName, item.LastName), "phone": item.Phone}, nil, nil
+	}
+	if item.UserID == nil && (blank(item.FirstName) || blank(item.LastName)) {
+		return nil, nil, guardianInvalid(index, nil)
+	}
+	g, err := s.repo.GrantAppAccess(ctx, tenantID, &models.GrantAccessDto{
+		UserID: item.UserID, Email: item.Email, FirstName: item.FirstName, LastName: item.LastName, Phone: item.Phone,
+	}, tenancyModels.RolePortal)
+	if err != nil {
+		return nil, nil, guardianInvalid(index, err)
+	}
+	return map[string]any{
+		"user_id": g.UserID, "name": joinNames(g.FirstName, g.LastName), "email": g.Email, "phone": item.Phone,
+	}, g, nil
+}
+
+// guardianInvalid names the refused guardian. A grant's own refusal (a web account, another app
+// level) keeps its code so the form can say why; anything else is tracking.rider.guardian-invalid.
+func guardianInvalid(index int, err error) error {
+	detail := map[string]int{"index": index}
+	var trackingErr *trackingErrors.TrackingError
+	if errors.As(err, &trackingErr) && trackingErr.Code != trackingErrors.AccessGrantFailed {
+		return &trackingErrors.TrackingError{Code: trackingErr.Code, Err: err, Detail: detail}
+	}
+	return &trackingErrors.TrackingError{Code: trackingErrors.RiderGuardianInvalid, Err: err, Detail: detail}
+}
+
+func blank(value *string) bool {
+	return value == nil || strings.TrimSpace(*value) == ""
+}
+
+func joinNames(first, last *string) string {
+	parts := make([]string, 0, 2)
+	for _, p := range []*string{first, last} {
+		if !blank(p) {
+			parts = append(parts, strings.TrimSpace(*p))
+		}
+	}
+	return strings.Join(parts, " ")
 }
 
 func (s *AccessService) RemoveRiderGuardian(ctx context.Context, tenantID, riderID, userID uuid.UUID, scopeUserID *uuid.UUID) error {

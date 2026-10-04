@@ -45,11 +45,12 @@ type AccessGranted struct {
 
 // RiderGuardian is one row of a rider's Family tab (D3).
 type RiderGuardian struct {
-	UserID    uuid.UUID `json:"user_id"`
-	Email     *string   `json:"email"`
-	FirstName *string   `json:"first_name"`
-	LastName  *string   `json:"last_name"`
-	Phone     *string   `json:"phone"`
-	IsPrimary bool      `json:"is_primary"`
-	Notice    string    `json:"notice"`
+	// UserID is nil for a contact without an account (TRACK-037 D3).
+	UserID    *uuid.UUID `json:"user_id"`
+	Email     *string    `json:"email"`
+	FirstName *string    `json:"first_name"`
+	LastName  *string    `json:"last_name"`
+	Phone     *string    `json:"phone"`
+	IsPrimary bool       `json:"is_primary"`
+	Notice    string     `json:"notice"`
 }

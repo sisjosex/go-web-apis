@@ -135,6 +135,9 @@ func registerTenantRoutes(
 // family, a driver. The level is fixed by the route. An organization user manages its riders, so it
 // may give their families the app, in its scope; the driver stays the operator's.
 func registerAccessRoutes(r *gin.RouterGroup, denyOrganization gin.HandlerFunc, access *controllers.AccessController) {
+	r.POST("/riders",
+		tenancyMW.RequirePermission(trackingPerms.RidersWrite),
+		access.CreateRider)
 	r.GET("/riders/:rider_id/guardians",
 		tenancyMW.RequirePermission(trackingPerms.RidersRead),
 		access.ListRiderGuardians)
@@ -543,9 +546,6 @@ func registerRiderRoutes(
 	r.POST("/riders/:rider_id/qr-token",
 		tenancyMW.RequirePermission(trackingPerms.RidersWrite),
 		trackingController.RiderQRToken)
-	r.POST("/riders",
-		tenancyMW.RequirePermission(trackingPerms.RidersWrite),
-		trackingController.CreateRider)
 	r.PATCH("/riders/:rider_id",
 		tenancyMW.RequirePermission(trackingPerms.RidersWrite),
 		trackingController.UpdateRider)

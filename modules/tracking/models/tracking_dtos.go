@@ -1,6 +1,7 @@
 package models
 
 import (
+	"encoding/json"
 	"errors"
 	"strconv"
 	"strings"
@@ -225,6 +226,26 @@ type CreateRiderDto struct {
 	HomeLatitude          *float64  `json:"home_latitude" binding:"required_with=HomeLongitude,omitempty,min=-90,max=90"`
 	HomeLongitude         *float64  `json:"home_longitude" binding:"required_with=HomeLatitude,omitempty,min=-180,max=180"`
 	Notes                 *string   `json:"notes" binding:"omitempty,max=2000" conform:"trim"`
+	// Guardians are linked in the statement that creates the rider (TRACK-037 D2).
+	Guardians []NewRiderGuardianDto `json:"guardians" binding:"omitempty,max=5,dive"`
+	// LinkedGuardians is Guardians once their accounts are granted, as fn_rider_guardians_link reads it.
+	LinkedGuardians json.RawMessage `json:"-" swaggerignore:"true"`
+}
+
+// NewRiderGuardianDto is one guardian of the rider form: an account by user_id, a person to invite by
+// email and name, or a contact with only a name and a phone (TRACK-037 D3).
+type NewRiderGuardianDto struct {
+	UserID    *uuid.UUID `json:"user_id" binding:"omitempty,uuidv4"`
+	Email     *string    `json:"email" binding:"omitempty,email-valid,max=255" conform:"trim,lowercase"`
+	FirstName *string    `json:"first_name" binding:"omitempty,max=100" conform:"trim"`
+	LastName  *string    `json:"last_name" binding:"omitempty,max=100" conform:"trim"`
+	Phone     *string    `json:"phone" binding:"omitempty,max=50" conform:"trim"`
+}
+
+// CreatedRider is the 201 of POST /tracking/riders: the rider and the accounts its guardians got.
+type CreatedRider struct {
+	*Rider
+	Guardians []*AccessGranted `json:"guardians"`
 }
 
 // UpdateRiderDto represents request to update rider

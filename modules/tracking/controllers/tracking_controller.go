@@ -1356,18 +1356,8 @@ func (ctrl *TrackingController) GetRoutePath(c *gin.Context) {
 
 // ==================== RIDERS CRUD ====================
 
-// CreateRider godoc
-// @Summary Create rider
-// @Description Create a new rider (student/employee)
-// @Tags Tracking - Riders
-// @Accept json
-// @Produce json
-// @Security BearerAuth
-// @Param rider body models.CreateRiderDto true "Rider data"
-// @Success 201 {object} models.Rider
-// @Failure 400 {object} coreErrors.ErrorResponse
-// @Failure 500 {object} coreErrors.ErrorResponse
-// @Router /tracking/riders [post]
+// CreateRider is POST /tracking/riders in the single-database shape, which has no tenant and so no
+// guardian accounts; the tenant routes serve it from AccessController.CreateRider (TRACK-037).
 func (ctrl *TrackingController) CreateRider(c *gin.Context) {
 	tenantID, ok := ctrl.requireTenantID(c)
 	if !ok {

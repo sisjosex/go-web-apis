@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"strconv"
 	"strings"
 	"time"
 
@@ -863,20 +864,38 @@ var noAccount *uuid.UUID
 
 func (r *TrackingRepository) CreateRider(ctx context.Context, tenantID uuid.UUID, dto *models.CreateRiderDto, scopeUserID *uuid.UUID) (*models.Rider, error) {
 	var rider models.Rider
-	err := r.dbService.QueryRow(ctx, `SELECT * FROM tracking.sp_create_rider($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17::DECIMAL, $18::DECIMAL, $19::TEXT)`,
+	// One statement: the rider and its guardians' links commit together or not at all (TRACK-037 D2).
+	err := r.dbService.QueryRow(ctx, `SELECT r.* FROM tracking.sp_create_rider($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17::DECIMAL, $18::DECIMAL, $19::TEXT) r
+		CROSS JOIN LATERAL tracking.fn_rider_guardians_link($1, r.id, $20::JSONB) g`,
 		tenantID, dto.OrganizationID, dto.RiderType, dto.FirstName, dto.LastName, dto.IdentificationNumber,
 		dto.Phone, dto.Email, dto.EmergencyContactName, dto.EmergencyContactPhone,
 		noAccount, dto.GuardianName, dto.GuardianPhone, dto.GuardianEmail, dto.Address, scopeUserID,
-		dto.HomeLatitude, dto.HomeLongitude, dto.Notes,
+		dto.HomeLatitude, dto.HomeLongitude, dto.Notes, linkedGuardians(dto.LinkedGuardians),
 	).Scan(&rider.ID, &rider.OrganizationID, &rider.RiderType, &rider.FirstName, &rider.LastName,
 		&rider.IdentificationNumber, &rider.Phone, &rider.Email, &rider.EmergencyContactName,
 		&rider.EmergencyContactPhone, &rider.GuardianUserID, &rider.GuardianName, &rider.GuardianPhone,
 		&rider.GuardianEmail, &rider.Address, &rider.IsActive, &rider.CreatedAt, &rider.UpdatedAt,
 		&rider.HomeLatitude, &rider.HomeLongitude, &rider.Notes)
 	if err != nil {
+		var pgErr *pgconn.PgError
+		if errors.As(err, &pgErr) && pgErr.Message == "rider.guardian-invalid" {
+			mapped := &trackingErrors.TrackingError{Code: trackingErrors.RiderGuardianInvalid, Err: pgErr}
+			if n, convErr := strconv.Atoi(strings.TrimPrefix(pgErr.Detail, "index=")); convErr == nil {
+				mapped.Detail = map[string]int{"index": n}
+			}
+			return nil, mapped
+		}
 		return nil, scopedErr(err, trackingErrors.RiderCreateFailed)
 	}
 	return &rider, nil
+}
+
+// linkedGuardians is the JSON fn_rider_guardians_link reads; none is an empty list.
+func linkedGuardians(raw []byte) string {
+	if len(raw) == 0 {
+		return "[]"
+	}
+	return string(raw)
 }
 
 func (r *TrackingRepository) UpdateRider(ctx context.Context, tenantID uuid.UUID, riderID uuid.UUID, dto *models.UpdateRiderDto, scopeUserID *uuid.UUID) (*models.Rider, error) {

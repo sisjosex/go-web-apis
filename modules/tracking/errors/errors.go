@@ -224,6 +224,7 @@ const (
 	AccessUserDeleted     = "tracking.access.user-deleted"
 	AccessGrantFailed     = "tracking.access.grant.failed"
 	RiderGuardianNotFound = "tracking.rider.guardian-not-found"
+	RiderGuardianInvalid  = "tracking.rider.guardian-invalid"
 
 	// Document errors (TR0201-TR0220)
 	DocumentNotFound          = "tracking.document.not-found"

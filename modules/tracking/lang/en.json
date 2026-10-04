@@ -219,6 +219,7 @@
   "tracking.access.user-deleted": "This email belongs to a deleted account",
   "tracking.access.grant.failed": "Failed to grant app access",
   "tracking.rider.guardian-not-found": "This account is not a guardian of the rider",
+  "tracking.rider.guardian-invalid": "A guardian needs an account, an email with first and last name, or a name with a phone",
   "document-digest.email.subject": "%d document(s) need attention in %s",
   "document-digest.email.description": "These compliance documents have entered their warning window. A document is named here once; renew it and it will be watched again.",
   "document-digest.email.button-text": "Open documents",

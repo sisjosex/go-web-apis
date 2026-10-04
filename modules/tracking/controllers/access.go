@@ -42,12 +42,17 @@ var accessStatus = map[string]int{
 	trackingErrors.AccessUserDeleted:              http.StatusConflict,
 	trackingErrors.DriverUserAlreadyLinked:        http.StatusConflict,
 	trackingErrors.OrganizationScopeDenied:        http.StatusForbidden,
+	trackingErrors.RiderGuardianInvalid:           http.StatusBadRequest,
 }
 
 func accessError(c *gin.Context, err error) {
 	var trackingErr *trackingErrors.TrackingError
 	if errors.As(err, &trackingErr) {
 		if status, ok := accessStatus[trackingErr.Code]; ok {
+			if trackingErr.Detail != nil {
+				c.JSON(status, coreErrors.BuildErrorDetail(c, trackingErr.Code, trackingErr.Detail))
+				return
+			}
 			c.JSON(status, coreErrors.BuildErrorSingle(c, trackingErr.Code))
 			return
 		}
@@ -79,6 +84,39 @@ func bindGrant(c *gin.Context, dto any) bool {
 	}
 	_ = conform.Strings(dto)
 	return true
+}
+
+// CreateRider godoc
+// @Summary Create rider
+// @Description A rider (student/employee) with up to 5 guardians in one request (TRACK-037 D2): an account by user_id, a person to invite by email and name, or a contact by name and phone. A refused guardian names its index in detail and nothing is created.
+// @Tags Tracking - Riders
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param rider body models.CreateRiderDto true "Rider data"
+// @Success 201 {object} models.CreatedRider
+// @Failure 400 {object} coreErrors.ErrorResponse
+// @Failure 404 {object} coreErrors.ErrorResponse
+// @Failure 409 {object} coreErrors.ErrorResponse
+// @Router /tracking/riders [post]
+func (ctrl *AccessController) CreateRider(c *gin.Context) {
+	tenantID, _, ok := accessIDs(c)
+	if !ok {
+		return
+	}
+	var dto models.CreateRiderDto
+	if err := c.ShouldBindJSON(&dto); err != nil {
+		c.JSON(http.StatusBadRequest, coreErrors.BuildErrorDetail(c, trackingErrors.RiderCreateFailed, utils.ExtractValidationError(c, err)))
+		return
+	}
+	_ = conform.Strings(&dto)
+	created, err := ctrl.access.CreateRider(c.Request.Context(), tenantID, &dto,
+		userIDAtLevel(c, tenancyModels.RoleOrganization), c.GetString("lang"))
+	if err != nil {
+		accessError(c, err)
+		return
+	}
+	c.JSON(http.StatusCreated, created)
 }
 
 // ListRiderGuardians godoc

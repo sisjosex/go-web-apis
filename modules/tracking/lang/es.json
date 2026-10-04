@@ -219,6 +219,7 @@
   "tracking.access.user-deleted": "Este correo pertenece a una cuenta eliminada",
   "tracking.access.grant.failed": "No se pudo dar acceso a la app",
   "tracking.rider.guardian-not-found": "Esta cuenta no es apoderado del pasajero",
+  "tracking.rider.guardian-invalid": "Un apoderado necesita una cuenta, un correo con nombre y apellido, o un nombre con teléfono",
   "document-digest.email.subject": "%d documento(s) requieren atención en %s",
   "document-digest.email.description": "Estos documentos entraron en su periodo de aviso. Cada documento se nombra aquí una vez; al renovarlo vuelve a vigilarse.",
   "document-digest.email.button-text": "Abrir documentos",
