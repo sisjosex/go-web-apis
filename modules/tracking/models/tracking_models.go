@@ -310,6 +310,11 @@ type Rider struct {
 	HomeLatitude  *float64 `json:"home_latitude"`
 	HomeLongitude *float64 `json:"home_longitude"`
 	Notes         *string  `json:"notes"`
+	// GroupLabel is the rider's course or shift, "5to B" (TRACK-039 D2).
+	GroupLabel *string `json:"group_label"`
+	// AssignedRouteName rides only on a list read for a route: the route the rider already rides in
+	// its direction, which the bulk add shows instead of a checkbox (TRACK-039 D1).
+	AssignedRouteName *string `json:"assigned_route_name,omitempty"`
 }
 
 // RiderRouteAssignment is which route a rider rides, on which weekdays and between which dates

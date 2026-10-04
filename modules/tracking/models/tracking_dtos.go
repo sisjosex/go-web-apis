@@ -199,6 +199,40 @@ type ListRidersQuery struct {
 	Search         string  `form:"search"`
 	Page           int     `form:"page,default=1" binding:"min=1"`
 	PageSize       int     `form:"page_size,default=20" binding:"min=1,max=100"`
+	// RouteID names, per rider, the route it already rides in that route's direction; Unassigned keeps
+	// the riders with none; Group narrows to one course (TRACK-039).
+	RouteID    *string `form:"route_id" binding:"omitempty,uuid"`
+	Unassigned *bool   `form:"unassigned"`
+	Group      string  `form:"group" binding:"omitempty,max=100"`
+}
+
+// ListRiderGroupsQuery binds GET /tracking/riders/groups.
+type ListRiderGroupsQuery struct {
+	OrganizationID *string `form:"organization_id" binding:"omitempty,uuid"`
+}
+
+// BulkAssignRidersDto is POST /tracking/routes/:id/assignments/bulk (TRACK-039 D1): days and start
+// default to the route's schedule days and its today.
+type BulkAssignRidersDto struct {
+	RiderIDs   []uuid.UUID          `json:"rider_ids" binding:"required,min=1,max=100"`
+	DaysOfWeek *int16               `json:"days_of_week" binding:"omitempty,min=1,max=127"`
+	ValidFrom  *coreModels.DateOnly `json:"valid_from" time_format:"2006-01-02"`
+}
+
+// BulkAssignResult is one rider's outcome: assigned, or skipped with its reason (no-home, overlap…).
+type BulkAssignResult struct {
+	RiderID uuid.UUID `json:"rider_id"`
+	Status  string    `json:"status"`
+	Reason  *string   `json:"reason"`
+}
+
+// BulkAssignRidersResponse answers every rider, how many went in, the route's seats and the capacity
+// warnings of the route and its return.
+type BulkAssignRidersResponse struct {
+	Results       []*BulkAssignResult `json:"results"`
+	AssignedCount int                 `json:"assigned_count"`
+	Seats         *int32              `json:"seats"`
+	Warnings      []AssignmentWarning `json:"warnings"`
 }
 
 type ListRidersResponse struct {
@@ -226,6 +260,7 @@ type CreateRiderDto struct {
 	HomeLatitude          *float64  `json:"home_latitude" binding:"required_with=HomeLongitude,omitempty,min=-90,max=90"`
 	HomeLongitude         *float64  `json:"home_longitude" binding:"required_with=HomeLatitude,omitempty,min=-180,max=180"`
 	Notes                 *string   `json:"notes" binding:"omitempty,max=2000" conform:"trim"`
+	GroupLabel            *string   `json:"group_label" binding:"omitempty,max=100" conform:"trim"`
 	// Guardians are linked in the statement that creates the rider (TRACK-037 D2).
 	Guardians []NewRiderGuardianDto `json:"guardians" binding:"omitempty,max=5,dive"`
 	// LinkedGuardians is Guardians once their accounts are granted, as fn_rider_guardians_link reads it.
@@ -261,7 +296,9 @@ type UpdateRiderDto struct {
 	HomeLatitude          *float64 `json:"home_latitude" binding:"required_with=HomeLongitude,omitempty,min=-90,max=90"`
 	HomeLongitude         *float64 `json:"home_longitude" binding:"required_with=HomeLatitude,omitempty,min=-180,max=180"`
 	Notes                 *string  `json:"notes" binding:"omitempty,max=2000" conform:"trim"`
-	IsActive              *bool    `json:"is_active"`
+	// GroupLabel: nil keeps the group, "" clears it (TRACK-039 D2).
+	GroupLabel *string `json:"group_label" binding:"omitempty,max=100" conform:"trim"`
+	IsActive   *bool   `json:"is_active"`
 }
 
 // === DTOs for Route Management ===

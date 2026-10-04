@@ -62,6 +62,36 @@ func mapAssignmentError(err error, fallbackCode string) error {
 	return mapped
 }
 
+// BulkAssignRiders assigns many riders to a route in one call (TRACK-039 D1): each rider's outcome,
+// and the route's and its return's capacity warnings.
+func (r *TrackingRepository) BulkAssignRiders(ctx context.Context, tenantID, routeID uuid.UUID, dto *models.BulkAssignRidersDto) ([]*models.BulkAssignResult, []models.AssignmentWarning, error) {
+	rows, err := r.dbService.Query(ctx, `SELECT * FROM tracking.sp_bulk_assign_riders($1, $2, $3, $4::SMALLINT, $5::DATE)`,
+		tenantID, routeID, dto.RiderIDs, dto.DaysOfWeek, dto.ValidFrom)
+	if err != nil {
+		return nil, nil, mapAssignmentError(err, trackingErrors.AssignmentCreateFailed)
+	}
+	defer rows.Close()
+	results := []*models.BulkAssignResult{}
+	warnings := []models.AssignmentWarning{}
+	for rows.Next() {
+		var res models.BulkAssignResult
+		var raw []byte
+		if err := rows.Scan(&res.RiderID, &res.Status, &res.Reason, &raw); err != nil {
+			return nil, nil, err
+		}
+		results = append(results, &res)
+		if len(results) == 1 {
+			if err := json.Unmarshal(raw, &warnings); err != nil {
+				return nil, nil, err
+			}
+		}
+	}
+	if err := rows.Err(); err != nil {
+		return nil, nil, mapAssignmentError(err, trackingErrors.AssignmentCreateFailed)
+	}
+	return results, warnings, nil
+}
+
 // scanAssignmentWrites reads a write SP's rows: the assignments, each carrying the same warnings.
 func scanAssignmentWrites(rows pgx.Rows) ([]*models.RiderRouteAssignment, []models.AssignmentWarning, error) {
 	defer rows.Close()

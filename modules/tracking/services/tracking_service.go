@@ -295,6 +295,30 @@ func (s *TrackingService) CreateAssignment(ctx context.Context, tenantID uuid.UU
 	return &models.AssignmentResponse{Assignment: result.Assignments[0], Warnings: result.Warnings}, nil
 }
 
+// BulkAssignRiders adds many riders of a destination to a route at once (TRACK-039 D1) and answers
+// each outcome beside the route's seats.
+func (s *TrackingService) BulkAssignRiders(ctx context.Context, tenantID, routeID uuid.UUID, dto *models.BulkAssignRidersDto) (*models.BulkAssignRidersResponse, error) {
+	results, warnings, err := s.trackingRepo.BulkAssignRiders(ctx, tenantID, routeID, dto)
+	if err != nil {
+		return nil, err
+	}
+	route, err := s.trackingRepo.GetRoute(ctx, tenantID, routeID, nil)
+	if err != nil {
+		return nil, err
+	}
+	assigned := 0
+	for _, res := range results {
+		if res.Status == "assigned" {
+			assigned++
+		}
+	}
+	return &models.BulkAssignRidersResponse{Results: results, AssignedCount: assigned, Seats: route.Seats, Warnings: warnings}, nil
+}
+
+func (s *TrackingService) ListRiderGroups(ctx context.Context, tenantID uuid.UUID, organizationID *string) ([]string, error) {
+	return s.trackingRepo.ListRiderGroups(ctx, tenantID, organizationID)
+}
+
 func (s *TrackingService) CreateAssignments(ctx context.Context, tenantID uuid.UUID, dtos []models.AssignRiderDto) (*models.BulkAssignmentResponse, error) {
 	return s.trackingRepo.CreateAssignments(ctx, tenantID, dtos)
 }

@@ -159,6 +159,72 @@ func (ctrl *TrackingController) CreateAssignmentsBulk(c *gin.Context) {
 	c.JSON(http.StatusCreated, result)
 }
 
+// BulkAssignRiders godoc
+// @Summary Add many riders to a route
+// @Description Up to 100 riders in one call (TRACK-039 D1), each with its home as its stop and on the return too when the route has one; a rider without a home pin or already on another route that day is skipped with its reason and the rest still go in
+// @Tags Tracking - Assignments
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param route_id path string true "Route ID (UUID)"
+// @Param body body models.BulkAssignRidersDto true "Riders, and optionally days and start"
+// @Success 200 {object} models.BulkAssignRidersResponse
+// @Failure 400 {object} coreErrors.ErrorResponse
+// @Failure 404 {object} coreErrors.ErrorResponse
+// @Router /tracking/routes/{route_id}/assignments/bulk [post]
+func (ctrl *TrackingController) BulkAssignRiders(c *gin.Context) {
+	tenantID, ok := ctrl.requireTenantID(c)
+	if !ok {
+		return
+	}
+	routeID, err := uuid.Parse(c.Param("route_id"))
+	if err != nil {
+		c.JSON(http.StatusBadRequest, coreErrors.BuildErrorSingle(c, coreErrors.InvalidUUID))
+		return
+	}
+	var dto models.BulkAssignRidersDto
+	if err := c.ShouldBindJSON(&dto); err != nil {
+		c.JSON(http.StatusBadRequest, coreErrors.BuildErrorDetail(c, trackingErrors.AssignmentCreateFailed, utils.ExtractValidationError(c, err)))
+		return
+	}
+	result, err := ctrl.trackingService.BulkAssignRiders(c.Request.Context(), tenantID, routeID, &dto)
+	if err != nil {
+		if assignmentErrorResponse(c, err) {
+			return
+		}
+		c.JSON(http.StatusInternalServerError, coreErrors.BuildError(c, err))
+		return
+	}
+	c.JSON(http.StatusOK, result)
+}
+
+// ListRiderGroups godoc
+// @Summary The groups riders use
+// @Description The distinct groups ("5to B") of the tenant's riders, optionally of one organization (TRACK-039 D2)
+// @Tags Tracking - Riders
+// @Produce json
+// @Security BearerAuth
+// @Param organization_id query string false "Organization ID (UUID)"
+// @Success 200 {object} map[string][]string
+// @Router /tracking/riders/groups [get]
+func (ctrl *TrackingController) ListRiderGroups(c *gin.Context) {
+	tenantID, ok := ctrl.requireTenantID(c)
+	if !ok {
+		return
+	}
+	var query models.ListRiderGroupsQuery
+	if err := c.ShouldBindQuery(&query); err != nil {
+		c.JSON(http.StatusBadRequest, coreErrors.BuildErrorDetail(c, trackingErrors.RiderListFailed, utils.ExtractValidationError(c, err)))
+		return
+	}
+	groups, err := ctrl.trackingService.ListRiderGroups(c.Request.Context(), tenantID, query.OrganizationID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, coreErrors.BuildError(c, err))
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"groups": groups})
+}
+
 // UpdateAssignment godoc
 // @Summary Edit an assignment
 // @Description Every field but the rider; a field left out keeps its value. Answers the route's capacity warnings

@@ -540,6 +540,7 @@ func registerRiderRoutes(
 		denyOrganization,
 		tenancyMW.RequirePermission(trackingPerms.AssignmentsRead),
 		trackingController.SuggestRiderStops)
+	r.GET("/riders/groups", trackingController.ListRiderGroups)
 	r.GET("/riders/:rider_id", trackingController.GetRider)
 	// The card's code (TRACK-027): read as the rider is, rotated as a rider is changed.
 	r.GET("/riders/:rider_id/qr-token", trackingController.RiderQRToken)
@@ -565,6 +566,10 @@ func registerRiderRoutes(
 		denyOrganization,
 		tenancyMW.RequirePermission(trackingPerms.AssignmentsManage),
 		trackingController.CreateAssignmentsBulk)
+	r.POST("/routes/:route_id/assignments/bulk",
+		denyOrganization,
+		tenancyMW.RequirePermission(trackingPerms.AssignmentsManage),
+		trackingController.BulkAssignRiders)
 	r.PATCH("/assignments/:assignment_id",
 		denyOrganization,
 		tenancyMW.RequirePermission(trackingPerms.AssignmentsManage),
