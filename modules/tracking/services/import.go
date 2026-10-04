@@ -34,6 +34,9 @@ const (
 	importCodeDuplicate      = "tracking.import.code-duplicate"
 	importCoordinatesInvalid = "tracking.import.coordinates-invalid"
 	importCreateFailed       = "tracking.import.create-failed"
+	importServiceInvalid     = "tracking.import.service-invalid"
+	importStopUnknown        = "tracking.import.stop-unknown"
+	importMissingLocation    = "tracking.import.missing-location"
 
 	// errorParam joins a code and the value it is about, as the wizard reads it.
 	errorParam = "|"
@@ -377,7 +380,9 @@ type ridersImport struct {
 	svc trackingInterfaces.TrackingService
 }
 
-// NewRidersImportDescriptor imports the people a tenant carries, with their home and guardian contact.
+// NewRidersImportDescriptor imports the people a tenant carries, with their home and guardian contact,
+// and the service they contracted (TRACK-043): which legs, their group, and a shared stop by name. A
+// row with an address but no pin still imports, warned as missing its location, to be pinned later.
 func NewRidersImportDescriptor(svc trackingInterfaces.TrackingService) importInterfaces.ImportDescriptor {
 	return &ridersImport{svc: svc}
 }
@@ -388,7 +393,8 @@ func (d *ridersImport) Columns() []importModels.ColumnSpec {
 	return columnsOf(textColumn("first_name", true), textColumn("last_name", true), textColumn("organization", false),
 		textColumn("phone", false), textColumn("address", false), numberColumn("home_latitude", false),
 		numberColumn("home_longitude", false), textColumn("guardian_name", false), textColumn("guardian_phone", false),
-		textColumn("guardian_email", false))
+		textColumn("guardian_email", false), textColumn("service", false), textColumn("group", false),
+		textColumn("stop", false))
 }
 
 // Matches by the rider's own columns: the users file has first and last names but no organization
@@ -424,7 +430,49 @@ func (d *ridersImport) run(ctx importModels.ImportContext, line int, row map[str
 			return rowResult(line, row, []string{importCreateFailed}, true)
 		}
 	}
-	return rowResult(line, row, nil, process)
+	result := rowResult(line, row, nil, process)
+	if dto.HomeLatitude == nil && dto.StopPlaceID == nil {
+		result.Warnings = []string{importMissingLocation}
+	}
+	return result
+}
+
+// serviceLegs reads "ambos / ida / vuelta" or "both / outbound / return"; empty is both (TRACK-043 D1).
+func serviceLegs(value string) (*string, bool) {
+	legs := map[string]string{
+		"": "both", "ambos": "both", "both": "both", "ida": "outbound", "outbound": "outbound",
+		"solo ida": "outbound", "vuelta": "return", "return": "return", "solo vuelta": "return",
+	}
+	leg, ok := legs[strings.ToLower(strings.TrimSpace(value))]
+	return &leg, ok
+}
+
+// stopPlace finds a stop place of the tenant by its exact name, once per name per run (TRACK-043 D3).
+func (d *ridersImport) stopPlace(ctx importModels.ImportContext, name string) *uuid.UUID {
+	cache, ok := ctx.Scratch["tracking.stop-names"].(map[string]*uuid.UUID)
+	if !ok {
+		cache = map[string]*uuid.UUID{}
+		if ctx.Scratch != nil {
+			ctx.Scratch["tracking.stop-names"] = cache
+		}
+	}
+	key := strings.ToLower(name)
+	if id, seen := cache[key]; seen {
+		return id
+	}
+	var found *uuid.UUID
+	res, err := d.svc.ListStopPlaces(ctx.Context(), ctx.TenantID, models.ListStopPlacesQuery{Search: name, Page: 1, PageSize: 20}, nil, nil)
+	if err == nil {
+		for _, p := range res.StopPlaces {
+			if strings.EqualFold(p.Name, name) {
+				id := p.ID
+				found = &id
+				break
+			}
+		}
+	}
+	cache[key] = found
+	return found
 }
 
 func (d *ridersImport) dto(ctx importModels.ImportContext, row map[string]string) (*models.CreateRiderDto, []string) {
@@ -446,6 +494,16 @@ func (d *ridersImport) dto(ctx importModels.ImportContext, row map[string]string
 	if !okLat || !okLng || (lat == nil) != (lng == nil) {
 		errs = append(errs, importCoordinatesInvalid)
 	}
+	legs, okLegs := serviceLegs(cell(row, "service"))
+	if !okLegs {
+		errs = append(errs, importServiceInvalid+errorParam+cell(row, "service"))
+	}
+	var stopID *uuid.UUID
+	if stop := cell(row, "stop"); stop != "" {
+		if stopID = d.stopPlace(ctx, stop); stopID == nil {
+			errs = append(errs, importStopUnknown+errorParam+stop)
+		}
+	}
 	if len(errs) > 0 {
 		return nil, errs
 	}
@@ -459,6 +517,7 @@ func (d *ridersImport) dto(ctx importModels.ImportContext, row map[string]string
 		HomeLatitude: lat, HomeLongitude: lng,
 		GuardianName: optionalCell(row, "guardian_name"), GuardianPhone: optionalCell(row, "guardian_phone"),
 		GuardianEmail: optionalCell(row, "guardian_email"),
+		ServiceLegs:   legs, GroupLabel: optionalCell(row, "group"), StopPlaceID: stopID,
 	}, nil
 }
 

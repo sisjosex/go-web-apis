@@ -204,6 +204,8 @@ type ListRidersQuery struct {
 	RouteID    *string `form:"route_id" binding:"omitempty,uuid"`
 	Unassigned *bool   `form:"unassigned"`
 	Group      string  `form:"group" binding:"omitempty,max=100"`
+	// MissingLocation keeps the riders still without a home pin (TRACK-043 D2).
+	MissingLocation *bool `form:"missing_location"`
 }
 
 // ListRiderGroupsQuery binds GET /tracking/riders/groups.
@@ -261,6 +263,9 @@ type CreateRiderDto struct {
 	HomeLongitude         *float64  `json:"home_longitude" binding:"required_with=HomeLatitude,omitempty,min=-180,max=180"`
 	Notes                 *string   `json:"notes" binding:"omitempty,max=2000" conform:"trim"`
 	GroupLabel            *string   `json:"group_label" binding:"omitempty,max=100" conform:"trim"`
+	// ServiceLegs is both (the default), outbound or return; StopPlaceID a shared stop (TRACK-043).
+	ServiceLegs *string    `json:"service_legs" binding:"omitempty,oneof=both outbound return"`
+	StopPlaceID *uuid.UUID `json:"stop_place_id" binding:"omitempty,uuidv4"`
 	// Guardians are linked in the statement that creates the rider (TRACK-037 D2).
 	Guardians []NewRiderGuardianDto `json:"guardians" binding:"omitempty,max=5,dive"`
 	// LinkedGuardians is Guardians once their accounts are granted, as fn_rider_guardians_link reads it.
@@ -298,7 +303,10 @@ type UpdateRiderDto struct {
 	Notes                 *string  `json:"notes" binding:"omitempty,max=2000" conform:"trim"`
 	// GroupLabel: nil keeps the group, "" clears it (TRACK-039 D2).
 	GroupLabel *string `json:"group_label" binding:"omitempty,max=100" conform:"trim"`
-	IsActive   *bool   `json:"is_active"`
+	// ServiceLegs and StopPlaceID keep their value when left out (TRACK-043).
+	ServiceLegs *string    `json:"service_legs" binding:"omitempty,oneof=both outbound return"`
+	StopPlaceID *uuid.UUID `json:"stop_place_id" binding:"omitempty,uuidv4"`
+	IsActive    *bool      `json:"is_active"`
 }
 
 // === DTOs for Route Management ===

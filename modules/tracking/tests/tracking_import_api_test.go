@@ -92,3 +92,36 @@ func TestImportRiders(t *testing.T) {
 	assert.Equal(t, []string{"created", "skipped", "failed"}, rowStatuses(done))
 	assert.Contains(t, done.Rows[2].Errors, "tracking.import.organization-unknown|Nowhere")
 }
+
+// TestImportRiders_Service - TRACK-043: a pinned row, an address-only row (imported, warned, listed
+// under missing_location with its address) and an unknown stop (refused by name); the legs and group
+// land on the rider.
+func TestImportRiders_Service(t *testing.T) {
+	helper := SetupTrackingTest(t)
+	defer helper.Close()
+	school := OrganizationName(t, helper, MainSchoolID)
+	last := "Srv" + uuid.New().String()[:5]
+	csv := fmt.Sprintf("first_name,last_name,organization,home_latitude,home_longitude,address,service,group,stop\n"+
+		"Ana,%[1]s,%[2]s,-17.39,-66.15,,solo ida,5to B,\n"+
+		"Beto,%[1]s,%[2]s,,,Calle Jordán 123,vuelta,,\n"+
+		"Ceci,%[1]s,%[2]s,,,,ambos,,Parada Inexistente\n", last, school)
+
+	done := importTrackingCSV(t, helper, "/import", "tracking_riders", csv)
+	assert.Equal(t, []string{"created", "created", "failed"}, rowStatuses(done))
+	assert.Contains(t, done.Rows[1].Warnings, "tracking.import.missing-location")
+	assert.Contains(t, done.Rows[2].Errors, "tracking.import.stop-unknown|Parada Inexistente")
+
+	missing := ListRiders(t, helper, "?missing_location=true&search="+last)
+	if assert.Len(t, missing.Riders, 1) {
+		assert.Equal(t, "Beto", missing.Riders[0].FirstName)
+		assert.Equal(t, "Calle Jordán 123", *missing.Riders[0].Address)
+		assert.Equal(t, "return", missing.Riders[0].ServiceLegs)
+	}
+	all := ListRiders(t, helper, "?search="+last)
+	for _, r := range all.Riders {
+		if r.FirstName == "Ana" {
+			assert.Equal(t, "outbound", r.ServiceLegs)
+			assert.Equal(t, "5to B", *r.GroupLabel)
+		}
+	}
+}

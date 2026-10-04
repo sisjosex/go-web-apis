@@ -315,6 +315,11 @@ type Rider struct {
 	// AssignedRouteName rides only on a list read for a route: the route the rider already rides in
 	// its direction, which the bulk add shows instead of a checkbox (TRACK-039 D1).
 	AssignedRouteName *string `json:"assigned_route_name,omitempty"`
+	// ServiceLegs is what the family contracted — both, outbound or return — and StopPlaceID a shared
+	// stop the school agreed instead of the home (TRACK-043 D1, D3).
+	ServiceLegs   string     `json:"service_legs"`
+	StopPlaceID   *uuid.UUID `json:"stop_place_id"`
+	StopPlaceName *string    `json:"stop_place_name"`
 }
 
 // RiderRouteAssignment is which route a rider rides, on which weekdays and between which dates
