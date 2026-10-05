@@ -48,6 +48,8 @@ func mapAssignmentError(err error, fallbackCode string) error {
 		code = trackingErrors.AssignmentRange
 	case "rider.not-found":
 		code = trackingErrors.RiderNotFound
+	case "rider.location-required":
+		code = trackingErrors.RiderLocationRequired
 	case "route.not-found":
 		code = trackingErrors.RouteNotFound
 	default:

@@ -274,6 +274,17 @@ const (
 	RiderNoHomeLocation    = "tracking.rider.no-home-location"
 	RiderSuggestionsFailed = "tracking.rider.suggestions.failed"
 
+	// Rider places (TRACK-044 D4). LocationRequired refuses an assignment whose leg needs the home of a
+	// rider with neither a home pin nor a shared stop (D3); PlaceDefault deleting the default place while
+	// others exist.
+	RiderLocationRequired  = "tracking.rider.location-required"
+	RiderPlaceNotFound     = "tracking.rider-place.not-found"
+	RiderPlaceDefault      = "tracking.rider-place.default"
+	RiderPlaceListFailed   = "tracking.rider-place.list.failed"
+	RiderPlaceCreateFailed = "tracking.rider-place.create.failed"
+	RiderPlaceUpdateFailed = "tracking.rider-place.update.failed"
+	RiderPlaceDeleteFailed = "tracking.rider-place.delete.failed"
+
 	TenantNotFound = "tracking.tenant.not-found"
 
 	// Generic errors

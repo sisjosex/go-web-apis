@@ -24,6 +24,7 @@ var assignmentStatus = map[string]int{
 	trackingErrors.AssignmentStopNotOnRoute: http.StatusBadRequest,
 	trackingErrors.AssignmentDaysOfWeek:     http.StatusBadRequest,
 	trackingErrors.AssignmentRange:          http.StatusBadRequest,
+	trackingErrors.RiderLocationRequired:    http.StatusUnprocessableEntity,
 	trackingErrors.OrganizationScopeDenied:  http.StatusForbidden,
 }
 

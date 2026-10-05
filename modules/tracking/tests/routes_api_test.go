@@ -122,7 +122,7 @@ func TestRiderStatus_RouteWithoutLegacyEndTime(t *testing.T) {
 	helper := SetupTrackingTest(t)
 	defer helper.Close()
 
-	riderID := CreateTestRider(t, helper)
+	riderID := CreateHomedRider(t, helper)
 	routeID := CreateTestRoute(t, helper)
 	CreateAssignment(t, helper, AssignmentBody(riderID, routeID, 127))
 

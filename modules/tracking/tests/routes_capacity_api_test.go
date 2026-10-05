@@ -49,7 +49,7 @@ func TestRoute_CapacityOverride(t *testing.T) {
 		assert.Equal(t, int32(1), *route.CapacityOverride)
 	}
 
-	body := AssignmentBody(CreateTestRider(t, helper), routeID, EveryDayMask)
+	body := AssignmentBody(CreateHomedRider(t, helper), routeID, EveryDayMask)
 	w := helper.DoRequest("POST", "/tracking/assignments", body, map[string]string{})
 	assert.Equal(t, http.StatusCreated, w.Code, w.Body.String())
 	var created models.AssignmentResponse

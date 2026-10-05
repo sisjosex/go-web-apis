@@ -160,6 +160,7 @@ func guardianRoute(t *testing.T, helper *testhelpers.ApiTestHelper, start string
 	})
 	body := AssignmentBody(TestRiderJohnID, routeID, EveryDayMask)
 	body["pickup_stop_place_id"] = CentralStationID
+	body["dropoff_stop_place_id"] = SchoolAStopID
 	assignment := CreateAssignment(t, helper, body)
 	t.Cleanup(func() {
 		helper.DoRequest("DELETE", "/tracking/assignments/"+assignment["id"].(string), nil, map[string]string{})
@@ -252,7 +253,7 @@ func TestSuggestions_NearHome(t *testing.T) {
 		`UPDATE tracking.routes SET vehicle_id = $2 WHERE id = $1`, routeID, TestBusID); err != nil {
 		t.Fatalf("set vehicle: %v", err)
 	}
-	CreateAssignment(t, helper, AssignmentBody(CreateTestRider(t, helper), routeID, WeekdaysMask))
+	CreateAssignment(t, helper, AssignmentBody(CreateHomedRider(t, helper), routeID, WeekdaysMask))
 
 	riderID := CreateTestRider(t, helper)
 	w = helper.DoRequest("GET", "/tracking/riders/"+riderID+"/suggestions?direction=outbound", nil, map[string]string{})

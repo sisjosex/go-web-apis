@@ -932,14 +932,30 @@ func CreateAssignment(t *testing.T, helper *testhelpers.ApiTestHelper, body map[
 	return ParseResponse(t, w.Body.Bytes())["assignment"].(map[string]interface{})
 }
 
-// CreateTestRider creates a rider in MainSchoolID and returns its id
+// CreateTestRider creates a rider in MainSchoolID without a home pin, as an import row with only an
+// address leaves one (TRACK-043 D2), and returns its id. Assigning one needs explicit stops.
 func CreateTestRider(t *testing.T, helper *testhelpers.ApiTestHelper) string {
+	return createRider(t, helper, nil)
+}
+
+// CreateHomedRider creates a rider in MainSchoolID with a home pin out of town, so an assignment with no
+// stop can place them (TRACK-044 D3), and returns its id. Assigned to a seeded route it adds a stop that
+// later tests see; give it a route of its own.
+func CreateHomedRider(t *testing.T, helper *testhelpers.ApiTestHelper) string {
+	return createRider(t, helper, map[string]interface{}{"home_latitude": -17.35, "home_longitude": -66.2})
+}
+
+func createRider(t *testing.T, helper *testhelpers.ApiTestHelper, extra map[string]interface{}) string {
+	t.Helper()
 	dto := ValidRiderDto()
 	body := map[string]interface{}{
 		"organization_id": dto.OrganizationID,
 		"rider_type":      dto.RiderType,
 		"first_name":      dto.FirstName,
 		"last_name":       dto.LastName,
+	}
+	for k, v := range extra {
+		body[k] = v
 	}
 	w := helper.DoRequest("POST", "/tracking/riders", body, map[string]string{})
 	if w.Code != http.StatusCreated {

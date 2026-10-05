@@ -657,12 +657,13 @@ type AssignRiderDto struct {
 
 // UpdateAssignmentDto edits an assignment in place. Every field is optional and a field left out
 // keeps its value — the SP reads the object by key presence, hence omitempty everywhere. The rider
-// is not editable: another rider is a delete and a create.
+// is not editable: another rider is a delete and a create. A stop may be "home": the rider's home on
+// the route, added as a stop if missing (TRACK-044).
 type UpdateAssignmentDto struct {
 	RouteID            *uuid.UUID           `json:"route_id,omitempty" binding:"omitempty,uuidv4"`
 	DaysOfWeek         *int16               `json:"days_of_week,omitempty" binding:"omitempty,min=1,max=127"`
-	PickupStopPlaceID  *uuid.UUID           `json:"pickup_stop_place_id,omitempty" binding:"omitempty,uuidv4"`
-	DropoffStopPlaceID *uuid.UUID           `json:"dropoff_stop_place_id,omitempty" binding:"omitempty,uuidv4"`
+	PickupStopPlaceID  *string              `json:"pickup_stop_place_id,omitempty" binding:"omitempty,uuid|eq=home"`
+	DropoffStopPlaceID *string              `json:"dropoff_stop_place_id,omitempty" binding:"omitempty,uuid|eq=home"`
 	ValidFrom          *coreModels.DateOnly `json:"valid_from,omitempty" binding:"omitempty" time_format:"2006-01-02"`
 	ValidUntil         *coreModels.DateOnly `json:"valid_until,omitempty" binding:"omitempty" time_format:"2006-01-02"`
 }

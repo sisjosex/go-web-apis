@@ -157,6 +157,12 @@ type TrackingRepository interface {
 	DeleteRiderAbsence(ctx context.Context, tenantID, riderID, absenceID uuid.UUID, scopeUserID, guardianUserID *uuid.UUID) error
 	SuggestRiderStops(ctx context.Context, tenantID, riderID uuid.UUID, query models.SuggestRiderStopsQuery) ([]*models.RiderStopSuggestion, error)
 
+	// Rider places (TRACK-044 D4)
+	ListRiderPlaces(ctx context.Context, tenantID, riderID uuid.UUID, scopeUserID *uuid.UUID) ([]*models.RiderPlace, error)
+	CreateRiderPlace(ctx context.Context, tenantID, riderID uuid.UUID, dto *models.CreateRiderPlaceDto, scopeUserID *uuid.UUID) (*models.RiderPlace, error)
+	UpdateRiderPlace(ctx context.Context, tenantID, riderID, placeID uuid.UUID, dto *models.UpdateRiderPlaceDto, scopeUserID *uuid.UUID) (*models.RiderPlace, error)
+	DeleteRiderPlace(ctx context.Context, tenantID, riderID, placeID uuid.UUID, scopeUserID *uuid.UUID) error
+
 	// Organization members
 	ListOrganizationMembers(ctx context.Context, tenantID uuid.UUID, organizationID uuid.UUID) ([]*models.OrganizationMember, error)
 	UpsertOrganizationMember(ctx context.Context, tenantID uuid.UUID, organizationID uuid.UUID, userID uuid.UUID, role string) (*models.OrganizationMember, error)

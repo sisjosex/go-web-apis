@@ -565,6 +565,19 @@ func registerRiderRoutes(
 		tenancyMW.RequirePermission(trackingPerms.AssignmentsRead),
 		trackingController.SuggestRiderStops)
 	r.GET("/riders/groups", trackingController.ListRiderGroups)
+	// Saved places (TRACK-044 D4): read and changed as the rider is.
+	r.GET("/riders/:rider_id/places",
+		tenancyMW.RequirePermission(trackingPerms.RidersRead),
+		trackingController.ListRiderPlaces)
+	r.POST("/riders/:rider_id/places",
+		tenancyMW.RequirePermission(trackingPerms.RidersWrite),
+		trackingController.CreateRiderPlace)
+	r.PATCH("/riders/:rider_id/places/:place_id",
+		tenancyMW.RequirePermission(trackingPerms.RidersWrite),
+		trackingController.UpdateRiderPlace)
+	r.DELETE("/riders/:rider_id/places/:place_id",
+		tenancyMW.RequirePermission(trackingPerms.RidersWrite),
+		trackingController.DeleteRiderPlace)
 	r.GET("/riders/:rider_id", trackingController.GetRider)
 	// The card's code (TRACK-027): read as the rider is, rotated as a rider is changed.
 	r.GET("/riders/:rider_id/qr-token", trackingController.RiderQRToken)
@@ -746,6 +759,10 @@ func registerOpenRiderRoutes(g *gin.RouterGroup, trackingController *controllers
 	g.POST("/riders/:rider_id/absences", trackingController.CreateRiderAbsence)
 	g.DELETE("/riders/:rider_id/absences/:absence_id", trackingController.DeleteRiderAbsence)
 	g.GET("/riders/:rider_id/suggestions", trackingController.SuggestRiderStops)
+	g.GET("/riders/:rider_id/places", trackingController.ListRiderPlaces)
+	g.POST("/riders/:rider_id/places", trackingController.CreateRiderPlace)
+	g.PATCH("/riders/:rider_id/places/:place_id", trackingController.UpdateRiderPlace)
+	g.DELETE("/riders/:rider_id/places/:place_id", trackingController.DeleteRiderPlace)
 	g.GET("/assignments", trackingController.ListAssignments)
 	g.POST("/assignments", trackingController.CreateAssignment)
 	g.POST("/assignments/bulk", trackingController.CreateAssignmentsBulk)

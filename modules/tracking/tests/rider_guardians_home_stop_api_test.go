@@ -120,7 +120,8 @@ func TestAssignments_HomeIsDefaultStop(t *testing.T) {
 	assert.Len(t, ListRouteStops(t, helper, routeID, ""), 3)
 	assert.Len(t, ListRouteVersions(t, helper, routeID), 2)
 
-	// A rider without a home pin still assigns, with no stop.
-	c := CreateAssignment(t, helper, AssignmentBody(CreateTestRider(t, helper), routeID, WeekdaysMask))
-	assert.Nil(t, c["pickup_stop_place_id"])
+	// A rider without a home pin cannot be placed (TRACK-044 D3).
+	w := helper.DoRequest("POST", "/tracking/assignments", AssignmentBody(CreateTestRider(t, helper), routeID, WeekdaysMask), map[string]string{})
+	expectStatus(t, w, http.StatusUnprocessableEntity)
+	assert.Contains(t, w.Body.String(), "tracking.rider.location-required")
 }

@@ -60,7 +60,7 @@ func TestAssignments_DaysSplitAcrossRoutes(t *testing.T) {
 	helper := SetupTrackingTest(t)
 	defer helper.Close()
 
-	riderID := CreateTestRider(t, helper)
+	riderID := CreateHomedRider(t, helper)
 	routeA := CreateTestRoute(t, helper)
 	routeB := CreateTestRoute(t, helper)
 
@@ -89,7 +89,7 @@ func TestAssignments_Overlap(t *testing.T) {
 	helper := SetupTrackingTest(t)
 	defer helper.Close()
 
-	riderID := CreateTestRider(t, helper)
+	riderID := CreateHomedRider(t, helper)
 	routeA := CreateTestRoute(t, helper)
 	CreateAssignment(t, helper, AssignmentBody(riderID, routeA, MonToWedMask))
 
@@ -133,7 +133,7 @@ func TestAssignments_CapacityWarnings(t *testing.T) {
 	var body map[string]interface{}
 	for i := 0; i < 3; i++ {
 		w = helper.DoRequest("POST", "/tracking/assignments",
-			AssignmentBody(CreateTestRider(t, helper), routeID, EveryDayMask), map[string]string{})
+			AssignmentBody(CreateHomedRider(t, helper), routeID, EveryDayMask), map[string]string{})
 		expectStatus(t, w, http.StatusCreated)
 		body = ParseResponse(t, w.Body.Bytes())
 		if i < 2 {
@@ -162,7 +162,7 @@ func TestAssignments_BulkRollsBackOnOverlap(t *testing.T) {
 	helper := SetupTrackingTest(t)
 	defer helper.Close()
 
-	riderID := CreateTestRider(t, helper)
+	riderID := CreateHomedRider(t, helper)
 	routeID := CreateTestRoute(t, helper)
 	items := []map[string]interface{}{
 		AssignmentBody(riderID, routeID, MonToWedMask),
@@ -207,7 +207,7 @@ func TestAssignments_UpdateAndDelete(t *testing.T) {
 	helper := SetupTrackingTest(t)
 	defer helper.Close()
 
-	riderID := CreateTestRider(t, helper)
+	riderID := CreateHomedRider(t, helper)
 	routeID := CreateTestRoute(t, helper)
 	a := CreateAssignment(t, helper, AssignmentBody(riderID, routeID, MonToWedMask))
 	CreateAssignment(t, helper, AssignmentBody(riderID, routeID, ThuToFriMask))
@@ -238,7 +238,7 @@ func TestAssignments_ListOtherTenant(t *testing.T) {
 	helper := SetupTrackingTest(t)
 	defer helper.Close()
 	routeID := CreateTestRoute(t, helper)
-	CreateAssignment(t, helper, AssignmentBody(CreateTestRider(t, helper), routeID, WeekdaysMask))
+	CreateAssignment(t, helper, AssignmentBody(CreateHomedRider(t, helper), routeID, WeekdaysMask))
 	if _, err := helper.DB().Execute(context.Background(), `
 		WITH o AS (
 			INSERT INTO tracking.organizations (tenant_id, kind, name) VALUES ($1, 'school', 'Elsewhere') RETURNING id

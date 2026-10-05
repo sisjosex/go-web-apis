@@ -409,6 +409,26 @@ func (s *TrackingService) DeleteRiderAbsence(ctx context.Context, tenantID, ride
 	return s.trackingRepo.DeleteRiderAbsence(ctx, tenantID, riderID, absenceID, scopeUserID, guardianUserID)
 }
 
+func (s *TrackingService) ListRiderPlaces(ctx context.Context, tenantID, riderID uuid.UUID, scopeUserID *uuid.UUID) (*models.ListRiderPlacesResponse, error) {
+	places, err := s.trackingRepo.ListRiderPlaces(ctx, tenantID, riderID, scopeUserID)
+	if err != nil {
+		return nil, err
+	}
+	return &models.ListRiderPlacesResponse{Places: places}, nil
+}
+
+func (s *TrackingService) CreateRiderPlace(ctx context.Context, tenantID, riderID uuid.UUID, dto *models.CreateRiderPlaceDto, scopeUserID *uuid.UUID) (*models.RiderPlace, error) {
+	return s.trackingRepo.CreateRiderPlace(ctx, tenantID, riderID, dto, scopeUserID)
+}
+
+func (s *TrackingService) UpdateRiderPlace(ctx context.Context, tenantID, riderID, placeID uuid.UUID, dto *models.UpdateRiderPlaceDto, scopeUserID *uuid.UUID) (*models.RiderPlace, error) {
+	return s.trackingRepo.UpdateRiderPlace(ctx, tenantID, riderID, placeID, dto, scopeUserID)
+}
+
+func (s *TrackingService) DeleteRiderPlace(ctx context.Context, tenantID, riderID, placeID uuid.UUID, scopeUserID *uuid.UUID) error {
+	return s.trackingRepo.DeleteRiderPlace(ctx, tenantID, riderID, placeID, scopeUserID)
+}
+
 func (s *TrackingService) SuggestRiderStops(ctx context.Context, tenantID, riderID uuid.UUID, query models.SuggestRiderStopsQuery) (*models.SuggestRiderStopsResponse, error) {
 	suggestions, err := s.trackingRepo.SuggestRiderStops(ctx, tenantID, riderID, query)
 	if err != nil {

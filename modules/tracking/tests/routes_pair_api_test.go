@@ -109,10 +109,10 @@ func TestRoutePair_AssignmentLegs(t *testing.T) {
 	out, ret := createPair(t, helper, "")
 	outID, retID := ExtractID(t, out), ExtractID(t, ret)
 
-	both := CreateTestRider(t, helper)
+	both := CreateHomedRider(t, helper)
 	w := helper.DoRequest("POST", "/tracking/assignments", AssignmentBody(both, outID, WeekdaysMask), map[string]string{})
 	expectStatus(t, w, http.StatusCreated)
-	onlyOut := AssignmentBody(CreateTestRider(t, helper), outID, WeekdaysMask)
+	onlyOut := AssignmentBody(CreateHomedRider(t, helper), outID, WeekdaysMask)
 	onlyOut["legs"] = "outbound"
 	expectStatus(t, helper.DoRequest("POST", "/tracking/assignments", onlyOut, map[string]string{}), http.StatusCreated)
 
@@ -137,7 +137,7 @@ func TestRoutePair_SeatsShort(t *testing.T) {
 	out, _ := createPair(t, helper, "")
 	outID := ExtractID(t, out)
 	for i := 0; i < 3; i++ {
-		body := AssignmentBody(CreateTestRider(t, helper), outID, WeekdaysMask)
+		body := AssignmentBody(CreateHomedRider(t, helper), outID, WeekdaysMask)
 		body["valid_from"] = "2026-01-01"
 		expectStatus(t, helper.DoRequest("POST", "/tracking/assignments", body, map[string]string{}), http.StatusCreated)
 	}

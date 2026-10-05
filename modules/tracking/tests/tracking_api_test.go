@@ -1259,7 +1259,7 @@ func TestGetRiderStatus_PicksCurrentOrNextRoute(t *testing.T) {
 	helper := SetupTrackingTest(t)
 	defer helper.Close()
 
-	riderID := CreateTestRider(t, helper)
+	riderID := CreateHomedRider(t, helper)
 	CreateTestRouteAssignment(t, helper, riderID, "00:00:00", "00:00:01", "outbound")
 	lateRouteID := CreateTestRouteAssignment(t, helper, riderID, "23:59:00", "23:59:59", "inbound")
 
@@ -1277,7 +1277,7 @@ func TestGetRiderStatus_AllRoutesEnded(t *testing.T) {
 	helper := SetupTrackingTest(t)
 	defer helper.Close()
 
-	riderID := CreateTestRider(t, helper)
+	riderID := CreateHomedRider(t, helper)
 	CreateTestRouteAssignment(t, helper, riderID, "00:00:00", "00:00:01", "outbound")
 
 	w := helper.DoRequest("GET", fmt.Sprintf("/tracking/riders/%s/status", riderID), nil, map[string]string{})
