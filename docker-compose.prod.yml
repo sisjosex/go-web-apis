@@ -25,7 +25,9 @@ name: xanthops
 # 0.5 GB, the five Go processes 2.8 GB under a hard limit each with GOMEMLIMIT
 # just below it, Caddy 0.25 GB — ~4 GB stay with the kernel as page cache.
 # No CPU quotas: a quota on 6 cores leaves cores idle; cpu_shares only weigh
-# who wins under contention (PostgreSQL 2048, APIs 1024, the rest 512).
+# who wins under contention (PostgreSQL 2048, APIs 1024, the rest 512). The
+# one exception is valhalla and vroom, capped at the 2 cores their 2 workers
+# use anyway, so a full route proposal never crowds out the API or PostgreSQL.
 
 # Every container logs through json-file with a cap (D3): at most 5 × 20 MB
 # each, compressed, so the disk never fills and nothing else has to rotate.
@@ -360,6 +362,9 @@ services:
     restart: unless-stopped
     command: ["valhalla_service", "/valhalla/valhalla.json", "2"]
     mem_limit: 1g
+    # A hard cap matching its 2 workers: a 101-point bus matrix (a full proposal) takes ~6 s
+    # and ~450 MB, and never more than 2 cores, so the API keeps the rest.
+    cpus: 2
     cpu_shares: 512
     logging: *logging
     volumes:
@@ -377,6 +382,7 @@ services:
     image: ghcr.io/vroom-project/vroom-docker:v1.14.0
     restart: unless-stopped
     mem_limit: 512m
+    cpus: 2 # matches threads: 2 in docker/vroom/config.yml
     cpu_shares: 256
     logging: *logging
     depends_on: [valhalla]
