@@ -1,3 +1,5 @@
+//go:build !noasynqmon
+
 package jobs
 
 import (
@@ -23,7 +25,8 @@ func (s sharedConn) MakeRedisClient() interface{} {
 	return s.valkey.Client()
 }
 
-// Monitor returns the asynqmon UI and API rooted at MonitorPath.
+// Monitor returns the asynqmon UI and API rooted at MonitorPath. The production image builds with
+// -tags noasynqmon (monitor_off.go): the UI is megabytes of the binary nobody opens there (INFRA-011).
 func Monitor(valkey coreServices.ValkeyService) http.Handler {
 	return asynqmon.New(asynqmon.Options{
 		RootPath:     MonitorPath,

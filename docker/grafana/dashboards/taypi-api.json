@@ -1,0 +1,320 @@
+{
+  "uid": "taypi-api",
+  "title": "Taypi — API and database",
+  "schemaVersion": 39,
+  "version": 1,
+  "time": {
+    "from": "now-24h",
+    "to": "now"
+  },
+  "refresh": "1m",
+  "tags": [
+    "taypi",
+    "INFRA-011"
+  ],
+  "panels": [
+    {
+      "id": 1,
+      "type": "timeseries",
+      "title": "API p95 by route (5 min)",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 0,
+        "w": 12,
+        "h": 8
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s"
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "right",
+          "calcs": [
+            "lastNotNull",
+            "max"
+          ]
+        }
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "histogram_quantile(0.95, sum by (le, route) (rate(http_request_duration_seconds_bucket{job=\"api\"}[5m])))",
+          "legendFormat": "{{route}}"
+        }
+      ]
+    },
+    {
+      "id": 2,
+      "type": "timeseries",
+      "title": "API p50 by route (5 min)",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "x": 12,
+        "y": 0,
+        "w": 12,
+        "h": 8
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s"
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "right",
+          "calcs": [
+            "lastNotNull",
+            "max"
+          ]
+        }
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "histogram_quantile(0.5, sum by (le, route) (rate(http_request_duration_seconds_bucket{job=\"api\"}[5m])))",
+          "legendFormat": "{{route}}"
+        }
+      ]
+    },
+    {
+      "id": 3,
+      "type": "timeseries",
+      "title": "Requests and 5xx per second",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 8,
+        "w": 12,
+        "h": 8
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "reqps"
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "right",
+          "calcs": [
+            "lastNotNull",
+            "max"
+          ]
+        }
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum(rate(http_request_duration_seconds_count{job=\"api\"}[5m]))",
+          "legendFormat": "requests"
+        },
+        {
+          "refId": "B",
+          "expr": "sum(rate(http_request_duration_seconds_count{job=\"api\",status=\"5xx\"}[5m]))",
+          "legendFormat": "5xx"
+        }
+      ]
+    },
+    {
+      "id": 4,
+      "type": "timeseries",
+      "title": "Go memory and goroutines",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "x": 12,
+        "y": 8,
+        "w": 12,
+        "h": 8
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "bytes"
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "right",
+          "calcs": [
+            "lastNotNull",
+            "max"
+          ]
+        }
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "go_memstats_heap_inuse_bytes{job=\"api\"}",
+          "legendFormat": "heap {{role}}"
+        },
+        {
+          "refId": "B",
+          "expr": "go_goroutines{job=\"api\"}",
+          "legendFormat": "goroutines {{role}}"
+        }
+      ]
+    },
+    {
+      "id": 5,
+      "type": "table",
+      "title": "Top 20 statements by total time (since stats reset)",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 16,
+        "w": 24,
+        "h": 9
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s"
+        },
+        "overrides": []
+      },
+      "options": {
+        "sortBy": [
+          {
+            "displayName": "Value",
+            "desc": true
+          }
+        ]
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "topk(20, sum by (datname, queryid) (pg_stat_statements_seconds_total))",
+          "format": "table",
+          "instant": true
+        }
+      ],
+      "transformations": [
+        {
+          "id": "organize",
+          "options": {
+            "excludeByName": {
+              "Time": true
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": 6,
+      "type": "table",
+      "title": "Mean time per call of the slowest statements",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 25,
+        "w": 24,
+        "h": 9
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s"
+        },
+        "overrides": []
+      },
+      "options": {
+        "sortBy": [
+          {
+            "displayName": "Value",
+            "desc": true
+          }
+        ]
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "topk(20, sum by (datname, queryid) (pg_stat_statements_seconds_total) / sum by (datname, queryid) (pg_stat_statements_calls_total))",
+          "format": "table",
+          "instant": true
+        }
+      ],
+      "transformations": [
+        {
+          "id": "organize",
+          "options": {
+            "excludeByName": {
+              "Time": true
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": 7,
+      "type": "table",
+      "title": "Tables read by full scan most (seq_scan)",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 34,
+        "w": 24,
+        "h": 9
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "options": {
+        "sortBy": [
+          {
+            "displayName": "Value",
+            "desc": true
+          }
+        ]
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "topk(20, pg_stat_user_tables_seq_scan)",
+          "format": "table",
+          "instant": true
+        }
+      ],
+      "transformations": [
+        {
+          "id": "organize",
+          "options": {
+            "excludeByName": {
+              "Time": true
+            }
+          }
+        }
+      ]
+    }
+  ]
+}

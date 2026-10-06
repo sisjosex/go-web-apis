@@ -1,0 +1,16 @@
+# INFRA-011 D1: what Prometheus reads, every 30 s — the APIs' request latency per route
+# (core/middleware/observe.go) and Go runtime, and PostgreSQL through postgres-exporter.
+global:
+  scrape_interval: 30s
+  evaluation_interval: 30s
+
+scrape_configs:
+  - job_name: api
+    static_configs:
+      - targets: ["api-platform:9100"]
+        labels: { role: api }
+      - targets: ["api-worker:9100"]
+        labels: { role: worker }
+  - job_name: postgres
+    static_configs:
+      - targets: ["postgres-exporter:9187"]

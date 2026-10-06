@@ -38,6 +38,17 @@ type CoreConfig struct {
 	RateLimitPerSecond int
 	RateLimitBurst     int
 
+	// Stricter classes (INFRA-011 D3): sign-ins per minute per IP and email, heavy work (imports,
+	// exports, reports) per minute per tenant.
+	RateLimitLoginPerMin int
+	RateLimitHeavyPerMin int
+
+	// Diagnostics (INFRA-011): a request at least this slow, or a 5xx, logs one line; Prometheus reads
+	// /metrics on MetricsAddr and the profiler listens on PprofAddr — empty turns either off.
+	SlowRequest time.Duration
+	MetricsAddr string
+	PprofAddr   string
+
 	// TrustedProxies — CIDRs whose X-Forwarded-For names the real client (INFRA-010 D1). Only the
 	// proxy in front of the API may be listed: anyone else could pick their own rate-limit key.
 	TrustedProxies []string
@@ -69,9 +80,12 @@ func DefaultCoreConfig() *CoreConfig {
 		LogFormat:        "text",
 		AllowedOrigins:   []string{"http://localhost:3000"},
 
-		RateLimitPerSecond: 10,
-		RateLimitBurst:     20,
-		TrustedProxies:     []string{"127.0.0.1"},
+		RateLimitPerSecond:   10,
+		RateLimitBurst:       20,
+		RateLimitLoginPerMin: 5,
+		RateLimitHeavyPerMin: 3,
+		SlowRequest:          300 * time.Millisecond,
+		TrustedProxies:       []string{"127.0.0.1"},
 
 		AppRole:            "all",
 		JobsConcurrency:    10,
@@ -112,9 +126,14 @@ func LoadCoreConfig() *CoreConfig {
 		AllowedOrigins: utils.GetEnvAsStringSlice("ALLOWED_ORIGINS", []string{"http://localhost:3000"}),
 
 		// Rate limiting - requests per second per IP
-		RateLimitPerSecond: rateLimit,
-		RateLimitBurst:     utils.GetEnvAsInt("RATE_LIMIT_BURST", 2*rateLimit),
-		TrustedProxies:     utils.GetEnvAsStringSlice("TRUSTED_PROXIES", []string{"127.0.0.1"}),
+		RateLimitPerSecond:   rateLimit,
+		RateLimitBurst:       utils.GetEnvAsInt("RATE_LIMIT_BURST", 2*rateLimit),
+		RateLimitLoginPerMin: utils.GetEnvAsInt("RATE_LIMIT_LOGIN_PER_MIN", 5),
+		RateLimitHeavyPerMin: utils.GetEnvAsInt("RATE_LIMIT_HEAVY_PER_MIN", 3),
+		SlowRequest:          time.Duration(utils.GetEnvAsInt("SLOW_REQUEST_MS", 300)) * time.Millisecond,
+		MetricsAddr:          utils.GetEnv("METRICS_ADDR", ""),
+		PprofAddr:            utils.GetEnv("PPROF_ADDR", ""),
+		TrustedProxies:       utils.GetEnvAsStringSlice("TRUSTED_PROXIES", []string{"127.0.0.1"}),
 
 		// Runtime roles and Valkey
 		AppRole:            utils.GetEnv("APP_ROLE", "all"),

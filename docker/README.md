@@ -26,7 +26,10 @@ image for five roles, and Valhalla, which has no Debian package.
 | api-realtime | 512 MB | `GOMEMLIMIT` 420 MiB | one goroutine pair per socket |
 | api-scheduler | 256 MB | `GOMEMLIMIT` 200 MiB | |
 | caddy | 256 MB | — | |
-| **kernel page cache** | **~4 GB** | | what PostgreSQL reads when a page is not in its buffers |
+| prometheus | 256 MB | 15 days, ≤ 2 GB on disk | INFRA-011 D1 |
+| grafana | 192 MB | — | loopback only, port 3001 |
+| postgres-exporter | 64 MB | — | |
+| **kernel page cache** | **~3.5 GB** | | what PostgreSQL reads when a page is not in its buffers |
 
 `GOMEMLIMIT` makes the Go collector work harder as the heap nears the limit instead of
 letting the kernel kill the process; under no pressure it costs nothing. A process
@@ -74,6 +77,22 @@ per query, four in total.
   `docker compose exec postgres psql -U postgres -d web -c 'CREATE EXTENSION pg_stat_statements'`.
   Then `SELECT calls, round(mean_exec_time) ms, left(query, 80) FROM pg_stat_statements
   ORDER BY total_exec_time DESC LIMIT 10;`
+
+## Metrics (INFRA-011)
+
+Prometheus scrapes `/metrics` of api-platform and api-worker (`METRICS_ADDR=:9100`, compose
+network only) and PostgreSQL through postgres-exporter (`pg_stat_statements`, table scans).
+Grafana provisions one dashboard, *Taypi — API and database*: p50/p95 per route, requests
+and 5xx, Go memory, the top statements by total and by mean time, the tables read by full
+scan. It listens on the box's loopback only:
+
+    ssh -L 3001:127.0.0.1:3001 josex@<box>     # then http://localhost:3001, admin / GRAFANA_ADMIN_PASSWORD
+
+A statement that leads the totals is one spec: find its `queryid` in
+`SELECT queryid, query FROM pg_stat_statements WHERE queryid = …`. A request slower than
+`SLOW_REQUEST_MS` (300) or answered 5xx also writes one line with route, tenant and
+`duration_ms` to `docker compose logs api-platform`. The Go profiler answers inside the
+container: `docker compose exec api-platform wget -qO- 127.0.0.1:6060/debug/pprof/heap > heap.pb`.
 
 ## Logs
 

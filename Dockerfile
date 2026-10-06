@@ -11,8 +11,9 @@ COPY . .
 # or tenant from -mode, ./cmd/cli carries `migrate` and `tenant -migrate all`.
 # Static and stripped: no libc at runtime, no symbol table, no build paths.
 # noswagger: no /swagger in production, and ~9 MB less binary (routes/swagger.go).
-RUN CGO_ENABLED=0 go build -trimpath -tags noswagger -ldflags="-s -w" -o app ./cmd/server \
- && CGO_ENABLED=0 go build -trimpath -tags noswagger -ldflags="-s -w" -o cli ./cmd/cli
+# noasynqmon: no jobs UI either, ~7 MB less (core/jobs/monitor.go, INFRA-011).
+RUN CGO_ENABLED=0 go build -trimpath -tags noswagger,noasynqmon -ldflags="-s -w" -o app ./cmd/server \
+ && CGO_ENABLED=0 go build -trimpath -tags noswagger,noasynqmon -ldflags="-s -w" -o cli ./cmd/cli
 # The only files either binary reads from disk: migrations, translations, e-mail templates.
 # The Go sources and the test media under modules/ stay behind.
 RUN mkdir /assets \

@@ -163,11 +163,13 @@ func (s *tenantService) UpdateTenant(ctx context.Context, tenantID uuid.UUID, dt
 // AddUserToTenant adds a user to a tenant
 func (s *tenantService) AddUserToTenant(ctx context.Context, tenantID uuid.UUID, requesterUserID uuid.UUID, dto *models.AddUserToTenantDto) error {
 	_, err := s.tenantRepository.AddUserToTenant(ctx, tenantID, requesterUserID, dto.UserID, dto.Role)
+	InvalidateAccess(ctx, dto.UserID)
 	return err
 }
 
 // RemoveUserFromTenant removes a user from a tenant
 func (s *tenantService) RemoveUserFromTenant(ctx context.Context, tenantID uuid.UUID, requesterUserID uuid.UUID, userID uuid.UUID) error {
+	defer InvalidateAccess(ctx, userID)
 	return s.tenantRepository.RemoveUserFromTenant(ctx, tenantID, requesterUserID, userID)
 }
 
@@ -177,8 +179,18 @@ func (s *tenantService) GetTenantBySlug(ctx context.Context, slug string) (*mode
 }
 
 // VerifyUserTenantAccess verifies user has access to tenant (used by middleware)
+// Read from the shared cache first (INFRA-011 D2); a refusal is never cached, so access granted is
+// seen at once.
 func (s *tenantService) VerifyUserTenantAccess(ctx context.Context, userID uuid.UUID, slug string) (*models.TenantAccessInfo, error) {
-	return s.tenantRepository.VerifyUserTenantAccess(ctx, userID, slug)
+	if info, ok := loadAccess(ctx, userID, slug); ok {
+		return info, nil
+	}
+	info, err := s.tenantRepository.VerifyUserTenantAccess(ctx, userID, slug)
+	if err != nil {
+		return nil, err
+	}
+	storeAccess(ctx, userID, slug, info)
+	return info, nil
 }
 
 // CountUserOwnedTenants counts how many tenants a user owns
@@ -219,5 +231,6 @@ func (s *tenantService) RunTenantMigrations(ctx context.Context, tenantSlug stri
 
 // UpdateUserRole updates a user's role within a tenant
 func (s *tenantService) UpdateUserRole(ctx context.Context, tenantID uuid.UUID, requesterUserID uuid.UUID, userID uuid.UUID, role string) error {
+	defer InvalidateAccess(ctx, userID)
 	return s.tenantRepository.UpdateUserRole(ctx, tenantID, requesterUserID, userID, role)
 }

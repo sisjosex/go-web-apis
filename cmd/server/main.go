@@ -91,6 +91,9 @@ func main() {
 	dbService := services.NewDatabaseService()
 	go dbService.InitDatabase(ctx)
 
+	// /metrics for Prometheus and the profiler, each on its own listener when configured (INFRA-011).
+	services.StartDiagnostics(ctx, coreConf.MetricsAddr, coreConf.PprofAddr)
+
 	valkey, err := services.NewValkeyService(coreConf.RedisURL)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "❌ %v\n", err)

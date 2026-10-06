@@ -42,11 +42,14 @@ func (s *roleService) SetRolePermissions(ctx context.Context, tenantID, requeste
 	return s.repo.SetRolePermissions(ctx, tenantID, requesterID, roleID, permCodes)
 }
 
+// A role given or taken changes the user's permissions: their cached access goes (INFRA-011 D2).
 func (s *roleService) AssignUserRole(ctx context.Context, tenantID, requesterID, userID, roleID uuid.UUID) error {
+	defer InvalidateAccess(ctx, userID)
 	return s.repo.AssignUserRole(ctx, tenantID, requesterID, userID, roleID)
 }
 
 func (s *roleService) RevokeUserRole(ctx context.Context, tenantID, requesterID, userID, roleID uuid.UUID) error {
+	defer InvalidateAccess(ctx, userID)
 	return s.repo.RevokeUserRole(ctx, tenantID, requesterID, userID, roleID)
 }
 

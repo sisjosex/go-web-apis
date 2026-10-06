@@ -212,6 +212,9 @@ func baseDeps(r *gin.Engine, dbService coreServices.DatabaseService, valkey core
 
 // useGlobalMiddleware applies to every route registered after it.
 func useGlobalMiddleware(r *gin.Engine, valkey coreServices.ValkeyService) {
+	// First, so it times everything after it, the limiter's refusals included (INFRA-011).
+	r.Use(coreMiddleware.Observe(config.ModularAppConfig.Core.SlowRequest))
+
 	// CORS — must be registered before the rate limiter so preflight OPTIONS
 	// requests are handled before they hit the limiter.
 	// If-None-Match in, ETag out: a cached read (TRACK-028's route line) is revalidated by the page itself.
@@ -229,6 +232,8 @@ func useGlobalMiddleware(r *gin.Engine, valkey coreServices.ValkeyService) {
 	// todos los tests, así que necesita un límite alto para no rechazarse a sí misma.
 	coreConf := config.ModularAppConfig.Core
 	r.Use(coreMiddleware.RateLimit(valkey, coreConf.RateLimitPerSecond, coreConf.RateLimitBurst))
+	// Sign-in per IP and address, imports per tenant (INFRA-011 D3).
+	r.Use(coreMiddleware.RateClasses(valkey, coreConf.RateLimitLoginPerMin, coreConf.RateLimitHeavyPerMin))
 
 	// Language middleware - detects lang from ?lang=es or Accept-Language header
 	r.Use(coreMiddleware.LanguageMiddleware())
@@ -265,13 +270,18 @@ func registerAuthAndBilling(d routeDeps) billingInterfaces.BillingService {
 }
 
 // registerJobsMonitor mounts asynqmon — the queues of every tenant, so platform
-// admins only (INFRA-001). Nothing without Valkey.
+// admins only (INFRA-001). Nothing without Valkey, nor in an image built with -tags noasynqmon
+// (INFRA-011), where the UI is not linked.
 func registerJobsMonitor(d routeDeps, valkey coreServices.ValkeyService) {
 	if valkey == nil {
 		return
 	}
+	monitor := coreJobs.Monitor(valkey)
+	if monitor == nil {
+		return
+	}
 	jobsMonitor := d.engine.Group(coreJobs.MonitorPath, d.authMiddleware, authMW.RequireSystemRole(coreModels.SystemRoleSuperAdmin))
-	jobsMonitor.Any("/*path", gin.WrapH(coreJobs.Monitor(valkey)))
+	jobsMonitor.Any("/*path", gin.WrapH(monitor))
 }
 
 // registerTenancy mounts tenancy, users and the platform group when tenancy is
@@ -321,6 +331,10 @@ func tenancyChains(d routeDeps) tenantChains {
 	// TenantMiddlewareFromHeader always requires X-Tenant-Slug; super_admin can switch to any
 	// tenant, regular users must be members.
 	tenantService := tenancyServices.NewTenantService(tenancyRepos.NewTenantRepository(d.db), d.db)
+	// Every tenant request's access check shares one Valkey cache across replicas (INFRA-011 D2).
+	if d.valkey != nil {
+		tenancyServices.UseAccessCache(d.valkey)
+	}
 	chains.modules = tenancyServices.NewModuleService(tenancyRepos.NewModuleRepository(d.db))
 	chains.tenant = tenancyMW.TenantMiddlewareFromHeader(tenantService)
 	chains.portal = tenancyMW.TenantMiddlewareFromHeader(tenantService, tenancyModels.RolePortal)
