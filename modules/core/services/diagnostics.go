@@ -40,7 +40,8 @@ func serveDiagnostics(ctx context.Context, name, addr string, handler http.Handl
 	}()
 	go func() {
 		<-ctx.Done()
-		shutdown, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+		// ctx is done by now; its values stay, its cancellation must not cut the shutdown short.
+		shutdown, cancel := context.WithTimeout(context.WithoutCancel(ctx), 2*time.Second)
 		defer cancel()
 		_ = server.Shutdown(shutdown)
 	}()

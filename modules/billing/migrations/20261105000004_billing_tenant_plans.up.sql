@@ -276,6 +276,23 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql STABLE;
 
+-- The members a business has, for its usage meter: they live in the platform database, which alone has
+-- tenancy; elsewhere the answer is 0 and the caller reads the platform's.
+CREATE FUNCTION billing.sp_count_tenant_members(p_tenant_id UUID)
+RETURNS BIGINT AS $$
+DECLARE
+    v_count BIGINT := 0;
+BEGIN
+    IF to_regclass('tenancy.tenant_users') IS NOT NULL THEN
+        SELECT COUNT(*) INTO v_count FROM tenancy.tenant_users tu WHERE tu.tenant_id = p_tenant_id AND tu.is_active;
+    END IF;
+    RETURN v_count;
+END;
+$$ LANGUAGE plpgsql STABLE;
+
+COMMENT ON FUNCTION billing.sp_count_tenant_members(UUID) IS
+'Active members of a business, its users_per_tenant usage (BILLING-001)';
+
 -- The daily job: a paid plan seven days past its end expires; its business keeps every row and gets
 -- the free limits until a payment is confirmed.
 CREATE FUNCTION billing.sp_expire_subscriptions(p_grace_days INT DEFAULT 7)

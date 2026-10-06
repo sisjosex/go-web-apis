@@ -10,8 +10,8 @@ import (
 type Subscription struct {
 	ID               uuid.UUID  `json:"id"`
 	UserID           uuid.UUID  `json:"user_id"`
-	Plan             string     `json:"plan"`    // free | pro | enterprise
-	Status           string     `json:"status"`  // active | expired | canceled | trial
+	Plan             string     `json:"plan"`   // free | pro | enterprise
+	Status           string     `json:"status"` // active | expired | canceled | trial
 	StartedAt        time.Time  `json:"started_at"`
 	ExpiresAt        *time.Time `json:"expires_at"`
 	CanceledAt       *time.Time `json:"canceled_at"`

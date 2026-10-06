@@ -1244,6 +1244,17 @@ func StopPlacePoint(t *testing.T, helper *testhelpers.ApiTestHelper, id string) 
 	return lat, lng
 }
 
+// SeatRoute puts a route on the seeded bus with its own name and seats (TRACK-046): the free-seat list's
+// fixture, which the API sets only through a vehicle and a route form at once.
+func SeatRoute(t *testing.T, helper *testhelpers.ApiTestHelper, routeID, name string, seats int) {
+	t.Helper()
+	if _, err := helper.DB().Execute(context.Background(),
+		`UPDATE tracking.routes SET vehicle_id = $2, route_name = $3, capacity = $4 WHERE id = $1`,
+		routeID, TestBusID, name, seats); err != nil {
+		t.Fatalf("seat route: %v", err)
+	}
+}
+
 // CountStopPlaces counts the test tenant's places, which the paged list does not total cheaply.
 func CountStopPlaces(t *testing.T, helper *testhelpers.ApiTestHelper) int {
 	t.Helper()

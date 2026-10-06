@@ -102,7 +102,7 @@ func (r *billingRepository) GetTenantUsage(ctx context.Context, tenantID uuid.UU
 
 	var members int64
 	if err := r.dbService.GetPrimaryPool().QueryRow(ctx,
-		`SELECT COUNT(*) FROM tenancy.tenant_users WHERE tenant_id = $1 AND is_active`, tenantID).Scan(&members); err != nil {
+		`SELECT billing.sp_count_tenant_members($1)`, tenantID).Scan(&members); err != nil {
 		return nil, err
 	}
 	used["users_per_tenant"] = members

@@ -1,6 +1,7 @@
 -- BILLING-001 down: business plans, prices and payment notices go; user plans stay as they were.
 
 DROP FUNCTION IF EXISTS billing.sp_expire_subscriptions(INT);
+DROP FUNCTION IF EXISTS billing.sp_count_tenant_members(UUID);
 DROP FUNCTION IF EXISTS billing.sp_list_notified_payments();
 DROP FUNCTION IF EXISTS billing.sp_confirm_payment(UUID, UUID);
 DROP FUNCTION IF EXISTS billing.sp_notify_payment(UUID, UUID, VARCHAR, VARCHAR, VARCHAR);

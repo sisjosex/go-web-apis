@@ -4,7 +4,6 @@
 package tracking_test
 
 import (
-	"context"
 	"net/http"
 	"testing"
 
@@ -20,11 +19,7 @@ func seatedRoute(t *testing.T, name string, seats int) string {
 	helper := SetupTrackingTest(t)
 	defer helper.Close()
 	routeID, _ := createTripRoute(t, helper, "07:00")
-	if _, err := helper.DB().Execute(context.Background(),
-		`UPDATE tracking.routes SET vehicle_id = $2, route_name = $3, capacity = $4 WHERE id = $1`,
-		routeID, TestBusID, name, seats); err != nil {
-		t.Fatalf("seat route: %v", err)
-	}
+	SeatRoute(t, helper, routeID, name, seats)
 	w := helper.DoRequest("POST", "/tracking/assignments",
 		AssignmentBody(CreateHomedRider(t, helper), routeID, EveryDayMask), map[string]string{})
 	expectStatus(t, w, http.StatusCreated)
