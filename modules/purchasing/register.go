@@ -7,7 +7,7 @@ func init() {
 		Code:        "purchasing",
 		Name:        "Purchasing",
 		Description: "Purchase orders, quotes and customer management.",
-		Icon:        "shopping-cart",
+		Icon:        "cart",
 		Route:       "/purchasing",
 		Category:    "operations",
 		Features: []string{
