@@ -98,10 +98,9 @@ func (r *moduleRepository) EnableWithRequirements(ctx context.Context, tenantID 
 }
 
 func (r *moduleRepository) DisableTenantModule(ctx context.Context, tenantID uuid.UUID, moduleCode string) error {
+	// The SP returns void, which pgx cannot scan: Exec, not QueryRow.
 	query := `SELECT tenancy.sp_disable_tenant_module($1, $2)`
-	row := r.dbService.GetPrimaryPool().QueryRow(ctx, query, tenantID, moduleCode)
-	var dummy any
-	err := row.Scan(&dummy)
+	_, err := r.dbService.GetPrimaryPool().Exec(ctx, query, tenantID, moduleCode)
 	if err != nil {
 		var pgErr *pgconn.PgError
 		if errors.As(err, &pgErr) {

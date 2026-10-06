@@ -13,7 +13,8 @@ import (
 
 // TRACK-046: the routes list answers which routes still have seats.
 
-// seatedRoute is a route on the seeded bus named name with seats seats and one rider aboard.
+// seatedRoute is a route on the seeded bus named name with seats seats and two riders aboard: the one
+// createTripRoute assigns and one more.
 func seatedRoute(t *testing.T, name string, seats int) string {
 	t.Helper()
 	helper := SetupTrackingTest(t)
@@ -30,8 +31,8 @@ func seatedRoute(t *testing.T, name string, seats int) string {
 // sort=free_seats puts the emptiest first.
 func TestRoutes_FreeSeatsFilter(t *testing.T) {
 	prefix := "Cupos-" + uuid.NewString()[:8]
-	full := seatedRoute(t, prefix+" llena", 1)
-	half := seatedRoute(t, prefix+" media", 2)
+	full := seatedRoute(t, prefix+" llena", 2)
+	half := seatedRoute(t, prefix+" media", 3)
 	roomy := seatedRoute(t, prefix+" amplia", 10)
 
 	helper := SetupTrackingTest(t)

@@ -939,7 +939,7 @@ func (r *TrackingRepository) CreateRider(ctx context.Context, tenantID uuid.UUID
 	// behind the plan's rider limit (BILLING-001 D2).
 	err := r.dbService.QueryRow(ctx, `SELECT r.* FROM public.fn_within_limit($1, (
 			SELECT COUNT(*) FROM tracking.riders x
-			INNER JOIN tracking.transport_companies c ON c.id = x.company_id WHERE c.tenant_id = $1
+			INNER JOIN tracking.organizations o ON o.id = x.organization_id WHERE o.tenant_id = $1
 		), $24::INT, 'tracking_riders') lim(tenant_id)
 		CROSS JOIN LATERAL tracking.sp_create_rider(lim.tenant_id, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17::DECIMAL, $18::DECIMAL, $19::TEXT, $21::VARCHAR, $22::VARCHAR, $23::UUID) r
 		CROSS JOIN LATERAL tracking.fn_rider_guardians_link($1, r.id, $20::JSONB) g`,

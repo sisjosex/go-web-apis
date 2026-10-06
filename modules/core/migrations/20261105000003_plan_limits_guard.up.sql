@@ -41,8 +41,8 @@ DECLARE
 BEGIN
     IF to_regclass('tracking.riders') IS NOT NULL THEN
         EXECUTE 'SELECT COUNT(*) FROM tracking.riders r
-                 INNER JOIN tracking.transport_companies c ON c.id = r.company_id
-                 WHERE c.tenant_id = $1' INTO v_riders USING p_tenant_id;
+                 INNER JOIN tracking.organizations o ON o.id = r.organization_id
+                 WHERE o.tenant_id = $1' INTO v_riders USING p_tenant_id;
         EXECUTE 'SELECT COUNT(*) FROM tracking.vehicles v
                  INNER JOIN tracking.transport_companies c ON c.id = v.company_id
                  WHERE c.tenant_id = $1' INTO v_vehicles USING p_tenant_id;

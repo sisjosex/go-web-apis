@@ -330,8 +330,10 @@ BEGIN
             'latitude', ST_Y(v_dest::geometry), 'longitude', ST_X(v_dest::geometry));
     END IF;
 
-    -- The pickups in order, without the editor's own sequence (the list order is the order).
-    FOR v_item IN SELECT e FROM jsonb_array_elements(COALESCE(p_stops, '[]'::jsonb)) e LOOP
+    -- The pickups in order, without the editor's own sequence (the list order is the order). A body
+    -- without stops sends JSON null, which is not SQL NULL: anything but an array is no stops.
+    FOR v_item IN SELECT e FROM jsonb_array_elements(
+        CASE WHEN jsonb_typeof(p_stops) = 'array' THEN p_stops ELSE '[]'::jsonb END) e LOOP
         v_point := tracking.fn_stop_item_point(p_tenant_id, v_item);
         IF v_point IS NULL THEN
             RAISE EXCEPTION 'stop-place.invalid' USING ERRCODE = 'P0001';

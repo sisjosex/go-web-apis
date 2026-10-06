@@ -41,6 +41,24 @@ func LoadTenantModules(moduleService interfaces.ModuleService) gin.HandlerFunc {
 	}
 }
 
+// ModuleCheck is LoadTenantModules and RequireModule as one check for TenantMiddlewareFromHeaderThen:
+// the tenant's modules from the cache, then 403 tenant.module.not-enabled unless code is one of them.
+func ModuleCheck(moduleService interfaces.ModuleService, code string) func(*gin.Context) bool {
+	return func(c *gin.Context) bool {
+		ta, ok := c.Value("tenant_access").(*models.TenantAccessInfo)
+		if ok {
+			if codes, err := moduleService.GetTenantEnabledModuleCodes(c.Request.Context(), ta.TenantID); err == nil {
+				ta.EnabledModules = codes
+			}
+		}
+		if !ok || !ta.HasModule(code) {
+			c.AbortWithStatusJSON(http.StatusForbidden, coreErrors.BuildErrorSingle(c, tenancyErrors.ModuleNotEnabled))
+			return false
+		}
+		return true
+	}
+}
+
 // RequireModule checks that the current tenant has the specified module enabled.
 // Must be placed after TenantMiddleware or TenantMiddlewareFromHeader.
 func RequireModule(moduleCode string) gin.HandlerFunc {
@@ -153,6 +171,14 @@ func TenantMiddleware(tenantService interfaces.TenantService) gin.HandlerFunc {
 // a mobile client builds a second chain naming the level it serves, so the exception is read at the
 // route rather than from a path list in here.
 func TenantMiddlewareFromHeader(tenantService interfaces.TenantService, allowMobileRoles ...string) gin.HandlerFunc {
+	return TenantMiddlewareFromHeaderThen(tenantService, nil, allowMobileRoles...)
+}
+
+// TenantMiddlewareFromHeaderThen is TenantMiddlewareFromHeader with one more check — then — run once
+// the tenant is resolved and before the handlers; then aborts and answers false to stop the request.
+// It exists because a middleware that calls c.Next() cannot be wrapped in a closure with another: the
+// handlers would run inside the first call, before the second check (TENANCY-003 D2).
+func TenantMiddlewareFromHeaderThen(tenantService interfaces.TenantService, then func(*gin.Context) bool, allowMobileRoles ...string) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		// Check if multitenancy is enabled
 		tenancyConf := config.ModularAppConfig.Tenancy
@@ -233,6 +259,9 @@ func TenantMiddlewareFromHeader(tenantService interfaces.TenantService, allowMob
 			c.Request = c.Request.WithContext(ctx)
 		}
 
+		if then != nil && !then(c) {
+			return
+		}
 		c.Next()
 	}
 }

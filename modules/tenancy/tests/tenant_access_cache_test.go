@@ -35,27 +35,29 @@ func TestTenantAccess_RemovedMemberRefusedOnNextRequest(t *testing.T) {
 	if w.Code != http.StatusCreated && w.Code != http.StatusOK {
 		t.Fatalf("create tenant: %d %s", w.Code, w.Body.String())
 	}
-	registered, _ := member.Register(memberEmail, "$Password2025", "Cache", "Member")
-	w = owner.DoRequest("POST", "/tenants/"+slug+"/users", map[string]interface{}{"email": memberEmail, "role": "admin"}, map[string]string{})
+	if _, err := member.Register(memberEmail, "$Password2025", "Cache", "Member"); err != nil {
+		t.Fatalf("register member: %v", err)
+	}
+	if _, err := member.Login(memberEmail, "$Password2025"); err != nil {
+		t.Fatalf("member login: %v", err)
+	}
+	memberID := member.GetUserID()
+	w = owner.DoRequest("POST", "/tenants/"+slug+"/users", map[string]interface{}{"user_id": memberID, "role": "admin"}, map[string]string{})
 	if w.Code != http.StatusCreated && w.Code != http.StatusOK {
 		t.Fatalf("add member: %d %s", w.Code, w.Body.String())
 	}
-	memberID := registered["id"]
-	if user, ok := registered["user"].(map[string]interface{}); ok {
-		memberID = user["id"]
-	}
 
-	member.Login(memberEmail, "$Password2025")
 	member.SetTenantSlug(slug)
 	w = member.DoRequest("GET", "/tenants/"+slug+"/modules", nil, map[string]string{})
 	assert.Equal(t, http.StatusOK, w.Code, "a member reads its workspace: %s", w.Body.String())
 
-	if id, ok := memberID.(string); ok {
+	if memberID != "" {
+		id := memberID
 		w = owner.DoRequest("DELETE", "/tenants/"+slug+"/users/"+id, nil, map[string]string{})
 		assert.Equal(t, http.StatusOK, w.Code, w.Body.String())
 		w = member.DoRequest("GET", "/tenants/"+slug+"/modules", nil, map[string]string{})
 		assert.Equal(t, http.StatusForbidden, w.Code, "the next request is refused: %s", w.Body.String())
 	} else {
-		t.Fatalf("register answered no user id: %v", registered)
+		t.Fatal("the member has no id")
 	}
 }
