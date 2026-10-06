@@ -110,6 +110,27 @@ type tenantChains struct {
 	modules tenancyInterfaces.ModuleService
 }
 
+// withModule is tenant followed by the module's check (TENANCY-003 D2): a workspace without the module
+// enabled gets 403 tenant.module.not-enabled. The list comes from the in-process cache, so the check
+// costs no query on a warm tenant. Without tenancy it is tenant unchanged.
+func (chains tenantChains) withModule(tenant gin.HandlerFunc, code string) gin.HandlerFunc {
+	if chains.modules == nil {
+		return tenant
+	}
+	load, require := tenancyMW.LoadTenantModules(chains.modules), tenancyMW.RequireModule(code)
+	return func(c *gin.Context) {
+		tenant(c)
+		if c.IsAborted() {
+			return
+		}
+		load(c)
+		if c.IsAborted() {
+			return
+		}
+		require(c)
+	}
+}
+
 // SetupRoutes mounts the HTTP API. valkey is nil when REDIS_URL is unset; hub is nil when this
 // process runs no WebSocket gateway (every role but all and realtime).
 func SetupRoutes(r *gin.Engine, dbService coreServices.DatabaseService, valkey coreServices.ValkeyService, hub *realtime.Hub) {
@@ -384,23 +405,7 @@ func registerTracking(d routeDeps, chains tenantChains, valkey coreServices.Valk
 	d.purposes.Register(trackingDocumentFiles.Purpose())
 	trackingController := trackingControllers.NewTrackingController(trackingService, trackingDocumentFiles)
 
-	// Build a composite tenant+module middleware chain for tracking
-	trackingChain := func(tenant gin.HandlerFunc) gin.HandlerFunc {
-		if chains.modules == nil {
-			return tenant
-		}
-		return gin.HandlerFunc(func(c *gin.Context) {
-			tenant(c)
-			if c.IsAborted() {
-				return
-			}
-			tenancyMW.LoadTenantModules(chains.modules)(c)
-			if c.IsAborted() {
-				return
-			}
-			tenancyMW.RequireModule("tracking")(c)
-		})
-	}
+	trackingChain := func(tenant gin.HandlerFunc) gin.HandlerFunc { return chains.withModule(tenant, "tracking") }
 
 	// The GPS ingest: a device token runs the device chain, anything else is a driver's session.
 	trackingConf := config.ModularAppConfig.Tracking
@@ -479,7 +484,7 @@ func registerBusinessModules(d routeDeps, chains tenantChains) inventoryRoutes.I
 	var inventorySvcs inventoryRoutes.InventoryServices
 	if coreConf.IsModuleEnabled("inventory") {
 		inventorySvcs = inventoryRoutes.NewInventoryServices(d.db, d.media)
-		inventoryRoutes.RegisterInventoryRoutes(d.apiV1, inventorySvcs, d.authMiddleware, chains.tenant)
+		inventoryRoutes.RegisterInventoryRoutes(d.apiV1, inventorySvcs, d.authMiddleware, chains.withModule(chains.tenant, "inventory"))
 		log.Println("✅ Inventory module (with Batches) enabled and routes registered")
 	}
 
@@ -490,13 +495,13 @@ func registerBusinessModules(d routeDeps, chains tenantChains) inventoryRoutes.I
 			salesServices.NewSalesOrderService(salesRepos.NewSalesOrderRepository(d.db)))
 
 		// Register sales routes (with JWT auth + tenant middleware)
-		salesRoutes.SetupSalesRoutes(d.apiV1, customerController, salesOrderController, d.authMiddleware, chains.tenant)
+		salesRoutes.SetupSalesRoutes(d.apiV1, customerController, salesOrderController, d.authMiddleware, chains.withModule(chains.tenant, "sales"))
 		log.Println("✅ Sales module enabled and routes registered")
 	}
 
 	if coreConf.IsModuleEnabled("purchasing") {
 		purchasingService := purchasingServices.NewPurchasingService(purchasingRepos.NewPurchasingRepository(d.db))
-		purchasingRoutes.RegisterPurchasingRoutes(d.apiV1, purchasingService, d.authMiddleware, chains.tenant)
+		purchasingRoutes.RegisterPurchasingRoutes(d.apiV1, purchasingService, d.authMiddleware, chains.withModule(chains.tenant, "purchasing"))
 		log.Println("✅ Purchasing module enabled and routes registered")
 	}
 

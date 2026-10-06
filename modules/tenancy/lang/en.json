@@ -31,5 +31,8 @@
   "tenant.permission.denied": "You do not have permission to perform this action",
   "tenant.permission.code-required": "Permission code is required",
   "tenant.user.portal-web-forbidden": "This account is mobile-only — sign in from the app",
-  "tenant.gps-device.unauthorized": "Unknown GPS device token"
+  "tenant.gps-device.unauthorized": "Unknown GPS device token",
+  "tenant.module.not-found": "That module does not exist.",
+  "tenant.module.not-enabled": "This module is not enabled for the business.",
+  "tenant.module.required-by": "Another enabled module needs it. Turn that one off first."
 }

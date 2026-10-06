@@ -18,5 +18,7 @@ func init() {
 			"Client portal access",
 		},
 		IsDefault: false,
+		// TENANCY-003 D1: what it needs, what is worth offering beside it, which businesses it serves.
+		Verticals: []string{"transport"},
 	})
 }

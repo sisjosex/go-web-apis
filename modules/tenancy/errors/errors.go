@@ -58,7 +58,17 @@ const (
 	ModuleNotEnabled   = "tenant.module.not-enabled"
 	ModuleCodeRequired = "tenant.module.code-required"
 	ModuleUpdateFailed = "tenant.module.update-failed"
+	// ModuleRequiredBy refuses to turn off a module another enabled one needs (TENANCY-003 D1).
+	ModuleRequiredBy = "tenant.module.required-by"
 )
+
+// ModuleRequiredByError names the enabled modules that still need Module; the API answers 409.
+type ModuleRequiredByError struct {
+	Module     string
+	Dependents []string
+}
+
+func (e *ModuleRequiredByError) Error() string { return ModuleRequiredBy }
 
 // Role errors
 const (

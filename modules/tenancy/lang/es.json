@@ -31,5 +31,8 @@
   "tenant.permission.denied": "No tienes permiso para realizar esta acción",
   "tenant.permission.code-required": "El código de permiso es requerido",
   "tenant.user.portal-web-forbidden": "Esta cuenta es solo para móvil — inicia sesión desde la aplicación",
-  "tenant.gps-device.unauthorized": "Token de dispositivo GPS desconocido"
+  "tenant.gps-device.unauthorized": "Token de dispositivo GPS desconocido",
+  "tenant.module.not-found": "Ese módulo no existe.",
+  "tenant.module.not-enabled": "Este módulo no está activo en el negocio.",
+  "tenant.module.required-by": "Otro módulo activo lo necesita. Desactiva ese primero."
 }

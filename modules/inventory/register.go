@@ -17,5 +17,8 @@ func init() {
 			"Low-stock alerts",
 		},
 		IsDefault: false,
+		// TENANCY-003 D1: what it needs, what is worth offering beside it, which businesses it serves.
+		Complements: []string{"sales", "purchasing"},
+		Verticals:   []string{"retail"},
 	})
 }
