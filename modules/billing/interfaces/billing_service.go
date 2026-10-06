@@ -30,4 +30,17 @@ type BillingService interface {
 
 	// ListPayments returns paginated payment history.
 	ListPayments(ctx context.Context, userID uuid.UUID, page, limit int) (*models.PaymentListResponse, error)
+
+	// GetTenantPlan returns a business's plan, its limits now, the prices and where to pay (BILLING-001).
+	GetTenantPlan(ctx context.Context, tenantID uuid.UUID) (*models.TenantPlan, error)
+	// TenantLimit answers a business's limit for a feature, from a 60 s cache; -1 is unlimited.
+	TenantLimit(ctx context.Context, tenantID uuid.UUID, feature string) (int, error)
+	// GetTenantUsage answers each limited feature's use against the business's limit.
+	GetTenantUsage(ctx context.Context, tenantID uuid.UUID) (*models.UsageResponse, error)
+	NotifyPayment(ctx context.Context, tenantID, userID uuid.UUID, dto *models.NotifyPaymentDto) (*models.TenantPayment, error)
+	// ConfirmPayment completes a notified payment; the business's cached plan is dropped.
+	ConfirmPayment(ctx context.Context, paymentID, confirmedBy uuid.UUID) (*models.TenantPayment, error)
+	ListNotifiedPayments(ctx context.Context) ([]models.NotifiedPayment, error)
+	// ExpireSubscriptions is the daily job: paid plans past their grace go back to the free limits.
+	ExpireSubscriptions(ctx context.Context) (int, error)
 }

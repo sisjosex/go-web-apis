@@ -6,6 +6,7 @@ import (
 	"errors"
 	"log"
 
+	"josex/web/modules/core/limits"
 	"josex/web/modules/core/services"
 	"josex/web/modules/inventory/models"
 
@@ -38,8 +39,12 @@ func (r *ProductRepository) CreateProductWithVariants(
 
 	err := r.dbService.QueryRow(
 		ctx,
-		`SELECT CAST(product_id AS VARCHAR), sku, name, message FROM inventory.sp_create_product_with_variants($1, $2, $3, $4, $5, $6::JSONB, NULL::UUID, $7, $8)`,
+		// The plan's product limit is checked in the same statement (BILLING-001 D2).
+		`SELECT CAST(p.product_id AS VARCHAR), p.sku, p.name, p.message
+		 FROM public.fn_within_limit($1, (SELECT COUNT(*) FROM inventory.products x WHERE x.tenant_id = $1), $9::INT, 'inventory_items') lim(tenant_id)
+		 CROSS JOIN LATERAL inventory.sp_create_product_with_variants(lim.tenant_id, $2, $3, $4, $5, $6::JSONB, NULL::UUID, $7, $8) p`,
 		tenantID, sku, name, description, basePrice, variantsJSON, maxAxes, maxCombinations,
+		limits.For(ctx, tenantID, limits.InventoryItems),
 	).Scan(&productID, &respSku, &respName, &message)
 
 	if err != nil {

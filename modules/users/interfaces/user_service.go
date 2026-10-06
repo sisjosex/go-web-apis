@@ -1,6 +1,8 @@
 package interfaces
 
 import (
+	"context"
+
 	coreModels "josex/web/modules/core/models"
 	userModels "josex/web/modules/users/models"
 
@@ -16,5 +18,7 @@ type UserService interface {
 	GetStats(tenantID uuid.UUID, excludeUserID *uuid.UUID) (*userModels.UserStatsResponse, error)
 	SoftDeleteUser(userID uuid.UUID) error
 	AssignToTenant(tenantID, requesterID, userID uuid.UUID, role string) error
+	// EnsureTenantSeat refuses when the workspace's plan has no member seat left (BILLING-001 D2).
+	EnsureTenantSeat(ctx context.Context, tenantID uuid.UUID) error
 	ResetPassword(userID uuid.UUID) (*userModels.ResetPasswordResult, error)
 }

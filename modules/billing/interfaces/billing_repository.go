@@ -29,4 +29,12 @@ type BillingRepository interface {
 
 	// ListPayments returns paginated payment history for a user.
 	ListPayments(ctx context.Context, userID uuid.UUID, page, limit int) (*models.PaymentListResponse, error)
+
+	// Business plans (BILLING-001).
+	GetTenantPlan(ctx context.Context, tenantID uuid.UUID) (*models.TenantPlan, error)
+	NotifyPayment(ctx context.Context, tenantID, userID uuid.UUID, dto *models.NotifyPaymentDto) (*models.TenantPayment, error)
+	ConfirmPayment(ctx context.Context, paymentID, confirmedBy uuid.UUID) (*models.TenantPayment, error)
+	ListNotifiedPayments(ctx context.Context) ([]models.NotifiedPayment, error)
+	ExpireSubscriptions(ctx context.Context, graceDays int) (int, error)
+	GetTenantUsage(ctx context.Context, tenantID uuid.UUID) (map[string]int64, error)
 }

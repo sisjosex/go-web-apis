@@ -45,5 +45,18 @@ func RegisterBillingRoutes(
 		// Payment history
 		billing.GET("/payments", ctrl.ListPayments)
 		billing.POST("/payments", platformOnly, ctrl.RecordPayment)
+
+		// The platform's confirmation queue (BILLING-001 D3).
+		billing.GET("/payments/pending", platformOnly, ctrl.ListNotifiedPayments)
+		billing.POST("/payments/:id/confirm", platformOnly, ctrl.ConfirmPayment)
 	}
+}
+
+// RegisterTenantBillingRoutes mounts a business's own plan behind the tenant chain (BILLING-001): its
+// plan and usage for every member, the payment notice for whoever holds the workspace.
+func RegisterTenantBillingRoutes(rg *gin.RouterGroup, ctrl *controllers.BillingController, authMiddleware, tenant gin.HandlerFunc) {
+	billing := rg.Group("/billing", authMiddleware, tenant)
+	billing.GET("/tenant/plan", ctrl.GetTenantPlan)
+	billing.GET("/usage", ctrl.GetTenantUsage)
+	billing.POST("/payments/notice", ctrl.NotifyPayment)
 }

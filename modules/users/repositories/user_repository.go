@@ -313,6 +313,16 @@ func (r *userRepository) GetStats(tenantID uuid.UUID, excludeUserID *uuid.UUID) 
 	return stats, nil
 }
 
+// EnsureTenantSeat refuses with billing.limit-reached when the workspace already has as many active
+// members as its plan allows (BILLING-001 D2). Run before the account is created, since the account and
+// the membership are two writes.
+func (r *userRepository) EnsureTenantSeat(ctx context.Context, tenantID uuid.UUID, limit int) error {
+	var ok uuid.UUID
+	return r.dbService.GetPrimaryPool().QueryRow(ctx,
+		`SELECT public.fn_within_limit($1, (SELECT COUNT(*) FROM tenancy.tenant_users x WHERE x.tenant_id = $1 AND x.is_active), $2::INT, 'users_per_tenant')`,
+		tenantID, limit).Scan(&ok)
+}
+
 func (r *userRepository) AssignToTenant(tenantID, requesterID, userID uuid.UUID, role string) error {
 	ctx := context.Background()
 	query := `SELECT * FROM tenancy.sp_add_user_to_tenant($1, $2, $3, $4)`

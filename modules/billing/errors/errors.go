@@ -11,6 +11,9 @@ const (
 	PaymentSubscriptionNotFound = "billing.payment.subscription-not-found"
 	PaymentCreateFailed         = "billing.payment.create-failed"
 	PaymentListFailed           = "billing.payment.list-failed"
+	// A confirmation for a payment that is not a business's, or not waiting (BILLING-001 D3).
+	PaymentNotFound   = "billing.payment.not-found"
+	PaymentNotPending = "billing.payment.not-pending"
 
 	// General
 	BillingValidationFailed = "billing.validation-failed"

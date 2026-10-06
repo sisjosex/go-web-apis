@@ -1,6 +1,8 @@
 package interfaces
 
 import (
+	"context"
+
 	coreModels "josex/web/modules/core/models"
 	userModels "josex/web/modules/users/models"
 
@@ -16,5 +18,6 @@ type UserRepository interface {
 	GetStats(tenantID uuid.UUID, excludeUserID *uuid.UUID) (*userModels.UserStatsResponse, error)
 	SoftDeleteUser(userID uuid.UUID) error
 	AssignToTenant(tenantID, requesterID, userID uuid.UUID, role string) error
+	EnsureTenantSeat(ctx context.Context, tenantID uuid.UUID, limit int) error
 	ResetPasswordToken(userID uuid.UUID) (*userModels.ResetPasswordResult, error)
 }

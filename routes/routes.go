@@ -17,6 +17,7 @@ import (
 	billingServices "josex/web/modules/billing/services"
 	coreControllers "josex/web/modules/core/controllers"
 	coreJobs "josex/web/modules/core/jobs"
+	"josex/web/modules/core/limits"
 	coreMiddleware "josex/web/modules/core/middleware"
 	coreModels "josex/web/modules/core/models"
 	coreRoutes "josex/web/modules/core/routes"
@@ -139,6 +140,8 @@ func SetupRoutes(r *gin.Engine, dbService coreServices.DatabaseService, valkey c
 	billingService := registerAuthAndBilling(d)
 	registerJobsMonitor(d, valkey)
 	chains := registerTenancy(d, billingService)
+	// A business's plan, usage and payment notice (BILLING-001) need its tenant chain.
+	billingRoutes.RegisterTenantBillingRoutes(d.apiV1, billingControllers.NewBillingController(billingService), d.authMiddleware, chains.tenant)
 	registerTracking(d, chains, valkey)
 	inventorySvcs := registerBusinessModules(d, chains)
 	registerImport(d, chains, inventorySvcs)
@@ -254,6 +257,8 @@ func registerAuthAndBilling(d routeDeps) billingInterfaces.BillingService {
 	billingService := billingServices.NewBillingService(billingRepos.NewBillingRepository(d.db))
 	billingController := billingControllers.NewBillingController(billingService)
 	billingRoutes.RegisterBillingRoutes(d.apiV1, billingController, d.authMiddleware, d.jwt)
+	// Every module's create asks billing for the business's limit through core (BILLING-001 D2).
+	limits.SetResolver(billingService.TenantLimit)
 	log.Println("✅ Billing module routes registered")
 
 	return billingService

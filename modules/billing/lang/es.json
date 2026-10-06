@@ -7,5 +7,9 @@
   "billing.payment.subscription-not-found": "Suscripción no encontrada para este usuario",
   "billing.payment.create-failed": "Error al registrar el pago",
   "billing.payment.list-failed": "Error al obtener el historial de pagos",
-  "billing.plan.contact-sales": "Contáctanos para cambiar de plan"
+  "billing.plan.contact-sales": "Contáctanos para cambiar de plan",
+  "billing.limit-reached": "Llegaste al límite de tu plan. Mejora el plan para agregar más.",
+  "billing.payment.not-found": "Ese pago no existe.",
+  "billing.payment.not-pending": "Ese pago ya fue confirmado o no está esperando confirmación.",
+  "billing.price.not-found": "Ese plan no tiene precio para el ciclo elegido."
 }

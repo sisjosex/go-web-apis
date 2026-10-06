@@ -122,3 +122,17 @@ VALUES
     ('00000000-0000-0000-0000-000000000001', 'sales', true),
     ('00000000-0000-0000-0000-000000000001', 'purchasing', true)
 ON CONFLICT (tenant_id, module_code) DO NOTHING;
+
+-- The test tenant is on enterprise (BILLING-001): its suites create far more riders, vehicles and
+-- products than the free limits allow. A test of the limits makes a business of its own.
+DO $$
+BEGIN
+    IF to_regclass('billing.subscriptions') IS NOT NULL AND NOT EXISTS (
+        SELECT 1 FROM billing.subscriptions
+        WHERE tenant_id = '00000000-0000-0000-0000-000000000001' AND status IN ('active', 'trial')
+    ) THEN
+        INSERT INTO billing.subscriptions (tenant_id, plan, status)
+        VALUES ('00000000-0000-0000-0000-000000000001', 'enterprise', 'active');
+    END IF;
+END;
+$$;

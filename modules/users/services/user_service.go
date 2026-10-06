@@ -1,6 +1,9 @@
 package services
 
 import (
+	"context"
+
+	"josex/web/modules/core/limits"
 	coreModels "josex/web/modules/core/models"
 	"josex/web/modules/users/interfaces"
 	userModels "josex/web/modules/users/models"
@@ -38,6 +41,10 @@ func (s *userService) SoftDeleteUser(userID uuid.UUID) error {
 
 func (s *userService) GetStats(tenantID uuid.UUID, excludeUserID *uuid.UUID) (*userModels.UserStatsResponse, error) {
 	return s.userRepository.GetStats(tenantID, excludeUserID)
+}
+
+func (s *userService) EnsureTenantSeat(ctx context.Context, tenantID uuid.UUID) error {
+	return s.userRepository.EnsureTenantSeat(ctx, tenantID, limits.For(ctx, tenantID, limits.UsersPerTenant))
 }
 
 func (s *userService) AssignToTenant(tenantID, requesterID, userID uuid.UUID, role string) error {

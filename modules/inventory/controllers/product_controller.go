@@ -11,6 +11,7 @@ import (
 	"github.com/jackc/pgx/v5/pgconn"
 
 	coreErrors "josex/web/modules/core/errors"
+	"josex/web/modules/core/limits"
 	inventoryErrors "josex/web/modules/inventory/errors"
 	inventoryInterfaces "josex/web/modules/inventory/interfaces"
 	"josex/web/modules/inventory/models"
@@ -58,6 +59,9 @@ func (ctrl *ProductController) CreateProductWithVariants(c *gin.Context) {
 
 	product, err := ctrl.productService.CreateProductWithVariants(c.Request.Context(), tenantID, dto)
 	if err != nil {
+		if limits.Respond(c, err) {
+			return
+		}
 		var pgErr *pgconn.PgError
 		if errors.As(err, &pgErr) {
 			switch pgErr.Message {

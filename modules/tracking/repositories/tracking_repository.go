@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 
+	"josex/web/modules/core/limits"
 	coreServices "josex/web/modules/core/services"
 	trackingErrors "josex/web/modules/tracking/errors"
 	"josex/web/modules/tracking/models"
@@ -367,8 +368,14 @@ func (r *TrackingRepository) DeleteCompany(ctx context.Context, tenantID uuid.UU
 
 func (r *TrackingRepository) CreateVehicle(ctx context.Context, tenantID uuid.UUID, dto *models.CreateVehicleDto) (*models.Vehicle, error) {
 	var v models.Vehicle
-	err := r.dbService.QueryRow(ctx, `SELECT * FROM tracking.sp_create_vehicle($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`,
+	// The plan's vehicle limit is checked in the same statement (BILLING-001 D2).
+	err := r.dbService.QueryRow(ctx, `SELECT v.* FROM public.fn_within_limit($1, (
+			SELECT COUNT(*) FROM tracking.vehicles x
+			INNER JOIN tracking.transport_companies c ON c.id = x.company_id WHERE c.tenant_id = $1
+		), $11::INT, 'tracking_vehicles') lim(tenant_id)
+		CROSS JOIN LATERAL tracking.sp_create_vehicle(lim.tenant_id, $2, $3, $4, $5, $6, $7, $8, $9, $10) v`,
 		tenantID, dto.CompanyID, dto.PlateNumber, dto.VehicleType, dto.Brand, dto.Model, dto.Year, dto.Capacity, dto.GPSDeviceID, dto.Status,
+		limits.For(ctx, tenantID, limits.TrackingVehicles),
 	).Scan(&v.ID, &v.CompanyID, &v.PlateNumber, &v.VehicleType, &v.Brand, &v.Model, &v.Year, &v.Capacity, &v.GPSDeviceID, &v.Status, &v.CreatedAt, &v.UpdatedAt)
 	if err != nil {
 		return nil, &trackingErrors.TrackingError{Code: trackingErrors.VehicleCreateFailed, Err: err}
@@ -928,14 +935,19 @@ var noAccount *uuid.UUID
 
 func (r *TrackingRepository) CreateRider(ctx context.Context, tenantID uuid.UUID, dto *models.CreateRiderDto, scopeUserID *uuid.UUID) (*models.Rider, error) {
 	var rider models.Rider
-	// One statement: the rider and its guardians' links commit together or not at all (TRACK-037 D2).
-	err := r.dbService.QueryRow(ctx, `SELECT r.* FROM tracking.sp_create_rider($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17::DECIMAL, $18::DECIMAL, $19::TEXT, $21::VARCHAR, $22::VARCHAR, $23::UUID) r
+	// One statement: the rider and its guardians' links commit together or not at all (TRACK-037 D2),
+	// behind the plan's rider limit (BILLING-001 D2).
+	err := r.dbService.QueryRow(ctx, `SELECT r.* FROM public.fn_within_limit($1, (
+			SELECT COUNT(*) FROM tracking.riders x
+			INNER JOIN tracking.transport_companies c ON c.id = x.company_id WHERE c.tenant_id = $1
+		), $24::INT, 'tracking_riders') lim(tenant_id)
+		CROSS JOIN LATERAL tracking.sp_create_rider(lim.tenant_id, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17::DECIMAL, $18::DECIMAL, $19::TEXT, $21::VARCHAR, $22::VARCHAR, $23::UUID) r
 		CROSS JOIN LATERAL tracking.fn_rider_guardians_link($1, r.id, $20::JSONB) g`,
 		tenantID, dto.OrganizationID, dto.RiderType, dto.FirstName, dto.LastName, dto.IdentificationNumber,
 		dto.Phone, dto.Email, dto.EmergencyContactName, dto.EmergencyContactPhone,
 		noAccount, dto.GuardianName, dto.GuardianPhone, dto.GuardianEmail, dto.Address, scopeUserID,
 		dto.HomeLatitude, dto.HomeLongitude, dto.Notes, linkedGuardians(dto.LinkedGuardians), dto.GroupLabel,
-		dto.ServiceLegs, dto.StopPlaceID,
+		dto.ServiceLegs, dto.StopPlaceID, limits.For(ctx, tenantID, limits.TrackingRiders),
 	).Scan(&rider.ID, &rider.OrganizationID, &rider.RiderType, &rider.FirstName, &rider.LastName,
 		&rider.IdentificationNumber, &rider.Phone, &rider.Email, &rider.EmergencyContactName,
 		&rider.EmergencyContactPhone, &rider.GuardianUserID, &rider.GuardianName, &rider.GuardianPhone,

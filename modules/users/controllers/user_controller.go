@@ -12,6 +12,7 @@ import (
 
 	"josex/web/config"
 	coreErrors "josex/web/modules/core/errors"
+	"josex/web/modules/core/limits"
 	coreModels "josex/web/modules/core/models"
 	coreServices "josex/web/modules/core/services"
 	"josex/web/modules/core/utils"
@@ -51,6 +52,15 @@ func (uc *UserController) Create(c *gin.Context) {
 	if tempPassword == "" {
 		tempPassword = utils.GenerateRandomPassword()
 		newUser.Password = tempPassword
+	}
+
+	// Inside a workspace, a seat must be free before the account exists (BILLING-001 D2).
+	if tenantIDStr, ok := c.Get("tenant_id"); ok {
+		if tenantID, err := uuid.Parse(tenantIDStr.(string)); err == nil {
+			if err := uc.userService.EnsureTenantSeat(c.Request.Context(), tenantID); limits.Respond(c, err) {
+				return
+			}
+		}
 	}
 
 	user, err := uc.userService.InsertUser(newUser)

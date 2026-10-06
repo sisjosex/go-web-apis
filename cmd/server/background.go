@@ -8,6 +8,9 @@ import (
 	"time"
 
 	"josex/web/config"
+	billingJobs "josex/web/modules/billing/jobs"
+	billingRepos "josex/web/modules/billing/repositories"
+	billingServices "josex/web/modules/billing/services"
 	"josex/web/modules/core/jobs"
 	"josex/web/modules/core/services"
 	geoRouting "josex/web/modules/geo/services/routing"
@@ -95,6 +98,14 @@ func registerJobs(ctx context.Context, registry *jobs.Registry, db services.Data
 	registry.Schedule(jobs.Entry{
 		Cron: "30 3 * * *", Period: daily,
 		Task: asynq.NewTask(jobs.TaskOutboxPurge, nil), Opts: []asynq.Option{asynq.Queue(jobs.QueueLow)},
+	})
+
+	// Paid business plans past their grace fall back to the free limits (BILLING-001 D3).
+	registry.Handle(billingJobs.TaskExpire, billingJobs.ExpireHandler(
+		billingServices.NewBillingService(billingRepos.NewBillingRepository(db))))
+	registry.Schedule(jobs.Entry{
+		Cron: billingJobs.ExpireCron, Period: daily,
+		Task: asynq.NewTask(billingJobs.TaskExpire, nil), Opts: []asynq.Option{asynq.Queue(jobs.QueueLow)},
 	})
 
 	if config.ModularAppConfig.Core.IsModuleEnabled("tracking") {

@@ -81,3 +81,84 @@ type RecordPaymentDto struct {
 	PeriodStart       *time.Time `json:"period_start"`
 	PeriodEnd         *time.Time `json:"period_end"`
 }
+
+// ── Business plans (BILLING-001) ──────────────────────────────────────────────
+
+// PlanPrice is what a plan costs per cycle.
+type PlanPrice struct {
+	Plan     string  `json:"plan"`
+	Cycle    string  `json:"cycle"` // monthly | annual
+	Amount   float64 `json:"amount"`
+	Currency string  `json:"currency"`
+}
+
+// PaymentInstructions is where a customer pays (D3): the platform's bank QR and account, from config.
+type PaymentInstructions struct {
+	QRImageURL string `json:"qr_image_url"`
+	Bank       string `json:"bank"`
+	Account    string `json:"account"`
+	Holder     string `json:"holder"`
+}
+
+// TenantPlan is a business's plan: what it is on, until when, and the limits it has now — the free
+// plan's once expired (D1, D3).
+type TenantPlan struct {
+	Plan          string              `json:"plan"`
+	Cycle         string              `json:"cycle"`
+	Status        string              `json:"status"`
+	PeriodEnd     *time.Time          `json:"period_end"`
+	EffectivePlan string              `json:"effective_plan"`
+	Limits        map[string]int      `json:"limits"`
+	Prices        []PlanPrice         `json:"prices"`
+	Payment       PaymentInstructions `json:"payment"`
+}
+
+// TenantPayment is a business's payment: notified by the customer, completed by the platform.
+type TenantPayment struct {
+	ID          uuid.UUID  `json:"id"`
+	TenantID    uuid.UUID  `json:"tenant_id"`
+	UserID      *uuid.UUID `json:"user_id"`
+	Plan        string     `json:"plan"`
+	Cycle       string     `json:"cycle"`
+	Amount      float64    `json:"amount"`
+	Currency    string     `json:"currency"`
+	Status      string     `json:"status"`
+	Reference   *string    `json:"reference"`
+	PaidAt      *time.Time `json:"paid_at"`
+	PeriodStart *time.Time `json:"period_start"`
+	PeriodEnd   *time.Time `json:"period_end"`
+	CreatedAt   time.Time  `json:"created_at"`
+}
+
+// NotifiedPayment is a row of the platform's confirmation queue.
+type NotifiedPayment struct {
+	ID         uuid.UUID  `json:"id"`
+	TenantID   uuid.UUID  `json:"tenant_id"`
+	TenantName string     `json:"tenant_name"`
+	UserID     *uuid.UUID `json:"user_id"`
+	Plan       string     `json:"plan"`
+	Cycle      string     `json:"cycle"`
+	Amount     float64    `json:"amount"`
+	Currency   string     `json:"currency"`
+	Reference  *string    `json:"reference"`
+	CreatedAt  time.Time  `json:"created_at"`
+}
+
+// NotifyPaymentDto is "Ya pagué" (D3): the plan and cycle paid for and the bank reference.
+type NotifyPaymentDto struct {
+	Plan      string `json:"plan" binding:"required,oneof=pro"`
+	Cycle     string `json:"cycle" binding:"required,oneof=monthly annual"`
+	Reference string `json:"reference" binding:"required,min=3,max=255" conform:"trim"`
+}
+
+// UsageFeature is how much of one limited feature a business uses.
+type UsageFeature struct {
+	Feature string `json:"feature"`
+	Used    int64  `json:"used"`
+	Limit   int    `json:"limit"` // -1 = unlimited
+}
+
+// UsageResponse is GET /billing/usage.
+type UsageResponse struct {
+	Features []UsageFeature `json:"features"`
+}

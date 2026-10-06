@@ -12,6 +12,7 @@ import (
 
 	"josex/web/config"
 	coreErrors "josex/web/modules/core/errors"
+	"josex/web/modules/core/limits"
 	"josex/web/modules/core/utils"
 	tenancyModels "josex/web/modules/tenancy/models"
 	trackingErrors "josex/web/modules/tracking/errors"
@@ -543,6 +544,9 @@ func (ctrl *TrackingController) CreateVehicle(c *gin.Context) {
 	conform.Strings(&dto)
 	vehicle, err := ctrl.trackingService.CreateVehicle(c.Request.Context(), tenantID, &dto)
 	if err != nil {
+		if limits.Respond(c, err) {
+			return
+		}
 		c.JSON(http.StatusInternalServerError, coreErrors.BuildError(c, err))
 		return
 	}
@@ -1372,7 +1376,7 @@ func (ctrl *TrackingController) CreateRider(c *gin.Context) {
 	conform.Strings(&dto)
 	rider, err := ctrl.trackingService.CreateRider(c.Request.Context(), tenantID, &dto, ctrl.scopeUserID(c))
 	if err != nil {
-		if scopeRefused(c, err) {
+		if scopeRefused(c, err) || limits.Respond(c, err) {
 			return
 		}
 		var trackingErr *trackingErrors.TrackingError
