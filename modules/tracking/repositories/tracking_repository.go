@@ -516,7 +516,7 @@ func scanRoute(rt *models.Route) []any {
 
 // scanOrganization is the one scan order every organization read and write shares.
 func scanOrganization(org *models.Organization) []any {
-	return []any{&org.ID, &org.TenantID, &org.Kind, &org.Name, &org.Timezone, &org.IsActive, &org.CreatedAt, &org.UpdatedAt, &org.AbsenceCutoffMin, &org.Latitude, &org.Longitude, &org.Address}
+	return []any{&org.ID, &org.TenantID, &org.Kind, &org.Name, &org.Timezone, &org.IsActive, &org.CreatedAt, &org.UpdatedAt, &org.AbsenceCutoffMin, &org.Latitude, &org.Longitude, &org.Address, &org.StopPlaceID}
 }
 
 // mapRouteError turns the route SPs' own codes into module codes, falling back to fallbackCode.
@@ -1070,9 +1070,10 @@ func (r *TrackingRepository) CreateOrganization(ctx context.Context, tenantID uu
 			p_absence_cutoff_min := $6,
 			p_latitude  := $7,
 			p_longitude := $8,
-			p_address   := $9
+			p_address   := $9,
+			p_create_stop := COALESCE($10::BOOLEAN, true)
 		)
-	`, tenantID, dto.Kind, dto.Name, dto.Timezone, dto.IsActive, dto.AbsenceCutoffMin, dto.Latitude, dto.Longitude, dto.Address,
+	`, tenantID, dto.Kind, dto.Name, dto.Timezone, dto.IsActive, dto.AbsenceCutoffMin, dto.Latitude, dto.Longitude, dto.Address, dto.CreateStop,
 	).Scan(scanOrganization(&org)...)
 	if err != nil {
 		return nil, &trackingErrors.TrackingError{Code: trackingErrors.OrganizationCreateFailed, Err: err}
@@ -1093,9 +1094,10 @@ func (r *TrackingRepository) UpdateOrganization(ctx context.Context, tenantID uu
 			p_absence_cutoff_min := $7,
 			p_latitude        := $8,
 			p_longitude       := $9,
-			p_address         := $10
+			p_address         := $10,
+			p_create_stop     := COALESCE($11::BOOLEAN, true)
 		)
-	`, tenantID, organizationID, dto.Kind, dto.Name, dto.Timezone, dto.IsActive, dto.AbsenceCutoffMin, dto.Latitude, dto.Longitude, dto.Address,
+	`, tenantID, organizationID, dto.Kind, dto.Name, dto.Timezone, dto.IsActive, dto.AbsenceCutoffMin, dto.Latitude, dto.Longitude, dto.Address, dto.CreateStop,
 	).Scan(scanOrganization(&org)...)
 	if err != nil {
 		return nil, mapOrganizationError(err, trackingErrors.OrganizationUpdateFailed)

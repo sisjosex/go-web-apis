@@ -1509,11 +1509,7 @@ func TestCreateOrganizationSuccess(t *testing.T) {
 	defer helper.Close()
 
 	dto := ValidOrganizationDto()
-	body := map[string]interface{}{
-		"name":     dto.Name,
-		"kind":     dto.Kind,
-		"timezone": dto.Timezone,
-	}
+	body := OrganizationBody(dto)
 
 	w := helper.DoRequest("POST", "/tracking/organizations", body, map[string]string{})
 
@@ -1531,7 +1527,7 @@ func TestCreateOrganizationRejectsUnknownKind(t *testing.T) {
 	helper := SetupTrackingTest(t)
 	defer helper.Close()
 
-	body := map[string]interface{}{"name": "Bad Kind", "kind": "hospital", "timezone": "UTC"}
+	body := map[string]interface{}{"name": "Bad Kind", "kind": "hospital", "timezone": "UTC", "latitude": -17.2, "longitude": -66.3}
 	w := helper.DoRequest("POST", "/tracking/organizations", body, map[string]string{})
 
 	assert.Equal(t, http.StatusBadRequest, w.Code)
@@ -1691,8 +1687,7 @@ func TestDeleteOrganizationMemberNotAMember(t *testing.T) {
 func createOrganization(t *testing.T, helper *testhelpers.ApiTestHelper) string {
 	t.Helper()
 
-	dto := ValidOrganizationDto()
-	body := map[string]interface{}{"name": dto.Name, "kind": dto.Kind, "timezone": dto.Timezone}
+	body := OrganizationBody(ValidOrganizationDto())
 	w := helper.DoRequest("POST", "/tracking/organizations", body, map[string]string{})
 	if w.Code != http.StatusCreated {
 		t.Fatalf("create organization: expected 201, got %d: %s", w.Code, w.Body.String())

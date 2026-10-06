@@ -216,12 +216,26 @@ func RiderDtoForOrganization(organizationID uuid.UUID) models.CreateRiderDto {
 	return dto
 }
 
-// ValidOrganizationDto returns a valid organization DTO with test values
+// ValidOrganizationDto returns a valid organization DTO with test values. The pin (required since
+// TRACK-045 D2) is a fresh spot north of the riders' homes, so the client's own stop never lands within
+// 30 m of a place another test counts on.
 func ValidOrganizationDto() models.CreateOrganizationDto {
+	jitter := float64(uuid.New().ID()%10000) / 1e5
+	lat, lng := -17.20-jitter, -66.30-jitter
 	return models.CreateOrganizationDto{
-		Name:     "Test Organization " + uuid.New().String()[:8],
-		Kind:     "school",
-		Timezone: "America/Lima",
+		Name:      "Test Organization " + uuid.New().String()[:8],
+		Kind:      "school",
+		Timezone:  "America/Lima",
+		Latitude:  &lat,
+		Longitude: &lng,
+	}
+}
+
+// OrganizationBody is ValidOrganizationDto as a request body.
+func OrganizationBody(dto models.CreateOrganizationDto) map[string]interface{} {
+	return map[string]interface{}{
+		"name": dto.Name, "kind": dto.Kind, "timezone": dto.Timezone,
+		"latitude": *dto.Latitude, "longitude": *dto.Longitude,
 	}
 }
 

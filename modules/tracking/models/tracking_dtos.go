@@ -708,10 +708,12 @@ type CreateOrganizationDto struct {
 	IsActive *bool  `json:"is_active"`
 	// Minutes before a pickup up to which a guardian may report an absence (TRACK-022 D1); 60 when unset.
 	AbsenceCutoffMin *int32 `json:"absence_cutoff_min" binding:"omitempty,min=0,max=1440"`
-	// The destination its routes take (TRACK-038 D2): both halves of the pin, or neither.
-	Latitude  *float64 `json:"latitude" binding:"required_with=Longitude,omitempty,min=-90,max=90"`
-	Longitude *float64 `json:"longitude" binding:"required_with=Latitude,omitempty,min=-180,max=180"`
+	// The destination its routes take (TRACK-038 D2), required since TRACK-045 D2.
+	Latitude  *float64 `json:"latitude" binding:"required,min=-90,max=90"`
+	Longitude *float64 `json:"longitude" binding:"required,min=-180,max=180"`
 	Address   *string  `json:"address" binding:"omitempty,max=500" conform:"trim"`
+	// CreateStop makes the pin the client's own stop (TRACK-045 D3); true when unset.
+	CreateStop *bool `json:"create_stop"`
 }
 
 // UpdateOrganizationDto represents request to update an organization. Every field is optional: the
@@ -726,6 +728,9 @@ type UpdateOrganizationDto struct {
 	Latitude         *float64 `json:"latitude" binding:"required_with=Longitude,omitempty,min=-90,max=90"`
 	Longitude        *float64 `json:"longitude" binding:"required_with=Latitude,omitempty,min=-180,max=180"`
 	Address          *string  `json:"address" binding:"omitempty,max=500" conform:"trim"`
+	// CreateStop gives a pinned client without a stop its own (TRACK-045 D3); true when unset. A
+	// linked stop follows the client either way.
+	CreateStop *bool `json:"create_stop"`
 }
 
 // ListOrganizationsQuery binds GET /tracking/organizations.

@@ -259,6 +259,8 @@ type Organization struct {
 	Latitude  *float64 `json:"latitude"`
 	Longitude *float64 `json:"longitude"`
 	Address   *string  `json:"address"`
+	// The client's own stop at its pin, the destination of its route pairs (TRACK-045 D3).
+	StopPlaceID *uuid.UUID `json:"stop_place_id"`
 }
 
 // OrganizationMember is a tenant user on an organization, with the identity joined from auth.users.
