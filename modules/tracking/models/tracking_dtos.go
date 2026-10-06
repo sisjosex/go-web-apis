@@ -327,8 +327,12 @@ type ListRoutesQuery struct {
 	OrganizationID *string `form:"organization_id" binding:"omitempty,uuid"`
 	Direction      string  `form:"direction" binding:"omitempty,oneof=outbound inbound"`
 	IsActive       *bool   `form:"is_active"`
-	Page           int     `form:"page,default=1" binding:"min=1"`
-	PageSize       int     `form:"page_size,default=20" binding:"min=1,max=100"`
+	// HasFreeSeats keeps the routes carrying fewer riders today than their seats (TRACK-046).
+	HasFreeSeats *bool `form:"has_free_seats"`
+	// Sort is name (the default) or free_seats, most free first.
+	Sort     string `form:"sort" binding:"omitempty,oneof=name free_seats"`
+	Page     int    `form:"page,default=1" binding:"min=1"`
+	PageSize int    `form:"page_size,default=20" binding:"min=1,max=100"`
 }
 
 type ListRoutesResponse struct {

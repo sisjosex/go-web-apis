@@ -607,8 +607,8 @@ func (r *TrackingRepository) UpdateRoute(ctx context.Context, tenantID uuid.UUID
 // (TRACK-002 D2); an organization user's page holds only the routes their riders ride.
 func (r *TrackingRepository) ListRoutes(ctx context.Context, tenantID uuid.UUID, query models.ListRoutesQuery, scopeUserID *uuid.UUID) ([]*models.Route, int64, error) {
 	rows, err := r.dbService.Query(ctx,
-		`SELECT * FROM tracking.sp_list_routes($1::UUID, $2::VARCHAR, $3::UUID, $4::VARCHAR, $5::BOOLEAN, $6::INT, $7::INT, $8::UUID, $9::UUID, $10::UUID)`,
-		tenantID, query.Search, query.CompanyID, query.Direction, query.IsActive, query.Page, query.PageSize, scopeUserID, query.VehicleID, query.OrganizationID)
+		`SELECT * FROM tracking.sp_list_routes($1::UUID, $2::VARCHAR, $3::UUID, $4::VARCHAR, $5::BOOLEAN, $6::INT, $7::INT, $8::UUID, $9::UUID, $10::UUID, $11::BOOLEAN, $12::VARCHAR)`,
+		tenantID, query.Search, query.CompanyID, query.Direction, query.IsActive, query.Page, query.PageSize, scopeUserID, query.VehicleID, query.OrganizationID, query.HasFreeSeats, query.Sort)
 	if err != nil {
 		return nil, 0, scopedErr(err, trackingErrors.RouteListFailed)
 	}
