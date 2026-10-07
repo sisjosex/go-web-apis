@@ -23,6 +23,8 @@ is_build "$DATE" || { echo "❌ '$DATE' is not a YYYY-MM-DD date"; exit 1; }
 : "${TILES_URL:=http://127.0.0.1:8090/tiles}" # baked into the styles; 127.0.0.1, not localhost (AGENTS.md)
 : "${GEO_STYLE_LANG:=es}"                     # label language, falls back to `name`
 : "${GEO_BUILD_MEMORY:=3g}"                   # JVM heap for the basemap
+: "${GEO_MAX_ZOOM:=14}"                       # basemap max zoom; MapLibre overzooms past it
+: "${GEO_BOUNDS:=-69.7,-23.0,-57.4,-9.6}"     # basemap bounds, west,south,east,north (Bolivia)
 
 BASEMAP_REF=ca93fc06efbaff1c5f069d06edbe5de18839c1c8 # protomaps/basemaps, tiles 4.15.2
 BASEMAP_IMAGE=taypi-geo-basemap:4.15.2
@@ -68,8 +70,6 @@ stage "routing tiles" docker run --rm -v "$DATA/$WORK:/work" -v "$DATA/$WORK/val
 		--mjolnir-tile-dir /valhalla/tiles --mjolnir-tile-extract /valhalla/tiles.tar \
 		--mjolnir-admin /valhalla/admins.sqlite --mjolnir-timezone "" \
 		--mjolnir-traffic-extract "" --additional-data-elevation "" \
-		--loki-logging-level warn --thor-logging-level warn \
-		--odin-logging-level warn --meili-logging-level warn \
 		--httpd-service-listen "tcp://*:8002" \
 		--service-limits-bus-max-matrix-location-pairs 40000 \
 		--service-limits-auto-max-matrix-location-pairs 40000 > /valhalla/valhalla.json
@@ -84,12 +84,15 @@ docker image inspect "$BASEMAP_IMAGE" > /dev/null 2>&1 \
 	|| stage "basemap image" docker build -t "$BASEMAP_IMAGE" "https://github.com/protomaps/basemaps.git#$BASEMAP_REF:tiles"
 # --download fetches only the sources missing from data/sources (water, land,
 # landcover, Natural Earth — a few GB, once). Same container-disk rule as above.
+# Max zoom 14 and the bounds keep the file under Cloudflare's range cut (README → Basemap size):
+# z15 alone was half of it, and without bounds the extract's box spanned most of South America.
 stage "basemap" docker run --rm -e "JAVA_TOOL_OPTIONS=-Xmx$GEO_BUILD_MEMORY" \
 	-v "$DATA/sources:/tiles/data/sources" -v "$DATA/$WORK:/work" \
-	--entrypoint sh "$BASEMAP_IMAGE" -ec '
+	--entrypoint sh "$BASEMAP_IMAGE" -ec "
 	java -jar /tiles/protomaps-basemap.jar --download --osm_path=/work/region.osm.pbf \
+		--maxzoom=$GEO_MAX_ZOOM --bounds=$GEO_BOUNDS \
 		--tmpdir=/tmp/planetiler --output=/tmp/basemap.pmtiles --force
-	cp /tmp/basemap.pmtiles /work/tiles/'
+	cp /tmp/basemap.pmtiles /work/tiles/"
 
 stage "styles, fonts, sprites" tools sh -ec "
 	assets=/data/sources/basemaps-assets-$ASSETS_REF.tar.gz

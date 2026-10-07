@@ -26,7 +26,8 @@ tools() {
 }
 
 ensure_tools() {
-	docker image inspect "$TOOLS_IMAGE" > /dev/null 2>&1 || docker build -q -t "$TOOLS_IMAGE" "$GEO_DIR" > /dev/null
+	docker image inspect "$TOOLS_IMAGE" > /dev/null 2>&1 \
+		|| docker build -q -t "$TOOLS_IMAGE" "$(cd "$GEO_DIR" && (pwd -W 2>/dev/null || pwd))" > /dev/null
 }
 
 # A build dir is a UTC date; `current` and `previous` are build dirs renamed in place.

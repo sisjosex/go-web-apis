@@ -109,11 +109,13 @@ the previous date is always there on both. Running either rollback twice returns
 
 ## Basemap size
 
-Cloudflare's free plan caches files up to 512 MiB. Bolivia's basemap is 503 MiB, and `publish.sh`
-refuses anything over `TILES_MAX_BYTES` before uploading. If an update crosses it, rebuild with
-`--maxzoom=14` added to the `java -jar` line of `build.sh`: MapLibre overzooms 14, the street
-detail stays. A file over Cloudflare's real limit would still be served, uncached, from R2 — the
-second `curl` of the cut-over checks shows `Cf-Cache-Status: HIT` when it is cached.
+Through Cloudflare's cache, a range past ~253 MiB of the file sends its headers and never its body
+(INFRA-012, 2026-10-06: the 503 MiB z15 build left every map grey). So `build.sh` stops at
+`GEO_MAX_ZOOM=14` within `GEO_BOUNDS` (Bolivia), 208 MiB in the 2026-10-07 build (503 MiB at z15 with no bounds), and `publish.sh` refuses
+anything over `TILES_MAX_BYTES` (240 MiB) before uploading. MapLibre overzooms 14; z15 only adds
+minor POIs and building detail, while z13 would drop residential street names and most houses.
+If Bolivia ever outgrows the guard, a Cache Rule that bypasses the cache for `*.pmtiles` (step 6
+below) serves every range from R2 instead, one Class B read per tile.
 
 ## Basemap on R2 — one-time setup
 
@@ -133,7 +135,9 @@ second `curl` of the cut-over checks shows `Cf-Cache-Status: HIT` when it is cac
 6. Caching → Cache Rules → hostname equals `tiles.taypi24.com` → **Eligible for cache**, Edge TTL
    **use cache-control header if present**, Browser TTL **respect origin TTL**. Without the rule
    `.json`, `.pbf` and `.pmtiles` are not cached at all; without the Browser TTL the zone's default
-   (4 h) replaces the styles' 5 min and a publish takes hours to reach browsers.
+   (4 h) replaces the styles' 5 min and a publish takes hours to reach browsers. Only for a
+   basemap over `TILES_MAX_BYTES`: a second rule after it, URI Full wildcard
+   `https://tiles.taypi24.com/*.pmtiles` → **Bypass cache** (the last matching rule wins).
 7. Maps pick up the new host as they reload their style (≤5 min). Then deploy the compose without
    the tiles site and drop `/srv/geo/*/tiles` from the box.
 
@@ -156,10 +160,12 @@ Cloudflare reads the basemap from R2 once per edge and serves ranges from its ca
 | `TILES_URL` | build, publish | build: `http://127.0.0.1:8090/tiles` · publish: `https://tiles.taypi24.com` | build: baked into the build's (dev) styles · publish: the bucket's custom domain |
 | `GEO_STYLE_LANG` | build, publish | `es` | label language; falls back to the local `name` |
 | `GEO_BUILD_MEMORY` | build | `3g` | JVM heap for the basemap |
+| `GEO_MAX_ZOOM` | build | `14` | basemap max zoom (Basemap size) |
+| `GEO_BOUNDS` | build | `-69.7,-23.0,-57.4,-9.6` | basemap bounds, west,south,east,north |
 | `TILES_S3_ENDPOINT` | publish | — | `https://<account id>.r2.cloudflarestorage.com` |
 | `TILES_S3_BUCKET` | publish | `tiles` | |
 | `TILES_S3_ACCESS_KEY`, `TILES_S3_SECRET_KEY` | publish | — | the bucket-scoped R2 token |
-| `TILES_MAX_BYTES` | publish | `536870912` (512 MiB) | the size guard |
+| `TILES_MAX_BYTES` | publish | `251658240` (240 MiB) | the size guard, under Cloudflare's range cut |
 | `GEO_DATA_DIR` | all | `docker/geo/data` | the layout above; compose mounts it too |
 | `GEO_COMPOSE` | switch, rollback | `docker-compose.prod.yml` | the compose file that runs `valhalla` |
 | `GEO_IMPORT` | switch, rollback | `docker compose … run migrate ./cli geo import …` | the command that loads `current/places.geojsonl` |

@@ -4,7 +4,7 @@
 #
 #   docker/geo/publish.sh <date>       # rollback: publish.sh <previous date>
 #
-# 1. Refuse when <date>/tiles/basemap.pmtiles exceeds Cloudflare's cacheable size (D2).
+# 1. Refuse when <date>/tiles/basemap.pmtiles exceeds what Cloudflare's cache serves (INFRA-012).
 # 2. Read the live date from the bucket's root style-light.json.
 # 3. Sync <date>/tiles/ to s3://$TILES_S3_BUCKET/<date>/ — immutable, cached 30 days. A dated
 #    prefix never changes, so a rollback's sync uploads nothing.
@@ -31,11 +31,11 @@ done
 : "${TILES_S3_SECRET_KEY:?TILES_S3_SECRET_KEY is required}"
 : "${TILES_URL:=https://tiles.taypi24.com}"   # the bucket's custom domain; the styles live at its root
 : "${GEO_STYLE_LANG:=es}"
-: "${TILES_MAX_BYTES:=536870912}"             # 512 MiB, the largest file Cloudflare's free plan caches
+: "${TILES_MAX_BYTES:=251658240}"             # 240 MiB: cached ranges past ~253 MiB never send a body
 
 size=$(wc -c < "$GEO_DATA_DIR/$SRC/tiles/basemap.pmtiles")
 if [ "$size" -gt "$TILES_MAX_BYTES" ]; then
-	echo "❌ basemap.pmtiles is $size B, over $TILES_MAX_BYTES B: Cloudflare would not cache it."
+	echo "❌ basemap.pmtiles is $size B, over $TILES_MAX_BYTES B: Cloudflare's cache would not serve its end."
 	echo "   Rebuild with a lower max zoom (docker/geo/README.md → Basemap size)."
 	exit 1
 fi
