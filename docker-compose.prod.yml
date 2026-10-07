@@ -400,7 +400,7 @@ services:
   # Grafana listens on the box's loopback only: ssh -L 3001:127.0.0.1:3001 josex@<box>
   # and open http://localhost:3001 (docker/README.md → Metrics).
   postgres-exporter:
-    image: quay.io/prometheuscommunity/postgres-exporter:v0.15.0
+    image: quay.io/prometheuscommunity/postgres-exporter:v0.17.1 # v0.16+ reads PostgreSQL 17 (renamed blk_*_time, pg_stat_checkpointer)
     restart: unless-stopped
     mem_limit: 64m
     cpu_shares: 256
