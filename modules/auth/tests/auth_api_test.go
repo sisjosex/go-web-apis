@@ -254,6 +254,7 @@ func TestGetProfileSuccess(t *testing.T) {
 	assert.NotEmpty(t, response["id"])
 	assert.Equal(t, "profile@test.com", response["email"])
 	assert.Equal(t, "John", response["first_name"])
+	assert.Equal(t, "es", response["locale"], "the account's language, applied by the app after login (APP-012)")
 }
 
 func TestGetProfileUnauthorized(t *testing.T) {
@@ -1126,6 +1127,11 @@ func TestUpdateProfileLocale(t *testing.T) {
 	w := helper.DoRequest("PATCH", "/auth/profile", map[string]interface{}{"locale": "en"}, map[string]string{})
 	assert.Equal(t, http.StatusOK, w.Code, w.Body.String())
 	assert.Equal(t, "en", locale())
+
+	w = helper.DoRequest("GET", "/auth/profile", nil, map[string]string{})
+	var profile map[string]interface{}
+	_ = json.Unmarshal(w.Body.Bytes(), &profile)
+	assert.Equal(t, "en", profile["locale"], "the profile read returns the switched language (APP-012)")
 
 	w = helper.DoRequest("PATCH", "/auth/profile", map[string]interface{}{"locale": "fr"}, map[string]string{})
 	assert.Equal(t, http.StatusBadRequest, w.Code)

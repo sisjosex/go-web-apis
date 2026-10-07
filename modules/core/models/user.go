@@ -16,4 +16,6 @@ type User struct {
 	CreatedAt         *time.Time `json:"created_at"`
 	ExpirationDate    *DateOnly  `json:"expiration_date"`
 	TenantRole        *string    `json:"tenant_role,omitempty"`
+	// Locale is the language the account reads the app in; only the profile read fills it (APP-012).
+	Locale *string `json:"locale,omitempty"`
 }

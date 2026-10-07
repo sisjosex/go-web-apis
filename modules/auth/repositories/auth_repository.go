@@ -298,6 +298,7 @@ p_user_id := $1
 		&user.ProfilePictureUrl,
 		&user.Bio,
 		&user.WebsiteUrl,
+		&user.Locale,
 	)
 
 	if err != nil {
