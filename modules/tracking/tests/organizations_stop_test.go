@@ -89,11 +89,12 @@ func TestOrganizationStop_RoutePairReusesIt(t *testing.T) {
 	before := CountStopPlaces(t, helper)
 
 	w := helper.DoRequest("POST", "/tracking/routes", map[string]interface{}{
-		"company_id":      MainCompanyID,
-		"organization_id": ExtractID(t, client),
-		"route_name":      "Ruta " + uuid.NewString()[:6],
-		"arrival_time":    "07:45",
-		"departure_time":  "13:00",
+		"company_id":                MainCompanyID,
+		"organization_id":           ExtractID(t, client),
+		"route_name":                "Ruta " + uuid.NewString()[:6],
+		"arrival_time":              "07:45",
+		"departure_time":            "13:00",
+		"destination_stop_place_id": stopID,
 	}, map[string]string{})
 	expectStatus(t, w, http.StatusCreated)
 	created := ParseResponse(t, w.Body.Bytes())

@@ -16,7 +16,7 @@ import (
 
 // TRACK-038: routes anchored on their destination, outbound and return created as a pair.
 
-// createPair creates a route to the seeded school (pinned first) with three new stops, on vehicleID
+// createPair creates a route to the seeded school (pinned first) ending at its stop, with three new stops, on vehicleID
 // when set, and answers the outbound and the return.
 func createPair(t *testing.T, helper *testhelpers.ApiTestHelper, vehicleID string) (map[string]interface{}, map[string]interface{}) {
 	t.Helper()
@@ -26,12 +26,13 @@ func createPair(t *testing.T, helper *testhelpers.ApiTestHelper, vehicleID strin
 	expectStatus(t, w, http.StatusOK)
 
 	body := map[string]interface{}{
-		"company_id":      MainCompanyID,
-		"organization_id": MainSchoolID,
-		"route_name":      "Ruta " + uuid.New().String()[:6],
-		"arrival_time":    "07:45",
-		"departure_time":  "13:00",
-		"stops":           pairStops(),
+		"company_id":                MainCompanyID,
+		"organization_id":           MainSchoolID,
+		"route_name":                "Ruta " + uuid.New().String()[:6],
+		"arrival_time":              "07:45",
+		"departure_time":            "13:00",
+		"stops":                     pairStops(),
+		"destination_stop_place_id": ParseResponse(t, w.Body.Bytes())["stop_place_id"],
 	}
 	if vehicleID != "" {
 		body["vehicle_id"] = vehicleID

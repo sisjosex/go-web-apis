@@ -707,6 +707,18 @@ func TenantMembership(t *testing.T, helper *testhelpers.ApiTestHelper, userID st
 	return role, active
 }
 
+// CountTenantMemberships counts an account's rows in the test tenant — one, whatever created it.
+func CountTenantMemberships(t *testing.T, helper *testhelpers.ApiTestHelper, userID string) int {
+	t.Helper()
+	var n int
+	if err := helper.DB().QueryRow(context.Background(),
+		`SELECT COUNT(*) FROM tenancy.tenant_users WHERE tenant_id = $1 AND user_id = $2`,
+		TestTenantID, userID).Scan(&n); err != nil {
+		t.Fatalf("count memberships: %v", err)
+	}
+	return n
+}
+
 // UserIDByEmail is the id of the account holding email, "" when there is none.
 func UserIDByEmail(t *testing.T, helper *testhelpers.ApiTestHelper, email string) string {
 	t.Helper()
@@ -1306,5 +1318,40 @@ func SetTripStopsDueAgo(t *testing.T, helper *testhelpers.ApiTestHelper, tripID 
 	if _, err := helper.DB().Execute(context.Background(),
 		`UPDATE tracking.trip_stops SET planned_at = now() - make_interval(mins => $2) WHERE trip_id = $1`, tripID, minutesAgo); err != nil {
 		t.Fatalf("set trip stops due: %v", err)
+	}
+}
+
+// TripRouteVersion reads the route version a trip was materialised from: the API never names it,
+// and a test storing a planned line on it needs it (MOBILE-023).
+func TripRouteVersion(t *testing.T, helper *testhelpers.ApiTestHelper, tripID string) string {
+	t.Helper()
+	var versionID string
+	if err := helper.DB().QueryRow(context.Background(),
+		`SELECT CAST(route_version_id AS TEXT) FROM tracking.trips WHERE id = $1 AND tenant_id = $2`,
+		tripID, TestTenantID).Scan(&versionID); err != nil {
+		t.Fatalf("trip version: %v", err)
+	}
+	return versionID
+}
+
+// TrackingSetupFlags reads tracking.sp_tracking_setup for a tenant the API helper cannot sign in to
+// (TRACK-050): companies, drivers, vehicles, routes, riders.
+func TrackingSetupFlags(t *testing.T, helper *testhelpers.ApiTestHelper, tenantID string) [5]bool {
+	t.Helper()
+	var f [5]bool
+	if err := helper.DB().QueryRow(context.Background(), `SELECT * FROM tracking.sp_tracking_setup($1)`, tenantID).
+		Scan(&f[0], &f[1], &f[2], &f[3], &f[4]); err != nil {
+		t.Fatalf("sp_tracking_setup: %v", err)
+	}
+	return f
+}
+
+// SeedTenantCompany gives a bare tenant its first company, nothing else (TRACK-050).
+func SeedTenantCompany(t *testing.T, helper *testhelpers.ApiTestHelper, tenantID string) {
+	t.Helper()
+	companyID := uuid.NewString()
+	if _, err := helper.DB().Execute(context.Background(), `INSERT INTO tracking.transport_companies (id, tenant_id, name, registration_number, status)
+		VALUES ($1, $2, 'Setup Transit', $3, 'active')`, companyID, tenantID, "REG-"+companyID[:8]); err != nil {
+		t.Fatalf("seed the tenant's company: %v", err)
 	}
 }

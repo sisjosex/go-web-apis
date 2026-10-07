@@ -437,11 +437,13 @@ func (d *ridersImport) run(ctx importModels.ImportContext, line int, row map[str
 	return result
 }
 
-// serviceLegs reads "ambos / ida / vuelta" or "both / outbound / return"; empty is both (TRACK-043 D1).
+// serviceLegs reads "ambos / ingreso / retorno" (or the older "ida / vuelta") or "both / outbound /
+// return"; empty is both (TRACK-043 D1, TRACK-049 D1).
 func serviceLegs(value string) (*string, bool) {
 	legs := map[string]string{
 		"": "both", "ambos": "both", "both": "both", "ida": "outbound", "outbound": "outbound",
 		"solo ida": "outbound", "vuelta": "return", "return": "return", "solo vuelta": "return",
+		"ingreso": "outbound", "solo ingreso": "outbound", "retorno": "return", "solo retorno": "return",
 	}
 	leg, ok := legs[strings.ToLower(strings.TrimSpace(value))]
 	return &leg, ok

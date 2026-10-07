@@ -1950,7 +1950,8 @@ func routeErrorResponse(c *gin.Context, err error) bool {
 		return false
 	}
 	switch trackingErr.Code {
-	case trackingErrors.RouteNotFound, trackingErrors.CompanyNotFound, trackingErrors.OrganizationNotFound:
+	case trackingErrors.RouteNotFound, trackingErrors.CompanyNotFound, trackingErrors.OrganizationNotFound,
+		trackingErrors.StopPlaceNotFound:
 		c.JSON(http.StatusNotFound, coreErrors.BuildErrorSingle(c, trackingErr.Code))
 		return true
 	case trackingErrors.RouteDestinationRequired, trackingErrors.RouteDepartureRequired, trackingErrors.StopPlaceInvalid:

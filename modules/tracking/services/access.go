@@ -21,11 +21,12 @@ import (
 type AccessRepository interface {
 	GrantAppAccess(ctx context.Context, tenantID uuid.UUID, dto *models.GrantAccessDto, level string) (*models.AppAccessGrant, error)
 	CreateRider(ctx context.Context, tenantID uuid.UUID, dto *models.CreateRiderDto, scopeUserID *uuid.UUID) (*models.Rider, error)
+	CreateDriver(ctx context.Context, tenantID uuid.UUID, dto *models.CreateDriverDto) (*models.Driver, error)
 	RevokeAppAccess(ctx context.Context, tenantID, userID uuid.UUID, level string) error
 	TenantName(ctx context.Context, tenantID uuid.UUID) (string, error)
 	UserLinked(ctx context.Context, tenantID, userID uuid.UUID) (bool, error)
 	ListRiderGuardians(ctx context.Context, tenantID, riderID uuid.UUID, scopeUserID *uuid.UUID) ([]*models.RiderGuardian, error)
-	AddRiderGuardian(ctx context.Context, tenantID, riderID uuid.UUID, grant *models.AppAccessGrant, phone *string, scopeUserID *uuid.UUID) error
+	AddRiderGuardian(ctx context.Context, tenantID, riderID uuid.UUID, userID *uuid.UUID, name, email string, phone *string, scopeUserID *uuid.UUID) error
 	RemoveRiderGuardian(ctx context.Context, tenantID, riderID, userID uuid.UUID, scopeUserID *uuid.UUID) error
 	SetDriverAccount(ctx context.Context, tenantID, driverID uuid.UUID, userID *uuid.UUID) (*uuid.UUID, error)
 	UpsertOrganizationMember(ctx context.Context, tenantID, organizationID, userID uuid.UUID, role string) (*models.OrganizationMember, error)
@@ -66,9 +67,24 @@ func (s *AccessService) ListRiderGuardians(ctx context.Context, tenantID, riderI
 	return guardians, nil
 }
 
-func (s *AccessService) AddRiderGuardian(ctx context.Context, tenantID, riderID uuid.UUID, dto *models.GrantAccessDto, scopeUserID *uuid.UUID, lang string) (*models.AccessGranted, error) {
-	return s.grant(ctx, tenantID, dto, tenancyModels.RolePortal, lang, func(g *models.AppAccessGrant) error {
-		return s.repo.AddRiderGuardian(ctx, tenantID, riderID, g, dto.Phone, scopeUserID)
+// AddRiderGuardian takes one guardian as the rider form does (TRACK-048 D3): an account by user_id, a
+// person to invite by email and name, or a contact with only a name and a phone, who gets no account.
+func (s *AccessService) AddRiderGuardian(ctx context.Context, tenantID, riderID uuid.UUID, dto *models.NewRiderGuardianDto, scopeUserID *uuid.UUID, lang string) (*models.AccessGranted, error) {
+	if dto.UserID == nil && dto.Email == nil {
+		if blank(dto.FirstName) || blank(dto.Phone) {
+			return nil, &trackingErrors.TrackingError{Code: trackingErrors.RiderGuardianInvalid}
+		}
+		if err := s.repo.AddRiderGuardian(ctx, tenantID, riderID, nil, joinNames(dto.FirstName, dto.LastName), "", dto.Phone, scopeUserID); err != nil {
+			return nil, err
+		}
+		return &models.AccessGranted{FirstName: dto.FirstName, LastName: dto.LastName, Status: models.GuardianContact}, nil
+	}
+	if dto.UserID == nil && (blank(dto.FirstName) || blank(dto.LastName)) {
+		return nil, &trackingErrors.TrackingError{Code: trackingErrors.RiderGuardianInvalid}
+	}
+	grant := &models.GrantAccessDto{UserID: dto.UserID, Email: dto.Email, FirstName: dto.FirstName, LastName: dto.LastName, Phone: dto.Phone}
+	return s.grant(ctx, tenantID, grant, tenancyModels.RolePortal, lang, func(g *models.AppAccessGrant) error {
+		return s.repo.AddRiderGuardian(ctx, tenantID, riderID, &g.UserID, joinNames(g.FirstName, g.LastName), g.Email, dto.Phone, scopeUserID)
 	})
 }
 
@@ -120,10 +136,40 @@ func (s *AccessService) CreateRider(ctx context.Context, tenantID uuid.UUID, dto
 			go s.mailNotice(lang, g, notice)
 		}
 		granted = append(granted, &models.AccessGranted{
-			UserID: g.UserID, Email: g.Email, FirstName: g.FirstName, LastName: g.LastName, Status: g.Status, Notice: notice,
+			UserID: &g.UserID, Email: g.Email, FirstName: g.FirstName, LastName: g.LastName, Status: g.Status, Notice: notice,
 		})
 	}
 	return &models.CreatedRider{Rider: rider, Guardians: granted}, nil
+}
+
+// CreateDriver creates a driver and, when asked, their app access in one request (TRACK-047 D3): the
+// account is granted the driver level first, under the driver's own name, then the driver is written
+// already linked to it. A refused write takes back the membership this call added.
+func (s *AccessService) CreateDriver(ctx context.Context, tenantID uuid.UUID, dto *models.CreateDriverDto, lang string) (*models.CreatedDriver, error) {
+	if dto.Account == nil {
+		driver, err := s.repo.CreateDriver(ctx, tenantID, dto)
+		if err != nil {
+			return nil, err
+		}
+		return &models.CreatedDriver{Driver: driver}, nil
+	}
+
+	phone := dto.Account.Phone
+	if phone == nil {
+		phone = dto.Phone
+	}
+	grant := &models.GrantAccessDto{Email: &dto.Account.Email, FirstName: &dto.FirstName, LastName: &dto.LastName, Phone: phone}
+	var driver *models.Driver
+	granted, err := s.grant(ctx, tenantID, grant, tenancyModels.RoleDriver, lang, func(g *models.AppAccessGrant) error {
+		dto.UserID = &g.UserID
+		var err error
+		driver, err = s.repo.CreateDriver(ctx, tenantID, dto)
+		return err
+	})
+	if err != nil {
+		return nil, err
+	}
+	return &models.CreatedDriver{Driver: driver, Account: granted}, nil
 }
 
 // guardianLink is one guardian as fn_rider_guardians_link reads it. A contact (no account, no email)
@@ -236,7 +282,7 @@ func (s *AccessService) grant(ctx context.Context, tenantID uuid.UUID, dto *mode
 		go s.mailNotice(lang, g, notice)
 	}
 	return &models.AccessGranted{
-		UserID: g.UserID, Email: g.Email, FirstName: g.FirstName, LastName: g.LastName,
+		UserID: &g.UserID, Email: g.Email, FirstName: g.FirstName, LastName: g.LastName,
 		Status: g.Status, Notice: notice,
 	}, nil
 }

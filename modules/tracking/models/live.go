@@ -46,6 +46,38 @@ type TripLive struct {
 	TripDetail
 	Position json.RawMessage `json:"position"`
 	Eta      []StopEta       `json:"eta"`
+	LiveStory
+}
+
+// LiveStory is what a live map draws beyond the stops (MOBILE-023): the planned line, the vehicle's
+// type and the client's kind for the marker, and where the trip ends. Each is null when unknown.
+type LiveStory struct {
+	PlannedPath      *PlannedPath     `json:"planned_path"`
+	VehicleType      *string          `json:"vehicle_type"`
+	OrganizationKind *string          `json:"organization_kind"`
+	Destination      *LiveDestination `json:"destination"`
+}
+
+// PlannedPath is the line the trip's route version planned, precision-6 polyline. ETag is its md5:
+// a caller that already holds it gets the object without Polyline6 (MOBILE-023 D2).
+type PlannedPath struct {
+	Polyline6 string `json:"polyline6,omitempty"`
+	DistanceM *int   `json:"distance_m"`
+	ETag      string `json:"etag"`
+}
+
+// LiveDestination is the trip's last located stop.
+type LiveDestination struct {
+	Name string  `json:"name"`
+	Lat  float64 `json:"lat"`
+	Lng  float64 `json:"lng"`
+}
+
+// DropKnownPath leaves the line out when etag is the one the caller holds.
+func (s *LiveStory) DropKnownPath(etag string) {
+	if s.PlannedPath != nil && etag != "" && etag == s.PlannedPath.ETag {
+		s.PlannedPath.Polyline6 = ""
+	}
 }
 
 // RiderLive is GET /tracking/riders/:id/live (MOBILE-010): the rider's trip in progress, the rider's own
@@ -59,6 +91,7 @@ type RiderLive struct {
 	Stops        []RiderLiveStop `json:"stops"`
 	Position     json.RawMessage `json:"position" swaggertype:"object"`
 	Eta          []StopEta       `json:"eta"`
+	LiveStory
 }
 
 // RiderLiveStop is one of the rider's stops on the trip: where it is and whether it is pickup or dropoff.

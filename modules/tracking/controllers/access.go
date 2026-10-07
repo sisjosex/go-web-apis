@@ -119,6 +119,41 @@ func (ctrl *AccessController) CreateRider(c *gin.Context) {
 	c.JSON(http.StatusCreated, created)
 }
 
+// CreateDriver godoc
+// @Summary Create driver
+// @Description A driver for one of the tenant's companies, with their app access in the same request (TRACK-047 D3): account.email finds or creates the account under the driver's name at the driver level. A refused account leaves no driver.
+// @Tags Tracking - Drivers
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param driver body models.CreateDriverDto true "Driver data"
+// @Success 201 {object} models.CreatedDriver
+// @Failure 400 {object} coreErrors.ErrorResponse
+// @Failure 404 {object} coreErrors.ErrorResponse
+// @Failure 409 {object} coreErrors.ErrorResponse
+// @Router /tracking/drivers [post]
+func (ctrl *AccessController) CreateDriver(c *gin.Context) {
+	tenantID, _, ok := accessIDs(c)
+	if !ok {
+		return
+	}
+	var dto models.CreateDriverDto
+	if err := c.ShouldBindJSON(&dto); err != nil {
+		c.JSON(http.StatusBadRequest, coreErrors.BuildErrorDetail(c, trackingErrors.DriverCreateFailed, utils.ExtractValidationError(c, err)))
+		return
+	}
+	_ = conform.Strings(&dto)
+	created, err := ctrl.access.CreateDriver(c.Request.Context(), tenantID, &dto, c.GetString("lang"))
+	if err != nil {
+		if driverErrorResponse(c, err) {
+			return
+		}
+		accessError(c, err)
+		return
+	}
+	c.JSON(http.StatusCreated, created)
+}
+
 // ListRiderGuardians godoc
 // @Summary A rider's family accounts
 // @Description The guardian accounts that see the rider in the app (D3), each with the access notice to copy
@@ -144,14 +179,14 @@ func (ctrl *AccessController) ListRiderGuardians(c *gin.Context) {
 }
 
 // AddRiderGuardian godoc
-// @Summary Give a rider's family the app
-// @Description An existing account by user_id, or a person by email and name, found or created at the portal level; 409 when the email has web access or another app level (D4)
+// @Summary Add a rider's guardian
+// @Description An existing account by user_id, a person by email and name (found or created at the portal level), or a contact by name and phone with no account (TRACK-048 D3, user_id null, status contact); 409 when the email has web access or another app level (D4)
 // @Tags Tracking - Access
 // @Accept json
 // @Produce json
 // @Security BearerAuth
 // @Param rider_id path string true "Rider ID (UUID)"
-// @Param body body models.GrantAccessDto true "Account or person"
+// @Param body body models.NewRiderGuardianDto true "Account, person or contact"
 // @Success 201 {object} models.AccessGranted
 // @Failure 400 {object} coreErrors.ErrorResponse
 // @Failure 404 {object} coreErrors.ErrorResponse
@@ -162,7 +197,7 @@ func (ctrl *AccessController) AddRiderGuardian(c *gin.Context) {
 	if !ok {
 		return
 	}
-	var dto models.GrantAccessDto
+	var dto models.NewRiderGuardianDto
 	if !bindGrant(c, &dto) {
 		return
 	}

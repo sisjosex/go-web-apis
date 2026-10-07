@@ -495,3 +495,53 @@ func TestRealtimeSocket_RiderEta(t *testing.T) {
 		assert.LessOrEqual(t, len(data.Eta), 2, "the rider's stops only")
 	}
 }
+
+// ---- MOBILE-023: the live map tells the story ----
+
+// TestRiderLive_PlannedPathAndStory - an in-progress trip's rider snapshot carries the planned line
+// with its etag, the vehicle type, the rider's school as organization_kind and the last stop as the
+// destination; sent back as path_etag, the line is left out.
+func TestRiderLive_PlannedPathAndStory(t *testing.T) {
+	helper := SetupTrackingTest(t)
+	defer helper.Close()
+	riderID, tripID, _ := guardianRiding(t, helper)
+	storePath(t, helper, TripRouteVersion(t, helper, tripID), heroinasLine)
+
+	portal := SetupPortalTest(t)
+	defer portal.Close()
+	w := portal.DoRequest("GET", "/tracking/riders/"+riderID+"/live", nil, map[string]string{})
+	if w.Code != http.StatusOK {
+		t.Fatalf("rider live: %d %s", w.Code, w.Body.String())
+	}
+	var live models.RiderLive
+	decodeBody(t, w, &live)
+	if assert.NotNil(t, live.PlannedPath) {
+		assert.Equal(t, heroinasLine, live.PlannedPath.Polyline6)
+		assert.NotEmpty(t, live.PlannedPath.ETag)
+	}
+	if assert.NotNil(t, live.OrganizationKind) {
+		assert.Equal(t, "school", *live.OrganizationKind)
+	}
+	assert.NotNil(t, live.VehicleType)
+	if assert.NotNil(t, live.Destination) {
+		assert.InDelta(t, -17.3890, live.Destination.Lat, 1e-6, "the trip's last stop")
+	}
+
+	w = portal.DoRequest("GET", "/tracking/riders/"+riderID+"/live?path_etag="+live.PlannedPath.ETag, nil, map[string]string{})
+	live = models.RiderLive{}
+	decodeBody(t, w, &live)
+	if assert.NotNil(t, live.PlannedPath) {
+		assert.Empty(t, live.PlannedPath.Polyline6, "a known line is not sent again")
+	}
+
+	w = helper.DoRequest("GET", "/tracking/trips/"+tripID+"/live", nil, map[string]string{})
+	var trip models.TripLive
+	decodeBody(t, w, &trip)
+	if assert.NotNil(t, trip.PlannedPath) {
+		assert.Equal(t, heroinasLine, trip.PlannedPath.Polyline6)
+	}
+	assert.NotNil(t, trip.Destination)
+}
+
+// heroinasLine is Av. Heroínas as precision-6 polyline, eleven points.
+const heroinasLine = "nuqd`@vpae}BfE_XfEwj@fEwj@fEwj@bB_XbBwQfEwj@fEwj@fEwj@fEod@"

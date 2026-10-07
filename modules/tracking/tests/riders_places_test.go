@@ -25,12 +25,13 @@ func createEmptyPair(t *testing.T, helper *testhelpers.ApiTestHelper) (string, s
 	}, map[string]string{})
 	expectStatus(t, w, http.StatusOK)
 	w = helper.DoRequest("POST", "/tracking/routes", map[string]interface{}{
-		"company_id":      MainCompanyID,
-		"organization_id": MainSchoolID,
-		"route_name":      "Ruta " + uuid.New().String()[:6],
-		"arrival_time":    "07:45",
-		"departure_time":  "13:00",
-		"stops":           []interface{}{},
+		"company_id":                MainCompanyID,
+		"organization_id":           MainSchoolID,
+		"route_name":                "Ruta " + uuid.New().String()[:6],
+		"arrival_time":              "07:45",
+		"departure_time":            "13:00",
+		"stops":                     []interface{}{},
+		"destination_stop_place_id": ParseResponse(t, w.Body.Bytes())["stop_place_id"],
 	}, map[string]string{})
 	expectStatus(t, w, http.StatusCreated)
 	created := ParseResponse(t, w.Body.Bytes())

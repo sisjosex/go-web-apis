@@ -70,6 +70,7 @@ func orNotFound(err error) error {
 // @Produce json
 // @Security BearerAuth
 // @Param trip_id path string true "Trip ID (UUID)"
+// @Param path_etag query string false "The planned_path.etag the caller holds: the line is then left out"
 // @Success 200 {object} models.TripLive
 // @Failure 400 {object} coreErrors.ErrorResponse
 // @Failure 404 {object} coreErrors.ErrorResponse
@@ -98,6 +99,7 @@ func (ctrl *LiveController) GetTripLive(c *gin.Context) {
 		tripErrorResponse(c, err)
 		return
 	}
+	live.DropKnownPath(c.Query("path_etag"))
 	c.JSON(http.StatusOK, live)
 }
 
@@ -108,6 +110,7 @@ func (ctrl *LiveController) GetTripLive(c *gin.Context) {
 // @Produce json
 // @Security BearerAuth
 // @Param rider_id path string true "Rider ID (UUID)"
+// @Param path_etag query string false "The planned_path.etag the caller holds: the line is then left out"
 // @Success 200 {object} models.RiderLive
 // @Failure 400 {object} coreErrors.ErrorResponse
 // @Failure 403 {object} coreErrors.ErrorResponse
@@ -131,5 +134,6 @@ func (ctrl *LiveController) GetRiderLive(c *gin.Context) {
 		}
 		return
 	}
+	live.DropKnownPath(c.Query("path_etag"))
 	c.JSON(http.StatusOK, live)
 }

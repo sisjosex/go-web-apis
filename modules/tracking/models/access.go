@@ -32,15 +32,19 @@ type AppAccessGrant struct {
 	TenantName      string
 }
 
+// GuardianContact is the status of a guardian kept as a contact, without an account (TRACK-048 D3).
+const GuardianContact = "contact"
+
 // AccessGranted is the 201 of a grant. Notice is the text the access email carries, for the
-// "Copy message" button (D5).
+// "Copy message" button (D5). A guardian added as a contact (TRACK-048 D3) has no account: UserID is
+// nil and Status "contact".
 type AccessGranted struct {
-	UserID    uuid.UUID `json:"user_id"`
-	Email     string    `json:"email"`
-	FirstName *string   `json:"first_name"`
-	LastName  *string   `json:"last_name"`
-	Status    string    `json:"status"`
-	Notice    string    `json:"notice"`
+	UserID    *uuid.UUID `json:"user_id"`
+	Email     string     `json:"email"`
+	FirstName *string    `json:"first_name"`
+	LastName  *string    `json:"last_name"`
+	Status    string     `json:"status"`
+	Notice    string     `json:"notice"`
 }
 
 // RiderGuardian is one row of a rider's Family tab (D3).

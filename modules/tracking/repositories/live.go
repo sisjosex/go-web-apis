@@ -32,11 +32,15 @@ func (r *TrackingRepository) LiveFleet(ctx context.Context, tenantID uuid.UUID, 
 // runs to. Eta is left empty for the caller.
 func (r *TrackingRepository) TripLive(ctx context.Context, tenantID, tripID uuid.UUID) (*models.TripLive, []models.PendingStop, error) {
 	var live models.TripLive
-	var stops, position, pending []byte
+	var stops, position, pending, path, destination []byte
 	err := r.dbService.QueryRow(ctx, `SELECT * FROM tracking.sp_trip_live(p_tenant_id := $1, p_trip_id := $2)`, tenantID, tripID).
-		Scan(append(scanTrip(&live.Trip), &stops, &live.Polyline, &live.DistanceKm, &live.TraceSource, &position, &pending)...)
+		Scan(append(scanTrip(&live.Trip), &stops, &live.Polyline, &live.DistanceKm, &live.TraceSource, &position, &pending,
+			&path, &live.VehicleType, &live.OrganizationKind, &destination)...)
 	if err != nil {
 		return nil, nil, mapTripError(err, trackingErrors.TripNotFound)
+	}
+	if err := scanStory(&live.LiveStory, path, destination); err != nil {
+		return nil, nil, err
 	}
 	if err := json.Unmarshal(stops, &live.Stops); err != nil {
 		return nil, nil, err
@@ -56,13 +60,17 @@ func (r *TrackingRepository) TripLive(ctx context.Context, tenantID, tripID uuid
 // and the trip's pending stops the ETA runs through. Scope as GetRiderStatus: out of it, not-found.
 func (r *TrackingRepository) RiderLive(ctx context.Context, tenantID, riderID uuid.UUID, scopeUserID, guardianUserID *uuid.UUID) (*models.RiderLive, []models.PendingStop, error) {
 	var live models.RiderLive
-	var stops, position, pending []byte
+	var stops, position, pending, path, destination []byte
 	err := r.dbService.QueryRow(ctx,
 		`SELECT * FROM tracking.sp_rider_live(p_tenant_id := $1, p_rider_id := $2, p_scope_user_id := $3, p_guardian_user_id := $4)`,
 		tenantID, riderID, scopeUserID, guardianUserID).
-		Scan(&live.RiderID, &live.TripID, &live.RouteName, &live.LicensePlate, &stops, &position, &pending)
+		Scan(&live.RiderID, &live.TripID, &live.RouteName, &live.LicensePlate, &stops, &position, &pending,
+			&path, &live.VehicleType, &live.OrganizationKind, &destination)
 	if err != nil {
 		return nil, nil, scopedErr(err, trackingErrors.TrackingInternalError)
+	}
+	if err := scanStory(&live.LiveStory, path, destination); err != nil {
+		return nil, nil, err
 	}
 	if err := json.Unmarshal(stops, &live.Stops); err != nil {
 		return nil, nil, err
@@ -76,6 +84,23 @@ func (r *TrackingRepository) RiderLive(ctx context.Context, tenantID, riderID uu
 	}
 	live.Eta = []models.StopEta{}
 	return &live, pendingStops, nil
+}
+
+// scanStory reads the two JSONB columns of a live snapshot's story; NULL leaves the field nil.
+func scanStory(story *models.LiveStory, path, destination []byte) error {
+	if path != nil {
+		story.PlannedPath = &models.PlannedPath{}
+		if err := json.Unmarshal(path, story.PlannedPath); err != nil {
+			return err
+		}
+	}
+	if destination != nil {
+		story.Destination = &models.LiveDestination{}
+		if err := json.Unmarshal(destination, story.Destination); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // CanSubscribe answers whether the user may listen to channel; guardian is the portal level.

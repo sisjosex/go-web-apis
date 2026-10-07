@@ -110,6 +110,16 @@ type TrackingOverview struct {
 	HasRoutes       bool          `json:"has_routes"`
 }
 
+// TrackingSetup is what the tenant has set up yet, in the order the home's assistant asks for it
+// (TRACK-050 D2).
+type TrackingSetup struct {
+	Companies bool `json:"companies"`
+	Drivers   bool `json:"drivers"`
+	Vehicles  bool `json:"vehicles"`
+	Routes    bool `json:"routes"`
+	Riders    bool `json:"riders"`
+}
+
 // DelayedTrip is one late trip of the home, by minutes.
 type DelayedTrip struct {
 	TripID           uuid.UUID `json:"trip_id"`
@@ -288,7 +298,7 @@ type Driver struct {
 	FirstName        string               `json:"first_name"`
 	LastName         string               `json:"last_name"`
 	Phone            *string              `json:"phone"`
-	LicenseNumber    string               `json:"license_number"`
+	LicenseNumber    *string              `json:"license_number"`
 	LicenseClass     *string              `json:"license_class"`
 	LicenseExpiresOn *coreModels.DateOnly `json:"license_expires_on"`
 	Status           string               `json:"status"` // active, inactive, suspended

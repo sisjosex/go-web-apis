@@ -110,8 +110,8 @@ func (r *TrackingRepository) ListRiderGuardians(ctx context.Context, tenantID, r
 	return guardians, nil
 }
 
-func (r *TrackingRepository) AddRiderGuardian(ctx context.Context, tenantID, riderID uuid.UUID, grant *models.AppAccessGrant, phone *string, scopeUserID *uuid.UUID) error {
-	name := joinName(grant.FirstName, grant.LastName)
+// AddRiderGuardian links an account, or with a nil userID writes a contact row (TRACK-048 D3).
+func (r *TrackingRepository) AddRiderGuardian(ctx context.Context, tenantID, riderID uuid.UUID, userID *uuid.UUID, name, email string, phone *string, scopeUserID *uuid.UUID) error {
 	_, err := r.dbService.Execute(ctx, `
 		SELECT tracking.sp_rider_guardian_add(
 			p_tenant_id     := $1,
@@ -121,7 +121,7 @@ func (r *TrackingRepository) AddRiderGuardian(ctx context.Context, tenantID, rid
 			p_email         := $5,
 			p_phone         := $6,
 			p_scope_user_id := $7
-		)`, tenantID, riderID, grant.UserID, name, grant.Email, phone, scopeUserID)
+		)`, tenantID, riderID, userID, name, email, phone, scopeUserID)
 	if err != nil {
 		return mapAccessError(err)
 	}
@@ -146,21 +146,4 @@ func (r *TrackingRepository) SetDriverAccount(ctx context.Context, tenantID, dri
 		return nil, mapAccessError(err)
 	}
 	return previous, nil
-}
-
-func joinName(first, last *string) *string {
-	name := ""
-	if first != nil {
-		name = *first
-	}
-	if last != nil && *last != "" {
-		if name != "" {
-			name += " "
-		}
-		name += *last
-	}
-	if name == "" {
-		return nil
-	}
-	return &name
 }

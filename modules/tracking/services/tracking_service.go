@@ -319,6 +319,10 @@ func (s *TrackingService) TrackingOverview(ctx context.Context, tenantID uuid.UU
 	return s.trackingRepo.TrackingOverview(ctx, tenantID, date, scopeUserID)
 }
 
+func (s *TrackingService) TrackingSetup(ctx context.Context, tenantID uuid.UUID) (*models.TrackingSetup, error) {
+	return s.trackingRepo.TrackingSetup(ctx, tenantID)
+}
+
 func (s *TrackingService) ListRiderGroups(ctx context.Context, tenantID uuid.UUID, organizationID *string) ([]string, error) {
 	return s.trackingRepo.ListRiderGroups(ctx, tenantID, organizationID)
 }

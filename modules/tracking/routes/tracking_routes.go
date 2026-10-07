@@ -169,6 +169,10 @@ func registerAccessRoutes(r *gin.RouterGroup, denyOrganization gin.HandlerFunc, 
 	r.DELETE("/riders/:rider_id/guardians/:user_id",
 		tenancyMW.RequirePermission(trackingPerms.RidersWrite),
 		access.RemoveRiderGuardian)
+	r.POST("/drivers",
+		denyOrganization,
+		tenancyMW.RequirePermission(trackingPerms.DriversWrite),
+		access.CreateDriver)
 	r.PUT("/drivers/:driver_id/account",
 		denyOrganization,
 		tenancyMW.RequirePermission(trackingPerms.DriversWrite),
@@ -256,13 +260,10 @@ func registerFleetRoutes(r *gin.RouterGroup, denyOrganization gin.HandlerFunc, t
 		trackingController.SetVehicleDriver)
 	r.GET("/vehicles/:vehicle_id/conflicts", denyOrganization, trackingController.VehicleConflicts)
 
-	// Drivers — the carrier's staff, so the operator's alone, like the rest of the fleet.
+	// Drivers — the carrier's staff, so the operator's alone, like the rest of the fleet. POST is
+	// registerAccessRoutes': it may invite the driver to the app (TRACK-047).
 	r.GET("/drivers", denyOrganization, trackingController.ListDrivers)
 	r.GET("/drivers/:driver_id", denyOrganization, trackingController.GetDriver)
-	r.POST("/drivers",
-		denyOrganization,
-		tenancyMW.RequirePermission(trackingPerms.DriversWrite),
-		trackingController.CreateDriver)
 	r.PATCH("/drivers/:driver_id",
 		denyOrganization,
 		tenancyMW.RequirePermission(trackingPerms.DriversWrite),
@@ -330,6 +331,7 @@ func registerTripRoutes(r *gin.RouterGroup, denyOrganization gin.HandlerFunc, tr
 	// An organization user reads its own trips: the SP scopes the board (MOBILE-020).
 	r.GET("/trips", trackingController.ListTrips)
 	r.GET("/overview", tenancyMW.RequirePermission(trackingPerms.RoutesRead), trackingController.TrackingOverview)
+	r.GET("/setup", denyOrganization, tenancyMW.RequirePermission(trackingPerms.RoutesRead), trackingController.TrackingSetup)
 	r.GET("/trips/:trip_id", denyOrganization, trackingController.GetTrip)
 	r.GET("/trips/:trip_id/status", denyOrganization, trackingController.GetTripStatus)
 	r.GET("/trips/:trip_id/events", denyOrganization, trackingController.ListTripEvents)

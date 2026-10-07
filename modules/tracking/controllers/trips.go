@@ -349,3 +349,24 @@ func (ctrl *TrackingController) TrackingOverview(c *gin.Context) {
 	}
 	c.JSON(http.StatusOK, overview)
 }
+
+// TrackingSetup godoc
+// @Summary The tracking home's setup assistant
+// @Description Whether the tenant has any company, driver, vehicle, route and rider yet, in the order the first-run assistant asks for them (TRACK-050 D2)
+// @Tags Tracking - Trips
+// @Produce json
+// @Security BearerAuth
+// @Success 200 {object} models.TrackingSetup
+// @Router /tracking/setup [get]
+func (ctrl *TrackingController) TrackingSetup(c *gin.Context) {
+	tenantID, ok := ctrl.requireTenantID(c)
+	if !ok {
+		return
+	}
+	setup, err := ctrl.trackingService.TrackingSetup(c.Request.Context(), tenantID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, coreErrors.BuildError(c, err))
+		return
+	}
+	c.JSON(http.StatusOK, setup)
+}

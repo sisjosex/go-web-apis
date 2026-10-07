@@ -108,8 +108,8 @@ type AlertCreatedResponse struct {
 type CreateCompanyDto struct {
 	Name               string  `json:"name" binding:"required,min=3,max=255" conform:"trim"`
 	Email              string  `json:"email" binding:"omitempty,email-valid" conform:"trim,lowercase"`
-	Phone              string  `json:"phone" binding:"required,max=20" conform:"trim"`
-	Address            string  `json:"address" binding:"required,max=500" conform:"trim"`
+	Phone              string  `json:"phone" binding:"omitempty,max=20" conform:"trim"`
+	Address            string  `json:"address" binding:"omitempty,max=500" conform:"trim"`
 	City               string  `json:"city" binding:"max=100" conform:"trim"`
 	Country            string  `json:"country" binding:"max=100" conform:"trim"`
 	RegistrationNumber string  `json:"registration_number" binding:"max=100" conform:"trim"`
@@ -372,6 +372,9 @@ type CreateRouteDto struct {
 	DaysOfWeek      *int16           `json:"days_of_week" binding:"omitempty,min=1,max=127"`
 	Stops           []map[string]any `json:"stops" binding:"omitempty,max=100"`
 	ReturnRouteName *string          `json:"return_route_name" binding:"omitempty,min=3,max=255" conform:"trim"`
+	// DestinationStopPlaceID is the stop the pair ends at (TRACK-049 D3); without it the destination is
+	// the pin in destination_lat/lng, and with neither the create answers route.destination-required.
+	DestinationStopPlaceID *uuid.UUID `json:"destination_stop_place_id" binding:"omitempty,uuid"`
 }
 
 // CreatedRoute is the 201 of POST /tracking/routes: the route, and its return when one was created.
@@ -769,10 +772,28 @@ type CreateDriverDto struct {
 	FirstName        string               `json:"first_name" binding:"required,min=2,max=255" conform:"trim"`
 	LastName         string               `json:"last_name" binding:"required,min=2,max=255" conform:"trim"`
 	Phone            *string              `json:"phone" binding:"omitempty,max=50" conform:"trim"`
-	LicenseNumber    string               `json:"license_number" binding:"required,min=2,max=100" conform:"trim"`
+	LicenseNumber    *string              `json:"license_number" binding:"omitempty,min=2,max=100" conform:"trim"`
 	LicenseClass     *string              `json:"license_class" binding:"omitempty,max=50" conform:"trim"`
 	LicenseExpiresOn *coreModels.DateOnly `json:"license_expires_on" time_format:"2006-01-02"`
 	Status           string               `json:"status" binding:"omitempty,oneof=active inactive suspended" conform:"trim,lowercase"`
+	// Account invites the driver to the app in the same request (TRACK-047 D3): the account is found or
+	// created by email under the driver's own name and granted the driver level.
+	Account *DriverAccountDto `json:"account" binding:"omitempty"`
+	// UserID is the granted account, set by the service before the driver is written.
+	UserID *uuid.UUID `json:"-" swaggerignore:"true"`
+}
+
+// DriverAccountDto is the person's app access asked for with a new driver; the phone defaults to the
+// driver's.
+type DriverAccountDto struct {
+	Email string  `json:"email" binding:"required,email-valid,max=255" conform:"trim,lowercase"`
+	Phone *string `json:"phone" binding:"omitempty,max=50" conform:"trim"`
+}
+
+// CreatedDriver is the 201 of POST /tracking/drivers: the driver and the account it was given, if any.
+type CreatedDriver struct {
+	*Driver
+	Account *AccessGranted `json:"account"`
 }
 
 // UpdateDriverDto represents request to update a driver. Every field is optional: the SP keeps what

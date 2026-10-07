@@ -549,6 +549,8 @@ func mapRouteError(err error, fallbackCode string) error {
 			return &trackingErrors.TrackingError{Code: trackingErrors.RouteDepartureRequired, Err: pgErr}
 		case "stop-place.invalid":
 			return &trackingErrors.TrackingError{Code: trackingErrors.StopPlaceInvalid, Err: pgErr}
+		case "stop-place.not-found":
+			return &trackingErrors.TrackingError{Code: trackingErrors.StopPlaceNotFound, Err: pgErr}
 		}
 	}
 	return &trackingErrors.TrackingError{Code: fallbackCode, Err: err}
@@ -578,10 +580,10 @@ func (r *TrackingRepository) CreateRoutePair(ctx context.Context, tenantID uuid.
 	var outbound uuid.UUID
 	var inbound *uuid.UUID
 	err = r.dbService.QueryRow(ctx,
-		`SELECT * FROM tracking.sp_create_route_pair($1, $2, $3, $4, $5, $6, $7::TIME, $8::TIME, $9::SMALLINT, $10::JSONB, $11, $12, $13, $14, $15, $16)`,
+		`SELECT * FROM tracking.sp_create_route_pair($1, $2, $3, $4, $5, $6, $7::TIME, $8::TIME, $9::SMALLINT, $10::JSONB, $11, $12, $13, $14, $15, $16, $17)`,
 		tenantID, dto.CompanyID, dto.OrganizationID, dto.RouteName, dto.VehicleID, dto.WithReturn,
 		dto.ArrivalTime, dto.DepartureTime, dto.DaysOfWeek, string(stops), dto.Timezone, dto.ReturnRouteName,
-		dto.DestinationLat, dto.DestinationLng, nilIfEmpty(dto.DestinationAddress), createdBy,
+		dto.DestinationLat, dto.DestinationLng, nilIfEmpty(dto.DestinationAddress), dto.DestinationStopPlaceID, createdBy,
 	).Scan(&outbound, &inbound)
 	if err != nil {
 		return uuid.Nil, nil, mapRouteError(err, trackingErrors.RouteCreateFailed)
@@ -1251,7 +1253,7 @@ func (r *TrackingRepository) CreateDriver(ctx context.Context, tenantID uuid.UUI
 			p_license_expires_on := $9,
 			p_status             := $10
 		)
-	`, tenantID, dto.CompanyID, noAccount, dto.FirstName, dto.LastName, dto.Phone,
+	`, tenantID, dto.CompanyID, dto.UserID, dto.FirstName, dto.LastName, dto.Phone,
 		dto.LicenseNumber, dto.LicenseClass, dto.LicenseExpiresOn, dto.Status,
 	).Scan(scanDriver(&driver)...)
 	if err != nil {

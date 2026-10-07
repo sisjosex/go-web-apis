@@ -225,3 +225,14 @@ func (r *TrackingRepository) TrackingOverview(ctx context.Context, tenantID uuid
 	}
 	return &o, nil
 }
+
+// TrackingSetup reads what the tenant has set up yet in one call (TRACK-050 D2).
+func (r *TrackingRepository) TrackingSetup(ctx context.Context, tenantID uuid.UUID) (*models.TrackingSetup, error) {
+	var s models.TrackingSetup
+	err := r.dbService.QueryRow(ctx, `SELECT * FROM tracking.sp_tracking_setup($1)`, tenantID).
+		Scan(&s.Companies, &s.Drivers, &s.Vehicles, &s.Routes, &s.Riders)
+	if err != nil {
+		return nil, &trackingErrors.TrackingError{Code: trackingErrors.TripListFailed, Err: err}
+	}
+	return &s, nil
+}
