@@ -49,15 +49,15 @@ func LoadAuthConfig() *AuthConfig {
 		// JWT configuration
 		JWTSecretKey:         utils.MustGetEnv("JWT_SECRET_KEY"),  // Required
 		JWTRefreshKey:        utils.MustGetEnv("JWT_REFRESH_KEY"), // Required
-		JWTExpiration:        utils.GetEnvAsDuration("JWT_EXPIRATION_MINUTES", 15*time.Minute),
-		JWTRefreshExpiration: utils.GetEnvAsDuration("JWT_REFRESH_EXPIRATION_HOURS", 168*time.Hour), // 7 days
+		JWTExpiration:        utils.GetEnvAsDurationUnit("JWT_EXPIRATION_MINUTES", 15*time.Minute, time.Minute),
+		JWTRefreshExpiration: utils.GetEnvAsDurationUnit("JWT_REFRESH_EXPIRATION_HOURS", 720*time.Hour, time.Hour), // 30 days since the last refresh (MOBILE-022)
 
 		// Email verification
-		EmailVerificationTokenExpiry: utils.GetEnvAsDuration("EMAIL_VERIFICATION_TOKEN_EXPIRY_HOURS", 24*time.Hour),
+		EmailVerificationTokenExpiry: utils.GetEnvAsDurationUnit("EMAIL_VERIFICATION_TOKEN_EXPIRY_HOURS", 24*time.Hour, time.Hour),
 		EmailVerificationRequired:    utils.GetEnvAsBool("EMAIL_VERIFICATION_REQUIRED", false),
 
 		// Password reset
-		PasswordResetTokenExpiry: utils.GetEnvAsDuration("PASSWORD_RESET_TOKEN_EXPIRY_HOURS", 1*time.Hour),
+		PasswordResetTokenExpiry: utils.GetEnvAsDurationUnit("PASSWORD_RESET_TOKEN_EXPIRY_HOURS", 1*time.Hour, time.Hour),
 
 		// Session management
 		MaxSessionsPerUser: utils.GetEnvAsInt("MAX_SESSIONS_PER_USER", 5),
@@ -75,7 +75,7 @@ func LoadAuthConfig() *AuthConfig {
 		SMTPFrom:    utils.GetEnv("SMTP_FROM", "noreply@example.com"),
 
 		// OTP Configuration
-		OTPExpiryMinutes:   utils.GetEnvAsDuration("OTP_EXPIRY_MINUTES", 10*time.Minute),
+		OTPExpiryMinutes:   utils.GetEnvAsDurationUnit("OTP_EXPIRY_MINUTES", 10*time.Minute, time.Minute),
 		OTPLength:          utils.GetEnvAsInt("OTP_LENGTH", 6),
 		OTPMaxAttempts:     utils.GetEnvAsInt("OTP_MAX_ATTEMPTS", 5),
 		OTPEnabledChannels: utils.GetEnvAsStringSlice("OTP_ENABLED_CHANNELS", []string{"whatsapp", "sms", "email"}),

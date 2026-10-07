@@ -171,7 +171,7 @@ test-import:
 	go test $(TEST_FLAGS) ./modules/import/services
 
 test-core: db-reset
-	go test $(TEST_FLAGS) ./modules/core/tests ./modules/core/services/...
+	go test $(TEST_FLAGS) ./modules/core/tests ./modules/core/services/... ./modules/core/utils
 
 test-tenancy: db-reset
 	go test $(TEST_FLAGS) ./modules/tenancy/tests ./modules/tenancy/middleware

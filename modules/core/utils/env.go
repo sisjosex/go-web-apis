@@ -126,17 +126,22 @@ func GetEnvAsBool(key string, defaultValue bool) bool {
 // Supports formats: "15m", "1h", "24h", "168h", etc.
 // If the value is a number without unit, treats it as minutes
 func GetEnvAsDuration(key string, defaultValue time.Duration) time.Duration {
+	return GetEnvAsDurationUnit(key, defaultValue, time.Minute)
+}
+
+// GetEnvAsDurationUnit gets an environment variable as time.Duration, reading a bare number in the
+// unit its key names: GetEnvAsDurationUnit("X_HOURS", d, time.Hour) turns "168" into 168h.
+// Duration strings ("720h", "15m") are accepted as they are.
+func GetEnvAsDurationUnit(key string, defaultValue, unit time.Duration) time.Duration {
 	LoadEnv()
 
 	if value, exists := os.LookupEnv(key); exists {
-		// Try parsing as duration first (e.g., "15m", "1h")
+		value = strings.TrimSpace(value)
 		if duration, err := time.ParseDuration(value); err == nil {
 			return duration
 		}
-
-		// If that fails, try parsing as minutes (backward compatibility)
-		if minutes, err := strconv.Atoi(value); err == nil {
-			return time.Duration(minutes) * time.Minute
+		if n, err := strconv.Atoi(value); err == nil {
+			return time.Duration(n) * unit
 		}
 
 		log.Printf("Warning: Could not convert %s='%s' to duration, using default: %v", key, value, defaultValue)
