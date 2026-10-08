@@ -1091,6 +1091,17 @@ func TripVersionID(t *testing.T, helper *testhelpers.ApiTestHelper, tripID strin
 	return versionID
 }
 
+// SetTripRouteClient makes the client of a trip's route an organization: a route takes one only when it
+// is created as a destination pair (TRACK-038), which a test of the client's kind does not need (TRACK-051).
+func SetTripRouteClient(t *testing.T, helper *testhelpers.ApiTestHelper, tripID, organizationID string) {
+	t.Helper()
+	if _, err := helper.DB().Execute(context.Background(),
+		`UPDATE tracking.routes SET organization_id = $2 WHERE id = (SELECT route_id FROM tracking.trips WHERE id = $1)`,
+		tripID, organizationID); err != nil {
+		t.Fatalf("set trip route client: %v", err)
+	}
+}
+
 // ArriveStopByGPS marks a stop arrived the way sp_ingest_positions does from the positions, with no
 // driver op behind it, and answers the arrived_at it stored (MOBILE-015 A1).
 func ArriveStopByGPS(t *testing.T, helper *testhelpers.ApiTestHelper, stopID uuid.UUID) time.Time {

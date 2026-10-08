@@ -26,6 +26,9 @@ type LiveVehicle struct {
 	Speed        *float32   `json:"speed"`
 	Heading      *float32   `json:"heading"`
 	RecordedAt   time.Time  `json:"recorded_at"`
+	// OrganizationKind is the route client's kind (school | company | other), which picks the marker:
+	// nil without a trip or when the route names no client (TRACK-051).
+	OrganizationKind *string `json:"organization_kind"`
 }
 
 type LiveFleetResponse struct {

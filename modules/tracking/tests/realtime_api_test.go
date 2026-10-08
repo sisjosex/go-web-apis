@@ -82,12 +82,14 @@ func startCochabambaTrip(t *testing.T, helper *testhelpers.ApiTestHelper, routeI
 
 // ---- step 1: snapshots ----
 
-// TestLiveFleet_Snapshot - the fleet snapshot lists the ingesting vehicle with its trip and route; the
-// organization filter keeps it for its rider's school and drops it for another; a guardian → 403.
+// TestLiveFleet_Snapshot - the fleet snapshot lists the ingesting vehicle with its trip, route and the
+// route client's kind (a school's route → "school", TRACK-051); the organization filter keeps it for
+// its rider's school and drops it for another; a guardian → 403.
 func TestLiveFleet_Snapshot(t *testing.T) {
 	helper := SetupTrackingTest(t)
 	defer helper.Close()
 	tripID, vehicleID := liveTrip(t, helper)
+	SetTripRouteClient(t, helper, tripID, MainSchoolID)
 	ingest(t, helper, pointsJSON(t, vehicleID, time.Now().UTC(), [2]float64{-17.39, -66.15}))
 
 	find := func(query string) *models.LiveVehicle {
@@ -109,6 +111,9 @@ func TestLiveFleet_Snapshot(t *testing.T) {
 		assert.Equal(t, tripID, v.TripID.String())
 		assert.NotNil(t, v.RouteName)
 		assert.InDelta(t, -17.39, v.Lat, 1e-9)
+		if assert.NotNil(t, v.OrganizationKind) {
+			assert.Equal(t, "school", *v.OrganizationKind)
+		}
 	}
 	assert.NotNil(t, find("?organization_id="+MainSchoolID))
 	assert.Nil(t, find("?organization_id="+EmptyEmployerID))
