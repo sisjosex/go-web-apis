@@ -84,12 +84,11 @@ func TestCreateUser_MissingFields(t *testing.T) {
 // User Update Tests
 // ============================================
 
-// TestUpdateUser_Success validates successful user update
+// TestUpdateUser_Success - an edit without a session is refused before it reaches the user. The edit
+// itself is TestUsers_GetAndUpdate (user_admin_test.go).
 func TestUpdateUser_Success(t *testing.T) {
 	helper := testhelpers.SetupApiTest(t)
 	defer helper.Close()
-
-	userID := "00000000-0000-0000-0000-000000000099"
 
 	body := models.UpdateUserDto{
 		FirstName: stringPtr("UpdatedFirst"),
@@ -97,13 +96,8 @@ func TestUpdateUser_Success(t *testing.T) {
 		Phone:     stringPtr("+506 9876 5432"),
 	}
 
-	w := helper.DoRequest("PATCH", fmt.Sprintf("/users/%s", userID), body, map[string]string{})
-
-	if w.Code != http.StatusOK && w.Code != http.StatusUnauthorized && w.Code != http.StatusNotFound {
-		t.Logf("Error response: %s", w.Body.String())
-	}
-	assert.True(t, w.Code == http.StatusOK || w.Code == http.StatusUnauthorized || w.Code == http.StatusNotFound)
-	t.Logf("✅ Users: UpdateUser endpoint validated (responds with %d)", w.Code)
+	w := helper.DoRequest("PUT", "/users/00000000-0000-0000-0000-000000000099", body, map[string]string{})
+	assert.Equal(t, http.StatusUnauthorized, w.Code, w.Body.String())
 }
 
 // TestUpdateUser_InvalidID validates UUID validation

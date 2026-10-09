@@ -77,13 +77,22 @@ func TestTenantPlan_NoticeThenConfirmExtendsByCycle(t *testing.T) {
 
 	w = helper.DoRequest("POST", fmt.Sprintf("/billing/payments/%s/confirm", payment["id"]), nil, map[string]string{})
 	assert.Equal(t, http.StatusForbidden, w.Code, "only the platform confirms")
+	w = helper.DoRequest("GET", "/billing/payments/pending", nil, map[string]string{})
+	assert.Equal(t, http.StatusForbidden, w.Code, "only the platform reads the queue")
 
 	promote(t, helper, email)
 	if _, err := helper.Login(email, "$Password2025"); err != nil {
 		t.Fatalf("login: %v", err)
 	}
+	w = helper.DoRequest("GET", "/billing/payments/pending", nil, map[string]string{})
+	assert.Equal(t, http.StatusOK, w.Code, w.Body.String())
+	assert.Contains(t, w.Body.String(), payment["id"], "a notified payment waits in the platform's queue")
+
 	w = helper.DoRequest("POST", fmt.Sprintf("/billing/payments/%s/confirm", payment["id"]), nil, map[string]string{})
 	assert.Equal(t, http.StatusOK, w.Code, w.Body.String())
+
+	w = helper.DoRequest("GET", "/billing/payments/pending", nil, map[string]string{})
+	assert.NotContains(t, w.Body.String(), payment["id"], "a confirmed payment leaves the queue")
 
 	w = helper.DoRequest("GET", "/billing/tenant/plan", nil, map[string]string{})
 	plan := body(t, w.Body.Bytes())

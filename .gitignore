@@ -58,6 +58,8 @@ Thumbs.db
 # Logs
 *.log
 logs/
+# Route hits the test recorder writes for tools/check -routes (INFRA-014)
+.route-hits
 tmp/
 temp/
 

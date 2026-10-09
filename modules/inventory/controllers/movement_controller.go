@@ -6,6 +6,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
 
 	coreErrors "josex/web/modules/core/errors"
@@ -124,6 +125,11 @@ func (ctrl *MovementController) GetMovement(c *gin.Context) {
 
 	movement, err := ctrl.movementService.GetMovement(c.Request.Context(), tenantID, movementID)
 	if err != nil {
+		// The SP answers no row for an id the tenant does not have.
+		if errors.Is(err, pgx.ErrNoRows) {
+			c.JSON(http.StatusNotFound, coreErrors.BuildErrorSingle(c, inventoryErrors.MovementNotFound))
+			return
+		}
 		var pgErr *pgconn.PgError
 		if errors.As(err, &pgErr) {
 			switch pgErr.Message {

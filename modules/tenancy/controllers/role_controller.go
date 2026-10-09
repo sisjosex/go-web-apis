@@ -195,6 +195,11 @@ func (ctrl *RoleController) UpdateRole(c *gin.Context) {
 	if err != nil {
 		var pgErr *pgconn.PgError
 		if errors.As(err, &pgErr) {
+			// sp_update_role raises no duplicate-name of its own: the unique (tenant_id, name) index does.
+			if pgErr.Code == "23505" { // unique_violation
+				c.JSON(http.StatusConflict, coreErrors.BuildErrorSingle(c, tenancyErrors.RoleDuplicateName))
+				return
+			}
 			switch pgErr.Message {
 			case "tenant.role.not-found":
 				c.JSON(http.StatusNotFound, coreErrors.BuildErrorSingle(c, tenancyErrors.RoleNotFound))

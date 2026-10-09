@@ -27,7 +27,7 @@ func GetHTTPStatusFromError(err error) int {
 			switch pgErr.Message {
 			case "customer.not-found", "sales-order.not-found", "order-item.not-found":
 				return 404
-			case "customer.already-exists", "sales-order.invalid-status", "sales-order.insufficient-inventory":
+			case "customer.already-exists", "sales-order.invalid-status", "sales-order.insufficient-inventory", "sales-order.cannot-modify":
 				return 409
 			case "customer.invalid-email", "sales-order.empty-items", "order-item.invalid-qty":
 				return 400

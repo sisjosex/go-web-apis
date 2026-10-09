@@ -31,7 +31,8 @@ help:
 	@echo "  make build            - Build server binary"
 	@echo ""
 	@echo "✅ QUALITY GATE"
-	@echo "  make gate             - fmt + lint + check + build, quiet; MODULES=\"tracking inventory\" adds their tests"
+	@echo "  make gate             - fmt + lint + check + build, then each changed module's tests + route coverage"
+	@echo "                          (MODULES=\"tracking inventory\" overrides the modules picked from git diff)"
 	@echo "  make lint             - golangci-lint on changed code only (--new); make lint-all for the tree"
 	@echo "  make check            - tools/check: gofmt, tenant scope in SPs, DTO tenant binding (changed files)"
 	@echo ""
@@ -43,7 +44,7 @@ help:
 	@echo ""
 	@echo "🧪 TESTS"
 	@echo "  make test             - Reset DB + run main test suite"
-	@echo "  make test-all         - Reset DB + run all module tests"
+	@echo "  make test-all         - Reset DB + run all module tests + every module's route coverage"
 	@echo "  make test-auth        - Auth module"
 	@echo "  make test-tenancy     - Tenancy module"
 	@echo "  make test-inventory   - Inventory module"
@@ -53,7 +54,7 @@ help:
 	@echo "  make test-tracking    - Tracking module"
 	@echo "  make test-users       - Users module"
 	@echo "  make test-core        - Core module (jobs tests need Valkey, storage tests the local S3)"
-	@echo "  make test-import      - Import engine (unit, no DB)"
+	@echo "  make test-import      - Import engine (unit) + its routes through users and inventory"
 	@echo "  make test-geo         - Geo module (address search, routing breaker, ETA fallback)"
 	@echo ""
 	@echo "🗄️  DATABASE"
@@ -136,9 +137,13 @@ seed-dev:
 # TESTS
 # ════════════════════════════════════════════════════════════════
 TEST_FLAGS := -tags=integration $(GOFLAGS) -timeout=120s -p 1
+# The test engine records every request here; `go run ./tools/check -routes` reads it (INFRA-014).
+ROUTE_HITS := $(CURDIR)/.route-hits
+TEST_MODULES := auth users import core tenancy tracking inventory sales purchasing billing geo
+GO_TEST := rm -f $(ROUTE_HITS); ROUTE_HITS=$(ROUTE_HITS) go test $(TEST_FLAGS)
 
 test: db-reset
-	go test $(TEST_FLAGS) \
+	$(GO_TEST) \
 		./modules/auth/tests \
 		./modules/tenancy/tests \
 		./modules/tenancy/middleware \
@@ -148,51 +153,55 @@ test: db-reset
 
 test-all: db-reset
 	@echo "🧪 Running all module tests..."
-	go test $(TEST_FLAGS) \
-		./modules/auth/tests \
-		./modules/users/tests \
+	$(GO_TEST) \
+		./modules/auth/tests ./modules/auth/services/... \
+		./modules/users/tests ./modules/users/services \
 		./modules/tenancy/tests \
 		./modules/tenancy/middleware \
-		./modules/core/services \
+		./modules/core/tests ./modules/core/services/... ./modules/core/utils \
+		./modules/import/services \
 		./modules/tracking/tests \
-		./modules/inventory/tests \
+		./modules/inventory/tests ./modules/inventory/services \
 		./modules/sales/tests \
 		./modules/purchasing/tests \
-		./modules/billing/tests
+		./modules/billing/tests \
+		./modules/geo/tests ./modules/geo/services/routing
+	go run ./tools/check -routes $(ROUTE_HITS) -module "$(TEST_MODULES)"
 	@echo "✅ All tests done"
 
 test-auth: db-reset
-	go test $(TEST_FLAGS) ./modules/auth/tests ./modules/auth/services/...
+	$(GO_TEST) ./modules/auth/tests ./modules/auth/services/...
 
 test-users: db-reset
-	go test $(TEST_FLAGS) ./modules/users/tests ./modules/users/services
+	$(GO_TEST) ./modules/users/tests ./modules/users/services
 
-test-import:
-	go test $(TEST_FLAGS) ./modules/import/services
+# The engine's HTTP routes are driven by the resources that plug into it: users and inventory.
+test-import: db-reset
+	$(GO_TEST) ./modules/import/services ./modules/users/tests ./modules/inventory/tests
 
 test-core: db-reset
-	go test $(TEST_FLAGS) ./modules/core/tests ./modules/core/services/... ./modules/core/utils
+	$(GO_TEST) ./modules/core/tests ./modules/core/services/... ./modules/core/utils
 
 test-tenancy: db-reset
-	go test $(TEST_FLAGS) ./modules/tenancy/tests ./modules/tenancy/middleware
+	$(GO_TEST) ./modules/tenancy/tests ./modules/tenancy/middleware
 
 test-tracking: db-reset
-	go test $(TEST_FLAGS) ./modules/tracking/tests
+	$(GO_TEST) ./modules/tracking/tests
 
 test-inventory: db-reset
-	go test $(TEST_FLAGS) ./modules/inventory/tests ./modules/inventory/services
+	$(GO_TEST) ./modules/inventory/tests ./modules/inventory/services
 
 test-sales: db-reset
-	go test $(TEST_FLAGS) ./modules/sales/tests
+	$(GO_TEST) ./modules/sales/tests
 
 test-purchasing: db-reset
-	go test $(TEST_FLAGS) ./modules/purchasing/tests
+	$(GO_TEST) ./modules/purchasing/tests
 
 test-billing: db-reset
-	go test $(TEST_FLAGS) ./modules/billing/tests
+	$(GO_TEST) ./modules/billing/tests
 
 test-geo: db-reset
-	go test $(TEST_FLAGS) ./modules/geo/tests ./modules/geo/services/routing
+	$(GO_TEST) ./modules/geo/tests ./modules/geo/services/routing
 
 # ════════════════════════════════════════════════════════════════
 # DATABASE
@@ -261,10 +270,13 @@ gate:
 	$(call quiet,check,go run ./tools/check)
 	$(call quiet,lint,golangci-lint run --new ./...)
 	$(call quiet,build,go build -o $(BINARY) ./cmd/server)
-	@for m in $(MODULES); do \
+	@mods="$(MODULES)"; [ -n "$$mods" ] || mods=$$(go run ./tools/check -modules); \
+	echo "> modules: $${mods:-none}"; \
+	for m in $$mods; do \
 		printf "> test-$$m "; start=$$(date +%s); \
-		if $(MAKE) -s test-$$m > $(GATE_LOG) 2>&1; then echo "ok ($$(( $$(date +%s) - start ))s)"; \
-		else echo "FAIL"; grep -E "^(---|===|FAIL|panic|\s+[a-z_]+\.go:[0-9]+)" $(GATE_LOG) | tail -40; echo "GATE FAILED at test-$$m"; rm -f $(GATE_LOG); exit 1; fi; \
+		if $(MAKE) -s test-$$m > $(GATE_LOG) 2>&1 && go run ./tools/check -routes $(ROUTE_HITS) -module $$m >> $(GATE_LOG) 2>&1; \
+		then echo "ok ($$(( $$(date +%s) - start ))s)"; \
+		else echo "FAIL"; grep -E "^(---|===|FAIL|panic|\s+[a-z_]+\.go:[0-9]+|unmatched|route without|check -routes)" $(GATE_LOG) | grep -vE "^(--- PASS|=== (RUN|PAUSE|CONT))" | tail -40; echo "GATE FAILED at test-$$m"; rm -f $(GATE_LOG); exit 1; fi; \
 	done
 	@rm -f $(GATE_LOG); echo "GATE PASSED"
 

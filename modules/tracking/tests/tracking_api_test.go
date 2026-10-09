@@ -18,6 +18,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"josex/web/modules/core/services/storage"
 	"josex/web/modules/core/services/storage/storagetest"
@@ -1291,24 +1292,6 @@ func TestGetRiderStatus_AllRoutesEnded(t *testing.T) {
 // LOCATIONS & EVENTS TESTS (10 tests)
 // ============================================================================
 
-// TestUpdateVehicleLocation - The unauthenticated GPS ingest route is gone → 404
-func TestUpdateVehicleLocation(t *testing.T) {
-	helper := testhelpers.SetupApiTest(t)
-	defer helper.Close()
-
-	body := map[string]interface{}{
-		"vehicle_id": TestBusID,
-		"latitude":   40.7128,
-		"longitude":  -74.0060,
-		"speed":      45.5,
-		"heading":    180.0,
-	}
-
-	w := helper.DoRequest("POST", "/tracking/locations", body, map[string]string{})
-
-	assert.Equal(t, http.StatusNotFound, w.Code)
-}
-
 // TestGetVehicleCurrentLocation - Get latest vehicle location → 200
 func TestGetVehicleCurrentLocation(t *testing.T) {
 	helper := SetupTrackingTest(t)
@@ -1332,38 +1315,6 @@ func TestGetVehicleCurrentLocation(t *testing.T) {
 			}
 		}
 	}
-}
-
-// TestGetLocationHistory - Historical vehicle positions → 200
-func TestGetLocationHistory(t *testing.T) {
-	helper := SetupTrackingTest(t)
-	defer helper.Close()
-
-	vehicleID := TestBusID
-	w := helper.DoRequest("GET", fmt.Sprintf("/tracking/locations/history?vehicle_id=%s&limit=10", vehicleID), nil, map[string]string{})
-
-	if w.Code == http.StatusNotFound {
-		t.Skip("GET /tracking/locations/history not yet implemented")
-		return
-	}
-	assert.Equal(t, http.StatusOK, w.Code)
-	locations := ParseListResponse(t, w.Body.Bytes())
-	assert.NotNil(t, locations)
-}
-
-// TestLocationHistory Pagination - Page through location history → 200
-func TestLocationHistoryPagination(t *testing.T) {
-	helper := SetupTrackingTest(t)
-	defer helper.Close()
-
-	vehicleID := TestBusID
-	w := helper.DoRequest("GET", fmt.Sprintf("/tracking/locations/history?vehicle_id=%s&limit=5&offset=0", vehicleID), nil, map[string]string{})
-
-	if w.Code == http.StatusNotFound {
-		t.Skip("GET /tracking/locations/history not yet implemented")
-		return
-	}
-	assert.Equal(t, http.StatusOK, w.Code)
 }
 
 // ============================================================================
@@ -1401,80 +1352,6 @@ func TestCreateRouteAlert(t *testing.T) {
 
 	if w.Code == http.StatusCreated || w.Code == http.StatusOK {
 		assert.True(t, true)
-	}
-}
-
-// TestRoutePerformanceMetrics - On-time, delays, etc. → 200
-func TestRoutePerformanceMetrics(t *testing.T) {
-	helper := SetupTrackingTest(t)
-	defer helper.Close()
-
-	routeID := MorningRouteID
-	w := helper.DoRequest("GET", fmt.Sprintf("/tracking/routes/%s/metrics", routeID), nil, map[string]string{})
-
-	// Endpoint may not be implemented yet
-	if w.Code == http.StatusOK {
-		metrics := ParseResponse(t, w.Body.Bytes())
-		assert.NotNil(t, metrics)
-		// Verify expected metrics structure if present
-		if onTimePercentage, ok := metrics["on_time_percentage"]; ok {
-			assert.NotNil(t, onTimePercentage)
-		}
-		if totalTrips, ok := metrics["total_trips"]; ok {
-			assert.NotNil(t, totalTrips)
-		}
-	} else if w.Code == http.StatusNotFound || w.Code == http.StatusMethodNotAllowed {
-		// Endpoint not implemented
-		assert.True(t, true)
-	} else {
-		assert.True(t, w.Code < 500, "Should not return server error")
-	}
-}
-
-// TestStopArrivalPrediction - Predict stop arrival times → 200
-func TestStopArrivalPrediction(t *testing.T) {
-	helper := SetupTrackingTest(t)
-	defer helper.Close()
-
-	routeID := MorningRouteID
-	w := helper.DoRequest("GET", fmt.Sprintf("/tracking/routes/%s/predictions", routeID), nil, map[string]string{})
-
-	if w.Code == http.StatusOK {
-		predictions := ParseResponse(t, w.Body.Bytes())
-		assert.NotNil(t, predictions)
-		// Should return array of stop predictions or map with stops
-		if stops, ok := predictions["stops"]; ok {
-			assert.NotNil(t, stops)
-		}
-	} else if w.Code == http.StatusNotFound || w.Code == http.StatusMethodNotAllowed {
-		assert.True(t, true)
-	} else {
-		assert.True(t, w.Code < 500, "Should not return server error")
-	}
-}
-
-// TestRouteDelayDetection - Automatically detect delays → 200
-func TestRouteDelayDetection(t *testing.T) {
-	helper := SetupTrackingTest(t)
-	defer helper.Close()
-
-	routeID := MorningRouteID
-	w := helper.DoRequest("GET", fmt.Sprintf("/tracking/routes/%s/delays", routeID), nil, map[string]string{})
-
-	if w.Code == http.StatusOK {
-		response := ParseResponse(t, w.Body.Bytes())
-		assert.NotNil(t, response)
-		// Verify response has delay information
-		if hasDelay, ok := response["has_delay"]; ok {
-			assert.NotNil(t, hasDelay)
-		}
-		if delayMinutes, ok := response["delay_minutes"]; ok {
-			assert.NotNil(t, delayMinutes)
-		}
-	} else if w.Code == http.StatusNotFound || w.Code == http.StatusMethodNotAllowed {
-		assert.True(t, true)
-	} else {
-		assert.True(t, w.Code < 500, "Should not return server error")
 	}
 }
 
@@ -2082,6 +1959,44 @@ func TestListDocumentsBySubject(t *testing.T) {
 		found = found || document["id"] == mine["id"]
 	}
 	assert.True(t, found, "the document just filed must be on its own subject's list")
+}
+
+// TestUpdateDocumentType - a policy line is edited in place; an unknown id is a 404, a bad value a 400,
+// and another line's code is a conflict (INFRA-014).
+func TestUpdateDocumentType(t *testing.T) {
+	helper := SetupTrackingTest(t)
+	defer helper.Close()
+
+	typeID := CreateTestDocumentType(t, helper, "vehicle", false)
+	other := CreateTestDocumentType(t, helper, "vehicle", false)
+
+	w := helper.DoRequest("PATCH", "/tracking/document-types/"+typeID, map[string]interface{}{
+		"name": "Seguro obligatorio", "warn_days_before": 15, "blocks_service": true,
+	}, map[string]string{})
+	assert.Equal(t, http.StatusOK, w.Code, w.Body.String())
+	updated := ParseResponse(t, w.Body.Bytes())
+	assert.Equal(t, "Seguro obligatorio", updated["name"])
+	assert.Equal(t, true, updated["blocks_service"])
+
+	w = helper.DoRequest("GET", "/tracking/document-types?applies_to=vehicle", nil, map[string]string{})
+	assert.Contains(t, w.Body.String(), "Seguro obligatorio", "the edit is stored")
+
+	otherCode := ""
+	for _, line := range ParseListResponse(t, w.Body.Bytes()) {
+		if line["id"] == other {
+			otherCode, _ = line["code"].(string)
+		}
+	}
+	require.NotEmpty(t, otherCode, "the other line is listed")
+	w = helper.DoRequest("PATCH", "/tracking/document-types/"+typeID, map[string]interface{}{"code": otherCode}, map[string]string{})
+	assert.Equal(t, http.StatusConflict, w.Code, "another line's code: %s", w.Body.String())
+
+	w = helper.DoRequest("PATCH", "/tracking/document-types/"+typeID, map[string]interface{}{"applies_to": "boat"}, map[string]string{})
+	assert.Equal(t, http.StatusBadRequest, w.Code, w.Body.String())
+	w = helper.DoRequest("PATCH", "/tracking/document-types/"+uuid.NewString(), map[string]interface{}{"name": "Ghost"}, map[string]string{})
+	assert.Equal(t, http.StatusNotFound, w.Code, w.Body.String())
+	w = helper.DoRequest("PATCH", "/tracking/document-types/not-a-uuid", map[string]interface{}{"name": "Ghost"}, map[string]string{})
+	assert.Equal(t, http.StatusBadRequest, w.Code, w.Body.String())
 }
 
 // TestExpiredBlockingDocumentBlocksDriver - the whole of D2 end to end: an expired document of a

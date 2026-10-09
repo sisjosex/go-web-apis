@@ -74,7 +74,9 @@ func sharedTestServer() (*gin.Engine, coreServices.DatabaseService) {
 			hub = realtime.NewHub(valkey.Client(), config.ModularAppConfig.Tracking.WSQueueMax, nil)
 			hub.Start(context.Background()) //nolint:forbidigo // startup: the hub lives as long as the test binary
 		}
+		hits := openRouteHits(engine)
 		routes.SetupRoutes(engine, dbService, valkey, hub)
+		writeRoutes(hits, engine)
 
 		sharedEngine = engine
 		sharedValkey = valkey
@@ -82,6 +84,44 @@ func sharedTestServer() (*gin.Engine, coreServices.DatabaseService) {
 	})
 
 	return sharedEngine, sharedDBService
+}
+
+// openRouteHits, when ROUTE_HITS names a file, mounts the recorder `go run ./tools/check -routes`
+// reads (INFRA-014): one "hit METHOD route status path" line per request, route "-" when none matched.
+// It goes before SetupRoutes so it sees every request, unmatched ones included. Test binaries only:
+// no production request pays for it.
+func openRouteHits(engine *gin.Engine) *os.File {
+	path := os.Getenv("ROUTE_HITS")
+	if path == "" {
+		return nil
+	}
+	file, err := os.OpenFile(path, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0o644)
+	if err != nil {
+		panic(err)
+	}
+	var mu sync.Mutex
+	engine.Use(func(c *gin.Context) {
+		c.Next()
+		route := c.FullPath()
+		if route == "" {
+			route = "-"
+		}
+		mu.Lock()
+		defer mu.Unlock()
+		_, _ = fmt.Fprintf(file, "hit %s %s %d %s\n", c.Request.Method, route, c.Writer.Status(), c.Request.URL.Path)
+	})
+	return file
+}
+
+// writeRoutes appends one "route METHOD path handler" line per registered route; the handler's
+// package names the module that owns it.
+func writeRoutes(file *os.File, engine *gin.Engine) {
+	if file == nil {
+		return
+	}
+	for _, r := range engine.Routes() {
+		_, _ = fmt.Fprintf(file, "route %s %s %s\n", r.Method, r.Path, r.Handler)
+	}
 }
 
 // InitTestEnvironment loads .env.test before any config is initialized

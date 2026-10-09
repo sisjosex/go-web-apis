@@ -490,7 +490,7 @@ func (uc *AuthController) UpdateProfile(ctx *gin.Context) {
 // @Produce  json
 // @Param Authorization header string true "Bearer Token"
 // @Param request body authModels.VerifyEmailRequestDto false "Email data"
-// @Success 200 {object} authModels.VerifyEmailToken
+// @Success 200 {object} bool
 // @Failure 400 {object} coreErrors.ErrorResponse
 // @Router /auth/email/verification [post]
 // @Security ApiKeyAuth
@@ -513,6 +513,17 @@ func (uc *AuthController) GenerateEmailVerificationToken(ctx *gin.Context) {
 	verifyEmailRequest := &authModels.VerifyEmailRequest{
 		Email:  verifyEmailRequestDto.Email,
 		UserId: &userID,
+	}
+
+	// No address in the body verifies the account's own: the email goes to the one it already has.
+	recipient := verifyEmailRequestDto.Email
+	if recipient == nil {
+		user, err := uc.authService.GetProfile(authModels.GetProfileDto{ID: userID})
+		if err != nil || user.Email == nil {
+			ctx.JSON(http.StatusBadRequest, coreErrors.BuildErrorSingle(ctx, authErrors.UserRequestEmailError))
+			return
+		}
+		recipient = user.Email
 	}
 
 	tx, err := uc.dbService.BeginTransaction(ctx)
@@ -544,7 +555,7 @@ func (uc *AuthController) GenerateEmailVerificationToken(ctx *gin.Context) {
 	subject := utils.GetTranslation(lang, "verify-email.email.subject")
 
 	templatePath := coreServices.GetTemplatePath("auth", "verify-email.html")
-	err = uc.emailService.SendEmail(*verifyEmailRequest.Email, subject, templatePath, emailData)
+	err = uc.emailService.SendEmail(*recipient, subject, templatePath, emailData)
 	if err != nil {
 		// Not sent → no token (AUTH-002): the user is told and can retry at once. The cause stays in the
 		// log; SMTP details are not the client's business.
@@ -559,7 +570,8 @@ func (uc *AuthController) GenerateEmailVerificationToken(ctx *gin.Context) {
 		return
 	}
 
-	ctx.JSON(http.StatusOK, token)
+	// `true`: the token goes out by email only — in the answer it would confirm an address unread.
+	ctx.JSON(http.StatusOK, true)
 }
 
 // ConfirmEmailAddress godoc

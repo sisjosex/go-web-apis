@@ -404,9 +404,10 @@ func (r *tenantRepository) UpdateUserRole(ctx context.Context, tenantID uuid.UUI
 		}
 		return err
 	}
+	// The SP's RAISE reaches pgx only once the rows are read: Close, then Err carries it.
 	rows.Close()
 
-	return nil
+	return rows.Err()
 }
 
 // ListTenantAdminEmails returns the active owners and admins of one tenant — who an operational

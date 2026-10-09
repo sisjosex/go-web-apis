@@ -63,3 +63,25 @@ func TestRouteRefusesAnUnknownCosting(t *testing.T) {
 		t.Fatalf("want 400, got %d %s", w.Code, w.Body.String())
 	}
 }
+
+// TestRouteAnswersTheTrip - with routing up, a route comes back with its line, time, distance and legs.
+func TestRouteAnswersTheTrip(t *testing.T) {
+	helper := setupGeoTest(t)
+	routingUp(t)
+
+	body := map[string]any{
+		"locations": []map[string]float64{
+			{"lat": cochabambaLat, "lng": cochabambaLng},
+			{"lat": -17.3700, "lng": -66.1450},
+		},
+		"costing": "bus",
+	}
+	w := helper.DoRequest(http.MethodPost, "/geo/route", body, nil)
+	if w.Code != http.StatusOK {
+		t.Fatalf("route: %d %s", w.Code, w.Body.String())
+	}
+	route := decode[models.Route](t, w.Body.Bytes())
+	if route.DurationS != 540 || route.DistanceM != 3800 || len(route.Legs) != 1 || route.Polyline6 == "" {
+		t.Fatalf("unexpected route %+v", route)
+	}
+}

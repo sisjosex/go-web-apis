@@ -134,3 +134,47 @@ func TestSchedulerSingleLeader(t *testing.T) {
 		t.Fatal("the remaining scheduler never took the lease")
 	}
 }
+
+// TestLease_SingleHolderAndRenewal - while one holder keeps renewing, a second is refused past the
+// first TTL; a renewal by the loser changes nothing; a release hands the lease over at once (INFRA-014).
+func TestLease_SingleHolderAndRenewal(t *testing.T) {
+	helper := jobsValkey(t)
+	defer helper.Close()
+	ctx := context.Background()
+	client := helper.Valkey().Client()
+	const ttl = 600 * time.Millisecond
+
+	first := jobs.NewLease(client, "test:lease", ttl)
+	second := jobs.NewLease(client, "test:lease", ttl)
+
+	if ok, err := first.Acquire(ctx); err != nil || !ok {
+		t.Fatalf("first acquire: ok=%v err=%v", ok, err)
+	}
+	if ok, err := second.Acquire(ctx); err != nil || ok {
+		t.Fatalf("second acquire while held: ok=%v err=%v, want refused", ok, err)
+	}
+
+	// Renew at half the TTL twice: the lease outlives its first TTL only because it was kept.
+	for i := 0; i < 2; i++ {
+		time.Sleep(ttl / 2)
+		if ok, err := first.Renew(ctx); err != nil || !ok {
+			t.Fatalf("renew %d: ok=%v err=%v", i, ok, err)
+		}
+	}
+	if ok, err := second.Acquire(ctx); err != nil || ok {
+		t.Fatalf("second acquire after a renewed TTL: ok=%v err=%v, want refused", ok, err)
+	}
+	if ok, err := second.Renew(ctx); err != nil || ok {
+		t.Fatalf("a renewal by the non-holder: ok=%v err=%v, want refused", ok, err)
+	}
+
+	if err := first.Release(ctx); err != nil {
+		t.Fatalf("release: %v", err)
+	}
+	if ok, err := second.Acquire(ctx); err != nil || !ok {
+		t.Fatalf("second acquire after release: ok=%v err=%v", ok, err)
+	}
+	if ok, err := first.Renew(ctx); err != nil || ok {
+		t.Fatalf("the old holder renews a lease it lost: ok=%v err=%v, want refused", ok, err)
+	}
+}

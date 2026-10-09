@@ -159,7 +159,7 @@ func (r *CustomerRepository) UpdateCustomer(ctx context.Context, tenantID uuid.U
 
 // DeleteCustomer deletes a customer
 func (r *CustomerRepository) DeleteCustomer(ctx context.Context, tenantID uuid.UUID, id uuid.UUID) error {
-	_, err := r.dbService.Execute(ctx, `CALL sales.sp_delete_customer($1, $2)`, tenantID, id)
+	_, err := r.dbService.Execute(ctx, `SELECT sales.sp_delete_customer(p_tenant_id := $1, p_customer_id := $2)`, tenantID, id)
 	return err
 }
 

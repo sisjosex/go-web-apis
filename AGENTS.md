@@ -9,16 +9,33 @@ before you open a file: where things are, how they run, and the gotchas that are
 - Business logic lives in PostgreSQL SPs. Go binds, calls, maps error codes, responds.
 - `tenant_id` only from `c.Get("tenant_id")`; tenant routes always carry auth + tenant middleware.
 - Secrets only from `.env.*`.
-- A change ships with `make gate MODULES="<modules touched>"` green. `make build` alone is not
-  verification. New or changed endpoint ⇒ integration test in `modules/{name}/tests/`.
+- A change ships with `make gate` green. `make build` alone is not verification. The gate picks the
+  modules to test from `git diff` — every module when `core`, `auth`, `tenancy`, `users`, `routes/`,
+  `cmd/` or `config/` changed; `MODULES="x y"` overrides it.
+- Every route has a test that reaches it with a **2xx**, and no test request hits a path no route
+  answers. The gate enforces both after each module's tests (INFRA-014). New or changed endpoint ⇒
+  integration test in `modules/{name}/tests/` that drives it to success, not only its refusals.
 - Changing an SP signature ⇒ `DROP FUNCTION IF EXISTS` + `CREATE FUNCTION`, never `CREATE OR REPLACE`.
+
+### Reading the route check
+
+`make test-<m>` records every request into `.route-hits`; the gate then runs
+`go run ./tools/check -routes .route-hits -module <m>`. A route belongs to the module of its handler's
+package. Two kinds of failure:
+
+- `route without a 2xx test hit: PATCH /api/v1/x/:id — never reached` — no test calls it; `— reached
+  with 400, 404` — tests call it but none succeeds. Add the success case.
+- `unmatched test request (no route answers it — wrong method or path): PATCH /api/v1/x/abc (404)` — a
+  test asserts on a route that does not exist (wrong verb, a typo, a removed route). Fix or delete it.
+
+Routes whose handler lives in `routes/` (the jobs monitor UI, `/tracking/ws`) and swagger are not checked.
 
 ## Commands — from `api/`
 
 ```bash
 make dev-platform | dev-tenant        # hot reload, ports 8080 / 9081
 make build                            # compile to bin/
-make gate MODULES="tracking"          # check + lint (changed code) + build + tests of MODULES, quiet
+make gate                             # check + lint (changed code) + build + tests and route coverage of the changed modules, quiet
 make check-all | lint-all             # the whole-tree baseline, when asked for
 make docker-up | docker-down          # PostgreSQL + Valkey + local S3 (:8333) containers (tests need them up)
 make seed-dev                         # emulator dev accounts on tenant mi-negocio (cmd/cli/seed_dev.sql), idempotent

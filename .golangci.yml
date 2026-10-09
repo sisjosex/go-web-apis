@@ -15,6 +15,11 @@ linters:
     - rowserrcheck
     - sqlclosecheck
     - bodyclose
+    # Readability and performance (INFRA-014): changed code only, like every linter here.
+    - gocognit
+    - nestif
+    - prealloc
+    - perfsprint
   settings:
     forbidigo:
       analyze-types: true
@@ -28,14 +33,18 @@ linters:
       statements: 50
     gocyclo:
       min-complexity: 15
+    gocognit:
+      min-complexity: 20
+    nestif:
+      min-complexity: 5
   exclusions:
     rules:
-      # Entry points (cmd/, tools/) and tests may create root contexts and be long.
+      # Entry points (cmd/, tools/) and tests may create root contexts and be long or branchy.
       - path: ^(cmd|tools)/|_test\.go$|/tests/
-        linters: [forbidigo, funlen, gocyclo]
+        linters: [forbidigo, funlen, gocyclo, gocognit, nestif, prealloc, perfsprint]
       # Swagger output is generated.
       - path: ^docs/
-        linters: [govet, errcheck, staticcheck, unused, funlen, gocyclo]
+        linters: [govet, errcheck, staticcheck, unused, funlen, gocyclo, gocognit, nestif, prealloc, perfsprint]
 
 formatters:
   enable:

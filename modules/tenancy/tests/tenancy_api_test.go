@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"os"
 	"testing"
 	"time"
 
@@ -304,34 +305,27 @@ func TestCreateTenantAsAdminSuccess(t *testing.T) {
 // TENANT INFO TESTS
 // ============================================================================
 
-// TestGetTenantInfoSuccess tests retrieving tenant information
+// TestGetTenantInfoSuccess - a workspace its owner just created is among their tenants, with its name.
+// GET /tenants/:slug is not a route (the handler is unmounted); /tenants/me is how a client reads it.
 func TestGetTenantInfoSuccess(t *testing.T) {
 	helper := testhelpers.SetupApiTest(t)
 	defer helper.Close()
 
-	// Register and login as regular user
-	helper.Register("owner@test.com", "$Password2025", "Owner", "User")
-	helper.Login("owner@test.com", "$Password2025")
+	stamp := time.Now().UnixNano()
+	email := fmt.Sprintf("info-owner-%d@test.com", stamp)
+	slug := fmt.Sprintf("info-%d", stamp)
+	helper.Register(email, "$Password2025", "Owner", "User")
+	helper.Login(email, "$Password2025")
 
-	// Create tenant first
-	createBody := map[string]interface{}{
-		"slug": "info-test-tenant",
-		"name": "Info Test Tenant",
-	}
-	wCreate := helper.DoRequest("POST", "/tenants/self-service", createBody, map[string]string{})
+	wCreate := helper.DoRequest("POST", "/tenants/self-service", map[string]interface{}{"slug": slug, "name": "Info Test Tenant"}, map[string]string{})
 	if wCreate.Code != http.StatusCreated && wCreate.Code != http.StatusOK {
-		t.Logf("⚠️ Tenant creation failed with status %d", wCreate.Code)
-		return
+		t.Fatalf("create tenant: %d %s", wCreate.Code, wCreate.Body.String())
 	}
 
-	// Try to get tenant info
-	w := helper.DoRequest("GET", "/tenants/info-test-tenant", nil, map[string]string{})
-
-	// Endpoint should be accessible (may return 200 OK or 404 if not implemented)
-	assert.True(t, w.Code == http.StatusOK || w.Code == http.StatusNotFound,
-		fmt.Sprintf("Expected 200/404, got %d: %s", w.Code, w.Body.String()))
-
-	t.Logf("✅ Get tenant info test - endpoint response code %d", w.Code)
+	w := helper.DoRequest("GET", "/tenants/me", nil, map[string]string{})
+	assert.Equal(t, http.StatusOK, w.Code, w.Body.String())
+	assert.Contains(t, w.Body.String(), slug, "the owner's tenants hold the new workspace")
+	assert.Contains(t, w.Body.String(), "Info Test Tenant")
 }
 
 // ============================================================================
@@ -397,36 +391,35 @@ func TestRemoveUserFromTenantUnauthorized(t *testing.T) {
 // TENANT MIGRATIONS TESTS
 // ============================================================================
 
-// TestRunTenantMigrationsSuccess tests running migrations on a tenant database
+// TestRunTenantMigrationsSuccess - a super_admin migrates a workspace on its own database. The test points
+// that database at the test DB, already migrated, so the run is a no-op that must still succeed; a workspace
+// on the shared database is refused.
 func TestRunTenantMigrationsSuccess(t *testing.T) {
 	helper := testhelpers.SetupApiTest(t)
 	defer helper.Close()
 
-	// Login as super_admin (required for migrations)
-	_, err := helper.LoginAsSuperAdmin()
-	if err != nil {
+	if _, err := helper.LoginAsSuperAdmin(); err != nil {
 		t.Fatalf("Failed to login as super_admin: %v", err)
 	}
 
-	// Create a tenant first (use default database)
-	createBody := map[string]interface{}{
-		"slug": "migration-test-tenant",
-		"name": "Migration Test Tenant",
+	stamp := time.Now().UnixNano()
+	custom := fmt.Sprintf("migrate-own-%d", stamp)
+	wCreate := helper.DoRequest("POST", "/tenants", map[string]interface{}{
+		"slug": custom, "name": "Own Database", "database_url": os.Getenv("DATABASE_URL"),
+	}, map[string]string{})
+	if wCreate.Code != http.StatusCreated && wCreate.Code != http.StatusOK {
+		t.Fatalf("create tenant: %d %s", wCreate.Code, wCreate.Body.String())
 	}
-	wCreate := helper.DoRequest("POST", "/tenants", createBody, map[string]string{})
-	if wCreate.Code != http.StatusCreated && wCreate.Code != http.StatusOK && wCreate.Code != http.StatusBadRequest {
-		t.Logf("⚠️ Tenant creation returned %d", wCreate.Code)
+	w := helper.DoRequest("POST", "/tenants/"+custom+"/migrate", nil, map[string]string{"X-Tenant-Slug": custom})
+	assert.Equal(t, http.StatusOK, w.Code, w.Body.String())
+
+	shared := fmt.Sprintf("migrate-shared-%d", stamp)
+	wCreate = helper.DoRequest("POST", "/tenants", map[string]interface{}{"slug": shared, "name": "Shared Database"}, map[string]string{})
+	if wCreate.Code != http.StatusCreated && wCreate.Code != http.StatusOK {
+		t.Fatalf("create tenant: %d %s", wCreate.Code, wCreate.Body.String())
 	}
-
-	// Try to run migrations on the tenant
-	w := helper.DoRequest("POST", "/tenants/migration-test-tenant/migrate", nil, map[string]string{})
-
-	// Super admin should be able to call migrations endpoint
-	// Response could be 200 OK, 400 BadRequest, or 404 if endpoint not implemented
-	assert.True(t, w.Code == http.StatusOK || w.Code == http.StatusBadRequest || w.Code == http.StatusNotFound,
-		fmt.Sprintf("Expected 200/400/404, got %d: %s", w.Code, w.Body.String()))
-
-	t.Logf("✅ Tenant migrations test - super_admin response code %d", w.Code)
+	w = helper.DoRequest("POST", "/tenants/"+shared+"/migrate", nil, map[string]string{"X-Tenant-Slug": shared})
+	assert.Equal(t, http.StatusBadRequest, w.Code, "a shared-database workspace has nothing to migrate: %s", w.Body.String())
 }
 
 // TestRunTenantMigrationsUnauthorized tests that non-admins can't run migrations

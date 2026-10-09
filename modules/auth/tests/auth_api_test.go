@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"net/http"
 	"testing"
+	"time"
 
 	"josex/web/config"
 	coreServices "josex/web/modules/core/services"
@@ -17,6 +18,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func init() {
@@ -547,43 +549,63 @@ func TestLoginFacebookMissingEmail(t *testing.T) {
 // EMAIL VERIFICATION TESTS
 // ============================================================================
 
-// TestGenerateEmailVerificationTokenSuccess tests generating email verification token
+// TestGenerateEmailVerificationTokenSuccess - a signed-in user asks for the verification email; the token
+// it carries confirms the address once (INFRA-014).
 func TestGenerateEmailVerificationTokenSuccess(t *testing.T) {
 	helper := testhelpers.SetupApiTest(t)
 	defer helper.Close()
 
-	// Register and login
-	helper.Register("verify@test.com", "$Password2025", "Verify", "User")
-	helper.Login("verify@test.com", "$Password2025")
+	email := "verify-" + uuid.New().String() + "@test.com"
+	helper.Register(email, "$Password2025", "Verify", "User")
+	helper.Login(email, "$Password2025")
 
-	// Request email verification token
 	w := helper.DoRequest("POST", "/auth/email/verification", nil, map[string]string{})
+	assert.Equal(t, http.StatusOK, w.Code, w.Body.String())
 
-	// May fail if endpoint requires additional parameters
-	assert.True(t, w.Code == http.StatusOK || w.Code == http.StatusCreated || w.Code == http.StatusBadRequest,
-		fmt.Sprintf("Expected 200/201/400, got %d", w.Code))
+	token := verificationTokenFor(t, helper, email)
+	w = helper.DoRequest("PUT", "/auth/email/verification", map[string]interface{}{"token": token}, map[string]string{})
+	assert.Equal(t, http.StatusOK, w.Code, w.Body.String())
+
+	w = helper.DoRequest("PUT", "/auth/email/verification", map[string]interface{}{"token": token}, map[string]string{})
+	assert.Equal(t, http.StatusBadRequest, w.Code, "a token confirms once: %s", w.Body.String())
 }
 
-// TestConfirmEmailVerificationSuccess tests confirming email with token
+// TestConfirmEmailVerificationSuccess - an unknown or malformed token confirms nothing.
 func TestConfirmEmailVerificationSuccess(t *testing.T) {
 	helper := testhelpers.SetupApiTest(t)
 	defer helper.Close()
 
-	// Register (email not verified by default)
-	helper.Register("confirm@test.com", "$Password2025", "Confirm", "User")
-	helper.Login("confirm@test.com", "$Password2025")
+	w := helper.DoRequest("PUT", "/auth/email/verification", map[string]interface{}{"token": uuid.NewString()}, map[string]string{})
+	assert.Equal(t, http.StatusBadRequest, w.Code, w.Body.String())
+	w = helper.DoRequest("PUT", "/auth/email/verification", map[string]interface{}{"token": "test-verification-token-123"}, map[string]string{})
+	assert.Equal(t, http.StatusBadRequest, w.Code, w.Body.String())
+}
 
-	// In a real scenario, we'd get the token from email/database
-	// For testing, we'll use a mock token (endpoint should validate in DB)
-	body := map[string]interface{}{
-		"token": "test-verification-token-123",
+// TestRequestOtpByPhoneRelaysByEmail - SMS and WhatsApp have no provider yet: a phone with an account
+// gets its code by email; a phone without one is refused.
+func TestRequestOtpByPhoneRelaysByEmail(t *testing.T) {
+	helper := testhelpers.SetupApiTest(t)
+	defer helper.Close()
+
+	phone := fmt.Sprintf("+5917%07d", time.Now().UnixNano()%10000000)
+	w := helper.DoRequest("POST", "/auth/register", map[string]interface{}{
+		"email": "otp-phone-" + uuid.New().String() + "@test.com", "password": "$Password2025",
+		"first_name": "Otp", "last_name": "Phone", "phone": phone, "birthday": "1990-01-15",
+	}, map[string]string{})
+	require.Contains(t, []int{http.StatusOK, http.StatusCreated}, w.Code, w.Body.String())
+
+	for _, channel := range []string{"sms", "whatsapp"} {
+		w = helper.DoRequest("POST", "/auth/otp/"+channel+"/request", map[string]interface{}{
+			"destination": phone, "channel": channel, "device_id": uuid.NewString(),
+		}, map[string]string{})
+		assert.Equal(t, http.StatusOK, w.Code, "%s: %s", channel, w.Body.String())
+		assert.Contains(t, w.Body.String(), `"delivered_via":"email"`, channel)
 	}
 
-	w := helper.DoRequest("PUT", "/auth/email/verification", body, map[string]string{})
-
-	// May fail with invalid token, which is expected
-	assert.True(t, w.Code == http.StatusOK || w.Code == http.StatusBadRequest,
-		fmt.Sprintf("Expected 200 or 400, got %d: %s", w.Code, w.Body.String()))
+	w = helper.DoRequest("POST", "/auth/otp/sms/request", map[string]interface{}{
+		"destination": "+59100000000", "channel": "sms", "device_id": uuid.NewString(),
+	}, map[string]string{})
+	assert.Equal(t, http.StatusBadRequest, w.Code, "a phone without an account: %s", w.Body.String())
 }
 
 // ============================================================================

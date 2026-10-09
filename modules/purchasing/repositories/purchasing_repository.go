@@ -315,7 +315,7 @@ func (r *PurchasingRepository) GetPurchaseOrderItems(ctx context.Context, tenant
 func (r *PurchasingRepository) ReceivePurchaseOrder(ctx context.Context, tenantID uuid.UUID, poID uuid.UUID, receivedBy *uuid.UUID, notes *string) (*models.PurchaseOrderReceipt, error) {
 	receipt := &models.PurchaseOrderReceipt{}
 	if err := r.dbService.QueryRow(ctx,
-		`SELECT * FROM purchasing.sp_receive_purchase_order_items($1, $2, CURRENT_TIMESTAMP, $3, $4)`,
+		`SELECT * FROM purchasing.sp_receive_purchase_order_items(p_tenant_id := $1, p_po_id := $2, p_received_by := $3, p_notes := $4)`,
 		tenantID, poID, receivedBy, notes,
 	).Scan(
 		&receipt.ID, &receipt.PurchaseOrderID, &receipt.ReceiptNumber,
@@ -650,14 +650,12 @@ func (r *PurchasingRepository) GetRFQItems(ctx context.Context, tenantID uuid.UU
 
 	for rows.Next() {
 		item := models.RFQItem{}
-		var quantity float64
 		if err := rows.Scan(
 			&item.ID, &item.RFQID, &item.ProductID,
-			&quantity, &item.Description, &item.CreatedAt,
+			&item.Quantity, &item.Description, &item.CreatedAt,
 		); err != nil {
 			return nil, err
 		}
-		item.Quantity = int(quantity)
 		items = append(items, item)
 	}
 	if err = rows.Err(); err != nil {
@@ -670,13 +668,12 @@ func (r *PurchasingRepository) GetRFQItems(ctx context.Context, tenantID uuid.UU
 // AddRFQItem adds an item to an RFQ
 func (r *PurchasingRepository) AddRFQItem(ctx context.Context, tenantID uuid.UUID, rfqID uuid.UUID, item *models.RFQItem) (*models.RFQItem, error) {
 	result := &models.RFQItem{}
-	var quantity float64
 	if err := r.dbService.QueryRow(ctx,
 		`SELECT * FROM purchasing.sp_add_rfq_item($1, $2, $3, $4, $5)`,
 		tenantID, rfqID, item.ProductID, item.Quantity, item.Description,
 	).Scan(
 		&result.ID, &result.RFQID, &result.ProductID,
-		&quantity, &result.Description, &result.CreatedAt,
+		&result.Quantity, &result.Description, &result.CreatedAt,
 	); err != nil {
 		var pgErr *pgconn.PgError
 		if errors.As(err, &pgErr) {
@@ -684,21 +681,19 @@ func (r *PurchasingRepository) AddRFQItem(ctx context.Context, tenantID uuid.UUI
 		}
 		return nil, err
 	}
-	result.Quantity = int(quantity)
 	return result, nil
 }
 
 // AddRFQResponse adds a supplier response to an RFQ
 func (r *PurchasingRepository) AddRFQResponse(ctx context.Context, tenantID uuid.UUID, response *models.RFQResponse) (*models.RFQResponse, error) {
 	result := &models.RFQResponse{}
-	var paymentTerms string
 	if err := r.dbService.QueryRow(ctx,
 		`SELECT * FROM purchasing.sp_add_rfq_response($1, $2, $3, $4, $5, $6, $7)`,
 		tenantID, response.RFQID, response.SupplierID, response.TotalPrice,
 		response.DeliveryDays, response.PaymentTerms, response.Notes,
 	).Scan(
 		&result.ID, &result.RFQID, &result.SupplierID, &result.TotalPrice,
-		&result.DeliveryDays, &paymentTerms, &result.Notes,
+		&result.DeliveryDays, &result.PaymentTerms, &result.Notes,
 		&result.CreatedAt, &result.UpdatedAt,
 	); err != nil {
 		var pgErr *pgconn.PgError
@@ -729,10 +724,9 @@ func (r *PurchasingRepository) GetRFQResponses(ctx context.Context, tenantID uui
 
 	for rows.Next() {
 		resp := models.RFQResponse{}
-		var paymentTerms string
 		if err := rows.Scan(
 			&resp.ID, &resp.RFQID, &resp.SupplierID, &resp.TotalPrice,
-			&resp.DeliveryDays, &paymentTerms, &resp.Notes,
+			&resp.DeliveryDays, &resp.PaymentTerms, &resp.Notes,
 			&resp.CreatedAt, &resp.UpdatedAt,
 		); err != nil {
 			return nil, err
@@ -747,11 +741,11 @@ func (r *PurchasingRepository) GetRFQResponses(ctx context.Context, tenantID uui
 }
 
 // SelectBestRFQResponse closes an RFQ by selecting the winning response
-func (r *PurchasingRepository) SelectBestRFQResponse(ctx context.Context, tenantID uuid.UUID, rfqID, _ uuid.UUID) error {
+func (r *PurchasingRepository) SelectBestRFQResponse(ctx context.Context, tenantID uuid.UUID, rfqID, responseID uuid.UUID) error {
 	var updated bool
 	if err := r.dbService.QueryRow(ctx,
-		`SELECT * FROM purchasing.sp_select_best_rfq_response($1, $2)`,
-		tenantID, rfqID,
+		`SELECT * FROM purchasing.sp_select_best_rfq_response($1, $2, $3)`,
+		tenantID, rfqID, responseID,
 	).Scan(&updated); err != nil {
 		var pgErr *pgconn.PgError
 		if errors.As(err, &pgErr) {

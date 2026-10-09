@@ -19,6 +19,26 @@ import (
 // SESSION HARDENING (MOBILE-011 step 2)
 // ============================================================================
 
+// verificationTokenFor reads the account's pending email verification token: the endpoint only emails it.
+func verificationTokenFor(t *testing.T, helper *testhelpers.ApiTestHelper, email string) string {
+	t.Helper()
+
+	var token string
+	// check:raw-sql the token only ever leaves by email; no endpoint or SP hands it back
+	err := helper.DB().QueryRow(context.Background(), `
+		SELECT t.token
+		FROM auth.email_verification_tokens t
+		INNER JOIN auth.users u ON u.id = t.user_id
+		WHERE LOWER(u.email) = LOWER($1)
+		ORDER BY t.created_at DESC
+		LIMIT 1
+	`, email).Scan(&token)
+	if err != nil {
+		t.Fatalf("read verification token for %s: %v", email, err)
+	}
+	return token
+}
+
 // resetTokenFor reads the account's pending reset token: the endpoint only emails it.
 func resetTokenFor(t *testing.T, helper *testhelpers.ApiTestHelper, email string) string {
 	t.Helper()

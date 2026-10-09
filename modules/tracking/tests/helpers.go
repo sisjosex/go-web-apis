@@ -1211,6 +1211,31 @@ func InsertOutboxRow(helper *testhelpers.ApiTestHelper, topic string, payload ma
 	return id, tenantID, err
 }
 
+// AgeOutboxRow backdates an outbox row by ago, published that long ago or never: the purge judges
+// publication age, and no test can wait a week.
+func AgeOutboxRow(t *testing.T, helper *testhelpers.ApiTestHelper, id int64, ago time.Duration, published bool) {
+	t.Helper()
+	_, err := helper.DB().Execute(context.Background(), `
+		UPDATE tracking.outbox
+		SET created_at = now() - $2::interval,
+		    published_at = CASE WHEN $3 THEN now() - $2::interval END
+		WHERE id = $1`, id, ago.String(), published)
+	if err != nil {
+		t.Fatalf("age outbox row %d: %v", id, err)
+	}
+}
+
+// OutboxRowExists answers whether the outbox still holds the row.
+func OutboxRowExists(t *testing.T, helper *testhelpers.ApiTestHelper, id int64) bool {
+	t.Helper()
+	var exists bool
+	if err := helper.DB().QueryRow(context.Background(),
+		`SELECT EXISTS (SELECT 1 FROM tracking.outbox WHERE id = $1)`, id).Scan(&exists); err != nil {
+		t.Fatalf("read outbox row %d: %v", id, err)
+	}
+	return exists
+}
+
 // InsertOutboxRowIn writes one outbox row inside a transaction the test owns — the rolled-back case.
 func InsertOutboxRowIn(tx pgx.Tx, topic string, payload map[string]interface{}) error {
 	raw, err := json.Marshal(payload)

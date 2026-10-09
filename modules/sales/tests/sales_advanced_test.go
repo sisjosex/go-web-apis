@@ -4,213 +4,219 @@
 package sales_test
 
 import (
+	"encoding/json"
+	"fmt"
 	"net/http"
 	"testing"
+	"time"
 
 	coreTestHelpers "josex/web/modules/core/testhelpers"
+
+	"github.com/google/uuid"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
+
+// INFRA-014: every sales route reached with a success — customers, the order lifecycle, returns,
+// payments and the report — plus their refusals. These replace tests that never signed in.
 
 func init() {
 	// Initialize test environment (load .env.test before any config)
 	coreTestHelpers.InitTestEnvironment()
 }
 
-// ========== PHASE 1: Batch Assignment & Order Completion Tests ==========
-
-// TestAddOrderItemWithBatch_FifoAssignment tests that the endpoint exists and validates structure
-func TestAddOrderItemWithBatch_FifoAssignment(t *testing.T) {
-	helper := SetupSalesTest(t)
-	defer helper.Close()
-
-	// Invalid UUID should return 400
-	invalidBody := map[string]interface{}{
-		"product_id": "invalid-uuid",
-		"quantity":   10,
-		"unit_price": 50.0,
+func data(t *testing.T, body []byte) map[string]interface{} {
+	t.Helper()
+	var resp struct {
+		Data map[string]interface{} `json:"data"`
 	}
-	w := helper.DoRequest("PATCH", "/sales/orders/invalid-id/items", invalidBody, map[string]string{})
-	// Should fail with 400 or 404
-	if w.Code != http.StatusBadRequest && w.Code != http.StatusNotFound && w.Code != http.StatusUnauthorized {
-		t.Errorf("Expected 400/404/401, got %d", w.Code)
-	}
-	t.Logf("✅ Phase 1: AddOrderItem endpoint structure validated (responds with %d)", w.Code)
+	require.NoError(t, json.Unmarshal(body, &resp), string(body))
+	return resp.Data
 }
 
-// TestCompleteOrder_ConsumeBatch tests the complete order endpoint structure
-func TestCompleteOrder_ConsumeBatch(t *testing.T) {
-	helper := SetupSalesTest(t)
-	defer helper.Close()
-
-	// Invalid UUID should return 400
-	w := helper.DoRequest("PATCH", "/sales/orders/invalid-id/complete", nil, map[string]string{})
-	// Should fail with 400 or 404
-	if w.Code != http.StatusBadRequest && w.Code != http.StatusNotFound && w.Code != http.StatusUnauthorized {
-		t.Errorf("Expected 400/404/401, got %d", w.Code)
-	}
-	t.Logf("✅ Phase 1: CompleteOrder endpoint structure validated (responds with %d)", w.Code)
+func newCustomer(t *testing.T, helper *coreTestHelpers.ApiTestHelper) string {
+	t.Helper()
+	w := helper.DoRequest("POST", "/sales/customers", map[string]interface{}{
+		"name": "Flow Cliente", "email": fmt.Sprintf("flow-%d@example.com", uniqueTimestamp()),
+		"phone_number": "1234567890", "address": "Calle Uno 123", "city": "Santiago",
+		"state": "RM", "postal_code": "8320000", "country": "Chile",
+	}, nil)
+	require.Equal(t, http.StatusCreated, w.Code, "create customer: %s", w.Body.String())
+	id, _ := data(t, w.Body.Bytes())["id"].(string)
+	require.NotEmpty(t, id)
+	return id
 }
 
-// ========== PHASE 2: Reporting & Cancellation Tests ==========
-
-// TestCancelOrder_ReleasesBatch tests the cancel order endpoint structure
-func TestCancelOrder_ReleasesBatch(t *testing.T) {
-	helper := SetupSalesTest(t)
-	defer helper.Close()
-
-	// Invalid UUID should return 400
-	w := helper.DoRequest("PATCH", "/sales/orders/invalid-id/cancel", nil, map[string]string{})
-	// Should fail with 400 or 404
-	if w.Code != http.StatusBadRequest && w.Code != http.StatusNotFound && w.Code != http.StatusUnauthorized {
-		t.Errorf("Expected 400/404/401, got %d", w.Code)
-	}
-	t.Logf("✅ Phase 2: CancelOrder endpoint structure validated (responds with %d)", w.Code)
+// orderWithItem is an order holding one stocked line of 2 × 10.
+func orderWithItem(t *testing.T, helper *coreTestHelpers.ApiTestHelper) string {
+	t.Helper()
+	productID := newSalesProduct(t, helper, "FLOW")
+	stockBatchFor(t, helper, productID, 10)
+	orderID := newSalesOrder(t, helper)
+	w := helper.DoRequest("POST", "/sales/orders/"+orderID+"/items", map[string]interface{}{
+		"product_id": productID, "quantity": 2, "unit_price": 10.0,
+	}, nil)
+	require.Equal(t, http.StatusCreated, w.Code, "add item: %s", w.Body.String())
+	return orderID
 }
 
-// TestGetOrderWithBatches tests the order with batches endpoint
-func TestGetOrderWithBatches(t *testing.T) {
-	helper := SetupSalesTest(t)
+// TestCustomers_GetUpdateDelete - a customer is read, edited and deleted, which deactivates it.
+func TestCustomers_GetUpdateDelete(t *testing.T) {
+	helper := SetupSalesAuthTest(t)
 	defer helper.Close()
+	id := newCustomer(t, helper)
 
-	// Invalid UUID should return 400
-	w := helper.DoRequest("GET", "/sales/orders/invalid-id/with-batches", nil, map[string]string{})
-	// Should fail with 400 or 404
-	if w.Code != http.StatusBadRequest && w.Code != http.StatusNotFound && w.Code != http.StatusUnauthorized {
-		t.Errorf("Expected 400/404/401, got %d", w.Code)
-	}
-	t.Logf("✅ Phase 2: GetOrderWithBatches endpoint structure validated (responds with %d)", w.Code)
+	w := helper.DoRequest("GET", "/sales/customers/"+id, nil, nil)
+	require.Equal(t, http.StatusOK, w.Code, w.Body.String())
+
+	w = helper.DoRequest("PATCH", "/sales/customers/"+id, map[string]interface{}{"city": "Cochabamba"}, nil)
+	require.Equal(t, http.StatusOK, w.Code, w.Body.String())
+	w = helper.DoRequest("GET", "/sales/customers/"+id, nil, nil)
+	assert.Contains(t, w.Body.String(), "Cochabamba", "the edit is stored")
+
+	w = helper.DoRequest("PATCH", "/sales/customers/"+id, map[string]interface{}{"city": "X"}, nil)
+	assert.Equal(t, http.StatusBadRequest, w.Code, "a city under 2 characters: %s", w.Body.String())
+	w = helper.DoRequest("PATCH", "/sales/customers/"+uuid.NewString(), map[string]interface{}{"city": "Sucre"}, nil)
+	assert.Equal(t, http.StatusNotFound, w.Code, w.Body.String())
+
+	w = helper.DoRequest("DELETE", "/sales/customers/"+id, nil, nil)
+	require.Contains(t, []int{http.StatusOK, http.StatusNoContent}, w.Code, w.Body.String())
+	w = helper.DoRequest("GET", "/sales/customers/"+id, nil, nil)
+	require.Equal(t, http.StatusOK, w.Code, w.Body.String())
+	assert.Equal(t, "inactive", data(t, w.Body.Bytes())["status"], "a delete deactivates: the customer's orders keep it")
+	w = helper.DoRequest("DELETE", "/sales/customers/not-a-uuid", nil, nil)
+	assert.Equal(t, http.StatusBadRequest, w.Code, w.Body.String())
 }
 
-// TestGetSalesReport_CalculatesMetrics tests the sales report endpoint
-func TestGetSalesReport_CalculatesMetrics(t *testing.T) {
-	helper := SetupSalesTest(t)
+// TestOrders_ListGetUpdate - an order shows in the list, reads back and takes an edit.
+func TestOrders_ListGetUpdate(t *testing.T) {
+	helper := SetupSalesAuthTest(t)
 	defer helper.Close()
+	orderID := newSalesOrder(t, helper)
 
-	// Missing date parameters should return 400
-	w := helper.DoRequest("GET", "/sales/reports/sales", nil, map[string]string{})
-	// Endpoint accepts query params, so missing them might return 400 or 401
-	if w.Code < 200 || w.Code >= 500 {
-		t.Logf("Sales report endpoint responds with code %d", w.Code)
-	}
-	t.Logf("✅ Phase 2: GetSalesReport endpoint structure validated (responds with %d)", w.Code)
+	w := helper.DoRequest("GET", "/sales/orders?limit=100", nil, nil)
+	require.Equal(t, http.StatusOK, w.Code, w.Body.String())
+	assert.Contains(t, w.Body.String(), orderID)
+
+	w = helper.DoRequest("GET", "/sales/orders/"+orderID, nil, nil)
+	require.Equal(t, http.StatusOK, w.Code, w.Body.String())
+	assert.Equal(t, orderID, data(t, w.Body.Bytes())["id"])
+
+	w = helper.DoRequest("PATCH", "/sales/orders/"+orderID, map[string]interface{}{"notes": "Leave at the door"}, nil)
+	require.Equal(t, http.StatusOK, w.Code, w.Body.String())
+	w = helper.DoRequest("GET", "/sales/orders/"+orderID, nil, nil)
+	assert.Contains(t, w.Body.String(), "Leave at the door", "the edit is stored")
+
+	w = helper.DoRequest("PATCH", "/sales/orders/"+orderID, map[string]interface{}{"shipping_address": "x"}, nil)
+	assert.Equal(t, http.StatusBadRequest, w.Code, w.Body.String())
+	w = helper.DoRequest("GET", "/sales/orders/"+uuid.NewString(), nil, nil)
+	assert.Equal(t, http.StatusNotFound, w.Code, w.Body.String())
+	w = helper.DoRequest("PATCH", "/sales/orders/"+uuid.NewString(), map[string]interface{}{"notes": "ghost"}, nil)
+	assert.Equal(t, http.StatusNotFound, w.Code, w.Body.String())
+	w = helper.DoRequest("POST", "/sales/orders/not-a-uuid/items", map[string]interface{}{"product_id": uuid.NewString(), "quantity": 1, "unit_price": 1}, nil)
+	assert.Equal(t, http.StatusBadRequest, w.Code, w.Body.String())
 }
 
-// ========== PHASE 3: Returns & Payments Tests ==========
-
-// TestCreateReturn_CreatesReturnRecord tests the return creation endpoint
-func TestCreateReturn_CreatesReturnRecord(t *testing.T) {
-	helper := SetupSalesTest(t)
+// TestOrders_Cancel - a pending order is cancelled; a cancelled one cannot be completed.
+func TestOrders_Cancel(t *testing.T) {
+	helper := SetupSalesAuthTest(t)
 	defer helper.Close()
+	orderID := orderWithItem(t, helper)
 
-	// Missing required fields should return 400
-	invalidBody := map[string]interface{}{
-		"reason": "Test", // Missing order_id
-	}
-	w := helper.DoRequest("POST", "/sales/returns", invalidBody, map[string]string{})
-	// Should fail with validation error
-	if w.Code != http.StatusBadRequest && w.Code != http.StatusUnauthorized {
-		t.Errorf("Expected 400/401, got %d", w.Code)
-	}
-	t.Logf("✅ Phase 3: CreateReturn endpoint structure validated (responds with %d)", w.Code)
+	w := helper.DoRequest("PATCH", "/sales/orders/"+orderID+"/cancel", nil, nil)
+	require.Equal(t, http.StatusOK, w.Code, w.Body.String())
+	assert.Equal(t, "cancelled", data(t, w.Body.Bytes())["status"])
+
+	w = helper.DoRequest("PATCH", "/sales/orders/"+orderID+"/complete", nil, nil)
+	assert.Equal(t, http.StatusConflict, w.Code, "a cancelled order is not completed: %s", w.Body.String())
+	w = helper.DoRequest("PATCH", "/sales/orders/"+uuid.NewString()+"/cancel", nil, nil)
+	assert.Equal(t, http.StatusNotFound, w.Code, w.Body.String())
+	w = helper.DoRequest("PATCH", "/sales/orders/not-a-uuid/cancel", nil, nil)
+	assert.Equal(t, http.StatusBadRequest, w.Code, w.Body.String())
 }
 
-// TestApproveReturn_RestoresInventory tests the return approval endpoint
-func TestApproveReturn_RestoresInventory(t *testing.T) {
-	helper := SetupSalesTest(t)
+// TestPaymentsAndReturns - a completed order is paid and returned; both list by order.
+func TestPaymentsAndReturns(t *testing.T) {
+	helper := SetupSalesAuthTest(t)
 	defer helper.Close()
+	orderID := orderWithItem(t, helper)
+	w := helper.DoRequest("PATCH", "/sales/orders/"+orderID+"/complete", nil, nil)
+	require.Equal(t, http.StatusOK, w.Code, w.Body.String())
 
-	// Invalid UUID should return 400
-	body := map[string]interface{}{
-		"approved": true,
-		"notes":    "Test",
-	}
-	w := helper.DoRequest("PATCH", "/sales/returns/invalid-id/approve", body, map[string]string{})
-	// Should fail with 400 or 404
-	if w.Code != http.StatusBadRequest && w.Code != http.StatusNotFound && w.Code != http.StatusUnauthorized {
-		t.Errorf("Expected 400/404/401, got %d", w.Code)
-	}
-	t.Logf("✅ Phase 3: ApproveReturn endpoint structure validated (responds with %d)", w.Code)
+	w = helper.DoRequest("POST", "/sales/payments", map[string]interface{}{"order_id": orderID, "amount": 20.0, "payment_method": "cash"}, nil)
+	require.Equal(t, http.StatusCreated, w.Code, w.Body.String())
+	w = helper.DoRequest("GET", "/sales/payments?order_id="+orderID, nil, nil)
+	require.Equal(t, http.StatusOK, w.Code, w.Body.String())
+	assert.Contains(t, w.Body.String(), "cash")
+
+	w = helper.DoRequest("POST", "/sales/payments", map[string]interface{}{"order_id": orderID, "amount": 5.0, "payment_method": "barter"}, nil)
+	assert.Equal(t, http.StatusBadRequest, w.Code, w.Body.String())
+	w = helper.DoRequest("POST", "/sales/payments", map[string]interface{}{"order_id": uuid.NewString(), "amount": 5.0, "payment_method": "cash"}, nil)
+	assert.Equal(t, http.StatusNotFound, w.Code, "an unknown order: %s", w.Body.String())
+	w = helper.DoRequest("GET", "/sales/payments", nil, nil)
+	assert.Equal(t, http.StatusBadRequest, w.Code, "order_id is required: %s", w.Body.String())
+
+	w = helper.DoRequest("POST", "/sales/returns", map[string]interface{}{"order_id": orderID, "reason": "Wrong size"}, nil)
+	require.Equal(t, http.StatusCreated, w.Code, w.Body.String())
+	returnID, _ := data(t, w.Body.Bytes())["id"].(string)
+	require.NotEmpty(t, returnID)
+
+	w = helper.DoRequest("GET", "/sales/returns?order_id="+orderID, nil, nil)
+	require.Equal(t, http.StatusOK, w.Code, w.Body.String())
+	assert.Contains(t, w.Body.String(), returnID)
+
+	w = helper.DoRequest("PATCH", "/sales/returns/"+returnID+"/approve", map[string]interface{}{"approved": true}, nil)
+	require.Equal(t, http.StatusOK, w.Code, w.Body.String())
+	w = helper.DoRequest("PATCH", "/sales/returns/"+uuid.NewString()+"/approve", map[string]interface{}{"approved": true}, nil)
+	assert.Equal(t, http.StatusNotFound, w.Code, w.Body.String())
+	w = helper.DoRequest("PATCH", "/sales/returns/not-a-uuid/approve", map[string]interface{}{"approved": true}, nil)
+	assert.Equal(t, http.StatusBadRequest, w.Code, w.Body.String())
+	w = helper.DoRequest("POST", "/sales/returns", map[string]interface{}{"order_id": uuid.NewString(), "reason": "Ghost"}, nil)
+	assert.Equal(t, http.StatusNotFound, w.Code, w.Body.String())
 }
 
-// TestGetReturns_ListsReturnsByOrder tests the returns list endpoint
-func TestGetReturns_ListsReturnsByOrder(t *testing.T) {
-	helper := SetupSalesTest(t)
+// TestSalesReport - the report covers a date range; both ends are required and must be dates.
+func TestSalesReport(t *testing.T) {
+	helper := SetupSalesAuthTest(t)
 	defer helper.Close()
+	today := time.Now().Format("2006-01-02")
 
-	// Missing order_id parameter
-	w := helper.DoRequest("GET", "/sales/returns", nil, map[string]string{})
-	// Should fail with validation error or 401
-	if w.Code < 200 || w.Code >= 500 {
-		t.Logf("GetReturns endpoint responds with code %d", w.Code)
-	}
-	t.Logf("✅ Phase 3: GetReturns endpoint structure validated (responds with %d)", w.Code)
+	w := helper.DoRequest("GET", "/sales/reports/sales?start_date=2026-01-01&end_date="+today, nil, nil)
+	require.Equal(t, http.StatusOK, w.Code, w.Body.String())
+	assert.Contains(t, w.Body.String(), "metrics")
+
+	w = helper.DoRequest("GET", "/sales/reports/sales", nil, nil)
+	assert.Equal(t, http.StatusBadRequest, w.Code, w.Body.String())
+	w = helper.DoRequest("GET", "/sales/reports/sales?start_date=yesterday&end_date="+today, nil, nil)
+	assert.Equal(t, http.StatusBadRequest, w.Code, w.Body.String())
 }
 
-// TestCreatePayment_RecordsPayment tests the payment creation endpoint
-func TestCreatePayment_RecordsPayment(t *testing.T) {
-	helper := SetupSalesTest(t)
+// TestSales_CrossTenantIsNotFound - another workspace with sales on reads none of test-company's.
+func TestSales_CrossTenantIsNotFound(t *testing.T) {
+	helper := SetupSalesAuthTest(t)
 	defer helper.Close()
+	customerID := newCustomer(t, helper)
+	orderID := newSalesOrder(t, helper)
 
-	// Missing required fields should return 400
-	invalidBody := map[string]interface{}{
-		"amount": 100.0, // Missing order_id and payment_method
-	}
-	w := helper.DoRequest("POST", "/sales/payments", invalidBody, map[string]string{})
-	// Should fail with validation error
-	if w.Code != http.StatusBadRequest && w.Code != http.StatusUnauthorized {
-		t.Errorf("Expected 400/401, got %d", w.Code)
-	}
-	t.Logf("✅ Phase 3: CreatePayment endpoint structure validated (responds with %d)", w.Code)
-}
+	other := coreTestHelpers.SetupApiTest(t)
+	stamp := uniqueTimestamp()
+	email := fmt.Sprintf("sales-other-%d@test.com", stamp)
+	slug := fmt.Sprintf("sales-%d", stamp)
+	other.Register(email, "$Password2025", "Other", "Seller")
+	_, err := other.Login(email, "$Password2025")
+	require.NoError(t, err)
+	w := other.DoRequest("POST", "/tenants/self-service", map[string]interface{}{"slug": slug, "name": "Other"}, nil)
+	require.Contains(t, []int{http.StatusOK, http.StatusCreated}, w.Code, w.Body.String())
+	w = other.DoRequest("PUT", "/tenants/"+slug+"/modules/sales", map[string]interface{}{"is_enabled": true}, map[string]string{"X-Tenant-Slug": slug})
+	require.Contains(t, []int{http.StatusOK, http.StatusNoContent}, w.Code, "enable sales: %s", w.Body.String())
+	other.SetTenantSlug(slug)
 
-// TestGetPayments_ListsAllPayments tests the payments list endpoint
-func TestGetPayments_ListsAllPayments(t *testing.T) {
-	helper := SetupSalesTest(t)
-	defer helper.Close()
-
-	// Missing order_id parameter
-	w := helper.DoRequest("GET", "/sales/payments", nil, map[string]string{})
-	// Should fail with validation error or 401
-	if w.Code < 200 || w.Code >= 500 {
-		t.Logf("GetPayments endpoint responds with code %d", w.Code)
-	}
-	t.Logf("✅ Phase 3: GetPayments endpoint structure validated (responds with %d)", w.Code)
-}
-
-// TestPhase1Phase2Phase3_AllEndpointsRegistered validates all Phase 1/2/3 endpoints are wired and responding
-func TestPhase1Phase2Phase3_AllEndpointsRegistered(t *testing.T) {
-	helper := SetupSalesTest(t)
-	defer helper.Close()
-
-	t.Logf("")
-	t.Logf("════════════════════════════════════════════════════════════════")
-	t.Logf("✅ PHASE 1/2/3 - ALL ENDPOINTS WIRED & RESPONDING")
-	t.Logf("════════════════════════════════════════════════════════════════")
-	t.Logf("")
-	t.Logf("PHASE 1: Batch Assignment & Order Completion")
-	t.Logf("  ✓ PATCH   /sales/orders/{id}/items         → AddOrderItem (wired)")
-	t.Logf("  ✓ PATCH   /sales/orders/{id}/complete      → CompleteOrder (wired)")
-	t.Logf("")
-	t.Logf("PHASE 2: Reporting & Cancellation")
-	t.Logf("  ✓ PATCH   /sales/orders/{id}/cancel        → CancelOrder (wired)")
-	t.Logf("  ✓ GET     /sales/orders/{id}/with-batches  → GetOrderWithBatches (wired)")
-	t.Logf("  ✓ GET     /sales/reports/sales             → GetSalesReport (wired)")
-	t.Logf("")
-	t.Logf("PHASE 3: Returns & Payments")
-	t.Logf("  ✓ POST    /sales/returns                    → CreateReturn (wired)")
-	t.Logf("  ✓ PATCH   /sales/returns/{id}/approve      → ApproveReturn (wired)")
-	t.Logf("  ✓ GET     /sales/returns                    → GetReturns (wired)")
-	t.Logf("  ✓ POST    /sales/payments                   → CreatePayment (wired)")
-	t.Logf("  ✓ GET     /sales/payments                   → GetPayments (wired)")
-	t.Logf("")
-	t.Logf("DATABASE: 12 Migrations + 9 Stored Procedures ✓")
-	t.Logf("  ✓ order_batch_assignments table")
-	t.Logf("  ✓ returns table")
-	t.Logf("  ✓ payments table")
-	t.Logf("")
-	t.Logf("GO LAYER: 13 Repo + 13 Service + 10 Controller ✓")
-	t.Logf("  ✓ All methods compiled and running")
-	t.Logf("  ✓ Error handling configured")
-	t.Logf("  ✓ Routes wired in routes/sales_routes.go")
-	t.Logf("")
-	t.Logf("════════════════════════════════════════════════════════════════")
+	w = other.DoRequest("GET", "/sales/customers/"+customerID, nil, nil)
+	assert.Equal(t, http.StatusNotFound, w.Code, w.Body.String())
+	w = other.DoRequest("GET", "/sales/orders/"+orderID, nil, nil)
+	assert.Equal(t, http.StatusNotFound, w.Code, w.Body.String())
+	w = other.DoRequest("PATCH", "/sales/orders/"+orderID+"/cancel", nil, nil)
+	assert.Equal(t, http.StatusNotFound, w.Code, w.Body.String())
+	w = other.DoRequest("DELETE", "/sales/customers/"+customerID, nil, nil)
+	assert.Equal(t, http.StatusNotFound, w.Code, w.Body.String())
 }

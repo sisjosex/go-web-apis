@@ -114,6 +114,40 @@ func TestOutboxRelay_CommittedRowOnly(t *testing.T) {
 	}
 }
 
+// TestOutboxPurge_OnlyRowsPublishedOverAWeekAgo - the daily purge deletes what was published more than
+// seven days ago; a recent publication and a row never published, however old, both stay (INFRA-014).
+func TestOutboxPurge_OnlyRowsPublishedOverAWeekAgo(t *testing.T) {
+	helper := SetupTrackingTest(t)
+	defer helper.Close()
+	if helper.Valkey() == nil {
+		t.Fatal("REDIS_URL is not set in .env.test — the outbox tests need Valkey (make docker-up)")
+	}
+
+	rows := map[string]int64{}
+	for _, name := range []string{"stale", "recent", "unpublished"} {
+		id, _, err := InsertOutboxRow(helper, "document.alerts", map[string]interface{}{"marker": name, "tenant_id": TestTenantID})
+		if err != nil {
+			t.Fatalf("insert %s row: %v", name, err)
+		}
+		rows[name] = id
+	}
+	AgeOutboxRow(t, helper, rows["stale"], 8*24*time.Hour, true)
+	AgeOutboxRow(t, helper, rows["recent"], 24*time.Hour, true)
+	AgeOutboxRow(t, helper, rows["unpublished"], 30*24*time.Hour, false)
+
+	tenant := jobs.Tenant{ID: TestTenantID, DatabaseURL: config.ModularAppConfig.Core.DatabaseURL}
+	lister := jobs.NewTenantDirectory(func(context.Context) ([]jobs.Tenant, error) { return []jobs.Tenant{tenant}, nil })
+	relay := jobs.NewOutboxRelay(helper.DB(), helper.Valkey(), lister, time.Minute)
+	defer relay.Shutdown()
+
+	if err := relay.Purge(context.Background(), nil); err != nil {
+		t.Fatalf("purge: %v", err)
+	}
+	assert.False(t, OutboxRowExists(t, helper, rows["stale"]), "published eight days ago: purged")
+	assert.True(t, OutboxRowExists(t, helper, rows["recent"]), "published yesterday: kept")
+	assert.True(t, OutboxRowExists(t, helper, rows["unpublished"]), "never published: kept, the relay still owes it")
+}
+
 // routeChangedRows is how many route.changed rows the outbox holds, which is what "this write left
 // exactly one behind" is measured against.
 func routeChangedRows(t *testing.T, helper *testhelpers.ApiTestHelper) int {

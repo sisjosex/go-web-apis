@@ -151,18 +151,6 @@ func execSQL(t *testing.T, helper *testhelpers.ApiTestHelper, query string, args
 
 // ---- step 1: the model replaces ride_events ----
 
-// TestRideEventsEndpointIsGone - D3: boarding is a trip task transition now → 404
-func TestRideEventsEndpointIsGone(t *testing.T) {
-	helper := SetupTrackingTest(t)
-	defer helper.Close()
-
-	w := helper.DoRequest("POST", "/tracking/events", map[string]interface{}{
-		"rider_id": TestRiderJohnID, "route_id": MorningRouteID, "vehicle_id": TestBusID, "event_type": "check_in",
-	}, map[string]string{})
-
-	assert.Equal(t, http.StatusNotFound, w.Code, w.Body.String())
-}
-
 // TestUpdateRouteTimezone - D2: PATCH carries an IANA zone, the read shows it; an unknown one → 400
 func TestUpdateRouteTimezone(t *testing.T) {
 	helper := SetupTrackingTest(t)

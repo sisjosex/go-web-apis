@@ -305,7 +305,12 @@ func (ctrl *PurchasingController) AddPurchaseOrderItem(c *gin.Context) {
 
 	item, err := ctrl.service.AddItemToPurchaseOrder(c.Request.Context(), tenantID, poID, productUUID, dto.Quantity, dto.UnitCost)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, coreErrors.BuildError(c, err))
+		writeSPError(c, err, map[string]int{
+			purchasingErrors.POInvalidStatus:   http.StatusConflict,
+			purchasingErrors.ProductNotFound:   http.StatusNotFound,
+			purchasingErrors.POInvalidQuantity: http.StatusBadRequest,
+			purchasingErrors.POInvalidCost:     http.StatusBadRequest,
+		})
 		return
 	}
 
@@ -341,18 +346,11 @@ func (ctrl *PurchasingController) ApprovePurchaseOrder(c *gin.Context) {
 
 	po, err := ctrl.service.ApprovePurchaseOrder(c.Request.Context(), tenantID, poID)
 	if err != nil {
-		var pgErr *pgconn.PgError
-		if goerrors.As(err, &pgErr) {
-			switch pgErr.Message {
-			case purchasingErrors.PONotFound:
-				c.JSON(http.StatusNotFound, coreErrors.BuildErrorSingle(c, purchasingErrors.PONotFound))
-				return
-			case purchasingErrors.POCannotApprove:
-				c.JSON(http.StatusConflict, coreErrors.BuildErrorSingle(c, purchasingErrors.POCannotApprove))
-				return
-			}
-		}
-		c.JSON(http.StatusInternalServerError, coreErrors.BuildError(c, err))
+		writeSPError(c, err, map[string]int{
+			purchasingErrors.PONotFound:      http.StatusNotFound,
+			purchasingErrors.POCannotApprove: http.StatusConflict,
+			purchasingErrors.PONoItems:       http.StatusConflict,
+		})
 		return
 	}
 
@@ -399,7 +397,9 @@ func (ctrl *PurchasingController) ReceivePurchaseOrder(c *gin.Context) {
 
 	receipt, err := ctrl.service.ReceivePurchaseOrder(c.Request.Context(), tenantID, poID, receivedBy, dto.Notes)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, coreErrors.BuildError(c, err))
+		writeSPError(c, err, map[string]int{
+			purchasingErrors.POCannotReceive: http.StatusConflict,
+		})
 		return
 	}
 
@@ -436,7 +436,9 @@ func (ctrl *PurchasingController) AddInvoice(c *gin.Context) {
 
 	invoice, err := ctrl.service.AddInvoice(c.Request.Context(), tenantID, poID, &dto)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, coreErrors.BuildError(c, err))
+		writeSPError(c, err, map[string]int{
+			purchasingErrors.PONotFound: http.StatusNotFound,
+		})
 		return
 	}
 
@@ -499,13 +501,19 @@ func (ctrl *PurchasingController) GetPriceComparison(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{
+	// Ordered by unit cost: the first row is the best price. A product no supplier priced has neither.
+	response := gin.H{
 		"product_id":     productID,
 		"comparisons":    comparisons,
-		"best_price":     comparisons[0].UnitCost,
-		"average_cost":   comparisons[0].AverageCost,
+		"best_price":     nil,
+		"average_cost":   nil,
 		"supplier_count": len(comparisons),
-	})
+	}
+	if len(comparisons) > 0 {
+		response["best_price"] = comparisons[0].UnitCost
+		response["average_cost"] = comparisons[0].AverageCost
+	}
+	c.JSON(http.StatusOK, response)
 }
 
 // ========== PHASE 2A: FIFO BATCH TRACKING ==========
@@ -530,7 +538,9 @@ func (ctrl *PurchasingController) CreateProductBatch(c *gin.Context) {
 
 	newBatch, err := ctrl.service.CreateProductBatch(c.Request.Context(), tenantID, &batch)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, coreErrors.BuildError(c, err))
+		writeSPError(c, err, map[string]int{
+			purchasingErrors.ProductNotFound: http.StatusNotFound,
+		})
 		return
 	}
 
@@ -659,7 +669,9 @@ func (ctrl *PurchasingController) CreateRFQ(c *gin.Context) {
 		}
 		_, err = ctrl.service.AddRFQItem(c.Request.Context(), tenantID, newRFQ.ID, item)
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, coreErrors.BuildError(c, err))
+			writeSPError(c, err, map[string]int{
+				purchasingErrors.ProductNotFound: http.StatusNotFound,
+			})
 			return
 		}
 	}
@@ -694,7 +706,9 @@ func (ctrl *PurchasingController) GetRFQResponses(c *gin.Context) {
 
 	responses, err := ctrl.service.GetRFQResponses(c.Request.Context(), tenantID, rfqUUID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, coreErrors.BuildError(c, err))
+		writeSPError(c, err, map[string]int{
+			purchasingErrors.RFQNotFound: http.StatusNotFound,
+		})
 		return
 	}
 
@@ -731,7 +745,9 @@ func (ctrl *PurchasingController) GetRFQComparison(c *gin.Context) {
 
 	comparison, err := ctrl.service.GetRFQComparison(c.Request.Context(), tenantID, rfqUUID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, coreErrors.BuildError(c, err))
+		writeSPError(c, err, map[string]int{
+			purchasingErrors.RFQNotFound: http.StatusNotFound,
+		})
 		return
 	}
 
@@ -772,7 +788,10 @@ func (ctrl *PurchasingController) SelectRFQResponse(c *gin.Context) {
 
 	err = ctrl.service.SelectBestRFQResponse(c.Request.Context(), tenantID, rfqUUID, responseUUID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, coreErrors.BuildError(c, err))
+		writeSPError(c, err, map[string]int{
+			purchasingErrors.RFQNotFound:         http.StatusNotFound,
+			purchasingErrors.RFQResponseNotFound: http.StatusNotFound,
+		})
 		return
 	}
 
@@ -781,4 +800,16 @@ func (ctrl *PurchasingController) SelectRFQResponse(c *gin.Context) {
 		"rfq_id":               rfqID,
 		"selected_response_id": responseID,
 	})
+}
+
+// writeSPError answers the status a stored procedure's refusal maps to, or 500 when it maps to none.
+func writeSPError(c *gin.Context, err error, statuses map[string]int) {
+	var pgErr *pgconn.PgError
+	if goerrors.As(err, &pgErr) {
+		if status, ok := statuses[pgErr.Message]; ok {
+			c.JSON(status, coreErrors.BuildErrorSingle(c, pgErr.Message))
+			return
+		}
+	}
+	c.JSON(http.StatusInternalServerError, coreErrors.BuildError(c, err))
 }

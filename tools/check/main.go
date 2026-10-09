@@ -3,6 +3,8 @@
 //
 //	go run ./tools/check        # changed files
 //	go run ./tools/check -all   # whole tree
+//	go run ./tools/check -routes .route-hits -module "tenancy users"   # endpoint coverage (routes.go)
+//	go run ./tools/check -modules   # the modules a change must test (routes.go)
 //
 // Checks:
 //   - gofmt: a changed .go file is gofmt-clean (line endings ignored, the worktree is CRLF).
@@ -50,7 +52,23 @@ type finding struct {
 
 func main() {
 	all := flag.Bool("all", false, "check the whole tree instead of the files changed against HEAD")
+	routesFile := flag.String("routes", "", "check endpoint coverage from this test recorder file (ROUTE_HITS)")
+	module := flag.String("module", "", "with -routes: the space-separated modules whose routes must be covered")
+	modules := flag.Bool("modules", false, "print the modules whose tests the changed files need")
 	flag.Parse()
+
+	if *routesFile != "" {
+		os.Exit(checkRoutes(*routesFile, strings.Fields(*module)))
+	}
+	if *modules {
+		picked, err := changedModules()
+		if err != nil {
+			fmt.Fprintln(os.Stderr, "check:", err)
+			os.Exit(2)
+		}
+		fmt.Println(strings.Join(picked, " "))
+		return
+	}
 
 	files, err := targetFiles(*all)
 	if err != nil {

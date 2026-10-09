@@ -744,6 +744,13 @@ func TestRecordMovement_Purchase(t *testing.T) {
 	var movement models.RecordMovementResponse
 	json.Unmarshal(w2.Body.Bytes(), &movement)
 	assert.Equal(t, 100.0, movement.NewStockQuantity)
+
+	// The movement reads back by id; an unknown id is a 404 (INFRA-014).
+	w3 := helper.DoRequest("GET", "/inventory/movements/"+movement.MovementID, nil, map[string]string{})
+	assert.Equal(t, http.StatusOK, w3.Code, w3.Body.String())
+	assert.Contains(t, w3.Body.String(), "PURCHASE")
+	w3 = helper.DoRequest("GET", "/inventory/movements/"+uuid.NewString(), nil, map[string]string{})
+	assert.Equal(t, http.StatusNotFound, w3.Code, w3.Body.String())
 }
 
 func TestRecordMovement_Sale(t *testing.T) {
