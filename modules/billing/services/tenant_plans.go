@@ -9,6 +9,7 @@ import (
 
 	"josex/web/config"
 	billingModels "josex/web/modules/billing/models"
+	coreServices "josex/web/modules/core/services"
 
 	"github.com/google/uuid"
 )
@@ -90,10 +91,17 @@ func (s *billingService) NotifyPayment(ctx context.Context, tenantID, userID uui
 		return nil, err
 	}
 	if admin := config.ModularAppConfig.Billing.AdminEmail; admin != "" {
-		s.tell(ctx, payment, func(contact *billingModels.PaymentContact) (string, string, string) {
-			return admin, "Pago por confirmar: " + deref(contact.TenantName),
-				fmt.Sprintf("%s avisó un pago de %.2f %s (%s %s), código %s.\n\nConfírmalo o recházalo en Plataforma → Suscripciones.",
-					deref(contact.TenantName), payment.Amount, payment.Currency, payment.Plan, payment.Cycle, deref(payment.Reference))
+		s.tell(ctx, payment, func(contact *billingModels.PaymentContact) (string, paymentMail) {
+			return admin, paymentMail{
+				Title:    "Pago por confirmar: " + deref(contact.TenantName),
+				Greeting: "Hola,",
+				Message:  deref(contact.TenantName) + " avisó un pago. Confírmalo o recházalo en Plataforma → Suscripciones.",
+				Details: append(paymentDetails(payment),
+					mailDetail{"Plan", payment.Plan + " · " + payment.Cycle},
+					mailDetail{"Código", deref(payment.Reference)}),
+				ButtonText: "Abrir suscripciones",
+				Path:       "/platform/subscriptions",
+			}
 		})
 	}
 	return payment, nil
@@ -105,14 +113,19 @@ func (s *billingService) ConfirmPayment(ctx context.Context, paymentID, confirme
 		return nil, err
 	}
 	planCache.Delete(payment.TenantID)
-	s.tell(ctx, payment, func(contact *billingModels.PaymentContact) (string, string, string) {
-		until := ""
+	s.tell(ctx, payment, func(contact *billingModels.PaymentContact) (string, paymentMail) {
+		details := append(paymentDetails(payment), mailDetail{"Plan", payment.Plan + " · " + deref(contact.TenantName)})
 		if payment.PeriodEnd != nil {
-			until = payment.PeriodEnd.Format("02/01/2006")
+			details = append(details, mailDetail{"Activo hasta", payment.PeriodEnd.Format("02/01/2006")})
 		}
-		return deref(contact.Email), "Tu pago fue confirmado",
-			fmt.Sprintf("Hola %s,\n\nConfirmamos tu pago de %.2f %s. El plan %s de %s está activo hasta el %s.",
-				deref(contact.FirstName), payment.Amount, payment.Currency, payment.Plan, deref(contact.TenantName), until)
+		return deref(contact.Email), paymentMail{
+			Title:      "Tu pago fue confirmado",
+			Greeting:   greeting(contact.FirstName),
+			Message:    "Confirmamos tu pago. Tu plan ya está activo.",
+			Details:    details,
+			ButtonText: "Ver mi plan",
+			Path:       "/billing",
+		}
 	})
 	return payment, nil
 }
@@ -123,10 +136,17 @@ func (s *billingService) RejectPayment(ctx context.Context, paymentID uuid.UUID,
 	if err != nil {
 		return nil, err
 	}
-	s.tell(ctx, payment, func(contact *billingModels.PaymentContact) (string, string, string) {
-		return deref(contact.Email), "No pudimos confirmar tu pago",
-			fmt.Sprintf("Hola %s,\n\nNo pudimos confirmar tu pago de %.2f %s para %s: %s\n\nSi ya pagaste, responde a este correo con el comprobante.",
-				deref(contact.FirstName), payment.Amount, payment.Currency, deref(contact.TenantName), reason)
+	s.tell(ctx, payment, func(contact *billingModels.PaymentContact) (string, paymentMail) {
+		return deref(contact.Email), paymentMail{
+			Title:    "No pudimos confirmar tu pago",
+			Greeting: greeting(contact.FirstName),
+			Message:  "No pudimos confirmar tu pago para " + deref(contact.TenantName) + ". Si ya pagaste, responde a este correo con el comprobante.",
+			Details:  append(paymentDetails(payment), mailDetail{"Motivo", reason}),
+			// The customer is asked to answer with the receipt: no "do not reply" under this one.
+			Replyable:  true,
+			ButtonText: "Ver mi plan",
+			Path:       "/billing",
+		}
 	})
 	return payment, nil
 }
@@ -145,20 +165,57 @@ func (s *billingService) AdjustTenantSubscription(ctx context.Context, tenantID 
 	return plan, nil
 }
 
+// paymentMail is one payment email: the shared layout of the other emails (title, greeting, a line, the
+// payment's details as a table, a button into the app, the sign-off).
+type paymentMail struct {
+	Title, Greeting, Message string
+	Details                  []mailDetail
+	ButtonText, Path         string
+	Replyable                bool
+}
+
+type mailDetail struct{ Label, Value string }
+
+// paymentDetails is the amount every payment email starts its table with.
+func paymentDetails(payment *billingModels.TenantPayment) []mailDetail {
+	return []mailDetail{{"Monto", fmt.Sprintf("%.2f %s", payment.Amount, payment.Currency)}}
+}
+
+func greeting(firstName *string) string {
+	if name := deref(firstName); name != "" {
+		return "Hola " + name + ","
+	}
+	return "Hola,"
+}
+
 // tell emails one person about a payment, after the write and off the request (D4): one read for who to
 // write to, and a mail that fails is logged, never the write's failure.
-func (s *billingService) tell(ctx context.Context, payment *billingModels.TenantPayment, compose func(*billingModels.PaymentContact) (to, subject, body string)) {
+func (s *billingService) tell(ctx context.Context, payment *billingModels.TenantPayment, compose func(*billingModels.PaymentContact) (string, paymentMail)) {
 	contact, err := s.repo.PaymentContact(ctx, payment.ID)
 	if err != nil {
 		log.Printf("⚠️  billing: contact for payment %s: %v", payment.ID, err)
 		return
 	}
-	to, subject, body := compose(contact)
+	to, mail := compose(contact)
 	if to == "" {
 		return
 	}
+	core := config.ModularAppConfig.Core
+	data := map[string]interface{}{
+		"Title":      mail.Title,
+		"Greeting":   mail.Greeting,
+		"Message":    mail.Message,
+		"Details":    mail.Details,
+		"ButtonText": mail.ButtonText,
+		"LandingURL": core.FrontendURL + mail.Path,
+		"SignOff":    "El equipo de " + core.AppName,
+	}
+	if !mail.Replyable {
+		data["AutomatedNote"] = "Este es un mensaje automático. Por favor, no respondas."
+	}
+	templatePath := coreServices.GetTemplatePath("billing", "payment-notice.html")
 	go func() {
-		if err := s.email.SendPlainEmail(to, subject, body); err != nil {
+		if err := s.email.SendEmail(to, mail.Title, templatePath, data); err != nil {
 			log.Printf("⚠️  billing: email for payment %s: %v", payment.ID, err)
 		}
 	}()

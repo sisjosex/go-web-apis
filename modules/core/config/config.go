@@ -112,7 +112,7 @@ func LoadCoreConfig() *CoreConfig {
 		AppPort: utils.GetEnv("APP_PORT", "8080"),
 
 		// App identity
-		AppName: utils.GetEnv("APP_NAME", "Platform"),
+		AppName: utils.GetEnv("APP_NAME", "Taypi"),
 		// Frontend URL (for email links and redirects)
 		FrontendURL: utils.GetEnv("FRONTEND_URL", "http://localhost:3000"),
 		// The page the app-access notice links to (TRACK-032 D2)
