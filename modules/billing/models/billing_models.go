@@ -90,6 +90,18 @@ type PlanPrice struct {
 	Cycle    string  `json:"cycle"` // monthly | annual
 	Amount   float64 `json:"amount"`
 	Currency string  `json:"currency"`
+	// QRImageURL is the bank QR for this exact amount (BILLING-002 D1); null falls back to Payment's.
+	QRImageURL *string `json:"qr_image_url"`
+}
+
+// PendingPayment is the notice under review the billing page shows until the platform answers (D4).
+type PendingPayment struct {
+	ID        uuid.UUID `json:"id"`
+	Plan      string    `json:"plan"`
+	Cycle     string    `json:"cycle"`
+	Amount    float64   `json:"amount"`
+	Currency  string    `json:"currency"`
+	CreatedAt time.Time `json:"created_at"`
 }
 
 // PaymentInstructions is where a customer pays (D3): the platform's bank QR and account, from config.
@@ -111,6 +123,9 @@ type TenantPlan struct {
 	Limits        map[string]int      `json:"limits"`
 	Prices        []PlanPrice         `json:"prices"`
 	Payment       PaymentInstructions `json:"payment"`
+	// PaymentCode identifies the business's transfer: the customer pastes it in the note (BILLING-002 D2).
+	PaymentCode    *string         `json:"payment_code"`
+	PendingPayment *PendingPayment `json:"pending_payment"`
 }
 
 // TenantPayment is a business's payment: notified by the customer, completed by the platform.
@@ -144,11 +159,59 @@ type NotifiedPayment struct {
 	CreatedAt  time.Time  `json:"created_at"`
 }
 
-// NotifyPaymentDto is "Ya pagué" (D3): the plan and cycle paid for and the bank reference.
+// NotifyPaymentDto is "Ya pagué" (D3): the plan and cycle paid for. The reference is optional: without
+// one the business's code is stored (BILLING-002 D2).
 type NotifyPaymentDto struct {
 	Plan      string `json:"plan" binding:"required,oneof=pro"`
 	Cycle     string `json:"cycle" binding:"required,oneof=monthly annual"`
-	Reference string `json:"reference" binding:"required,min=3,max=255" conform:"trim"`
+	Reference string `json:"reference" binding:"omitempty,min=3,max=255" conform:"trim"`
+}
+
+// RejectPaymentDto turns down a notice with the reason the customer is told (BILLING-002 D3).
+type RejectPaymentDto struct {
+	Reason string `json:"reason" binding:"required,min=3,max=500" conform:"trim"`
+}
+
+// TenantSubscription is a row of the platform's businesses list (BILLING-002 D3).
+type TenantSubscription struct {
+	TenantID         uuid.UUID  `json:"tenant_id"`
+	TenantName       string     `json:"tenant_name"`
+	TenantSlug       string     `json:"tenant_slug"`
+	Plan             string     `json:"plan"`
+	Cycle            string     `json:"cycle"`
+	Status           string     `json:"status"`
+	PeriodEnd        *time.Time `json:"period_end"`
+	PendingPaymentID *uuid.UUID `json:"pending_payment_id"`
+}
+
+// ListTenantSubscriptionsQuery is GET /billing/admin/subscriptions.
+type ListTenantSubscriptionsQuery struct {
+	Search   string `form:"search"`
+	Page     int    `form:"page,default=1" binding:"min=1"`
+	PageSize int    `form:"page_size,default=20" binding:"min=1,max=100"`
+}
+
+// ListTenantSubscriptionsResponse is one page of businesses and how many match.
+type ListTenantSubscriptionsResponse struct {
+	Subscriptions []TenantSubscription `json:"subscriptions"`
+	TotalCount    int64                `json:"total_count"`
+}
+
+// AdjustSubscriptionDto is the platform setting a business's plan by hand, with the reason it is
+// recorded under (BILLING-002 D3).
+type AdjustSubscriptionDto struct {
+	Plan      string     `json:"plan" binding:"required,oneof=free pro enterprise"`
+	Cycle     string     `json:"cycle" binding:"required,oneof=monthly annual"`
+	Status    string     `json:"status" binding:"required,oneof=active trial expired canceled"`
+	PeriodEnd *time.Time `json:"period_end"`
+	Reason    string     `json:"reason" binding:"required,min=3,max=500" conform:"trim"`
+}
+
+// PaymentContact is who hears about a payment: the member who notified it and the business (D4).
+type PaymentContact struct {
+	Email      *string
+	FirstName  *string
+	TenantName *string
 }
 
 // UsageFeature is how much of one limited feature a business uses.

@@ -15,6 +15,8 @@ type BillingConfig struct {
 	PaymentBank       string
 	PaymentAccount    string
 	PaymentHolder     string
+	// AdminEmail hears of every payment notice (BILLING-002 D4); empty sends none.
+	AdminEmail string
 }
 
 // LoadBillingConfig loads billing configuration from environment variables.
@@ -27,5 +29,6 @@ func LoadBillingConfig() *BillingConfig {
 		PaymentBank:       utils.GetEnv("BILLING_PAYMENT_BANK", ""),
 		PaymentAccount:    utils.GetEnv("BILLING_PAYMENT_ACCOUNT", ""),
 		PaymentHolder:     utils.GetEnv("BILLING_PAYMENT_HOLDER", ""),
+		AdminEmail:        utils.GetEnv("BILLING_ADMIN_EMAIL", ""),
 	}
 }

@@ -41,6 +41,12 @@ type BillingService interface {
 	// ConfirmPayment completes a notified payment; the business's cached plan is dropped.
 	ConfirmPayment(ctx context.Context, paymentID, confirmedBy uuid.UUID) (*models.TenantPayment, error)
 	ListNotifiedPayments(ctx context.Context) ([]models.NotifiedPayment, error)
+	// RejectPayment turns a notice down with a reason and emails the customer (BILLING-002 D3, D4).
+	RejectPayment(ctx context.Context, paymentID uuid.UUID, reason string, rejectedBy uuid.UUID) (*models.TenantPayment, error)
+	// ListTenantSubscriptions is the platform's businesses list (BILLING-002 D3).
+	ListTenantSubscriptions(ctx context.Context, query models.ListTenantSubscriptionsQuery) (*models.ListTenantSubscriptionsResponse, error)
+	// AdjustTenantSubscription sets a business's plan by hand, recorded with its reason (D3).
+	AdjustTenantSubscription(ctx context.Context, tenantID uuid.UUID, dto *models.AdjustSubscriptionDto, adjustedBy uuid.UUID) (*models.TenantPlan, error)
 	// ExpireSubscriptions is the daily job: paid plans past their grace go back to the free limits.
 	ExpireSubscriptions(ctx context.Context) (int, error)
 }

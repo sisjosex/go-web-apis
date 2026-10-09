@@ -35,6 +35,10 @@ type BillingRepository interface {
 	NotifyPayment(ctx context.Context, tenantID, userID uuid.UUID, dto *models.NotifyPaymentDto) (*models.TenantPayment, error)
 	ConfirmPayment(ctx context.Context, paymentID, confirmedBy uuid.UUID) (*models.TenantPayment, error)
 	ListNotifiedPayments(ctx context.Context) ([]models.NotifiedPayment, error)
+	RejectPayment(ctx context.Context, paymentID uuid.UUID, reason string, rejectedBy uuid.UUID) (*models.TenantPayment, error)
+	PaymentContact(ctx context.Context, paymentID uuid.UUID) (*models.PaymentContact, error)
+	ListTenantSubscriptions(ctx context.Context, query models.ListTenantSubscriptionsQuery) (*models.ListTenantSubscriptionsResponse, error)
+	AdjustTenantSubscription(ctx context.Context, tenantID uuid.UUID, dto *models.AdjustSubscriptionDto, adjustedBy uuid.UUID) (*models.TenantPlan, error)
 	ExpireSubscriptions(ctx context.Context, graceDays int) (int, error)
 	GetTenantUsage(ctx context.Context, tenantID uuid.UUID) (map[string]int64, error)
 }

@@ -5,17 +5,19 @@ import (
 
 	billingInterfaces "josex/web/modules/billing/interfaces"
 	billingModels "josex/web/modules/billing/models"
+	coreServices "josex/web/modules/core/services"
 
 	"github.com/google/uuid"
 )
 
 type billingService struct {
-	repo billingInterfaces.BillingRepository
+	repo  billingInterfaces.BillingRepository
+	email coreServices.EmailService
 }
 
 // NewBillingService constructs a new BillingService.
 func NewBillingService(repo billingInterfaces.BillingRepository) billingInterfaces.BillingService {
-	return &billingService{repo: repo}
+	return &billingService{repo: repo, email: coreServices.NewEmailService()}
 }
 
 func (s *billingService) GetSubscription(ctx context.Context, userID uuid.UUID) (*billingModels.Subscription, error) {

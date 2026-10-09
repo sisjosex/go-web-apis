@@ -15,6 +15,10 @@ const (
 	PaymentNotFound   = "billing.payment.not-found"
 	PaymentNotPending = "billing.payment.not-pending"
 
+	// BILLING-002 D3: the platform's hand adjustment.
+	AdjustReasonRequired = "billing.adjust.reason-required"
+	TenantNotFound       = "billing.tenant.not-found"
+
 	// General
 	BillingValidationFailed = "billing.validation-failed"
 	// PlanContactSales refuses a plan change or a payment written by anyone but the platform while

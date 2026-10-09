@@ -49,6 +49,11 @@ func RegisterBillingRoutes(
 		// The platform's confirmation queue (BILLING-001 D3).
 		billing.GET("/payments/pending", platformOnly, ctrl.ListNotifiedPayments)
 		billing.POST("/payments/:id/confirm", platformOnly, ctrl.ConfirmPayment)
+		billing.POST("/payments/:id/reject", platformOnly, ctrl.RejectPayment)
+
+		// The platform's businesses and the hand adjustment (BILLING-002 D3).
+		billing.GET("/admin/subscriptions", platformOnly, ctrl.ListTenantSubscriptions)
+		billing.PUT("/admin/tenants/:business_id/subscription", platformOnly, ctrl.AdjustTenantSubscription)
 	}
 }
 

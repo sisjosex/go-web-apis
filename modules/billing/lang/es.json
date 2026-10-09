@@ -11,5 +11,7 @@
   "billing.limit-reached": "Llegaste al límite de tu plan. Mejora el plan para agregar más.",
   "billing.payment.not-found": "Ese pago no existe.",
   "billing.payment.not-pending": "Ese pago ya fue confirmado o no está esperando confirmación.",
-  "billing.price.not-found": "Ese plan no tiene precio para el ciclo elegido."
+  "billing.price.not-found": "Ese plan no tiene precio para el ciclo elegido.",
+  "billing.adjust.reason-required": "Escribe el motivo del ajuste.",
+  "billing.tenant.not-found": "Ese negocio no existe."
 }

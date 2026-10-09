@@ -426,6 +426,9 @@ func (uc *AuthController) GetProfile(ctx *gin.Context) {
 		ctx.JSON(http.StatusBadRequest, coreErrors.BuildError(ctx, err))
 		return
 	}
+	if role := ctx.GetString("system_role"); role != "" {
+		user.SystemRole = &role
+	}
 
 	ctx.JSON(http.StatusOK, user)
 }

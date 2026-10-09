@@ -163,3 +163,128 @@ func (ctrl *BillingController) ConfirmPayment(c *gin.Context) {
 	}
 	c.JSON(http.StatusOK, payment)
 }
+
+// paymentWriteError answers the codes a payment write raises; reports whether it wrote the response.
+func paymentWriteError(c *gin.Context, err error) bool {
+	var pgErr *pgconn.PgError
+	if !errors.As(err, &pgErr) {
+		return false
+	}
+	switch pgErr.Message {
+	case billingErrors.PaymentNotFound, billingErrors.TenantNotFound:
+		c.JSON(http.StatusNotFound, coreErrors.BuildErrorSingle(c, pgErr.Message))
+		return true
+	case billingErrors.PaymentNotPending:
+		c.JSON(http.StatusConflict, coreErrors.BuildErrorSingle(c, pgErr.Message))
+		return true
+	case billingErrors.AdjustReasonRequired:
+		c.JSON(http.StatusBadRequest, coreErrors.BuildErrorSingle(c, pgErr.Message))
+		return true
+	}
+	return false
+}
+
+// RejectPayment godoc
+// @Summary Reject a payment
+// @Description Turns a notified payment down with the reason the customer is emailed; the plan does not change (BILLING-002 D3); super_admin only.
+// @Tags Billing
+// @Accept json
+// @Produce json
+// @Param id path string true "Payment ID"
+// @Param body body billingModels.RejectPaymentDto true "Why"
+// @Success 200 {object} billingModels.TenantPayment
+// @Failure 404 {object} coreErrors.ErrorResponse
+// @Failure 409 {object} coreErrors.ErrorResponse
+// @Router /billing/payments/{id}/reject [post]
+// @Security ApiKeyAuth
+func (ctrl *BillingController) RejectPayment(c *gin.Context) {
+	paymentID, err := uuid.Parse(c.Param("id"))
+	if err != nil {
+		c.JSON(http.StatusBadRequest, coreErrors.BuildErrorSingle(c, coreErrors.InvalidUUID))
+		return
+	}
+	userID, err := extractUserID(c)
+	if err != nil {
+		c.JSON(http.StatusUnauthorized, coreErrors.BuildErrorSingle(c, coreErrors.UserUnauthorized))
+		return
+	}
+	var dto billingModels.RejectPaymentDto
+	if err := c.ShouldBindJSON(&dto); err != nil {
+		c.JSON(http.StatusBadRequest, coreErrors.BuildErrorDetail(c, billingErrors.BillingValidationFailed, utils.ExtractValidationError(c, err)))
+		return
+	}
+	_ = conform.Strings(&dto)
+	payment, err := ctrl.billingService.RejectPayment(c.Request.Context(), paymentID, dto.Reason, userID)
+	if err != nil {
+		if !paymentWriteError(c, err) {
+			c.JSON(http.StatusInternalServerError, coreErrors.BuildError(c, err))
+		}
+		return
+	}
+	c.JSON(http.StatusOK, payment)
+}
+
+// ListTenantSubscriptions godoc
+// @Summary Every business and its plan
+// @Description The platform's businesses list: plan, cycle, status, end and the notice under review, searched by name or code (BILLING-002 D3); super_admin only.
+// @Tags Billing
+// @Produce json
+// @Param search query string false "Name or code"
+// @Param page query int false "Page" default(1)
+// @Param page_size query int false "Page size" default(20)
+// @Success 200 {object} billingModels.ListTenantSubscriptionsResponse
+// @Router /billing/admin/subscriptions [get]
+// @Security ApiKeyAuth
+func (ctrl *BillingController) ListTenantSubscriptions(c *gin.Context) {
+	var query billingModels.ListTenantSubscriptionsQuery
+	if err := c.ShouldBindQuery(&query); err != nil {
+		c.JSON(http.StatusBadRequest, coreErrors.BuildErrorDetail(c, billingErrors.BillingValidationFailed, utils.ExtractValidationError(c, err)))
+		return
+	}
+	out, err := ctrl.billingService.ListTenantSubscriptions(c.Request.Context(), query)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, coreErrors.BuildError(c, err))
+		return
+	}
+	c.JSON(http.StatusOK, out)
+}
+
+// AdjustTenantSubscription godoc
+// @Summary Set a business's plan by hand
+// @Description Plan, cycle, status and end with a required reason; recorded as an adjustment with before and after (BILLING-002 D3); super_admin only.
+// @Tags Billing
+// @Accept json
+// @Produce json
+// @Param business_id path string true "Business ID"
+// @Param body body billingModels.AdjustSubscriptionDto true "The plan and why"
+// @Success 200 {object} billingModels.TenantPlan
+// @Failure 404 {object} coreErrors.ErrorResponse
+// @Router /billing/admin/tenants/{business_id}/subscription [put]
+// @Security ApiKeyAuth
+func (ctrl *BillingController) AdjustTenantSubscription(c *gin.Context) {
+	// The business the platform acts on, named in the path — never the caller's own tenant.
+	tenantID, err := uuid.Parse(c.Param("business_id"))
+	if err != nil {
+		c.JSON(http.StatusBadRequest, coreErrors.BuildErrorSingle(c, coreErrors.InvalidUUID))
+		return
+	}
+	userID, err := extractUserID(c)
+	if err != nil {
+		c.JSON(http.StatusUnauthorized, coreErrors.BuildErrorSingle(c, coreErrors.UserUnauthorized))
+		return
+	}
+	var dto billingModels.AdjustSubscriptionDto
+	if err := c.ShouldBindJSON(&dto); err != nil {
+		c.JSON(http.StatusBadRequest, coreErrors.BuildErrorDetail(c, billingErrors.BillingValidationFailed, utils.ExtractValidationError(c, err)))
+		return
+	}
+	_ = conform.Strings(&dto)
+	plan, err := ctrl.billingService.AdjustTenantSubscription(c.Request.Context(), tenantID, &dto, userID)
+	if err != nil {
+		if !paymentWriteError(c, err) {
+			c.JSON(http.StatusInternalServerError, coreErrors.BuildError(c, err))
+		}
+		return
+	}
+	c.JSON(http.StatusOK, plan)
+}
