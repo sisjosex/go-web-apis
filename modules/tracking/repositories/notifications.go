@@ -79,6 +79,26 @@ func (r *TrackingRepository) queryNotificationSettings(ctx context.Context, quer
 // The push task's reads of TRACK-012 D3: auth.push_devices lives in the main database, so these run
 // on a context that names no tenant, whatever tenant the notice came from.
 
+// TripProgress answers what each guardian's trip-progress push says (MOBILE-024): one row per rider with
+// a task on the trip and guardian who did not mute it; none while the trip is planned.
+func (r *TrackingRepository) TripProgress(ctx context.Context, tenantID, tripID uuid.UUID) ([]models.TripProgressRow, error) {
+	rows, err := r.dbService.Query(ctx, `SELECT * FROM tracking.sp_trip_progress(p_tenant_id := $1, p_trip_id := $2)`, tenantID, tripID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := []models.TripProgressRow{}
+	for rows.Next() {
+		var p models.TripProgressRow
+		if err := rows.Scan(&p.RiderID, &p.RiderName, &p.UserID, &p.Phase, &p.StopsDone, &p.StopsTotal, &p.CurrentStop,
+			&p.NextStop, &p.TargetStop, &p.TargetTripStopID, &p.TripStatus, &p.VehicleType, &p.OrganizationKind); err != nil {
+			return nil, err
+		}
+		out = append(out, p)
+	}
+	return out, rows.Err()
+}
+
 // PushTokens answers every push token of an account.
 func (r *TrackingRepository) PushTokens(ctx context.Context, userID uuid.UUID) ([]string, error) {
 	rows, err := r.dbService.Query(ctx, `SELECT token FROM auth.sp_push_tokens(p_user_id := $1)`, userID)

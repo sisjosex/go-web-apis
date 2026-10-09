@@ -197,8 +197,12 @@ func toFCM(msg interfaces.PushMessage) fcmMessage {
 	m.Android.CollapseKey = msg.CollapseID
 	if msg.Silent {
 		// NORMAL: a data message is no reason to wake a dozing phone — it lands when the phone next
-		// syncs, and the collapse key keeps only the newest one.
+		// syncs, and the collapse key keeps only the newest one. An Urgent one is drawn by the phone
+		// at once (MOBILE-024): HIGH.
 		m.Android.Priority = "NORMAL"
+		if msg.Urgent {
+			m.Android.Priority = "HIGH"
+		}
 		m.APNS.Headers = map[string]string{"apns-push-type": "background", "apns-priority": "5"}
 		if msg.CollapseID != "" {
 			m.APNS.Headers["apns-collapse-id"] = msg.CollapseID

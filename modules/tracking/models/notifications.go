@@ -47,7 +47,7 @@ type MarkNotificationsReadDto struct {
 type NotificationSetting struct {
 	RiderID   uuid.UUID `json:"rider_id" binding:"required"`
 	RiderName string    `json:"rider_name,omitempty"`
-	Muted     []string  `json:"muted" binding:"max=8,dive,oneof=trip_started approaching boarded dropped_off no_show cancelled changed delay"`
+	Muted     []string  `json:"muted" binding:"max=9,dive,oneof=trip_started approaching boarded dropped_off no_show cancelled changed delay trip_progress"`
 }
 
 // NewNotice is a feed row sp_notify_event just wrote and the account did not mute: one push to send.
@@ -57,4 +57,22 @@ type NewNotice struct {
 	RiderID uuid.UUID
 	Type    string
 	Payload json.RawMessage
+}
+
+// TripProgressRow is one guardian's trip-progress push (MOBILE-024): where their rider is in the trip,
+// counted up to the rider's own stop — the pickup while waiting, the drop-off on board.
+type TripProgressRow struct {
+	RiderID          uuid.UUID
+	RiderName        string
+	UserID           uuid.UUID
+	Phase            string // to_pickup | on_board | done
+	StopsDone        int
+	StopsTotal       int
+	CurrentStop      *string
+	NextStop         *string
+	TargetStop       *string
+	TargetTripStopID *uuid.UUID
+	TripStatus       string
+	VehicleType      *string
+	OrganizationKind *string
 }

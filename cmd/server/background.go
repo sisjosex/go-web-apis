@@ -13,10 +13,13 @@ import (
 	billingServices "josex/web/modules/billing/services"
 	"josex/web/modules/core/jobs"
 	"josex/web/modules/core/services"
+	geoServices "josex/web/modules/geo/services"
 	geoRouting "josex/web/modules/geo/services/routing"
 	tenancyRepos "josex/web/modules/tenancy/repositories"
 	trackingJobs "josex/web/modules/tracking/jobs"
 	trackingPush "josex/web/modules/tracking/push"
+	trackingRepos "josex/web/modules/tracking/repositories"
+	trackingServices "josex/web/modules/tracking/services"
 
 	"github.com/google/uuid"
 	"github.com/hibiken/asynq"
@@ -134,12 +137,21 @@ func registerJobs(ctx context.Context, registry *jobs.Registry, db services.Data
 			pushClient = jobsClient
 		}
 		registry.Handle(trackingJobs.TaskDayChanged, trackingJobs.DayChangedHandler(db, valkey, pusher))
+		// The guardians' live progress notification (MOBILE-024): only with FCM; its ETA from the trip's
+		// shared cache, through the same router.
+		var progress *trackingJobs.ProgressSignal
+		if pushClient != nil {
+			progress = trackingJobs.NewProgressSignal(jobsClient)
+			eta := trackingServices.NewEtaService(router, geoServices.NewGeoService(nil, router, nil, geoConf), valkey)
+			registry.Handle(trackingJobs.TaskTripProgress, trackingJobs.TripProgressHandler(db, valkey, pusher,
+				trackingServices.NewLiveService(trackingRepos.NewTrackingRepository(db), eta)))
+		}
 		notify := trackingJobs.NewNotifier(db, pushClient, config.ModularAppConfig.Tracking)
 		// A trip moved (TRACK-020 D1): published to everyone watching it (TRACK-025), and a completed
 		// one gets its driven path, map-matched through the geo router — the raw line when Valhalla is
 		// down (TRACK-010).
 		registry.Handle(trackingJobs.TaskTripChanged, trackingJobs.TripChangedHandler(db, directory,
-			router, valkey, notify, signal))
+			router, valkey, notify, signal, progress))
 		// An alert was raised or resolved (TRACK-004 D1): an `alert` frame to the fleet and the trip.
 		registry.Handle(trackingJobs.TaskAlertChanged, trackingJobs.AlertChangedHandler(directory, valkey, notify))
 		// A route proposal was asked (TRACK-014): solved by VROOM, on its own breaker.

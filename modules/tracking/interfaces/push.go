@@ -19,6 +19,9 @@ type PushMessage struct {
 	CollapseID string
 	Channel    string
 	Silent     bool
+	// Urgent sends a Silent (data-only) message at high priority: the phone draws it itself, now —
+	// the trip-progress notification (MOBILE-024), which a dozing phone must not hold back.
+	Urgent bool
 }
 
 // Pusher is the push port (TRACK-012 D2): FCM today, for Android and iOS alike.

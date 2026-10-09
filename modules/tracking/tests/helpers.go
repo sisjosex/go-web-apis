@@ -1060,6 +1060,23 @@ func LinkPortalGuardian(t *testing.T, helper *testhelpers.ApiTestHelper, riderID
 	})
 }
 
+// MuteNotice mutes noticeType of riderID for userID, as the portal's settings switch does, and unmutes it
+// when the test ends.
+func MuteNotice(t *testing.T, helper *testhelpers.ApiTestHelper, userID, riderID, noticeType string) {
+	t.Helper()
+	ctx := context.Background()
+	if _, err := helper.DB().Execute(ctx, `INSERT INTO tracking.notification_settings (user_id, rider_id, type)
+		VALUES ($1, $2, $3) ON CONFLICT DO NOTHING`, userID, riderID, noticeType); err != nil {
+		t.Fatalf("mute %s: %v", noticeType, err)
+	}
+	t.Cleanup(func() {
+		if _, err := helper.DB().Execute(ctx, `DELETE FROM tracking.notification_settings
+			WHERE user_id = $1 AND rider_id = $2 AND type = $3`, userID, riderID, noticeType); err != nil {
+			t.Errorf("unmute %s: %v", noticeType, err)
+		}
+	})
+}
+
 // CleanTrackingDatabase cleans only tracking tables while preserving auth and system data
 // This is the proper cleanup for tracking-specific tests
 func CleanTrackingDatabase(helper *testhelpers.ApiTestHelper) error {

@@ -48,7 +48,7 @@ var frameOf = map[string]string{
 // the driver's day shows. valkey nil publishes nothing; notify and signal nil notify and signal
 // nothing. Delivery is at least once: a repeated frame makes a client refetch the same trip, a
 // repeated trace writes the same line, a repeated notice writes nothing.
-func TripChangedHandler(db coreServices.DatabaseService, tenants *coreJobs.TenantDirectory, router geoInterfaces.Router, valkey coreServices.ValkeyService, notify *Notifier, signal *DriverSignal) asynq.HandlerFunc {
+func TripChangedHandler(db coreServices.DatabaseService, tenants *coreJobs.TenantDirectory, router geoInterfaces.Router, valkey coreServices.ValkeyService, notify *Notifier, signal *DriverSignal, progress *ProgressSignal) asynq.HandlerFunc {
 	return func(ctx context.Context, task *asynq.Task) error {
 		var payload TripChanged
 		if err := json.Unmarshal(task.Payload(), &payload); err != nil {
@@ -76,6 +76,10 @@ func TripChangedHandler(db coreServices.DatabaseService, tenants *coreJobs.Tenan
 			return err
 		}
 		if err := notify.Notify(ctx, tenant, topicTripChanged, task.Payload()); err != nil {
+			return err
+		}
+		// Every transition and the approach move the guardians' progress notification (MOBILE-024).
+		if err := progress.Signal(ctx, tenant, tripID); err != nil {
 			return err
 		}
 		if payload.Type != "approach" {

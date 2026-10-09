@@ -405,7 +405,7 @@ func TestTripChanged_PublishedAndAcknowledged(t *testing.T) {
 	})
 
 	lister := jobs.NewTenantDirectory(func(context.Context) ([]jobs.Tenant, error) { return []jobs.Tenant{testTenant()}, nil })
-	err = trackingJobs.TripChangedHandler(helper.DB(), lister, nil, nil, nil, nil)(ctx, asynq.NewTask(info.Type, info.Payload))
+	err = trackingJobs.TripChangedHandler(helper.DB(), lister, nil, nil, nil, nil, nil)(ctx, asynq.NewTask(info.Type, info.Payload))
 
 	assert.NoError(t, err)
 	assert.Equal(t, 0, countRows(t, helper, `SELECT count(*) FROM tracking.trips WHERE id = $1 AND polyline IS NOT NULL`, tripID),
