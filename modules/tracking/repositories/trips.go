@@ -93,9 +93,11 @@ func (r *TrackingRepository) ListTrips(ctx context.Context, tenantID uuid.UUID, 
 			p_organization_id := $5::UUID,
 			p_page            := $6,
 			p_page_size       := $7,
-			p_scope_user_id   := $8
+			p_scope_user_id   := $8,
+			p_include_empty   := COALESCE($9::BOOLEAN, TRUE)
 		)
-	`, tenantID, query.Date, query.RouteID, query.Status, query.OrganizationID, query.Page, query.PageSize, query.ScopeUserID)
+	`, tenantID, query.Date, query.RouteID, query.Status, query.OrganizationID, query.Page, query.PageSize, query.ScopeUserID,
+		query.IncludeEmpty)
 	if err != nil {
 		return nil, 0, mapTripError(err, trackingErrors.TripListFailed)
 	}

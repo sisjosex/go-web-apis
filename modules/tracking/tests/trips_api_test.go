@@ -284,6 +284,10 @@ func TestMaterialiseLimaServiceDate(t *testing.T) {
 	routeID := CreateTestRoute(t, helper)
 	w := helper.DoRequest("PATCH", "/tracking/routes/"+routeID, map[string]interface{}{"timezone": "America/Lima"}, map[string]string{})
 	assert.Equal(t, http.StatusOK, w.Code, w.Body.String())
+	// A route with no stop makes no trip (TRACK-053 D3).
+	PublishRouteVersion(t, helper, routeID, "2026-01-01", []map[string]interface{}{
+		{"stop_place_id": CentralStationID, "sequence": 1, "planned_offset_min": 0},
+	})
 	CreateRouteSchedule(t, helper, routeID, map[string]interface{}{
 		"days_of_week": EveryDayMask, "start_time": "23:30", "valid_from": "2026-01-01",
 	})
