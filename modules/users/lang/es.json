@@ -8,6 +8,7 @@
   "user.create.password.no-password-number": "La contraseña debe contener al menos un número",
   "user.create.password.missing-special-chars": "La contraseña debe contener al menos un carácter especial (!@#$%^&*(),.?\":{}|<>)",
   "user.update.failed": "Error al actualizar el usuario",
+  "user.update.shared-account": "Esta cuenta pertenece a más de un negocio; su email y contraseña no se pueden cambiar aquí",
   "user.update.password.current-invalid": "La contraseña actual es inválida",
   "user.update.password.same-password": "La nueva contraseña no puede ser igual a la actual",
   "user.create.validation-failed": "Error de validación en la creación del usuario",

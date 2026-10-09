@@ -3,10 +3,12 @@ package errors
 // Users module error codes
 const (
 	// User CRUD errors
-	UserCreateFailed      = "user.create.failed"
-	UserUpdateFailed      = "user.update.failed"
-	UserValidationFailed  = "user.create.validation-failed"
-	UserEmailAlreadyInUse = "user.create.email-in-use"
+	UserCreateFailed = "user.create.failed"
+	UserUpdateFailed = "user.update.failed"
+	// UserUpdateSharedAccount refuses an email or password change on an account in more than one workspace.
+	UserUpdateSharedAccount = "user.update.shared-account"
+	UserValidationFailed    = "user.create.validation-failed"
+	UserEmailAlreadyInUse   = "user.create.email-in-use"
 
 	// User search/retrieval
 	UserNotFound          = "user.not-found"

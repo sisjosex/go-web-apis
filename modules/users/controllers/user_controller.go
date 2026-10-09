@@ -39,6 +39,26 @@ func NewUserController(userService userInterfaces.UserService, emailService core
 	}
 }
 
+// requestTenant is the workspace the tenancy middleware resolved; the user routes only reach a user there
+// (USERS-013). A request without one resolves to uuid.Nil, which matches no membership.
+func requestTenant(c *gin.Context) uuid.UUID {
+	if s, ok := c.Get("tenant_id"); ok {
+		if tid, err := uuid.Parse(s.(string)); err == nil {
+			return tid
+		}
+	}
+	return uuid.Nil
+}
+
+// pgMessage answers the stored procedure's error key, or "" for any other error.
+func pgMessage(err error) string {
+	var pgErr *pgconn.PgError
+	if errors.As(err, &pgErr) {
+		return pgErr.Message
+	}
+	return ""
+}
+
 func (uc *UserController) Create(c *gin.Context) {
 	var newUser userModels.CreateUserDto
 
@@ -166,6 +186,14 @@ func (uc *UserController) Update(c *gin.Context) {
 
 	user, err := uc.userService.UpdateUser(updateUser)
 	if err != nil {
+		switch pgMessage(err) {
+		case usersErrors.UserNotFound:
+			c.JSON(http.StatusNotFound, coreErrors.BuildError(c, err))
+			return
+		case usersErrors.UserUpdateSharedAccount:
+			c.JSON(http.StatusConflict, coreErrors.BuildError(c, err))
+			return
+		}
 		c.JSON(http.StatusBadRequest, coreErrors.BuildErrorDetail(c, usersErrors.UserUpdateFailed, err.Error()))
 		return
 	}
@@ -297,7 +325,7 @@ func (uc *UserController) GetUserById(c *gin.Context) {
 		return
 	}
 
-	user, err := uc.userService.GetUserById(userID)
+	user, err := uc.userService.GetUserById(requestTenant(c), userID)
 	if err != nil {
 		c.JSON(http.StatusNotFound, coreErrors.BuildError(c, err))
 		return
@@ -340,12 +368,16 @@ func (uc *UserController) SoftDeleteUser(c *gin.Context) {
 
 	// Use soft delete if enabled, otherwise permanent delete
 	if usersConfig.EnableSoftDelete {
-		err = uc.userService.SoftDeleteUser(userID)
+		err = uc.userService.SoftDeleteUser(requestTenant(c), userID)
 	} else {
 		// If hard delete is implemented, call it here
-		err = uc.userService.SoftDeleteUser(userID) // TODO: implement HardDeleteUser when needed
+		err = uc.userService.SoftDeleteUser(requestTenant(c), userID) // TODO: implement HardDeleteUser when needed
 	}
 
+	if pgMessage(err) == usersErrors.UserNotFound {
+		c.JSON(http.StatusNotFound, coreErrors.BuildError(c, err))
+		return
+	}
 	if err != nil {
 		c.JSON(http.StatusBadRequest, coreErrors.BuildError(c, err))
 		return
@@ -393,7 +425,7 @@ func (uc *UserController) ResetPassword(c *gin.Context) {
 		return
 	}
 
-	result, err := uc.userService.ResetPassword(id)
+	result, err := uc.userService.ResetPassword(requestTenant(c), id)
 	if err != nil {
 		var pgErr *pgconn.PgError
 		if errors.As(err, &pgErr) {

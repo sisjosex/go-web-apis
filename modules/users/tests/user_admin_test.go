@@ -10,6 +10,7 @@ import (
 	"testing"
 	"time"
 
+	"josex/web/config"
 	"josex/web/modules/core/testhelpers"
 	"josex/web/modules/users/models"
 
@@ -147,4 +148,136 @@ func TestUsers_ResetPassword(t *testing.T) {
 	stranger := outsider(t)
 	w = stranger.DoRequest("POST", "/users/"+id+"/reset-password", nil, testCompany)
 	assert.Equal(t, http.StatusForbidden, w.Code, w.Body.String())
+}
+
+// USERS-013: the user routes reach a user of the caller's workspace only.
+
+// ownWorkspace signs in a new user who owns a fresh workspace and answers it with that workspace's header.
+func ownWorkspace(t *testing.T) (*testhelpers.ApiTestHelper, map[string]string) {
+	t.Helper()
+	owner := outsider(t)
+	slug := fmt.Sprintf("users-scope-%d", time.Now().UnixNano())
+	w := owner.DoRequest("POST", "/tenants/self-service", map[string]interface{}{"slug": slug, "name": "Scope"}, nil)
+	require.Contains(t, []int{http.StatusOK, http.StatusCreated}, w.Code, w.Body.String())
+	return owner, map[string]string{"X-Tenant-Slug": slug}
+}
+
+// allowDeletion turns ALLOW_USER_DELETION on for one test; .env.test leaves it off. Call it after the
+// helper is set up, which loads the config.
+func allowDeletion(t *testing.T) {
+	t.Helper()
+	usersConfig := config.ModularAppConfig.Users
+	previous := usersConfig.AllowUserDeletion
+	usersConfig.AllowUserDeletion = true
+	t.Cleanup(func() { usersConfig.AllowUserDeletion = previous })
+}
+
+// TestUsers_OtherWorkspaceReadsAsUnknown - an owner of another workspace gets a test-company user's id
+// answered exactly like an id that does not exist, on every route (D1).
+func TestUsers_OtherWorkspaceReadsAsUnknown(t *testing.T) {
+	helper := setupSuperAdmin(t)
+	defer helper.Close()
+	allowDeletion(t)
+	id, email := createTenantUser(t, helper, "scope-target")
+	owner, ownHeader := ownWorkspace(t)
+
+	w := owner.DoRequest("GET", "/users/"+id, nil, ownHeader)
+	assert.Equal(t, http.StatusNotFound, w.Code, "read: %s", w.Body.String())
+	assert.NotContains(t, w.Body.String(), email)
+
+	w = owner.DoRequest("PUT", "/users/"+id, map[string]interface{}{"first_name": "Hijack"}, ownHeader)
+	assert.Equal(t, http.StatusNotFound, w.Code, "edit: %s", w.Body.String())
+
+	w = owner.DoRequest("DELETE", "/users/"+id, nil, ownHeader)
+	assert.Equal(t, http.StatusNotFound, w.Code, "delete: %s", w.Body.String())
+
+	// Reset answers an unknown id with 200 so ids are not probed; another workspace's user is unknown.
+	w = owner.DoRequest("POST", "/users/"+id+"/reset-password", nil, ownHeader)
+	assert.Equal(t, http.StatusOK, w.Code, "reset: %s", w.Body.String())
+	time.Sleep(200 * time.Millisecond) // the audit row of a sent reset is written in a goroutine
+	w = owner.DoRequest("GET", "/users/audit?action=user.password-reset", nil, ownHeader)
+	require.Equal(t, http.StatusOK, w.Code, w.Body.String())
+	var audit models.UserAuditListResponse
+	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &audit))
+	assert.Empty(t, audit.Entries, "no reset was issued: %s", w.Body.String())
+
+	w = helper.DoRequest("GET", "/users/"+id, nil, testCompany)
+	require.Equal(t, http.StatusOK, w.Code, w.Body.String())
+	assert.NotContains(t, w.Body.String(), "Hijack", "the user is untouched")
+}
+
+// TestUsers_UpdateIgnoresBodyID - the path names the user; an id in the body changes nothing.
+func TestUsers_UpdateIgnoresBodyID(t *testing.T) {
+	helper := setupSuperAdmin(t)
+	defer helper.Close()
+	pathID, _ := createTenantUser(t, helper, "scope-path")
+	bodyID, _ := createTenantUser(t, helper, "scope-body")
+
+	w := helper.DoRequest("PUT", "/users/"+pathID, map[string]interface{}{"id": bodyID, "first_name": "PathUser"}, testCompany)
+	require.Equal(t, http.StatusOK, w.Code, w.Body.String())
+	assert.Contains(t, w.Body.String(), pathID, "the path's user is the one answered")
+
+	w = helper.DoRequest("GET", "/users/"+pathID, nil, testCompany)
+	assert.Contains(t, w.Body.String(), "PathUser", "the path's user is updated")
+	w = helper.DoRequest("GET", "/users/"+bodyID, nil, testCompany)
+	assert.NotContains(t, w.Body.String(), "PathUser", "the body's user is untouched")
+}
+
+// sharedUser creates a test-company user and adds it to a second workspace; it answers the user's id,
+// email and password plus the second workspace's owner and header.
+func sharedUser(t *testing.T, helper *testhelpers.ApiTestHelper) (string, string, string, *testhelpers.ApiTestHelper, map[string]string) {
+	t.Helper()
+	id, email := createTenantUser(t, helper, "scope-shared")
+	owner, ownHeader := ownWorkspace(t)
+	w := owner.DoRequest("POST", "/tenants/"+ownHeader["X-Tenant-Slug"]+"/users",
+		map[string]interface{}{"user_id": id, "role": "member"}, ownHeader)
+	require.Contains(t, []int{http.StatusOK, http.StatusCreated}, w.Code, "add to the second workspace: %s", w.Body.String())
+	return id, email, "AdminTarget1!", owner, ownHeader
+}
+
+// TestUsers_DeleteSharedUserLeavesOtherWorkspace - deleting a user who also works elsewhere removes it
+// from this workspace only; it keeps signing in and the other workspace keeps it (D2).
+func TestUsers_DeleteSharedUserLeavesOtherWorkspace(t *testing.T) {
+	helper := setupSuperAdmin(t)
+	defer helper.Close()
+	allowDeletion(t)
+	id, email, password, owner, ownHeader := sharedUser(t, helper)
+
+	w := helper.DoRequest("DELETE", "/users/"+id, nil, testCompany)
+	require.Equal(t, http.StatusOK, w.Code, w.Body.String())
+
+	w = helper.DoRequest("GET", "/users/"+id, nil, testCompany)
+	assert.Equal(t, http.StatusNotFound, w.Code, "gone from test-company: %s", w.Body.String())
+	w = helper.DoRequest("GET", "/users?search="+email, nil, testCompany)
+	require.Equal(t, http.StatusOK, w.Code, w.Body.String())
+	assert.NotContains(t, w.Body.String(), email, "test-company's list no longer has it")
+
+	w = owner.DoRequest("GET", "/users/"+id, nil, ownHeader)
+	assert.Equal(t, http.StatusOK, w.Code, "the other workspace keeps it: %s", w.Body.String())
+
+	member := testhelpers.SetupApiTest(t)
+	defer member.Close()
+	_, err := member.Login(email, password)
+	assert.NoError(t, err, "the account still signs in")
+}
+
+// TestUsers_SharedAccountLoginIsLocked - on an account in two workspaces the email is refused and the
+// name is not (D3); once it is in one workspace only, the email changes.
+func TestUsers_SharedAccountLoginIsLocked(t *testing.T) {
+	helper := setupSuperAdmin(t)
+	defer helper.Close()
+	id, email, _, owner, ownHeader := sharedUser(t, helper)
+
+	newEmail := fmt.Sprintf("scope-moved-%d@example.com", time.Now().UnixNano())
+	w := helper.DoRequest("PUT", "/users/"+id, map[string]interface{}{"email": newEmail}, testCompany)
+	assert.Equal(t, http.StatusConflict, w.Code, "email on a shared account: %s", w.Body.String())
+	assert.Contains(t, w.Body.String(), "user.update.shared-account")
+
+	w = helper.DoRequest("PUT", "/users/"+id, map[string]interface{}{"first_name": "Shared", "email": email}, testCompany)
+	assert.Equal(t, http.StatusOK, w.Code, "name, with the unchanged email: %s", w.Body.String())
+
+	w = owner.DoRequest("DELETE", "/tenants/"+ownHeader["X-Tenant-Slug"]+"/users/"+id, nil, ownHeader)
+	require.Equal(t, http.StatusOK, w.Code, "leave the second workspace: %s", w.Body.String())
+	w = helper.DoRequest("PUT", "/users/"+id, map[string]interface{}{"email": newEmail}, testCompany)
+	assert.Equal(t, http.StatusOK, w.Code, "email on a single-workspace account: %s", w.Body.String())
 }

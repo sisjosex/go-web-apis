@@ -31,12 +31,12 @@ func (s *userService) ListUsers(query userModels.UserListQuery) (*userModels.Use
 	return s.userRepository.ListUsers(query)
 }
 
-func (s *userService) GetUserById(userID uuid.UUID) (*coreModels.User, error) {
-	return s.userRepository.GetUserById(userID)
+func (s *userService) GetUserById(tenantID, userID uuid.UUID) (*coreModels.User, error) {
+	return s.userRepository.GetUserById(tenantID, userID)
 }
 
-func (s *userService) SoftDeleteUser(userID uuid.UUID) error {
-	return s.userRepository.SoftDeleteUser(userID)
+func (s *userService) SoftDeleteUser(tenantID, userID uuid.UUID) error {
+	return s.userRepository.SoftDeleteUser(tenantID, userID)
 }
 
 func (s *userService) GetStats(tenantID uuid.UUID, excludeUserID *uuid.UUID) (*userModels.UserStatsResponse, error) {
@@ -51,6 +51,6 @@ func (s *userService) AssignToTenant(tenantID, requesterID, userID uuid.UUID, ro
 	return s.userRepository.AssignToTenant(tenantID, requesterID, userID, role)
 }
 
-func (s *userService) ResetPassword(userID uuid.UUID) (*userModels.ResetPasswordResult, error) {
-	return s.userRepository.ResetPasswordToken(userID)
+func (s *userService) ResetPassword(tenantID, userID uuid.UUID) (*userModels.ResetPasswordResult, error) {
+	return s.userRepository.ResetPasswordToken(tenantID, userID)
 }

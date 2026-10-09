@@ -101,6 +101,7 @@ func (r *userRepository) UpdateUser(userDTO userModels.UpdateUserDto) (*coreMode
 
 	query := `
         SELECT * FROM users.sp_update_user(
+p_tenant_id := $14,
 p_id := $1,
 p_first_name := $2,
 p_last_name := $3,
@@ -131,6 +132,7 @@ p_website_url := $13
 		userDTO.ProfilePictureUrl,
 		userDTO.Bio,
 		userDTO.WebsiteUrl,
+		userDTO.TenantID,
 	}
 
 	user := &coreModels.User{}
@@ -264,12 +266,12 @@ func (r *userRepository) ListUsers(query userModels.UserListQuery) (*userModels.
 	}, nil
 }
 
-func (r *userRepository) GetUserById(userID uuid.UUID) (*coreModels.User, error) {
+func (r *userRepository) GetUserById(tenantID, userID uuid.UUID) (*coreModels.User, error) {
 	ctx := context.Background()
-	query := `SELECT * FROM users.sp_get_user_by_id(p_user_id := $1)`
+	query := `SELECT * FROM users.sp_get_user_by_id(p_tenant_id := $1, p_user_id := $2)`
 
 	var user coreModels.User
-	err := r.dbService.QueryRow(ctx, query, userID).Scan(
+	err := r.dbService.QueryRow(ctx, query, tenantID, userID).Scan(
 		&user.ID,
 		&user.FirstName,
 		&user.LastName,
@@ -339,12 +341,12 @@ func (r *userRepository) AssignToTenant(tenantID, requesterID, userID uuid.UUID,
 	return nil
 }
 
-func (r *userRepository) SoftDeleteUser(userID uuid.UUID) error {
+func (r *userRepository) SoftDeleteUser(tenantID, userID uuid.UUID) error {
 	ctx := context.Background()
-	query := `SELECT users.sp_soft_delete_user(p_user_id := $1)`
+	query := `SELECT users.sp_soft_delete_user(p_tenant_id := $1, p_user_id := $2)`
 
 	var result bool
-	err := r.dbService.QueryRow(ctx, query, userID).Scan(&result)
+	err := r.dbService.QueryRow(ctx, query, tenantID, userID).Scan(&result)
 	if err != nil {
 		var pgErr *pgconn.PgError
 		if errors.As(err, &pgErr) {
@@ -356,8 +358,8 @@ func (r *userRepository) SoftDeleteUser(userID uuid.UUID) error {
 	return nil
 }
 
-func (r *userRepository) ResetPasswordToken(userID uuid.UUID) (*userModels.ResetPasswordResult, error) {
-	user, err := r.GetUserById(userID)
+func (r *userRepository) ResetPasswordToken(tenantID, userID uuid.UUID) (*userModels.ResetPasswordResult, error) {
+	user, err := r.GetUserById(tenantID, userID)
 	if err != nil {
 		return nil, err
 	}

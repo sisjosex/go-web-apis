@@ -8,6 +8,7 @@
   "user.create.password.no-password-number": "Password must contain at least one number",
   "user.create.password.missing-special-chars": "Password must contain at least one special character (!@#$%^&*(),.?\":{}|<>)",
   "user.update.failed": "Failed to update user",
+  "user.update.shared-account": "This account belongs to more than one workspace; its email and password cannot be changed here",
   "user.update.password.current-invalid": "Current password is invalid",
   "user.update.password.same-password": "New password cannot be the same as current password",
   "user.create.validation-failed": "User validation failed",

@@ -25,7 +25,7 @@ type CreateUserDto struct {
 
 // UpdateUserDto for updating a user (admin operation)
 type UpdateUserDto struct {
-	ID                uuid.UUID            `json:"id" binding:"uuidv4"`
+	ID                uuid.UUID            `json:"-"` // set server-side from the path; the body never picks the user
 	FirstName         *string              `json:"first_name"`
 	LastName          *string              `json:"last_name"`
 	Phone             *string              `json:"phone"`
