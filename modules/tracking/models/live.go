@@ -50,6 +50,16 @@ type TripLive struct {
 	Position json.RawMessage `json:"position"`
 	Eta      []StopEta       `json:"eta"`
 	LiveStory
+	// Trail is what the bus drove since the caller's trail_since (TRACK-052 D4); null unless in progress.
+	Trail *LiveTrail `json:"trail"`
+}
+
+// LiveTrail is the trip's fixes after a cursor, precision-6 polyline. LastAt is the newest fix's time —
+// the next trail_since — and null when nothing new arrived.
+type LiveTrail struct {
+	Polyline6 string     `json:"polyline6"`
+	Points    int        `json:"points"`
+	LastAt    *time.Time `json:"last_at"`
 }
 
 // LiveStory is what a live map draws beyond the stops (MOBILE-023): the planned line, the vehicle's

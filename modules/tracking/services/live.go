@@ -28,8 +28,9 @@ func (s *LiveService) Fleet(ctx context.Context, tenantID uuid.UUID, organizatio
 
 // Trip is the trip's live snapshot: detail, last position and the ETA to each pending stop — one
 // query, and at most one routing call per 30 s per trip (D1).
-func (s *LiveService) Trip(ctx context.Context, tenantID, tripID uuid.UUID) (*models.TripLive, TripEta, error) {
-	live, pending, err := s.repo.TripLive(ctx, tenantID, tripID)
+// trailSince is the caller's cursor: the trail carries only the fixes after it (TRACK-052 D4).
+func (s *LiveService) Trip(ctx context.Context, tenantID, tripID uuid.UUID, trailSince *time.Time) (*models.TripLive, TripEta, error) {
+	live, pending, err := s.repo.TripLive(ctx, tenantID, tripID, trailSince)
 	if err != nil {
 		return nil, TripEta{}, err
 	}

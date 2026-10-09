@@ -362,7 +362,9 @@ func trackingSocket(d routeDeps, chains tenantChains, live *trackingServices.Liv
 		eta, ok := live.CachedEta(ctx, tripID)
 		if !ok {
 			var err error
-			if _, eta, err = live.Trip(withTenant(ctx, session), session.TenantID, tripID); err != nil {
+			// The ETA frame needs no trail: a cursor of now reads none (TRACK-052).
+			now := time.Now()
+			if _, eta, err = live.Trip(withTenant(ctx, session), session.TenantID, tripID, &now); err != nil {
 				log.Printf("⚠️  realtime: eta %s: %v", tripID, err)
 				return nil, time.Time{}, false
 			}

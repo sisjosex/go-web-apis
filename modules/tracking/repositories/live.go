@@ -5,6 +5,8 @@ import (
 	"encoding/json"
 	"time"
 
+	geoModels "josex/web/modules/geo/models"
+	"josex/web/modules/geo/services/routing"
 	trackingErrors "josex/web/modules/tracking/errors"
 	"josex/web/modules/tracking/models"
 
@@ -31,16 +33,20 @@ func (r *TrackingRepository) LiveFleet(ctx context.Context, tenantID uuid.UUID, 
 
 // TripLive answers the trip detail with its vehicle's last position, and the pending stops the ETA
 // runs to. Eta is left empty for the caller.
-func (r *TrackingRepository) TripLive(ctx context.Context, tenantID, tripID uuid.UUID) (*models.TripLive, []models.PendingStop, error) {
+func (r *TrackingRepository) TripLive(ctx context.Context, tenantID, tripID uuid.UUID, trailSince *time.Time) (*models.TripLive, []models.PendingStop, error) {
 	var live models.TripLive
-	var stops, position, pending, path, destination []byte
-	err := r.dbService.QueryRow(ctx, `SELECT * FROM tracking.sp_trip_live(p_tenant_id := $1, p_trip_id := $2)`, tenantID, tripID).
+	var stops, position, pending, path, destination, trail []byte
+	err := r.dbService.QueryRow(ctx,
+		`SELECT * FROM tracking.sp_trip_live(p_tenant_id := $1, p_trip_id := $2, p_trail_since := $3)`, tenantID, tripID, trailSince).
 		Scan(append(scanTrip(&live.Trip), &stops, &live.Polyline, &live.DistanceKm, &live.TraceSource, &position, &pending,
-			&path, &live.VehicleType, &live.OrganizationKind, &destination)...)
+			&path, &live.VehicleType, &live.OrganizationKind, &destination, &trail)...)
 	if err != nil {
 		return nil, nil, mapTripError(err, trackingErrors.TripNotFound)
 	}
 	if err := scanStory(&live.LiveStory, path, destination); err != nil {
+		return nil, nil, err
+	}
+	if live.Trail, err = scanTrail(trail); err != nil {
 		return nil, nil, err
 	}
 	if err := json.Unmarshal(stops, &live.Stops); err != nil {
@@ -88,6 +94,30 @@ func (r *TrackingRepository) RiderLive(ctx context.Context, tenantID, riderID uu
 }
 
 // scanStory reads the two JSONB columns of a live snapshot's story; NULL leaves the field nil.
+// scanTrail encodes the SP's [[lat, lng], …] as a precision-6 polyline (TRACK-052 D4): a fifth of the
+// JSON's size on the wire. Nil stays nil — the trip is not running.
+func scanTrail(raw []byte) (*models.LiveTrail, error) {
+	if raw == nil {
+		return nil, nil
+	}
+	var row struct {
+		Points [][2]float64 `json:"points"`
+		LastAt *time.Time   `json:"last_at"`
+	}
+	if err := json.Unmarshal(raw, &row); err != nil {
+		return nil, err
+	}
+	points := make([]geoModels.LatLng, len(row.Points))
+	for i, p := range row.Points {
+		points[i] = geoModels.LatLng{Lat: p[0], Lng: p[1]}
+	}
+	trail := &models.LiveTrail{Points: len(points), LastAt: row.LastAt}
+	if len(points) > 0 {
+		trail.Polyline6 = routing.EncodePolyline6(points)
+	}
+	return trail, nil
+}
+
 func scanStory(story *models.LiveStory, path, destination []byte) error {
 	if path != nil {
 		story.PlannedPath = &models.PlannedPath{}

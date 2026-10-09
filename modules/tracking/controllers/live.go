@@ -2,6 +2,7 @@ package controllers
 
 import (
 	"net/http"
+	"time"
 
 	coreErrors "josex/web/modules/core/errors"
 	"josex/web/modules/core/utils"
@@ -71,6 +72,7 @@ func orNotFound(err error) error {
 // @Security BearerAuth
 // @Param trip_id path string true "Trip ID (UUID)"
 // @Param path_etag query string false "The planned_path.etag the caller holds: the line is then left out"
+// @Param trail_since query string false "RFC3339: the trail carries only the fixes after it (the last trail.last_at held)"
 // @Success 200 {object} models.TripLive
 // @Failure 400 {object} coreErrors.ErrorResponse
 // @Failure 404 {object} coreErrors.ErrorResponse
@@ -94,7 +96,12 @@ func (ctrl *LiveController) GetTripLive(c *gin.Context) {
 			return
 		}
 	}
-	live, _, err := ctrl.live.Trip(c.Request.Context(), tenantID, tripID)
+	// A cursor that does not parse is no cursor: the whole trail comes back, which is never wrong.
+	var trailSince *time.Time
+	if since, err := time.Parse(time.RFC3339Nano, c.Query("trail_since")); err == nil {
+		trailSince = &since
+	}
+	live, _, err := ctrl.live.Trip(c.Request.Context(), tenantID, tripID, trailSince)
 	if err != nil {
 		tripErrorResponse(c, err)
 		return

@@ -162,7 +162,7 @@ func TestTripLive_EtaPerPendingStop(t *testing.T) {
 	eta := trackingServices.NewEtaService(router, geoServices.NewGeoService(nil, router, nil, geoConf), helper.Valkey())
 	live2 := trackingServices.NewLiveService(trackingRepos.NewTrackingRepository(helper.DB()), eta)
 	for i := 0; i < 2; i++ {
-		if _, _, err := live2.Trip(ctx, uuid.MustParse(TestTenantID), uuid.MustParse(tripID)); err != nil {
+		if _, _, err := live2.Trip(ctx, uuid.MustParse(TestTenantID), uuid.MustParse(tripID), nil); err != nil {
 			t.Fatalf("trip live %d: %v", i, err)
 		}
 	}
