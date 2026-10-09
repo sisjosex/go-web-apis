@@ -34,7 +34,7 @@ func dateArg(d *coreModels.DateOnly) *time.Time {
 func scanRouteSchedule(s *models.RouteSchedule) []any {
 	return []any{
 		&s.ID, &s.RouteID, &s.DaysOfWeek, &s.StartTime, &s.ValidFrom, &s.ValidUntil,
-		&s.CalendarID, &s.CalendarName, &s.CreatedAt, &s.UpdatedAt,
+		&s.CalendarID, &s.CalendarName, &s.CreatedAt, &s.UpdatedAt, &s.ArrivalTime,
 	}
 }
 
@@ -62,6 +62,8 @@ func mapScheduleError(err error, fallbackCode string) error {
 			return &trackingErrors.TrackingError{Code: trackingErrors.ScheduleDaysOfWeek, Err: pgErr}
 		case "calendar.not-found":
 			return &trackingErrors.TrackingError{Code: trackingErrors.CalendarNotFound, Err: pgErr}
+		case "route.arrival-outbound-only":
+			return &trackingErrors.TrackingError{Code: trackingErrors.ScheduleArrivalOutboundOnly, Err: pgErr}
 		}
 	}
 	return &trackingErrors.TrackingError{Code: fallbackCode, Err: err}
@@ -97,10 +99,11 @@ func (r *TrackingRepository) CreateRouteSchedule(ctx context.Context, tenantID u
 			p_start_time   := $4,
 			p_valid_from   := $5,
 			p_valid_until  := $6,
-			p_calendar_id  := $7
+			p_calendar_id  := $7,
+			p_arrival_time := $8::TIME
 		)
 	`, tenantID, routeID, dto.DaysOfWeek, dto.StartTime, time.Time(dto.ValidFrom),
-		dateArg(dto.ValidUntil), dto.CalendarID,
+		dateArg(dto.ValidUntil), dto.CalendarID, dto.ArrivalTime,
 	).Scan(scanRouteSchedule(&schedule)...)
 	if err != nil {
 		return nil, mapScheduleError(err, trackingErrors.ScheduleCreateFailed)
@@ -120,10 +123,11 @@ func (r *TrackingRepository) UpdateRouteSchedule(ctx context.Context, tenantID u
 			p_valid_until  := $6,
 			p_calendar_id  := $7,
 			p_clear_valid_until := $8,
-			p_clear_calendar    := $9
+			p_clear_calendar    := $9,
+			p_arrival_time      := $10::TIME
 		)
 	`, tenantID, scheduleID, dto.DaysOfWeek, dto.StartTime, dateArg(dto.ValidFrom),
-		dateArg(dto.ValidUntil), dto.CalendarID, dto.ClearValidUntil, dto.ClearCalendar,
+		dateArg(dto.ValidUntil), dto.CalendarID, dto.ClearValidUntil, dto.ClearCalendar, dto.ArrivalTime,
 	).Scan(scanRouteSchedule(&schedule)...)
 	if err != nil {
 		return nil, mapScheduleError(err, trackingErrors.ScheduleUpdateFailed)

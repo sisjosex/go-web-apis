@@ -164,6 +164,11 @@ const (
 	ScheduleDaysOfWeek = "tracking.schedule.days-of-week"
 	// ScheduleRange refuses an end date before the start date (the table's CHECK).
 	ScheduleRange = "tracking.schedule.range"
+	// ScheduleTimeChoice refuses a schedule write naming both the departure and the arrival, or a create
+	// naming neither (TRACK-055 D2).
+	ScheduleTimeChoice = "tracking.schedule.time-choice"
+	// ScheduleArrivalOutboundOnly refuses an arrival on a return: only an outbound keeps one (TRACK-055 D2).
+	ScheduleArrivalOutboundOnly = "tracking.route.arrival-outbound-only"
 
 	// Calendar errors (TR0281-TR0300)
 	CalendarNotFound     = "tracking.calendar.not-found"

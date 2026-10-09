@@ -174,6 +174,8 @@
   "tracking.schedule.split-date": "La fecha de corte debe estar dentro de la vigencia del horario",
   "tracking.schedule.days-of-week": "Elige al menos un día de la semana",
   "tracking.schedule.range": "La fecha de fin debe ser igual o posterior a la de inicio",
+  "tracking.schedule.time-choice": "Indica la hora de salida o la de llegada, no ambas",
+  "tracking.route.arrival-outbound-only": "Solo la ruta de ingreso tiene hora de llegada",
   "tracking.calendar.not-found": "Calendario no encontrado",
   "tracking.calendar.create.failed": "Error al crear el calendario",
   "tracking.calendar.update.failed": "Error al actualizar el calendario",

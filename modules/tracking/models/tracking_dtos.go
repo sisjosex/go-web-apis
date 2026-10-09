@@ -462,11 +462,14 @@ type ReplaceRouteVersionStopsDto struct {
 // Monday … bit 6 Sunday — so 0 would be a schedule that never runs and is refused here rather than
 // stored. StartTime crosses the wire as HH:MM, which is what comes back.
 type CreateRouteScheduleDto struct {
-	DaysOfWeek int16                `json:"days_of_week" binding:"required,min=1,max=127"`
-	StartTime  string               `json:"start_time" binding:"required,datetime=15:04"`
-	ValidFrom  coreModels.DateOnly  `json:"valid_from" binding:"required" time_format:"2006-01-02"`
-	ValidUntil *coreModels.DateOnly `json:"valid_until" binding:"omitempty" time_format:"2006-01-02"`
-	CalendarID *uuid.UUID           `json:"calendar_id" binding:"omitempty,uuidv4"`
+	DaysOfWeek int16   `json:"days_of_week" binding:"required,min=1,max=127"`
+	StartTime  *string `json:"start_time" binding:"omitempty,datetime=15:04"`
+	// ArrivalTime, on an outbound and instead of StartTime, sets the departure from the stops' estimate
+	// and keeps it following them (TRACK-055 D2).
+	ArrivalTime *string              `json:"arrival_time" binding:"omitempty,datetime=15:04"`
+	ValidFrom   coreModels.DateOnly  `json:"valid_from" binding:"required" time_format:"2006-01-02"`
+	ValidUntil  *coreModels.DateOnly `json:"valid_until" binding:"omitempty" time_format:"2006-01-02"`
+	CalendarID  *uuid.UUID           `json:"calendar_id" binding:"omitempty,uuidv4"`
 }
 
 // UpdateRouteScheduleDto edits a schedule in place. Every field is optional: the SP keeps what it is
@@ -476,6 +479,7 @@ type CreateRouteScheduleDto struct {
 type UpdateRouteScheduleDto struct {
 	DaysOfWeek      *int16               `json:"days_of_week" binding:"omitempty,min=1,max=127"`
 	StartTime       *string              `json:"start_time" binding:"omitempty,datetime=15:04"`
+	ArrivalTime     *string              `json:"arrival_time" binding:"omitempty,datetime=15:04"`
 	ValidFrom       *coreModels.DateOnly `json:"valid_from" binding:"omitempty" time_format:"2006-01-02"`
 	ValidUntil      *coreModels.DateOnly `json:"valid_until" binding:"omitempty" time_format:"2006-01-02"`
 	CalendarID      *uuid.UUID           `json:"calendar_id" binding:"omitempty,uuidv4"`

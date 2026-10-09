@@ -197,6 +197,9 @@ type RouteSchedule struct {
 	CalendarName *string              `json:"calendar_name"`
 	CreatedAt    time.Time            `json:"created_at"`
 	UpdatedAt    time.Time            `json:"updated_at"`
+	// ArrivalTime is the outbound's arrival the estimate keeps (start_time + its minutes), null once a
+	// user fixed the departure (TRACK-055 D2).
+	ArrivalTime *string `json:"arrival_time"`
 }
 
 // Calendar is a named set of dates a schedule points at — a school year, the public holidays.

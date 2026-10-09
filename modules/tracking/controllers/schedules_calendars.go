@@ -32,7 +32,8 @@ func scheduleErrorResponse(c *gin.Context, err error) bool {
 	case trackingErrors.ScheduleOverlap:
 		c.JSON(http.StatusConflict, coreErrors.BuildErrorSingle(c, trackingErr.Code))
 		return true
-	case trackingErrors.ScheduleSplitDate, trackingErrors.ScheduleDaysOfWeek, trackingErrors.ScheduleRange:
+	case trackingErrors.ScheduleSplitDate, trackingErrors.ScheduleDaysOfWeek, trackingErrors.ScheduleRange,
+		trackingErrors.ScheduleArrivalOutboundOnly:
 		c.JSON(http.StatusBadRequest, coreErrors.BuildErrorSingle(c, trackingErr.Code))
 		return true
 	}
@@ -103,6 +104,10 @@ func (ctrl *TrackingController) CreateRouteSchedule(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, coreErrors.BuildErrorDetail(c, trackingErrors.ScheduleCreateFailed, utils.ExtractValidationError(c, err)))
 		return
 	}
+	if (dto.StartTime == nil) == (dto.ArrivalTime == nil) {
+		c.JSON(http.StatusBadRequest, coreErrors.BuildErrorSingle(c, trackingErrors.ScheduleTimeChoice))
+		return
+	}
 
 	schedule, err := ctrl.trackingService.CreateRouteSchedule(c.Request.Context(), tenantID, routeID, &dto)
 	if err != nil {
@@ -144,6 +149,10 @@ func (ctrl *TrackingController) UpdateRouteSchedule(c *gin.Context) {
 	var dto models.UpdateRouteScheduleDto
 	if err := c.ShouldBindJSON(&dto); err != nil {
 		c.JSON(http.StatusBadRequest, coreErrors.BuildErrorDetail(c, trackingErrors.ScheduleUpdateFailed, utils.ExtractValidationError(c, err)))
+		return
+	}
+	if dto.StartTime != nil && dto.ArrivalTime != nil {
+		c.JSON(http.StatusBadRequest, coreErrors.BuildErrorSingle(c, trackingErrors.ScheduleTimeChoice))
 		return
 	}
 
