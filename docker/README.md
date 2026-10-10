@@ -71,22 +71,40 @@ The settings are on the `postgres` command line in the compose file: NVMe costs
 compressed WAL, `jit=off` (short SP calls lose to JIT's warm-up), two parallel workers
 per query, four in total.
 
-- Slow queries: anything over 500 ms is one line in `docker compose logs postgres`.
+- Slow queries: anything over 500 ms is one line in `docker compose logs postgres`. The
+  threshold lives in `postgresql.auto.conf` (set by `postgres/init.sql`), not on the command
+  line, so `observe.sh querylog on|off` can change it live — see Metrics.
 - Profile: `pg_stat_statements` is preloaded and created by `postgres/init.sql` on the
   first boot. On a volume that existed before INFRA-004 run it once by hand:
   `docker compose exec postgres psql -U postgres -d web -c 'CREATE EXTENSION pg_stat_statements'`.
   Then `SELECT calls, round(mean_exec_time) ms, left(query, 80) FROM pg_stat_statements
   ORDER BY total_exec_time DESC LIMIT 10;`
 
-## Metrics (INFRA-011)
+## Metrics (INFRA-011, INFRA-016)
 
 Prometheus scrapes `/metrics` of api-platform and api-worker (`METRICS_ADDR=:9100`, compose
-network only) and PostgreSQL through postgres-exporter (`pg_stat_statements`, table scans).
-Grafana provisions one dashboard, *Taypi — API and database*: p50/p95 per route, requests
-and 5xx, Go memory, the top statements by total and by mean time, the tables read by full
-scan. It listens on the box's loopback only:
+network only) and PostgreSQL through postgres-exporter (`pg_stat_statements`, table scans),
+every 60 s, and keeps 15 days. Grafana provisions one dashboard, *Taypi — API and database*:
+p50/p95 per route, requests and 5xx, Go memory, the top statements by total and by mean
+time, the tables read by full scan.
+
+Always on, because they are cheap and history needs them: `pg_stat_statements`, the 500 ms
+slow-query line, Prometheus and postgres-exporter. On demand, through `docker/observe.sh`:
+
+    docker/observe.sh                    # status of both
+    docker/observe.sh grafana on         # ~150 MB while up; a deploy neither starts nor stops it
+    docker/observe.sh grafana off
+    docker/observe.sh querylog on        # every statement with its duration in `docker compose logs postgres`
+    docker/observe.sh querylog off       # back to ≥500 ms only
+
+Grafana is in the compose profile `metrics` and listens on the box's loopback only:
 
     ssh -L 3001:127.0.0.1:3001 josex@<box>     # then http://localhost:3001, admin / GRAFANA_ADMIN_PASSWORD
+
+`querylog` is `ALTER SYSTEM` + `pg_reload_conf()`: no restart, it survives one, and its disk
+is capped by the logging below. Turn it off when done — every statement is a log line. A
+volume from before INFRA-016 has no threshold in `postgresql.auto.conf`; `querylog off`
+writes it once.
 
 A statement that leads the totals is one spec: find its `queryid` in
 `SELECT queryid, query FROM pg_stat_statements WHERE queryid = …`. A request slower than

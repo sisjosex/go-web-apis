@@ -44,9 +44,11 @@ services:
     restart: unless-stopped
     # Memory and I/O settings for this box (D2): 2 GB of buffers, 6 GB the planner may
     # assume cached, NVMe costs, no JIT for short SP calls, checkpoints every 2 GB of
-    # WAL, 200 connections for the pool budget (D1), a 500 ms slow-query line and
-    # pg_stat_statements as the profiler. Parallel workers share memory through
-    # /dev/shm, which Docker caps at 64 MB unless shm_size says otherwise.
+    # WAL, 200 connections for the pool budget (D1) and pg_stat_statements as the
+    # profiler. Parallel workers share memory through /dev/shm, which Docker caps at
+    # 64 MB unless shm_size says otherwise. log_min_duration_statement (500 ms) is not
+    # here: a -c flag outranks ALTER SYSTEM, and docker/observe.sh flips it at runtime
+    # through ALTER SYSTEM (INFRA-016).
     command:
       - postgres
       - -c
@@ -75,8 +77,6 @@ services:
       - max_parallel_workers_per_gather=2
       - -c
       - jit=off
-      - -c
-      - log_min_duration_statement=500ms
       - -c
       - shared_preload_libraries=pg_stat_statements
     shm_size: 256m
@@ -397,8 +397,9 @@ services:
   # ============ METRICS (INFRA-011 D1) ============
   # Prometheus keeps 15 days of the APIs' latency per route and PostgreSQL's
   # statement statistics; Grafana draws them. ~0.5 GB together under hard limits.
-  # Grafana listens on the box's loopback only: ssh -L 3001:127.0.0.1:3001 josex@<box>
-  # and open http://localhost:3001 (docker/README.md → Metrics).
+  # Grafana runs only on demand (INFRA-016): docker/observe.sh grafana on|off. It
+  # listens on the box's loopback only: ssh -L 3001:127.0.0.1:3001 josex@<box> and
+  # open http://localhost:3001 (docker/README.md → Metrics).
   postgres-exporter:
     image: quay.io/prometheuscommunity/postgres-exporter:v0.17.1 # v0.16+ reads PostgreSQL 17 (renamed blk_*_time, pg_stat_checkpointer)
     restart: unless-stopped
@@ -433,6 +434,7 @@ services:
 
   grafana:
     image: grafana/grafana-oss:11.1.0
+    profiles: [metrics]
     restart: unless-stopped
     mem_limit: 192m
     cpu_shares: 256
