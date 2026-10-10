@@ -83,8 +83,8 @@ func (s *moduleService) UpsertTenantModule(ctx context.Context, tenantID uuid.UU
 		return nil, err
 	}
 	if !dto.IsEnabled {
-		if dependents := registry.RequiredBy(moduleCode, enabled); len(dependents) > 0 {
-			return nil, &tenancyErrors.ModuleRequiredByError{Module: moduleCode, Dependents: dependents}
+		if err := refuseOff(moduleCode, enabled); err != nil {
+			return nil, err
 		}
 	}
 
@@ -103,14 +103,25 @@ func (s *moduleService) UpsertTenantModule(ctx context.Context, tenantID uuid.UU
 	return s.moduleRepository.EnableWithRequirements(ctx, tenantID, missing, moduleCode, dto, enabledBy)
 }
 
-// DisableTenantModule refuses while an enabled module still requires this one.
+// refuseOff answers why moduleCode cannot be turned off: it is locked, or an enabled module requires it.
+func refuseOff(moduleCode string, enabled map[string]bool) error {
+	if desc, ok := registry.Get(moduleCode); ok && desc.Locked {
+		return &tenancyErrors.ModuleLockedError{Module: moduleCode}
+	}
+	if dependents := registry.RequiredBy(moduleCode, enabled); len(dependents) > 0 {
+		return &tenancyErrors.ModuleRequiredByError{Module: moduleCode, Dependents: dependents}
+	}
+	return nil
+}
+
+// DisableTenantModule refuses a locked module, and one an enabled module still requires.
 func (s *moduleService) DisableTenantModule(ctx context.Context, tenantID uuid.UUID, moduleCode string) error {
 	enabled, err := s.enabledCodes(ctx, tenantID)
 	if err != nil {
 		return err
 	}
-	if dependents := registry.RequiredBy(moduleCode, enabled); len(dependents) > 0 {
-		return &tenancyErrors.ModuleRequiredByError{Module: moduleCode, Dependents: dependents}
+	if err := refuseOff(moduleCode, enabled); err != nil {
+		return err
 	}
 	defer InvalidateTenantModules(tenantID)
 	return s.moduleRepository.DisableTenantModule(ctx, tenantID, moduleCode)

@@ -25,6 +25,8 @@ type ModuleDescriptor struct {
 	Complements []string `json:"complements"`
 	// Verticals are the business types it belongs to; a module offered to every business has none.
 	Verticals []string `json:"verticals"`
+	// Locked modules are always on: the API refuses to disable them (TENANCY-004), settings shows them on.
+	Locked bool `json:"locked"`
 }
 
 // Vertical is a business type the onboarding offers (TENANCY-003 D1): picking it enables Modules.

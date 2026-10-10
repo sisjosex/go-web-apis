@@ -46,5 +46,10 @@
   "permission.sales.payments-create": "Registrar pagos",
   "permission.sales.payments-create.description": "Registrar nuevos pagos",
   "permission.sales.reports-read": "Ver reportes de ventas",
-  "permission.sales.reports-read.description": "Acceder a reportes y analíticas de ventas"
+  "permission.sales.reports-read.description": "Acceder a reportes y analíticas de ventas",
+  "module.sales.description": "Pedidos, cotizaciones y gestión de clientes.",
+  "module.sales.feature.0": "Gestión de pedidos",
+  "module.sales.feature.1": "Generación de cotizaciones",
+  "module.sales.feature.2": "Base de clientes",
+  "module.sales.feature.3": "Reportes de ingresos"
 }

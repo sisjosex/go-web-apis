@@ -98,5 +98,10 @@
   "inventory.import.product-inconsistent": "La columna {value} dice algo distinto de la primera fila de este producto; repítela o déjala vacía",
   "inventory.import.option-image-inconsistent": "Dos filas con la opción {value} nombran archivos de imagen distintos",
   "inventory.import.combination-duplicate": "Este archivo ya trae esta combinación",
-  "inventory.import.combination-failed": "Error al crear la combinación"
+  "inventory.import.combination-failed": "Error al crear la combinación",
+  "module.inventory.description": "Gestión de stock, almacenes y catálogo de productos.",
+  "module.inventory.feature.0": "Catálogo de productos",
+  "module.inventory.feature.1": "Gestión de almacenes",
+  "module.inventory.feature.2": "Movimientos de stock",
+  "module.inventory.feature.3": "Alertas de stock bajo"
 }

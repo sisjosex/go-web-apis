@@ -60,6 +60,8 @@ const (
 	ModuleUpdateFailed = "tenant.module.update-failed"
 	// ModuleRequiredBy refuses to turn off a module another enabled one needs (TENANCY-003 D1).
 	ModuleRequiredBy = "tenant.module.required-by"
+	// ModuleLocked refuses to turn off a module that is always on (TENANCY-004).
+	ModuleLocked = "tenant.module.locked"
 )
 
 // ModuleRequiredByError names the enabled modules that still need Module; the API answers 409.
@@ -69,6 +71,13 @@ type ModuleRequiredByError struct {
 }
 
 func (e *ModuleRequiredByError) Error() string { return ModuleRequiredBy }
+
+// ModuleLockedError refuses to disable Module, which the registry declares always on; the API answers 409.
+type ModuleLockedError struct {
+	Module string
+}
+
+func (e *ModuleLockedError) Error() string { return ModuleLocked }
 
 // Role errors
 const (

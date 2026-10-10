@@ -109,3 +109,29 @@ func TestModules_RouteGatedAndCacheDroppedOnWrite(t *testing.T) {
 	w = helper.DoRequest("GET", "/inventory/products", nil, map[string]string{})
 	assert.Equal(t, http.StatusOK, w.Code, w.Body.String())
 }
+
+// TestModules_LockedCannotBeDisabled - users is always on (TENANCY-004): GET /modules says so, and both
+// ways of turning it off answer 409 tenant.module.locked.
+func TestModules_LockedCannotBeDisabled(t *testing.T) {
+	helper := testhelpers.SetupApiTest(t)
+	defer helper.Close()
+	slug := freshTenant(t, helper)
+
+	w := helper.DoRequest("GET", "/modules", nil, map[string]string{})
+	assert.Equal(t, http.StatusOK, w.Code, w.Body.String())
+	locked := map[string]bool{}
+	for _, row := range decode(t, w.Body.Bytes())["modules"].([]interface{}) {
+		m := row.(map[string]interface{})
+		locked[m["code"].(string)], _ = m["locked"].(bool)
+	}
+	assert.True(t, locked["users"])
+	assert.False(t, locked["inventory"])
+
+	w = helper.DoRequest("PUT", "/tenants/"+slug+"/modules/users", map[string]interface{}{"is_enabled": false}, map[string]string{})
+	assert.Equal(t, http.StatusConflict, w.Code, w.Body.String())
+	assert.Equal(t, "tenant.module.locked", decode(t, w.Body.Bytes())["error"])
+
+	w = helper.DoRequest("DELETE", "/tenants/"+slug+"/modules/users", nil, map[string]string{})
+	assert.Equal(t, http.StatusConflict, w.Code, w.Body.String())
+	assert.Equal(t, "tenant.module.locked", decode(t, w.Body.Bytes())["error"])
+}

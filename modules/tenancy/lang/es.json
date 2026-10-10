@@ -34,5 +34,6 @@
   "tenant.gps-device.unauthorized": "Token de dispositivo GPS desconocido",
   "tenant.module.not-found": "Ese módulo no existe.",
   "tenant.module.not-enabled": "Este módulo no está activo en el negocio.",
-  "tenant.module.required-by": "Otro módulo activo lo necesita. Desactiva ese primero."
+  "tenant.module.required-by": "Otro módulo activo lo necesita. Desactiva ese primero.",
+  "tenant.module.locked": "Este módulo está siempre activo."
 }

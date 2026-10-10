@@ -245,5 +245,11 @@
   "document-digest.email.description": "Estos documentos entraron en su periodo de aviso. Cada documento se nombra aquí una vez; al renovarlo vuelve a vigilarse.",
   "document-digest.email.button-text": "Abrir documentos",
   "document-digest.email.sign-off": "El equipo de %s",
-  "document-digest.email.automated-note": "Este es un mensaje automático. Por favor no respondas."
+  "document-digest.email.automated-note": "Este es un mensaje automático. Por favor no respondas.",
+  "module.tracking.description": "Ubicación GPS en tiempo real, gestión de rutas y asignación de conductores.",
+  "module.tracking.feature.0": "Ubicación GPS en tiempo real",
+  "module.tracking.feature.1": "Historial y reproducción de recorridos",
+  "module.tracking.feature.2": "Gestión de conductores y vehículos",
+  "module.tracking.feature.3": "Alertas y notificaciones de eventos",
+  "module.tracking.feature.4": "Portal para clientes"
 }

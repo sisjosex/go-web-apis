@@ -17,6 +17,8 @@ func init() {
 			"Audit log",
 		},
 		IsDefault: true,
-		AdminOnly:  true,
+		AdminOnly: true,
+		// Who signs in is managed here: a workspace without it has no way back in (TENANCY-004).
+		Locked: true,
 	})
 }

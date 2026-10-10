@@ -48,5 +48,9 @@
   "permission.purchasing.batches-create": "Crear lotes de compra",
   "permission.purchasing.batches-create.description": "Registrar nuevos lotes de productos desde compras",
   "permission.purchasing.reports-read": "Ver reportes de compras",
-  "permission.purchasing.reports-read.description": "Acceder a reportes de pagos pendientes y comparación de precios"
+  "permission.purchasing.reports-read.description": "Acceder a reportes de pagos pendientes y comparación de precios",
+  "module.purchasing.description": "Órdenes de compra, cotizaciones y proveedores.",
+  "module.purchasing.feature.0": "Compras",
+  "module.purchasing.feature.1": "Cotizaciones",
+  "module.purchasing.feature.2": "Clientes"
 }

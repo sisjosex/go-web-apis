@@ -2,12 +2,14 @@ package controllers
 
 import (
 	"errors"
+	"fmt"
 	"net/http"
 	"sort"
 
 	"josex/web/config"
 	coreErrors "josex/web/modules/core/errors"
 	"josex/web/modules/core/registry"
+	"josex/web/modules/core/utils"
 	tenancyErrors "josex/web/modules/tenancy/errors"
 	"josex/web/modules/tenancy/interfaces"
 	"josex/web/modules/tenancy/models"
@@ -33,10 +35,11 @@ func (mc *ModuleController) ListAvailableModules(c *gin.Context) {
 	coreConf := config.ModularAppConfig.Core
 	all := registry.GetAll()
 
+	lang := c.GetString("lang")
 	available := make([]registry.ModuleDescriptor, 0, len(all))
 	for _, m := range all {
 		if coreConf.IsModuleEnabled(m.Code) {
-			available = append(available, m)
+			available = append(available, localized(lang, m))
 		}
 	}
 
@@ -58,11 +61,37 @@ func (mc *ModuleController) ListAvailableModules(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"modules": available, "verticals": verticals})
 }
 
-// moduleWriteError answers a module write's refusal: 409 naming the modules that still need it, else 400.
+// localized answers the descriptor's description and features in lang (TENANCY-004 D2), from the owning
+// module's lang file (`module.<code>.description`, `module.<code>.feature.<i>`); the registry's English
+// is the fallback. Map lookups only, no I/O.
+func localized(lang string, m registry.ModuleDescriptor) registry.ModuleDescriptor {
+	m.Description = translateOr(lang, "module."+m.Code+".description", m.Description)
+	features := make([]string, len(m.Features))
+	for i, feature := range m.Features {
+		features[i] = translateOr(lang, fmt.Sprintf("module.%s.feature.%d", m.Code, i), feature)
+	}
+	m.Features = features
+	return m
+}
+
+func translateOr(lang, key, fallback string) string {
+	if text := utils.GetTranslation(lang, key); text != key {
+		return text
+	}
+	return fallback
+}
+
+// moduleWriteError answers a module write's refusal: 409 for a locked module or one others still need,
+// else 400.
 func moduleWriteError(c *gin.Context, err error) {
 	var requiredBy *tenancyErrors.ModuleRequiredByError
 	if errors.As(err, &requiredBy) {
 		c.JSON(http.StatusConflict, coreErrors.BuildErrorDetail(c, tenancyErrors.ModuleRequiredBy, gin.H{"required_by": requiredBy.Dependents}))
+		return
+	}
+	var locked *tenancyErrors.ModuleLockedError
+	if errors.As(err, &locked) {
+		c.JSON(http.StatusConflict, coreErrors.BuildErrorSingle(c, tenancyErrors.ModuleLocked))
 		return
 	}
 	c.JSON(http.StatusBadRequest, coreErrors.BuildError(c, err))
@@ -99,6 +128,7 @@ func (mc *ModuleController) GetTenantModules(c *gin.Context) {
 		AdminOnly   bool     `json:"admin_only,omitempty"`
 	}
 
+	lang := c.GetString("lang")
 	result := make([]EnrichedModule, 0, len(tenantModules))
 	for _, m := range tenantModules {
 		em := EnrichedModule{
@@ -110,6 +140,7 @@ func (mc *ModuleController) GetTenantModules(c *gin.Context) {
 			},
 		}
 		if desc, ok := registry.Get(m.ModuleCode); ok {
+			desc = localized(lang, desc)
 			em.Name = desc.Name
 			em.Description = desc.Description
 			em.Icon = desc.Icon
