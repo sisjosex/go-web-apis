@@ -14,6 +14,7 @@ import (
 	"josex/web/modules/tracking/models"
 
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
 )
 
@@ -146,82 +147,71 @@ func (r *TrackingRepository) GetRouteRealtimeStatus(ctx context.Context, tenantI
 
 // GetRiderStatus gets rider status for guardian view
 func (r *TrackingRepository) GetRiderStatus(ctx context.Context, tenantID uuid.UUID, riderID uuid.UUID, scopeUserID *uuid.UUID, guardianUserID *uuid.UUID) (*models.RiderStatusResponse, error) {
-	var retRiderID uuid.UUID
-	var riderName string
-	var routeID *uuid.UUID
-	var routeName *string
-	var vehicleID *uuid.UUID
-	var licensePlate *string
-	var driverName *string
-	var vehicleLatitude, vehicleLongitude *float64
-	var vehicleSpeed *float64
-	var locationAgeSeconds *int32
-	var lastEventType *string
-	var lastEventTime *time.Time
-	var lastEventNotes *string
-	var lastEventStop *string
-	var scheduledPickupStop *string
-	var scheduledDropoffStop *string
-	var activeAlerts int32
-
-	err := r.dbService.QueryRow(
+	row := r.dbService.QueryRow(
 		ctx,
 		`SELECT * FROM tracking.sp_get_rider_status($1, $2, $3, $4)`,
 		tenantID,
 		riderID,
 		scopeUserID,
 		guardianUserID,
-	).Scan(
-		&retRiderID,
-		&riderName,
-		&routeID,
-		&routeName,
-		&vehicleID,
-		&licensePlate,
-		&driverName,
-		&vehicleLatitude,
-		&vehicleLongitude,
-		&vehicleSpeed,
-		&locationAgeSeconds,
-		&lastEventType,
-		&lastEventTime,
-		&lastEventNotes,
-		&lastEventStop,
-		&scheduledPickupStop,
-		&scheduledDropoffStop,
-		&activeAlerts,
 	)
-
+	status, err := scanRiderStatus(row)
 	if err != nil {
 		return nil, scopedErr(err, trackingErrors.RiderNotFound)
 	}
+	return status, nil
+}
 
-	var lastEventTimeStr *string
-	if lastEventTime != nil {
-		str := lastEventTime.Format(time.RFC3339)
-		lastEventTimeStr = &str
+// ListGuardianRiderStatus answers today's status of each of the guardian's riders in one call
+// (MOBILE-026 D1), in the shape GetRiderStatus answers one.
+func (r *TrackingRepository) ListGuardianRiderStatus(ctx context.Context, tenantID uuid.UUID, guardianUserID uuid.UUID) ([]models.RiderStatusResponse, error) {
+	rows, err := r.dbService.Query(ctx, `SELECT * FROM tracking.sp_list_guardian_rider_status($1, $2)`, tenantID, guardianUserID)
+	if err != nil {
+		return nil, err
 	}
+	defer rows.Close()
+	statuses := []models.RiderStatusResponse{}
+	for rows.Next() {
+		status, err := scanRiderStatus(rows)
+		if err != nil {
+			return nil, err
+		}
+		statuses = append(statuses, *status)
+	}
+	return statuses, rows.Err()
+}
 
-	return &models.RiderStatusResponse{
-		RiderID:              retRiderID,
-		RiderName:            riderName,
-		RouteID:              routeID,
-		RouteName:            routeName,
-		VehicleID:            vehicleID,
-		LicensePlate:         licensePlate,
-		DriverName:           driverName,
-		VehicleLatitude:      vehicleLatitude,
-		VehicleLongitude:     vehicleLongitude,
-		VehicleSpeed:         vehicleSpeed,
-		LocationAgeSeconds:   locationAgeSeconds,
-		LastEventType:        lastEventType,
-		LastEventTime:        lastEventTimeStr,
-		LastEventNotes:       lastEventNotes,
-		LastEventStop:        lastEventStop,
-		ScheduledPickupStop:  scheduledPickupStop,
-		ScheduledDropoffStop: scheduledDropoffStop,
-		ActiveAlerts:         activeAlerts,
-	}, nil
+// scanRiderStatus reads one row of sp_get_rider_status's shape.
+func scanRiderStatus(row pgx.Row) (*models.RiderStatusResponse, error) {
+	var s models.RiderStatusResponse
+	var lastEventTime *time.Time
+	if err := row.Scan(
+		&s.RiderID,
+		&s.RiderName,
+		&s.RouteID,
+		&s.RouteName,
+		&s.VehicleID,
+		&s.LicensePlate,
+		&s.DriverName,
+		&s.VehicleLatitude,
+		&s.VehicleLongitude,
+		&s.VehicleSpeed,
+		&s.LocationAgeSeconds,
+		&s.LastEventType,
+		&lastEventTime,
+		&s.LastEventNotes,
+		&s.LastEventStop,
+		&s.ScheduledPickupStop,
+		&s.ScheduledDropoffStop,
+		&s.ActiveAlerts,
+	); err != nil {
+		return nil, err
+	}
+	if lastEventTime != nil {
+		formatted := lastEventTime.Format(time.RFC3339)
+		s.LastEventTime = &formatted
+	}
+	return &s, nil
 }
 
 // CreateRouteAlert creates a route delay/breakdown alert

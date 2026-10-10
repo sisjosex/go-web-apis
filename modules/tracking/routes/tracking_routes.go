@@ -552,6 +552,8 @@ func registerRiderRoutes(
 	// hang off the portal-permissive chain; the scope a guardian sees is resolved in the SP, not
 	// here. Everything else about a rider stays operator- and organization-only.
 	p.GET("/riders", trackingController.ListRiders)
+	// The guardian home (MOBILE-026 D1): every rider's status in one call.
+	p.GET("/riders/today", trackingController.ListGuardianRiderStatus)
 	p.GET("/riders/:rider_id/status", trackingController.GetRiderStatus)
 	// Absences (TRACK-022) are a guardian's too: the SPs resolve the scope and mark a guardian's write
 	// `portal`. A staff caller still needs riders:write to change them.

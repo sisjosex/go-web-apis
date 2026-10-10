@@ -14,6 +14,7 @@ import (
 	coreErrors "josex/web/modules/core/errors"
 	"josex/web/modules/core/limits"
 	"josex/web/modules/core/utils"
+	tenancyErrors "josex/web/modules/tenancy/errors"
 	tenancyModels "josex/web/modules/tenancy/models"
 	trackingErrors "josex/web/modules/tracking/errors"
 	"josex/web/modules/tracking/interfaces"
@@ -278,6 +279,35 @@ func (ctrl *TrackingController) GetRiderStatus(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, response)
+}
+
+// ListGuardianRiderStatus godoc
+// @Summary Today's status of each of the guardian's riders
+// @Description The guardian home (MOBILE-026 D1): every rider the signed-in guardian is linked to, each
+// @Description with the status GET /tracking/riders/{rider_id}/status answers — one call for all of them.
+// @Tags Tracking - Status
+// @Produce json
+// @Security BearerAuth
+// @Success 200 {object} map[string][]models.RiderStatusResponse
+// @Failure 403 {object} coreErrors.ErrorResponse
+// @Router /tracking/riders/today [get]
+func (ctrl *TrackingController) ListGuardianRiderStatus(c *gin.Context) {
+	tenantID, ok := ctrl.requireTenantID(c)
+	if !ok {
+		return
+	}
+	// A guardian's read only: for anyone else "my riders" is the whole tenant, which no home lists.
+	guardian := ctrl.guardianUserID(c)
+	if guardian == nil {
+		c.JSON(http.StatusForbidden, coreErrors.BuildErrorSingle(c, tenancyErrors.PermissionDenied))
+		return
+	}
+	riders, err := ctrl.trackingService.ListGuardianRiderStatus(c.Request.Context(), tenantID, *guardian)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, coreErrors.BuildError(c, err))
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"riders": riders})
 }
 
 // CreateRouteAlert godoc

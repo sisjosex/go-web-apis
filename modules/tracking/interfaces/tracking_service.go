@@ -18,6 +18,7 @@ type TrackingService interface {
 	// Status queries
 	GetRouteRealtimeStatus(ctx context.Context, tenantID uuid.UUID, routeID uuid.UUID, scopeUserID *uuid.UUID) (*models.RouteRealtimeStatusResponse, error)
 	GetRiderStatus(ctx context.Context, tenantID uuid.UUID, riderID uuid.UUID, scopeUserID *uuid.UUID, guardianUserID *uuid.UUID) (*models.RiderStatusResponse, error)
+	ListGuardianRiderStatus(ctx context.Context, tenantID uuid.UUID, guardianUserID uuid.UUID) ([]models.RiderStatusResponse, error)
 
 	// Alert operations
 	CreateRouteAlert(ctx context.Context, tenantID uuid.UUID, dto *models.CreateAlertDto, createdBy *uuid.UUID) (*models.AlertCreatedResponse, error)

@@ -30,6 +30,11 @@ func (s *TrackingService) GetRouteRealtimeStatus(ctx context.Context, tenantID u
 	return s.trackingRepo.GetRouteRealtimeStatus(ctx, tenantID, routeID, scopeUserID)
 }
 
+// ListGuardianRiderStatus is the guardian home (MOBILE-026 D1): today's status of each of their riders.
+func (s *TrackingService) ListGuardianRiderStatus(ctx context.Context, tenantID uuid.UUID, guardianUserID uuid.UUID) ([]models.RiderStatusResponse, error) {
+	return s.trackingRepo.ListGuardianRiderStatus(ctx, tenantID, guardianUserID)
+}
+
 // GetRiderStatus gets rider status for guardian view
 func (s *TrackingService) GetRiderStatus(ctx context.Context, tenantID uuid.UUID, riderID uuid.UUID, scopeUserID *uuid.UUID, guardianUserID *uuid.UUID) (*models.RiderStatusResponse, error) {
 	return s.trackingRepo.GetRiderStatus(ctx, tenantID, riderID, scopeUserID, guardianUserID)
