@@ -74,6 +74,12 @@ per query, four in total.
 - Slow queries: anything over 500 ms is one line in `docker compose logs postgres`. The
   threshold lives in `postgresql.auto.conf` (set by `postgres/init.sql`), not on the command
   line, so `observe.sh querylog on|off` can change it live — see Metrics.
+- Also in `postgresql.auto.conf`: `idle_in_transaction_session_timeout = 60s` (an open,
+  idle transaction is ended instead of holding locks and a connection) and
+  `track_io_timing = on` (disk-wait time per statement in `pg_stat_statements`). A volume
+  from before 2026-10-09 got them by hand: `ALTER SYSTEM SET …; SELECT pg_reload_conf();`.
+  After a reload `pg_settings.pending_restart` flags `max_connections` and `shared_buffers`:
+  the image's `postgresql.conf` differs from the command line, which wins on every start.
 - Profile: `pg_stat_statements` is preloaded and created by `postgres/init.sql` on the
   first boot. On a volume that existed before INFRA-004 run it once by hand:
   `docker compose exec postgres psql -U postgres -d web -c 'CREATE EXTENSION pg_stat_statements'`.
