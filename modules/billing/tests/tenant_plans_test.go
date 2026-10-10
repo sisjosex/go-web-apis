@@ -107,21 +107,39 @@ func TestTenantPlan_NoticeThenConfirmExtendsByCycle(t *testing.T) {
 	assert.Equal(t, http.StatusConflict, w.Code, "a payment is confirmed once")
 }
 
-// TestTenantUsage_ListsEveryLimitedFeature - usage names riders, vehicles, products and members.
-func TestTenantUsage_ListsEveryLimitedFeature(t *testing.T) {
-	helper := SetupBillingTest(t)
-	defer helper.Close()
-	ownBusiness(t, helper)
-
+// usageRows answers GET /billing/usage as feature → module, and the members row's use.
+func usageRows(t *testing.T, helper *testhelpers.ApiTestHelper) (map[string]string, float64) {
+	t.Helper()
 	w := helper.DoRequest("GET", "/billing/usage", nil, map[string]string{})
 	assert.Equal(t, http.StatusOK, w.Code, w.Body.String())
-	features := map[string]float64{}
+	modules, members := map[string]string{}, 0.0
 	for _, row := range body(t, w.Body.Bytes())["features"].([]interface{}) {
 		f := row.(map[string]interface{})
-		features[f["feature"].(string)] = f["used"].(float64)
+		modules[f["feature"].(string)] = f["module"].(string)
+		if f["feature"] == "users_per_tenant" {
+			members = f["used"].(float64)
+		}
 	}
-	assert.Contains(t, features, "tracking_riders")
-	assert.EqualValues(t, 1, features["users_per_tenant"], "the owner")
+	return modules, members
+}
+
+// TestTenantUsage_OnlyEnabledModules - a business with no module on sees only its members; turning
+// tracking on adds riders and vehicles, tagged with their module (BILLING-003).
+func TestTenantUsage_OnlyEnabledModules(t *testing.T) {
+	helper := SetupBillingTest(t)
+	defer helper.Close()
+	slug, _ := ownBusiness(t, helper)
+
+	rows, members := usageRows(t, helper)
+	assert.Equal(t, map[string]string{"users_per_tenant": "users"}, rows)
+	assert.EqualValues(t, 1, members, "the owner")
+
+	w := helper.DoRequest("PUT", "/tenants/"+slug+"/modules/tracking", map[string]interface{}{"is_enabled": true}, map[string]string{})
+	assert.Equal(t, http.StatusOK, w.Code, w.Body.String())
+	rows, _ = usageRows(t, helper)
+	assert.Equal(t, "tracking", rows["tracking_riders"])
+	assert.Equal(t, "tracking", rows["tracking_vehicles"])
+	assert.NotContains(t, rows, "inventory_items")
 }
 
 // TestTenantLimit_VehicleRefusedAtFreeLimit - a free business creates its three vehicles; the fourth

@@ -8,6 +8,9 @@ import (
 	"github.com/google/uuid"
 )
 
+// EnabledModules answers the module codes a business has on, from tenancy's cache (BILLING-003).
+type EnabledModules func(ctx context.Context, tenantID uuid.UUID) (map[string]bool, error)
+
 // BillingService defines the business operations for the billing module.
 type BillingService interface {
 	// GetSubscription returns the user's current subscription, or nil if none.
@@ -35,8 +38,10 @@ type BillingService interface {
 	GetTenantPlan(ctx context.Context, tenantID uuid.UUID) (*models.TenantPlan, error)
 	// TenantLimit answers a business's limit for a feature, from a 60 s cache; -1 is unlimited.
 	TenantLimit(ctx context.Context, tenantID uuid.UUID, feature string) (int, error)
-	// GetTenantUsage answers each limited feature's use against the business's limit.
+	// GetTenantUsage answers each limited feature of the business's enabled modules against its limit.
 	GetTenantUsage(ctx context.Context, tenantID uuid.UUID) (*models.UsageResponse, error)
+	// UseEnabledModules installs tenancy's lookup; without one usage lists every feature.
+	UseEnabledModules(lookup EnabledModules)
 	NotifyPayment(ctx context.Context, tenantID, userID uuid.UUID, dto *models.NotifyPaymentDto) (*models.TenantPayment, error)
 	// ConfirmPayment completes a notified payment; the business's cached plan is dropped.
 	ConfirmPayment(ctx context.Context, paymentID, confirmedBy uuid.UUID) (*models.TenantPayment, error)

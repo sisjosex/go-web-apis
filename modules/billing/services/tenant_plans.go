@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"josex/web/config"
+	billingInterfaces "josex/web/modules/billing/interfaces"
 	billingModels "josex/web/modules/billing/models"
 	coreServices "josex/web/modules/core/services"
 
@@ -66,21 +67,45 @@ func limitOf(limits map[string]int, feature string) int {
 	return -1
 }
 
-// usageFeatures are the limits a business sees on its billing page, in this order.
-var usageFeatures = []string{"tracking_riders", "tracking_vehicles", "inventory_items", "users_per_tenant"}
+// usageFeatures are the limits a business sees on its billing page, in this order, each with the
+// module it belongs to (BILLING-003).
+var usageFeatures = []struct{ feature, module string }{
+	{"tracking_riders", "tracking"},
+	{"tracking_vehicles", "tracking"},
+	{"inventory_items", "inventory"},
+	{"users_per_tenant", usersModule},
+}
+
+// usersModule is not a tenant module: every business has members, so its limit always shows.
+const usersModule = "users"
+
+func (s *billingService) UseEnabledModules(lookup billingInterfaces.EnabledModules) {
+	s.enabledModules = lookup
+}
 
 func (s *billingService) GetTenantUsage(ctx context.Context, tenantID uuid.UUID) (*billingModels.UsageResponse, error) {
+	var enabled map[string]bool // nil: no lookup (tenancy off), every feature shows
+	if s.enabledModules != nil {
+		codes, err := s.enabledModules(ctx, tenantID)
+		if err != nil {
+			return nil, err
+		}
+		enabled = codes
+	}
 	used, err := s.repo.GetTenantUsage(ctx, tenantID)
 	if err != nil {
 		return nil, err
 	}
 	out := &billingModels.UsageResponse{Features: make([]billingModels.UsageFeature, 0, len(usageFeatures))}
-	for _, feature := range usageFeatures {
-		limit, err := s.TenantLimit(ctx, tenantID, feature)
+	for _, f := range usageFeatures {
+		if enabled != nil && f.module != usersModule && !enabled[f.module] {
+			continue
+		}
+		limit, err := s.TenantLimit(ctx, tenantID, f.feature)
 		if err != nil {
 			return nil, err
 		}
-		out.Features = append(out.Features, billingModels.UsageFeature{Feature: feature, Used: used[feature], Limit: limit})
+		out.Features = append(out.Features, billingModels.UsageFeature{Feature: f.feature, Module: f.module, Used: used[f.feature], Limit: limit})
 	}
 	return out, nil
 }

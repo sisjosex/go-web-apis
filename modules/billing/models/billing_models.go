@@ -217,6 +217,7 @@ type PaymentContact struct {
 // UsageFeature is how much of one limited feature a business uses.
 type UsageFeature struct {
 	Feature string `json:"feature"`
+	Module  string `json:"module"` // the module the feature belongs to, for grouping
 	Used    int64  `json:"used"`
 	Limit   int    `json:"limit"` // -1 = unlimited
 }

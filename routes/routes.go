@@ -132,6 +132,10 @@ func SetupRoutes(r *gin.Engine, dbService coreServices.DatabaseService, valkey c
 	billingService := registerAuthAndBilling(d)
 	registerJobsMonitor(d, valkey)
 	chains := registerTenancy(d, billingService)
+	// Usage lists only the enabled modules' limits, from the same cache ModuleCheck reads (BILLING-003).
+	if chains.modules != nil {
+		billingService.UseEnabledModules(chains.modules.GetTenantEnabledModuleCodes)
+	}
 	// A business's plan, usage and payment notice (BILLING-001) need its tenant chain.
 	billingRoutes.RegisterTenantBillingRoutes(d.apiV1, billingControllers.NewBillingController(billingService), d.authMiddleware, chains.tenant)
 	registerTracking(d, chains, valkey)

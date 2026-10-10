@@ -11,8 +11,9 @@ import (
 )
 
 type billingService struct {
-	repo  billingInterfaces.BillingRepository
-	email coreServices.EmailService
+	repo           billingInterfaces.BillingRepository
+	email          coreServices.EmailService
+	enabledModules billingInterfaces.EnabledModules
 }
 
 // NewBillingService constructs a new BillingService.
