@@ -1,0 +1,41 @@
+CREATE OR REPLACE FUNCTION tracking.fn_exception_payload_valid(p_kind character varying, p_payload jsonb)
+ RETURNS boolean
+ LANGUAGE plpgsql
+ IMMUTABLE
+AS $function$
+DECLARE
+    v_keys     TEXT[];
+    v_expected TEXT[];
+BEGIN
+    IF jsonb_typeof(COALESCE(p_payload, '{}'::jsonb)) <> 'object' THEN
+        RETURN FALSE;
+    END IF;
+
+    v_keys := ARRAY(SELECT k FROM jsonb_object_keys(COALESCE(p_payload, '{}'::jsonb)) k ORDER BY k);
+    v_expected := CASE p_kind
+        WHEN 'cancel'         THEN ARRAY[]::TEXT[]
+        WHEN 'change_time'    THEN ARRAY['start_time']
+        WHEN 'change_vehicle' THEN ARRAY['vehicle_id']
+        WHEN 'change_driver'  THEN ARRAY['driver_id']
+        WHEN 'skip_stop'      THEN ARRAY['stop_place_id']
+        WHEN 'add_stop'       THEN ARRAY['after_sequence', 'stop_place_id']
+        WHEN 'detour'         THEN ARRAY['stops']
+    END;
+
+    IF v_keys IS DISTINCT FROM v_expected THEN
+        RETURN FALSE;
+    END IF;
+
+    IF p_kind = 'change_time' AND p_payload->>'start_time' !~ '^([01][0-9]|2[0-3]):[0-5][0-9]$' THEN
+        RETURN FALSE;
+    END IF;
+
+    IF p_kind = 'detour' AND jsonb_typeof(p_payload->'stops') <> 'array' THEN
+        RETURN FALSE;
+    END IF;
+
+    RETURN TRUE;
+END;
+$function$;
+
+COMMENT ON FUNCTION tracking.fn_exception_payload_valid(character varying,jsonb) IS 'Whether an exception payload carries exactly the keys its kind defines, and whether the values the preview casts are castable (TRACK-018 step 3)';

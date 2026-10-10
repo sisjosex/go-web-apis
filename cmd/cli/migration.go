@@ -129,20 +129,14 @@ func (mg *migrationGenerator) upTemplate() string {
 -- Module:    %s
 -- Created:   %s
 
--- TODO: Write your migration SQL here
+-- Tables, columns, indexes, constraints, views and data only. A function goes in
+-- modules/%s/sql/functions/<name>.sql, applied whenever the file changes (INFRA-015).
 -- Example table:
 -- CREATE TABLE IF NOT EXISTS %s.my_table (
 --     id         UUID PRIMARY KEY DEFAULT public.uuid_generate_v4(),
 --     name       VARCHAR(255) NOT NULL,
 --     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 -- );
-
--- Example stored procedure:
--- CREATE OR REPLACE FUNCTION %s.sp_my_proc() RETURNS TABLE(...) LANGUAGE plpgsql AS $$
--- BEGIN
---     ...
--- END;
--- $$;
 `,
 		mg.name, mg.module, time.Now().Format("2006-01-02 15:04:05"),
 		mg.module, mg.module)
@@ -155,9 +149,8 @@ func (mg *migrationGenerator) downTemplate() string {
 -- TODO: Write your rollback SQL here
 -- Example:
 -- DROP TABLE IF EXISTS %s.my_table;
--- DROP FUNCTION IF EXISTS %s.sp_my_proc;
 `,
-		mg.name, mg.module, mg.module, mg.module)
+		mg.name, mg.module, mg.module)
 }
 
 // sanitizeName replaces any non-alphanumeric characters with underscores

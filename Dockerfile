@@ -14,10 +14,11 @@ COPY . .
 # noasynqmon: no jobs UI either, ~7 MB less (core/jobs/monitor.go, INFRA-011).
 RUN CGO_ENABLED=0 go build -trimpath -tags noswagger,noasynqmon -ldflags="-s -w" -o app ./cmd/server \
  && CGO_ENABLED=0 go build -trimpath -tags noswagger,noasynqmon -ldflags="-s -w" -o cli ./cmd/cli
-# The only files either binary reads from disk: migrations, translations, e-mail templates.
+# The only files either binary reads from disk: migrations, function files, translations, e-mail
+# templates.
 # The Go sources and the test media under modules/ stay behind.
 RUN mkdir /assets \
- && find modules -type f \( -path '*/migrations/*' -o -path '*/lang/*' -o -path '*/templates/*' \) \
+ && find modules -type f \( -path '*/migrations/*' -o -path '*/sql/functions/*' -o -path '*/lang/*' -o -path '*/templates/*' \) \
   | tar -cf - -T - | tar -xf - -C /assets
 
 # Runner

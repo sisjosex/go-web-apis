@@ -3,7 +3,9 @@
 // Subcommands:
 //   - migration: Generate new database migration files (independent, no config needed)
 //   - migrate:   Run the modular migrations on the ENV_FILE database once and exit
-//   - tenant:    Manage tenant instances and run tenant-specific migrations (requires .env.platform)
+//   - functions: Write the live functions into modules/<m>/sql/functions (INFRA-015)
+//   - schema:    Write the tables, indexes and views into modules/<m>/sql/schema.sql (INFRA-015)
+//   - tenant:   Manage tenant instances and run tenant-specific migrations (requires .env.platform)
 //   - jobs:      Run one scheduled job and exit (requires .env.platform)
 //   - geo:       Import the address-search places of a geo build (.env.platform)
 //   - tracking:  Tracking maintenance: queue the planned route lines (requires .env.platform)
@@ -12,6 +14,8 @@
 // Each subcommand has its own handler file:
 //   - migration.go:    Migration generation logic
 //   - migrate.go:      One-shot schema migration (the deploy's migrate job)
+//   - functions.go:    Function files dump
+//   - schema.go:       Schema snapshot dump
 //   - tenant_mgmt.go:  Tenant management and operations
 //   - jobs.go:         Scheduled jobs cron runs one at a time
 //   - geo.go:          Geo places import
@@ -39,6 +43,10 @@ func main() {
 		CmdMigration(args)
 	case "migrate", "mig":
 		CmdMigrate(args)
+	case "functions":
+		CmdFunctions(args)
+	case "schema":
+		CmdSchema(args)
 	case "tenant", "t":
 		CmdTenant(args)
 	case "jobs", "j":
@@ -66,6 +74,8 @@ func printMainUsage() {
 	fmt.Println("\nSubcommands:")
 	fmt.Println("  migration, m    Create new database schema migrations")
 	fmt.Println("  migrate, mig    Run the modular migrations on the ENV_FILE database")
+	fmt.Println("  functions       Dump the live functions into each module's sql/functions")
+	fmt.Println("  schema          Dump each module's tables, indexes and views into its sql/schema.sql")
 	fmt.Println("  tenant, t       Manage tenant instances and run tenant migrations")
 	fmt.Println("  jobs, j         Run a scheduled job once (cron calls these)")
 	fmt.Println("  geo             Import a geo build's places into geo.places")

@@ -1,0 +1,25 @@
+CREATE OR REPLACE FUNCTION inventory.sp_get_category(p_tenant_id uuid, p_category_id uuid)
+ RETURNS TABLE(id uuid, parent_id uuid, name character varying, slug character varying, description text, icon_url character varying, display_order integer, is_active boolean, product_count bigint, created_at timestamp without time zone, updated_at timestamp without time zone)
+ LANGUAGE plpgsql
+AS $function$
+BEGIN
+    RETURN QUERY
+    SELECT
+        CAST(pc.id AS UUID),
+        CAST(pc.parent_id AS UUID),
+        CAST(pc.name AS VARCHAR),
+        CAST(pc.slug AS VARCHAR),
+        pc.description,
+        CAST(pc.icon_url AS VARCHAR),
+        pc.display_order,
+        pc.is_active,
+        CAST(COUNT(DISTINCT pcm.product_id) AS BIGINT),
+        pc.created_at,
+        pc.updated_at
+    FROM inventory.product_categories pc
+    LEFT JOIN inventory.product_category_mapping pcm ON pc.id = pcm.category_id
+    WHERE pc.id = p_category_id AND pc.tenant_id = p_tenant_id AND pc.deleted_at IS NULL
+    GROUP BY pc.id, pc.parent_id, pc.name, pc.slug, pc.description, pc.icon_url,
+             pc.display_order, pc.is_active, pc.created_at, pc.updated_at;
+END;
+$function$;

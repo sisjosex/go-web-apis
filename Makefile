@@ -3,7 +3,7 @@
         migrate migrate-list tenant-list tenant-migrate \
         test test-auth test-users test-core test-tenancy test-tracking test-inventory test-sales test-purchasing test-billing test-import test-geo test-all \
         geo-build geo-switch geo-rollback geo-up \
-        db-reset docker-up docker-down clean
+        db-reset schema docker-up docker-down clean
 
 # Build output
 BINARY := bin/server
@@ -31,7 +31,7 @@ help:
 	@echo "  make build            - Build server binary"
 	@echo ""
 	@echo "✅ QUALITY GATE"
-	@echo "  make gate             - fmt + lint + check + build, then each changed module's tests + route coverage"
+	@echo "  make gate             - fmt + lint + check + build, then each changed module's tests + route coverage, then the schema snapshot"
 	@echo "                          (MODULES=\"tracking inventory\" overrides the modules picked from git diff)"
 	@echo "  make lint             - golangci-lint on changed code only (--new); make lint-all for the tree"
 	@echo "  make check            - tools/check: gofmt, tenant scope in SPs, DTO tenant binding (changed files)"
@@ -59,6 +59,7 @@ help:
 	@echo ""
 	@echo "🗄️  DATABASE"
 	@echo "  make db-reset         - Drop, recreate, and migrate test database"
+	@echo "  make schema           - Reset, then rewrite every modules/<m>/sql/schema.sql"
 	@echo ""
 	@echo "🐳 DOCKER"
 	@echo "  make docker-up        - Start docker-compose services (PostgreSQL, Valkey)"
@@ -210,6 +211,16 @@ db-reset:
 	@echo "🔄 Resetting test database..."
 	go run ./cmd/testutil/main.go ./cmd/testutil/seed.go -reset
 
+# The schema snapshot (INFRA-015): tables, indexes and views of every module, never a function.
+# pg_dump runs inside the test database's container, so its version matches the server's.
+PG_DUMP_CONTAINER ?= tenant-db
+SCHEMA_DUMP := PG_DUMP_CONTAINER=$(PG_DUMP_CONTAINER) go run ./cmd/cli schema dump
+# The gate compares the worktree snapshot before and after the dump (CR ignored: the checkout is CRLF).
+SCHEMA_SUMS := for f in modules/*/sql/schema.sql; do [ -f "$$f" ] && echo "$$f $$(tr -d '\r' < "$$f" | sha256sum | cut -c1-16)"; done
+
+schema: db-reset
+	$(SCHEMA_DUMP)
+
 # ════════════════════════════════════════════════════════════════
 # DOCKER
 # ════════════════════════════════════════════════════════════════
@@ -277,7 +288,14 @@ gate:
 		if $(MAKE) -s test-$$m > $(GATE_LOG) 2>&1 && go run ./tools/check -routes $(ROUTE_HITS) -module $$m >> $(GATE_LOG) 2>&1; \
 		then echo "ok ($$(( $$(date +%s) - start ))s)"; \
 		else echo "FAIL"; grep -E "^(---|===|FAIL|panic|\s+[a-z_]+\.go:[0-9]+|unmatched|route without|check -routes)" $(GATE_LOG) | grep -vE "^(--- PASS|=== (RUN|PAUSE|CONT))" | tail -40; echo "GATE FAILED at test-$$m"; rm -f $(GATE_LOG); exit 1; fi; \
-	done
+	done; \
+	[ -z "$$mods" ] || { printf "> schema "; before=$$($(SCHEMA_SUMS)); \
+		if $(SCHEMA_DUMP) > $(GATE_LOG) 2>&1 && [ "$$before" = "$$($(SCHEMA_SUMS))" ]; \
+		then echo "ok"; \
+		else echo "FAIL"; tail -5 $(GATE_LOG); echo "$$before" > $(GATE_LOG); \
+			{ $(SCHEMA_SUMS); } | grep -vxFf $(GATE_LOG) | cut -d' ' -f1; \
+			echo 'schema.sql no longer matches the migrations: run `make schema` and commit it'; \
+			echo "GATE FAILED at schema"; rm -f $(GATE_LOG); exit 1; fi; }
 	@rm -f $(GATE_LOG); echo "GATE PASSED"
 
 # ════════════════════════════════════════════════════════════════

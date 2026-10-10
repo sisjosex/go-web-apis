@@ -170,6 +170,9 @@ func (ms *MigrationService) RunMigrations() error {
 		if err := ms.runModuleMigrations(module); err != nil {
 			return fmt.Errorf("migration failed for module %s: %w", module.Name, err)
 		}
+		if err := ms.runModuleFunctions(module); err != nil {
+			return fmt.Errorf("functions failed for module %s: %w", module.Name, err)
+		}
 
 		log.Printf("✅ Module %s migrations applied successfully", module.Name)
 	}

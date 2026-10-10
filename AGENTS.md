@@ -15,7 +15,9 @@ before you open a file: where things are, how they run, and the gotchas that are
 - Every route has a test that reaches it with a **2xx**, and no test request hits a path no route
   answers. The gate enforces both after each module's tests (INFRA-014). New or changed endpoint ⇒
   integration test in `modules/{name}/tests/` that drives it to success, not only its refusals.
-- Changing an SP signature ⇒ `DROP FUNCTION IF EXISTS` + `CREATE FUNCTION`, never `CREATE OR REPLACE`.
+- A function lives in `modules/{name}/sql/functions/{fn}.sql` (`CREATE OR REPLACE`, edited in place), applied
+  after the module's migrations whenever its sha256 changes; a migration only changes tables and never
+  creates a function. A committed migration is never edited. Rules in `sql.md` (INFRA-015).
 
 ### Reading the route check
 
@@ -41,7 +43,8 @@ make docker-up | docker-down          # PostgreSQL + Valkey + local S3 (:8333) c
 make seed-dev                         # emulator dev accounts on tenant mi-negocio (cmd/cli/seed_dev.sql), idempotent
 make test-<module>                    # auth core users tenancy tracking inventory sales purchasing billing geo
 make test-all                         # every module (db-reset first)
-make migrate MODULE=x NAME=y          # .up.sql + .down.sql pair
+make migrate MODULE=x NAME=y          # .up.sql + .down.sql pair — tables only
+make schema                           # db-reset, then rewrite every sql/schema.sql (commit it with the migration)
 make tenant-migrate SLUG=x            # apply to one tenant DB
 make swagger                          # regenerate docs
 make geo-build | geo-switch DATE=… | geo-rollback | geo-up   # geo data, docker/geo/README.md
@@ -59,7 +62,8 @@ Setup is human-only: copy `.env.example` → `.env.platform` / `.env.tenant`, th
 | Tenant | `cmd/server -mode=tenant` | `.env.tenant` | 9080 | core auth users tracking inventory sales purchasing geo |
 
 One binary, one `-mode` flag: `cmd/platform` and `cmd/tenant` have not existed for some time. The
-sibling `cmd/cli` carries `migration` (generate), `migrate` (apply, one shot), `tenant`, `jobs`,
+sibling `cmd/cli` carries `migration` (generate), `migrate` (apply, one shot), `functions dump` and `schema dump`
+(write `sql/` from a reset database), `tenant`, `jobs`,
 `geo import` and `tracking paths backfill`.
 
 **Roles (INFRA-001).** `-role` (flag > `APP_ROLE` > `all`) picks what a process runs: `api`, `worker`
@@ -163,7 +167,8 @@ modules/{name}/
 ├── controllers/  services/  repositories/  interfaces/  models/
 ├── routes/       # RegisterXRoutes, gated by IsModuleEnabled in routes/routes.go
 ├── config/       # LoadXConfig → config.ModularAppConfig.X ; env via utils.GetEnv*
-├── migrations/   # {timestamp}_{name}.up.sql / .down.sql
+├── migrations/   # {timestamp}_{name}.up.sql / .down.sql — tables, indexes, views, data
+├── sql/          # functions/{fn}.sql (one name each, its trigger too) · schema.sql (generated, read a table here)
 ├── lang/         # en.json, es.json — flat keys "module.action.error-type"
 ├── errors/       # error code constants
 └── tests/        # helpers.go + {name}_api_test.go, build tag integration
@@ -240,7 +245,7 @@ param ⇒ search is client-side or new API work — the spec decides, never the 
 
 ## Adding a module
 
-1. Layout above · 2. `config/config.go` + register in `ModularAppConfig` · 3. migrations · 4. `lang/` ·
+1. Layout above · 2. `config/config.go` + register in `ModularAppConfig` · 3. migrations + `sql/functions` · 4. `lang/` ·
 5. `errors/` · 6. interfaces → repository → service → controller · 7. routes in `routes/routes.go` gated
 by `IsModuleEnabled` · 8. add to `ENABLED_MODULES` in the env file **and `.env.test`, after every module
 whose schema it references** — that list is the migration order · 9. `tests/helpers.go` + API tests ·
@@ -293,6 +298,11 @@ outbox purge, partitions, one translation file — are debug; failures stay at i
 
 ## Gotchas not visible in code
 
+- Function files run after their module's migrations, all of a module in one transaction: one failing
+  file leaves the module's functions as they were and the server retries like a dirty migration. A
+  fresh database still runs every old migration, old function versions included, and the files then
+  overwrite them. On that fresh database a migration calling another module's SP gets the
+  SP's current version, not the one of the migration's day.
 - `make test-*` runs `db-reset` first: drops, recreates, migrates and seeds `josex_test`. A `db-reset`
   failure is a real current problem, not a known issue to step around.
 - Adding a column to an SP without adding it to `row.Scan` fails silently at runtime, not at build.

@@ -14,6 +14,9 @@
 //   - raw SQL: a Go string holding a statement must call an SP (sp_/fn_). Tests keep their direct reads
 //     and fixtures in tests/helpers.go; cmd/ and core/testhelpers are exempt; "// check:raw-sql <why>"
 //     on the line above opts one statement out (bulk COPY staging). Only lines added against HEAD count.
+//   - migrations (INFRA-015): a migration not yet in HEAD creates no function — functions live in
+//     modules/<m>/sql/functions/ — and its version is above every committed one of its module. A function
+//     file gets the tenant-scope check, except a new one moved out of a committed migration (from its first edit).
 package main
 
 import (
@@ -26,6 +29,7 @@ import (
 	"go/token"
 	"os"
 	"os/exec"
+	"path"
 	"path/filepath"
 	"regexp"
 	"strconv"
@@ -35,7 +39,10 @@ import (
 var (
 	reCreateTable   = regexp.MustCompile(`(?is)CREATE\s+TABLE\s+(?:IF\s+NOT\s+EXISTS\s+)?([a-z_]+\.)?([a-z_]+)\s*\((.*?)\);`)
 	reTenantColumn  = regexp.MustCompile(`(?im)^\s*tenant_id\s`)
-	reCreateFunc    = regexp.MustCompile(`(?is)CREATE\s+(?:OR\s+REPLACE\s+)?FUNCTION\s+([a-z_]+\.)?([a-z_]+)\s*\((.*?)\)\s*RETURNS\s+(\w+).*?\$\$(.*?)\$\$`)
+	reCreateFunc    = regexp.MustCompile(`(?is)CREATE\s+(?:OR\s+REPLACE\s+)?FUNCTION\s+([a-z_]+\.)?([a-z_]+)\s*\((.*?)\)\s*RETURNS\s+(\w+).*?\$(?:function)?\$(.*?)\$(?:function)?\$`)
+	reCreateRoutine = regexp.MustCompile(`(?i)\bCREATE\s+(?:OR\s+REPLACE\s+)?(?:FUNCTION|PROCEDURE)\s`)
+	reRoutineName   = regexp.MustCompile(`(?i)\bCREATE\s+(?:OR\s+REPLACE\s+)?(?:FUNCTION|PROCEDURE)\s+(?:"?[a-z_]+"?\.)?"?([a-z_0-9]+)"?\s*\(`)
+	reMigrationName = regexp.MustCompile(`^(\d+)_.*\.up\.sql$`)
 	reSprintfSQL    = regexp.MustCompile(`(?i)fmt\.Sprintf\(\s*"[^"]*\b(SELECT|INSERT|UPDATE|DELETE|FROM)\b`)
 	reTenantFromReq = regexp.MustCompile(`\.(Query|Param|PostForm|GetHeader|DefaultQuery)\(\s*"(tenant_id|X-Tenant-Id|tenant)"`)
 	reSQLStatement  = regexp.MustCompile(`^\s*(SELECT\s|WITH\s|INSERT\s+INTO\s|UPDATE\s+[a-z_.]+\s+SET\s|DELETE\s+FROM\s|TRUNCATE\s|MERGE\s+INTO\s)`)
@@ -87,12 +94,28 @@ func main() {
 	}
 
 	var findings []finding
+	var migrated map[string]bool
 	for _, f := range files {
 		switch {
 		case strings.HasSuffix(f, ".go"):
 			findings = append(findings, checkGo(f)...)
 			findings = append(findings, checkRawSQL(f, *all)...)
 		case strings.HasSuffix(f, ".up.sql"):
+			findings = append(findings, checkSQL(f, tenantTables)...)
+			findings = append(findings, checkNewMigration(f)...)
+		case isFunctionFile(f):
+			if !*all && !inHEAD(f) {
+				if migrated == nil {
+					if migrated, err = migratedFunctions(); err != nil {
+						fmt.Fprintln(os.Stderr, "check:", err)
+						os.Exit(2)
+					}
+				}
+				// Moved out of a committed migration (INFRA-015 cutover): checked from its first edit.
+				if migrated[strings.TrimSuffix(path.Base(f), ".sql")] {
+					continue
+				}
+			}
 			findings = append(findings, checkSQL(f, tenantTables)...)
 		}
 	}
@@ -107,21 +130,21 @@ func main() {
 	fmt.Printf("check — %d file(s) clean\n", len(files))
 }
 
-// targetFiles lists .go and .up.sql files: changed against HEAD, or every tracked one with all.
+// targetFiles lists .go, .up.sql and function files: changed against HEAD, or every tracked one with all.
 func targetFiles(all bool) ([]string, error) {
 	var out []string
 	if all {
-		lines, err := git("ls-files", "--", "*.go", "*.up.sql")
+		lines, err := git(append([]string{"ls-files", "--"}, checkedPaths...)...)
 		if err != nil {
 			return nil, err
 		}
 		out = lines
 	} else {
-		changed, err := git("diff", "--name-only", "--diff-filter=AM", "HEAD", "--", "*.go", "*.up.sql")
+		changed, err := git(append([]string{"diff", "--name-only", "--diff-filter=AM", "HEAD", "--"}, checkedPaths...)...)
 		if err != nil {
 			return nil, err
 		}
-		untracked, err := git("ls-files", "--others", "--exclude-standard", "--", "*.go", "*.up.sql")
+		untracked, err := git(append([]string{"ls-files", "--others", "--exclude-standard", "--"}, checkedPaths...)...)
 		if err != nil {
 			return nil, err
 		}
@@ -136,6 +159,12 @@ func targetFiles(all bool) ([]string, error) {
 		}
 	}
 	return files, nil
+}
+
+var checkedPaths = []string{"*.go", "*.up.sql", "modules/*/sql/functions/*.sql"}
+
+func isFunctionFile(file string) bool {
+	return strings.Contains(file, "/sql/functions/") && strings.HasSuffix(file, ".sql")
 }
 
 func git(args ...string) ([]string, error) {
@@ -198,6 +227,70 @@ func checkSQL(file string, tenantTables map[string]bool) []finding {
 		}
 	}
 	return out
+}
+
+// checkNewMigration holds a migration HEAD does not have yet to INFRA-015: it changes tables only,
+// and its version is above its module's highest committed one — golang-migrate skips a lower
+// version without a word once a higher one is applied.
+func checkNewMigration(file string) []finding {
+	if inHEAD(file) {
+		return nil
+	}
+	src, err := os.ReadFile(file)
+	if err != nil {
+		return []finding{{file, 0, err.Error()}}
+	}
+	text := string(src)
+	var out []finding
+	module := strings.Split(file, "/")[1]
+	if loc := reCreateRoutine.FindStringIndex(text); loc != nil {
+		line := 1 + strings.Count(text[:loc[0]], "\n")
+		out = append(out, finding{file, line, fmt.Sprintf("a migration creates no function — write it to modules/%s/sql/functions/<name>.sql, applied on every change (sql.md)", module)})
+	}
+	committed, err := git("ls-tree", "--name-only", "HEAD", path.Dir(file)+"/")
+	if err != nil {
+		return append(out, finding{file, 0, err.Error()})
+	}
+	var highest uint64
+	for _, c := range committed {
+		highest = max(highest, migrationVersion(c))
+	}
+	if version := migrationVersion(file); version <= highest {
+		out = append(out, finding{file, 1, fmt.Sprintf("version %d is not above %d, the highest committed in modules/%s/migrations — it would never run where that one has; create it with make migrate (sql.md)", version, highest, module)})
+	}
+	return out
+}
+
+func inHEAD(file string) bool {
+	return exec.Command("git", "cat-file", "-e", "HEAD:"+file).Run() == nil
+}
+
+// migratedFunctions names every function a committed up migration creates.
+func migratedFunctions() (map[string]bool, error) {
+	files, err := git("ls-files", "--", "modules/*/migrations/*.up.sql")
+	if err != nil {
+		return nil, err
+	}
+	names := map[string]bool{}
+	for _, f := range files {
+		src, err := os.ReadFile(f)
+		if err != nil {
+			return nil, err
+		}
+		for _, m := range reRoutineName.FindAllStringSubmatch(string(src), -1) {
+			names[strings.ToLower(m[1])] = true
+		}
+	}
+	return names, nil
+}
+
+func migrationVersion(file string) uint64 {
+	m := reMigrationName.FindStringSubmatch(path.Base(file))
+	if m == nil {
+		return 0
+	}
+	v, _ := strconv.ParseUint(m[1], 10, 64)
+	return v
 }
 
 func checkGo(file string) []finding {
