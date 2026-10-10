@@ -188,6 +188,7 @@ func TestDayChanged_SilentPush(t *testing.T) {
 		assert.Nil(t, sent.Message.Android.Notification, "data only")
 		assert.Equal(t, "day:d-1", sent.Message.Android.CollapseKey)
 		assert.Equal(t, "NORMAL", sent.Message.Android.Priority)
-		assert.Equal(t, map[string]string{"type": "day_changed", "tenant_slug": "test-company"}, sent.Message.Data)
+		// The language rides along (TENANCY-005): the phone draws a silent message in the account's.
+		assert.Equal(t, map[string]string{"type": "day_changed", "tenant_slug": "test-company", "locale": "es"}, sent.Message.Data)
 	}
 }

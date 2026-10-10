@@ -61,6 +61,17 @@ func PushSendHandler(db coreServices.DatabaseService, pusher interfaces.Pusher) 
 	}
 }
 
+// withLocale copies data with the recipient's language added: the map is shared by every phone of the
+// message, and two of them may belong to accounts that read different languages.
+func withLocale(data map[string]string, locale string) map[string]string {
+	out := make(map[string]string, len(data)+1)
+	for k, v := range data {
+		out[k] = v
+	}
+	out["locale"] = locale
+	return out
+}
+
 // pushToUser sends msg to each of the user's phones. A token FCM answers UNREGISTERED is deleted; a
 // refused message is logged under what and dropped; an outage is answered so the task retries.
 func pushToUser(ctx context.Context, db coreServices.DatabaseService, pusher interfaces.Pusher, userID uuid.UUID, msg interfaces.PushMessage, what string) error {
@@ -72,8 +83,11 @@ func pushToUser(ctx context.Context, db coreServices.DatabaseService, pusher int
 	var outage error
 	for _, token := range tokens {
 		msg.Token = token.Token
-		// Written in the recipient's language (TENANCY-005 D1); a silent message has no words.
-		if !msg.Silent && msg.Type != "" {
+		// Written in the recipient's language (TENANCY-005 D1). A silent message has no words: the phone
+		// draws it, so it carries the language instead — a phone woken cold knows no app language.
+		if msg.Silent {
+			msg.Data = withLocale(msg.Data, token.Locale)
+		} else if msg.Type != "" {
 			msg.Title, msg.Body = push.NoticeText(token.Locale, msg.Type, msg.Args)
 		}
 		err := pusher.Send(ctx, msg)
