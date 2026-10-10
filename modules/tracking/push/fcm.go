@@ -113,10 +113,14 @@ type fcmAndroid struct {
 	Notification *fcmAndroidNotice `json:"notification,omitempty"`
 }
 
+// fcmAndroidNotice carries the written Title/Body, or the loc keys when there are none: Android lets a
+// loc key win over a title, so the two are never sent together.
 type fcmAndroidNotice struct {
-	TitleLocKey  string   `json:"title_loc_key"`
+	Title        string   `json:"title,omitempty"`
+	Body         string   `json:"body,omitempty"`
+	TitleLocKey  string   `json:"title_loc_key,omitempty"`
 	TitleLocArgs []string `json:"title_loc_args,omitempty"`
-	BodyLocKey   string   `json:"body_loc_key"`
+	BodyLocKey   string   `json:"body_loc_key,omitempty"`
 	BodyLocArgs  []string `json:"body_loc_args,omitempty"`
 	Tag          string   `json:"tag,omitempty"`
 	ChannelID    string   `json:"channel_id,omitempty"`
@@ -134,9 +138,11 @@ type fcmAPNS struct {
 }
 
 type fcmAPNSAlert struct {
-	TitleLocKey  string   `json:"title-loc-key"`
+	Title        string   `json:"title,omitempty"`
+	Body         string   `json:"body,omitempty"`
+	TitleLocKey  string   `json:"title-loc-key,omitempty"`
 	TitleLocArgs []string `json:"title-loc-args,omitempty"`
-	LocKey       string   `json:"loc-key"`
+	LocKey       string   `json:"loc-key,omitempty"`
 	LocArgs      []string `json:"loc-args,omitempty"`
 }
 
@@ -213,14 +219,20 @@ func toFCM(msg interfaces.PushMessage) fcmMessage {
 	title, body := "notice_"+msg.Type, "notice_"+msg.Type+"_body"
 	// HIGH wakes a dozing phone: a notice about the bus is only worth it now.
 	m.Android.Priority = "HIGH"
+	if msg.CollapseID != "" {
+		m.APNS.Headers = map[string]string{"apns-collapse-id": msg.CollapseID}
+	}
+	// Written in the recipient's language when the server has the words (TENANCY-005 D1).
+	if msg.Title != "" {
+		m.Android.Notification = &fcmAndroidNotice{Title: msg.Title, Body: msg.Body, Tag: msg.CollapseID, ChannelID: msg.Channel}
+		m.APNS.Payload.Aps.Alert = &fcmAPNSAlert{Title: msg.Title, Body: msg.Body}
+		return m
+	}
 	// The title names the rider too ("%1$s is on board"): it takes the body's args, and a string
 	// that does not use them ignores them.
 	m.Android.Notification = &fcmAndroidNotice{
 		TitleLocKey: title, TitleLocArgs: msg.Args, BodyLocKey: body, BodyLocArgs: msg.Args,
 		Tag: msg.CollapseID, ChannelID: msg.Channel,
-	}
-	if msg.CollapseID != "" {
-		m.APNS.Headers = map[string]string{"apns-collapse-id": msg.CollapseID}
 	}
 	m.APNS.Payload.Aps.Alert = &fcmAPNSAlert{TitleLocKey: title, TitleLocArgs: msg.Args, LocKey: body, LocArgs: msg.Args}
 	return m

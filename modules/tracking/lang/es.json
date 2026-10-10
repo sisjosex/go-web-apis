@@ -251,5 +251,21 @@
   "module.tracking.feature.1": "Historial y reproducción de recorridos",
   "module.tracking.feature.2": "Gestión de conductores y vehículos",
   "module.tracking.feature.3": "Alertas y notificaciones de eventos",
-  "module.tracking.feature.4": "Portal para clientes"
+  "module.tracking.feature.4": "Portal para clientes",
+  "notice.trip_started.title": "El viaje empezó",
+  "notice.trip_started.body": "%2$s ya salió con %1$s en la lista.",
+  "notice.approaching.title": "El bus se acerca",
+  "notice.approaching.body": "%2$s llega pronto a %3$s, donde sube %1$s.",
+  "notice.boarded.title": "%1$s subió",
+  "notice.boarded.body": "%1$s subió a %2$s en %3$s.",
+  "notice.dropped_off.title": "%1$s llegó",
+  "notice.dropped_off.body": "%1$s bajó de %2$s en %3$s.",
+  "notice.no_show.title": "%1$s no subió",
+  "notice.no_show.body": "%2$s marcó a %1$s como ausente en %3$s.",
+  "notice.cancelled.title": "Viaje cancelado",
+  "notice.cancelled.body": "%2$s no hará el viaje de %1$s.",
+  "notice.changed.title": "Cambio en el viaje",
+  "notice.changed.body": "El viaje de %1$s en %2$s cambió.",
+  "notice.delay.title": "Retraso",
+  "notice.delay.body": "%2$s, viaje de %1$s: %3$s"
 }

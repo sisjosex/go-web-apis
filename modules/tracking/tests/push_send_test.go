@@ -17,6 +17,7 @@ import (
 	"golang.org/x/oauth2"
 
 	"josex/web/modules/core/testhelpers"
+	"josex/web/modules/core/utils"
 	trackingJobs "josex/web/modules/tracking/jobs"
 	"josex/web/modules/tracking/push"
 )
@@ -69,7 +70,8 @@ func pushRows(t *testing.T, helper *testhelpers.ApiTestHelper, token, notificati
 	return tokens, feed
 }
 
-// TestPushSend_FCMAnswers - TRACK-012 step 3: a delivered message carries the loc keys and args; an
+// TestPushSend_FCMAnswers - TRACK-012 step 3: a delivered message carries the loc keys and args, or
+// the words written in the guardian's language when the server has them (TENANCY-005); an
 // UNREGISTERED token is deleted and the task done; a 503 fails the task for asynq to retry, with the
 // token and the feed row untouched.
 func TestPushSend_FCMAnswers(t *testing.T) {
@@ -82,6 +84,10 @@ func TestPushSend_FCMAnswers(t *testing.T) {
 	handler := trackingJobs.PushSendHandler(helper.DB(), pusher)
 
 	t.Run("delivered", func(t *testing.T) {
+		// No words for the type on the server: the phone localizes the loc keys (TENANCY-005 fallback).
+		saved := utils.Translations
+		t.Cleanup(func() { utils.Translations = saved })
+		utils.Translations = map[string]map[string]string{}
 		fcm.status, fcm.body = http.StatusOK, `{"name":"projects/test-project/messages/1"}`
 		task, id := pushSendFixture(t, helper, "tok-ok")
 		assert.NoError(t, handler(t.Context(), task))
@@ -104,6 +110,31 @@ func TestPushSend_FCMAnswers(t *testing.T) {
 		assert.Equal(t, []string{"John Doe", "Morning Route"}, sent.Message.Android.Notification.BodyLocArgs)
 		assert.Equal(t, []string{"John Doe", "Morning Route"}, sent.Message.Android.Notification.TitleLocArgs, "the title names the rider too")
 		assert.Equal(t, id, sent.Message.Android.Notification.Tag, "a resend replaces the notice shown")
+	})
+
+	t.Run("written in the recipient's language", func(t *testing.T) {
+		// TENANCY-005 D1: with the words in tracking's lang files, the phone gets them written in the
+		// guardian's own language (`auth.users.locale`, 'es' by default) and no loc keys at all.
+		saved := utils.Translations
+		t.Cleanup(func() { utils.Translations = saved })
+		utils.Translations = map[string]map[string]string{"es": {
+			"notice.boarded.title": "%1$s subió", "notice.boarded.body": "%1$s subió a %2$s.",
+		}}
+		fcm.status, fcm.body = http.StatusOK, `{"name":"projects/test-project/messages/2"}`
+		task, _ := pushSendFixture(t, helper, "tok-written")
+		assert.NoError(t, handler(t.Context(), task))
+		var sent struct {
+			Message struct {
+				Android struct {
+					Notification map[string]interface{} `json:"notification"`
+				} `json:"android"`
+			} `json:"message"`
+		}
+		assert.NoError(t, json.Unmarshal([]byte(fcm.last.Load().(string)), &sent))
+		notice := sent.Message.Android.Notification
+		assert.Equal(t, "John Doe subió", notice["title"])
+		assert.Equal(t, "John Doe subió a Morning Route.", notice["body"])
+		assert.NotContains(t, notice, "title_loc_key", "a loc key would win over the written title")
 	})
 
 	t.Run("unregistered", func(t *testing.T) {

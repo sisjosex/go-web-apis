@@ -22,6 +22,10 @@ type PushMessage struct {
 	// Urgent sends a Silent (data-only) message at high priority: the phone draws it itself, now —
 	// the trip-progress notification (MOBILE-024), which a dozing phone must not hold back.
 	Urgent bool
+	// Title and Body are the notice already written in its recipient's language (TENANCY-005 D1): the
+	// phone shows them as they are, whatever its system language. Empty, it localizes the loc keys.
+	Title string
+	Body  string
 }
 
 // Pusher is the push port (TRACK-012 D2): FCM today, for Android and iOS alike.

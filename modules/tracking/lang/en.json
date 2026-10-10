@@ -245,5 +245,21 @@
   "document-digest.email.description": "These compliance documents have entered their warning window. A document is named here once; renew it and it will be watched again.",
   "document-digest.email.button-text": "Open documents",
   "document-digest.email.sign-off": "The %s team",
-  "document-digest.email.automated-note": "This is an automated message. Please do not reply."
+  "document-digest.email.automated-note": "This is an automated message. Please do not reply.",
+  "notice.trip_started.title": "The trip started",
+  "notice.trip_started.body": "%2$s has left with %1$s on the list.",
+  "notice.approaching.title": "The bus is near",
+  "notice.approaching.body": "%2$s is about to reach %3$s, where %1$s gets on.",
+  "notice.boarded.title": "%1$s is on board",
+  "notice.boarded.body": "%1$s got on %2$s at %3$s.",
+  "notice.dropped_off.title": "%1$s arrived",
+  "notice.dropped_off.body": "%1$s got off %2$s at %3$s.",
+  "notice.no_show.title": "%1$s did not board",
+  "notice.no_show.body": "%2$s marked %1$s absent at %3$s.",
+  "notice.cancelled.title": "Trip cancelled",
+  "notice.cancelled.body": "%2$s will not run %1$s's trip.",
+  "notice.changed.title": "Trip changed",
+  "notice.changed.body": "%1$s's trip on %2$s changed.",
+  "notice.delay.title": "Delay",
+  "notice.delay.body": "%2$s, %1$s's trip: %3$s"
 }

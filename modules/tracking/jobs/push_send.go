@@ -9,6 +9,7 @@ import (
 
 	coreServices "josex/web/modules/core/services"
 	"josex/web/modules/tracking/interfaces"
+	"josex/web/modules/tracking/push"
 	trackingRepos "josex/web/modules/tracking/repositories"
 
 	"github.com/google/uuid"
@@ -70,12 +71,16 @@ func pushToUser(ctx context.Context, db coreServices.DatabaseService, pusher int
 	}
 	var outage error
 	for _, token := range tokens {
-		msg.Token = token
+		msg.Token = token.Token
+		// Written in the recipient's language (TENANCY-005 D1); a silent message has no words.
+		if !msg.Silent && msg.Type != "" {
+			msg.Title, msg.Body = push.NoticeText(token.Locale, msg.Type, msg.Args)
+		}
 		err := pusher.Send(ctx, msg)
 		switch {
 		case err == nil:
 		case errors.Is(err, interfaces.ErrPushUnregistered):
-			if err := repo.ForgetPushToken(ctx, token); err != nil {
+			if err := repo.ForgetPushToken(ctx, token.Token); err != nil {
 				return err
 			}
 		case errors.Is(err, interfaces.ErrPushRejected):

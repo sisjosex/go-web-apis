@@ -99,13 +99,19 @@ func (r *TrackingRepository) TripProgress(ctx context.Context, tenantID, tripID 
 	return out, rows.Err()
 }
 
-// PushTokens answers every push token of an account.
-func (r *TrackingRepository) PushTokens(ctx context.Context, userID uuid.UUID) ([]string, error) {
-	rows, err := r.dbService.Query(ctx, `SELECT token FROM auth.sp_push_tokens(p_user_id := $1)`, userID)
+// PushToken is one phone of an account, and the language the account reads (TENANCY-005).
+type PushToken struct {
+	Token  string
+	Locale string
+}
+
+// PushTokens answers every push token of an account, each with the account's language.
+func (r *TrackingRepository) PushTokens(ctx context.Context, userID uuid.UUID) ([]PushToken, error) {
+	rows, err := r.dbService.Query(ctx, `SELECT token, locale FROM auth.sp_push_tokens(p_user_id := $1)`, userID)
 	if err != nil {
 		return nil, err
 	}
-	return pgx.CollectRows(rows, pgx.RowTo[string])
+	return pgx.CollectRows(rows, pgx.RowToStructByPos[PushToken])
 }
 
 // ForgetPushToken deletes a token FCM answered UNREGISTERED.
