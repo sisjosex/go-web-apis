@@ -93,6 +93,7 @@ func (r *TrackingRepository) GetRouteRealtimeStatus(ctx context.Context, tenantI
 	var vehicleID *uuid.UUID
 	var licensePlate *string
 	var driverName *string
+	var driverID *uuid.UUID
 	var currentLatitude, currentLongitude *float64
 	var currentSpeed *float64
 	var locationAgeSeconds *int32
@@ -110,6 +111,7 @@ func (r *TrackingRepository) GetRouteRealtimeStatus(ctx context.Context, tenantI
 		&vehicleID,
 		&licensePlate,
 		&driverName,
+		&driverID,
 		&currentLatitude,
 		&currentLongitude,
 		&currentSpeed,
@@ -132,6 +134,7 @@ func (r *TrackingRepository) GetRouteRealtimeStatus(ctx context.Context, tenantI
 		VehicleID:          vehicleID,
 		LicensePlate:       licensePlate,
 		DriverName:         driverName,
+		DriverID:           driverID,
 		CurrentLatitude:    currentLatitude,
 		CurrentLongitude:   currentLongitude,
 		CurrentSpeed:       currentSpeed,
@@ -193,6 +196,7 @@ func scanRiderStatus(row pgx.Row) (*models.RiderStatusResponse, error) {
 		&s.VehicleID,
 		&s.LicensePlate,
 		&s.DriverName,
+		&s.DriverID,
 		&s.VehicleLatitude,
 		&s.VehicleLongitude,
 		&s.VehicleSpeed,

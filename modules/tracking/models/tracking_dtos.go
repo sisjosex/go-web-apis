@@ -37,17 +37,19 @@ type RouteRealtimeStatusResponse struct {
 	VehicleID    *uuid.UUID `json:"vehicle_id"`
 	LicensePlate *string    `json:"license_plate"`
 	// DriverName is the route's default driver (TRACK-006); NULL while the route has none.
-	DriverName         *string  `json:"driver_name"`
-	CurrentLatitude    *float64 `json:"current_latitude"`
-	CurrentLongitude   *float64 `json:"current_longitude"`
-	CurrentSpeed       *float64 `json:"current_speed"`
-	LocationAgeSeconds *int32   `json:"location_age_seconds"`
-	TotalRiders        int32    `json:"total_riders"`
-	BoardedCount       int32    `json:"boarded_count"`
-	ArrivedCount       int32    `json:"arrived_count"`
-	NoShowCount        int32    `json:"no_show_count"`
-	PendingCount       int32    `json:"pending_count"`
-	ActiveAlerts       int32    `json:"active_alerts"`
+	DriverName *string `json:"driver_name"`
+	// DriverID is who DriverName names — today's trip driver, else the route's default (TRACK-058 D1).
+	DriverID           *uuid.UUID `json:"driver_id"`
+	CurrentLatitude    *float64   `json:"current_latitude"`
+	CurrentLongitude   *float64   `json:"current_longitude"`
+	CurrentSpeed       *float64   `json:"current_speed"`
+	LocationAgeSeconds *int32     `json:"location_age_seconds"`
+	TotalRiders        int32      `json:"total_riders"`
+	BoardedCount       int32      `json:"boarded_count"`
+	ArrivedCount       int32      `json:"arrived_count"`
+	NoShowCount        int32      `json:"no_show_count"`
+	PendingCount       int32      `json:"pending_count"`
+	ActiveAlerts       int32      `json:"active_alerts"`
 }
 
 // === DTOs for Rider Status (Guardian View) ===
@@ -61,6 +63,7 @@ type RiderStatusResponse struct {
 	VehicleID            *uuid.UUID `json:"vehicle_id"`
 	LicensePlate         *string    `json:"license_plate"`
 	DriverName           *string    `json:"driver_name"`
+	DriverID             *uuid.UUID `json:"driver_id"`
 	VehicleLatitude      *float64   `json:"vehicle_latitude"`
 	VehicleLongitude     *float64   `json:"vehicle_longitude"`
 	VehicleSpeed         *float64   `json:"vehicle_speed"`

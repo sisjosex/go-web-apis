@@ -1763,7 +1763,7 @@ func TestDeleteDriverRefusedWhileARouteNamesThem(t *testing.T) {
 }
 
 // TestDriverNameOnStatusEndpoints - driver_name stops being a TODO: both status SPs read it off the
-// route's default driver. The schedule is widened for the call because sp_get_rider_status only
+// route's default driver, with its driver_id beside it so the app can link it (TRACK-058 D1). The schedule is widened for the call because sp_get_rider_status only
 // follows an assignment whose route has not ended yet, which would otherwise make this test depend
 // on the hour it runs at.
 func TestDriverNameOnStatusEndpoints(t *testing.T) {
@@ -1787,10 +1787,12 @@ func TestDriverNameOnStatusEndpoints(t *testing.T) {
 	riderStatus := helper.DoRequest("GET", "/tracking/riders/"+TestRiderJohnID+"/status", nil, map[string]string{})
 	assert.Equal(t, http.StatusOK, riderStatus.Code, riderStatus.Body.String())
 	assert.Equal(t, "Ana Quispe", ParseResponse(t, riderStatus.Body.Bytes())["driver_name"])
+	assert.Equal(t, driverID, ParseResponse(t, riderStatus.Body.Bytes())["driver_id"])
 
 	routeStatus := helper.DoRequest("GET", "/tracking/routes/"+MorningRouteID+"/status", nil, map[string]string{})
 	assert.Equal(t, http.StatusOK, routeStatus.Code, routeStatus.Body.String())
 	assert.Equal(t, "Ana Quispe", ParseResponse(t, routeStatus.Body.Bytes())["driver_name"])
+	assert.Equal(t, driverID, ParseResponse(t, routeStatus.Body.Bytes())["driver_id"])
 }
 
 // TestRouteStatusWithoutDefaultDriver - a route with no default driver still answers, with a NULL
@@ -1803,6 +1805,7 @@ func TestRouteStatusWithoutDefaultDriver(t *testing.T) {
 
 	assert.Equal(t, http.StatusOK, w.Code, w.Body.String())
 	assert.Nil(t, ParseResponse(t, w.Body.Bytes())["driver_name"])
+	assert.Nil(t, ParseResponse(t, w.Body.Bytes())["driver_id"])
 }
 
 // ============================================================================

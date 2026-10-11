@@ -1,5 +1,5 @@
 CREATE OR REPLACE FUNCTION tracking.sp_get_route_realtime_status(p_tenant_id uuid, p_route_id uuid, p_scope_user_id uuid DEFAULT NULL::uuid)
- RETURNS TABLE(route_id uuid, route_name character varying, vehicle_id uuid, license_plate character varying, driver_name character varying, current_latitude numeric, current_longitude numeric, current_speed numeric, location_age_seconds integer, total_riders integer, boarded_count integer, arrived_count integer, no_show_count integer, pending_count integer, active_alerts integer)
+ RETURNS TABLE(route_id uuid, route_name character varying, vehicle_id uuid, license_plate character varying, driver_name character varying, driver_id uuid, current_latitude numeric, current_longitude numeric, current_speed numeric, location_age_seconds integer, total_riders integer, boarded_count integer, arrived_count integer, no_show_count integer, pending_count integer, active_alerts integer)
  LANGUAGE plpgsql
 AS $function$
 DECLARE
@@ -36,6 +36,7 @@ BEGIN
         v.id AS vehicle_id,
         CAST(v.plate_number AS VARCHAR) AS license_plate,
         CAST(d.first_name || ' ' || d.last_name AS VARCHAR) AS driver_name,
+        d.id AS driver_id,
         vl.latitude AS current_latitude,
         vl.longitude AS current_longitude,
         vl.speed AS current_speed,

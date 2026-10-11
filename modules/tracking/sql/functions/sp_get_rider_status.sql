@@ -1,5 +1,5 @@
 CREATE OR REPLACE FUNCTION tracking.sp_get_rider_status(p_tenant_id uuid, p_rider_id uuid, p_scope_user_id uuid DEFAULT NULL::uuid, p_guardian_user_id uuid DEFAULT NULL::uuid)
- RETURNS TABLE(rider_id uuid, rider_name character varying, route_id uuid, route_name character varying, vehicle_id uuid, license_plate character varying, driver_name character varying, vehicle_latitude numeric, vehicle_longitude numeric, vehicle_speed numeric, location_age_seconds integer, last_event_type character varying, last_event_time timestamp without time zone, last_event_notes text, last_event_stop character varying, scheduled_pickup_stop character varying, scheduled_dropoff_stop character varying, active_alerts integer)
+ RETURNS TABLE(rider_id uuid, rider_name character varying, route_id uuid, route_name character varying, vehicle_id uuid, license_plate character varying, driver_name character varying, driver_id uuid, vehicle_latitude numeric, vehicle_longitude numeric, vehicle_speed numeric, location_age_seconds integer, last_event_type character varying, last_event_time timestamp without time zone, last_event_notes text, last_event_stop character varying, scheduled_pickup_stop character varying, scheduled_dropoff_stop character varying, active_alerts integer)
  LANGUAGE plpgsql
 AS $function$
 DECLARE
@@ -34,6 +34,7 @@ BEGIN
         v.id AS vehicle_id,
         CAST(v.plate_number AS VARCHAR) AS license_plate,
         CAST(d.first_name || ' ' || d.last_name AS VARCHAR) AS driver_name,
+        d.id AS driver_id,
         vl.latitude AS vehicle_latitude,
         vl.longitude AS vehicle_longitude,
         vl.speed AS vehicle_speed,
