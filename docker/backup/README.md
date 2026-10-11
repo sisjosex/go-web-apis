@@ -1,6 +1,7 @@
 # Backup and restore
 
-Nightly logical backup of the whole cluster to S3-compatible storage. One
+Nightly logical backup of the whole cluster to S3-compatible storage, and the
+point-in-time archive beside it (below). One
 `crond` in the `backup` container runs `/backup.sh` on `BACKUP_SCHEDULE`.
 
 ## What lands in the bucket
@@ -78,7 +79,30 @@ That count must match the source. `pg_restore` warns about the `postgres` role
 and about extensions it cannot recreate as a non-superuser; those warnings are
 expected and do not mean the restore failed — a non-zero exit code does.
 
-## What this is not
+## Point-in-time recovery
 
-Point-in-time recovery. A nightly dump loses up to 24 hours. PITR (pgBackRest or
-WAL-G) and a scheduled restore test are INFRA-004.
+The dump above loses up to 24 hours. pgBackRest, inside the `postgres` image (INFRA-017),
+archives every WAL segment to `s3://$BACKUP_S3_BUCKET/pgbackrest/` within a minute, on top of a
+full base backup each Sunday and a differential each other night (`docker/README.md → Backups`
+has the cron and the measured recovery time). It restores the **whole cluster** — every
+database — to any minute of the last 8-14 days. Same bucket and token as the dump; the prune
+above only touches date prefixes.
+
+From `/srv/taypi24` on the box:
+
+```sh
+docker/restore.sh info                                     # backups, WAL range, last archived segment
+docker/restore.sh drill --time '2026-10-11 14:05:00+00'    # restore into pg-drill, print tables and seconds per phase
+docker/restore.sh drill                                    # same, to the last archived minute
+docker/restore.sh drill clean                              # remove pg-drill and its volume
+docker/restore.sh restore --time '2026-10-11 14:05:00+00' --yes   # production: stops the stack, restores pgdata, starts it
+```
+
+`drill` never touches `pgdata`: its own container and volume, archiving off, the table count
+next to production's. Rehearse the exact `--time` with it before `restore`, which refuses
+without `--yes`. After a real restore take a full backup (the command is printed): the
+cluster continues on a new timeline.
+
+Use the **dump** instead when one database is wrong and the others are not (a tenant with its
+own database), or to move data to another PostgreSQL version. To pull one database out of a
+point in time, `drill` to that minute and `pg_dump` it from `pg-drill`.

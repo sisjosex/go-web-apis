@@ -40,7 +40,12 @@ x-logging: &logging
 
 services:
   postgres:
-    image: postgis/postgis:17-3.5
+    # postgis/postgis:17-3.5 plus pgBackRest (INFRA-017): every WAL segment goes to
+    # s3://$BACKUP_S3_BUCKET/pgbackrest/ within a minute; base backups come from the host's
+    # cron and docker/restore.sh restores to any minute (docker/backup/README.md).
+    build:
+      context: ./docker/postgres
+    image: xanthops-postgres
     restart: unless-stopped
     # Memory and I/O settings for this box (D2): 2 GB of buffers, 6 GB the planner may
     # assume cached, NVMe costs, no JIT for short SP calls, checkpoints every 2 GB of
@@ -82,12 +87,18 @@ services:
     shm_size: 256m
     cpu_shares: 2048
     logging: *logging
-    environment:
+    environment: &postgres-env
       POSTGRES_USER: ${POSTGRES_USER}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
       POSTGRES_DB: ${POSTGRES_DB}
       # The tenant server's own database — nothing in the API creates it.
       POSTGRES_EXTRA_DBS: ${TENANT_POSTGRES_DB}
+      # The pgBackRest repository: the backup service's bucket and token, under pgbackrest/.
+      BACKUP_S3_BUCKET: ${BACKUP_S3_BUCKET}
+      BACKUP_S3_ENDPOINT: ${BACKUP_S3_ENDPOINT:-}
+      BACKUP_S3_ACCESS_KEY: ${BACKUP_S3_ACCESS_KEY}
+      BACKUP_S3_SECRET_KEY: ${BACKUP_S3_SECRET_KEY}
+      BACKUP_S3_REGION: ${BACKUP_S3_REGION:-us-east-1}
     volumes:
       - pgdata:/var/lib/postgresql/data
       - ./docker/postgres/init-extra-databases.sh:/docker-entrypoint-initdb.d/10-extra-databases.sh:ro
@@ -98,6 +109,22 @@ services:
       timeout: 5s
       retries: 10
       start_period: 30s
+
+  # The restore drill (docker/restore.sh drill): the same image restored from R2 onto its own
+  # volume, never pgdata. archive_mode=off on the command line outranks the restored
+  # postgresql.auto.conf, so a promoted drill never pushes a timeline into the repository;
+  # max_connections matches production because recovery refuses a lower value.
+  pg-drill:
+    image: xanthops-postgres
+    profiles: [drill]
+    restart: "no"
+    command: ["postgres", "-c", "archive_mode=off", "-c", "max_connections=200", "-c", "shared_preload_libraries=pg_stat_statements"]
+    shm_size: 256m
+    cpu_shares: 512
+    logging: *logging
+    environment: *postgres-env
+    volumes:
+      - pgdrill:/var/lib/postgresql/data
 
   # ============ VALKEY (queues, rate limit — INFRA-001) ============
   # Nothing here is the only copy of business data (the outbox is in PostgreSQL),
@@ -478,6 +505,7 @@ services:
 
 volumes:
   pgdata:
+  pgdrill:
   valkeydata:
   promdata:
   grafanadata:

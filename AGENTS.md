@@ -285,7 +285,9 @@ Caddy routes `PLATFORM_HOST/api/v1/tracking/ws` to it; the `tenant` profile is a
 for a dedicated box.
 
 `docker/backup/README.md` has the nightly dump and the restore steps; deploy variables are at the
-bottom of `.env.example`. PITR, PgBouncer and monitoring are INFRA-005.
+bottom of `.env.example`. Point-in-time recovery is pgBackRest inside the `postgres` image
+(INFRA-017: WAL to R2 within a minute, `docker/restore.sh info|drill|restore`); alerting is INFRA-018;
+PgBouncer has no spec yet.
 
 **One box (INFRA-004).** `docker/README.md` is the server runbook: the memory split of the 12 GB, the
 connection budget (`DATABASE_POOL_SIZE` + `TENANCY_DATABASE_POOL_SIZE` per service, idle connections

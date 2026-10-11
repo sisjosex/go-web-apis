@@ -26,6 +26,7 @@ image for five roles, and Valhalla, which has no Debian package.
 | api-realtime | 512 MB | `GOMEMLIMIT` 420 MiB | one goroutine pair per socket |
 | api-scheduler | 256 MB | `GOMEMLIMIT` 200 MiB | |
 | caddy | 256 MB | — | |
+| pgbackrest | none | ~30 MB during a backup or archive push, nothing between | inside postgres (INFRA-017) |
 | prometheus | 256 MB | 15 days, ≤ 2 GB on disk | INFRA-011 D1 |
 | grafana | 192 MB | — | loopback only, port 3001 |
 | postgres-exporter | 64 MB | — | |
@@ -62,7 +63,7 @@ database costs no connection. Idle connections close after 5 min.
 29 + 24 × 7 = 197: seven dedicated databases busy at the same moment fit, however many
 tenants share the platform one. Past that, either raise `max_connections` (each connection
 is ~5-10 MB when active — take it from the page cache line above) or put PgBouncer in front
-(INFRA-005; the relay's `LISTEN` must keep a direct connection).
+(no spec yet; the relay's `LISTEN` must keep a direct connection).
 
 ## PostgreSQL
 
@@ -117,6 +118,54 @@ A statement that leads the totals is one spec: find its `queryid` in
 `SLOW_REQUEST_MS` (300) or answered 5xx also writes one line with route, tenant and
 `duration_ms` to `docker compose logs api-platform`. The Go profiler answers inside the
 container: `docker compose exec api-platform wget -qO- 127.0.0.1:6060/debug/pprof/heap > heap.pb`.
+
+## Backups (INFRA-017)
+
+Two copies, both in the R2 bucket `BACKUP_S3_BUCKET` (`backup/README.md` has the restore steps):
+
+- **Point-in-time** — the `postgres` image (`postgres/Dockerfile`) carries pgBackRest. Every WAL
+  segment goes to `pgbackrest/` within 60 s (`archive_timeout`), a full base backup lands on
+  Sunday 03:30 UTC and a differential the other nights, from the host's cron. Two fulls are kept:
+  any minute of the last 8-14 days restores, losing at most ~2 min (RPO).
+  `docker/restore.sh info|drill|restore` reads and restores it.
+- **Nightly dump** — the `backup` service, 03:00 UTC, one `pg_dump` per database: the way to
+  restore one database alone or into another PostgreSQL version.
+
+Once per box, and again only if the stanza is ever deleted:
+
+```sh
+cd /srv/taypi24
+# A volume from before INFRA-017: postgres/archive.sql never ran on it. archive_mode applies on the
+# restart the deploy does (the compose file builds the new image when it is missing).
+docker compose -f docker-compose.prod.yml exec -T postgres sh -c 'psql -U "$POSTGRES_USER" -d postgres \
+  -c "ALTER SYSTEM SET archive_mode = on" \
+  -c "ALTER SYSTEM SET archive_command = '\''pgbackrest --stanza=main archive-push %p'\''" \
+  -c "ALTER SYSTEM SET archive_timeout = '\''60s'\''"'
+sh docker/deploy.sh <sha>
+# The pushes before this line fail (no stanza yet) and stay queued; they go through after it.
+docker compose -f docker-compose.prod.yml exec -T -u postgres postgres pgbackrest --stanza=main stanza-create
+docker compose -f docker-compose.prod.yml exec -T -u postgres postgres pgbackrest --stanza=main check
+docker compose -f docker-compose.prod.yml exec -T -u postgres postgres pgbackrest --stanza=main --type=full backup
+docker compose -f docker-compose.prod.yml exec -T postgres sh -c 'psql -U "$POSTGRES_USER" -d postgres -c "SELECT pg_stat_reset_shared('\''archiver'\'')"'
+cat > /etc/cron.d/taypi-backup <<'EOF'
+30 3 * * 0   root cd /srv/taypi24 && docker compose -f docker-compose.prod.yml exec -T -u postgres postgres pgbackrest --stanza=main --type=full backup >> /var/log/taypi-backup.log 2>&1
+30 3 * * 1-6 root cd /srv/taypi24 && docker compose -f docker-compose.prod.yml exec -T -u postgres postgres pgbackrest --stanza=main --type=diff backup >> /var/log/taypi-backup.log 2>&1
+EOF
+```
+
+Healthy is `failed_count = 0` and a recent `last_archived_time` in
+`SELECT archived_count, failed_count, last_archived_time FROM pg_stat_archiver`, and a backup from
+last night in `docker/restore.sh info`. A change to `postgres/Dockerfile` needs
+`docker compose -f docker-compose.prod.yml build postgres` before the deploy: the deploy pulls
+images, it does not rebuild one it already has. Nothing alerts on a failing archive yet (INFRA-018).
+
+**Recovery time, measured** with `docker/restore.sh drill` on this box:
+
+| Data | Download | Start | Replay | Total |
+|---|---|---|---|---|
+| _pending the first drill_ | | | | |
+
+Run a drill after any change to the image or the bucket, and when the data has grown tenfold.
 
 ## Logs
 
