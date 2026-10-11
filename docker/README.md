@@ -161,9 +161,12 @@ images, it does not rebuild one it already has. Nothing alerts on a failing arch
 
 **Recovery time, measured** with `docker/restore.sh drill` on this box:
 
-| Data | Download | Start | Replay | Total |
-|---|---|---|---|---|
-| _pending the first drill_ | | | | |
+| Date | Data | Download | Start | Replay | Total |
+|---|---|---|---|---|---|
+| 2026-10-11 | 102 MB cluster (26.6 MB lz4 backup set), 1 full + 3 WAL segments | 84 s | 8 s | 1 s | 93 s |
+
+The download is per-file R2 latency more than bytes; a production `restore` adds the stop and
+the `up -d --wait` (~1 min). Target RTO is 1 h.
 
 Run a drill after any change to the image or the bucket, and when the data has grown tenfold.
 

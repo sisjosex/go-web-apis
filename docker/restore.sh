@@ -40,12 +40,33 @@ restore_in() {
 	$DRILL run --rm --no-deps -u postgres "$@"
 }
 
-# Polls every 5 s, for up to an hour, until <service> answers <query> with t.
+# Polls every 5 s, for up to an hour, until <service> answers <query> with t. A server that
+# stops instead (a target it cannot reach) ends the wait with its last log lines.
 wait_for() {
 	i=0
 	until [ "$(psql_in "$1" -c "$2" 2>/dev/null)" = t ]; do
+		if [ -z "$($DRILL ps -q --status running "$1")" ]; then
+			$DRILL logs --tail 5 "$1" >&2
+			echo "❌ $1 stopped before '$2'" >&2
+			exit 1
+		fi
 		i=$((i + 1))
 		[ "$i" -gt 720 ] && { echo "❌ $1: no '$2' after 60 min — $COMPOSE logs $1" >&2; exit 1; }
+		sleep 5
+	done
+}
+
+# Recovery to a time stops at the first commit after it; on a quiet server the archive may hold
+# none yet, and the restored server then refuses to start. One commit and a WAL switch on the
+# live server, then up to 2 min for that segment to reach the archive. Skipped when it is down.
+flush_archive() {
+	seg=$(psql_in postgres -c 'SELECT txid_current()' -c 'SELECT pg_walfile_name(pg_switch_wal())' 2>/dev/null) \
+		|| { echo "postgres is down: the archive ends where it stopped"; return 0; }
+	seg=$(echo "$seg" | tail -1)
+	i=0
+	until [ "$(psql_in postgres -c "SELECT last_archived_wal >= '$seg' FROM pg_stat_archiver")" = t ]; do
+		i=$((i + 1))
+		[ "$i" -gt 24 ] && { echo "❌ $seg not archived after 2 min — docker/restore.sh info" >&2; exit 1; }
 		sleep 5
 	done
 }
@@ -59,6 +80,7 @@ drill() {
 	docker volume inspect "$VOLUME" >/dev/null 2>&1 \
 		&& { echo "❌ $VOLUME exists — docker/restore.sh drill clean" >&2; exit 1; }
 	echo "🧪 drill → pg-drill ${TIME:-(end of archive)}"
+	flush_archive
 	t0=$(date +%s)
 	restore_in pg-drill
 	t1=$(date +%s)
@@ -84,8 +106,12 @@ restore() {
 	echo "   Rehearse first: docker/restore.sh drill${TIME:+ --time '$TIME'}"
 	[ "$YES" = 1 ] || usage
 	t0=$(date +%s)
-	# Everything, not only the API: nothing may write between the stop and the restore.
-	$COMPOSE stop
+	# Everything, not only the API: nothing may write between the stop and the restore. Postgres
+	# last, after its final writes are in the archive.
+	# shellcheck disable=SC2046 # one word per service
+	$COMPOSE stop $($COMPOSE ps --services | grep -vx postgres)
+	flush_archive
+	$COMPOSE stop postgres
 	# --delta rewrites only the files that differ from the backup: minutes, not a full download.
 	restore_in postgres --delta
 	$COMPOSE start postgres
