@@ -173,7 +173,7 @@ token. Send the new bot any message from the operator's account, then read the c
 `https://api.telegram.org/bot<token>/getUpdates` (`message.chat.id`). On the box:
 
     mkdir -p secrets/alertmanager
-    printf '%s' '<token>' > secrets/alertmanager/telegram_token && chmod 600 secrets/alertmanager/telegram_token
+    printf '%s' '<token>' > secrets/alertmanager/telegram_token && chmod 644 secrets/alertmanager/telegram_token   # alertmanager runs as nobody; secrets/ itself is 700
     echo 'ALERT_TELEGRAM_CHAT_ID=<chat id>' >> .env
     dc up -d alertmanager                       # a changed config or chat id needs a restart, not a reload
 
