@@ -22,8 +22,6 @@ import (
 	"net/http"
 	"os"
 	"sort"
-	"strconv"
-	"strings"
 	"sync"
 	"time"
 
@@ -86,7 +84,7 @@ func main() {
 
 	// Let the worker finish what is queued, then count what it stored.
 	drainUntil := time.Now().Add(15 * time.Second)
-	for time.Now().Before(drainUntil) && streamLag(ctx, valkey.Client(), stream) > 0 {
+	for time.Now().Before(drainUntil) && trackingServices.StreamLag(ctx, valkey.Client(), stream) > 0 {
 		time.Sleep(200 * time.Millisecond)
 	}
 	stored, distinct := countStored(tenantCtx, db, fleet, start.Add(-time.Minute))
@@ -230,36 +228,9 @@ func watchLag(ctx context.Context, client *redis.Client, stream string, stop <-c
 		case <-stop:
 			return worst
 		case <-time.After(500 * time.Millisecond):
-			worst = math.Max(worst, streamLag(ctx, client, stream))
+			worst = math.Max(worst, trackingServices.StreamLag(ctx, client, stream))
 		}
 	}
-}
-
-// streamLag is how old the oldest point the worker has not finished is: the first entry not yet
-// delivered to the group, or the oldest one delivered and not acked. Entry ids are milliseconds.
-func streamLag(ctx context.Context, client *redis.Client, stream string) float64 {
-	oldest := int64(0)
-	groups, err := client.XInfoGroups(ctx, stream).Result()
-	if err != nil || len(groups) == 0 {
-		return 0
-	}
-	if next, err := client.XRangeN(ctx, stream, "("+groups[0].LastDeliveredID, "+", 1).Result(); err == nil && len(next) > 0 {
-		oldest = entryMillis(next[0].ID)
-	}
-	if pending, err := client.XPending(ctx, stream, groups[0].Name).Result(); err == nil && pending.Count > 0 {
-		if ms := entryMillis(pending.Lower); oldest == 0 || ms < oldest {
-			oldest = ms
-		}
-	}
-	if oldest == 0 {
-		return 0
-	}
-	return float64(time.Now().UnixMilli()-oldest) / 1000
-}
-
-func entryMillis(id string) int64 {
-	ms, _ := strconv.ParseInt(strings.SplitN(id, "-", 2)[0], 10, 64)
-	return ms
 }
 
 // countStored answers how many rows the load vehicles have since the run began, and how many distinct

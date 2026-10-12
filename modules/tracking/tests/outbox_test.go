@@ -13,10 +13,13 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/hibiken/asynq"
+	"github.com/jackc/pgx/v5"
+	"github.com/prometheus/client_golang/prometheus/testutil"
 	"github.com/stretchr/testify/assert"
 
 	"josex/web/config"
 	"josex/web/modules/core/jobs"
+	coreServices "josex/web/modules/core/services"
 	"josex/web/modules/core/testhelpers"
 )
 
@@ -303,4 +306,38 @@ func TestOutboxRouteChanged_ExceptionsAndSchedules(t *testing.T) {
 
 	assert.Equal(t, http.StatusCreated, w.Code, w.Body.String())
 	assert.Equal(t, after+1, routeChangedRows(t, helper))
+}
+
+// TestOutboxLag_ReadsTheUnpublishedTail - INFRA-018: sp_outbox_lag counts the unpublished rows and
+// ages the oldest, and the relay turns the drained answer into its gauges.
+func TestOutboxLag_ReadsTheUnpublishedTail(t *testing.T) {
+	helper := SetupTrackingTest(t)
+	defer helper.Close()
+	ctx := context.Background()
+
+	id, _, err := InsertOutboxRow(helper, "document.alerts", map[string]interface{}{"marker": "lag", "tenant_id": TestTenantID})
+	if err != nil {
+		t.Fatalf("insert row: %v", err)
+	}
+	AgeOutboxRow(t, helper, id, 90*time.Second, false)
+
+	var rows int64
+	var oldest float64
+	if err := helper.DB().QueryRow(ctx, `SELECT unpublished_rows, oldest_unpublished_seconds FROM tracking.sp_outbox_lag()`).Scan(&rows, &oldest); err != nil {
+		t.Fatalf("sp_outbox_lag: %v", err)
+	}
+	assert.GreaterOrEqual(t, rows, int64(1), "the aged row is unpublished")
+	assert.GreaterOrEqual(t, oldest, 90.0, "the oldest unpublished row is at least the aged one")
+
+	relay, inspector := startTestRelay(t, helper, TestTenantID)
+	defer relay.Shutdown()
+	defer inspector.Close()
+	cfg, err := pgx.ParseConfig(config.ModularAppConfig.Core.DatabaseURL)
+	if err != nil {
+		t.Fatalf("parse database url: %v", err)
+	}
+	waitFor(t, 5*time.Second, "the relay's gauges after its drain", func() bool {
+		return testutil.ToFloat64(coreServices.OutboxUnpublishedRows.WithLabelValues(cfg.Database)) == 0 &&
+			testutil.ToFloat64(coreServices.OutboxOldestUnpublishedSeconds.WithLabelValues(cfg.Database)) == 0
+	})
 }

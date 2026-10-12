@@ -30,6 +30,8 @@ image for five roles, and Valhalla, which has no Debian package.
 | prometheus | 256 MB | 15 days, ≤ 2 GB on disk | INFRA-011 D1 |
 | grafana | 192 MB | — | loopback only, port 3001 |
 | postgres-exporter | 64 MB | — | |
+| alertmanager | 64 MB | ~20 MB | Telegram receiver (INFRA-018) |
+| node-exporter | 64 MB | ~20 MB | host disk, memory, load; the backup's textfile |
 | **kernel page cache** | **~3.5 GB** | | what PostgreSQL reads when a page is not in its buffers |
 
 `GOMEMLIMIT` makes the Go collector work harder as the heap nears the limit instead of
@@ -89,9 +91,13 @@ per query, four in total.
 
 ## Metrics (INFRA-011, INFRA-016)
 
-Prometheus scrapes `/metrics` of api-platform and api-worker (`METRICS_ADDR=:9100`, compose
-network only) and PostgreSQL through postgres-exporter (`pg_stat_statements`, table scans),
-every 60 s, and keeps 15 days. Grafana provisions one dashboard, *Taypi — API and database*:
+Prometheus scrapes `/metrics` of api-platform, api-realtime, api-worker and api-scheduler
+(`METRICS_ADDR=:9100`, compose network only), PostgreSQL through postgres-exporter
+(`pg_stat_statements`, table scans) and the host through node-exporter, every 60 s, and keeps
+15 days. Besides latency and the Go runtime the APIs publish what no exporter can know:
+`taypi_gps_stream_lag_seconds{stream}`, `taypi_outbox_unpublished_rows` and
+`taypi_outbox_oldest_unpublished_seconds{database}`, `taypi_dependency_up{dependency}` (valkey,
+valhalla) and the worker's `asynq_queue_size` / `asynq_queue_latency_seconds` (INFRA-018). Grafana provisions one dashboard, *Taypi — API and database*:
 p50/p95 per route, requests and 5xx, Go memory, the top statements by total and by mean
 time, the tables read by full scan.
 
@@ -118,6 +124,62 @@ A statement that leads the totals is one spec: find its `queryid` in
 `SLOW_REQUEST_MS` (300) or answered 5xx also writes one line with route, tenant and
 `duration_ms` to `docker compose logs api-platform`. The Go profiler answers inside the
 container: `docker compose exec api-platform wget -qO- 127.0.0.1:6060/debug/pprof/heap > heap.pb`.
+
+## Alerts (INFRA-018)
+
+Prometheus evaluates `docker/prometheus/alerts.yml` every 60 s; Alertmanager sends what fires,
+and later its resolution, to one Telegram chat. `critical` repeats every 4 h while it lasts,
+`warning` every 24 h. A cause silences its consequences: `PostgresDown` holds back `ApiDown`,
+`Http5xxRate` and `OutboxLag`; `ApiDown{role="worker"}` holds back `GpsStreamLag` and `OutboxLag`.
+All commands below run from `/srv/taypi24` and abbreviate `docker compose -f docker-compose.prod.yml`
+as `dc`.
+
+| Alert | Severity | Means | First command |
+|---|---|---|---|
+| ApiDown | critical | an api-* process has not answered `/metrics` for 2 min (the `role` label says which) | `dc ps`, then `dc logs --tail=100 api-<role>` |
+| Http5xxRate | warning | over 2 % of requests answered 5xx for 5 min | `dc logs --since=10m api-platform \| grep 'slow or failed'` — route and tenant are on the line |
+| GpsStreamLag | critical | GPS points wait over 5 s before they are stored, for 5 min: the worker is behind or stuck | `dc logs --tail=100 api-worker \| grep 'gps consumer'`, then `docker stats --no-stream postgres api-worker` |
+| OutboxLag | warning | an outbox row has waited over 60 s to become a task, for 5 min | `dc logs --tail=100 api-worker \| grep 'outbox relay'` — usually Valkey refusing writes |
+| AsynqBacklog | warning | over 1 000 tasks waiting for 10 min | `dc logs --tail=100 api-worker`; a handler failing in a loop shows in `asynq_tasks_failed_total` |
+| PostgresDown | critical | postgres-exporter cannot reach PostgreSQL for 1 min | `dc ps postgres`, `dc logs --tail=100 postgres`, `df -h` |
+| PostgresConnections | warning | over 80 % of `max_connections` (200) in use for 5 min | `dc exec postgres psql -U postgres -c "SELECT usename, datname, state, count(*) FROM pg_stat_activity GROUP BY 1,2,3 ORDER BY 4 DESC"` |
+| DiskFilling | warning | under 20 % of the root disk free for 10 min | `df -h`, `docker system df`, `du -sh /var/lib/docker/volumes/*` |
+| HostMemoryLow | warning | under 10 % of the host's memory available for 10 min | `docker stats --no-stream`; a process near its limit is the one to look at |
+| BackupStale | warning | no nightly dump succeeded in 26 h, or none ever has | `dc logs --tail=50 backup`, then `dc run --rm backup /backup.sh` |
+| WalArchiveFailing | critical | pgBackRest's `archive-push` failed in the last 15 min: point-in-time recovery has a hole | `dc exec -u postgres postgres pgbackrest --stanza=main check`, `docker/restore.sh info` |
+| DependencyDown | warning | Valkey or Valhalla does not answer the API for 2 min (`dependency` label) | `dc ps valkey valhalla`, `dc logs --tail=50 <dependency>` |
+| ProcessRestarting | warning | an api-* process started over twice in 30 min | `docker inspect --format '{{.State.OOMKilled}}' xanthops-api-<role>-1`; true → raise its limit (Memory above) |
+
+**Silence** an alert during planned work — it still shows in Alertmanager, nothing is sent:
+
+    dc exec alertmanager amtool --alertmanager.url=http://localhost:9093 silence add alertname=ApiDown --duration=2h --comment="deploy"
+    dc exec alertmanager amtool --alertmanager.url=http://localhost:9093 silence query
+    dc exec alertmanager amtool --alertmanager.url=http://localhost:9093 silence expire <id>
+
+**Test** the channel: a fake alert arrives within 30 s, its "resolved" about 5 min after it ends.
+
+    dc exec alertmanager amtool --alertmanager.url=http://localhost:9093 alert add alertname=Test severity=warning --annotation=summary=test --end="$(date -u -d '+2 min' +%Y-%m-%dT%H:%M:%SZ)"
+
+**Test the rules** after editing `alerts.yml`, on the PC or the box:
+
+    docker run --rm --entrypoint sh -v "$PWD/docker/prometheus:/etc/prometheus" -w /etc/prometheus prom/prometheus:v2.53.0 \
+      -c 'promtool check config prometheus.yml && promtool test rules alerts_test.yml'
+    dc restart prometheus                       # rules load at start
+
+**What is firing** right now, without Grafana: `dc exec prometheus wget -qO- localhost:9090/api/v1/alerts`.
+
+**Bot and chat, once.** In Telegram, talk to `@BotFather` → `/newbot` → a name → it answers the
+token. Send the new bot any message from the operator's account, then read the chat id from
+`https://api.telegram.org/bot<token>/getUpdates` (`message.chat.id`). On the box:
+
+    mkdir -p secrets/alertmanager
+    printf '%s' '<token>' > secrets/alertmanager/telegram_token && chmod 600 secrets/alertmanager/telegram_token
+    echo 'ALERT_TELEGRAM_CHAT_ID=<chat id>' >> .env
+    dc up -d alertmanager                       # a changed config or chat id needs a restart, not a reload
+
+**Box down.** Nothing on the box can report the box itself. An external free check (UptimeRobot or
+healthchecks.io) of `https://api.taypi24.com/readyz` every 5 min, alerting the same Telegram chat,
+covers it; it is set up by hand, outside the stack.
 
 ## Backups (INFRA-017)
 

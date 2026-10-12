@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"time"
 
+	coreServices "josex/web/modules/core/services"
 	geoConfig "josex/web/modules/geo/config"
 	"josex/web/modules/geo/interfaces"
 	"josex/web/modules/geo/models"
@@ -36,6 +37,10 @@ type valhallaProvider struct {
 }
 
 func newValhallaProvider(baseURL string, timeout time.Duration) *valhallaProvider {
+	// The breaker is the probe (INFRA-018): closed until five calls fail in a row, open while Valhalla
+	// is down, closed again after a trial call succeeds. Half-open says nothing new, so it is left out.
+	up := coreServices.DependencyUp.WithLabelValues("valhalla")
+	up.Set(1)
 	return &valhallaProvider{
 		baseURL: baseURL,
 		client:  &http.Client{Timeout: timeout},
@@ -45,6 +50,14 @@ func newValhallaProvider(baseURL string, timeout time.Duration) *valhallaProvide
 			ReadyToTrip: func(c gobreaker.Counts) bool { return c.ConsecutiveFailures >= breakerFailures },
 			// "No route" is Valhalla working; only outages count toward opening.
 			IsSuccessful: func(err error) bool { return err == nil || errors.Is(err, interfaces.ErrNoRoute) },
+			OnStateChange: func(_ string, _, to gobreaker.State) {
+				switch to {
+				case gobreaker.StateOpen:
+					up.Set(0)
+				case gobreaker.StateClosed:
+					up.Set(1)
+				}
+			},
 		}),
 	}
 }

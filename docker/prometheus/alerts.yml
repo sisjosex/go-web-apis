@@ -1,0 +1,114 @@
+# INFRA-018: what pages the operator. Evaluated every 60 s; Alertmanager groups, repeats and
+# sends (docker/alertmanager/alertmanager.yml). critical repeats every 4 h, warning every 24 h.
+# Every rule has a row in docker/README.md → Alerts: what it means and the first command.
+# Test: promtool test rules alerts_test.yml (docker/README.md → Alerts → Testing).
+groups:
+  - name: taypi
+    rules:
+      - alert: ApiDown
+        expr: up{job="api"} == 0
+        for: 2m
+        labels: { severity: critical }
+        annotations:
+          summary: "api-{{ $labels.role }} has not answered /metrics for 2 minutes"
+          runbook: "docker/README.md → Alerts → ApiDown"
+
+      - alert: Http5xxRate
+        expr: |
+          sum(rate(http_request_duration_seconds_count{status="5xx"}[5m]))
+            / sum(rate(http_request_duration_seconds_count[5m])) > 0.02
+        for: 5m
+        labels: { severity: warning }
+        annotations:
+          summary: "{{ $value | humanizePercentage }} of API requests answer 5xx"
+          runbook: "docker/README.md → Alerts → Http5xxRate"
+
+      - alert: GpsStreamLag
+        expr: max(taypi_gps_stream_lag_seconds) > 5
+        for: 5m
+        labels: { severity: critical }
+        annotations:
+          summary: "GPS points wait {{ $value | humanizeDuration }} before they are stored"
+          runbook: "docker/README.md → Alerts → GpsStreamLag"
+
+      - alert: OutboxLag
+        expr: max(taypi_outbox_oldest_unpublished_seconds) > 60
+        for: 5m
+        labels: { severity: warning }
+        annotations:
+          summary: "The oldest unpublished outbox row is {{ $value | humanizeDuration }} old"
+          runbook: "docker/README.md → Alerts → OutboxLag"
+
+      - alert: AsynqBacklog
+        expr: sum(asynq_queue_size) > 1000
+        for: 10m
+        labels: { severity: warning }
+        annotations:
+          summary: "{{ $value }} tasks wait in the asynq queues"
+          runbook: "docker/README.md → Alerts → AsynqBacklog"
+
+      - alert: PostgresDown
+        expr: pg_up == 0
+        for: 1m
+        labels: { severity: critical }
+        annotations:
+          summary: "postgres-exporter cannot reach PostgreSQL"
+          runbook: "docker/README.md → Alerts → PostgresDown"
+
+      # max(), not the bare series: sum() drops the labels the setting carries.
+      - alert: PostgresConnections
+        expr: sum(pg_stat_activity_count) / max(pg_settings_max_connections) > 0.8
+        for: 5m
+        labels: { severity: warning }
+        annotations:
+          summary: "{{ $value | humanizePercentage }} of max_connections in use"
+          runbook: "docker/README.md → Alerts → PostgresConnections"
+
+      - alert: DiskFilling
+        expr: node_filesystem_avail_bytes{mountpoint="/"} / node_filesystem_size_bytes{mountpoint="/"} < 0.2
+        for: 10m
+        labels: { severity: warning }
+        annotations:
+          summary: "{{ $value | humanizePercentage }} of the root disk is free"
+          runbook: "docker/README.md → Alerts → DiskFilling"
+
+      - alert: HostMemoryLow
+        expr: node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes < 0.1
+        for: 10m
+        labels: { severity: warning }
+        annotations:
+          summary: "{{ $value | humanizePercentage }} of the host's memory is available"
+          runbook: "docker/README.md → Alerts → HostMemoryLow"
+
+      # absent(): no stamp at all — a backup that never succeeded, or node-exporter not reading it.
+      - alert: BackupStale
+        expr: |
+          time() - taypi_backup_last_success_timestamp_seconds > 26 * 3600
+            or absent(taypi_backup_last_success_timestamp_seconds)
+        labels: { severity: warning }
+        annotations:
+          summary: "No nightly backup has succeeded in 26 hours"
+          runbook: "docker/README.md → Alerts → BackupStale"
+
+      # postgres-exporter's pg_stat_archiver: pgBackRest's archive-push failing (INFRA-017).
+      - alert: WalArchiveFailing
+        expr: increase(pg_stat_archiver_failed_count[15m]) > 0
+        labels: { severity: critical }
+        annotations:
+          summary: "WAL archiving to R2 failed {{ $value }} times in 15 minutes"
+          runbook: "docker/README.md → Alerts → WalArchiveFailing"
+
+      - alert: DependencyDown
+        expr: min by (dependency) (taypi_dependency_up) == 0
+        for: 2m
+        labels: { severity: warning }
+        annotations:
+          summary: "{{ $labels.dependency }} does not answer the API"
+          runbook: "docker/README.md → Alerts → DependencyDown"
+
+      - alert: ProcessRestarting
+        expr: changes(process_start_time_seconds{job="api"}[30m]) > 2
+        labels: { severity: warning }
+        annotations:
+          summary: "api-{{ $labels.role }} restarted {{ $value }} times in 30 minutes"
+          runbook: "docker/README.md → Alerts → ProcessRestarting"

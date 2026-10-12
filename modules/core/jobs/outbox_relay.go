@@ -200,11 +200,14 @@ func (r *OutboxRelay) listen(ctx context.Context, url string) error {
 
 	for {
 		// Drain first: rows written while no one was listening are published before the first wait.
-		if err := r.drain(ctx, pool); err != nil {
+		// The backlog is read after a failed drain too: that is when it grows.
+		err := r.drain(ctx, pool)
+		r.observeLag(ctx, pool, url)
+		if err != nil {
 			return err
 		}
 		waitCtx, cancel := context.WithTimeout(ctx, r.poll)
-		_, err := conn.WaitForNotification(waitCtx)
+		_, err = conn.WaitForNotification(waitCtx)
 		cancel()
 		if ctx.Err() != nil {
 			return nil
@@ -223,6 +226,22 @@ func (r *OutboxRelay) drain(ctx context.Context, pool *pgxpool.Pool) error {
 			return err
 		}
 	}
+}
+
+// observeLag sets the database's outbox gauges (INFRA-018). A failed read leaves the last value: the
+// relay's own error is already logged, and a database that is down has its own alert.
+func (r *OutboxRelay) observeLag(ctx context.Context, pool *pgxpool.Pool, url string) {
+	if ctx.Err() != nil {
+		return
+	}
+	var rows int64
+	var oldest float64
+	if err := pool.QueryRow(ctx, `SELECT unpublished_rows, oldest_unpublished_seconds FROM tracking.sp_outbox_lag()`).Scan(&rows, &oldest); err != nil {
+		return
+	}
+	label := databaseLabel(url)
+	coreServices.OutboxUnpublishedRows.WithLabelValues(label).Set(float64(rows))
+	coreServices.OutboxOldestUnpublishedSeconds.WithLabelValues(label).Set(oldest)
 }
 
 type outboxRow struct {

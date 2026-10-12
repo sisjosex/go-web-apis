@@ -1,0 +1,73 @@
+# promtool test rules alerts_test.yml — the rules whose timing matters most (INFRA-018).
+rule_files:
+  - alerts.yml
+
+evaluation_interval: 1m
+
+tests:
+  # The worker stops answering: firing after its 2 minutes, for that role only.
+  - interval: 1m
+    input_series:
+      - series: 'up{job="api", role="worker", instance="api-worker:9100"}'
+        values: "1 0 0 0 0"
+      - series: 'up{job="api", role="api", instance="api-platform:9100"}'
+        values: "1 1 1 1 1"
+    alert_rule_test:
+      - eval_time: 2m
+        alertname: ApiDown
+        exp_alerts: []
+      - eval_time: 4m
+        alertname: ApiDown
+        exp_alerts:
+          - exp_labels: { severity: critical, job: api, role: worker, instance: "api-worker:9100" }
+            exp_annotations:
+              summary: "api-worker has not answered /metrics for 2 minutes"
+              runbook: "docker/README.md → Alerts → ApiDown"
+
+  # A lag spike shorter than 5 minutes stays quiet; a sustained one fires.
+  - interval: 1m
+    input_series:
+      - series: 'taypi_gps_stream_lag_seconds{job="api", role="worker", stream="gps:shared"}'
+        values: "0 8 8 0 0 9 9 9 9 9 9 9"
+    alert_rule_test:
+      - eval_time: 3m
+        alertname: GpsStreamLag
+        exp_alerts: []
+      - eval_time: 11m
+        alertname: GpsStreamLag
+        exp_alerts:
+          - exp_labels: { severity: critical }
+            exp_annotations:
+              summary: "GPS points wait 9s before they are stored"
+              runbook: "docker/README.md → Alerts → GpsStreamLag"
+
+  # The stamp of a backup at t=0 is fine at 25 h and stale at 27 h.
+  - interval: 1h
+    input_series:
+      - series: 'taypi_backup_last_success_timestamp_seconds{job="node", instance="node-exporter:9100"}'
+        values: "0x30"
+    alert_rule_test:
+      - eval_time: 25h
+        alertname: BackupStale
+        exp_alerts: []
+      - eval_time: 27h
+        alertname: BackupStale
+        exp_alerts:
+          - exp_labels: { severity: warning, job: node, instance: "node-exporter:9100" }
+            exp_annotations:
+              summary: "No nightly backup has succeeded in 26 hours"
+              runbook: "docker/README.md → Alerts → BackupStale"
+
+  # No stamp at all — the first backup never ran — fires too.
+  - interval: 1m
+    input_series:
+      - series: 'up{job="node", instance="node-exporter:9100"}'
+        values: "1 1 1"
+    alert_rule_test:
+      - eval_time: 2m
+        alertname: BackupStale
+        exp_alerts:
+          - exp_labels: { severity: warning }
+            exp_annotations:
+              summary: "No nightly backup has succeeded in 26 hours"
+              runbook: "docker/README.md → Alerts → BackupStale"

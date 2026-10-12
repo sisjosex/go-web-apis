@@ -71,7 +71,10 @@ func (hc *HealthController) Readyz(c *gin.Context) {
 	}
 
 	if hc.valkey != nil {
-		if err := hc.valkey.Ping(ctx); err != nil {
+		err := hc.valkey.Ping(ctx)
+		// The healthcheck probes every 15 s, so this is the Valkey gauge of every scraped role.
+		coreServices.SetUp(coreServices.DependencyUp.WithLabelValues("valkey"), err == nil)
+		if err != nil {
 			if hc.needsValkey {
 				c.JSON(http.StatusServiceUnavailable, gin.H{"status": "unavailable", "reason": "valkey unreachable"})
 				return

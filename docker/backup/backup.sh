@@ -6,8 +6,8 @@
 # from pg_database at run time — tenants add databases after this container
 # started, so the list can never be baked in.
 #
-# BACKUP_HEARTBEAT_URL, when set, gets one GET after the upload and the prune: a
-# heartbeat service alerts when a night's ping is missing.
+# A success stamps /textfile/backup.prom, which Prometheus alerts on (INFRA-018).
+# BACKUP_HEARTBEAT_URL, when set, also gets one GET after the upload and the prune.
 #
 # Restore steps: docker/backup/README.md
 set -eu
@@ -82,6 +82,13 @@ for prefix in $(aws s3 ls "s3://${BACKUP_S3_BUCKET}/" $S3_ARGS | awk '$1 == "PRE
 done
 
 echo "✅ Backup $DATE complete"
+
+# node-exporter's textfile collector reads this; BackupStale fires when it is over 26 h old or
+# missing (INFRA-018). Written to a temp file and moved, so a scrape never reads half a line.
+if [ -d "${BACKUP_TEXTFILE_DIR:=/textfile}" ]; then
+	echo "taypi_backup_last_success_timestamp_seconds $(date +%s)" > "$BACKUP_TEXTFILE_DIR/backup.prom.$$"
+	mv "$BACKUP_TEXTFILE_DIR/backup.prom.$$" "$BACKUP_TEXTFILE_DIR/backup.prom"
+fi
 
 if [ -n "${BACKUP_HEARTBEAT_URL:-}" ]; then
 	wget -q -T 10 -O /dev/null "$BACKUP_HEARTBEAT_URL" || echo "⚠️  heartbeat ping failed"

@@ -1,0 +1,37 @@
+# INFRA-018 D1: every alert of docker/prometheus/alerts.yml goes to one Telegram chat, and so
+# does its "resolved". The bot token is ./secrets/alertmanager/telegram_token on the box; the
+# chat id is ALERT_TELEGRAM_CHAT_ID in .env, written over the placeholder below when the
+# container starts (docker-compose.prod.yml), so edit this file and restart, never reload.
+# Bot and chat setup, silences and a test alert: docker/README.md → Alerts.
+route:
+  receiver: telegram
+  # One message per alert name: a role going down with three others is one message, not four.
+  group_by: [alertname]
+  group_wait: 30s
+  group_interval: 5m
+  repeat_interval: 24h
+  routes:
+    - matchers: ['severity="critical"']
+      receiver: telegram
+      repeat_interval: 4h
+
+# A cause silences its consequences: PostgreSQL down fails requests and stalls the outbox; a
+# worker down stops the GPS consumer and the relay.
+inhibit_rules:
+  - source_matchers: ['alertname="PostgresDown"']
+    target_matchers: ['alertname=~"ApiDown|Http5xxRate|OutboxLag"']
+  - source_matchers: ['alertname="ApiDown"', 'role="worker"']
+    target_matchers: ['alertname=~"GpsStreamLag|OutboxLag"']
+
+receivers:
+  - name: telegram
+    telegram_configs:
+      - api_url: https://api.telegram.org
+        bot_token_file: /run/secrets/telegram_token
+        chat_id: __ALERT_TELEGRAM_CHAT_ID__
+        parse_mode: HTML
+        send_resolved: true
+        message: |-
+          {{ if eq .Status "firing" }}🔴{{ else }}✅{{ end }} <b>{{ .CommonLabels.alertname }}</b> · {{ .CommonLabels.severity }}{{ if eq .Status "resolved" }} · resolved{{ end }}
+          {{ range .Alerts }}• {{ .Annotations.summary }}
+          {{ end }}<i>{{ .CommonAnnotations.runbook }}</i>

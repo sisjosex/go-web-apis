@@ -31,6 +31,9 @@ const (
 	gpsPublishEvery = 3 * time.Second
 	// gpsRetryAfter is the pause after a batch the database refused; its entries stay pending.
 	gpsRetryAfter = time.Second
+	// gpsLagEvery is how often a loop measures its stream's lag gauge (three Valkey reads): often
+	// enough for a 60 s scrape, not after every 200 ms read.
+	gpsLagEvery = 5 * time.Second
 )
 
 // Channel names every publisher and subscriber agrees on (TRACK-010 step 3, TRACK-025).
@@ -193,8 +196,16 @@ func (pc *PositionsConsumer) refresh(ctx context.Context) error {
 // queued before any worker existed is stored too. A legacy stream ends its loop once nothing in it is
 // new or pending, and is deleted (INFRA-009 D3).
 func (pc *PositionsConsumer) runStream(ctx context.Context, l gpsLoop) {
-	lastClaim := time.Time{}
+	lastClaim, lastLag := time.Time{}, time.Time{}
+	lag := coreServices.GPSStreamLagSeconds.WithLabelValues(l.stream)
+	// A retired or stopped stream leaves no stale value behind.
+	defer coreServices.GPSStreamLagSeconds.DeleteLabelValues(l.stream)
 	for ctx.Err() == nil {
+		if time.Since(lastLag) > gpsLagEvery {
+			lastLag = time.Now()
+			lag.Set(trackingServices.StreamLag(ctx, pc.client, l.stream))
+		}
+
 		if err := pc.client.XGroupCreateMkStream(ctx, l.stream, gpsGroup, "0").Err(); err != nil && !strings.HasPrefix(err.Error(), "BUSYGROUP") {
 			pc.pause(ctx, fmt.Errorf("create group on %s: %w", l.stream, err))
 			continue

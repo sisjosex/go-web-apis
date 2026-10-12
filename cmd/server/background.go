@@ -23,6 +23,8 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/hibiken/asynq"
+	"github.com/hibiken/asynq/x/metrics"
+	"github.com/prometheus/client_golang/prometheus"
 )
 
 // background is the non-HTTP part of a process: whichever of the worker, the outbox relay and the
@@ -76,6 +78,8 @@ func startBackground(ctx context.Context, mode, role string, db services.Databas
 			return nil, fmt.Errorf("worker: %w", err)
 		}
 		bg.worker = worker
+		// Queue size, latency and failures on /metrics, read from Valkey on each scrape (INFRA-018).
+		prometheus.MustRegister(metrics.NewQueueMetricsCollector(asynq.NewInspectorFromRedisClient(valkey.Client())))
 		relay.Start(ctx)
 		bg.relay = relay
 		if coreConf.IsModuleEnabled("tracking") {
