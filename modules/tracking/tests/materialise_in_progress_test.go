@@ -127,3 +127,35 @@ func TestMaterialise_InProgressRemovedRiders(t *testing.T) {
 	assert.Equal(t, []string{"1:pickup:done", "2:dropoff:pending"}, RiderTasks(t, helper, trip.ID.String(), onBoard))
 	assert.Empty(t, RiderTasks(t, helper, trip.ID.String(), waiting))
 }
+
+// TestMaterialise_InProgressAnnouncesAddedRider - TRACK-069 D3: a rider assigned at the stop the bus
+// is at gets one rider_added event and its guardian one rider_added notice naming the stop; the
+// rider already aboard is not told again, and a second run adds nothing.
+func TestMaterialise_InProgressAnnouncesAddedRider(t *testing.T) {
+	helper := SetupTrackingTest(t)
+	defer helper.Close()
+	trip := driverTrip(t, helper, 1, true)
+	driver := SetupDriverTest(t)
+	defer driver.Close()
+	first := trip.Stops[0]
+	sync(t, driver, op(models.DriverOpStopArrive, models.DriverSyncArgs{TripStopID: &first.ID}, time.Now().UTC().Add(-5*time.Minute)))
+	aboard := first.Tasks[0].SubjectID.String()
+	addGuardians(t, helper, aboard, "portal-unlinked@test.local")
+
+	riderID := lateRider(t, helper, trip)
+	addGuardians(t, helper, riderID, "portal@test.local")
+	NotifyTripEvents(t, helper, trip.ID.String(), "rider_added")
+
+	assert.Equal(t, 1, TripEventCount(t, helper, trip.ID, "rider_added"))
+	notices := noticeRows(t, helper, riderID, "rider_added")
+	if assert.Contains(t, notices, "portal@test.local") {
+		assert.NotEmpty(t, NoticeStopName(t, helper, notices["portal@test.local"]), "the notice names the pickup stop")
+	}
+	assert.Empty(t, noticeRows(t, helper, aboard, "rider_added"))
+
+	today := dayOffset(t, "UTC", 0)
+	materialiseRoute(t, helper, trip.RouteID.String(), today, today)
+	NotifyTripEvents(t, helper, trip.ID.String(), "rider_added")
+	assert.Equal(t, 1, TripEventCount(t, helper, trip.ID, "rider_added"))
+	assert.Len(t, noticeRows(t, helper, riderID, "rider_added"), 1)
+}

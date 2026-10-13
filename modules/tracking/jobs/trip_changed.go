@@ -37,7 +37,7 @@ type TripChanged struct {
 var frameOf = map[string]string{
 	"start": FrameTripStatus, "complete": FrameTripStatus, "cancel": FrameTripStatus, "override": FrameTripStatus,
 	"arrive": FrameStop, "skip": FrameStop,
-	"done": FrameTask, "no_show": FrameTask,
+	"done": FrameTask, "no_show": FrameTask, "rider_added": FrameTask,
 }
 
 // TripChangedHandler consumes trip.changed: every transition is published to the tenant's fleet, the

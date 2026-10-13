@@ -86,7 +86,11 @@ reads the in-memory `jobs.TenantDirectory`. Delivery is at least once — handle
 `outbox:route.changed` handler calls it for one route (tenant taken from the TaskID), the daily
 `tracking:trips-materialise` entry (02:00 UTC) for every route. Both are clamped to each route's local
 today..today+14 (`routes.timezone`, IANA). An SP that changes a route's plan or riders writes
-`route.changed` via `tracking.fn_route_changed` and never touches trips itself.
+`route.changed` via `tracking.fn_route_changed` and never touches trips itself. The one exception is
+`tracking:trips-cancel-empty` (every 5 min, TRACK-069): `sp_cancel_empty_trips` cancels today's trips still
+without riders once their client's `empty_trip_cancel_min` is reached (overridden, so never revived; event
+reason `no_riders`, no guardian notice) and the job pushes the driver `trip_cancelled_empty`. A rider added
+to a running trip by the materialiser is a `rider_added` event and notice.
 
 **Planned route line (TRACK-028).** `route_versions` keeps the line by streets (`planned_polyline`
 precision 6, `planned_distance_m`, `planned_legs [{distance_m, duration_s}]`, `path_source`

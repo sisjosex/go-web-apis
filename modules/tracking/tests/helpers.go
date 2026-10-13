@@ -1408,3 +1408,69 @@ func SeedTenantCompany(t *testing.T, helper *testhelpers.ApiTestHelper, tenantID
 		t.Fatalf("seed the tenant's company: %v", err)
 	}
 }
+
+// MoveTripStart moves a trip's planned start to minutes from now, as a day running late or early
+// would find it (TRACK-069).
+func MoveTripStart(t *testing.T, helper *testhelpers.ApiTestHelper, tripID string, minutes int) {
+	t.Helper()
+	if _, err := helper.DB().Execute(context.Background(),
+		`UPDATE tracking.trips SET planned_start = now() + make_interval(mins => $2) WHERE id = $1`, tripID, minutes); err != nil {
+		t.Fatalf("move trip start: %v", err)
+	}
+}
+
+// SetTripStopTimes plans a trip's first stop minutes from now and each next one a minute later — a
+// negative minutes makes the trip overdue (TRACK-069 D5).
+func SetTripStopTimes(t *testing.T, helper *testhelpers.ApiTestHelper, tripID string, minutes int) {
+	t.Helper()
+	if _, err := helper.DB().Execute(context.Background(),
+		`UPDATE tracking.trip_stops SET planned_at = now() + make_interval(mins => $2 + sequence - 1) WHERE trip_id = $1`,
+		tripID, minutes); err != nil {
+		t.Fatalf("set trip stop times: %v", err)
+	}
+}
+
+// TripCancelState answers a trip's status, whether it is overridden, and the reason of each of its
+// cancel events ("" when none was given) — what the auto-cancel leaves behind (TRACK-069 D1).
+func TripCancelState(t *testing.T, helper *testhelpers.ApiTestHelper, tripID string) (string, bool, []string) {
+	t.Helper()
+	var status string
+	var overridden bool
+	var reasons []string
+	err := helper.DB().QueryRow(context.Background(), `
+		SELECT t.status, t.is_overridden,
+		       COALESCE((SELECT array_agg(COALESCE(e.payload->>'reason', '')) FROM tracking.trip_events e
+		                 WHERE e.trip_id = t.id AND e.type = 'cancel'), '{}')
+		FROM tracking.trips t WHERE t.id = $1`, tripID).Scan(&status, &overridden, &reasons)
+	if err != nil {
+		t.Fatalf("read trip %s: %v", tripID, err)
+	}
+	return status, overridden, reasons
+}
+
+// NotifyTripEvents runs sp_notify_event over a trip's trip.changed outbox rows of one type, as the
+// worker would, without a relay.
+func NotifyTripEvents(t *testing.T, helper *testhelpers.ApiTestHelper, tripID, eventType string) {
+	t.Helper()
+	if _, err := helper.DB().Execute(context.Background(), `
+		SELECT n.* FROM tracking.outbox o
+		CROSS JOIN LATERAL tracking.sp_notify_event($1, o.topic, o.payload, NULL) n
+		WHERE o.topic = 'trip.changed' AND o.payload->>'trip_id' = $2 AND o.payload->>'type' = $3`,
+		TestTenantID, tripID, eventType); err != nil {
+		t.Fatalf("notify trip events: %v", err)
+	}
+}
+
+// NoticeStopName is the stop a feed row names.
+func NoticeStopName(t *testing.T, helper *testhelpers.ApiTestHelper, noticeID string) string {
+	t.Helper()
+	var stop *string
+	if err := helper.DB().QueryRow(context.Background(),
+		`SELECT payload->>'stop_name' FROM tracking.notifications WHERE id = $1`, noticeID).Scan(&stop); err != nil {
+		t.Fatalf("read notice: %v", err)
+	}
+	if stop == nil {
+		return ""
+	}
+	return *stop
+}

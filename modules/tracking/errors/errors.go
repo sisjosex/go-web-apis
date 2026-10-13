@@ -261,7 +261,10 @@ const (
 	TripInvalidTransition = "tracking.trip.invalid-transition"
 	TripTaskTripNotActive = "tracking.trip.task.trip-not-active"
 	// TripTaskOpConflict is a client_op_id already spent on another task.
-	TripTaskOpConflict   = "tracking.trip.task.op-conflict"
+	TripTaskOpConflict = "tracking.trip.task.op-conflict"
+	// TripInvalidRange is a board range that ends before it starts, has no start, or spans over 31
+	// days (TRACK-069 D5).
+	TripInvalidRange     = "tracking.trip.invalid-range"
 	TripListFailed       = "tracking.trip.list.failed"
 	TripUpdateFailed     = "tracking.trip.update.failed"
 	TripTransitionFailed = "tracking.trip.transition.failed"

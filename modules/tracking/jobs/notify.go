@@ -107,7 +107,7 @@ func tripCollapseID(tripID string, riderID uuid.UUID) string {
 // can silence one kind of notice from the system settings.
 func noticeChannel(noticeType string) string {
 	switch noticeType {
-	case "trip_started", "boarded", "dropped_off":
+	case "trip_started", "rider_added", "boarded", "dropped_off":
 		return "trip"
 	case "approaching":
 		return "approaching"

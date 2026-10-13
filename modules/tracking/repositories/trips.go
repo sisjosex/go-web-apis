@@ -27,6 +27,37 @@ func (r *TrackingRepository) MaterialiseTrips(ctx context.Context, tenantID uuid
 	return trips, err
 }
 
+// CancelledEmptyTrip is one trip sp_cancel_empty_trips cancelled for having no riders, and the user
+// linked to its driver (nil: none) — who gets told (TRACK-069 D2).
+type CancelledEmptyTrip struct {
+	TripID       uuid.UUID
+	RouteName    string
+	PlannedStart time.Time
+	Timezone     string
+	DriverUserID *uuid.UUID
+}
+
+// CancelEmptyTrips cancels the tenant's trips of today still without riders once their client's lead
+// is reached (TRACK-069 D1). One SP call per tenant; a second call cancels nothing new.
+func (r *TrackingRepository) CancelEmptyTrips(ctx context.Context, tenantID uuid.UUID) ([]CancelledEmptyTrip, error) {
+	rows, err := r.dbService.Query(ctx,
+		`SELECT trip_id, route_name, planned_start, timezone, driver_user_id FROM tracking.sp_cancel_empty_trips(p_tenant_id := $1)`,
+		tenantID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []CancelledEmptyTrip
+	for rows.Next() {
+		var t CancelledEmptyTrip
+		if err := rows.Scan(&t.TripID, &t.RouteName, &t.PlannedStart, &t.Timezone, &t.DriverUserID); err != nil {
+			return nil, err
+		}
+		out = append(out, t)
+	}
+	return out, rows.Err()
+}
+
 // The trip endpoints of TRACK-020, beside the materialiser: one slice, one file.
 
 // scanTrip is the one scan order every trip read and write shares.
@@ -45,6 +76,7 @@ var tripCodes = map[string]string{
 	"trip.stop.not-found":                  trackingErrors.TripStopNotFound,
 	"trip.task.not-found":                  trackingErrors.TripTaskNotFound,
 	"trip.invalid-transition":              trackingErrors.TripInvalidTransition,
+	"trip.invalid-range":                   trackingErrors.TripInvalidRange,
 	"trip.task.trip-not-active":            trackingErrors.TripTaskTripNotActive,
 	"trip.task.op-conflict":                trackingErrors.TripTaskOpConflict,
 	"route.company-mismatch":               trackingErrors.RouteCompanyMismatch,
@@ -94,10 +126,12 @@ func (r *TrackingRepository) ListTrips(ctx context.Context, tenantID uuid.UUID, 
 			p_page            := $6,
 			p_page_size       := $7,
 			p_scope_user_id   := $8,
-			p_include_empty   := COALESCE($9::BOOLEAN, TRUE)
+			p_include_empty   := COALESCE($9::BOOLEAN, TRUE),
+			p_date_to         := $10::DATE,
+			p_late_min        := $11
 		)
 	`, tenantID, query.Date, query.RouteID, query.Status, query.OrganizationID, query.Page, query.PageSize, query.ScopeUserID,
-		query.IncludeEmpty)
+		query.IncludeEmpty, query.DateTo, query.LateMin)
 	if err != nil {
 		return nil, 0, mapTripError(err, trackingErrors.TripListFailed)
 	}

@@ -196,6 +196,7 @@
   "tracking.trip.stop.not-found": "Parada del viaje no encontrada",
   "tracking.trip.task.not-found": "Tarea del viaje no encontrada",
   "tracking.trip.invalid-transition": "No se puede hacer en el estado actual del viaje",
+  "tracking.trip.invalid-range": "El rango de fechas debe empezar antes de terminar y abarcar 31 días como máximo",
   "tracking.trip.task.trip-not-active": "El viaje no ha empezado o ya terminó",
   "tracking.trip.task.op-conflict": "Esta operación ya se usó para otra tarea",
   "tracking.trip.list.failed": "Error al obtener los viajes",
@@ -267,5 +268,9 @@
   "notice.changed.title": "Cambio en el viaje",
   "notice.changed.body": "El viaje de %1$s en %2$s cambió.",
   "notice.delay.title": "Retraso",
-  "notice.delay.body": "%2$s, viaje de %1$s: %3$s"
+  "notice.delay.body": "%2$s, viaje de %1$s: %3$s",
+  "notice.rider_added.title": "%1$s va en el viaje de hoy",
+  "notice.rider_added.body": "%2$s ya está en camino; %1$s sube en %3$s.",
+  "notice.trip_cancelled_empty.title": "Viaje cancelado: sin pasajeros",
+  "notice.trip_cancelled_empty.body": "El viaje de las %2$s de %1$s se canceló porque no tiene pasajeros."
 }

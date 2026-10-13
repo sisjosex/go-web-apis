@@ -274,6 +274,9 @@ type Organization struct {
 	Address   *string  `json:"address"`
 	// The client's own stop at its pin, the destination of its route pairs (TRACK-045 D3).
 	StopPlaceID *uuid.UUID `json:"stop_place_id"`
+	// EmptyTripCancelMin is how many minutes before departure a trip still without riders cancels
+	// itself; 0 never (TRACK-069 D1).
+	EmptyTripCancelMin int32 `json:"empty_trip_cancel_min"`
 }
 
 // OrganizationMember is a tenant user on an organization, with the identity joined from auth.users.

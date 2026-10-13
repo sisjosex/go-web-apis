@@ -14,11 +14,12 @@ BEGIN
         'route_id',     t.route_id,
         'service_date', t.service_date,
         'type',         p_type,
-        'subject_id',   COALESCE(p_payload->>'trip_stop_task_id', p_payload->>'trip_stop_id')
+        'subject_id',   COALESCE(p_payload->>'trip_stop_task_id', p_payload->>'trip_stop_id'),
+        'reason',       p_payload->>'reason'
     )
     FROM tracking.trips t
     WHERE t.id = p_trip_id AND t.tenant_id = p_tenant_id;
 END;
 $function$;
 
-COMMENT ON FUNCTION tracking.fn_trip_changed(uuid,uuid,character varying,uuid,jsonb) IS 'Records one transition of a trip: a trip_events row of p_type and a trip.changed outbox row { trip_id, route_id, service_date, type, subject_id } — subject_id the task or stop it moved (TRACK-020 D1, TRACK-012)';
+COMMENT ON FUNCTION tracking.fn_trip_changed(uuid,uuid,character varying,uuid,jsonb) IS 'Records one transition of a trip: a trip_events row of p_type and a trip.changed outbox row { trip_id, route_id, service_date, type, subject_id, reason } — subject_id the task or stop it moved, reason why when the payload says (TRACK-020 D1, TRACK-012, TRACK-069)';

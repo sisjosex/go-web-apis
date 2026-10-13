@@ -120,6 +120,10 @@ type ListTripsQuery struct {
 	// IncludeEmpty false leaves out the trips nobody rides that have not started (TRACK-053 D1); unset
 	// keeps them, so callers other than the web board see every trip.
 	IncludeEmpty *bool `form:"include_empty"`
+	// DateTo makes Date the first day of a range, at most 31 days long (TRACK-069 D5).
+	DateTo *string `form:"date_to" binding:"omitempty,datetime=2006-01-02"`
+	// LateMin keeps the trips whose next stop is at least that many minutes overdue (TRACK-069 D5).
+	LateMin *int32 `form:"late_min" binding:"omitempty,min=1,max=120"`
 	// ScopeUserID narrows the board to an organization user's trips (MOBILE-020); set by the
 	// controller from the access level, never bound from the query.
 	ScopeUserID *uuid.UUID `form:"-"`

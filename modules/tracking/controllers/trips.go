@@ -21,6 +21,7 @@ var tripStatus = map[string]int{
 	trackingErrors.TripStopNotFound:        http.StatusNotFound,
 	trackingErrors.TripTaskNotFound:        http.StatusNotFound,
 	trackingErrors.TripInvalidTransition:   http.StatusConflict,
+	trackingErrors.TripInvalidRange:        http.StatusBadRequest,
 	trackingErrors.TripTaskTripNotActive:   http.StatusConflict,
 	trackingErrors.TripTaskOpConflict:      http.StatusConflict,
 	trackingErrors.RouteCompanyMismatch:    http.StatusBadRequest,

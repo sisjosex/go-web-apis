@@ -259,7 +259,7 @@ CREATE TABLE tracking.notification_settings (
     user_id uuid NOT NULL,
     rider_id uuid NOT NULL,
     type character varying(20) NOT NULL,
-    CONSTRAINT chk_notification_settings_type CHECK (((type)::text = ANY ((ARRAY['trip_started'::character varying, 'approaching'::character varying, 'boarded'::character varying, 'dropped_off'::character varying, 'no_show'::character varying, 'cancelled'::character varying, 'changed'::character varying, 'delay'::character varying, 'trip_progress'::character varying])::text[])))
+    CONSTRAINT chk_notification_settings_type CHECK (((type)::text = ANY ((ARRAY['trip_started'::character varying, 'approaching'::character varying, 'boarded'::character varying, 'dropped_off'::character varying, 'no_show'::character varying, 'cancelled'::character varying, 'changed'::character varying, 'delay'::character varying, 'trip_progress'::character varying, 'rider_added'::character varying])::text[])))
 );
 
 
@@ -283,7 +283,7 @@ CREATE TABLE tracking.notifications (
     dedupe_key text NOT NULL,
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     read_at timestamp with time zone,
-    CONSTRAINT chk_notifications_type CHECK (((type)::text = ANY ((ARRAY['trip_started'::character varying, 'approaching'::character varying, 'boarded'::character varying, 'dropped_off'::character varying, 'no_show'::character varying, 'cancelled'::character varying, 'changed'::character varying, 'delay'::character varying])::text[])))
+    CONSTRAINT chk_notifications_type CHECK (((type)::text = ANY ((ARRAY['trip_started'::character varying, 'approaching'::character varying, 'boarded'::character varying, 'dropped_off'::character varying, 'no_show'::character varying, 'cancelled'::character varying, 'changed'::character varying, 'delay'::character varying, 'rider_added'::character varying])::text[])))
 );
 
 
@@ -363,7 +363,9 @@ CREATE TABLE tracking.organizations (
     location public.geography(Point,4326),
     address character varying(500),
     stop_place_id uuid,
+    empty_trip_cancel_min integer DEFAULT 30 NOT NULL,
     CONSTRAINT chk_organization_absence_cutoff CHECK (((absence_cutoff_min >= 0) AND (absence_cutoff_min <= 1440))),
+    CONSTRAINT chk_organization_empty_trip_cancel CHECK (((empty_trip_cancel_min >= 0) AND (empty_trip_cancel_min <= 1440))),
     CONSTRAINT chk_organization_kind CHECK (((kind)::text = ANY ((ARRAY['school'::character varying, 'company'::character varying, 'other'::character varying])::text[])))
 );
 
@@ -387,6 +389,13 @@ COMMENT ON COLUMN tracking.organizations.location IS 'Where the school or compan
 --
 
 COMMENT ON COLUMN tracking.organizations.stop_place_id IS 'The client''s own stop at its pin: the destination of its route pairs, kept in sync with the pin (TRACK-045 D3)';
+
+
+--
+-- Name: COLUMN organizations.empty_trip_cancel_min; Type: COMMENT; Schema: tracking; Owner: -
+--
+
+COMMENT ON COLUMN tracking.organizations.empty_trip_cancel_min IS 'Minutes before planned_start a trip of this client with no rider cancels itself; 0 never (TRACK-069 D1)';
 
 
 --

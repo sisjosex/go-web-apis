@@ -24,6 +24,10 @@ BEGIN
                 v_type := 'trip_started';
                 v_dedupe := p_event->>'trip_id';
             WHEN 'cancel' THEN
+                -- A trip cancelled for having no riders has nobody to tell (TRACK-069 D2).
+                IF p_event->>'reason' = 'no_riders' THEN
+                    RETURN;
+                END IF;
                 v_type := 'cancelled';
                 v_dedupe := p_event->>'trip_id';
             WHEN 'override' THEN
@@ -42,6 +46,11 @@ BEGIN
                 v_dedupe := CAST(v_subject AS TEXT);
             WHEN 'no_show' THEN
                 v_type := 'no_show';
+                v_task := v_subject;
+                v_dedupe := CAST(v_subject AS TEXT);
+            WHEN 'rider_added' THEN
+                -- A rider assigned to a running trip: its family alone, at its pickup (TRACK-069 D3).
+                v_type := 'rider_added';
                 v_task := v_subject;
                 v_dedupe := CAST(v_subject AS TEXT);
             ELSE
@@ -145,4 +154,4 @@ BEGIN
 END;
 $function$;
 
-COMMENT ON FUNCTION tracking.sp_notify_event(uuid,character varying,jsonb,bigint) IS 'Turns one trip.changed or alert.changed outbox event into feed rows, one per guardian|self account and rider, idempotent on the dedupe key; answers the new rows whose type the account did not mute; a route alert reaches every rider assigned to the route today (TRACK-012, TRACK-033)';
+COMMENT ON FUNCTION tracking.sp_notify_event(uuid,character varying,jsonb,bigint) IS 'Turns one trip.changed or alert.changed outbox event into feed rows, one per guardian|self account and rider, idempotent on the dedupe key; answers the new rows whose type the account did not mute; a route alert reaches every rider assigned to the route today; a riderless auto-cancel tells nobody, a rider added to a running trip only its own family (TRACK-012, TRACK-033, TRACK-069)';

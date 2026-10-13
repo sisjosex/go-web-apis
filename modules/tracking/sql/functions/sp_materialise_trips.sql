@@ -5,6 +5,8 @@ AS $function$
 DECLARE
     v_trips UUID[];
     v_running UUID[];
+    v_added_trips UUID[];
+    v_added_tasks UUID[];
 BEGIN
     IF p_route_id IS NOT NULL AND NOT EXISTS (
         SELECT 1 FROM tracking.routes r
@@ -273,18 +275,32 @@ BEGIN
                   ))
               )
             RETURNING tk.id
+        ),
+        added AS (
+            INSERT INTO tracking.trip_stop_tasks (trip_stop_id, kind, subject_type, subject_id, status)
+            SELECT wt.trip_stop_id, wt.kind, 'passenger', wt.rider_id, 'pending'
+            FROM wanted wt
+            WHERE NOT EXISTS (
+                SELECT 1 FROM settled s
+                WHERE s.trip_id = wt.trip_id AND s.rider_id = wt.rider_id
+            )
+            ON CONFLICT (trip_stop_id, kind, subject_type, subject_id) DO UPDATE SET
+                status = 'pending',
+                updated_at = now()
+            WHERE trip_stop_tasks.status = 'cancelled'
+            RETURNING trip_stop_tasks.id, trip_stop_tasks.trip_stop_id, trip_stop_tasks.kind
         )
-        INSERT INTO tracking.trip_stop_tasks (trip_stop_id, kind, subject_type, subject_id, status)
-        SELECT wt.trip_stop_id, wt.kind, 'passenger', wt.rider_id, 'pending'
-        FROM wanted wt
-        WHERE NOT EXISTS (
-            SELECT 1 FROM settled s
-            WHERE s.trip_id = wt.trip_id AND s.rider_id = wt.rider_id
-        )
-        ON CONFLICT (trip_stop_id, kind, subject_type, subject_id) DO UPDATE SET
-            status = 'pending',
-            updated_at = now()
-        WHERE trip_stop_tasks.status = 'cancelled';
+        SELECT COALESCE(array_agg(ts.trip_id), '{}'), COALESCE(array_agg(ad.id), '{}')
+          INTO v_added_trips, v_added_tasks
+        FROM added ad
+        INNER JOIN tracking.trip_stops ts ON ts.id = ad.trip_stop_id
+        WHERE ad.kind = 'pickup';
+
+        -- A rider who now rides a trip already on the road: its family is told (TRACK-069 D3). A
+        -- pickup already pending returns nothing above, so a second run announces no one.
+        PERFORM tracking.fn_trip_changed(p_tenant_id, x.trip_id, 'rider_added', NULL,
+                                         jsonb_build_object('trip_stop_task_id', x.task_id))
+        FROM unnest(v_added_trips, v_added_tasks) AS x(trip_id, task_id);
     END IF;
 
     RETURN cardinality(v_trips);

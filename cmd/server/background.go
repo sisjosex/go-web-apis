@@ -141,6 +141,13 @@ func registerJobs(ctx context.Context, registry *jobs.Registry, db services.Data
 			pushClient = jobsClient
 		}
 		registry.Handle(trackingJobs.TaskDayChanged, trackingJobs.DayChangedHandler(db, valkey, pusher))
+		// Trips of today still without riders cancel themselves at their client's lead, and the driver is
+		// told when FCM is set (TRACK-069 D1, D2).
+		registry.Handle(trackingJobs.TaskTripsCancelEmpty, trackingJobs.TripsCancelEmptyHandler(db, directory, pusher))
+		registry.Schedule(jobs.Entry{
+			Cron: trackingJobs.TripsCancelEmptyCron, Period: trackingJobs.TripsCancelEmptyPeriod,
+			Task: asynq.NewTask(trackingJobs.TaskTripsCancelEmpty, nil),
+		})
 		// The guardians' live progress notification (MOBILE-024): only with FCM; its ETA from the trip's
 		// shared cache, through the same router.
 		var progress *trackingJobs.ProgressSignal

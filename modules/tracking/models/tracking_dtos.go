@@ -728,6 +728,8 @@ type CreateOrganizationDto struct {
 	Address   *string  `json:"address" binding:"omitempty,max=500" conform:"trim"`
 	// CreateStop makes the pin the client's own stop (TRACK-045 D3); true when unset.
 	CreateStop *bool `json:"create_stop"`
+	// Minutes before departure a riderless trip cancels itself, 0 never (TRACK-069 D1); 30 when unset.
+	EmptyTripCancelMin *int32 `json:"empty_trip_cancel_min" binding:"omitempty,min=0,max=1440"`
 }
 
 // UpdateOrganizationDto represents request to update an organization. Every field is optional: the
@@ -745,6 +747,8 @@ type UpdateOrganizationDto struct {
 	// CreateStop gives a pinned client without a stop its own (TRACK-045 D3); true when unset. A
 	// linked stop follows the client either way.
 	CreateStop *bool `json:"create_stop"`
+	// Minutes before departure a riderless trip cancels itself, 0 never (TRACK-069 D1).
+	EmptyTripCancelMin *int32 `json:"empty_trip_cancel_min" binding:"omitempty,min=0,max=1440"`
 }
 
 // ListOrganizationsQuery binds GET /tracking/organizations.

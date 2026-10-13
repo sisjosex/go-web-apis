@@ -196,6 +196,7 @@
   "tracking.trip.stop.not-found": "Trip stop not found",
   "tracking.trip.task.not-found": "Trip task not found",
   "tracking.trip.invalid-transition": "This can't be done in the trip's current state",
+  "tracking.trip.invalid-range": "The date range must start before it ends and span 31 days at most",
   "tracking.trip.task.trip-not-active": "The trip hasn't started or has already ended",
   "tracking.trip.task.op-conflict": "This operation was already used for another task",
   "tracking.trip.list.failed": "Failed to retrieve the trips",
@@ -261,5 +262,9 @@
   "notice.changed.title": "Trip changed",
   "notice.changed.body": "%1$s's trip on %2$s changed.",
   "notice.delay.title": "Delay",
-  "notice.delay.body": "%2$s, %1$s's trip: %3$s"
+  "notice.delay.body": "%2$s, %1$s's trip: %3$s",
+  "notice.rider_added.title": "%1$s is on today's trip",
+  "notice.rider_added.body": "%2$s is already under way; %1$s gets on at %3$s.",
+  "notice.trip_cancelled_empty.title": "Trip cancelled: no riders",
+  "notice.trip_cancelled_empty.body": "The %2$s trip of %1$s was cancelled because it has no riders."
 }
