@@ -38,11 +38,13 @@ type TrackingService interface {
 	ListVehicles(ctx context.Context, tenantID uuid.UUID, query models.ListVehiclesQuery) (*models.ListVehiclesResponse, error)
 	GetVehicle(ctx context.Context, tenantID uuid.UUID, vehicleID uuid.UUID) (*models.Vehicle, error)
 	SetVehicleDriver(ctx context.Context, tenantID, vehicleID uuid.UUID, driverID *uuid.UUID) (*models.Vehicle, error)
+	MoveVehicleCompany(ctx context.Context, tenantID, vehicleID uuid.UUID, dto *models.MoveVehicleCompanyDto) (*models.MovedVehicle, error)
 	VehicleScheduleConflicts(ctx context.Context, tenantID, vehicleID uuid.UUID, routeID, driverID *uuid.UUID) (*models.VehicleConflictsResponse, error)
 	DeleteVehicle(ctx context.Context, tenantID uuid.UUID, vehicleID uuid.UUID) error
 
 	// Routes CRUD
 	CreateRoute(ctx context.Context, tenantID uuid.UUID, dto *models.CreateRouteDto, createdBy *uuid.UUID) (*models.CreatedRoute, error)
+	CreateRouteReturn(ctx context.Context, tenantID, routeID uuid.UUID, dto *models.CreateRouteReturnDto, createdBy *uuid.UUID) (*models.Route, error)
 	UpdateRoute(ctx context.Context, tenantID uuid.UUID, routeID uuid.UUID, dto *models.UpdateRouteDto) (*models.Route, error)
 	ListRoutes(ctx context.Context, tenantID uuid.UUID, query models.ListRoutesQuery, scopeUserID *uuid.UUID) (*models.ListRoutesResponse, error)
 	GetRoute(ctx context.Context, tenantID uuid.UUID, routeID uuid.UUID, scopeUserID *uuid.UUID) (*models.Route, error)
@@ -106,7 +108,7 @@ type TrackingService interface {
 	TrackingOverview(ctx context.Context, tenantID uuid.UUID, date *string, scopeUserID *uuid.UUID) (*models.TrackingOverview, error)
 	TrackingSetup(ctx context.Context, tenantID uuid.UUID) (*models.TrackingSetup, error)
 	UpdateAssignment(ctx context.Context, tenantID uuid.UUID, assignmentID uuid.UUID, dto *models.UpdateAssignmentDto) (*models.AssignmentResponse, error)
-	DeleteAssignment(ctx context.Context, tenantID uuid.UUID, assignmentID uuid.UUID) error
+	DeleteAssignment(ctx context.Context, tenantID uuid.UUID, assignmentID uuid.UUID, twin bool) error
 	ListAssignments(ctx context.Context, tenantID uuid.UUID, query models.ListAssignmentsQuery, scopeUserID *uuid.UUID) (*models.ListAssignmentsResponse, error)
 
 	// Trips (TRACK-020)

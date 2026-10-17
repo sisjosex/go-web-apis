@@ -162,8 +162,8 @@ func (r *TrackingRepository) UpdateAssignment(ctx context.Context, tenantID uuid
 	return &models.AssignmentResponse{Assignment: assignments[0], Warnings: warnings}, nil
 }
 
-func (r *TrackingRepository) DeleteAssignment(ctx context.Context, tenantID uuid.UUID, assignmentID uuid.UUID) error {
-	_, err := r.dbService.Execute(ctx, `SELECT tracking.sp_delete_rider_route_assignment(p_tenant_id := $1, p_id := $2)`, tenantID, assignmentID)
+func (r *TrackingRepository) DeleteAssignment(ctx context.Context, tenantID uuid.UUID, assignmentID uuid.UUID, twin bool) error {
+	_, err := r.dbService.Execute(ctx, `SELECT tracking.sp_delete_rider_route_assignment(p_tenant_id := $1, p_id := $2, p_twin := $3)`, tenantID, assignmentID, twin)
 	if err != nil {
 		return mapAssignmentError(err, trackingErrors.AssignmentDeleteFailed)
 	}

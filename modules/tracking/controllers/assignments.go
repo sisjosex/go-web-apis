@@ -274,6 +274,7 @@ func (ctrl *TrackingController) UpdateAssignment(c *gin.Context) {
 // @Produce json
 // @Security BearerAuth
 // @Param assignment_id path string true "Assignment ID (UUID)"
+// @Param twin query bool false "false keeps its twin on the paired route (TRACK-070 D5); default true"
 // @Success 204 "No Content"
 // @Failure 400 {object} coreErrors.ErrorResponse
 // @Failure 404 {object} coreErrors.ErrorResponse
@@ -290,7 +291,8 @@ func (ctrl *TrackingController) DeleteAssignment(c *gin.Context) {
 		return
 	}
 
-	if err := ctrl.trackingService.DeleteAssignment(c.Request.Context(), tenantID, assignmentID); err != nil {
+	twin := c.Query("twin") != "false"
+	if err := ctrl.trackingService.DeleteAssignment(c.Request.Context(), tenantID, assignmentID, twin); err != nil {
 		if assignmentErrorResponse(c, err) {
 			return
 		}

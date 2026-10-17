@@ -68,7 +68,10 @@ type PositionsConsumer struct {
 	client  *redis.Client
 	tenants *coreJobs.TenantDirectory
 	radii   models.IngestRadii
-	name    string
+	// approachMinutes and approachEta announce a stop by its ETA (TRACK-070 D3).
+	approachMinutes int
+	approachEta     EtaFunc
+	name            string
 	// ClaimIdle is how long an entry stays pending before another consumer takes it over (60 s), and
 	// ClaimEvery how often a consumer looks for such entries (30 s).
 	ClaimIdle  time.Duration
@@ -87,6 +90,30 @@ type gpsLoop struct {
 	stream string
 	tenant *coreJobs.Tenant
 	legacy bool
+}
+
+// EtaFunc answers a running trip's ETA to each of its pending stops (TRACK-070 D3).
+type EtaFunc func(ctx context.Context, tenantID, tripID uuid.UUID) ([]models.StopEta, error)
+
+// LiveEta is the ETA the live snapshot computes: the shared eta:{trip} entry, at most one routing call
+// per 30 s per trip.
+func LiveEta(live *trackingServices.LiveService) EtaFunc {
+	return func(ctx context.Context, tenantID, tripID uuid.UUID) ([]models.StopEta, error) {
+		now := time.Now()
+		_, eta, err := live.Trip(ctx, tenantID, tripID, &now)
+		return eta.Eta, err
+	}
+}
+
+// approachCheckEvery is how often one trip's ETA is read for its approach notices, whatever the
+// number of points it sends: the ETA's own cache life.
+const approachCheckEvery = 30 * time.Second
+
+// WithApproachEta announces each pending stop once its ETA is within minutes (TRACK-070 D3); the
+// radius in sp_ingest_positions stays as the fallback when there is no ETA. 0 or a nil eta turns it off.
+func (pc *PositionsConsumer) WithApproachEta(minutes int, eta EtaFunc) *PositionsConsumer {
+	pc.approachMinutes, pc.approachEta = minutes, eta
+	return pc
 }
 
 func NewPositionsConsumer(db coreServices.DatabaseService, valkey coreServices.ValkeyService, tenants *coreJobs.TenantDirectory, radii models.IngestRadii) *PositionsConsumer {
@@ -317,6 +344,7 @@ func (pc *PositionsConsumer) store(ctx context.Context, l gpsLoop, messages []re
 			return fmt.Errorf("store %d point(s) of %s on %s: %w", len(points), id, l.stream, err)
 		}
 		defer pc.publish(ctx, id, stored)
+		defer pc.announce(tenantCtx, tenantID, stored)
 	}
 	return pc.client.XAck(ctx, l.stream, gpsGroup, ids...).Err()
 }
@@ -344,6 +372,43 @@ func (pc *PositionsConsumer) publish(ctx context.Context, tenantID string, vehic
 	}
 	if _, err := pipe.Exec(ctx); err != nil {
 		log.Printf("⚠️  gps consumer: publish: %v", err)
+	}
+}
+
+// announce reads, at most every approachCheckEvery per trip, the ETA of each trip that just reported
+// and announces its pending stops due within approachMinutes. A failure is logged and dropped: the
+// next check retries, and the radius still covers the stop.
+func (pc *PositionsConsumer) announce(ctx context.Context, tenantID uuid.UUID, vehicles []models.IngestedVehicle) {
+	if pc.approachMinutes <= 0 || pc.approachEta == nil {
+		return
+	}
+	repo := trackingRepos.NewTrackingRepository(pc.db)
+	for _, v := range vehicles {
+		if v.TripID == nil {
+			continue
+		}
+		won, err := pc.client.SetNX(ctx, "approach:"+v.TripID.String(), 1, approachCheckEvery).Result()
+		if err != nil || !won {
+			continue
+		}
+		eta, err := pc.approachEta(ctx, tenantID, *v.TripID)
+		if err != nil {
+			log.Printf("⚠️  gps consumer: approach eta %s: %v", v.TripID, err)
+			continue
+		}
+		horizon := time.Now().Add(time.Duration(pc.approachMinutes) * time.Minute)
+		due := []uuid.UUID{}
+		for _, e := range eta {
+			if !e.EtaAt.After(horizon) {
+				due = append(due, e.TripStopID)
+			}
+		}
+		if len(due) == 0 {
+			continue
+		}
+		if _, err := repo.MarkStopApproach(ctx, tenantID, *v.TripID, due); err != nil {
+			log.Printf("⚠️  gps consumer: approach %s: %v", v.TripID, err)
+		}
 	}
 }
 

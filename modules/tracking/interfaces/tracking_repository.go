@@ -39,12 +39,14 @@ type TrackingRepository interface {
 	ListVehicles(ctx context.Context, tenantID uuid.UUID, query models.ListVehiclesQuery) ([]*models.Vehicle, int64, error)
 	GetVehicle(ctx context.Context, tenantID uuid.UUID, vehicleID uuid.UUID) (*models.Vehicle, error)
 	SetVehicleDriver(ctx context.Context, tenantID, vehicleID uuid.UUID, driverID *uuid.UUID) error
+	MoveVehicleCompany(ctx context.Context, tenantID, vehicleID uuid.UUID, dto *models.MoveVehicleCompanyDto) (*models.MovedVehicle, error)
 	VehicleScheduleConflicts(ctx context.Context, tenantID, vehicleID uuid.UUID, routeID, driverID *uuid.UUID) ([]*models.VehicleScheduleConflict, error)
 	DeleteVehicle(ctx context.Context, tenantID uuid.UUID, vehicleID uuid.UUID) error
 
 	// Routes CRUD
 	CreateRoute(ctx context.Context, tenantID uuid.UUID, dto *models.CreateRouteDto) (*models.Route, error)
 	CreateRoutePair(ctx context.Context, tenantID uuid.UUID, dto *models.CreateRouteDto, createdBy *uuid.UUID) (uuid.UUID, *uuid.UUID, error)
+	CreateRouteReturn(ctx context.Context, tenantID, routeID uuid.UUID, dto *models.CreateRouteReturnDto, createdBy *uuid.UUID) (uuid.UUID, error)
 	VehicleSeatsShort(ctx context.Context, tenantID, vehicleID uuid.UUID, routeID *uuid.UUID) ([]*models.VehicleSeatsShort, error)
 	UpdateRoute(ctx context.Context, tenantID uuid.UUID, routeID uuid.UUID, dto *models.UpdateRouteDto) (*models.Route, error)
 	ListRoutes(ctx context.Context, tenantID uuid.UUID, query models.ListRoutesQuery, scopeUserID *uuid.UUID) ([]*models.Route, int64, error)
@@ -110,7 +112,7 @@ type TrackingRepository interface {
 	TrackingOverview(ctx context.Context, tenantID uuid.UUID, date *string, scopeUserID *uuid.UUID) (*models.TrackingOverview, error)
 	TrackingSetup(ctx context.Context, tenantID uuid.UUID) (*models.TrackingSetup, error)
 	UpdateAssignment(ctx context.Context, tenantID uuid.UUID, assignmentID uuid.UUID, dto *models.UpdateAssignmentDto) (*models.AssignmentResponse, error)
-	DeleteAssignment(ctx context.Context, tenantID uuid.UUID, assignmentID uuid.UUID) error
+	DeleteAssignment(ctx context.Context, tenantID uuid.UUID, assignmentID uuid.UUID, twin bool) error
 	ListAssignments(ctx context.Context, tenantID uuid.UUID, query models.ListAssignmentsQuery, scopeUserID *uuid.UUID) ([]*models.RiderRouteAssignment, int64, error)
 
 	// Organizations CRUD

@@ -97,6 +97,11 @@ type Route struct {
 	PairedRouteID    *uuid.UUID `json:"paired_route_id"`
 	Seats            *int32     `json:"seats"`
 	AssignedCount    int32      `json:"assigned_count"`
+	// The list alone (TRACK-070 D1): the schedule in force today, HH:mm, and with group_pairs the
+	// return, a row of the same shape.
+	StartTime   *string         `json:"start_time,omitempty"`
+	ArrivalTime *string         `json:"arrival_time,omitempty"`
+	ReturnRoute json.RawMessage `json:"return_route,omitempty"`
 }
 
 // TrackingOverview is the tracking home (TRACK-041 D2): the day's trips by state, the riders absent,

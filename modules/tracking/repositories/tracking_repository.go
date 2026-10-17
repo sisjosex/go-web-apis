@@ -443,6 +443,31 @@ func (r *TrackingRepository) SetVehicleDriver(ctx context.Context, tenantID, veh
 	return nil
 }
 
+// MoveVehicleCompany moves a vehicle to another carrier, its routes with it or left without it, in one
+// transaction (TRACK-070 D4); the vehicle itself is read by the caller.
+func (r *TrackingRepository) MoveVehicleCompany(ctx context.Context, tenantID, vehicleID uuid.UUID, dto *models.MoveVehicleCompanyDto) (*models.MovedVehicle, error) {
+	moved := &models.MovedVehicle{}
+	err := r.dbService.QueryRow(ctx, `SELECT * FROM tracking.sp_move_vehicle_company($1, $2, $3, $4)`,
+		tenantID, vehicleID, dto.CompanyID, dto.MoveRoutes).Scan(&moved.RoutesMoved, &moved.RoutesUnassigned)
+	var pgErr *pgconn.PgError
+	if errors.As(err, &pgErr) {
+		switch pgErr.Message {
+		case "vehicle.not-found":
+			return nil, &trackingErrors.TrackingError{Code: trackingErrors.VehicleNotFound, Err: pgErr}
+		case "company.not-found":
+			return nil, &trackingErrors.TrackingError{Code: trackingErrors.CompanyNotFound, Err: pgErr}
+		case "vehicle.plate-already-exists":
+			return nil, &trackingErrors.TrackingError{Code: trackingErrors.VehiclePlateAlreadyExists, Err: pgErr}
+		case "route.code-already-exists":
+			return nil, &trackingErrors.TrackingError{Code: trackingErrors.RouteCodeAlreadyExists, Err: pgErr}
+		}
+	}
+	if err != nil {
+		return nil, &trackingErrors.TrackingError{Code: trackingErrors.VehicleMoveFailed, Err: err}
+	}
+	return moved, nil
+}
+
 // VehicleScheduleConflicts answers the runs that would overlap if routeID (nil: the vehicle's own
 // routes) ran on the vehicle, driverID's other routes included when set (TRACK-034 D2).
 func (r *TrackingRepository) VehicleScheduleConflicts(ctx context.Context, tenantID, vehicleID uuid.UUID, routeID, driverID *uuid.UUID) ([]*models.VehicleScheduleConflict, error) {
@@ -541,6 +566,10 @@ func mapRouteError(err error, fallbackCode string) error {
 			return &trackingErrors.TrackingError{Code: trackingErrors.RouteDestinationRequired, Err: pgErr}
 		case "route.departure-required":
 			return &trackingErrors.TrackingError{Code: trackingErrors.RouteDepartureRequired, Err: pgErr}
+		case "route.has-return":
+			return &trackingErrors.TrackingError{Code: trackingErrors.RouteHasReturn, Err: pgErr}
+		case "route.not-outbound":
+			return &trackingErrors.TrackingError{Code: trackingErrors.RouteNotOutbound, Err: pgErr}
 		case "stop-place.invalid":
 			return &trackingErrors.TrackingError{Code: trackingErrors.StopPlaceInvalid, Err: pgErr}
 		case "stop-place.not-found":
@@ -585,6 +614,17 @@ func (r *TrackingRepository) CreateRoutePair(ctx context.Context, tenantID uuid.
 	return outbound, inbound, nil
 }
 
+// CreateRouteReturn makes the return of an outbound without one and answers its id (TRACK-070 D2).
+func (r *TrackingRepository) CreateRouteReturn(ctx context.Context, tenantID, routeID uuid.UUID, dto *models.CreateRouteReturnDto, createdBy *uuid.UUID) (uuid.UUID, error) {
+	var id uuid.UUID
+	err := r.dbService.QueryRow(ctx, `SELECT tracking.sp_create_route_return($1, $2, $3::TIME, $4)`,
+		tenantID, routeID, dto.DepartureTime, createdBy).Scan(&id)
+	if err != nil {
+		return uuid.Nil, mapRouteError(err, trackingErrors.RouteCreateFailed)
+	}
+	return id, nil
+}
+
 func nilIfEmpty(value string) *string {
 	if value == "" {
 		return nil
@@ -609,9 +649,13 @@ func (r *TrackingRepository) UpdateRoute(ctx context.Context, tenantID uuid.UUID
 // ListRoutes returns one page of the tenant's routes plus the total the same filters match
 // (TRACK-002 D2); an organization user's page holds only the routes their riders ride.
 func (r *TrackingRepository) ListRoutes(ctx context.Context, tenantID uuid.UUID, query models.ListRoutesQuery, scopeUserID *uuid.UUID) ([]*models.Route, int64, error) {
+	vehicleID, withoutVehicle := query.VehicleID, false
+	if vehicleID != nil && *vehicleID == "none" {
+		vehicleID, withoutVehicle = nil, true
+	}
 	rows, err := r.dbService.Query(ctx,
-		`SELECT * FROM tracking.sp_list_routes($1::UUID, $2::VARCHAR, $3::UUID, $4::VARCHAR, $5::BOOLEAN, $6::INT, $7::INT, $8::UUID, $9::UUID, $10::UUID, $11::BOOLEAN, $12::VARCHAR)`,
-		tenantID, query.Search, query.CompanyID, query.Direction, query.IsActive, query.Page, query.PageSize, scopeUserID, query.VehicleID, query.OrganizationID, query.HasFreeSeats, query.Sort)
+		`SELECT * FROM tracking.sp_list_routes($1::UUID, $2::VARCHAR, $3::UUID, $4::VARCHAR, $5::BOOLEAN, $6::INT, $7::INT, $8::UUID, $9::UUID, $10::UUID, $11::BOOLEAN, $12::VARCHAR, $13::BOOLEAN, $14::BOOLEAN)`,
+		tenantID, query.Search, query.CompanyID, query.Direction, query.IsActive, query.Page, query.PageSize, scopeUserID, vehicleID, query.OrganizationID, query.HasFreeSeats, query.Sort, query.GroupPairs, withoutVehicle)
 	if err != nil {
 		return nil, 0, scopedErr(err, trackingErrors.RouteListFailed)
 	}
@@ -620,7 +664,7 @@ func (r *TrackingRepository) ListRoutes(ctx context.Context, tenantID uuid.UUID,
 	var totalCount int64
 	for rows.Next() {
 		var rt models.Route
-		if err := rows.Scan(append(scanRoute(&rt), &totalCount)...); err != nil {
+		if err := rows.Scan(append(scanRoute(&rt), &rt.StartTime, &rt.ArrivalTime, &rt.ReturnRoute, &totalCount)...); err != nil {
 			return nil, 0, err
 		}
 		routes = append(routes, &rt)
@@ -730,9 +774,10 @@ func (r *TrackingRepository) ListStopPlaces(ctx context.Context, tenantID uuid.U
 			p_longitude  := $4,
 			p_radius_m   := $5,
 			p_page       := $6,
-			p_page_size  := $7
+			p_page_size  := $7,
+			p_organization_id := $8::UUID
 		)
-	`, tenantID, query.Search, latitude, longitude, query.RadiusM, query.Page, query.PageSize)
+	`, tenantID, query.Search, latitude, longitude, query.RadiusM, query.Page, query.PageSize, query.OrganizationID)
 	if err != nil {
 		return nil, 0, &trackingErrors.TrackingError{Code: trackingErrors.StopPlaceListFailed, Err: err}
 	}

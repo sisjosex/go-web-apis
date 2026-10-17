@@ -30,6 +30,14 @@ func (r *TrackingRepository) IngestPositions(ctx context.Context, tenantID uuid.
 	})
 }
 
+// MarkStopApproach announces the given pending stops of a running trip, each once (TRACK-070 D3), and
+// answers how many it stamped.
+func (r *TrackingRepository) MarkStopApproach(ctx context.Context, tenantID, tripID uuid.UUID, tripStopIDs []uuid.UUID) (int, error) {
+	var stamped int
+	err := r.dbService.QueryRow(ctx, `SELECT tracking.sp_mark_stop_approach($1, $2, $3)`, tenantID, tripID, tripStopIDs).Scan(&stamped)
+	return stamped, err
+}
+
 // DriverActiveVehicle answers the vehicle of the driver account's trip in progress, nil when there is
 // none.
 func (r *TrackingRepository) DriverActiveVehicle(ctx context.Context, tenantID, userID uuid.UUID) (*uuid.UUID, error) {

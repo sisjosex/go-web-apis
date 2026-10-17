@@ -768,6 +768,47 @@ func (ctrl *TrackingController) CreateRoute(c *gin.Context) {
 	c.JSON(http.StatusCreated, route)
 }
 
+// CreateRouteReturn godoc
+// @Summary Create the return of a route
+// @Description Gives an outbound without a pair its return: stops reversed, same vehicle and weekdays, its riders copied (TRACK-070 D2)
+// @Tags Tracking - Routes
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param id path string true "Route ID (UUID)"
+// @Param body body models.CreateRouteReturnDto true "Return departure"
+// @Success 201 {object} models.Route
+// @Failure 400 {object} coreErrors.ErrorResponse
+// @Failure 404 {object} coreErrors.ErrorResponse
+// @Failure 409 {object} coreErrors.ErrorResponse
+// @Router /tracking/routes/{id}/return [post]
+func (ctrl *TrackingController) CreateRouteReturn(c *gin.Context) {
+	tenantID, ok := ctrl.requireTenantID(c)
+	if !ok {
+		return
+	}
+
+	routeID, err := uuid.Parse(c.Param("route_id"))
+	if err != nil {
+		c.JSON(http.StatusBadRequest, coreErrors.BuildErrorSingle(c, coreErrors.InvalidUUID))
+		return
+	}
+	var dto models.CreateRouteReturnDto
+	if err := c.ShouldBindJSON(&dto); err != nil {
+		c.JSON(http.StatusBadRequest, coreErrors.BuildErrorDetail(c, trackingErrors.RouteDepartureRequired, utils.ExtractValidationError(c, err)))
+		return
+	}
+	route, err := ctrl.trackingService.CreateRouteReturn(c.Request.Context(), tenantID, routeID, &dto, ctrl.actingUserID(c))
+	if err != nil {
+		if routeErrorResponse(c, err) {
+			return
+		}
+		c.JSON(http.StatusInternalServerError, coreErrors.BuildError(c, err))
+		return
+	}
+	c.JSON(http.StatusCreated, route)
+}
+
 // UpdateRoute godoc
 // @Summary Update route
 // @Description Update existing route details
@@ -820,6 +861,8 @@ func (ctrl *TrackingController) UpdateRoute(c *gin.Context) {
 // @Param company_id query string false "Company ID (UUID)"
 // @Param direction query string false "outbound or inbound"
 // @Param is_active query bool false "Active flag"
+// @Param vehicle_id query string false "Vehicle ID (UUID), or none for the routes without one"
+// @Param group_pairs query bool false "A pair as one row, the return in return_route"
 // @Param page query int false "Page (default 1)"
 // @Param page_size query int false "Page size (default 20, max 100)"
 // @Success 200 {object} models.ListRoutesResponse
@@ -1998,7 +2041,7 @@ func routeErrorResponse(c *gin.Context, err error) bool {
 	case trackingErrors.RouteTimezone:
 		c.JSON(http.StatusBadRequest, coreErrors.BuildErrorSingle(c, trackingErr.Code))
 		return true
-	case trackingErrors.RouteCodeAlreadyExists:
+	case trackingErrors.RouteCodeAlreadyExists, trackingErrors.RouteHasReturn, trackingErrors.RouteNotOutbound:
 		c.JSON(http.StatusConflict, coreErrors.BuildErrorSingle(c, trackingErr.Code))
 		return true
 	}

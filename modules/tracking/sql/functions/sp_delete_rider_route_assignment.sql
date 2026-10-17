@@ -1,4 +1,4 @@
-CREATE OR REPLACE FUNCTION tracking.sp_delete_rider_route_assignment(p_tenant_id uuid, p_id uuid)
+CREATE OR REPLACE FUNCTION tracking.sp_delete_rider_route_assignment(p_tenant_id uuid, p_id uuid, p_twin boolean DEFAULT true)
  RETURNS void
  LANGUAGE plpgsql
 AS $function$
@@ -24,6 +24,11 @@ BEGIN
     PERFORM tracking.fn_route_prune_home_stop(p_tenant_id, v_old.route_id, v_old.rider_id, v_old.dropoff_stop_place_id, v_on);
     PERFORM tracking.fn_route_changed(v_old.route_id, v_on, v_old.valid_until);
 
+    -- TRACK-070 D5: "Quitar solo del ingreso / retorno" leaves the twin riding the other leg.
+    IF NOT COALESCE(p_twin, true) THEN
+        RETURN;
+    END IF;
+
     DELETE FROM tracking.rider_route_assignments a
     USING tracking.routes r
     WHERE r.id = v_old.route_id
@@ -41,4 +46,4 @@ BEGIN
 END;
 $function$;
 
-COMMENT ON FUNCTION tracking.sp_delete_rider_route_assignment(uuid,uuid) IS 'Removes one assignment, and its twin on the paired route (TRACK-038 D1), taking their home stops off the routes nobody else calls at them on (TRACK-044 D5), writing route.changed for the days they covered from the route''s today (TRACK-009)';
+COMMENT ON FUNCTION tracking.sp_delete_rider_route_assignment(uuid,uuid,boolean) IS 'Removes one assignment, and unless p_twin is false its twin on the paired route (TRACK-038 D1, TRACK-070 D5), taking their home stops off the routes nobody else calls at them on (TRACK-044 D5), writing route.changed for the days they covered from the route''s today (TRACK-009)';

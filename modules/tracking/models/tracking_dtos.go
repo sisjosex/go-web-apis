@@ -324,8 +324,9 @@ type UpdateRiderDto struct {
 type ListRoutesQuery struct {
 	Search    string  `form:"search"`
 	CompanyID *string `form:"company_id" binding:"omitempty,uuid"`
-	// VehicleID narrows to the routes one vehicle runs: the vehicle's Routes tab (TRACK-034).
-	VehicleID *string `form:"vehicle_id" binding:"omitempty,uuid"`
+	// VehicleID narrows to the routes one vehicle runs: the vehicle's Routes tab (TRACK-034); "none"
+	// to the routes without one (TRACK-070 D4).
+	VehicleID *string `form:"vehicle_id" binding:"omitempty,uuid|eq=none"`
 	// OrganizationID narrows to one destination's routes (TRACK-038).
 	OrganizationID *string `form:"organization_id" binding:"omitempty,uuid"`
 	Direction      string  `form:"direction" binding:"omitempty,oneof=outbound inbound"`
@@ -333,9 +334,11 @@ type ListRoutesQuery struct {
 	// HasFreeSeats keeps the routes carrying fewer riders today than their seats (TRACK-046).
 	HasFreeSeats *bool `form:"has_free_seats"`
 	// Sort is name (the default) or free_seats, most free first.
-	Sort     string `form:"sort" binding:"omitempty,oneof=name free_seats"`
-	Page     int    `form:"page,default=1" binding:"min=1"`
-	PageSize int    `form:"page_size,default=20" binding:"min=1,max=100"`
+	Sort string `form:"sort" binding:"omitempty,oneof=name free_seats"`
+	// GroupPairs lists a pair as its outbound, the return in return_route (TRACK-070 D1).
+	GroupPairs bool `form:"group_pairs"`
+	Page       int  `form:"page,default=1" binding:"min=1"`
+	PageSize   int  `form:"page_size,default=20" binding:"min=1,max=100"`
 }
 
 type ListRoutesResponse struct {
@@ -381,6 +384,11 @@ type CreateRouteDto struct {
 }
 
 // CreatedRoute is the 201 of POST /tracking/routes: the route, and its return when one was created.
+// CreateRouteReturnDto gives a lone outbound its return (TRACK-070 D2): only the time it leaves.
+type CreateRouteReturnDto struct {
+	DepartureTime string `json:"departure_time" binding:"required,datetime=15:04"`
+}
+
 type CreatedRoute struct {
 	*Route
 	ReturnRoute *Route `json:"return_route"`
@@ -432,6 +440,20 @@ type RouteVersionStopDto struct {
 // SetVehicleDriverDto sets who usually drives a vehicle (TRACK-034 D1); a null DriverID clears it.
 type SetVehicleDriverDto struct {
 	DriverID *uuid.UUID `json:"driver_id" binding:"omitempty,uuidv4"`
+}
+
+// MoveVehicleCompanyDto moves a vehicle to another carrier; MoveRoutes takes its routes and their
+// pairs with it, false leaves them without a vehicle (TRACK-070 D4).
+type MoveVehicleCompanyDto struct {
+	CompanyID  uuid.UUID `json:"company_id" binding:"required"`
+	MoveRoutes bool      `json:"move_routes"`
+}
+
+// MovedVehicle is the vehicle as it now reads and what happened to its routes.
+type MovedVehicle struct {
+	Vehicle          *Vehicle `json:"vehicle"`
+	RoutesMoved      int32    `json:"routes_moved"`
+	RoutesUnassigned int32    `json:"routes_unassigned"`
 }
 
 // VehicleConflictsQuery asks which runs would overlap: RouteID being assigned to the vehicle, or —
@@ -608,11 +630,13 @@ type UpdateStopPlaceDto struct {
 // ListStopPlacesQuery binds GET /tracking/stop-places. `near=lat,lng` turns the list into the stop
 // places within `radius_m` of that point, nearest first, each carrying distance_m.
 type ListStopPlacesQuery struct {
-	Search   string  `form:"search"`
-	Near     *string `form:"near"`
-	RadiusM  *int32  `form:"radius_m" binding:"omitempty,min=1,max=100000"`
-	Page     int     `form:"page,default=1" binding:"min=1"`
-	PageSize int     `form:"page_size,default=20" binding:"min=1,max=100"`
+	Search  string  `form:"search"`
+	Near    *string `form:"near"`
+	RadiusM *int32  `form:"radius_m" binding:"omitempty,min=1,max=100000"`
+	// OrganizationID keeps one client's places: its gates (TRACK-070 D5).
+	OrganizationID *string `form:"organization_id" binding:"omitempty,uuid"`
+	Page           int     `form:"page,default=1" binding:"min=1"`
+	PageSize       int     `form:"page_size,default=20" binding:"min=1,max=100"`
 }
 
 // ErrInvalidNear is what NearPoint returns for a `near` the handler cannot read as a coordinate.

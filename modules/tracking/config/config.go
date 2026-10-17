@@ -38,6 +38,9 @@ type TrackingConfig struct {
 	GPSArrivalRadiusM int
 	// Within ApproachRadiusM of the next stop a trip announces it to its riders once (TRACK-012 D4).
 	ApproachRadiusM int
+	// ApproachMinutes announces a stop once its ETA is this close, before the radius when traffic is
+	// slow (TRACK-070 D3); 0 leaves the radius alone.
+	ApproachMinutes int
 
 	// WebSocket gateway (TRACK-025): a ping every WSPingSeconds, and a connection closed 1013 once
 	// WSQueueMax frames that must all arrive are waiting for it.
@@ -78,6 +81,7 @@ func LoadTrackingConfig() *TrackingConfig {
 		GPSStreamMaxLen:   int64(utils.GetEnvAsInt("GPS_STREAM_MAXLEN", 100000)),
 		GPSArrivalRadiusM: utils.GetEnvAsInt("GPS_ARRIVAL_RADIUS_M", 50),
 		ApproachRadiusM:   utils.GetEnvAsInt("TRACKING_APPROACH_RADIUS_M", 800),
+		ApproachMinutes:   utils.GetEnvAsInt("TRACKING_APPROACH_MINUTES", 5),
 
 		// WebSocket gateway
 		WSPingSeconds: utils.GetEnvAsInt("WS_PING_SECONDS", 25),

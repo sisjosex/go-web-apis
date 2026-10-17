@@ -13,6 +13,7 @@ import (
 	billingServices "josex/web/modules/billing/services"
 	"josex/web/modules/core/jobs"
 	"josex/web/modules/core/services"
+	geoInterfaces "josex/web/modules/geo/interfaces"
 	geoServices "josex/web/modules/geo/services"
 	geoRouting "josex/web/modules/geo/services/routing"
 	tenancyRepos "josex/web/modules/tenancy/repositories"
@@ -70,7 +71,13 @@ func startBackground(ctx context.Context, mode, role string, db services.Databas
 	// One directory per process: every walker and handler resolves tenants from this copy (INFRA-009 D5).
 	directory := jobs.NewTenantDirectory(tenantLister(db))
 	relay := jobs.NewOutboxRelay(db, valkey, directory, coreConf.OutboxPollInterval)
-	registerJobs(ctx, registry, db, valkey, relay, directory)
+	// One router for every tracking job and the GPS consumer, so route, trace and ETA calls share its
+	// breaker.
+	var router geoInterfaces.Router
+	if coreConf.IsModuleEnabled("tracking") {
+		router = geoRouting.NewRouter(config.ModularAppConfig.Geo)
+	}
+	registerJobs(ctx, registry, db, valkey, relay, directory, router)
 
 	if runsWorker {
 		worker, err := jobs.StartWorker(valkey, registry, coreConf.JobsConcurrency)
@@ -83,7 +90,12 @@ func startBackground(ctx context.Context, mode, role string, db services.Databas
 		relay.Start(ctx)
 		bg.relay = relay
 		if coreConf.IsModuleEnabled("tracking") {
-			bg.positions = trackingJobs.NewPositionsConsumer(db, valkey, directory, config.ModularAppConfig.Tracking.IngestRadii())
+			trackingConf := config.ModularAppConfig.Tracking
+			// A stop is announced once its ETA is within the notice minutes (TRACK-070 D3).
+			eta := trackingServices.NewEtaService(router, geoServices.NewGeoService(nil, router, nil, config.ModularAppConfig.Geo), valkey)
+			live := trackingServices.NewLiveService(trackingRepos.NewTrackingRepository(db), eta)
+			bg.positions = trackingJobs.NewPositionsConsumer(db, valkey, directory, trackingConf.IngestRadii()).
+				WithApproachEta(trackingConf.ApproachMinutes, trackingJobs.LiveEta(live))
 			bg.positions.Start(ctx)
 		}
 	}
@@ -99,7 +111,7 @@ func startBackground(ctx context.Context, mode, role string, db services.Databas
 // scheduler build the same registry: the scheduler reads the entries, the worker the handlers. ctx is
 // the process's: what a handler keeps for its lifetime, like the push adapter's token source, ends
 // with it.
-func registerJobs(ctx context.Context, registry *jobs.Registry, db services.DatabaseService, valkey services.ValkeyService, relay *jobs.OutboxRelay, directory *jobs.TenantDirectory) {
+func registerJobs(ctx context.Context, registry *jobs.Registry, db services.DatabaseService, valkey services.ValkeyService, relay *jobs.OutboxRelay, directory *jobs.TenantDirectory, router geoInterfaces.Router) {
 	daily := 24 * time.Hour
 	registry.Handle(jobs.TaskOutboxPurge, relay.Purge)
 	registry.Schedule(jobs.Entry{
@@ -118,9 +130,7 @@ func registerJobs(ctx context.Context, registry *jobs.Registry, db services.Data
 	if config.ModularAppConfig.Core.IsModuleEnabled("tracking") {
 		registry.Handle(trackingJobs.TaskDocumentAlerts, trackingJobs.PassHandler(db, directory))
 		registry.Handle(trackingJobs.TaskDocumentDigest, trackingJobs.DigestHandler(services.NewEmailService(), tenantDirectory(db, directory)))
-		// One router for every job, so route and trace calls share its breaker.
 		geoConf := config.ModularAppConfig.Geo
-		router := geoRouting.NewRouter(geoConf)
 		// A route's plan changed: rebuild its trips that have not started (TRACK-008 D4) and its planned
 		// line by streets (TRACK-028). The daily pass is the same SP over every route, so a missed row is
 		// caught the next morning.

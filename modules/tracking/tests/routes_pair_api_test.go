@@ -20,6 +20,16 @@ import (
 // when set, and answers the outbound and the return.
 func createPair(t *testing.T, helper *testhelpers.ApiTestHelper, vehicleID string) (map[string]interface{}, map[string]interface{}) {
 	t.Helper()
+	w := helper.DoRequest("POST", "/tracking/routes", pairBody(t, helper, vehicleID), map[string]string{})
+	expectStatus(t, w, http.StatusCreated)
+	created := ParseResponse(t, w.Body.Bytes())
+	ret, _ := created["return_route"].(map[string]interface{})
+	return created, ret
+}
+
+// pairBody is the create body of createPair: the school pinned first, three new stops, its stop as the end.
+func pairBody(t *testing.T, helper *testhelpers.ApiTestHelper, vehicleID string) map[string]interface{} {
+	t.Helper()
 	w := helper.DoRequest("PATCH", "/tracking/organizations/"+MainSchoolID, map[string]interface{}{
 		"latitude": -17.3935, "longitude": -66.1570, "address": "Av. Ballivián 500",
 	}, map[string]string{})
@@ -37,11 +47,7 @@ func createPair(t *testing.T, helper *testhelpers.ApiTestHelper, vehicleID strin
 	if vehicleID != "" {
 		body["vehicle_id"] = vehicleID
 	}
-	w = helper.DoRequest("POST", "/tracking/routes", body, map[string]string{})
-	expectStatus(t, w, http.StatusCreated)
-	created := ParseResponse(t, w.Body.Bytes())
-	ret, _ := created["return_route"].(map[string]interface{})
-	return created, ret
+	return body
 }
 
 // pairStops are three new places, a fresh spot each run so no earlier place within 30 m is reused.

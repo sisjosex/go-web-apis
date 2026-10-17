@@ -128,6 +128,19 @@ func (s *TrackingService) SetVehicleDriver(ctx context.Context, tenantID, vehicl
 	return s.trackingRepo.GetVehicle(ctx, tenantID, vehicleID)
 }
 
+// MoveVehicleCompany moves a vehicle to another carrier and answers it as it now reads, with what
+// happened to its routes (TRACK-070 D4).
+func (s *TrackingService) MoveVehicleCompany(ctx context.Context, tenantID, vehicleID uuid.UUID, dto *models.MoveVehicleCompanyDto) (*models.MovedVehicle, error) {
+	moved, err := s.trackingRepo.MoveVehicleCompany(ctx, tenantID, vehicleID, dto)
+	if err != nil {
+		return nil, err
+	}
+	if moved.Vehicle, err = s.trackingRepo.GetVehicle(ctx, tenantID, vehicleID); err != nil {
+		return nil, err
+	}
+	return moved, nil
+}
+
 // VehicleScheduleConflicts answers the overlapping runs and, with seats in mind, the routes the vehicle
 // would leave short (TRACK-034 D2, TRACK-038 D3).
 func (s *TrackingService) VehicleScheduleConflicts(ctx context.Context, tenantID, vehicleID uuid.UUID, routeID, driverID *uuid.UUID) (*models.VehicleConflictsResponse, error) {
@@ -176,6 +189,15 @@ func (s *TrackingService) CreateRoute(ctx context.Context, tenantID uuid.UUID, d
 		}
 	}
 	return created, nil
+}
+
+// CreateRouteReturn gives an outbound its return and answers the new route (TRACK-070 D2).
+func (s *TrackingService) CreateRouteReturn(ctx context.Context, tenantID, routeID uuid.UUID, dto *models.CreateRouteReturnDto, createdBy *uuid.UUID) (*models.Route, error) {
+	id, err := s.trackingRepo.CreateRouteReturn(ctx, tenantID, routeID, dto, createdBy)
+	if err != nil {
+		return nil, err
+	}
+	return s.trackingRepo.GetRoute(ctx, tenantID, id, nil)
 }
 
 func (s *TrackingService) UpdateRoute(ctx context.Context, tenantID uuid.UUID, routeID uuid.UUID, dto *models.UpdateRouteDto) (*models.Route, error) {
@@ -340,8 +362,8 @@ func (s *TrackingService) UpdateAssignment(ctx context.Context, tenantID uuid.UU
 	return s.trackingRepo.UpdateAssignment(ctx, tenantID, assignmentID, dto)
 }
 
-func (s *TrackingService) DeleteAssignment(ctx context.Context, tenantID uuid.UUID, assignmentID uuid.UUID) error {
-	return s.trackingRepo.DeleteAssignment(ctx, tenantID, assignmentID)
+func (s *TrackingService) DeleteAssignment(ctx context.Context, tenantID uuid.UUID, assignmentID uuid.UUID, twin bool) error {
+	return s.trackingRepo.DeleteAssignment(ctx, tenantID, assignmentID, twin)
 }
 
 func (s *TrackingService) ListAssignments(ctx context.Context, tenantID uuid.UUID, query models.ListAssignmentsQuery, scopeUserID *uuid.UUID) (*models.ListAssignmentsResponse, error) {

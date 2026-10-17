@@ -1288,11 +1288,11 @@ func VehiclePositionCount(t *testing.T, helper *testhelpers.ApiTestHelper, vehic
 // ROUTE SETUP AND IMPORT (TRACK-034, APP-009)
 // ============================================================================
 
-// SetRouteVehicle puts a route on a vehicle without the PATCH's route.changed.
+// SetRouteVehicle puts a route on a vehicle without the PATCH's route.changed; "" leaves it without one.
 func SetRouteVehicle(t *testing.T, helper *testhelpers.ApiTestHelper, routeID, vehicleID string) {
 	t.Helper()
 	if _, err := helper.DB().Execute(context.Background(),
-		`UPDATE tracking.routes SET vehicle_id = $2 WHERE id = $1`, routeID, vehicleID); err != nil {
+		`UPDATE tracking.routes SET vehicle_id = NULLIF($2, '')::UUID WHERE id = $1`, routeID, vehicleID); err != nil {
 		t.Fatalf("route vehicle: %v", err)
 	}
 }
@@ -1473,4 +1473,72 @@ func NoticeStopName(t *testing.T, helper *testhelpers.ApiTestHelper, noticeID st
 		return ""
 	}
 	return *stop
+}
+
+// ============================================================================
+// TRACK-070 BUILDERS: a trip's state, the approach stamp
+// ============================================================================
+
+// CompleteTrip marks a trip driven, as if it had started and ended now.
+func CompleteTrip(t *testing.T, helper *testhelpers.ApiTestHelper, tripID string) {
+	t.Helper()
+	if _, err := helper.DB().Execute(context.Background(),
+		`UPDATE tracking.trips SET status = 'completed', started_at = now(), ended_at = now() WHERE id = $1`, tripID); err != nil {
+		t.Fatalf("complete trip: %v", err)
+	}
+}
+
+// RouteTripIDs answers a route's trips that are not cancelled, by service date.
+func RouteTripIDs(t *testing.T, helper *testhelpers.ApiTestHelper, routeID string) []string {
+	t.Helper()
+	return queryIDs(t, helper,
+		`SELECT id::text FROM tracking.trips WHERE route_id = $1 AND status <> 'cancelled' ORDER BY service_date`, routeID)
+}
+
+// TripVehicleID answers a trip's vehicle id, "" without one.
+func TripVehicleID(t *testing.T, helper *testhelpers.ApiTestHelper, tripID string) string {
+	t.Helper()
+	var vehicle string
+	if err := helper.DB().QueryRow(context.Background(),
+		`SELECT COALESCE(vehicle_id::text, '') FROM tracking.trips WHERE id = $1`, tripID).Scan(&vehicle); err != nil {
+		t.Fatalf("trip vehicle: %v", err)
+	}
+	return vehicle
+}
+
+// TripPendingStopIDs answers a trip's pending stops by sequence.
+func TripPendingStopIDs(t *testing.T, helper *testhelpers.ApiTestHelper, tripID string) []string {
+	t.Helper()
+	return queryIDs(t, helper,
+		`SELECT id::text FROM tracking.trip_stops WHERE trip_id = $1 AND status = 'pending' ORDER BY sequence`, tripID)
+}
+
+// StopApproachNotified answers whether a trip stop's approach went out (TRACK-012 D4).
+func StopApproachNotified(t *testing.T, helper *testhelpers.ApiTestHelper, tripStopID string) bool {
+	t.Helper()
+	var notified bool
+	if err := helper.DB().QueryRow(context.Background(),
+		`SELECT approach_notified_at IS NOT NULL FROM tracking.trip_stops WHERE id = $1`, tripStopID).Scan(&notified); err != nil {
+		t.Fatalf("stop approach: %v", err)
+	}
+	return notified
+}
+
+// queryIDs answers the first column of query's rows as strings.
+func queryIDs(t *testing.T, helper *testhelpers.ApiTestHelper, query string, args ...interface{}) []string {
+	t.Helper()
+	rows, err := helper.DB().Query(context.Background(), query, args...)
+	if err != nil {
+		t.Fatalf("query ids: %v", err)
+	}
+	defer rows.Close()
+	ids := []string{}
+	for rows.Next() {
+		var id string
+		if err := rows.Scan(&id); err != nil {
+			t.Fatalf("query ids: %v", err)
+		}
+		ids = append(ids, id)
+	}
+	return ids
 }

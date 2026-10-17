@@ -258,6 +258,10 @@ func registerFleetRoutes(r *gin.RouterGroup, denyOrganization gin.HandlerFunc, t
 		denyOrganization,
 		tenancyMW.RequirePermission(trackingPerms.VehiclesWrite),
 		trackingController.SetVehicleDriver)
+	r.POST("/vehicles/:vehicle_id/company",
+		denyOrganization,
+		tenancyMW.RequirePermission(trackingPerms.VehiclesWrite),
+		trackingController.MoveVehicleCompany)
 	r.GET("/vehicles/:vehicle_id/conflicts", denyOrganization, trackingController.VehicleConflicts)
 
 	// Drivers — the carrier's staff, so the operator's alone, like the rest of the fleet. POST is
@@ -300,6 +304,10 @@ func registerRouteRoutes(r *gin.RouterGroup, denyOrganization gin.HandlerFunc, t
 		denyOrganization,
 		tenancyMW.RequirePermission(trackingPerms.RoutesWrite),
 		trackingController.CreateRoute)
+	r.POST("/routes/:route_id/return",
+		denyOrganization,
+		tenancyMW.RequirePermission(trackingPerms.RoutesWrite),
+		trackingController.CreateRouteReturn)
 	r.PATCH("/routes/:route_id",
 		denyOrganization,
 		tenancyMW.RequirePermission(trackingPerms.RoutesWrite),
@@ -662,6 +670,7 @@ func registerOpenFleetRoutes(g *gin.RouterGroup, trackingController *controllers
 	g.PATCH("/vehicles/:vehicle_id", trackingController.UpdateVehicle)
 	g.DELETE("/vehicles/:vehicle_id", trackingController.DeleteVehicle)
 	g.PUT("/vehicles/:vehicle_id/driver", trackingController.SetVehicleDriver)
+	g.POST("/vehicles/:vehicle_id/company", trackingController.MoveVehicleCompany)
 	g.GET("/vehicles/:vehicle_id/conflicts", trackingController.VehicleConflicts)
 	g.POST("/drivers", trackingController.CreateDriver)
 	g.GET("/drivers", trackingController.ListDrivers)
@@ -681,6 +690,7 @@ func registerOpenRouteRoutes(g *gin.RouterGroup, trackingController *controllers
 	g.GET("/routes/:route_id/status", trackingController.GetRouteRealtimeStatus)
 	g.GET("/routes/:route_id/stops", trackingController.ListRouteStops)
 	g.GET("/routes/:route_id/path", trackingController.GetRoutePath)
+	g.POST("/routes/:route_id/return", trackingController.CreateRouteReturn)
 	g.PATCH("/routes/:route_id", trackingController.UpdateRoute)
 	g.DELETE("/routes/:route_id", trackingController.DeleteRoute)
 	g.GET("/routes/:route_id/versions", trackingController.ListRouteVersions)

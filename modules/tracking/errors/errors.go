@@ -14,6 +14,7 @@ const (
 	// VehicleDriverCompanyMismatch refuses a usual driver of another carrier (TRACK-034 D1).
 	VehicleDriverCompanyMismatch = "tracking.vehicle.driver-company-mismatch"
 	VehicleDriverFailed          = "tracking.vehicle.driver.failed"
+	VehicleMoveFailed            = "tracking.vehicle.move.failed"
 	VehicleConflictsFailed       = "tracking.vehicle.conflicts.failed"
 
 	// Route errors (TR0021-TR0040)
@@ -27,6 +28,10 @@ const (
 	RouteTimezone            = "tracking.route.timezone"
 	RouteDestinationRequired = "tracking.route.destination-required"
 	RouteDepartureRequired   = "tracking.route.departure-required"
+	// RouteHasReturn and RouteNotOutbound refuse "Crear retorno" on a route that already has its
+	// return or is itself one (TRACK-070 D2).
+	RouteHasReturn   = "tracking.route.has-return"
+	RouteNotOutbound = "tracking.route.not-outbound"
 	// RouteCompanyMismatch refuses a vehicle or default driver of another carrier; the detail names
 	// the field (TRACK-002).
 	RouteCompanyMismatch = "tracking.route.company-mismatch"

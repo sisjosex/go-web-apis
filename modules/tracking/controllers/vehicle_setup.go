@@ -20,6 +20,9 @@ import (
 var vehicleSetupStatus = map[string]int{
 	trackingErrors.VehicleNotFound:              http.StatusNotFound,
 	trackingErrors.VehicleDriverCompanyMismatch: http.StatusUnprocessableEntity,
+	trackingErrors.CompanyNotFound:              http.StatusNotFound,
+	trackingErrors.VehiclePlateAlreadyExists:    http.StatusConflict,
+	trackingErrors.RouteCodeAlreadyExists:       http.StatusConflict,
 }
 
 func vehicleSetupError(c *gin.Context, err error) {
@@ -81,6 +84,44 @@ func (ctrl *TrackingController) SetVehicleDriver(c *gin.Context) {
 		return
 	}
 	c.JSON(http.StatusOK, vehicle)
+}
+
+// MoveVehicleCompany godoc
+// @Summary Move a vehicle to another company
+// @Description The vehicle changes carrier; move_routes takes its routes and their pairs with it, false
+// @Description leaves them without a vehicle. A usual driver of another carrier is dropped (TRACK-070 D4).
+// @Tags Tracking - Vehicles
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param vehicle_id path string true "Vehicle ID (UUID)"
+// @Param body body models.MoveVehicleCompanyDto true "Target company and whether the routes go"
+// @Success 200 {object} models.MovedVehicle
+// @Failure 400 {object} coreErrors.ErrorResponse
+// @Failure 404 {object} coreErrors.ErrorResponse
+// @Failure 409 {object} coreErrors.ErrorResponse
+// @Router /tracking/vehicles/{vehicle_id}/company [post]
+func (ctrl *TrackingController) MoveVehicleCompany(c *gin.Context) {
+	tenantID, ok := ctrl.requireTenantID(c)
+	if !ok {
+		return
+	}
+	vehicleID, err := uuid.Parse(c.Param("vehicle_id"))
+	if err != nil {
+		c.JSON(http.StatusBadRequest, coreErrors.BuildErrorSingle(c, coreErrors.InvalidUUID))
+		return
+	}
+	var dto models.MoveVehicleCompanyDto
+	if err := c.ShouldBindJSON(&dto); err != nil {
+		c.JSON(http.StatusBadRequest, coreErrors.BuildErrorDetail(c, trackingErrors.VehicleMoveFailed, utils.ExtractValidationError(c, err)))
+		return
+	}
+	moved, err := ctrl.trackingService.MoveVehicleCompany(c.Request.Context(), tenantID, vehicleID, &dto)
+	if err != nil {
+		vehicleSetupError(c, err)
+		return
+	}
+	c.JSON(http.StatusOK, moved)
 }
 
 // VehicleConflicts godoc
