@@ -1,5 +1,5 @@
 CREATE OR REPLACE FUNCTION tracking.sp_list_trips(p_tenant_id uuid, p_date date DEFAULT NULL::date, p_route_id uuid DEFAULT NULL::uuid, p_status character varying DEFAULT NULL::character varying, p_organization_id uuid DEFAULT NULL::uuid, p_page integer DEFAULT 1, p_page_size integer DEFAULT 20, p_scope_user_id uuid DEFAULT NULL::uuid, p_include_empty boolean DEFAULT true, p_date_to date DEFAULT NULL::date, p_late_min integer DEFAULT NULL::integer)
- RETURNS TABLE(id uuid, route_id uuid, route_name character varying, direction character varying, route_schedule_id uuid, service_date date, timezone character varying, planned_start timestamp with time zone, vehicle_id uuid, license_plate character varying, driver_id uuid, driver_name character varying, status character varying, started_at timestamp with time zone, ended_at timestamp with time zone, is_overridden boolean, stops_count integer, tasks_total integer, tasks_done integer, created_at timestamp with time zone, updated_at timestamp with time zone, delay_seconds integer, total_count bigint)
+ RETURNS TABLE(id uuid, route_id uuid, route_name character varying, direction character varying, route_schedule_id uuid, service_date date, timezone character varying, planned_start timestamp with time zone, vehicle_id uuid, license_plate character varying, driver_id uuid, driver_name character varying, status character varying, started_at timestamp with time zone, ended_at timestamp with time zone, is_overridden boolean, stops_count integer, tasks_total integer, tasks_done integer, created_at timestamp with time zone, updated_at timestamp with time zone, service_block jsonb, delay_seconds integer, total_count bigint)
  LANGUAGE plpgsql
  STABLE
 AS $function$
@@ -18,7 +18,7 @@ BEGIN
     SELECT pg.id, pg.route_id, pg.route_name, pg.direction, pg.route_schedule_id, pg.service_date,
            pg.timezone, pg.planned_start, pg.vehicle_id, pg.license_plate, pg.driver_id, pg.driver_name,
            pg.status, pg.started_at, pg.ended_at, pg.is_overridden, pg.stops_count, pg.tasks_total,
-           pg.tasks_done, pg.created_at, pg.updated_at,
+           pg.tasks_done, pg.created_at, pg.updated_at, pg.service_block,
            -- GREATEST skips a NULL, so the CASE keeps an ended trip's NULL.
            CASE WHEN COALESCE(pg.next_planned_at, ns.planned_at) IS NOT NULL
                 THEN CAST(GREATEST(0, EXTRACT(EPOCH FROM (now() - COALESCE(pg.next_planned_at, ns.planned_at)))) AS INT) END,
@@ -85,4 +85,4 @@ BEGIN
 END;
 $function$;
 
-COMMENT ON FUNCTION tracking.sp_list_trips(uuid,date,uuid,character varying,uuid,integer,integer,uuid,boolean,date,integer) IS 'One page of a day''s trips by planned start — p_date (through p_date_to, at most 31 days on, else trip.invalid-range — TRACK-069 D5), or each route''s own today when NULL — narrowed by route, status and an organization whose riders it carries, or p_scope_user_id''s organizations (MOBILE-020); riderless trips not yet started only with p_include_empty (TRACK-053); every row carries delay_seconds (its next pending stop overdue by, NULL once ended — TRACK-021) and total_count (TRACK-020); p_late_min keeps the trips whose next stop is at least that many minutes overdue, filtered before paging (TRACK-069 D5)';
+COMMENT ON FUNCTION tracking.sp_list_trips(uuid,date,uuid,character varying,uuid,integer,integer,uuid,boolean,date,integer) IS 'One page of a day''s trips by planned start — p_date (through p_date_to, at most 31 days on, else trip.invalid-range — TRACK-069 D5), or each route''s own today when NULL — narrowed by route, status and an organization whose riders it carries, or p_scope_user_id''s organizations (MOBILE-020); riderless trips not yet started only with p_include_empty (TRACK-053); every row carries delay_seconds (its next pending stop overdue by, NULL once ended — TRACK-021), service_block (TRACK-064) and total_count (TRACK-020); p_late_min keeps the trips whose next stop is at least that many minutes overdue, filtered before paging (TRACK-069 D5)';

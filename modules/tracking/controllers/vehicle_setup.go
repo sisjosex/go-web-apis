@@ -23,13 +23,18 @@ var vehicleSetupStatus = map[string]int{
 	trackingErrors.CompanyNotFound:              http.StatusNotFound,
 	trackingErrors.VehiclePlateAlreadyExists:    http.StatusConflict,
 	trackingErrors.RouteCodeAlreadyExists:       http.StatusConflict,
+	trackingErrors.ServiceBlocked:               http.StatusConflict,
 }
 
 func vehicleSetupError(c *gin.Context, err error) {
 	var trackingErr *trackingErrors.TrackingError
 	if errors.As(err, &trackingErr) {
 		if status, ok := vehicleSetupStatus[trackingErr.Code]; ok {
-			c.JSON(status, coreErrors.BuildErrorSingle(c, trackingErr.Code))
+			if trackingErr.Detail != nil {
+				c.JSON(status, coreErrors.BuildErrorDetail(c, trackingErr.Code, trackingErr.Detail))
+			} else {
+				c.JSON(status, coreErrors.BuildErrorSingle(c, trackingErr.Code))
+			}
 			return
 		}
 	}

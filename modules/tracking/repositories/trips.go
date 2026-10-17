@@ -66,7 +66,7 @@ func scanTrip(t *models.Trip) []any {
 		&t.ID, &t.RouteID, &t.RouteName, &t.Direction, &t.RouteScheduleID, &t.ServiceDate, &t.Timezone,
 		&t.PlannedStart, &t.VehicleID, &t.LicensePlate, &t.DriverID, &t.DriverName, &t.Status,
 		&t.StartedAt, &t.EndedAt, &t.IsOverridden, &t.StopsCount, &t.TasksTotal, &t.TasksDone,
-		&t.CreatedAt, &t.UpdatedAt,
+		&t.CreatedAt, &t.UpdatedAt, &t.ServiceBlock,
 	}
 }
 
@@ -80,13 +80,15 @@ var tripCodes = map[string]string{
 	"trip.task.trip-not-active":            trackingErrors.TripTaskTripNotActive,
 	"trip.task.op-conflict":                trackingErrors.TripTaskOpConflict,
 	"route.company-mismatch":               trackingErrors.RouteCompanyMismatch,
+	"service.blocked":                      trackingErrors.ServiceBlocked,
+	"trip.service-blocked":                 trackingErrors.TripServiceBlocked,
 	"driver.not-linked":                    trackingErrors.DriverNotLinked,
 	"rider.not-found":                      trackingErrors.RiderNotFound,
 	trackingErrors.OrganizationScopeDenied: trackingErrors.OrganizationScopeDenied,
 }
 
-// mapTripError maps an SP refusal to its code, falling back to fallbackCode. company-mismatch names
-// the offending field as DETAIL, which becomes the error's Detail.
+// mapTripError maps an SP refusal to its code, falling back to fallbackCode. company-mismatch and
+// service.blocked name the offending field as DETAIL, which becomes the error's Detail.
 func mapTripError(err error, fallbackCode string) error {
 	var pgErr *pgconn.PgError
 	if errors.As(err, &pgErr) {

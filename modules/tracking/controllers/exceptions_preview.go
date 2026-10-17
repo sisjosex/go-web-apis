@@ -30,6 +30,9 @@ func exceptionErrorResponse(c *gin.Context, err error) bool {
 	case trackingErrors.ExceptionPayload, trackingErrors.ExceptionRange, trackingErrors.RoutePreviewRange:
 		c.JSON(http.StatusBadRequest, coreErrors.BuildErrorSingle(c, trackingErr.Code))
 		return true
+	case trackingErrors.ServiceBlocked:
+		c.JSON(http.StatusConflict, coreErrors.BuildErrorDetail(c, trackingErr.Code, trackingErr.Detail))
+		return true
 	}
 	return false
 }

@@ -35,6 +35,9 @@ const (
 	// RouteCompanyMismatch refuses a vehicle or default driver of another carrier; the detail names
 	// the field (TRACK-002).
 	RouteCompanyMismatch = "tracking.route.company-mismatch"
+	// ServiceBlocked refuses assigning a vehicle or driver with an expired blocking document; the
+	// detail names the field (TRACK-064 D1).
+	ServiceBlocked = "tracking.service.blocked"
 
 	// Rider errors (TR0041-TR0060)
 	RiderNotFound      = "tracking.rider.not-found"
@@ -273,7 +276,10 @@ const (
 	TripTaskOpConflict = "tracking.trip.task.op-conflict"
 	// TripInvalidRange is a board range that ends before it starts, has no start, or spans over 31
 	// days (TRACK-069 D5).
-	TripInvalidRange     = "tracking.trip.invalid-range"
+	TripInvalidRange = "tracking.trip.invalid-range"
+	// TripServiceBlocked refuses starting a trip whose vehicle or driver carries an expired blocking
+	// document (TRACK-064 D1).
+	TripServiceBlocked   = "tracking.trip.service-blocked"
 	TripListFailed       = "tracking.trip.list.failed"
 	TripUpdateFailed     = "tracking.trip.update.failed"
 	TripTransitionFailed = "tracking.trip.transition.failed"

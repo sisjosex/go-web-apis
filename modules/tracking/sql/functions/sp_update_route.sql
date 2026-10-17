@@ -45,8 +45,10 @@ CREATE OR REPLACE FUNCTION tracking.sp_update_route(p_tenant_id uuid, p_route_id
 AS $function$
 DECLARE
     v_company_id UUID;
+    v_vehicle_id UUID;
+    v_driver_id  UUID;
 BEGIN
-    SELECT r.company_id INTO v_company_id
+    SELECT r.company_id, r.vehicle_id, r.default_driver_id INTO v_company_id, v_vehicle_id, v_driver_id
     FROM tracking.routes r
     INNER JOIN tracking.transport_companies tc ON tc.id = r.company_id
     WHERE r.id = p_route_id AND tc.tenant_id = p_tenant_id;
@@ -56,6 +58,12 @@ BEGIN
     END IF;
 
     PERFORM tracking.fn_route_company_check(p_tenant_id, v_company_id, p_vehicle_id, p_default_driver_id);
+    -- TRACK-064 D1: only a newly assigned one is refused, so an edit of a route whose bus expired
+    -- yesterday still saves.
+    PERFORM tracking.fn_service_block_check(p_tenant_id,
+        CASE WHEN p_vehicle_id IS DISTINCT FROM v_vehicle_id THEN p_vehicle_id END,
+        CASE WHEN p_default_driver_id IS DISTINCT FROM v_driver_id THEN p_default_driver_id END,
+        'default_driver_id');
 
     IF p_timezone IS NOT NULL AND NOT EXISTS (
         SELECT 1 FROM pg_timezone_names tz WHERE tz.name = p_timezone
@@ -96,4 +104,4 @@ BEGIN
 END;
 $function$;
 
-COMMENT ON FUNCTION tracking.sp_update_route(uuid,uuid,character varying,character varying,character varying,uuid,uuid,character varying,character varying,numeric,numeric,character varying,numeric,numeric,integer,boolean,integer) IS 'Edits a route and returns it as sp_get_route does; company_id is immutable, vehicle and default driver are written as sent (NULL clears), the rest keep their value when NULL. Raises route.not-found, route.company-mismatch, route.timezone or route.code-already-exists (TRACK-002)';
+COMMENT ON FUNCTION tracking.sp_update_route(uuid,uuid,character varying,character varying,character varying,uuid,uuid,character varying,character varying,numeric,numeric,character varying,numeric,numeric,integer,boolean,integer) IS 'Edits a route and returns it as sp_get_route does; company_id is immutable, vehicle and default driver are written as sent (NULL clears), the rest keep their value when NULL. Raises route.not-found, route.company-mismatch, route.timezone or route.code-already-exists (TRACK-002), service.blocked for a newly assigned vehicle or driver (TRACK-064)';

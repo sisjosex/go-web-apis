@@ -2016,7 +2016,8 @@ func (ctrl *TrackingController) DeleteDriver(c *gin.Context) {
 // it did; anything else is the caller's 500. One map keeps the five handlers from disagreeing about
 // what a duplicate licence is.
 // routeErrorResponse answers the route SPs' own refusals. company-mismatch carries the offending
-// field (vehicle_id or default_driver_id) as its detail, so the form can put it on that field.
+// field (vehicle_id or default_driver_id) as its detail, so the form can put it on that field;
+// service.blocked does the same (TRACK-064).
 func routeErrorResponse(c *gin.Context, err error) bool {
 	var trackingErr *trackingErrors.TrackingError
 	if !errors.As(err, &trackingErr) {
@@ -2043,6 +2044,9 @@ func routeErrorResponse(c *gin.Context, err error) bool {
 		return true
 	case trackingErrors.RouteCodeAlreadyExists, trackingErrors.RouteHasReturn, trackingErrors.RouteNotOutbound:
 		c.JSON(http.StatusConflict, coreErrors.BuildErrorSingle(c, trackingErr.Code))
+		return true
+	case trackingErrors.ServiceBlocked:
+		c.JSON(http.StatusConflict, coreErrors.BuildErrorDetail(c, trackingErr.Code, trackingErr.Detail))
 		return true
 	}
 	return false

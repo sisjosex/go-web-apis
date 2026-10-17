@@ -48,6 +48,8 @@ func mapExceptionError(err error, fallbackCode string) error {
 			return &trackingErrors.TrackingError{Code: trackingErrors.DriverNotFound, Err: pgErr}
 		case "stop-place.not-found":
 			return &trackingErrors.TrackingError{Code: trackingErrors.StopPlaceNotFound, Err: pgErr}
+		case "service.blocked":
+			return &trackingErrors.TrackingError{Code: trackingErrors.ServiceBlocked, Err: pgErr, Detail: pgErr.Detail}
 		}
 	}
 	return &trackingErrors.TrackingError{Code: fallbackCode, Err: err}

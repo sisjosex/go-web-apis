@@ -59,6 +59,7 @@ BEGIN
     IF COALESCE(p_with_return, true) AND p_departure_time IS NULL THEN
         RAISE EXCEPTION 'route.departure-required' USING ERRCODE = 'P0001';
     END IF;
+    PERFORM tracking.fn_service_block_check(p_tenant_id, p_vehicle_id, NULL);
 
     -- The pickups in order, without the editor's own sequence (the list order is the order). A body
     -- without stops sends JSON null, which is not SQL NULL: anything but an array is no stops.
@@ -127,4 +128,4 @@ BEGIN
 END;
 $function$;
 
-COMMENT ON FUNCTION tracking.sp_create_route_pair(uuid,uuid,uuid,character varying,uuid,boolean,time without time zone,time without time zone,smallint,jsonb,character varying,character varying,numeric,numeric,character varying,uuid,uuid) IS 'Creates a destination''s outbound route (stops, possibly none, then the destination) and, with p_with_return, its return "<name> (retorno)" (reversed), same vehicle, linked both ways, each with its schedule, in one transaction (TRACK-038 D1, D2); the outbound departure follows its stops (TRACK-044 D2); the destination is the stop sent, or a pin (TRACK-049 D3); raises tracking.organization.not-found, tracking.stop-place.not-found, tracking.route.destination-required, tracking.route.departure-required';
+COMMENT ON FUNCTION tracking.sp_create_route_pair(uuid,uuid,uuid,character varying,uuid,boolean,time without time zone,time without time zone,smallint,jsonb,character varying,character varying,numeric,numeric,character varying,uuid,uuid) IS 'Creates a destination''s outbound route (stops, possibly none, then the destination) and, with p_with_return, its return "<name> (retorno)" (reversed), same vehicle, linked both ways, each with its schedule, in one transaction (TRACK-038 D1, D2); the outbound departure follows its stops (TRACK-044 D2); the destination is the stop sent, or a pin (TRACK-049 D3); raises tracking.organization.not-found, tracking.stop-place.not-found, tracking.route.destination-required, tracking.route.departure-required, tracking.service.blocked (TRACK-064)';

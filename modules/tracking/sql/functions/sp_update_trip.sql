@@ -1,5 +1,5 @@
 CREATE OR REPLACE FUNCTION tracking.sp_update_trip(p_tenant_id uuid, p_trip_id uuid, p_changes jsonb, p_user_id uuid DEFAULT NULL::uuid)
- RETURNS TABLE(id uuid, route_id uuid, route_name character varying, direction character varying, route_schedule_id uuid, service_date date, timezone character varying, planned_start timestamp with time zone, vehicle_id uuid, license_plate character varying, driver_id uuid, driver_name character varying, status character varying, started_at timestamp with time zone, ended_at timestamp with time zone, is_overridden boolean, stops_count integer, tasks_total integer, tasks_done integer, created_at timestamp with time zone, updated_at timestamp with time zone, stops jsonb)
+ RETURNS TABLE(id uuid, route_id uuid, route_name character varying, direction character varying, route_schedule_id uuid, service_date date, timezone character varying, planned_start timestamp with time zone, vehicle_id uuid, license_plate character varying, driver_id uuid, driver_name character varying, status character varying, started_at timestamp with time zone, ended_at timestamp with time zone, is_overridden boolean, stops_count integer, tasks_total integer, tasks_done integer, created_at timestamp with time zone, updated_at timestamp with time zone, service_block jsonb, stops jsonb)
  LANGUAGE plpgsql
 AS $function$
 DECLARE
@@ -30,6 +30,9 @@ BEGIN
     ) THEN
         RAISE EXCEPTION 'route.company-mismatch' USING ERRCODE = 'P0001', DETAIL = 'driver_id';
     END IF;
+    PERFORM tracking.fn_service_block_check(p_tenant_id,
+        CASE WHEN v_vehicle IS DISTINCT FROM v_trip.vehicle_id THEN v_vehicle END,
+        CASE WHEN v_driver IS DISTINCT FROM v_trip.driver_id THEN v_driver END);
 
     UPDATE tracking.trips t
     SET vehicle_id = v_vehicle,
@@ -51,4 +54,4 @@ BEGIN
 END;
 $function$;
 
-COMMENT ON FUNCTION tracking.sp_update_trip(uuid,uuid,jsonb,uuid) IS 'Overrides a trip not ended — vehicle_id, driver_id, planned_start, a key left out keeps its value — and marks it is_overridden so the materialiser keeps the header; raises trip.invalid-transition, route.company-mismatch (DETAIL the field); answers the detail (TRACK-020)';
+COMMENT ON FUNCTION tracking.sp_update_trip(uuid,uuid,jsonb,uuid) IS 'Overrides a trip not ended — vehicle_id, driver_id, planned_start, a key left out keeps its value — and marks it is_overridden so the materialiser keeps the header; raises trip.invalid-transition, route.company-mismatch, service.blocked for a newly assigned vehicle or driver (TRACK-064) (DETAIL the field); answers the detail (TRACK-020)';

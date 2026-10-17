@@ -34,6 +34,15 @@ type Trip struct {
 	TasksDone       int32               `json:"tasks_done"`
 	CreatedAt       time.Time           `json:"created_at"`
 	UpdatedAt       time.Time           `json:"updated_at"`
+	// ServiceBlock is the first of the vehicle and driver carrying an expired blocking document,
+	// read on every row, so renewing the document clears it (TRACK-064 D2).
+	ServiceBlock *ServiceBlock `json:"service_block"`
+}
+
+// ServiceBlock names who keeps a trip in — "vehicle" or "driver" — and the document type expired.
+type ServiceBlock struct {
+	Subject string `json:"subject"`
+	Reason  string `json:"reason"`
 }
 
 // TripListRow is a row of GET /tracking/trips: the trip plus how long its next pending stop has

@@ -1,5 +1,5 @@
 CREATE OR REPLACE FUNCTION tracking.fn_trip_rows(p_tenant_id uuid, p_ids uuid[])
- RETURNS TABLE(id uuid, route_id uuid, route_name character varying, direction character varying, route_schedule_id uuid, service_date date, timezone character varying, planned_start timestamp with time zone, vehicle_id uuid, license_plate character varying, driver_id uuid, driver_name character varying, status character varying, started_at timestamp with time zone, ended_at timestamp with time zone, is_overridden boolean, stops_count integer, tasks_total integer, tasks_done integer, created_at timestamp with time zone, updated_at timestamp with time zone)
+ RETURNS TABLE(id uuid, route_id uuid, route_name character varying, direction character varying, route_schedule_id uuid, service_date date, timezone character varying, planned_start timestamp with time zone, vehicle_id uuid, license_plate character varying, driver_id uuid, driver_name character varying, status character varying, started_at timestamp with time zone, ended_at timestamp with time zone, is_overridden boolean, stops_count integer, tasks_total integer, tasks_done integer, created_at timestamp with time zone, updated_at timestamp with time zone, service_block jsonb)
  LANGUAGE sql
  STABLE
 AS $function$
@@ -24,7 +24,8 @@ AS $function$
         CAST(pr.total AS INT),
         CAST(pr.done AS INT),
         t.created_at,
-        t.updated_at
+        t.updated_at,
+        tracking.fn_service_block(t.tenant_id, t.vehicle_id, t.driver_id)
     FROM tracking.trips t
     INNER JOIN tracking.routes r ON r.id = t.route_id
     LEFT JOIN tracking.vehicles v ON v.id = t.vehicle_id
@@ -42,4 +43,4 @@ AS $function$
       AND (p_ids IS NULL OR t.id = ANY(p_ids));
 $function$;
 
-COMMENT ON FUNCTION tracking.fn_trip_rows(uuid,uuid[]) IS 'The one row shape of a trip — route, plate and driver names, stops_count, tasks_total (not cancelled) and tasks_done (done or no_show) — for p_ids, or every trip of the tenant when NULL (TRACK-020)';
+COMMENT ON FUNCTION tracking.fn_trip_rows(uuid,uuid[]) IS 'The one row shape of a trip — route, plate and driver names, stops_count, tasks_total (not cancelled) and tasks_done (done or no_show), service_block { subject, reason } of a blocked vehicle or driver (TRACK-064) — for p_ids, or every trip of the tenant when NULL (TRACK-020)';

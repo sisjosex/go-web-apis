@@ -25,6 +25,8 @@ var tripStatus = map[string]int{
 	trackingErrors.TripTaskTripNotActive:   http.StatusConflict,
 	trackingErrors.TripTaskOpConflict:      http.StatusConflict,
 	trackingErrors.RouteCompanyMismatch:    http.StatusBadRequest,
+	trackingErrors.ServiceBlocked:          http.StatusConflict,
+	trackingErrors.TripServiceBlocked:      http.StatusConflict,
 	trackingErrors.DriverNotLinked:         http.StatusForbidden,
 	trackingErrors.RiderNotFound:           http.StatusNotFound,
 	trackingErrors.OrganizationScopeDenied: http.StatusForbidden,
@@ -37,7 +39,7 @@ var (
 	tripTaskActions = map[string]string{"done": "done", "no-show": "no_show"}
 )
 
-// tripErrorResponse answers the trip codes with their status and anything else with a 500. company-mismatch carries the offending field as its detail.
+// tripErrorResponse answers the trip codes with their status and anything else with a 500. company-mismatch and service.blocked carry the offending field as their detail.
 func tripErrorResponse(c *gin.Context, err error) {
 	var trackingErr *trackingErrors.TrackingError
 	if errors.As(err, &trackingErr) {

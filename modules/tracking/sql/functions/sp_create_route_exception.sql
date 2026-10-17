@@ -35,6 +35,10 @@ BEGIN
         RAISE EXCEPTION 'driver.not-found' USING ERRCODE = 'P0001';
     END IF;
 
+    PERFORM tracking.fn_service_block_check(p_tenant_id,
+        CASE WHEN p_kind = 'change_vehicle' THEN (p_payload->>'vehicle_id')::UUID END,
+        CASE WHEN p_kind = 'change_driver' THEN (p_payload->>'driver_id')::UUID END);
+
     IF p_kind IN ('skip_stop', 'add_stop') AND NOT EXISTS (
         SELECT 1 FROM tracking.stop_places sp
         WHERE sp.id = (p_payload->>'stop_place_id')::UUID AND sp.tenant_id = p_tenant_id
@@ -71,4 +75,4 @@ BEGIN
 END;
 $function$;
 
-COMMENT ON FUNCTION tracking.sp_create_route_exception(uuid,uuid,date,date,character varying,jsonb,character varying,uuid) IS 'Records what happens differently over a range of dates; raises tracking.exception.payload when the payload does not carry exactly the keys its kind defines, and writes one route.changed row over that range';
+COMMENT ON FUNCTION tracking.sp_create_route_exception(uuid,uuid,date,date,character varying,jsonb,character varying,uuid) IS 'Records what happens differently over a range of dates; raises tracking.exception.payload when the payload does not carry exactly the keys its kind defines, tracking.service.blocked when the vehicle or driver it names is blocked (TRACK-064), and writes one route.changed row over that range';

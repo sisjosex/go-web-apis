@@ -435,6 +435,8 @@ func (r *TrackingRepository) SetVehicleDriver(ctx context.Context, tenantID, veh
 			return &trackingErrors.TrackingError{Code: trackingErrors.VehicleNotFound, Err: pgErr}
 		case "vehicle.driver-company-mismatch":
 			return &trackingErrors.TrackingError{Code: trackingErrors.VehicleDriverCompanyMismatch, Err: pgErr}
+		case "service.blocked":
+			return &trackingErrors.TrackingError{Code: trackingErrors.ServiceBlocked, Err: pgErr, Detail: pgErr.Detail}
 		}
 	}
 	if err != nil {
@@ -556,6 +558,8 @@ func mapRouteError(err error, fallbackCode string) error {
 			return &trackingErrors.TrackingError{Code: trackingErrors.CompanyNotFound, Err: pgErr}
 		case "route.company-mismatch":
 			return &trackingErrors.TrackingError{Code: trackingErrors.RouteCompanyMismatch, Err: pgErr}
+		case "service.blocked":
+			return &trackingErrors.TrackingError{Code: trackingErrors.ServiceBlocked, Err: pgErr, Detail: pgErr.Detail}
 		case "route.timezone":
 			return &trackingErrors.TrackingError{Code: trackingErrors.RouteTimezone, Err: pgErr}
 		case "route.code-already-exists":

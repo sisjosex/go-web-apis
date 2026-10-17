@@ -1,5 +1,5 @@
 CREATE OR REPLACE FUNCTION tracking.sp_trip_live(p_tenant_id uuid, p_trip_id uuid, p_trail_since timestamp with time zone DEFAULT NULL::timestamp with time zone)
- RETURNS TABLE(id uuid, route_id uuid, route_name character varying, direction character varying, route_schedule_id uuid, service_date date, timezone character varying, planned_start timestamp with time zone, vehicle_id uuid, license_plate character varying, driver_id uuid, driver_name character varying, status character varying, started_at timestamp with time zone, ended_at timestamp with time zone, is_overridden boolean, stops_count integer, tasks_total integer, tasks_done integer, created_at timestamp with time zone, updated_at timestamp with time zone, stops jsonb, polyline text, distance_km numeric, trace_source character varying, vehicle_position jsonb, pending_stops jsonb, planned_path jsonb, vehicle_type character varying, organization_kind character varying, destination jsonb, trail jsonb)
+ RETURNS TABLE(id uuid, route_id uuid, route_name character varying, direction character varying, route_schedule_id uuid, service_date date, timezone character varying, planned_start timestamp with time zone, vehicle_id uuid, license_plate character varying, driver_id uuid, driver_name character varying, status character varying, started_at timestamp with time zone, ended_at timestamp with time zone, is_overridden boolean, stops_count integer, tasks_total integer, tasks_done integer, created_at timestamp with time zone, updated_at timestamp with time zone, service_block jsonb, stops jsonb, polyline text, distance_km numeric, trace_source character varying, vehicle_position jsonb, pending_stops jsonb, planned_path jsonb, vehicle_type character varying, organization_kind character varying, destination jsonb, trail jsonb)
  LANGUAGE plpgsql
  STABLE
 AS $function$
@@ -9,7 +9,7 @@ BEGIN
         g.id, g.route_id, g.route_name, g.direction, g.route_schedule_id, g.service_date, g.timezone,
         g.planned_start, g.vehicle_id, g.license_plate, g.driver_id, g.driver_name, g.status,
         g.started_at, g.ended_at, g.is_overridden, g.stops_count, g.tasks_total, g.tasks_done,
-        g.created_at, g.updated_at,
+        g.created_at, g.updated_at, g.service_block,
         -- Each stop as the detail draws it, plus where it is.
         COALESCE((
             SELECT jsonb_agg(s.stop || jsonb_build_object(

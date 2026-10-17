@@ -20,6 +20,7 @@ BEGIN
     ) THEN
         RAISE EXCEPTION 'vehicle.driver-company-mismatch' USING ERRCODE = 'P0001';
     END IF;
+    PERFORM tracking.fn_service_block_check(p_tenant_id, NULL, p_driver_id);
 
     UPDATE tracking.vehicles v
     SET default_driver_id = p_driver_id, updated_at = CURRENT_TIMESTAMP
@@ -34,4 +35,4 @@ BEGIN
 END;
 $function$;
 
-COMMENT ON FUNCTION tracking.sp_set_vehicle_driver(uuid,uuid,uuid) IS 'Sets (NULL clears) the usual driver of a vehicle, who must belong to its carrier, and replans its routes from today; raises vehicle.not-found or vehicle.driver-company-mismatch (TRACK-034 D1)';
+COMMENT ON FUNCTION tracking.sp_set_vehicle_driver(uuid,uuid,uuid) IS 'Sets (NULL clears) the usual driver of a vehicle, who must belong to its carrier, and replans its routes from today; raises vehicle.not-found, vehicle.driver-company-mismatch (TRACK-034 D1) or service.blocked (TRACK-064)';
