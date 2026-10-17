@@ -598,6 +598,8 @@ func registerRiderRoutes(
 		tenancyMW.RequirePermission(trackingPerms.AssignmentsRead),
 		trackingController.SuggestRiderStops)
 	r.GET("/riders/groups", trackingController.ListRiderGroups)
+	// The printable cards of a route, a client or a rider (TRACK-072 D2), scoped as the list is.
+	r.GET("/riders/cards", trackingController.ListRiderCards)
 	// Saved places (TRACK-044 D4): read and changed as the rider is.
 	r.GET("/riders/:rider_id/places",
 		tenancyMW.RequirePermission(trackingPerms.RidersRead),

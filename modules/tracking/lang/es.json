@@ -236,6 +236,8 @@
   "tracking.driver.today.failed": "Error al cargar los viajes de hoy",
   "tracking.driver.sync.failed": "Error al sincronizar las operaciones",
   "tracking.rider.qr-token.failed": "No se pudo leer el código de la tarjeta del pasajero",
+  "tracking.rider.cards.invalid": "Elige una ruta, un cliente o un pasajero para imprimir tarjetas",
+  "tracking.rider.cards.failed": "No se pudieron cargar las tarjetas de los pasajeros",
   "tracking.driver.rider.failed": "No se pudo buscar al pasajero",
   "tracking.driver.rider.invalid": "Escribe al menos 2 caracteres del nombre o el código de la tarjeta",
   "tracking.driver.incident.invalid": "Incidente no válido",

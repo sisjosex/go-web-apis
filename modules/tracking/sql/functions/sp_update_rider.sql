@@ -86,6 +86,8 @@ BEGIN
         home_location = CASE WHEN p_home_latitude IS NOT NULL AND p_home_longitude IS NOT NULL
             THEN ST_SetSRID(ST_MakePoint(p_home_longitude, p_home_latitude), 4326)::geography
             ELSE r.home_location END,
+        -- A person placing the pin confirms it (TRACK-072 D3).
+        home_geocoded = r.home_geocoded AND (p_home_latitude IS NULL OR p_home_longitude IS NULL),
         notes = NULLIF(TRIM(p_notes), ''),
         -- NULL keeps the group, '' clears it (TRACK-039 D2).
         group_label = CASE WHEN p_group_label IS NULL THEN r.group_label ELSE NULLIF(TRIM(p_group_label), '') END,

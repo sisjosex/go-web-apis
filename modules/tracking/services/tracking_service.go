@@ -428,6 +428,10 @@ func (s *TrackingService) RiderQRToken(ctx context.Context, tenantID, riderID uu
 	return s.trackingRepo.RiderQRToken(ctx, tenantID, riderID, rotate, scopeUserID)
 }
 
+func (s *TrackingService) ListRiderCards(ctx context.Context, tenantID uuid.UUID, query models.RiderCardsQuery, scopeUserID *uuid.UUID) ([]models.RiderCard, error) {
+	return s.trackingRepo.ListRiderCards(ctx, tenantID, query, scopeUserID)
+}
+
 func (s *TrackingService) ListRiderAbsences(ctx context.Context, tenantID, riderID uuid.UUID, query models.ListRiderAbsencesQuery, scopeUserID, guardianUserID *uuid.UUID) ([]*models.RiderAbsence, error) {
 	return s.trackingRepo.ListRiderAbsences(ctx, tenantID, riderID, query, scopeUserID, guardianUserID)
 }

@@ -123,6 +123,7 @@ type TrackingService interface {
 
 	// The rider's card code (TRACK-027)
 	RiderQRToken(ctx context.Context, tenantID, riderID uuid.UUID, rotate bool, scopeUserID *uuid.UUID) (string, error)
+	ListRiderCards(ctx context.Context, tenantID uuid.UUID, query models.RiderCardsQuery, scopeUserID *uuid.UUID) ([]models.RiderCard, error)
 
 	// Absences and suggestions (TRACK-022)
 	ListRiderAbsences(ctx context.Context, tenantID, riderID uuid.UUID, query models.ListRiderAbsencesQuery, scopeUserID, guardianUserID *uuid.UUID) ([]*models.RiderAbsence, error)

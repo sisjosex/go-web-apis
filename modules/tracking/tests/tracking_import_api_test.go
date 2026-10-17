@@ -4,15 +4,18 @@
 package tracking_test
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"os"
 	"testing"
 
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 
 	"josex/web/modules/core/testhelpers"
+	geoRepos "josex/web/modules/geo/repositories"
 	importModels "josex/web/modules/import/models"
 )
 
@@ -91,6 +94,57 @@ func TestImportRiders(t *testing.T) {
 	done := importTrackingCSV(t, helper, "/import", "tracking_riders", csv)
 	assert.Equal(t, []string{"created", "skipped", "failed"}, rowStatuses(done))
 	assert.Contains(t, done.Rows[2].Errors, "tracking.import.organization-unknown|Nowhere")
+}
+
+// loadPlaces replaces geo.places with the geo module's fixture (Av. Aroma, Calle Sucre in Cochabamba).
+func loadPlaces(t *testing.T, helper *testhelpers.ApiTestHelper) {
+	t.Helper()
+	file, err := os.Open("../../geo/tests/fixtures/places.geojsonl")
+	if err != nil {
+		t.Fatalf("open places fixture: %v", err)
+	}
+	defer func() { _ = file.Close() }()
+	if _, err := geoRepos.NewPlacesRepository(helper.DB()).Import(context.Background(), file); err != nil {
+		t.Fatalf("import places: %v", err)
+	}
+}
+
+// TestImportRiders_Geocoded - TRACK-072 D3: an address the places search finds becomes an approximate
+// home, warned and listed under geocoded; a nonsense one stays missing its location; moving the pin
+// confirms it.
+func TestImportRiders_Geocoded(t *testing.T) {
+	helper := SetupTrackingTest(t)
+	defer helper.Close()
+	loadPlaces(t, helper)
+	school := OrganizationName(t, helper, MainSchoolID)
+	last := "Geo" + uuid.New().String()[:5]
+	csv := fmt.Sprintf("first_name,last_name,organization,address\n"+
+		"Dora,%[1]s,%[2]s,Av. Aroma 123\nEmi,%[1]s,%[2]s,Zzqxw Vvkj\n", last, school)
+
+	dry := importTrackingCSV(t, helper, "/import/validate", "tracking_riders", csv)
+	assert.Contains(t, dry.Rows[0].Warnings, "tracking.import.geocoded")
+
+	done := importTrackingCSV(t, helper, "/import", "tracking_riders", csv)
+	assert.Equal(t, []string{"created", "created"}, rowStatuses(done))
+	assert.Equal(t, []string{"tracking.import.geocoded"}, done.Rows[0].Warnings)
+	assert.Equal(t, []string{"tracking.import.missing-location"}, done.Rows[1].Warnings)
+
+	geocoded := ListRiders(t, helper, "?geocoded=true&search="+last)
+	if !assert.Len(t, geocoded.Riders, 1) {
+		return
+	}
+	dora := geocoded.Riders[0]
+	assert.Equal(t, "Dora", dora.FirstName)
+	assert.True(t, dora.HomeGeocoded)
+	if assert.NotNil(t, dora.HomeLatitude) {
+		assert.InDelta(t, -17.396, *dora.HomeLatitude, 0.01)
+	}
+
+	w := helper.DoRequest("PATCH", "/tracking/riders/"+dora.ID.String(), map[string]interface{}{
+		"home_latitude": -17.3961, "home_longitude": -66.1565,
+	}, map[string]string{})
+	expectStatus(t, w, http.StatusOK)
+	assert.Empty(t, ListRiders(t, helper, "?geocoded=true&search="+last).Riders)
 }
 
 // TestImportRiders_Service - TRACK-043: a pinned row, an address-only row (imported, warned, listed

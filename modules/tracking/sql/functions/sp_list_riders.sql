@@ -30,8 +30,8 @@ BEGIN
 END;
 $function$;
 
-CREATE OR REPLACE FUNCTION tracking.sp_list_riders(p_tenant_id uuid, p_organization_id uuid DEFAULT NULL::uuid, p_search character varying DEFAULT NULL::character varying, p_rider_type character varying DEFAULT NULL::character varying, p_is_active boolean DEFAULT NULL::boolean, p_page integer DEFAULT 1, p_page_size integer DEFAULT 20, p_scope_user_id uuid DEFAULT NULL::uuid, p_guardian_user_id uuid DEFAULT NULL::uuid, p_route_id uuid DEFAULT NULL::uuid, p_unassigned boolean DEFAULT NULL::boolean, p_group character varying DEFAULT NULL::character varying, p_missing_location boolean DEFAULT NULL::boolean)
- RETURNS TABLE(id uuid, organization_id uuid, organization_name character varying, organization_kind character varying, rider_type character varying, first_name character varying, last_name character varying, identification_number character varying, phone character varying, email character varying, emergency_contact_name character varying, emergency_contact_phone character varying, guardian_user_id uuid, guardian_name character varying, guardian_phone character varying, guardian_email character varying, address character varying, is_active boolean, created_at timestamp without time zone, updated_at timestamp without time zone, home_latitude numeric, home_longitude numeric, notes text, group_label character varying, assigned_route_name character varying, service_legs character varying, stop_place_id uuid, stop_place_name character varying, total_count bigint)
+CREATE OR REPLACE FUNCTION tracking.sp_list_riders(p_tenant_id uuid, p_organization_id uuid DEFAULT NULL::uuid, p_search character varying DEFAULT NULL::character varying, p_rider_type character varying DEFAULT NULL::character varying, p_is_active boolean DEFAULT NULL::boolean, p_page integer DEFAULT 1, p_page_size integer DEFAULT 20, p_scope_user_id uuid DEFAULT NULL::uuid, p_guardian_user_id uuid DEFAULT NULL::uuid, p_route_id uuid DEFAULT NULL::uuid, p_unassigned boolean DEFAULT NULL::boolean, p_group character varying DEFAULT NULL::character varying, p_missing_location boolean DEFAULT NULL::boolean, p_geocoded boolean DEFAULT NULL::boolean)
+ RETURNS TABLE(id uuid, organization_id uuid, organization_name character varying, organization_kind character varying, rider_type character varying, first_name character varying, last_name character varying, identification_number character varying, phone character varying, email character varying, emergency_contact_name character varying, emergency_contact_phone character varying, guardian_user_id uuid, guardian_name character varying, guardian_phone character varying, guardian_email character varying, address character varying, is_active boolean, created_at timestamp without time zone, updated_at timestamp without time zone, home_latitude numeric, home_longitude numeric, notes text, group_label character varying, assigned_route_name character varying, service_legs character varying, stop_place_id uuid, stop_place_name character varying, home_geocoded boolean, total_count bigint)
  LANGUAGE plpgsql
 AS $function$
 DECLARE
@@ -89,6 +89,7 @@ BEGIN
         CAST(r.service_legs AS VARCHAR),
         r.stop_place_id,
         CAST(sp.name AS VARCHAR),
+        r.home_geocoded,
         CAST(COUNT(*) OVER () AS BIGINT)
     FROM tracking.riders r
     INNER JOIN tracking.organizations o ON o.id = r.organization_id
@@ -117,6 +118,7 @@ BEGIN
       AND (p_group IS NULL OR p_group = '' OR r.group_label = p_group)
       AND (NOT COALESCE(p_unassigned, false) OR asg.route_name IS NULL)
       AND (NOT COALESCE(p_missing_location, false) OR r.home_location IS NULL)
+      AND (NOT COALESCE(p_geocoded, false) OR r.home_geocoded)
       AND (
           p_search IS NULL
           OR p_search = ''
@@ -131,4 +133,4 @@ BEGIN
 END;
 $function$;
 
-COMMENT ON FUNCTION tracking.sp_list_riders(uuid,uuid,character varying,character varying,boolean,integer,integer,uuid,uuid,uuid,boolean,character varying,boolean) IS 'One page of a tenant''s riders by name with their organization''s name and kind, narrowed to p_scope_user_id''s organizations and to p_guardian_user_id''s own riders when either is set, and optionally by organization, type, status and a name/identification search; every row carries its group, the route it already rides in p_route_id''s direction (TRACK-039: p_unassigned keeps the riders with none, p_group one group, p_missing_location the riders without a pin — TRACK-043) and the total_count the filters match';
+COMMENT ON FUNCTION tracking.sp_list_riders(uuid,uuid,character varying,character varying,boolean,integer,integer,uuid,uuid,uuid,boolean,character varying,boolean,boolean) IS 'One page of a tenant''s riders by name with their organization''s name and kind, narrowed to p_scope_user_id''s organizations and to p_guardian_user_id''s own riders when either is set, and optionally by organization, type, status and a name/identification search; every row carries its group, the route it already rides in p_route_id''s direction (TRACK-039: p_unassigned keeps the riders with none, p_group one group, p_missing_location the riders without a pin — TRACK-043, p_geocoded those the import placed by address — TRACK-072) and the total_count the filters match';

@@ -85,6 +85,10 @@ const (
 	DriverIncidentInvalid = "tracking.driver.incident.invalid"
 	DriverIncidentFailed  = "tracking.driver.incident.failed"
 
+	// The printable cards (TRACK-072 D2): not exactly one filter, or a read that failed.
+	RiderCardsInvalid = "tracking.rider.cards.invalid"
+	RiderCardsFailed  = "tracking.rider.cards.failed"
+
 	// Portal notices (TRACK-012): a feed read, a mark-read, a settings read or write that failed, and
 	// a body out of range.
 	NotificationListFailed     = "tracking.notification.list.failed"

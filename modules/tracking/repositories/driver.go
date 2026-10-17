@@ -7,6 +7,7 @@ import (
 	"josex/web/modules/tracking/models"
 
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5"
 )
 
 // The driver's phone of TRACK-011: one SP per endpoint, the account resolved to its driver inside each.
@@ -68,6 +69,27 @@ func (r *TrackingRepository) RiderQRToken(ctx context.Context, tenantID, riderID
 		return "", scopedErr(err, trackingErrors.RiderQRTokenFailed)
 	}
 	return token, nil
+}
+
+// ListRiderCards reads the printable cards of a route, an organization or one rider in one query.
+func (r *TrackingRepository) ListRiderCards(ctx context.Context, tenantID uuid.UUID, query models.RiderCardsQuery, scopeUserID *uuid.UUID) ([]models.RiderCard, error) {
+	rows, err := r.dbService.Query(ctx, `
+		SELECT * FROM tracking.sp_list_rider_cards(p_tenant_id := $1, p_route_id := $2::UUID,
+			p_organization_id := $3::UUID, p_rider_id := $4::UUID, p_scope_user_id := $5)
+	`, tenantID, query.RouteID, query.OrganizationID, query.RiderID, scopeUserID)
+	if err != nil {
+		return nil, scopedErr(err, trackingErrors.RiderCardsFailed)
+	}
+	cards, err := pgx.CollectRows(rows, func(row pgx.CollectableRow) (models.RiderCard, error) {
+		var c models.RiderCard
+		err := row.Scan(&c.RiderID, &c.FirstName, &c.LastName, &c.OrganizationName, &c.RouteName,
+			&c.PickupStopName, &c.QRToken)
+		return c, err
+	})
+	if err != nil {
+		return nil, scopedErr(err, trackingErrors.RiderCardsFailed)
+	}
+	return cards, nil
 }
 
 // DriverResolveRider answers the rider a card code names; an unknown code is rider.not-found.

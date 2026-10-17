@@ -1,63 +1,4 @@
-CREATE OR REPLACE FUNCTION tracking.sp_create_rider(p_company_id uuid, p_rider_type character varying, p_first_name character varying, p_last_name character varying, p_identification_number character varying, p_phone character varying, p_email character varying, p_emergency_contact_name character varying, p_emergency_contact_phone character varying, p_guardian_user_id uuid, p_guardian_name character varying, p_guardian_phone character varying, p_guardian_email character varying, p_address character varying)
- RETURNS TABLE(id uuid, company_id uuid, rider_type character varying, first_name character varying, last_name character varying, identification_number character varying, phone character varying, email character varying, emergency_contact_name character varying, emergency_contact_phone character varying, guardian_user_id uuid, guardian_name character varying, guardian_phone character varying, guardian_email character varying, address character varying, is_active boolean, created_at timestamp without time zone, updated_at timestamp without time zone)
- LANGUAGE plpgsql
-AS $function$
-BEGIN
-    -- Check if company exists
-    IF NOT EXISTS (SELECT 1 FROM tracking.transport_companies WHERE tracking.transport_companies.id = p_company_id) THEN
-        RAISE EXCEPTION 'tracking.company.not-found' USING ERRCODE = 'P0001';
-    END IF;
-
-    -- Validate rider_type enum
-    IF p_rider_type NOT IN ('student', 'employee') THEN
-        RAISE EXCEPTION 'tracking.rider.invalid-type' USING ERRCODE = 'P0001';
-    END IF;
-
-    RETURN QUERY
-    INSERT INTO tracking.riders (
-        company_id, first_name, last_name, email, phone, identification_number, emergency_contact, status
-    )
-    VALUES (
-        p_company_id, 
-        p_first_name, 
-        p_last_name, 
-        p_email, 
-        p_phone, 
-        p_identification_number,
-        -- Store emergency contact as JSON (existing column)
-        CASE 
-            WHEN p_emergency_contact_name IS NOT NULL OR p_emergency_contact_phone IS NOT NULL THEN
-                jsonb_build_object(
-                    'name', p_emergency_contact_name,
-                    'phone', p_emergency_contact_phone
-                )
-            ELSE NULL
-        END,
-        'active'
-    )
-    RETURNING
-        tracking.riders.id,
-        tracking.riders.company_id,
-        p_rider_type,                           -- Pass through (not in table)
-        tracking.riders.first_name,
-        tracking.riders.last_name,
-        tracking.riders.identification_number,
-        tracking.riders.phone,
-        tracking.riders.email,
-        p_emergency_contact_name,               -- Pass through (extracted from JSON)
-        p_emergency_contact_phone,              -- Pass through (extracted from JSON)
-        p_guardian_user_id,                     -- Pass through (not in table)
-        p_guardian_name,                        -- Pass through (not in table)
-        p_guardian_phone,                       -- Pass through (not in table)
-        p_guardian_email,                       -- Pass through (not in table)
-        p_address,                              -- Pass through (not in table)
-        (tracking.riders.status = 'active'),
-        tracking.riders.created_at,
-        tracking.riders.updated_at;
-END;
-$function$;
-
-CREATE OR REPLACE FUNCTION tracking.sp_create_rider(p_tenant_id uuid, p_organization_id uuid, p_rider_type character varying, p_first_name character varying, p_last_name character varying, p_identification_number character varying, p_phone character varying, p_email character varying, p_emergency_contact_name character varying, p_emergency_contact_phone character varying, p_guardian_user_id uuid, p_guardian_name character varying, p_guardian_phone character varying, p_guardian_email character varying, p_address character varying, p_scope_user_id uuid DEFAULT NULL::uuid, p_home_latitude numeric DEFAULT NULL::numeric, p_home_longitude numeric DEFAULT NULL::numeric, p_notes text DEFAULT NULL::text, p_group_label character varying DEFAULT NULL::character varying, p_service_legs character varying DEFAULT NULL::character varying, p_stop_place_id uuid DEFAULT NULL::uuid)
+CREATE OR REPLACE FUNCTION tracking.sp_create_rider(p_tenant_id uuid, p_organization_id uuid, p_rider_type character varying, p_first_name character varying, p_last_name character varying, p_identification_number character varying, p_phone character varying, p_email character varying, p_emergency_contact_name character varying, p_emergency_contact_phone character varying, p_guardian_user_id uuid, p_guardian_name character varying, p_guardian_phone character varying, p_guardian_email character varying, p_address character varying, p_scope_user_id uuid DEFAULT NULL::uuid, p_home_latitude numeric DEFAULT NULL::numeric, p_home_longitude numeric DEFAULT NULL::numeric, p_notes text DEFAULT NULL::text, p_group_label character varying DEFAULT NULL::character varying, p_service_legs character varying DEFAULT NULL::character varying, p_stop_place_id uuid DEFAULT NULL::uuid, p_home_geocoded boolean DEFAULT false)
  RETURNS TABLE(id uuid, organization_id uuid, rider_type character varying, first_name character varying, last_name character varying, identification_number character varying, phone character varying, email character varying, emergency_contact_name character varying, emergency_contact_phone character varying, guardian_user_id uuid, guardian_name character varying, guardian_phone character varying, guardian_email character varying, address character varying, is_active boolean, created_at timestamp without time zone, updated_at timestamp without time zone, home_latitude numeric, home_longitude numeric, notes text, group_label character varying, service_legs character varying, stop_place_id uuid, stop_place_name character varying)
  LANGUAGE plpgsql
 AS $function$
@@ -81,7 +22,7 @@ BEGIN
     INSERT INTO tracking.riders (
         organization_id, rider_type, first_name, last_name,
         identification_number, phone, email, status, home_location, notes, group_label,
-        address, service_legs, stop_place_id
+        address, service_legs, stop_place_id, home_geocoded
     )
     VALUES (
         p_organization_id,
@@ -98,7 +39,9 @@ BEGIN
         NULLIF(TRIM(p_group_label), ''),
         NULLIF(TRIM(p_address), ''),
         COALESCE(NULLIF(TRIM(p_service_legs), ''), 'both'),
-        tracking.fn_rider_stop_place(p_tenant_id, p_stop_place_id)
+        tracking.fn_rider_stop_place(p_tenant_id, p_stop_place_id),
+        -- TRACK-072 D3: only a pin the import found by the address is approximate.
+        COALESCE(p_home_geocoded, false) AND p_home_latitude IS NOT NULL AND p_home_longitude IS NOT NULL
     )
     RETURNING tracking.riders.id INTO v_rider_id;
 

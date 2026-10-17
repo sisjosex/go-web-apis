@@ -581,9 +581,17 @@ CREATE TABLE tracking.riders (
     address character varying(500),
     service_legs character varying(10) DEFAULT 'both'::character varying NOT NULL,
     stop_place_id uuid,
+    home_geocoded boolean DEFAULT false NOT NULL,
     CONSTRAINT check_rider_type CHECK (((rider_type)::text = ANY ((ARRAY['student'::character varying, 'employee'::character varying])::text[]))),
     CONSTRAINT chk_rider_service_legs CHECK (((service_legs)::text = ANY ((ARRAY['both'::character varying, 'outbound'::character varying, 'return'::character varying])::text[])))
 );
+
+
+--
+-- Name: COLUMN riders.home_geocoded; Type: COMMENT; Schema: tracking; Owner: -
+--
+
+COMMENT ON COLUMN tracking.riders.home_geocoded IS 'The home pin came from geocoding the address at import, not from a person; moving the pin clears it (TRACK-072 D3)';
 
 
 --

@@ -196,6 +196,8 @@ databases never get the schema (`tenant_service.go` excludes it). Routing goes t
 `ErrNoRoute` (422) and never opens the breaker. `/geo/eta` always answers: Valhalla → observed
 durations → straight line × 1.3, flagged in `estimate_source`. The observed durations are tracking's
 (TRACK-066): wired only into the trip ETA, which carries the tenant in the context; `/geo/eta` gets nil.
+The tracking riders import takes the places repository as its `PlaceSearcher` (TRACK-072), built in
+`registerImport` when geo is enabled, nil otherwise.
 
 **Stored files (INFRA-007).** `core/services/storage`: the `ObjectStore` port (one bucket; one
 minio-go client per process), R2 in prod, the compose's SeaweedFS in dev and tests (`.env.test` uses the

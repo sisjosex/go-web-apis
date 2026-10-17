@@ -602,7 +602,12 @@ func registerImport(d routeDeps, chains tenantChains, inventorySvcs inventoryRou
 		importRegistry.Register("tracking", trackingServices.NewDocumentTypesImportDescriptor(tracking))
 		importRegistry.Register("tracking", trackingServices.NewStopPlacesImportDescriptor(tracking))
 		importRegistry.Register("tracking", trackingServices.NewVehiclesImportDescriptor(tracking))
-		importRegistry.Register("tracking", trackingServices.NewRidersImportDescriptor(tracking))
+		// A home given only as an address is placed by the geo module's search (TRACK-072 D3).
+		var places trackingServices.PlaceSearcher
+		if coreConf.IsModuleEnabled("geo") {
+			places = geoRepos.NewPlacesRepository(d.db)
+		}
+		importRegistry.Register("tracking", trackingServices.NewRidersImportDescriptor(tracking, places))
 	}
 	importController := importControllers.NewImportController(importServices.NewImportService(importRegistry))
 	importRoutes.RegisterImportRoutes(d.apiV1, importController, d.jwt, chains.tenant)

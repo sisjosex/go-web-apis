@@ -5,6 +5,7 @@ import (
 	"strconv"
 	"strings"
 
+	geoModels "josex/web/modules/geo/models"
 	importInterfaces "josex/web/modules/import/interfaces"
 	importModels "josex/web/modules/import/models"
 	trackingInterfaces "josex/web/modules/tracking/interfaces"
@@ -37,6 +38,7 @@ const (
 	importServiceInvalid     = "tracking.import.service-invalid"
 	importStopUnknown        = "tracking.import.stop-unknown"
 	importMissingLocation    = "tracking.import.missing-location"
+	importGeocoded           = "tracking.import.geocoded"
 
 	// errorParam joins a code and the value it is about, as the wizard reads it.
 	errorParam = "|"
@@ -144,26 +146,27 @@ func companiesOf(ctx importModels.ImportContext, svc trackingInterfaces.Tracking
 	return n
 }
 
-// organizationsOf also keeps each organization's kind: a school's riders are students.
-func organizationsOf(ctx importModels.ImportContext, svc trackingInterfaces.TrackingService) (namedIDs, map[uuid.UUID]string) {
+// organizationsOf also keeps each organization: a school's riders are students, and an address is
+// searched near the client's pin.
+func organizationsOf(ctx importModels.ImportContext, svc trackingInterfaces.TrackingService) (namedIDs, map[uuid.UUID]*models.Organization) {
 	if cached, ok := ctx.Scratch["tracking.organizations"].(namedIDs); ok {
-		kinds, _ := ctx.Scratch["tracking.organization-kinds"].(map[uuid.UUID]string)
-		return cached, kinds
+		byID, _ := ctx.Scratch["tracking.organizations-by-id"].(map[uuid.UUID]*models.Organization)
+		return cached, byID
 	}
 	names := map[string]uuid.UUID{}
-	kinds := map[uuid.UUID]string{}
+	byID := map[uuid.UUID]*models.Organization{}
 	if res, err := svc.ListOrganizations(ctx.Context(), ctx.TenantID, models.ListOrganizationsQuery{Page: 1, PageSize: importLookupPage}); err == nil {
 		for _, o := range res.Organizations {
 			names[o.Name] = o.ID
-			kinds[o.ID] = o.Kind
+			byID[o.ID] = o
 		}
 	}
 	n := newNamedIDs(names)
 	if ctx.Scratch != nil {
 		ctx.Scratch["tracking.organizations"] = n
-		ctx.Scratch["tracking.organization-kinds"] = kinds
+		ctx.Scratch["tracking.organizations-by-id"] = byID
 	}
-	return n, kinds
+	return n, byID
 }
 
 // rowResult is a row's outcome: invalid on a dry run, failed on the real one, when it has errors.
@@ -376,15 +379,23 @@ func (d *stopPlacesImport) nameTaken(ctx importModels.ImportContext, name string
 
 // ── riders ───────────────────────────────────────────────────────────────
 
+// PlaceSearcher is the geo module's address search (INFRA-003), what places an imported home.
+type PlaceSearcher interface {
+	Search(ctx context.Context, q string, lat, lng *float64, limit int) ([]geoModels.Place, error)
+}
+
 type ridersImport struct {
-	svc trackingInterfaces.TrackingService
+	svc    trackingInterfaces.TrackingService
+	places PlaceSearcher
 }
 
 // NewRidersImportDescriptor imports the people a tenant carries, with their home and guardian contact,
 // and the service they contracted (TRACK-043): which legs, their group, and a shared stop by name. A
-// row with an address but no pin still imports, warned as missing its location, to be pinned later.
-func NewRidersImportDescriptor(svc trackingInterfaces.TrackingService) importInterfaces.ImportDescriptor {
-	return &ridersImport{svc: svc}
+// row with an address but no pin is placed at the address's first match near the client, flagged as
+// approximate (TRACK-072 D3); with no match, or no places (geo off, nil), it imports warned as
+// missing its location, to be pinned later.
+func NewRidersImportDescriptor(svc trackingInterfaces.TrackingService, places PlaceSearcher) importInterfaces.ImportDescriptor {
+	return &ridersImport{svc: svc, places: places}
 }
 
 func (d *ridersImport) Resource() string { return "tracking_riders" }
@@ -425,16 +436,40 @@ func (d *ridersImport) run(ctx importModels.ImportContext, line int, row map[str
 		return duplicate(line, row, importRiderDuplicate+errorParam+dto.FirstName+" "+dto.LastName, process)
 	}
 	seen[key] = true
+	if dto.HomeLatitude == nil && dto.StopPlaceID == nil && dto.Address != nil {
+		d.geocode(ctx, dto)
+	}
 	if process {
 		if _, err := d.svc.CreateRider(ctx.Context(), ctx.TenantID, dto, nil); err != nil {
 			return rowResult(line, row, []string{importCreateFailed}, true)
 		}
 	}
 	result := rowResult(line, row, nil, process)
-	if dto.HomeLatitude == nil && dto.StopPlaceID == nil {
+	switch {
+	case dto.HomeGeocoded:
+		result.Warnings = []string{importGeocoded}
+	case dto.HomeLatitude == nil && dto.StopPlaceID == nil:
 		result.Warnings = []string{importMissingLocation}
 	}
 	return result
+}
+
+// geocode places the home at the address's first match, searched near the client's pin when it has
+// one: one indexed query per row (TRACK-072 D3). A failed search leaves the row without a location.
+func (d *ridersImport) geocode(ctx importModels.ImportContext, dto *models.CreateRiderDto) {
+	if d.places == nil {
+		return
+	}
+	var lat, lng *float64
+	if _, byID := organizationsOf(ctx, d.svc); byID[dto.OrganizationID] != nil {
+		lat, lng = byID[dto.OrganizationID].Latitude, byID[dto.OrganizationID].Longitude
+	}
+	found, err := d.places.Search(ctx.Context(), *dto.Address, lat, lng, 1)
+	if err != nil || len(found) == 0 {
+		return
+	}
+	dto.HomeLatitude, dto.HomeLongitude = &found[0].Lat, &found[0].Lng
+	dto.HomeGeocoded = true
 }
 
 // serviceLegs reads "ambos / ingreso / retorno" (or the older "ida / vuelta") or "both / outbound /
@@ -486,7 +521,7 @@ func (d *ridersImport) dto(ctx importModels.ImportContext, row map[string]string
 	if len(last) < 2 {
 		errs = append(errs, importRequired+errorParam+"last_name")
 	}
-	orgs, kinds := organizationsOf(ctx, d.svc)
+	orgs, byID := organizationsOf(ctx, d.svc)
 	orgID, orgErr := orgs.resolve(cell(row, "organization"), importOrgUnknown, importOrgRequired)
 	if orgErr != "" {
 		errs = append(errs, orgErr)
@@ -510,7 +545,7 @@ func (d *ridersImport) dto(ctx importModels.ImportContext, row map[string]string
 		return nil, errs
 	}
 	riderType := "student"
-	if kinds[orgID] == "company" {
+	if org := byID[orgID]; org != nil && org.Kind == "company" {
 		riderType = "employee"
 	}
 	return &models.CreateRiderDto{

@@ -86,6 +86,22 @@ type RiderQRToken struct {
 	QRToken string `json:"qr_token"`
 }
 
+// RiderCard is one printable rider card (TRACK-072 D2).
+type RiderCard struct {
+	RiderID          uuid.UUID `json:"rider_id"`
+	FirstName        string    `json:"first_name"`
+	LastName         string    `json:"last_name"`
+	OrganizationName string    `json:"organization_name"`
+	RouteName        *string   `json:"route_name"`
+	PickupStopName   *string   `json:"pickup_stop_name"`
+	QRToken          string    `json:"qr_token"`
+}
+
+// RiderCards is GET /tracking/riders/cards.
+type RiderCards struct {
+	Cards []RiderCard `json:"cards"`
+}
+
 // DriverRiderTask is a rider's pending pickup on the driver's trip in progress.
 type DriverRiderTask struct {
 	ID         uuid.UUID `json:"id"`

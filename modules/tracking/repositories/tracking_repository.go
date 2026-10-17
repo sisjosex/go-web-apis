@@ -982,13 +982,13 @@ func (r *TrackingRepository) CreateRider(ctx context.Context, tenantID uuid.UUID
 			SELECT COUNT(*) FROM tracking.riders x
 			INNER JOIN tracking.organizations o ON o.id = x.organization_id WHERE o.tenant_id = $1
 		), $24::INT, 'tracking_riders') lim(tenant_id)
-		CROSS JOIN LATERAL tracking.sp_create_rider(lim.tenant_id, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17::DECIMAL, $18::DECIMAL, $19::TEXT, $21::VARCHAR, $22::VARCHAR, $23::UUID) r
+		CROSS JOIN LATERAL tracking.sp_create_rider(lim.tenant_id, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17::DECIMAL, $18::DECIMAL, $19::TEXT, $21::VARCHAR, $22::VARCHAR, $23::UUID, $25::BOOLEAN) r
 		CROSS JOIN LATERAL tracking.fn_rider_guardians_link($1, r.id, $20::JSONB) g`,
 		tenantID, dto.OrganizationID, dto.RiderType, dto.FirstName, dto.LastName, dto.IdentificationNumber,
 		dto.Phone, dto.Email, dto.EmergencyContactName, dto.EmergencyContactPhone,
 		noAccount, dto.GuardianName, dto.GuardianPhone, dto.GuardianEmail, dto.Address, scopeUserID,
 		dto.HomeLatitude, dto.HomeLongitude, dto.Notes, linkedGuardians(dto.LinkedGuardians), dto.GroupLabel,
-		dto.ServiceLegs, dto.StopPlaceID, limits.For(ctx, tenantID, limits.TrackingRiders),
+		dto.ServiceLegs, dto.StopPlaceID, limits.For(ctx, tenantID, limits.TrackingRiders), dto.HomeGeocoded,
 	).Scan(&rider.ID, &rider.OrganizationID, &rider.RiderType, &rider.FirstName, &rider.LastName,
 		&rider.IdentificationNumber, &rider.Phone, &rider.Email, &rider.EmergencyContactName,
 		&rider.EmergencyContactPhone, &rider.GuardianUserID, &rider.GuardianName, &rider.GuardianPhone,
@@ -1040,9 +1040,9 @@ func (r *TrackingRepository) UpdateRider(ctx context.Context, tenantID uuid.UUID
 // total_count comes back on every row and stays 0 when the page is empty.
 func (r *TrackingRepository) ListRiders(ctx context.Context, tenantID uuid.UUID, query models.ListRidersQuery, scopeUserID *uuid.UUID, guardianUserID *uuid.UUID) ([]*models.Rider, int64, error) {
 	rows, err := r.dbService.Query(ctx,
-		`SELECT * FROM tracking.sp_list_riders($1::UUID, $2::UUID, $3::VARCHAR, $4::VARCHAR, $5::BOOLEAN, $6::INT, $7::INT, $8::UUID, $9::UUID, $10::UUID, $11::BOOLEAN, $12::VARCHAR, $13::BOOLEAN)`,
+		`SELECT * FROM tracking.sp_list_riders($1::UUID, $2::UUID, $3::VARCHAR, $4::VARCHAR, $5::BOOLEAN, $6::INT, $7::INT, $8::UUID, $9::UUID, $10::UUID, $11::BOOLEAN, $12::VARCHAR, $13::BOOLEAN, $14::BOOLEAN)`,
 		tenantID, query.OrganizationID, query.Search, query.RiderType, query.IsActive, query.Page, query.PageSize, scopeUserID, guardianUserID,
-		query.RouteID, query.Unassigned, query.Group, query.MissingLocation)
+		query.RouteID, query.Unassigned, query.Group, query.MissingLocation, query.Geocoded)
 	if err != nil {
 		return nil, 0, scopedErr(err, trackingErrors.RiderListFailed)
 	}
@@ -1056,7 +1056,7 @@ func (r *TrackingRepository) ListRiders(ctx context.Context, tenantID uuid.UUID,
 			&rider.EmergencyContactPhone, &rider.GuardianUserID, &rider.GuardianName, &rider.GuardianPhone,
 			&rider.GuardianEmail, &rider.Address, &rider.IsActive, &rider.CreatedAt, &rider.UpdatedAt,
 			&rider.HomeLatitude, &rider.HomeLongitude, &rider.Notes, &rider.GroupLabel, &rider.AssignedRouteName,
-			&rider.ServiceLegs, &rider.StopPlaceID, &rider.StopPlaceName, &totalCount); err != nil {
+			&rider.ServiceLegs, &rider.StopPlaceID, &rider.StopPlaceName, &rider.HomeGeocoded, &totalCount); err != nil {
 			return nil, 0, err
 		}
 		riders = append(riders, &rider)

@@ -209,6 +209,15 @@ type ListRidersQuery struct {
 	Group      string  `form:"group" binding:"omitempty,max=100"`
 	// MissingLocation keeps the riders still without a home pin (TRACK-043 D2).
 	MissingLocation *bool `form:"missing_location"`
+	// Geocoded keeps the riders whose home the import placed by address (TRACK-072 D3).
+	Geocoded *bool `form:"geocoded"`
+}
+
+// RiderCardsQuery binds GET /tracking/riders/cards: exactly one of the three (TRACK-072 D2).
+type RiderCardsQuery struct {
+	RouteID        *string `form:"route_id" binding:"omitempty,uuid"`
+	OrganizationID *string `form:"organization_id" binding:"omitempty,uuid"`
+	RiderID        *string `form:"rider_id" binding:"omitempty,uuid"`
 }
 
 // TrackingOverviewQuery binds GET /tracking/overview: the day, each route's own today when empty.
@@ -278,6 +287,8 @@ type CreateRiderDto struct {
 	Guardians []NewRiderGuardianDto `json:"guardians" binding:"omitempty,max=5,dive"`
 	// LinkedGuardians is Guardians once their accounts are granted, as fn_rider_guardians_link reads it.
 	LinkedGuardians json.RawMessage `json:"-" swaggerignore:"true"`
+	// HomeGeocoded marks the home as the import's guess from the address, never a form's (TRACK-072 D3).
+	HomeGeocoded bool `json:"-" swaggerignore:"true"`
 }
 
 // NewRiderGuardianDto is one guardian of the rider form: an account by user_id, a person to invite by

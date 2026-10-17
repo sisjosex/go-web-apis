@@ -236,6 +236,8 @@
   "tracking.driver.today.failed": "Failed to load today's trips",
   "tracking.driver.sync.failed": "Failed to sync the operations",
   "tracking.rider.qr-token.failed": "Failed to read the rider's card code",
+  "tracking.rider.cards.invalid": "Choose one route, client or rider to print cards for",
+  "tracking.rider.cards.failed": "Failed to load the rider cards",
   "tracking.driver.rider.failed": "Failed to find the rider",
   "tracking.driver.rider.invalid": "Type at least 2 characters of a name or the card code",
   "tracking.driver.incident.invalid": "Invalid incident",

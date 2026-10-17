@@ -2595,7 +2595,7 @@ func TestOperatorStillSeesEveryRider(t *testing.T) {
 	}
 	created := ExtractID(t, ParseResponse(t, w.Body.Bytes()))
 
-	listed := ListRiders(t, operator, "?page=1&page_size=100")
+	listed := ListRiders(t, operator, "?page=1&page_size=100&search=Visible")
 	found := false
 	for _, rider := range listed.Riders {
 		if rider.ID.String() == created {

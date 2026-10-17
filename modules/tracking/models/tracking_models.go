@@ -367,6 +367,9 @@ type Rider struct {
 	ServiceLegs   string     `json:"service_legs"`
 	StopPlaceID   *uuid.UUID `json:"stop_place_id"`
 	StopPlaceName *string    `json:"stop_place_name"`
+	// HomeGeocoded is a home the import placed by its address, until a person moves the pin; only the
+	// list reads it (TRACK-072 D3).
+	HomeGeocoded bool `json:"home_geocoded"`
 }
 
 // RiderRouteAssignment is which route a rider rides, on which weekdays and between which dates
