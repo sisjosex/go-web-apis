@@ -30,7 +30,24 @@ BEGIN
         RETURN FALSE;
     END IF;
 
+    IF p_kind IN ('skip_stop', 'add_stop') AND p_payload->>'stop_place_id' !~* '^[0-9a-f]{8}-([0-9a-f]{4}-){3}[0-9a-f]{12}$' THEN
+        RETURN FALSE;
+    END IF;
+
+    IF p_kind = 'add_stop' AND (jsonb_typeof(p_payload->'after_sequence') <> 'number'
+                                OR p_payload->>'after_sequence' !~ '^[0-9]+$') THEN
+        RETURN FALSE;
+    END IF;
+
+    -- TRACK-065 D3: the day's whole list, in order, as stop place ids.
     IF p_kind = 'detour' AND jsonb_typeof(p_payload->'stops') <> 'array' THEN
+        RETURN FALSE;
+    END IF;
+
+    IF p_kind = 'detour' AND EXISTS (
+        SELECT 1 FROM jsonb_array_elements(p_payload->'stops') s
+        WHERE jsonb_typeof(s) <> 'string' OR s #>> '{}' !~* '^[0-9a-f]{8}-([0-9a-f]{4}-){3}[0-9a-f]{12}$'
+    ) THEN
         RETURN FALSE;
     END IF;
 
@@ -38,4 +55,4 @@ BEGIN
 END;
 $function$;
 
-COMMENT ON FUNCTION tracking.fn_exception_payload_valid(character varying,jsonb) IS 'Whether an exception payload carries exactly the keys its kind defines, and whether the values the preview casts are castable (TRACK-018 step 3)';
+COMMENT ON FUNCTION tracking.fn_exception_payload_valid(character varying,jsonb) IS 'Whether an exception payload carries exactly the keys its kind defines, and whether the values the preview and the day''s stop plan cast are castable: a uuid stop_place_id, a whole after_sequence, detour stops as a list of uuids (TRACK-018 step 3, TRACK-065)';

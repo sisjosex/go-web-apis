@@ -1,5 +1,5 @@
 CREATE OR REPLACE FUNCTION tracking.sp_preview_route(p_tenant_id uuid, p_route_id uuid, p_from date, p_to date)
- RETURNS TABLE(service_date date, schedule_id uuid, start_time character varying, version_id uuid, vehicle_id uuid, driver_id uuid, status character varying, exceptions jsonb)
+ RETURNS TABLE(service_date date, schedule_id uuid, start_time character varying, version_id uuid, vehicle_id uuid, driver_id uuid, status character varying, exceptions jsonb, stops_count integer)
  LANGUAGE plpgsql
  STABLE
 AS $function$
@@ -50,7 +50,8 @@ BEGIN
             bool_or(e.kind = 'cancel') AS cancelled,
             MAX(e.payload->>'start_time') FILTER (WHERE e.kind = 'change_time')  AS start_time_override,
             MAX(e.payload->>'vehicle_id') FILTER (WHERE e.kind = 'change_vehicle') AS vehicle_override,
-            MAX(e.payload->>'driver_id')  FILTER (WHERE e.kind = 'change_driver')  AS driver_override
+            MAX(e.payload->>'driver_id')  FILTER (WHERE e.kind = 'change_driver')  AS driver_override,
+            bool_or(e.kind IN ('skip_stop', 'add_stop', 'detour')) AS stops_changed
         FROM (SELECT DISTINCT r2.service_date FROM runs r2) r
         INNER JOIN tracking.route_exceptions e
                 ON e.route_id = p_route_id
@@ -65,7 +66,12 @@ BEGIN
         COALESCE(CAST(ap.vehicle_override AS UUID), rt.vehicle_id),
         COALESCE(CAST(ap.driver_override AS UUID), rt.default_driver_id, ev.default_driver_id),
         CAST(CASE WHEN COALESCE(ap.cancelled, FALSE) THEN 'cancelled' ELSE 'planned' END AS VARCHAR),
-        COALESCE(ap.exceptions, '[]'::jsonb)
+        COALESCE(ap.exceptions, '[]'::jsonb),
+        -- The day's stop list (TRACK-065): the version's count unless a stop exception touches the day.
+        CAST(CASE WHEN COALESCE(ap.stops_changed, FALSE)
+             THEN (SELECT COUNT(*) FROM tracking.fn_trip_stop_plan(p_tenant_id, p_route_id, rv.id, rn.service_date))
+             ELSE (SELECT COUNT(*) FROM tracking.route_version_stops vs WHERE vs.version_id = rv.id)
+        END AS INT)
     FROM runs rn
     INNER JOIN tracking.routes rt ON rt.id = p_route_id
     LEFT JOIN applied ap ON ap.service_date = rn.service_date
@@ -80,4 +86,4 @@ BEGIN
 END;
 $function$;
 
-COMMENT ON FUNCTION tracking.sp_preview_route(uuid,uuid,date,date) IS 'The plan a route runs over a window of at most 92 days: schedules, calendar, version and exceptions resolved, the driver falling back to the running vehicle''s (TRACK-034 D1); writes nothing; raises tracking.route.preview-range for a wider window';
+COMMENT ON FUNCTION tracking.sp_preview_route(uuid,uuid,date,date) IS 'The plan a route runs over a window of at most 92 days: schedules, calendar, version and exceptions resolved, the driver falling back to the running vehicle''s (TRACK-034 D1), stops_count from the day''s stop plan (TRACK-065); writes nothing; raises tracking.route.preview-range for a wider window';

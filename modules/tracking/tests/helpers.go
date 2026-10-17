@@ -1196,6 +1196,51 @@ func RiderTasks(t *testing.T, helper *testhelpers.ApiTestHelper, tripID, riderID
 	return tasks
 }
 
+// TripStopPlaces answers a trip's stop places in sequence order, with when each is due (TRACK-065).
+func TripStopPlaces(t *testing.T, helper *testhelpers.ApiTestHelper, tripID string) ([]string, []time.Time) {
+	t.Helper()
+	rows, err := helper.DB().Query(context.Background(), `
+		SELECT stop_place_id::TEXT, planned_at FROM tracking.trip_stops WHERE trip_id = $1 ORDER BY sequence`, tripID)
+	if err != nil {
+		t.Fatalf("read trip stops: %v", err)
+	}
+	defer rows.Close()
+	places, due := []string{}, []time.Time{}
+	for rows.Next() {
+		var place string
+		var at time.Time
+		if err := rows.Scan(&place, &at); err != nil {
+			t.Fatalf("scan trip stop: %v", err)
+		}
+		places, due = append(places, place), append(due, at)
+	}
+	return places, due
+}
+
+// RiderTaskPlace answers the stop place of the rider's task of kind on the trip (TRACK-065).
+func RiderTaskPlace(t *testing.T, helper *testhelpers.ApiTestHelper, tripID, riderID, kind string) string {
+	t.Helper()
+	var place string
+	err := helper.DB().QueryRow(context.Background(), `
+		SELECT s.stop_place_id::TEXT FROM tracking.trip_stop_tasks k
+		JOIN tracking.trip_stops s ON s.id = k.trip_stop_id
+		WHERE s.trip_id = $1 AND k.subject_id = $2 AND k.kind = $3`, tripID, riderID, kind).Scan(&place)
+	if err != nil {
+		t.Fatalf("read the rider's %s: %v", kind, err)
+	}
+	return place
+}
+
+// DeleteTestRiders removes riders a test made, with their assignments, so later tests on the shared
+// database do not count them.
+func DeleteTestRiders(t *testing.T, helper *testhelpers.ApiTestHelper, riderIDs ...string) {
+	t.Helper()
+	if _, err := helper.DB().Execute(context.Background(),
+		`DELETE FROM tracking.riders WHERE id = ANY($1::UUID[])`, riderIDs); err != nil {
+		t.Fatalf("delete test riders: %v", err)
+	}
+}
+
 // InsertOutboxRow writes one outbox row as an SP would, answering its id and the tenant the trigger
 // gave it (INFRA-009); err is the trigger's refusal when the payload names neither tenant nor route.
 // No endpoint writes a bare row.

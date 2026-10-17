@@ -139,7 +139,7 @@ func (r *TrackingRepository) PreviewRoute(ctx context.Context, tenantID uuid.UUI
 	for rows.Next() {
 		var day models.RoutePreviewDay
 		if err := rows.Scan(&day.ServiceDate, &day.ScheduleID, &day.StartTime, &day.VersionID,
-			&day.VehicleID, &day.DriverID, &day.Status, &day.Exceptions); err != nil {
+			&day.VehicleID, &day.DriverID, &day.Status, &day.Exceptions, &day.StopsCount); err != nil {
 			return nil, err
 		}
 		days = append(days, &day)

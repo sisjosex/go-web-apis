@@ -256,6 +256,8 @@ type RoutePreviewDay struct {
 	DriverID    *uuid.UUID          `json:"driver_id"`
 	Status      string              `json:"status"`
 	Exceptions  json.RawMessage     `json:"exceptions"`
+	// StopsCount is the day's stop list: the version's, with that date's stop exceptions (TRACK-065).
+	StopsCount int32 `json:"stops_count"`
 }
 
 // Organization represents a school or employer whose people ride (TRACK-005). Kind is the only

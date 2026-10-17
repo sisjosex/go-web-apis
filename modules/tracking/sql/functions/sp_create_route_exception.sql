@@ -42,6 +42,17 @@ BEGIN
         RAISE EXCEPTION 'stop-place.not-found' USING ERRCODE = 'P0001';
     END IF;
 
+    -- A detour names at least two of the tenant's stop places (TRACK-065 D3).
+    IF p_kind = 'detour' AND (jsonb_array_length(p_payload->'stops') < 2 OR EXISTS (
+        SELECT 1 FROM jsonb_array_elements_text(p_payload->'stops') s(id)
+        WHERE NOT EXISTS (
+            SELECT 1 FROM tracking.stop_places sp
+            WHERE sp.id = CAST(s.id AS UUID) AND sp.tenant_id = p_tenant_id
+        )
+    )) THEN
+        RAISE EXCEPTION 'exception.payload' USING ERRCODE = 'P0001';
+    END IF;
+
     INSERT INTO tracking.route_exceptions (route_id, date_from, date_to, kind, payload, reason, created_by)
     VALUES (
         p_route_id, p_date_from, p_date_to, p_kind,

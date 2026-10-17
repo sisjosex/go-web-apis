@@ -82,23 +82,29 @@ BEGIN
       AND t.started_at IS NULL
       AND t.status IN ('planned', 'cancelled');
 
-    -- 2. Stops. A stop whose place moved is dropped with its tasks and inserted afresh below: on a
-    -- trip that has not started every task is still pending, so nothing is lost.
+    -- 2. Stops: the version's list with that date's stop exceptions applied (TRACK-065). A stop whose
+    -- place moved is dropped with its tasks and inserted afresh below: on a trip that has not started
+    -- every task is still pending, so nothing is lost. Two statements: the delete and the upsert share
+    -- (trip_id, sequence) keys.
+    WITH plan AS MATERIALIZED (
+        SELECT t.id AS trip_id, vs.sequence, vs.stop_place_id
+        FROM tracking.trips t
+        CROSS JOIN LATERAL tracking.fn_trip_stop_plan(p_tenant_id, t.route_id, t.route_version_id, t.service_date) vs
+        WHERE t.id = ANY(v_trips)
+    )
     DELETE FROM tracking.trip_stops ts
-    USING tracking.trips t
-    WHERE ts.trip_id = t.id
-      AND t.id = ANY(v_trips)
+    WHERE ts.trip_id = ANY(v_trips)
       AND NOT EXISTS (
-          SELECT 1 FROM tracking.route_version_stops vs
-          WHERE vs.version_id = t.route_version_id
-            AND vs.sequence = ts.sequence
-            AND vs.stop_place_id = ts.stop_place_id
+          SELECT 1 FROM plan pl
+          WHERE pl.trip_id = ts.trip_id
+            AND pl.sequence = ts.sequence
+            AND pl.stop_place_id = ts.stop_place_id
       );
 
     INSERT INTO tracking.trip_stops (trip_id, stop_place_id, sequence, planned_at)
     SELECT t.id, vs.stop_place_id, vs.sequence, t.planned_start + make_interval(mins => vs.planned_offset_min)
     FROM tracking.trips t
-    INNER JOIN tracking.route_version_stops vs ON vs.version_id = t.route_version_id
+    CROSS JOIN LATERAL tracking.fn_trip_stop_plan(p_tenant_id, t.route_id, t.route_version_id, t.service_date) vs
     WHERE t.id = ANY(v_trips)
     ON CONFLICT (trip_id, sequence) DO UPDATE SET
         planned_at = EXCLUDED.planned_at,
@@ -108,9 +114,16 @@ BEGIN
     -- 3. Tasks: a pickup and a dropoff per assignment in force on the trip's service date (its range
     -- holds the date and its weekday bit is set) whose rider reported no absence covering that date in
     -- both directions or the route's (TRACK-022), at the assigned stop when the trip
-    -- calls there, else the first (pickup) or last (dropoff) stop. Delete and upsert touch disjoint
+    -- calls there, else where the day redirects it (the next stop to board, the previous to get off —
+    -- TRACK-065 D3), else the first (pickup) or last (dropoff) stop. Delete and upsert touch disjoint
     -- keys, so one statement.
-    WITH wanted AS (
+    WITH redirects AS MATERIALIZED (
+        SELECT t.id AS trip_id, rd.stop_place_id, rd.pickup_stop_place_id, rd.dropoff_stop_place_id
+        FROM tracking.trips t
+        CROSS JOIN LATERAL tracking.fn_trip_stop_redirects(p_tenant_id, t.route_id, t.route_version_id, t.service_date) rd
+        WHERE t.id = ANY(v_trips)
+    ),
+    wanted AS (
         SELECT DISTINCT ON (t.id, ra.rider_id, k.kind)
             ts.id AS trip_stop_id,
             k.kind,
@@ -123,6 +136,9 @@ BEGIN
         INNER JOIN tracking.routes r ON r.id = t.route_id
         CROSS JOIN (VALUES ('pickup'), ('dropoff')) AS k(kind)
         INNER JOIN tracking.trip_stops ts ON ts.trip_id = t.id
+        LEFT JOIN redirects rd
+               ON rd.trip_id = t.id
+              AND rd.stop_place_id = CASE k.kind WHEN 'pickup' THEN ra.pickup_stop_place_id ELSE ra.dropoff_stop_place_id END
         WHERE t.id = ANY(v_trips)
           AND NOT EXISTS (
               SELECT 1 FROM tracking.rider_absences ab
@@ -134,6 +150,7 @@ BEGIN
         ORDER BY
             t.id, ra.rider_id, k.kind,
             ts.stop_place_id = CASE k.kind WHEN 'pickup' THEN ra.pickup_stop_place_id ELSE ra.dropoff_stop_place_id END DESC NULLS LAST,
+            ts.stop_place_id = CASE k.kind WHEN 'pickup' THEN rd.pickup_stop_place_id ELSE rd.dropoff_stop_place_id END DESC NULLS LAST,
             CASE k.kind WHEN 'pickup' THEN ts.sequence ELSE -ts.sequence END
     ),
     removed AS (

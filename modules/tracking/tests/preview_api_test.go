@@ -52,7 +52,7 @@ func TestCreateRouteExceptionEveryKind(t *testing.T) {
 		{"change_driver", map[string]interface{}{"driver_id": driverID}},
 		{"skip_stop", map[string]interface{}{"stop_place_id": SchoolAStopID}},
 		{"add_stop", map[string]interface{}{"stop_place_id": SchoolBStopID, "after_sequence": 2}},
-		{"detour", map[string]interface{}{"stops": []map[string]interface{}{{"stop_place_id": CentralStationID}}}},
+		{"detour", map[string]interface{}{"stops": []string{CentralStationID, SchoolAStopID}}},
 	}
 
 	for i, attempt := range kinds {
