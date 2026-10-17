@@ -754,6 +754,8 @@ type CreateOrganizationDto struct {
 	CreateStop *bool `json:"create_stop"`
 	// Minutes before departure a riderless trip cancels itself, 0 never (TRACK-069 D1); 30 when unset.
 	EmptyTripCancelMin *int32 `json:"empty_trip_cancel_min" binding:"omitempty,min=0,max=1440"`
+	// Minutes of late ETA at a stop that tell its families, 0 never (TRACK-066 D4); 10 when unset.
+	DelayNoticeMin *int32 `json:"delay_notice_min" binding:"omitempty,min=0,max=180"`
 }
 
 // UpdateOrganizationDto represents request to update an organization. Every field is optional: the
@@ -773,6 +775,8 @@ type UpdateOrganizationDto struct {
 	CreateStop *bool `json:"create_stop"`
 	// Minutes before departure a riderless trip cancels itself, 0 never (TRACK-069 D1).
 	EmptyTripCancelMin *int32 `json:"empty_trip_cancel_min" binding:"omitempty,min=0,max=1440"`
+	// Minutes of late ETA at a stop that tell its families, 0 never (TRACK-066 D4).
+	DelayNoticeMin *int32 `json:"delay_notice_min" binding:"omitempty,min=0,max=180"`
 }
 
 // ListOrganizationsQuery binds GET /tracking/organizations.

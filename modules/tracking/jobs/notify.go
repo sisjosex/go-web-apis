@@ -77,8 +77,9 @@ func (n *Notifier) enqueue(ctx context.Context, tenantSlug string, notice models
 		data["trip_id"] = trip
 		collapseID = tripCollapseID(trip, notice.RiderID)
 	}
+	textType, args := pushText(notice.Type, body)
 	payload, err := json.Marshal(PushSend{
-		NotificationID: notice.ID.String(), UserID: notice.UserID.String(), Type: notice.Type, Args: pushArgs(body), Data: data,
+		NotificationID: notice.ID.String(), UserID: notice.UserID.String(), Type: textType, Args: args, Data: data,
 		CollapseID: collapseID, Channel: noticeChannel(notice.Type),
 	})
 	if err != nil {
@@ -114,6 +115,18 @@ func noticeChannel(noticeType string) string {
 	default:
 		return "problems"
 	}
+}
+
+// pushText is the strings a notice is written with and their args. A delay from a late ETA (TRACK-066)
+// reads delay_eta, whose args add the minutes and the local arrival time; a raised alert keeps delay.
+func pushText(noticeType string, body map[string]any) (string, []string) {
+	args := pushArgs(body)
+	minutes, late := body["delay_min"].(float64)
+	if noticeType != "delay" || !late {
+		return noticeType, args
+	}
+	etaTime, _ := body["eta_time"].(string)
+	return "delay_eta", append(args, strconv.Itoa(int(minutes)), etaTime)
 }
 
 // pushArgs are the body's placeholders, in the order every notice string takes them: the rider, the

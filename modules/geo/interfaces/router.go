@@ -24,7 +24,7 @@ var (
 )
 
 // HistoricalDurations is the ETA's second source (D5): observed travel times between two points.
-// Nil until TRACK-010 records them.
+// Tracking's stop-to-stop medians (TRACK-066); nil in a server without tracking.
 type HistoricalDurations interface {
 	// Duration reports ok=false when nothing has been observed between from and to.
 	Duration(ctx context.Context, from, to models.LatLng, costing string) (seconds float64, ok bool, err error)

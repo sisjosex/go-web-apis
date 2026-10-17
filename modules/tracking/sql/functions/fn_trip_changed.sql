@@ -16,10 +16,13 @@ BEGIN
         'type',         p_type,
         'subject_id',   COALESCE(p_payload->>'trip_stop_task_id', p_payload->>'trip_stop_id'),
         'reason',       p_payload->>'reason'
-    )
+    ) || jsonb_strip_nulls(jsonb_build_object(
+        'delay_s',      p_payload->'delay_s',
+        'eta_at',       p_payload->'eta_at'
+    ))
     FROM tracking.trips t
     WHERE t.id = p_trip_id AND t.tenant_id = p_tenant_id;
 END;
 $function$;
 
-COMMENT ON FUNCTION tracking.fn_trip_changed(uuid,uuid,character varying,uuid,jsonb) IS 'Records one transition of a trip: a trip_events row of p_type and a trip.changed outbox row { trip_id, route_id, service_date, type, subject_id, reason } — subject_id the task or stop it moved, reason why when the payload says (TRACK-020 D1, TRACK-012, TRACK-069)';
+COMMENT ON FUNCTION tracking.fn_trip_changed(uuid,uuid,character varying,uuid,jsonb) IS 'Records one transition of a trip: a trip_events row of p_type and a trip.changed outbox row { trip_id, route_id, service_date, type, subject_id, reason } — subject_id the task or stop it moved, reason why when the payload says, plus delay_s and eta_at for a late-ETA delay (TRACK-020 D1, TRACK-012, TRACK-069, TRACK-066)';

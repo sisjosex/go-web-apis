@@ -192,3 +192,18 @@ func (r *TrackingRepository) DriverAudience(ctx context.Context, tenantID uuid.U
 	}
 	return out, rows.Err()
 }
+
+// TripDelayCheck hands a fresh ETA to sp_trip_delay_check, which announces each pending stop running
+// late past its riders' clients' threshold, once (TRACK-066 D3); it answers the stops announced.
+func (r *TrackingRepository) TripDelayCheck(ctx context.Context, tenantID, tripID uuid.UUID, eta []models.StopEta) ([]uuid.UUID, error) {
+	raw, err := json.Marshal(eta)
+	if err != nil {
+		return nil, err
+	}
+	rows, err := r.dbService.Query(ctx,
+		`SELECT * FROM tracking.sp_trip_delay_check(p_tenant_id := $1, p_trip_id := $2, p_eta := $3)`, tenantID, tripID, raw)
+	if err != nil {
+		return nil, err
+	}
+	return pgx.CollectRows(rows, pgx.RowTo[uuid.UUID])
+}

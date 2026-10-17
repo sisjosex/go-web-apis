@@ -26,6 +26,8 @@ const (
 type TripEta struct {
 	ComputedAt time.Time        `json:"computed_at"`
 	Eta        []models.StopEta `json:"eta"`
+	// Fresh is true when this call computed the estimate rather than reading it from the cache.
+	Fresh bool `json:"-"`
 }
 
 // EtaService computes ETAs on demand (TRACK-025 D1): only for a trip someone is looking at, cached
@@ -75,7 +77,7 @@ func (s *EtaService) ForTrip(ctx context.Context, tripID uuid.UUID, position *mo
 		return TripEta{}, err
 	}
 	now := time.Now().UTC()
-	out := TripEta{ComputedAt: now, Eta: make([]models.StopEta, len(legs))}
+	out := TripEta{ComputedAt: now, Eta: make([]models.StopEta, len(legs)), Fresh: true}
 	elapsed, source := 0.0, geoModels.EstimateValhalla
 	for i, stop := range pending[:len(legs)] {
 		elapsed += legs[i].DurationS

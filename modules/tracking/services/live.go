@@ -3,6 +3,7 @@ package services
 import (
 	"context"
 	"encoding/json"
+	"log"
 	"strings"
 	"time"
 
@@ -40,7 +41,7 @@ func (s *LiveService) Trip(ctx context.Context, tenantID, tripID uuid.UUID, trai
 			return nil, TripEta{}, err
 		}
 	}
-	eta, err := s.eta.ForTrip(ctx, tripID, position, pending)
+	eta, err := s.tripEta(ctx, tenantID, tripID, position, pending)
 	if err != nil {
 		return nil, TripEta{}, err
 	}
@@ -60,7 +61,7 @@ func (s *LiveService) Rider(ctx context.Context, tenantID, riderID uuid.UUID, sc
 	if err != nil {
 		return nil, time.Time{}, err
 	}
-	eta, err := s.eta.ForTrip(ctx, *live.TripID, position, pending)
+	eta, err := s.tripEta(ctx, tenantID, *live.TripID, position, pending)
 	if err != nil {
 		return nil, time.Time{}, err
 	}
@@ -74,6 +75,20 @@ func (s *LiveService) Rider(ctx context.Context, tenantID, riderID uuid.UUID, sc
 		}
 	}
 	return live, eta.ComputedAt, nil
+}
+
+// tripEta is the trip's ETA with the tenant in the context, where geo's historical source reads it
+// (TRACK-066 D2). A freshly computed one is checked for stops running late (D3): one query per trip
+// per 30 s whoever drives it — the hub, the positions consumer, a trip event. A failed check is
+// logged and the snapshot still answers; the next fresh ETA checks again.
+func (s *LiveService) tripEta(ctx context.Context, tenantID, tripID uuid.UUID, position *models.LivePosition, pending []models.PendingStop) (TripEta, error) {
+	eta, err := s.eta.ForTrip(interfaces.WithTenant(ctx, tenantID), tripID, position, pending)
+	if err == nil && eta.Fresh && len(eta.Eta) > 0 {
+		if _, derr := s.repo.TripDelayCheck(ctx, tenantID, tripID, eta.Eta); derr != nil {
+			log.Printf("⚠️  delay check %s: %v", tripID, derr)
+		}
+	}
+	return eta, err
 }
 
 // livePosition reads the position the ETA runs from; nil when the vehicle has not reported.

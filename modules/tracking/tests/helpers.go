@@ -1587,3 +1587,95 @@ func queryIDs(t *testing.T, helper *testhelpers.ApiTestHelper, query string, arg
 	}
 	return ids
 }
+
+// ---- TRACK-066: stop-to-stop history and delay notices ----
+
+// SetStopArrivals rewrites the arrival of each of tripID's stops to minutesAgo[i] minutes ago, in stop
+// order — the gaps a real drive leaves, which arrivals made in one test instant do not.
+func SetStopArrivals(t *testing.T, helper *testhelpers.ApiTestHelper, tripID string, minutesAgo ...int) {
+	t.Helper()
+	execSQL(t, helper, `UPDATE tracking.trip_stops SET arrived_at = now() - make_interval(mins => ($2::INT[])[sequence])
+		WHERE trip_id = $1`, tripID, minutesAgo)
+}
+
+// StopPairSampleCount answers how many stop-to-stop samples tripID left; durationS > 0 counts only
+// those of that many seconds.
+func StopPairSampleCount(t *testing.T, helper *testhelpers.ApiTestHelper, tripID string, durationS int) int {
+	t.Helper()
+	return countRows(t, helper, `SELECT count(*) FROM tracking.stop_pair_samples
+		WHERE trip_id = $1 AND ($2 = 0 OR duration_s = $2)`, tripID, durationS)
+}
+
+// SeedStopPairSample stores one sample of seconds between stops from and to on tripID, observed a day
+// ago in the weekday and band of now — what that trip completed would have left.
+func SeedStopPairSample(t *testing.T, helper *testhelpers.ApiTestHelper, tripID, from, to string, seconds int) {
+	t.Helper()
+	execSQL(t, helper, `
+		INSERT INTO tracking.stop_pair_samples
+			(trip_id, from_stop_place_id, to_stop_place_id, tenant_id, weekday, hour_band, duration_s, observed_at)
+		SELECT t.id, $2, $3, t.tenant_id, EXTRACT(ISODOW FROM now() AT TIME ZONE t.timezone),
+			EXTRACT(HOUR FROM now() AT TIME ZONE t.timezone)::INT / 2, $4, now() - INTERVAL '1 day'
+		FROM tracking.trips t WHERE t.id = $1`, tripID, from, to, seconds)
+}
+
+// KeepStopPairSamples drops the samples leaving stop from except those of keepSeconds.
+func KeepStopPairSamples(t *testing.T, helper *testhelpers.ApiTestHelper, from string, keepSeconds int) {
+	t.Helper()
+	execSQL(t, helper, `DELETE FROM tracking.stop_pair_samples WHERE from_stop_place_id = $1 AND duration_s <> $2`, from, keepSeconds)
+}
+
+// PlanStopsAroundNow plans tripID's stop 2 for now, stop 1 an hour before and stop 3 an hour after.
+func PlanStopsAroundNow(t *testing.T, helper *testhelpers.ApiTestHelper, tripID string) {
+	t.Helper()
+	execSQL(t, helper, `UPDATE tracking.trip_stops SET planned_at = now() + make_interval(hours => sequence - 2) WHERE trip_id = $1`, tripID)
+}
+
+// TripDelayEvents counts tripID's trip.changed delay rows in the outbox.
+func TripDelayEvents(t *testing.T, helper *testhelpers.ApiTestHelper, tripID string) int {
+	t.Helper()
+	return countRows(t, helper, `SELECT count(*) FROM tracking.outbox WHERE topic = 'trip.changed'
+		AND payload->>'trip_id' = $1 AND payload->>'type' = 'delay'`, tripID)
+}
+
+// StopDelayNotified answers whether the stop's late-ETA notice went out.
+func StopDelayNotified(t *testing.T, helper *testhelpers.ApiTestHelper, tripStopID string) bool {
+	t.Helper()
+	return countRows(t, helper, `SELECT count(*) FROM tracking.trip_stops WHERE id = $1 AND delay_notified_at IS NOT NULL`, tripStopID) == 1
+}
+
+// ClearStopDelayNotice forgets the stop's late-ETA notice, so the next fresh ETA may announce it again.
+func ClearStopDelayNotice(t *testing.T, helper *testhelpers.ApiTestHelper, tripStopID string) {
+	t.Helper()
+	execSQL(t, helper, `UPDATE tracking.trip_stops SET delay_notified_at = NULL WHERE id = $1`, tripStopID)
+}
+
+// NotifyTripDelays runs each of tripID's outbox delay rows through sp_notify_event, as the worker's
+// trip.changed handler does.
+func NotifyTripDelays(t *testing.T, helper *testhelpers.ApiTestHelper, tripID string) {
+	t.Helper()
+	execSQL(t, helper, `SELECT tracking.sp_notify_event($1, 'trip.changed', o.payload, o.id)
+		FROM tracking.outbox o WHERE o.topic = 'trip.changed' AND o.payload->>'trip_id' = $2 AND o.payload->>'type' = 'delay'`,
+		TestTenantID, tripID)
+}
+
+// DelayNotices answers rider's delay feed rows' payloads, per recipient email.
+func DelayNotices(t *testing.T, helper *testhelpers.ApiTestHelper, riderID string) map[string]map[string]any {
+	t.Helper()
+	rows, err := helper.DB().Query(t.Context(), `
+		SELECT u.email, n.payload FROM tracking.notifications n JOIN auth.users u ON u.id = n.user_id
+		WHERE n.rider_id = $1 AND n.type = 'delay'`, riderID)
+	if err != nil {
+		t.Fatalf("read notices: %v", err)
+	}
+	defer rows.Close()
+	out := map[string]map[string]any{}
+	for rows.Next() {
+		var email string
+		var payload map[string]any
+		if err := rows.Scan(&email, &payload); err != nil {
+			t.Fatalf("scan notice: %v", err)
+		}
+		out[email] = payload
+	}
+	return out
+}

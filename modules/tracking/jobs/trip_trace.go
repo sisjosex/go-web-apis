@@ -20,10 +20,10 @@ const (
 	TraceFallback = "fallback"
 )
 
-// ApplyTripTrace map-matches a completed trip's points and stores the line and its km on the trip.
-// The router down, refusing the path or absent (nil): the raw GPS line is stored instead, flagged
-// fallback. Fewer than two points: nothing to draw, nothing stored. It answers the source it stored,
-// "" when none.
+// ApplyTripTrace records a completed trip's stop-to-stop seconds (TRACK-066 D1), then map-matches its
+// points and stores the line and its km on the trip. The router down, refusing the path or absent
+// (nil): the raw GPS line is stored instead, flagged fallback. Fewer than two points: nothing to draw,
+// nothing stored. It answers the source it stored, "" when none.
 func ApplyTripTrace(ctx context.Context, db coreServices.DatabaseService, router geoInterfaces.Router, tenant coreJobs.Tenant, tripID uuid.UUID) (string, error) {
 	tenantID, err := uuid.Parse(tenant.ID)
 	if err != nil {
@@ -31,6 +31,9 @@ func ApplyTripTrace(ctx context.Context, db coreServices.DatabaseService, router
 	}
 	tenantCtx := context.WithValue(ctx, coreServices.TenantDatabaseURLKey, tenant.DatabaseURL)
 	repo := trackingRepos.NewTrackingRepository(db)
+	if _, err := repo.RecordStopPairSamples(tenantCtx, tenantID, tripID); err != nil {
+		return "", err
+	}
 	points, err := repo.TripTracePoints(tenantCtx, tenantID, tripID)
 	if err != nil || len(points) < 2 {
 		return "", err

@@ -3,7 +3,6 @@ package config
 import (
 	"josex/web/modules/core/utils"
 	"josex/web/modules/tracking/models"
-	"time"
 )
 
 // TrackingConfig holds tracking module configuration
@@ -18,7 +17,6 @@ type TrackingConfig struct {
 
 	// Real-time notification settings
 	EnableRealtimeNotifications bool
-	NotificationDelayThreshold  time.Duration
 
 	// Alert settings
 	AlertAutoResolveHours    int
@@ -64,7 +62,6 @@ func LoadTrackingConfig() *TrackingConfig {
 
 		// Notification settings
 		EnableRealtimeNotifications: utils.GetEnvAsBool("TRACKING_ENABLE_REALTIME_NOTIFICATIONS", true),
-		NotificationDelayThreshold:  utils.GetEnvAsDuration("TRACKING_NOTIFICATION_DELAY_THRESHOLD", 15*time.Minute),
 
 		// Alert settings
 		AlertAutoResolveHours:    utils.GetEnvAsInt("TRACKING_ALERT_AUTO_RESOLVE_HOURS", 24),

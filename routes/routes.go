@@ -342,10 +342,12 @@ func tenancyChains(d routeDeps) tenantChains {
 }
 
 // liveService is the snapshots and the ETA (TRACK-025 D1): the geo router for the one route call,
-// geo's own ETA for its fallbacks, Valkey for the 30 s cache.
+// geo's own ETA for its fallbacks (observed stop-to-stop medians, then the straight line), Valkey for
+// the 30 s cache.
 func liveService(d routeDeps, valkey coreServices.ValkeyService) *trackingServices.LiveService {
 	geoConf := config.ModularAppConfig.Geo
-	eta := trackingServices.NewEtaService(d.router, geoServices.NewGeoService(nil, d.router, nil, geoConf), valkey)
+	history := trackingRepos.NewHistoricalDurations(d.db)
+	eta := trackingServices.NewEtaService(d.router, geoServices.NewGeoService(nil, d.router, history, geoConf), valkey)
 	return trackingServices.NewLiveService(trackingRepos.NewTrackingRepository(d.db), eta)
 }
 

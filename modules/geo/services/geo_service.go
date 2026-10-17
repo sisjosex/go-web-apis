@@ -15,7 +15,7 @@ const defaultSearchLimit = 8
 type geoService struct {
 	places     *repositories.PlacesRepository
 	router     interfaces.Router
-	historical interfaces.HistoricalDurations // nil until TRACK-010
+	historical interfaces.HistoricalDurations // nil without tracking (TRACK-066)
 	busKmh     float64
 }
 

@@ -364,7 +364,9 @@ CREATE TABLE tracking.organizations (
     address character varying(500),
     stop_place_id uuid,
     empty_trip_cancel_min integer DEFAULT 30 NOT NULL,
+    delay_notice_min integer DEFAULT 10 NOT NULL,
     CONSTRAINT chk_organization_absence_cutoff CHECK (((absence_cutoff_min >= 0) AND (absence_cutoff_min <= 1440))),
+    CONSTRAINT chk_organization_delay_notice CHECK (((delay_notice_min >= 0) AND (delay_notice_min <= 180))),
     CONSTRAINT chk_organization_empty_trip_cancel CHECK (((empty_trip_cancel_min >= 0) AND (empty_trip_cancel_min <= 1440))),
     CONSTRAINT chk_organization_kind CHECK (((kind)::text = ANY ((ARRAY['school'::character varying, 'company'::character varying, 'other'::character varying])::text[])))
 );
@@ -396,6 +398,13 @@ COMMENT ON COLUMN tracking.organizations.stop_place_id IS 'The client''s own sto
 --
 
 COMMENT ON COLUMN tracking.organizations.empty_trip_cancel_min IS 'Minutes before planned_start a trip of this client with no rider cancels itself; 0 never (TRACK-069 D1)';
+
+
+--
+-- Name: COLUMN organizations.delay_notice_min; Type: COMMENT; Schema: tracking; Owner: -
+--
+
+COMMENT ON COLUMN tracking.organizations.delay_notice_min IS 'Minutes of ETA past planned_at at a stop that send its pending riders'' families a delay notice (TRACK-066 D4)';
 
 
 --
@@ -798,6 +807,32 @@ COMMENT ON COLUMN tracking.routes.paired_route_id IS 'The other leg of an outbou
 
 
 --
+-- Name: stop_pair_samples; Type: TABLE; Schema: tracking; Owner: -
+--
+
+CREATE TABLE tracking.stop_pair_samples (
+    trip_id uuid NOT NULL,
+    from_stop_place_id uuid NOT NULL,
+    to_stop_place_id uuid NOT NULL,
+    tenant_id uuid NOT NULL,
+    weekday smallint NOT NULL,
+    hour_band smallint NOT NULL,
+    duration_s integer NOT NULL,
+    observed_at timestamp with time zone NOT NULL,
+    CONSTRAINT chk_stop_pair_samples_duration CHECK ((duration_s > 0)),
+    CONSTRAINT chk_stop_pair_samples_hour_band CHECK (((hour_band >= 0) AND (hour_band <= 11))),
+    CONSTRAINT chk_stop_pair_samples_weekday CHECK (((weekday >= 1) AND (weekday <= 7)))
+);
+
+
+--
+-- Name: TABLE stop_pair_samples; Type: COMMENT; Schema: tracking; Owner: -
+--
+
+COMMENT ON TABLE tracking.stop_pair_samples IS 'Observed arrival-to-arrival seconds between consecutive stops of completed trips: the ETA source when the router is down (TRACK-066 D1)';
+
+
+--
 -- Name: stop_places; Type: TABLE; Schema: tracking; Owner: -
 --
 
@@ -907,6 +942,7 @@ CREATE TABLE tracking.trip_stops (
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     updated_at timestamp with time zone DEFAULT now() NOT NULL,
     approach_notified_at timestamp with time zone,
+    delay_notified_at timestamp with time zone,
     CONSTRAINT chk_trip_stops_status CHECK (((status)::text = ANY ((ARRAY['pending'::character varying, 'arrived'::character varying, 'skipped'::character varying])::text[])))
 );
 
@@ -923,6 +959,13 @@ COMMENT ON TABLE tracking.trip_stops IS 'The stops of one trip, copied from the 
 --
 
 COMMENT ON COLUMN tracking.trip_stops.approach_notified_at IS 'When the stop''s approach notice went out: the first position within the approach radius while it was the trip''s next pending stop (TRACK-012 D4)';
+
+
+--
+-- Name: COLUMN trip_stops.delay_notified_at; Type: COMMENT; Schema: tracking; Owner: -
+--
+
+COMMENT ON COLUMN tracking.trip_stops.delay_notified_at IS 'When the stop''s late-ETA notice went out: the first fresh ETA past the threshold of its riders'' clients (TRACK-066 D3)';
 
 
 --
@@ -1227,6 +1270,14 @@ ALTER TABLE ONLY tracking.route_versions
 
 ALTER TABLE ONLY tracking.routes
     ADD CONSTRAINT routes_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: stop_pair_samples stop_pair_samples_pkey; Type: CONSTRAINT; Schema: tracking; Owner: -
+--
+
+ALTER TABLE ONLY tracking.stop_pair_samples
+    ADD CONSTRAINT stop_pair_samples_pkey PRIMARY KEY (trip_id, from_stop_place_id);
 
 
 --
@@ -1704,6 +1755,13 @@ CREATE INDEX idx_routes_organization_id ON tracking.routes USING btree (organiza
 --
 
 CREATE INDEX idx_routes_vehicle_id ON tracking.routes USING btree (vehicle_id);
+
+
+--
+-- Name: idx_stop_pair_samples_pair; Type: INDEX; Schema: tracking; Owner: -
+--
+
+CREATE INDEX idx_stop_pair_samples_pair ON tracking.stop_pair_samples USING btree (tenant_id, from_stop_place_id, to_stop_place_id, weekday, hour_band, observed_at);
 
 
 --
@@ -2225,6 +2283,30 @@ ALTER TABLE ONLY tracking.routes
 
 ALTER TABLE ONLY tracking.routes
     ADD CONSTRAINT routes_vehicle_id_fkey FOREIGN KEY (vehicle_id) REFERENCES tracking.vehicles(id) ON DELETE SET NULL;
+
+
+--
+-- Name: stop_pair_samples stop_pair_samples_from_stop_place_id_fkey; Type: FK CONSTRAINT; Schema: tracking; Owner: -
+--
+
+ALTER TABLE ONLY tracking.stop_pair_samples
+    ADD CONSTRAINT stop_pair_samples_from_stop_place_id_fkey FOREIGN KEY (from_stop_place_id) REFERENCES tracking.stop_places(id) ON DELETE CASCADE;
+
+
+--
+-- Name: stop_pair_samples stop_pair_samples_to_stop_place_id_fkey; Type: FK CONSTRAINT; Schema: tracking; Owner: -
+--
+
+ALTER TABLE ONLY tracking.stop_pair_samples
+    ADD CONSTRAINT stop_pair_samples_to_stop_place_id_fkey FOREIGN KEY (to_stop_place_id) REFERENCES tracking.stop_places(id) ON DELETE CASCADE;
+
+
+--
+-- Name: stop_pair_samples stop_pair_samples_trip_id_fkey; Type: FK CONSTRAINT; Schema: tracking; Owner: -
+--
+
+ALTER TABLE ONLY tracking.stop_pair_samples
+    ADD CONSTRAINT stop_pair_samples_trip_id_fkey FOREIGN KEY (trip_id) REFERENCES tracking.trips(id) ON DELETE CASCADE;
 
 
 --

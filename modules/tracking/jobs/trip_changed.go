@@ -44,8 +44,8 @@ var frameOf = map[string]string{
 // trip, its riders and their organizations' fleets (TRACK-025), and a completed trip gets its driven
 // path stored (TRACK-010 step 4). The tenant comes from the TaskID the relay gave the row,
 // <tenant>:<id>, as route.changed's. It then becomes the riders' guardians' notices (TRACK-012).
-// The trip's driver is told its day changed (TRACK-030), but for an approach, which changes nothing
-// the driver's day shows. valkey nil publishes nothing; notify and signal nil notify and signal
+// The trip's driver is told its day changed (TRACK-030), but for an approach or a late-ETA delay
+// (TRACK-066), which change nothing the driver's day shows. valkey nil publishes nothing; notify and signal nil notify and signal
 // nothing. Delivery is at least once: a repeated frame makes a client refetch the same trip, a
 // repeated trace writes the same line, a repeated notice writes nothing.
 func TripChangedHandler(db coreServices.DatabaseService, tenants *coreJobs.TenantDirectory, router geoInterfaces.Router, valkey coreServices.ValkeyService, notify *Notifier, signal *DriverSignal, progress *ProgressSignal) asynq.HandlerFunc {
@@ -82,7 +82,7 @@ func TripChangedHandler(db coreServices.DatabaseService, tenants *coreJobs.Tenan
 		if err := progress.Signal(ctx, tenant, tripID); err != nil {
 			return err
 		}
-		if payload.Type != "approach" {
+		if payload.Type != "approach" && payload.Type != "delay" {
 			if err := signal.Signal(ctx, tenant, nil, &tripID, nil, nil); err != nil {
 				return err
 			}

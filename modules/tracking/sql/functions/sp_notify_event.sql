@@ -16,6 +16,8 @@ DECLARE
     v_alert_title VARCHAR;
     v_alert_route UUID;
     v_alert_trip  UUID;
+    v_delay_s INT;
+    v_eta_at  TIMESTAMPTZ;
 BEGIN
     IF p_topic = 'trip.changed' THEN
         v_trips := ARRAY[CAST(p_event->>'trip_id' AS UUID)];
@@ -37,6 +39,14 @@ BEGIN
                 v_type := 'approaching';
                 v_stop := v_subject;
                 v_dedupe := CAST(v_subject AS TEXT);
+            WHEN 'delay' THEN
+                -- The ETA runs late at one stop (TRACK-066 D3): its pending riders whose client's
+                -- threshold the delay reaches, once per stop.
+                v_type := 'delay';
+                v_stop := v_subject;
+                v_dedupe := 'eta:' || CAST(v_subject AS TEXT);
+                v_delay_s := CAST(p_event->>'delay_s' AS INT);
+                v_eta_at := CAST(p_event->>'eta_at' AS TIMESTAMPTZ);
             WHEN 'done' THEN
                 SELECT CASE k.kind WHEN 'pickup' THEN 'boarded' ELSE 'dropped_off' END
                   INTO v_type
@@ -89,7 +99,8 @@ BEGIN
                t.id AS trip,
                t.service_date AS day,
                r.route_name,
-               CASE WHEN v_stop IS NOT NULL OR v_task IS NOT NULL THEN sp.name END AS stop_name
+               CASE WHEN v_stop IS NOT NULL OR v_task IS NOT NULL THEN sp.name END AS stop_name,
+               CASE WHEN v_eta_at IS NOT NULL THEN to_char(v_eta_at AT TIME ZONE t.timezone, 'HH24:MI') END AS eta_time
         FROM tracking.trips t
         INNER JOIN tracking.routes r ON r.id = t.route_id
         INNER JOIN tracking.trip_stops ts ON ts.trip_id = t.id
@@ -101,18 +112,26 @@ BEGIN
           AND (v_task IS NULL OR k.id = v_task)
           AND (v_stop IS NULL OR ts.id = v_stop)
           AND CASE
-                  WHEN v_type = 'approaching' THEN k.status = 'pending'
+                  WHEN v_type = 'approaching' OR v_delay_s IS NOT NULL THEN k.status = 'pending'
                   WHEN v_task IS NOT NULL OR v_type = 'cancelled' THEN TRUE
                   ELSE k.status <> 'cancelled'
               END
+          AND (v_delay_s IS NULL OR EXISTS (
+                  SELECT 1
+                  FROM tracking.riders rr
+                  INNER JOIN tracking.organizations o ON o.id = rr.organization_id
+                  WHERE rr.id = k.subject_id
+                    AND o.delay_notice_min > 0
+                    AND o.delay_notice_min * 60 <= v_delay_s
+              ))
         ORDER BY k.subject_id, t.planned_start
     ),
     riders AS (
-        SELECT tr.rider, tr.trip, tr.day, tr.route_name, tr.stop_name
+        SELECT tr.rider, tr.trip, tr.day, tr.route_name, tr.stop_name, tr.eta_time
         FROM trip_riders tr
         UNION ALL
         -- A route's alert: every rider assigned to the route today in its timezone, riding today or not.
-        SELECT DISTINCT a.rider_id, CAST(NULL AS UUID), CAST(NULL AS DATE), r.route_name, CAST(NULL AS VARCHAR)
+        SELECT DISTINCT a.rider_id, CAST(NULL AS UUID), CAST(NULL AS DATE), r.route_name, CAST(NULL AS VARCHAR), CAST(NULL AS TEXT)
         FROM tracking.rider_route_assignments a
         INNER JOIN tracking.routes r ON r.id = a.route_id
         INNER JOIN tracking.transport_companies tc ON tc.id = r.company_id
@@ -130,7 +149,10 @@ BEGIN
                    'stop_name',    rs.stop_name,
                    'alert_id',     v_alert_id,
                    'alert_type',   v_alert_type,
-                   'title',        v_alert_title
+                   'title',        v_alert_title,
+                   'delay_min',    ROUND(v_delay_s / 60.0),
+                   'eta_at',       v_eta_at,
+                   'eta_time',     rs.eta_time
                )) AS body
         FROM riders rs
         INNER JOIN tracking.riders rd ON rd.id = rs.rider
@@ -154,4 +176,4 @@ BEGIN
 END;
 $function$;
 
-COMMENT ON FUNCTION tracking.sp_notify_event(uuid,character varying,jsonb,bigint) IS 'Turns one trip.changed or alert.changed outbox event into feed rows, one per guardian|self account and rider, idempotent on the dedupe key; answers the new rows whose type the account did not mute; a route alert reaches every rider assigned to the route today; a riderless auto-cancel tells nobody, a rider added to a running trip only its own family (TRACK-012, TRACK-033, TRACK-069)';
+COMMENT ON FUNCTION tracking.sp_notify_event(uuid,character varying,jsonb,bigint) IS 'Turns one trip.changed or alert.changed outbox event into feed rows, one per guardian|self account and rider, idempotent on the dedupe key; answers the new rows whose type the account did not mute; a route alert reaches every rider assigned to the route today; a riderless auto-cancel tells nobody, a rider added to a running trip only its own family; a late ETA (delay with delay_s) only the families with a pending task at that stop whose client''s delay_notice_min it reaches (TRACK-012, TRACK-033, TRACK-069, TRACK-066)';

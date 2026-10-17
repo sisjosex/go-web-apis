@@ -148,7 +148,13 @@ SUBSCRIBE per channel per process; position and eta are latest-wins per channel,
 and past `WS_QUEUE_MAX` closes 1013; Valkey lost or shutdown closes 1012. `outbox:trip.changed` publishes
 every transition; the hub adds `eta` on a watched `trip:{id}`, and on a watched `rider:{id}` the same
 trip ETA cut to that rider's stops (MOBILE-010). ETA is on demand (D1): one Valhalla route
-through every pending stop, cached `eta:{trip}` 30 s. Snapshots for (re)sync: `GET /tracking/live/fleet`,
+through every pending stop, cached `eta:{trip}` 30 s; Valhalla down, each leg falls back to the
+median of `stop_pair_samples` between the stops nearest its ends (≥ 3 samples in the weekday + 2-hour
+band, else any band, 90 days; written at trip completion, pruned by the partitions walk), then the
+straight line (TRACK-066). Every freshly computed ETA runs `sp_trip_delay_check`: a pending stop late
+by its riders' clients' `delay_notice_min` (default 10, 0 never) is stamped `delay_notified_at` and
+becomes one `trip.changed` `delay` → a `delay` notice with `delay_min`/`eta_at` to the families with a
+pending task there, push text `notice.delay_eta.*`. Snapshots for (re)sync: `GET /tracking/live/fleet`,
 `GET /tracking/trips/:id/live` (its stops carry `lat`/`lng`), and the guardian's `GET /tracking/riders/:id/live`
 (portal chain, scoped as the rider's status; no trip in progress → `trip_id: null`, no stops, no position).
 `GET /routes/:id/status` does not name the trip: a client finds it with `GET /trips?route_id=&status=in_progress`.
@@ -188,7 +194,8 @@ so it lives in the server's own database and the repository always takes the pri
 databases never get the schema (`tenant_service.go` excludes it). Routing goes through the
 `interfaces.Router` port (Valhalla adapter, gobreaker: 5 failures → open 30 s); a 4xx from Valhalla is
 `ErrNoRoute` (422) and never opens the breaker. `/geo/eta` always answers: Valhalla → observed
-durations (nil until TRACK-010) → straight line × 1.3, flagged in `estimate_source`.
+durations → straight line × 1.3, flagged in `estimate_source`. The observed durations are tracking's
+(TRACK-066): wired only into the trip ETA, which carries the tenant in the context; `/geo/eta` gets nil.
 
 **Stored files (INFRA-007).** `core/services/storage`: the `ObjectStore` port (one bucket; one
 minio-go client per process), R2 in prod, the compose's SeaweedFS in dev and tests (`.env.test` uses the

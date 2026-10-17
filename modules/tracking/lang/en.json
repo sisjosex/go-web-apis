@@ -266,6 +266,8 @@
   "notice.changed.body": "%1$s's trip on %2$s changed.",
   "notice.delay.title": "Delay",
   "notice.delay.body": "%2$s, %1$s's trip: %3$s",
+  "notice.delay_eta.title": "%4$s min late",
+  "notice.delay_eta.body": "%1$s reaches %3$s around %5$s.",
   "notice.rider_added.title": "%1$s is on today's trip",
   "notice.rider_added.body": "%2$s is already under way; %1$s gets on at %3$s.",
   "notice.trip_cancelled_empty.title": "Trip cancelled: no riders",

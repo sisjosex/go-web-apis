@@ -92,7 +92,7 @@ func startBackground(ctx context.Context, mode, role string, db services.Databas
 		if coreConf.IsModuleEnabled("tracking") {
 			trackingConf := config.ModularAppConfig.Tracking
 			// A stop is announced once its ETA is within the notice minutes (TRACK-070 D3).
-			eta := trackingServices.NewEtaService(router, geoServices.NewGeoService(nil, router, nil, config.ModularAppConfig.Geo), valkey)
+			eta := trackingServices.NewEtaService(router, geoServices.NewGeoService(nil, router, trackingRepos.NewHistoricalDurations(db), config.ModularAppConfig.Geo), valkey)
 			live := trackingServices.NewLiveService(trackingRepos.NewTrackingRepository(db), eta)
 			bg.positions = trackingJobs.NewPositionsConsumer(db, valkey, directory, trackingConf.IngestRadii()).
 				WithApproachEta(trackingConf.ApproachMinutes, trackingJobs.LiveEta(live))
@@ -163,7 +163,7 @@ func registerJobs(ctx context.Context, registry *jobs.Registry, db services.Data
 		var progress *trackingJobs.ProgressSignal
 		if pushClient != nil {
 			progress = trackingJobs.NewProgressSignal(jobsClient)
-			eta := trackingServices.NewEtaService(router, geoServices.NewGeoService(nil, router, nil, geoConf), valkey)
+			eta := trackingServices.NewEtaService(router, geoServices.NewGeoService(nil, router, trackingRepos.NewHistoricalDurations(db), geoConf), valkey)
 			registry.Handle(trackingJobs.TaskTripProgress, trackingJobs.TripProgressHandler(db, valkey, pusher,
 				trackingServices.NewLiveService(trackingRepos.NewTrackingRepository(db), eta)))
 		}

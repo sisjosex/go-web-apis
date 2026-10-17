@@ -284,6 +284,9 @@ type Organization struct {
 	// EmptyTripCancelMin is how many minutes before departure a trip still without riders cancels
 	// itself; 0 never (TRACK-069 D1).
 	EmptyTripCancelMin int32 `json:"empty_trip_cancel_min"`
+	// DelayNoticeMin is how late, in minutes, a stop's ETA may run before its families are told; 0
+	// never (TRACK-066 D4).
+	DelayNoticeMin int32 `json:"delay_notice_min"`
 }
 
 // OrganizationMember is a tenant user on an organization, with the identity joined from auth.users.
