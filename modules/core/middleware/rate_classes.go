@@ -29,17 +29,24 @@ var heavyRoutes = map[string]bool{
 	"POST /api/v1/import/validate": true,
 }
 
-// RateClasses adds the two stricter classes on top of the per-IP limit (INFRA-011 D3): sign-in at
-// loginPerMin per IP and e-mail, heavy work at heavyPerMin per tenant. One Valkey call, only on those
-// routes; without Valkey, or when it fails, the request passes (INFRA-001 D5) and the general limit
-// still applies.
-func RateClasses(valkey coreServices.ValkeyService, loginPerMin, heavyPerMin int) gin.HandlerFunc {
+// publicRoutes answer anyone holding a link, with no session (TRACK-060): a page polls them, so each
+// IP gets its own minute budget.
+var publicRoutes = map[string]bool{
+	"GET /api/v1/public/share/:token": true,
+}
+
+// RateClasses adds the stricter classes on top of the per-IP limit (INFRA-011 D3): sign-in at
+// loginPerMin per IP and e-mail, heavy work at heavyPerMin per tenant, the public reads at publicPerMin
+// per IP. One Valkey call, only on those routes; without Valkey, or when it fails, the request passes
+// (INFRA-001 D5) and the general limit still applies.
+func RateClasses(valkey coreServices.ValkeyService, loginPerMin, heavyPerMin, publicPerMin int) gin.HandlerFunc {
 	if valkey == nil {
 		return func(c *gin.Context) { c.Next() }
 	}
 	limiter := redis_rate.NewLimiter(valkey.Client())
 	login := redis_rate.PerMinute(loginPerMin)
 	heavy := redis_rate.PerMinute(heavyPerMin)
+	public := redis_rate.PerMinute(publicPerMin)
 
 	return func(c *gin.Context) {
 		route := c.Request.Method + " " + c.FullPath()
@@ -50,6 +57,8 @@ func RateClasses(valkey coreServices.ValkeyService, loginPerMin, heavyPerMin int
 			key, limit = "login:"+c.ClientIP()+":"+loginEmail(c), login
 		case heavyRoutes[route] && c.GetHeader("X-Tenant-Slug") != "":
 			key, limit = "heavy:"+c.GetHeader("X-Tenant-Slug"), heavy
+		case publicRoutes[route]:
+			key, limit = "public:"+c.ClientIP(), public
 		default:
 			c.Next()
 			return

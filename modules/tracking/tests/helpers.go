@@ -1679,3 +1679,15 @@ func DelayNotices(t *testing.T, helper *testhelpers.ApiTestHelper, riderID strin
 	}
 	return out
 }
+
+// ShareLinkVia answers how a share link was made (TRACK-060). The API lists a trip's links, but a
+// guardian's link lands on whichever trip of today the rider rides, which the test does not pick.
+func ShareLinkVia(t *testing.T, helper *testhelpers.ApiTestHelper, linkID string) string {
+	t.Helper()
+	var via string
+	if err := helper.DB().QueryRow(context.Background(),
+		`SELECT created_via FROM tracking.share_links WHERE id = $1`, linkID).Scan(&via); err != nil {
+		t.Fatalf("read the share link: %v", err)
+	}
+	return via
+}

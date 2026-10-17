@@ -3,6 +3,8 @@ package routes
 import (
 	"context"
 	"encoding/json"
+	"errors"
+	"net/http"
 
 	"josex/web/config"
 	authControllers "josex/web/modules/auth/controllers"
@@ -16,6 +18,7 @@ import (
 	billingRoutes "josex/web/modules/billing/routes"
 	billingServices "josex/web/modules/billing/services"
 	coreControllers "josex/web/modules/core/controllers"
+	coreErrors "josex/web/modules/core/errors"
 	coreJobs "josex/web/modules/core/jobs"
 	"josex/web/modules/core/limits"
 	coreMiddleware "josex/web/modules/core/middleware"
@@ -49,6 +52,7 @@ import (
 	tenancyRoutes "josex/web/modules/tenancy/routes"
 	tenancyServices "josex/web/modules/tenancy/services"
 	trackingControllers "josex/web/modules/tracking/controllers"
+	trackingErrors "josex/web/modules/tracking/errors"
 	"josex/web/modules/tracking/realtime"
 	trackingRepos "josex/web/modules/tracking/repositories"
 	trackingRoutes "josex/web/modules/tracking/routes"
@@ -71,6 +75,8 @@ import (
 	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/ua-parser/uap-go/uaparser"
 )
 
@@ -228,8 +234,8 @@ func useGlobalMiddleware(r *gin.Engine, valkey coreServices.ValkeyService) {
 	// todos los tests, así que necesita un límite alto para no rechazarse a sí misma.
 	coreConf := config.ModularAppConfig.Core
 	r.Use(coreMiddleware.RateLimit(valkey, coreConf.RateLimitPerSecond, coreConf.RateLimitBurst))
-	// Sign-in per IP and address, imports per tenant (INFRA-011 D3).
-	r.Use(coreMiddleware.RateClasses(valkey, coreConf.RateLimitLoginPerMin, coreConf.RateLimitHeavyPerMin))
+	// Sign-in per IP and address, imports per tenant (INFRA-011 D3), the public share reads per IP (TRACK-060).
+	r.Use(coreMiddleware.RateClasses(valkey, coreConf.RateLimitLoginPerMin, coreConf.RateLimitHeavyPerMin, coreConf.RateLimitPublicPerMin))
 
 	// Language middleware - detects lang from ?lang=es or Accept-Language header
 	r.Use(coreMiddleware.LanguageMiddleware())
@@ -394,6 +400,40 @@ func trackingSocket(d routeDeps, chains tenantChains, live *trackingServices.Liv
 		time.Duration(trackingConf.WSPingSeconds)*time.Second))
 }
 
+// shareTenant is the public share read's chain (TRACK-060): the token's slug, before the dot, names the
+// tenant — read through the shared cache, so a polling page costs no platform query — and its database
+// goes on the context, as the GPS device chain does. A slug that names no open tenant is the same 404
+// as a bad token, so the answer says nothing about which part was wrong.
+func shareTenant(tenants tenancyInterfaces.TenantService) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		notFound := func() {
+			c.AbortWithStatusJSON(http.StatusNotFound, coreErrors.BuildErrorSingle(c, trackingErrors.ShareNotFound))
+		}
+		slug, _, ok := trackingServices.ParseShareToken(c.Param("token"))
+		if !ok {
+			notFound()
+			return
+		}
+		tenant, err := tenants.GetTenantBySlugCached(c.Request.Context(), slug)
+		var pgErr *pgconn.PgError
+		unknown := errors.Is(err, pgx.ErrNoRows) || (errors.As(err, &pgErr) && pgErr.Message == "tenant.not-found")
+		if unknown || (err == nil && (!tenant.IsActive || tenant.IsSuspended)) {
+			notFound()
+			return
+		}
+		if err != nil {
+			c.AbortWithStatusJSON(http.StatusInternalServerError, coreErrors.BuildError(c, err))
+			return
+		}
+		c.Set("tenant_id", tenant.ID.String())
+		c.Set("tenant_slug", tenant.Slug)
+		if tenant.DatabaseURL != nil && *tenant.DatabaseURL != "" {
+			c.Request = c.Request.WithContext(context.WithValue(c.Request.Context(), coreServices.TenantDatabaseURLKey, *tenant.DatabaseURL))
+		}
+		c.Next()
+	}
+}
+
 // riderEta is a rider channel's ETA frame: the trip's estimate cut to the rider's pending stops. The
 // subscribe check already scoped the channel, so the snapshot is read unscoped; it is read only when
 // the cached estimate is newer than the one sent — one query per 30 s per watched rider.
@@ -482,6 +522,9 @@ func registerTracking(d routeDeps, chains tenantChains, valkey coreServices.Valk
 	// The live snapshots, and the socket when this process runs the gateway (TRACK-025).
 	live := liveService(d, valkey)
 	liveRoutes := trackingRoutes.Live{Controller: trackingControllers.NewLiveController(live)}
+	if chains.tenants != nil {
+		liveRoutes.Public = []gin.HandlerFunc{shareTenant(chains.tenants)}
+	}
 	if d.hub != nil {
 		liveRoutes.Socket = trackingSocket(d, chains, live)
 	}

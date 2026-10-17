@@ -28,6 +28,9 @@ type mockTenantService struct {
 func (m *mockTenantService) GetTenantBySlug(_ context.Context, _ string) (*models.Tenant, error) {
 	return m.tenantBySlug, m.slugErr
 }
+func (m *mockTenantService) GetTenantBySlugCached(_ context.Context, _ string) (*models.Tenant, error) {
+	return m.tenantBySlug, m.slugErr
+}
 func (m *mockTenantService) VerifyUserTenantAccess(_ context.Context, _ uuid.UUID, _ string) (*models.TenantAccessInfo, error) {
 	return m.accessInfo, m.err
 }

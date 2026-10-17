@@ -78,3 +78,35 @@ func InvalidateAccess(ctx context.Context, userID uuid.UUID) {
 		log.Printf("⚠️  tenant access cache: invalidate %s: %v", userID, err)
 	}
 }
+
+// tenantKey is a workspace by slug, for the chains with no user (TRACK-060): kept accessTTL, so a
+// suspension reaches them within 30 s.
+func tenantKey(slug string) string { return "tenant-slug:" + slug }
+
+func loadTenant(ctx context.Context, slug string) (*models.Tenant, bool) {
+	if accessValkey == nil {
+		return nil, false
+	}
+	raw, err := accessValkey.Client().Get(ctx, tenantKey(slug)).Bytes()
+	if err != nil {
+		return nil, false
+	}
+	var tenant models.Tenant
+	if json.Unmarshal(raw, &tenant) != nil {
+		return nil, false
+	}
+	return &tenant, true
+}
+
+func storeTenant(ctx context.Context, slug string, tenant *models.Tenant) {
+	if accessValkey == nil {
+		return
+	}
+	raw, err := json.Marshal(tenant)
+	if err != nil {
+		return
+	}
+	if err := accessValkey.Client().Set(ctx, tenantKey(slug), raw, accessTTL).Err(); err != nil {
+		log.Printf("⚠️  tenant cache: %v", err)
+	}
+}

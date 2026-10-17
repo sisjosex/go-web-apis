@@ -5,6 +5,7 @@ package core_test
 
 import (
 	"context"
+	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -17,7 +18,8 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-// INFRA-011 D3: sign-in per IP and address, imports per tenant, on top of the per-IP limit.
+// INFRA-011 D3: sign-in per IP and address, imports per tenant, on top of the per-IP limit; the public
+// share read per IP (TRACK-060).
 
 func classEngine(t *testing.T) *gin.Engine {
 	t.Helper()
@@ -30,7 +32,7 @@ func classEngine(t *testing.T) *gin.Engine {
 		t.Fatalf("Valkey unreachable: %v", err)
 	}
 	engine := gin.New()
-	engine.Use(coreMiddleware.RateClasses(helper.Valkey(), 5, 3))
+	engine.Use(coreMiddleware.RateClasses(helper.Valkey(), 5, 3, 60))
 	engine.POST("/api/v1/auth/login", func(c *gin.Context) {
 		// The controller still reads the body the limiter looked at.
 		raw, _ := io.ReadAll(c.Request.Body)
@@ -41,6 +43,7 @@ func classEngine(t *testing.T) *gin.Engine {
 		c.Status(http.StatusOK)
 	})
 	engine.POST("/api/v1/import", func(c *gin.Context) { c.Status(http.StatusOK) })
+	engine.GET("/api/v1/public/share/:token", func(c *gin.Context) { c.Status(http.StatusOK) })
 	return engine
 }
 
@@ -89,5 +92,29 @@ func TestRateClasses_ImportPerTenant(t *testing.T) {
 	}
 	if rec := post(engine, "/api/v1/import", "{}", map[string]string{"X-Tenant-Slug": "calm"}); rec.Code != http.StatusOK {
 		t.Fatalf("another tenant: want 200, got %d", rec.Code)
+	}
+}
+
+// TestRateClasses_PublicPerIP - the 61st public share read a minute from one IP is 429, whatever the
+// token; another IP still reads.
+func TestRateClasses_PublicPerIP(t *testing.T) {
+	engine := classEngine(t)
+	get := func(remote, token string) int {
+		req := httptest.NewRequest(http.MethodGet, "/api/v1/public/share/"+token, nil)
+		req.RemoteAddr = remote
+		rec := httptest.NewRecorder()
+		engine.ServeHTTP(rec, req)
+		return rec.Code
+	}
+	for i := range 60 {
+		if code := get("203.0.113.9:4000", fmt.Sprintf("slug.t%d", i)); code != http.StatusOK {
+			t.Fatalf("read %d: want 200, got %d", i+1, code)
+		}
+	}
+	if code := get("203.0.113.9:4000", "slug.other"); code != http.StatusTooManyRequests {
+		t.Fatalf("61st read: want 429, got %d", code)
+	}
+	if code := get("203.0.113.10:4000", "slug.t0"); code != http.StatusOK {
+		t.Fatalf("another IP: want 200, got %d", code)
 	}
 }

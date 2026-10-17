@@ -178,6 +178,19 @@ func (s *tenantService) GetTenantBySlug(ctx context.Context, slug string) (*mode
 	return s.tenantRepository.GetTenantBySlug(ctx, slug)
 }
 
+// GetTenantBySlugCached reads the shared cache first, as VerifyUserTenantAccess does.
+func (s *tenantService) GetTenantBySlugCached(ctx context.Context, slug string) (*models.Tenant, error) {
+	if tenant, ok := loadTenant(ctx, slug); ok {
+		return tenant, nil
+	}
+	tenant, err := s.tenantRepository.GetTenantBySlug(ctx, slug)
+	if err != nil {
+		return nil, err
+	}
+	storeTenant(ctx, slug, tenant)
+	return tenant, nil
+}
+
 // VerifyUserTenantAccess verifies user has access to tenant (used by middleware)
 // Read from the shared cache first (INFRA-011 D2); a refusal is never cached, so access granted is
 // seen at once.

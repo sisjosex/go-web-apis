@@ -18,6 +18,8 @@ type LiveRepository interface {
 	CanSubscribe(ctx context.Context, tenantID, userID uuid.UUID, guardian bool, channel string) (bool, error)
 	TripVisibleToUser(ctx context.Context, tenantID, tripID, userID uuid.UUID) (bool, error)
 	TripDelayCheck(ctx context.Context, tenantID, tripID uuid.UUID, eta []models.StopEta) ([]uuid.UUID, error)
+	// SharedTrip is a share link's trip (TRACK-060); nil when the token opens nothing.
+	SharedTrip(ctx context.Context, tenantID uuid.UUID, tokenHash []byte) (*models.SharedTrip, error)
 }
 
 type tenantKey struct{}

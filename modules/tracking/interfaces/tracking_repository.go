@@ -159,6 +159,11 @@ type TrackingRepository interface {
 	ListRiderAbsences(ctx context.Context, tenantID, riderID uuid.UUID, query models.ListRiderAbsencesQuery, scopeUserID, guardianUserID *uuid.UUID) ([]*models.RiderAbsence, error)
 	CreateRiderAbsence(ctx context.Context, tenantID, riderID uuid.UUID, dto *models.CreateRiderAbsenceDto, userID, scopeUserID, guardianUserID *uuid.UUID) (*models.CreateRiderAbsenceResponse, error)
 	DeleteRiderAbsence(ctx context.Context, tenantID, riderID, absenceID uuid.UUID, scopeUserID, guardianUserID *uuid.UUID) error
+
+	// Share links (TRACK-060)
+	CreateShareLink(ctx context.Context, tenantID uuid.UUID, tripID, riderID *uuid.UUID, userID *uuid.UUID, via string, tokenHash []byte, ttlMinutes *int32) (*models.ShareLinkCreated, error)
+	ListShareLinks(ctx context.Context, tenantID, tripID uuid.UUID) ([]*models.ShareLink, error)
+	RevokeShareLink(ctx context.Context, tenantID, linkID uuid.UUID, userID *uuid.UUID, ownOnly bool) error
 	SuggestRiderStops(ctx context.Context, tenantID, riderID uuid.UUID, query models.SuggestRiderStopsQuery) ([]*models.RiderStopSuggestion, error)
 
 	// Rider places (TRACK-044 D4)

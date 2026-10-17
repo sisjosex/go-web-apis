@@ -27,6 +27,9 @@ type TenantService interface {
 
 	// Get tenant by slug (used by middleware for super_admin access)
 	GetTenantBySlug(ctx context.Context, slug string) (*models.Tenant, error)
+	// GetTenantBySlugCached is GetTenantBySlug through the shared cache, for a chain with no user to
+	// check (TRACK-060's public share read).
+	GetTenantBySlugCached(ctx context.Context, slug string) (*models.Tenant, error)
 
 	// Verify user has access to tenant (used by middleware)
 	VerifyUserTenantAccess(ctx context.Context, userID uuid.UUID, slug string) (*models.TenantAccessInfo, error)

@@ -807,6 +807,32 @@ COMMENT ON COLUMN tracking.routes.paired_route_id IS 'The other leg of an outbou
 
 
 --
+-- Name: share_links; Type: TABLE; Schema: tracking; Owner: -
+--
+
+CREATE TABLE tracking.share_links (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    tenant_id uuid NOT NULL,
+    trip_id uuid NOT NULL,
+    rider_id uuid,
+    token_hash bytea NOT NULL,
+    created_by uuid,
+    created_via character varying(10) NOT NULL,
+    expires_at timestamp with time zone NOT NULL,
+    revoked_at timestamp with time zone,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    CONSTRAINT chk_share_links_via CHECK (((created_via)::text = ANY ((ARRAY['web'::character varying, 'portal'::character varying])::text[])))
+);
+
+
+--
+-- Name: TABLE share_links; Type: COMMENT; Schema: tracking; Owner: -
+--
+
+COMMENT ON TABLE tracking.share_links IS 'Public links to a trip: the sha256 of each token, who made it and until when it opens (TRACK-060)';
+
+
+--
 -- Name: stop_pair_samples; Type: TABLE; Schema: tracking; Owner: -
 --
 
@@ -1270,6 +1296,22 @@ ALTER TABLE ONLY tracking.route_versions
 
 ALTER TABLE ONLY tracking.routes
     ADD CONSTRAINT routes_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: share_links share_links_pkey; Type: CONSTRAINT; Schema: tracking; Owner: -
+--
+
+ALTER TABLE ONLY tracking.share_links
+    ADD CONSTRAINT share_links_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: share_links share_links_token_hash_key; Type: CONSTRAINT; Schema: tracking; Owner: -
+--
+
+ALTER TABLE ONLY tracking.share_links
+    ADD CONSTRAINT share_links_token_hash_key UNIQUE (token_hash);
 
 
 --
@@ -1755,6 +1797,13 @@ CREATE INDEX idx_routes_organization_id ON tracking.routes USING btree (organiza
 --
 
 CREATE INDEX idx_routes_vehicle_id ON tracking.routes USING btree (vehicle_id);
+
+
+--
+-- Name: idx_share_links_trip; Type: INDEX; Schema: tracking; Owner: -
+--
+
+CREATE INDEX idx_share_links_trip ON tracking.share_links USING btree (trip_id);
 
 
 --
@@ -2283,6 +2332,22 @@ ALTER TABLE ONLY tracking.routes
 
 ALTER TABLE ONLY tracking.routes
     ADD CONSTRAINT routes_vehicle_id_fkey FOREIGN KEY (vehicle_id) REFERENCES tracking.vehicles(id) ON DELETE SET NULL;
+
+
+--
+-- Name: share_links share_links_rider_id_fkey; Type: FK CONSTRAINT; Schema: tracking; Owner: -
+--
+
+ALTER TABLE ONLY tracking.share_links
+    ADD CONSTRAINT share_links_rider_id_fkey FOREIGN KEY (rider_id) REFERENCES tracking.riders(id) ON DELETE CASCADE;
+
+
+--
+-- Name: share_links share_links_trip_id_fkey; Type: FK CONSTRAINT; Schema: tracking; Owner: -
+--
+
+ALTER TABLE ONLY tracking.share_links
+    ADD CONSTRAINT share_links_trip_id_fkey FOREIGN KEY (trip_id) REFERENCES tracking.trips(id) ON DELETE CASCADE;
 
 
 --

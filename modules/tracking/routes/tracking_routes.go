@@ -42,6 +42,8 @@ type Portal struct {
 type Live struct {
 	Controller *controllers.LiveController
 	Socket     []gin.HandlerFunc
+	// Public is the share page's chain (TRACK-060): the token's slug names the tenant, no session.
+	Public []gin.HandlerFunc
 }
 
 // RegisterTrackingRoutes registers all tracking module routes
@@ -78,6 +80,9 @@ func RegisterTrackingRoutes(
 		}
 		if live.Socket != nil {
 			trackingGroup.GET("/ws", live.Socket...)
+		}
+		if live.Public != nil {
+			router.GET("/api/v1/public/share/:token", append(live.Public, live.Controller.GetSharedTrip)...)
 		}
 		if driver.Auth != nil {
 			registerDriverRoutes(router, driver)
@@ -360,6 +365,15 @@ func registerTripRoutes(r *gin.RouterGroup, denyOrganization gin.HandlerFunc, tr
 		denyOrganization,
 		tenancyMW.RequirePermission(trackingPerms.EventsWrite),
 		trackingController.TransitionTripTask)
+	// Share links (TRACK-060): the operator shares any trip it may read.
+	r.POST("/trips/:trip_id/share-links",
+		denyOrganization,
+		tenancyMW.RequirePermission(trackingPerms.RoutesRead),
+		trackingController.CreateTripShareLink)
+	r.GET("/trips/:trip_id/share-links",
+		denyOrganization,
+		tenancyMW.RequirePermission(trackingPerms.RoutesRead),
+		trackingController.ListTripShareLinks)
 }
 
 // registerStopPlaceRoutes covers the places routes call at (TRACK-007). A stop place is part of the
@@ -572,6 +586,13 @@ func registerRiderRoutes(
 	p.DELETE("/riders/:rider_id/absences/:absence_id",
 		guardianOrPermission(trackingPerms.RidersWrite),
 		trackingController.DeleteRiderAbsence)
+	// A guardian shares its rider's trip of today and revokes what it shared (TRACK-060); the SPs scope it.
+	p.POST("/riders/:rider_id/share-links",
+		guardianOrPermission(trackingPerms.RoutesRead),
+		trackingController.CreateRiderShareLink)
+	p.DELETE("/share-links/:link_id",
+		guardianOrPermission(trackingPerms.RoutesRead),
+		trackingController.RevokeShareLink)
 	r.GET("/riders/:rider_id/suggestions",
 		denyOrganization,
 		tenancyMW.RequirePermission(trackingPerms.AssignmentsRead),
