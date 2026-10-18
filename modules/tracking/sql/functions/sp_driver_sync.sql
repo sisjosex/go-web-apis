@@ -61,7 +61,7 @@ BEGIN
                     WHEN 'stop.arrive', 'stop.skip' THEN
                         PERFORM 1 FROM tracking.sp_trip_stop_transition(
                             p_tenant_id, v_target, substring(v_op.op FROM 6), p_user_id, v_op.recorded_at);
-                    WHEN 'task.done', 'task.no_show' THEN
+                    WHEN 'task.done', 'task.no_show', 'task.reset' THEN
                         PERFORM 1 FROM tracking.sp_trip_task_transition(
                             p_tenant_id, v_target, substring(v_op.op FROM 6), p_user_id, v_op.id,
                             v_op.args->'proof', v_op.recorded_at);
@@ -90,4 +90,4 @@ BEGIN
 END;
 $function$;
 
-COMMENT ON FUNCTION tracking.sp_driver_sync(uuid,uuid,jsonb) IS 'Applies a driver''s queued ops (stop.arrive|skip, task.done|no_show, trip.complete) by client_recorded_at, each stamped with that time (D2) and stored in driver_ops; a stored op answers its stored result (replayed, or rejected + code) without running; raises driver.not-linked (TRACK-011 D1)';
+COMMENT ON FUNCTION tracking.sp_driver_sync(uuid,uuid,jsonb) IS 'Applies a driver''s queued ops (stop.arrive|skip, task.done|no_show|reset, trip.complete) by client_recorded_at, each stamped with that time (D2) and stored in driver_ops; a stored op answers its stored result (replayed, or rejected + code) without running; raises driver.not-linked (TRACK-011 D1)';

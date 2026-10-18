@@ -274,3 +274,15 @@ func (r *TrackingRepository) TrackingSetup(ctx context.Context, tenantID uuid.UU
 	}
 	return &s, nil
 }
+
+// TripTaskProofKey answers the storage key of a task's drop-off photo, scoped as the rider's status;
+// no photo, or a task out of scope, is trip.task.not-found (MOBILE-032).
+func (r *TrackingRepository) TripTaskProofKey(ctx context.Context, tenantID, taskID uuid.UUID, scopeUserID, guardianUserID *uuid.UUID) (string, error) {
+	var key string
+	err := r.dbService.QueryRow(ctx, `SELECT tracking.sp_trip_task_proof_key($1, $2, $3, $4)`,
+		tenantID, taskID, scopeUserID, guardianUserID).Scan(&key)
+	if err != nil {
+		return "", mapTripError(err, trackingErrors.DriverProofFailed)
+	}
+	return key, nil
+}

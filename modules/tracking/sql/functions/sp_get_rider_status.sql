@@ -1,5 +1,5 @@
 CREATE OR REPLACE FUNCTION tracking.sp_get_rider_status(p_tenant_id uuid, p_rider_id uuid, p_scope_user_id uuid DEFAULT NULL::uuid, p_guardian_user_id uuid DEFAULT NULL::uuid)
- RETURNS TABLE(rider_id uuid, rider_name character varying, route_id uuid, route_name character varying, vehicle_id uuid, license_plate character varying, driver_name character varying, driver_id uuid, vehicle_latitude numeric, vehicle_longitude numeric, vehicle_speed numeric, location_age_seconds integer, last_event_type character varying, last_event_time timestamp without time zone, last_event_notes text, last_event_stop character varying, scheduled_pickup_stop character varying, scheduled_dropoff_stop character varying, active_alerts integer)
+ RETURNS TABLE(rider_id uuid, rider_name character varying, route_id uuid, route_name character varying, vehicle_id uuid, license_plate character varying, driver_name character varying, driver_id uuid, vehicle_latitude numeric, vehicle_longitude numeric, vehicle_speed numeric, location_age_seconds integer, last_event_type character varying, last_event_time timestamp without time zone, last_event_notes text, last_event_stop character varying, scheduled_pickup_stop character varying, scheduled_dropoff_stop character varying, active_alerts integer, last_event_task_id uuid, last_event_has_photo boolean)
  LANGUAGE plpgsql
 AS $function$
 DECLARE
@@ -50,7 +50,9 @@ BEGIN
             FROM tracking.route_alerts alerts
             WHERE alerts.route_id = ra.route_id
               AND alerts.status = 'active'
-        ), 0) AS active_alerts
+        ), 0) AS active_alerts,
+        last_event.task_id AS last_event_task_id,
+        COALESCE(last_event.has_photo, false) AS last_event_has_photo
     FROM tracking.riders rider
     -- Which route is the rider's now: of the assignments in force on each route's local today, the
     -- first route that has not ended.
@@ -90,7 +92,9 @@ BEGIN
             END AS event_type,
             k.done_at,
             k.proof->>'notes' AS notes,
-            sp.name AS stop_name
+            sp.name AS stop_name,
+            k.id AS task_id,
+            k.proof ? 'photo' AS has_photo
         FROM tracking.trip_stop_tasks k
         INNER JOIN tracking.trip_stops ts ON ts.id = k.trip_stop_id
         INNER JOIN tracking.trips kt ON kt.id = ts.trip_id
@@ -122,4 +126,4 @@ BEGIN
 END;
 $function$;
 
-COMMENT ON FUNCTION tracking.sp_get_rider_status(uuid,uuid,uuid,uuid) IS 'A rider''s live status for the guardian view over their route''s current trip (TRACK-008 D3): the last event is their latest task transition, the stops are where that trip calls for them; scoped to p_scope_user_id''s organizations and to p_guardian_user_id''s own riders when either is set';
+COMMENT ON FUNCTION tracking.sp_get_rider_status(uuid,uuid,uuid,uuid) IS 'A rider''s live status for the guardian view over their route''s current trip (TRACK-008 D3): the last event is their latest task transition, the stops are where that trip calls for them, and the last event names its task and whether it has a proof photo (MOBILE-032); scoped to p_scope_user_id''s organizations and to p_guardian_user_id''s own riders when either is set';

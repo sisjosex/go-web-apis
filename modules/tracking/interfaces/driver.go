@@ -28,4 +28,6 @@ type DriverService interface {
 	ResolveRider(ctx context.Context, tenantID, userID uuid.UUID, code string) (*models.DriverRider, error)
 	FindRiders(ctx context.Context, tenantID, userID uuid.UUID, query string) ([]models.DriverRider, error)
 	ReportIncident(ctx context.Context, tenantID, userID uuid.UUID, dto *models.DriverIncidentDto) (*models.DriverIncident, error)
+	// ProofTicket signs a drop-off photo's upload (MOBILE-032).
+	ProofTicket(ctx context.Context, tenantID uuid.UUID, size int64) (*models.DriverProofTicket, error)
 }

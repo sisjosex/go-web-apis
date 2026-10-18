@@ -27,12 +27,15 @@ type TrackingController struct {
 	// documentFiles keeps compliance document scans in the documents bucket (INFRA-007). It is the
 	// controller's and not the service's: the SPs own the rows, the bucket is the handler's to touch.
 	documentFiles *trackingServices.DocumentFiles
+	// proofFiles signs the links to drop-off proof photos (MOBILE-032).
+	proofFiles *trackingServices.ProofFiles
 }
 
-func NewTrackingController(trackingService interfaces.TrackingService, documentFiles *trackingServices.DocumentFiles) *TrackingController {
+func NewTrackingController(trackingService interfaces.TrackingService, documentFiles *trackingServices.DocumentFiles, proofFiles *trackingServices.ProofFiles) *TrackingController {
 	return &TrackingController{
 		trackingService: trackingService,
 		documentFiles:   documentFiles,
+		proofFiles:      proofFiles,
 	}
 }
 

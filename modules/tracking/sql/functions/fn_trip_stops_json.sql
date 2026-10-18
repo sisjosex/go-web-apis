@@ -25,7 +25,8 @@ AS $function$
             'subject_id',   k.subject_id,
             'rider_name',   rd.first_name || ' ' || rd.last_name,
             'status',       k.status,
-            'done_at',      k.done_at
+            'done_at',      k.done_at,
+            'has_photo',    COALESCE(k.proof ? 'photo', false)
         ) ORDER BY k.kind DESC, rd.last_name, rd.first_name, k.id), '[]'::jsonb) AS tasks
         FROM tracking.trip_stop_tasks k
         LEFT JOIN tracking.riders rd ON k.subject_type = 'passenger' AND rd.id = k.subject_id
@@ -34,4 +35,4 @@ AS $function$
     WHERE ts.trip_id = p_trip_id;
 $function$;
 
-COMMENT ON FUNCTION tracking.fn_trip_stops_json(uuid,uuid) IS 'A trip''s stops by sequence, each with its tasks (pickups first) and the passenger''s name, as the JSONB array the trip detail answers (TRACK-020)';
+COMMENT ON FUNCTION tracking.fn_trip_stops_json(uuid,uuid) IS 'A trip''s stops by sequence, each with its tasks (pickups first), the passenger''s name and whether a drop-off proof photo is stored (MOBILE-032), as the JSONB array the trip detail answers (TRACK-020)';

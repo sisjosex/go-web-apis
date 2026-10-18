@@ -86,6 +86,8 @@ type TripTask struct {
 	RiderName   *string    `json:"rider_name"`
 	Status      string     `json:"status"`
 	DoneAt      *time.Time `json:"done_at"`
+	// HasPhoto is a drop-off's proof photo (MOBILE-032); GET /tracking/trip-stop-tasks/:id/proof signs it.
+	HasPhoto bool `json:"has_photo"`
 }
 
 // TripStatus is GET /tracking/trips/:id/status: the counts of the route status over this trip, the

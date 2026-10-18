@@ -116,6 +116,8 @@ type TrackingService interface {
 	GetTrip(ctx context.Context, tenantID, tripID uuid.UUID) (*models.TripDetail, error)
 	GetTripStatus(ctx context.Context, tenantID, tripID uuid.UUID) (*models.TripStatus, error)
 	ListTripEvents(ctx context.Context, tenantID, tripID uuid.UUID) ([]*models.TripEvent, error)
+	// TripTaskProofKey is the storage key of a task's drop-off photo, scoped (MOBILE-032).
+	TripTaskProofKey(ctx context.Context, tenantID, taskID uuid.UUID, scopeUserID, guardianUserID *uuid.UUID) (string, error)
 	UpdateTrip(ctx context.Context, tenantID, tripID uuid.UUID, dto *models.UpdateTripDto, userID *uuid.UUID) (*models.TripDetail, error)
 	TransitionTrip(ctx context.Context, tenantID, tripID uuid.UUID, action string, userID *uuid.UUID) (*models.TripDetail, error)
 	TransitionTripStop(ctx context.Context, tenantID, stopID uuid.UUID, action string, userID *uuid.UUID) (*models.TripDetail, error)

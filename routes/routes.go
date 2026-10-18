@@ -463,7 +463,10 @@ func registerTracking(d routeDeps, chains tenantChains, valkey coreServices.Valk
 	// Scans live in the documents bucket (INFRA-007); the upload ticket learns their types and cap here.
 	trackingDocumentFiles := trackingServices.NewDocumentFiles(d.documents, config.ModularAppConfig.Tracking)
 	d.purposes.Register(trackingDocumentFiles.Purpose())
-	trackingController := trackingControllers.NewTrackingController(trackingService, trackingDocumentFiles)
+	// Drop-off proof photos share the bucket (MOBILE-032 D4).
+	trackingProofFiles := trackingServices.NewProofFiles(d.documents)
+	d.purposes.Register(trackingProofFiles.Purpose())
+	trackingController := trackingControllers.NewTrackingController(trackingService, trackingDocumentFiles, trackingProofFiles)
 
 	// The GPS ingest: a device token runs the device chain, anything else is a driver's session.
 	trackingConf := config.ModularAppConfig.Tracking
@@ -504,7 +507,7 @@ func registerTracking(d routeDeps, chains tenantChains, valkey coreServices.Valk
 		}
 	}
 	driverRoutes := trackingRoutes.Driver{
-		Controller: trackingControllers.NewDriverController(trackingServices.NewDriverService(trackingRepos.NewTrackingRepository(d.db))),
+		Controller: trackingControllers.NewDriverController(trackingServices.NewDriverService(trackingRepos.NewTrackingRepository(d.db), trackingProofFiles)),
 		Auth:       driverAuth,
 	}
 

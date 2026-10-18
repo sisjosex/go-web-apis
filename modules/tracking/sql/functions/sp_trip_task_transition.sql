@@ -35,18 +35,27 @@ BEGIN
     IF v_trip.status <> 'in_progress' THEN
         RAISE EXCEPTION 'trip.task.trip-not-active' USING ERRCODE = 'P0001';
     END IF;
-    IF v_stop = 'skipped' OR v_task.status <> 'pending' OR v_task.subject_type <> 'passenger'
+    IF p_action = 'reset' THEN
+        IF v_task.status NOT IN ('done', 'no_show') OR v_task.subject_type <> 'passenger' THEN
+            RAISE EXCEPTION 'trip.invalid-transition' USING ERRCODE = 'P0001';
+        END IF;
+        -- 15 minutes from the mark to when the driver undid it (MOBILE-032 D2): the reset's own
+        -- recorded time, so an undo made offline is not refused for the time it waited to sync.
+        IF v_task.done_at < tracking.fn_trip_at(v_trip, p_recorded_at) - INTERVAL '15 minutes' THEN
+            RAISE EXCEPTION 'trip.task.reset-expired' USING ERRCODE = 'P0001';
+        END IF;
+    ELSIF v_stop = 'skipped' OR v_task.status <> 'pending' OR v_task.subject_type <> 'passenger'
        OR p_action NOT IN ('done', 'no_show') THEN
         RAISE EXCEPTION 'trip.invalid-transition' USING ERRCODE = 'P0001';
     END IF;
 
     BEGIN
         UPDATE tracking.trip_stop_tasks k
-        SET status = p_action,
-            done_at = tracking.fn_trip_at(v_trip, p_recorded_at),
-            done_by = p_user_id,
+        SET status = CASE WHEN p_action = 'reset' THEN 'pending' ELSE p_action END,
+            done_at = CASE WHEN p_action = 'reset' THEN NULL ELSE tracking.fn_trip_at(v_trip, p_recorded_at) END,
+            done_by = CASE WHEN p_action = 'reset' THEN NULL ELSE p_user_id END,
             client_op_id = p_client_op_id,
-            proof = p_proof,
+            proof = CASE WHEN p_action = 'reset' THEN NULL ELSE p_proof END,
             updated_at = now()
         WHERE k.id = p_task_id;
     EXCEPTION WHEN unique_violation THEN
@@ -67,6 +76,20 @@ BEGIN
           AND k.subject_id = v_task.subject_id;
     END IF;
 
+    -- An undone pickup gives the rider back the drop-offs a no_show cancelled.
+    IF p_action = 'reset' AND v_task.kind = 'pickup' THEN
+        UPDATE tracking.trip_stop_tasks k
+        SET status = 'pending', updated_at = now()
+        FROM tracking.trip_stops ts
+        WHERE ts.id = k.trip_stop_id
+          AND ts.trip_id = v_trip_id
+          AND ts.status <> 'skipped'
+          AND k.kind = 'dropoff'
+          AND k.status = 'cancelled'
+          AND k.subject_type = v_task.subject_type
+          AND k.subject_id = v_task.subject_id;
+    END IF;
+
     PERFORM tracking.fn_trip_changed(p_tenant_id, v_trip_id, p_action, p_user_id, jsonb_build_object(
         'trip_stop_task_id', p_task_id,
         'trip_stop_id',      v_task.trip_stop_id,
@@ -79,4 +102,4 @@ BEGIN
 END;
 $function$;
 
-COMMENT ON FUNCTION tracking.sp_trip_task_transition(uuid,uuid,character varying,uuid,uuid,jsonb,timestamp with time zone) IS 'done or no_show one pending passenger task of an in-progress trip at a stop not skipped, done_at = p_recorded_at clamped, idempotent on p_client_op_id (the same id again writes nothing; spent on another task → trip.task.op-conflict); a pickup''s no_show cancels that rider''s pending dropoffs on the trip; raises trip.task.not-found, trip.task.trip-not-active, trip.invalid-transition; answers the trip''s detail (TRACK-020, TRACK-011 D2, MOBILE-015 A1)';
+COMMENT ON FUNCTION tracking.sp_trip_task_transition(uuid,uuid,character varying,uuid,uuid,jsonb,timestamp with time zone) IS 'done or no_show one pending passenger task of an in-progress trip at a stop not skipped, done_at = p_recorded_at clamped, idempotent on p_client_op_id (the same id again writes nothing; spent on another task → trip.task.op-conflict); a pickup''s no_show cancels that rider''s pending dropoffs on the trip; reset returns a done or no_show passenger task to pending within 15 min of its mark (else trip.task.reset-expired), clearing done_at, done_by and proof, and an undone pickup''s cancelled dropoffs on stops not skipped to pending (MOBILE-032 D2); raises trip.task.not-found, trip.task.trip-not-active, trip.invalid-transition; answers the trip''s detail (TRACK-020, TRACK-011 D2, MOBILE-015 A1)';

@@ -208,6 +208,8 @@ func scanRiderStatus(row pgx.Row) (*models.RiderStatusResponse, error) {
 		&s.ScheduledPickupStop,
 		&s.ScheduledDropoffStop,
 		&s.ActiveAlerts,
+		&s.LastEventTaskID,
+		&s.LastEventHasPhoto,
 	); err != nil {
 		return nil, err
 	}

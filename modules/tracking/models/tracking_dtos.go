@@ -75,6 +75,9 @@ type RiderStatusResponse struct {
 	ScheduledPickupStop  *string    `json:"scheduled_pickup_stop"`
 	ScheduledDropoffStop *string    `json:"scheduled_dropoff_stop"`
 	ActiveAlerts         int32      `json:"active_alerts"`
+	// The last event's task, and whether it is a drop-off with a proof photo (MOBILE-032).
+	LastEventTaskID   *uuid.UUID `json:"last_event_task_id"`
+	LastEventHasPhoto bool       `json:"last_event_has_photo"`
 }
 
 // === DTOs for Alerts ===

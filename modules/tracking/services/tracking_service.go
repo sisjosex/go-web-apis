@@ -406,6 +406,10 @@ func (s *TrackingService) ListTripEvents(ctx context.Context, tenantID, tripID u
 	return s.trackingRepo.ListTripEvents(ctx, tenantID, tripID)
 }
 
+func (s *TrackingService) TripTaskProofKey(ctx context.Context, tenantID, taskID uuid.UUID, scopeUserID, guardianUserID *uuid.UUID) (string, error) {
+	return s.trackingRepo.TripTaskProofKey(ctx, tenantID, taskID, scopeUserID, guardianUserID)
+}
+
 func (s *TrackingService) UpdateTrip(ctx context.Context, tenantID, tripID uuid.UUID, dto *models.UpdateTripDto, userID *uuid.UUID) (*models.TripDetail, error) {
 	return s.trackingRepo.UpdateTrip(ctx, tenantID, tripID, dto, userID)
 }

@@ -24,6 +24,7 @@ var tripStatus = map[string]int{
 	trackingErrors.TripInvalidRange:        http.StatusBadRequest,
 	trackingErrors.TripTaskTripNotActive:   http.StatusConflict,
 	trackingErrors.TripTaskOpConflict:      http.StatusConflict,
+	trackingErrors.DriverProofInvalid:      http.StatusBadRequest,
 	trackingErrors.RouteCompanyMismatch:    http.StatusBadRequest,
 	trackingErrors.ServiceBlocked:          http.StatusConflict,
 	trackingErrors.TripServiceBlocked:      http.StatusConflict,
@@ -138,6 +139,41 @@ func (ctrl *TrackingController) GetTrip(c *gin.Context) {
 		return
 	}
 	c.JSON(http.StatusOK, result)
+}
+
+// GetTripTaskProof godoc
+// @Summary Link to a drop-off's proof photo
+// @Description A 60-second signed link to the photo the driver took at the drop-off (MOBILE-032). An organization user reaches its riders' tasks, a guardian their own riders'; no photo, or a task out of scope, is 404
+// @Tags Tracking - Trips
+// @Produce json
+// @Security BearerAuth
+// @Param task_id path string true "Trip stop task ID (UUID)"
+// @Success 200 {object} models.TripTaskProof
+// @Failure 400 {object} coreErrors.ErrorResponse
+// @Failure 404 {object} coreErrors.ErrorResponse
+// @Router /tracking/trip-stop-tasks/{task_id}/proof [get]
+func (ctrl *TrackingController) GetTripTaskProof(c *gin.Context) {
+	tenantID, ok := ctrl.requireTenantID(c)
+	if !ok {
+		return
+	}
+	taskID, ok := pathUUID(c, "task_id")
+	if !ok {
+		return
+	}
+
+	ctx := c.Request.Context()
+	key, err := ctrl.trackingService.TripTaskProofKey(ctx, tenantID, taskID, ctrl.scopeUserID(c), ctrl.guardianUserID(c))
+	if err != nil {
+		tripErrorResponse(c, err)
+		return
+	}
+	proof, err := ctrl.proofFiles.URL(ctx, key)
+	if err != nil {
+		tripErrorResponse(c, err)
+		return
+	}
+	c.JSON(http.StatusOK, proof)
 }
 
 // GetTripStatus godoc

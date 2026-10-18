@@ -147,7 +147,7 @@ func checkOps(ops []models.DriverSyncOp) string {
 		switch op.Op {
 		case models.DriverOpStopArrive, models.DriverOpStopSkip:
 			target = op.Args.TripStopID
-		case models.DriverOpTaskDone, models.DriverOpTaskNoShow:
+		case models.DriverOpTaskDone, models.DriverOpTaskNoShow, models.DriverOpTaskReset:
 			target = op.Args.TripStopTaskID
 		case models.DriverOpTripComplete:
 			target = op.Args.TripID
@@ -212,6 +212,37 @@ func (ctrl *DriverController) FindRiders(c *gin.Context) {
 		return
 	}
 	c.JSON(http.StatusOK, models.DriverFindRidersResponse{Riders: riders})
+}
+
+// CreateProof godoc
+// @Summary Sign a drop-off photo's upload
+// @Description A 5-minute PUT of size bytes of WebP (at most 300 KB) to a pending key of the tenant; task.done names the key as proof.photo_key and the sync stores the photo under the task (MOBILE-032)
+// @Tags Tracking - Driver
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param proof body models.DriverProofDto true "Size of the photo"
+// @Success 201 {object} models.DriverProofTicket
+// @Failure 400 {object} coreErrors.ErrorResponse
+// @Failure 403 {object} coreErrors.ErrorResponse
+// @Router /mobile/driver/proofs [post]
+func (ctrl *DriverController) CreateProof(c *gin.Context) {
+	tenantID, _, ok := driverIDs(c)
+	if !ok {
+		return
+	}
+	var dto models.DriverProofDto
+	if err := c.ShouldBindJSON(&dto); err != nil {
+		c.JSON(http.StatusBadRequest, coreErrors.BuildErrorDetail(c, trackingErrors.DriverProofInvalid, utils.ExtractValidationError(c, err)))
+		return
+	}
+
+	ticket, err := ctrl.driverService.ProofTicket(c.Request.Context(), tenantID, dto.Size)
+	if err != nil {
+		tripErrorResponse(c, err)
+		return
+	}
+	c.JSON(http.StatusCreated, ticket)
 }
 
 // ReportIncident godoc

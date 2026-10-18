@@ -87,6 +87,9 @@ const (
 	DriverRiderInvalid    = "tracking.driver.rider.invalid"
 	DriverIncidentInvalid = "tracking.driver.incident.invalid"
 	DriverIncidentFailed  = "tracking.driver.incident.failed"
+	// A drop-off proof photo's ticket out of range, or a ticket or link that failed (MOBILE-032).
+	DriverProofInvalid = "tracking.driver.proof.invalid"
+	DriverProofFailed  = "tracking.driver.proof.failed"
 
 	// The printable cards (TRACK-072 D2): not exactly one filter, or a read that failed.
 	RiderCardsInvalid = "tracking.rider.cards.invalid"
@@ -274,6 +277,8 @@ const (
 	TripTaskTripNotActive = "tracking.trip.task.trip-not-active"
 	// TripTaskOpConflict is a client_op_id already spent on another task.
 	TripTaskOpConflict = "tracking.trip.task.op-conflict"
+	// TripTaskResetExpired is a task.reset over 15 minutes after its mark (MOBILE-032 D2).
+	TripTaskResetExpired = "tracking.trip.task.reset-expired"
 	// TripInvalidRange is a board range that ends before it starts, has no start, or spans over 31
 	// days (TRACK-069 D5).
 	TripInvalidRange = "tracking.trip.invalid-range"

@@ -18,6 +18,7 @@ const (
 	DriverOpStopSkip     = "stop.skip"
 	DriverOpTaskDone     = "task.done"
 	DriverOpTaskNoShow   = "task.no_show"
+	DriverOpTaskReset    = "task.reset"
 	DriverOpTripComplete = "trip.complete"
 )
 
@@ -45,7 +46,9 @@ type DriverRef struct {
 }
 
 // DriverSyncArgs is an op's target: trip_stop_id for a stop op, trip_stop_task_id (and an optional
-// proof) for a task op, trip_id for trip.complete.
+// proof) for a task op, trip_id for trip.complete. task.done's proof may name a ticket's photo_key
+// (MOBILE-032); the sync stores it and sends the SP { photo } instead, or { photo_failed } when the
+// upload was not a WebP of the tenant within the cap.
 type DriverSyncArgs struct {
 	TripStopID     *uuid.UUID     `json:"trip_stop_id,omitempty"`
 	TripStopTaskID *uuid.UUID     `json:"trip_stop_task_id,omitempty"`
@@ -56,7 +59,7 @@ type DriverSyncArgs struct {
 // DriverSyncOp is one queued op, stamped by the phone when the driver did it.
 type DriverSyncOp struct {
 	ClientOpID       *uuid.UUID     `json:"client_op_id" binding:"required"`
-	Op               string         `json:"op" binding:"required,oneof=stop.arrive stop.skip task.done task.no_show trip.complete"`
+	Op               string         `json:"op" binding:"required,oneof=stop.arrive stop.skip task.done task.no_show task.reset trip.complete"`
 	Args             DriverSyncArgs `json:"args"`
 	ClientRecordedAt *time.Time     `json:"client_recorded_at" binding:"required"`
 }
@@ -77,6 +80,25 @@ type DriverOpResult struct {
 // DriverSyncResponse is the sync's 200 body, one result per op in the order they were applied.
 type DriverSyncResponse struct {
 	Results []DriverOpResult `json:"results"`
+}
+
+// DriverProofDto is POST /mobile/driver/proofs: the size of the WebP the phone will upload (MOBILE-032).
+type DriverProofDto struct {
+	Size int64 `json:"size" binding:"required,gt=0,max=307200"`
+}
+
+// DriverProofTicket is where to PUT a proof photo, and the photo_key task.done names it by.
+type DriverProofTicket struct {
+	Key       string            `json:"key"`
+	UploadURL string            `json:"upload_url"`
+	Headers   map[string]string `json:"headers"`
+	ExpiresAt time.Time         `json:"expires_at"`
+}
+
+// TripTaskProof is GET /tracking/trip-stop-tasks/:task_id/proof: a 60-second link to the photo.
+type TripTaskProof struct {
+	URL       string    `json:"url"`
+	ExpiresAt time.Time `json:"expires_at"`
 }
 
 // The rider card and the incident report of TRACK-027.

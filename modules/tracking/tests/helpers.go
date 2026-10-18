@@ -1691,3 +1691,18 @@ func ShareLinkVia(t *testing.T, helper *testhelpers.ApiTestHelper, linkID string
 	}
 	return via
 }
+
+// TaskProof answers a trip stop task's proof column as text, "" when NULL. No endpoint reads it whole
+// (MOBILE-032).
+func TaskProof(t *testing.T, helper *testhelpers.ApiTestHelper, taskID uuid.UUID) string {
+	t.Helper()
+	var proof *string
+	if err := helper.DB().QueryRow(context.Background(),
+		`SELECT proof::text FROM tracking.trip_stop_tasks WHERE id = $1`, taskID).Scan(&proof); err != nil {
+		t.Fatalf("read proof: %v", err)
+	}
+	if proof == nil {
+		return ""
+	}
+	return *proof
+}

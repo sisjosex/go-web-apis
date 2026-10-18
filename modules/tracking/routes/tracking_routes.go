@@ -196,6 +196,7 @@ func registerDriverRoutes(router *gin.Engine, driver Driver) {
 	g.GET("/today", driver.Controller.Today)
 	g.POST("/trips/:trip_id/start", driver.Controller.StartTrip)
 	g.POST("/sync", driver.Controller.Sync)
+	g.POST("/proofs", driver.Controller.CreateProof)
 	// The rider card and the incident report (TRACK-027).
 	g.GET("/riders", driver.Controller.FindRiders)
 	g.GET("/riders/:code", driver.Controller.ResolveRider)
@@ -577,6 +578,9 @@ func registerRiderRoutes(
 	// The guardian home (MOBILE-026 D1): every rider's status in one call.
 	p.GET("/riders/today", trackingController.ListGuardianRiderStatus)
 	p.GET("/riders/:rider_id/status", trackingController.GetRiderStatus)
+	// A drop-off's proof photo (MOBILE-032): staff, an organization for its riders and a guardian for
+	// their own — one route, since r and p share the path; the SP scopes it as the status above.
+	p.GET("/trip-stop-tasks/:task_id/proof", trackingController.GetTripTaskProof)
 	// Absences (TRACK-022) are a guardian's too: the SPs resolve the scope and mark a guardian's write
 	// `portal`. A staff caller still needs riders:write to change them.
 	p.GET("/riders/:rider_id/absences", trackingController.ListRiderAbsences)
@@ -817,4 +821,5 @@ func registerOpenTripRoutes(g *gin.RouterGroup, trackingController *controllers.
 	g.POST("/trips/:trip_id/:action", trackingController.TransitionTrip)
 	g.POST("/trip-stops/:stop_id/:action", trackingController.TransitionTripStop)
 	g.POST("/trip-stop-tasks/:task_id/:action", trackingController.TransitionTripTask)
+	g.GET("/trip-stop-tasks/:task_id/proof", trackingController.GetTripTaskProof)
 }
