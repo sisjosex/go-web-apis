@@ -78,6 +78,9 @@ type RiderStatusResponse struct {
 	// The last event's task, and whether it is a drop-off with a proof photo (MOBILE-032).
 	LastEventTaskID   *uuid.UUID `json:"last_event_task_id"`
 	LastEventHasPhoto bool       `json:"last_event_has_photo"`
+	// The client's kind and the rider's type, on the guardian home only (TRACK-061).
+	OrganizationKind *string `json:"organization_kind,omitempty"`
+	RiderType        *string `json:"rider_type,omitempty"`
 }
 
 // === DTOs for Alerts ===

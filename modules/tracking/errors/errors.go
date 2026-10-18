@@ -302,6 +302,11 @@ const (
 	RiderNoHomeLocation    = "tracking.rider.no-home-location"
 	RiderSuggestionsFailed = "tracking.rider.suggestions.failed"
 
+	// The guardian's rider reads (TRACK-061): a history or cut-off span reversed or over 31 days.
+	RiderHistoryRange = "tracking.rider.history-range"
+	RiderCutoffsRange = "tracking.rider.cutoffs-range"
+	RiderReadFailed   = "tracking.rider.read.failed"
+
 	// Rider places (TRACK-044 D4). LocationRequired refuses an assignment whose leg needs the home of a
 	// rider with neither a home pin nor a shared stop (D3); PlaceDefault deleting the default place while
 	// others exist.

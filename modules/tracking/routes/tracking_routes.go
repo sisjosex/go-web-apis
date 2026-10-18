@@ -34,6 +34,11 @@ type Driver struct {
 type Portal struct {
 	Controller *controllers.PortalController
 	Auth       []gin.HandlerFunc
+	// AuthOnly is /mobile/portal/me's chain (TRACK-061 D1): a session and no tenant, since the answer
+	// spans every operator the account is a guardian in. Nil leaves the route unregistered.
+	AuthOnly []gin.HandlerFunc
+	// Reads are the rider's day, history and absence cut-offs, on the portal-permissive chain.
+	Reads *controllers.RiderReadsController
 }
 
 // Live is the realtime surface (TRACK-025): the snapshot reads, and the WebSocket endpoint's whole
@@ -72,7 +77,7 @@ func RegisterTrackingRoutes(
 	tenancyConf := config.ModularAppConfig.Tenancy
 
 	if coreConf.IsModuleEnabled("tenancy") && tenancyConf != nil && tenancyConf.Enabled {
-		registerTenantRoutes(trackingGroup, trackingController, tenantMiddleware, portalTenantMiddleware, jwtService, live.Controller, access)
+		registerTenantRoutes(trackingGroup, trackingController, tenantMiddleware, portalTenantMiddleware, jwtService, live.Controller, portal.Reads, access)
 		// Outside the groups: each carries its own chain — a device token or a driver's session for the
 		// ingest, a browser's subprotocol token and ?tenant_slug= for the socket.
 		if ingest.Auth != nil {
@@ -90,6 +95,9 @@ func RegisterTrackingRoutes(
 		if portal.Auth != nil {
 			registerPortalRoutes(router, portal)
 		}
+		if portal.AuthOnly != nil {
+			router.GET("/api/v1/mobile/portal/me", append(portal.AuthOnly, portal.Controller.Me)...)
+		}
 		return
 	}
 	registerOpenRoutes(trackingGroup, trackingController)
@@ -104,6 +112,7 @@ func registerTenantRoutes(
 	portalTenantMiddleware gin.HandlerFunc,
 	jwtService authServices.JWTService,
 	liveController *controllers.LiveController,
+	riderReads *controllers.RiderReadsController,
 	access *controllers.AccessController,
 ) {
 	// Multi-tenant mode: auth + tenant middleware + per-route permission checks
@@ -130,7 +139,7 @@ func registerTenantRoutes(
 	registerExceptionRoutes(r, denyOrganization, trackingController)
 	registerOrganizationRoutes(r, denyOrganization, trackingController, access)
 	registerDocumentRoutes(r, denyOrganization, trackingController)
-	registerRiderRoutes(r, p, denyOrganization, trackingController)
+	registerRiderRoutes(r, p, denyOrganization, trackingController, riderReads)
 	registerTripRoutes(r, denyOrganization, trackingController)
 	registerLiveRoutes(r, p, denyOrganization, liveController)
 	registerAccessRoutes(r, denyOrganization, access)
@@ -570,6 +579,7 @@ func registerRiderRoutes(
 	p *gin.RouterGroup,
 	denyOrganization gin.HandlerFunc,
 	trackingController *controllers.TrackingController,
+	riderReads *controllers.RiderReadsController,
 ) {
 	// Riders. The list and a rider's status are the guardian's two reads (TRACK-017 D3), so they
 	// hang off the portal-permissive chain; the scope a guardian sees is resolved in the SP, not
@@ -578,6 +588,12 @@ func registerRiderRoutes(
 	// The guardian home (MOBILE-026 D1): every rider's status in one call.
 	p.GET("/riders/today", trackingController.ListGuardianRiderStatus)
 	p.GET("/riders/:rider_id/status", trackingController.GetRiderStatus)
+	// The rider's day, history and absence cut-offs (TRACK-061), scoped in the SP as the status.
+	if riderReads != nil {
+		p.GET("/riders/:rider_id/today", riderReads.RiderToday)
+		p.GET("/riders/:rider_id/history", riderReads.RiderHistory)
+		p.GET("/riders/:rider_id/absence-cutoffs", riderReads.RiderAbsenceCutoffs)
+	}
 	// A drop-off's proof photo (MOBILE-032): staff, an organization for its riders and a guardian for
 	// their own — one route, since r and p share the path; the SP scopes it as the status above.
 	p.GET("/trip-stop-tasks/:task_id/proof", trackingController.GetTripTaskProof)

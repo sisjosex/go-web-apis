@@ -1706,3 +1706,49 @@ func TaskProof(t *testing.T, helper *testhelpers.ApiTestHelper, taskID uuid.UUID
 	}
 	return *proof
 }
+
+// SeedPortalSecondTenant seeds a second operator inside the test database — the tenant, the seeded
+// guardian's portal membership in it (the newest one), tracking enabled, a company client and one rider
+// the guardian is linked to — and removes it all when the test ends (TRACK-061 D1). database_url stays
+// NULL: the shared database, as a tenant sharing `web` has. It answers the slug and the rider.
+func SeedPortalSecondTenant(t *testing.T, helper *testhelpers.ApiTestHelper) (string, string) {
+	t.Helper()
+	ctx := context.Background()
+	tenantID, organizationID, riderID := uuid.NewString(), uuid.NewString(), uuid.NewString()
+	slug := "portal-two-" + tenantID[:8]
+	statements := []struct {
+		sql  string
+		args []interface{}
+	}{
+		{`INSERT INTO tenancy.tenants (id, slug, name) VALUES ($1, $2, 'Second Operator')`, []interface{}{tenantID, slug}},
+		{`INSERT INTO tenancy.tenant_users (tenant_id, user_id, role, joined_at)
+		  SELECT $1, u.id, 'portal', now() FROM auth.users u WHERE u.email = 'portal@test.local'`, []interface{}{tenantID}},
+		{`INSERT INTO tenancy.tenant_modules (tenant_id, module_code, is_enabled) VALUES ($1, 'tracking', TRUE)`, []interface{}{tenantID}},
+		{`INSERT INTO tracking.organizations (id, tenant_id, kind, name, timezone) VALUES ($1, $2, 'company', 'Second Client', 'UTC')`,
+			[]interface{}{organizationID, tenantID}},
+		{`INSERT INTO tracking.riders (id, first_name, last_name, rider_type, organization_id) VALUES ($1, 'Second', 'Rider', 'employee', $2)`,
+			[]interface{}{riderID, organizationID}},
+		{`INSERT INTO tracking.rider_contacts (rider_id, relation, name, email, user_id)
+		  SELECT $1, 'guardian', 'Portal Guardian', u.email, u.id FROM auth.users u WHERE u.email = 'portal@test.local'`, []interface{}{riderID}},
+	}
+	t.Cleanup(func() {
+		for _, q := range [][2]string{
+			{`DELETE FROM tracking.rider_contacts WHERE rider_id = $1`, riderID},
+			{`DELETE FROM tracking.riders WHERE id = $1`, riderID},
+			{`DELETE FROM tracking.organizations WHERE tenant_id = $1`, tenantID},
+			{`DELETE FROM tenancy.tenant_modules WHERE tenant_id = $1`, tenantID},
+			{`DELETE FROM tenancy.tenant_users WHERE tenant_id = $1`, tenantID},
+			{`DELETE FROM tenancy.tenants WHERE id = $1`, tenantID},
+		} {
+			if _, err := helper.DB().Execute(ctx, q[0], q[1]); err != nil {
+				t.Errorf("remove the second tenant: %v", err)
+			}
+		}
+	})
+	for _, s := range statements {
+		if _, err := helper.DB().Execute(ctx, s.sql, s.args...); err != nil {
+			t.Fatalf("seed the second tenant: %v", err)
+		}
+	}
+	return slug, riderID
+}

@@ -8,7 +8,9 @@ import (
 
 	"josex/web/config"
 	authControllers "josex/web/modules/auth/controllers"
+	authInterfaces "josex/web/modules/auth/interfaces"
 	authMW "josex/web/modules/auth/middleware"
+	authModels "josex/web/modules/auth/models"
 	authRepos "josex/web/modules/auth/repositories"
 	authRoutes "josex/web/modules/auth/routes"
 	authServices "josex/web/modules/auth/services"
@@ -53,6 +55,8 @@ import (
 	tenancyServices "josex/web/modules/tenancy/services"
 	trackingControllers "josex/web/modules/tracking/controllers"
 	trackingErrors "josex/web/modules/tracking/errors"
+	trackingInterfaces "josex/web/modules/tracking/interfaces"
+	trackingModels "josex/web/modules/tracking/models"
 	"josex/web/modules/tracking/realtime"
 	trackingRepos "josex/web/modules/tracking/repositories"
 	trackingRoutes "josex/web/modules/tracking/routes"
@@ -434,6 +438,48 @@ func shareTenant(tenants tenancyInterfaces.TenantService) gin.HandlerFunc {
 	}
 }
 
+// portalDirectory is /mobile/portal/me's view of the platform database (TRACK-061 D1): the profile and
+// the account's memberships — one query each — then every portal tenant's database through the shared
+// slug cache, so a warm tenant costs no query.
+type portalDirectory struct {
+	auth    authInterfaces.AuthRepository
+	tenants tenancyInterfaces.TenantService
+}
+
+func (p portalDirectory) PortalAccount(ctx context.Context, userID uuid.UUID) (trackingModels.PortalUser, []trackingModels.PortalMembership, error) {
+	user := trackingModels.PortalUser{ID: userID}
+	profile, err := p.auth.GetProfile(authModels.GetProfileDto{ID: userID})
+	if err != nil {
+		return user, nil, err
+	}
+	if profile.FirstName != nil {
+		user.FirstName = *profile.FirstName
+	}
+	if profile.LastName != nil {
+		user.LastName = *profile.LastName
+	}
+	tenants, err := p.tenants.GetUserTenants(ctx, userID)
+	if err != nil {
+		return user, nil, err
+	}
+	memberships := []trackingModels.PortalMembership{}
+	for _, t := range tenants {
+		if t.UserRole != tenancyModels.RolePortal || !t.IsActive || t.IsSuspended {
+			continue
+		}
+		tenant, err := p.tenants.GetTenantBySlugCached(ctx, t.Slug)
+		if err != nil {
+			return user, nil, err
+		}
+		m := trackingModels.PortalMembership{TenantID: t.TenantID, Slug: t.Slug, Name: t.Name}
+		if tenant.DatabaseURL != nil {
+			m.DatabaseURL = *tenant.DatabaseURL
+		}
+		memberships = append(memberships, m)
+	}
+	return user, memberships, nil
+}
+
 // riderEta is a rider channel's ETA frame: the trip's estimate cut to the rider's pending stops. The
 // subscribe check already scoped the channel, so the snapshot is read unscoped; it is read only when
 // the cached estimate is newer than the one sent — one query per 30 s per watched rider.
@@ -517,13 +563,23 @@ func registerTracking(d routeDeps, chains tenantChains, valkey coreServices.Valk
 		portalAuth = []gin.HandlerFunc{d.authMiddleware, chains.portal,
 			tenancyMW.LoadTenantModules(chains.modules), tenancyMW.RequireModule("tracking")}
 	}
-	portalRoutes := trackingRoutes.Portal{
-		Controller: trackingControllers.NewPortalController(trackingServices.NewNotificationService(trackingRepos.NewTrackingRepository(d.db))),
-		Auth:       portalAuth,
-	}
-
 	// The live snapshots, and the socket when this process runs the gateway (TRACK-025).
 	live := liveService(d, valkey)
+
+	var directory trackingInterfaces.PortalDirectory
+	var portalAuthOnly []gin.HandlerFunc
+	if chains.tenants != nil {
+		directory = portalDirectory{auth: authRepos.NewAuthRepository(d.db), tenants: chains.tenants}
+		portalAuthOnly = []gin.HandlerFunc{d.authMiddleware}
+	}
+	portalRoutes := trackingRoutes.Portal{
+		Controller: trackingControllers.NewPortalController(
+			trackingServices.NewNotificationService(trackingRepos.NewTrackingRepository(d.db)), directory, trackingService),
+		Auth:     portalAuth,
+		AuthOnly: portalAuthOnly,
+		Reads: trackingControllers.NewRiderReadsController(
+			trackingServices.NewRiderReadsService(trackingRepos.NewTrackingRepository(d.db), live)),
+	}
 	liveRoutes := trackingRoutes.Live{Controller: trackingControllers.NewLiveController(live)}
 	if chains.tenants != nil {
 		liveRoutes.Public = []gin.HandlerFunc{shareTenant(chains.tenants)}

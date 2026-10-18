@@ -1,16 +1,22 @@
 package controllers
 
 import (
+	"context"
 	"errors"
+	"log"
 	"net/http"
+	"sync"
 
 	coreErrors "josex/web/modules/core/errors"
+	coreServices "josex/web/modules/core/services"
 	"josex/web/modules/core/utils"
+	tenancyErrors "josex/web/modules/tenancy/errors"
 	trackingErrors "josex/web/modules/tracking/errors"
 	"josex/web/modules/tracking/interfaces"
 	"josex/web/modules/tracking/models"
 
 	"github.com/gin-gonic/gin"
+	"github.com/google/uuid"
 )
 
 // PortalController is /mobile/portal (TRACK-012): the guardian's phone. Apart from TrackingController
@@ -18,10 +24,13 @@ import (
 // riders itself.
 type PortalController struct {
 	notifications interfaces.NotificationService
+	// directory and riders serve /me, which spans tenants (TRACK-061 D1).
+	directory interfaces.PortalDirectory
+	riders    interfaces.TrackingService
 }
 
-func NewPortalController(notifications interfaces.NotificationService) *PortalController {
-	return &PortalController{notifications: notifications}
+func NewPortalController(notifications interfaces.NotificationService, directory interfaces.PortalDirectory, riders interfaces.TrackingService) *PortalController {
+	return &PortalController{notifications: notifications, directory: directory, riders: riders}
 }
 
 // maxSettingsRiders caps one PUT /notification-settings body.
@@ -160,4 +169,55 @@ func (ctrl *PortalController) SetNotificationSettings(c *gin.Context) {
 		return
 	}
 	c.JSON(http.StatusOK, settings)
+}
+
+// Me godoc
+// @Summary The account's riders in every operator
+// @Description The guardian's home across operators (TRACK-061 D1): the account, and per tenant where it holds the portal role (newest membership first) its riders as GET /tracking/riders/today answers them. One operator's read failing marks that entry error with riders null; the others still answer. Bearer only, no X-Tenant-Slug
+// @Tags Tracking - Portal
+// @Produce json
+// @Security BearerAuth
+// @Success 200 {object} models.PortalMe
+// @Failure 403 {object} coreErrors.ErrorResponse
+// @Failure 500 {object} coreErrors.ErrorResponse
+// @Router /mobile/portal/me [get]
+func (ctrl *PortalController) Me(c *gin.Context) {
+	userID, err := uuid.Parse(c.GetString("user_id"))
+	if err != nil {
+		c.JSON(http.StatusForbidden, coreErrors.BuildErrorSingle(c, tenancyErrors.PermissionDenied))
+		return
+	}
+	user, memberships, err := ctrl.directory.PortalAccount(c.Request.Context(), userID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, coreErrors.BuildError(c, err))
+		return
+	}
+	if len(memberships) == 0 {
+		c.JSON(http.StatusForbidden, coreErrors.BuildErrorSingle(c, tenancyErrors.PermissionDenied))
+		return
+	}
+
+	// One read per operator, each on its own database, side by side: 1–3 of them for a family.
+	tenants := make([]models.PortalTenant, len(memberships))
+	var wg sync.WaitGroup
+	for i, m := range memberships {
+		tenants[i] = models.PortalTenant{Slug: m.Slug, Name: m.Name}
+		wg.Add(1)
+		go func(entry *models.PortalTenant, m models.PortalMembership) {
+			defer wg.Done()
+			ctx := c.Request.Context()
+			if m.DatabaseURL != "" {
+				ctx = context.WithValue(ctx, coreServices.TenantDatabaseURLKey, m.DatabaseURL)
+			}
+			riders, err := ctrl.riders.ListGuardianRiderStatus(ctx, m.TenantID, userID)
+			if err != nil {
+				log.Printf("⚠️  portal me: tenant %s: %v", m.Slug, err)
+				entry.Error = true
+				return
+			}
+			entry.Riders = riders
+		}(&tenants[i], m)
+	}
+	wg.Wait()
+	c.JSON(http.StatusOK, models.PortalMe{User: user, Tenants: tenants})
 }

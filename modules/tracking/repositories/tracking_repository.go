@@ -175,20 +175,22 @@ func (r *TrackingRepository) ListGuardianRiderStatus(ctx context.Context, tenant
 	defer rows.Close()
 	statuses := []models.RiderStatusResponse{}
 	for rows.Next() {
-		status, err := scanRiderStatus(rows)
+		var kind, riderType string
+		status, err := scanRiderStatus(rows, &kind, &riderType)
 		if err != nil {
 			return nil, err
 		}
+		status.OrganizationKind, status.RiderType = &kind, &riderType
 		statuses = append(statuses, *status)
 	}
 	return statuses, rows.Err()
 }
 
-// scanRiderStatus reads one row of sp_get_rider_status's shape.
-func scanRiderStatus(row pgx.Row) (*models.RiderStatusResponse, error) {
+// scanRiderStatus reads one row of sp_get_rider_status's shape, then any columns a caller adds after it.
+func scanRiderStatus(row pgx.Row, extra ...any) (*models.RiderStatusResponse, error) {
 	var s models.RiderStatusResponse
 	var lastEventTime *time.Time
-	if err := row.Scan(
+	if err := row.Scan(append([]any{
 		&s.RiderID,
 		&s.RiderName,
 		&s.RouteID,
@@ -210,7 +212,7 @@ func scanRiderStatus(row pgx.Row) (*models.RiderStatusResponse, error) {
 		&s.ActiveAlerts,
 		&s.LastEventTaskID,
 		&s.LastEventHasPhoto,
-	); err != nil {
+	}, extra...)...); err != nil {
 		return nil, err
 	}
 	if lastEventTime != nil {
