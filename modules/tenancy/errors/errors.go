@@ -87,3 +87,10 @@ const (
 	RoleDeleteSystemRole = "tenant.role.delete.system-role"
 	RoleValidationFailed = "tenant.role.validation-failed"
 )
+
+// Platform usage errors (TRACK-013 D3): a from..to over 366 days, or ending before it starts.
+const (
+	UsageRangeTooWide = "tenant.usage.range-too-wide"
+	UsageRangeInvalid = "tenant.usage.range-invalid"
+	UsageListFailed   = "tenant.usage.list-failed"
+)

@@ -191,6 +191,14 @@ func registerJobs(ctx context.Context, registry *jobs.Registry, db services.Data
 			Cron: trackingJobs.PositionsPartitionsCron, Period: daily,
 			Task: asynq.NewTask(trackingJobs.TaskPositionsPartitions, nil),
 		})
+		// The reports' aggregates the trip close missed, the per-stop lateness and yesterday's usage
+		// in the platform database (TRACK-013 D1, D3).
+		registry.Handle(trackingJobs.TaskReportRollups, trackingJobs.ReportRollupsHandler(db,
+			tenancyRepos.NewUsageRepository(db), directory))
+		registry.Schedule(jobs.Entry{
+			Cron: trackingJobs.ReportRollupsCron, Period: daily,
+			Task: asynq.NewTask(trackingJobs.TaskReportRollups, nil), Opts: []asynq.Option{asynq.Queue(jobs.QueueLow)},
+		})
 	}
 }
 

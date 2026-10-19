@@ -144,6 +144,19 @@ func registerTenantRoutes(
 	registerLiveRoutes(r, p, denyOrganization, liveController)
 	registerAccessRoutes(r, denyOrganization, access)
 	registerPlanningRoutes(r, denyOrganization, trackingController)
+	registerReportRoutes(r, trackingController)
+}
+
+// registerReportRoutes is the reports (TRACK-013): their own permission (D4), and an organization user
+// reaches them too — each SP narrows the rows to its organizations.
+func registerReportRoutes(r *gin.RouterGroup, trackingController *controllers.TrackingController) {
+	reports := r.Group("/reports", tenancyMW.RequirePermission(trackingPerms.ReportsRead))
+	reports.GET("/attendance", trackingController.ReportAttendance)
+	reports.GET("/punctuality", trackingController.ReportPunctuality)
+	reports.GET("/fleet-usage", trackingController.ReportFleetUsage)
+	reports.GET("/incidents", trackingController.ReportIncidents)
+	// :report is attendance|punctuality|fleet-usage|incidents; the handler answers 404 to any other.
+	reports.GET("/:report/export", trackingController.ExportReport)
 }
 
 // registerPlanningRoutes is the planning screen per destination (TRACK-014): the operator's only — it

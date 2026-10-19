@@ -118,6 +118,28 @@ CREATE TABLE tenancy.tenants (
 
 
 --
+-- Name: usage_daily; Type: TABLE; Schema: tenancy; Owner: -
+--
+
+CREATE TABLE tenancy.usage_daily (
+    tenant_id uuid NOT NULL,
+    day date NOT NULL,
+    vehicles_active integer DEFAULT 0 NOT NULL,
+    trips_completed integer DEFAULT 0 NOT NULL,
+    positions bigint DEFAULT 0 NOT NULL,
+    riders_boarded integer DEFAULT 0 NOT NULL,
+    rolled_at timestamp with time zone DEFAULT now() NOT NULL
+);
+
+
+--
+-- Name: TABLE usage_daily; Type: COMMENT; Schema: tenancy; Owner: -
+--
+
+COMMENT ON TABLE tenancy.usage_daily IS 'Per tenant and UTC day: vehicles that ran, trips completed, GPS points and riders boarded (TRACK-013 D3)';
+
+
+--
 -- Name: user_roles; Type: TABLE; Schema: tenancy; Owner: -
 --
 
@@ -227,6 +249,14 @@ ALTER TABLE ONLY tenancy.tenant_modules
 
 
 --
+-- Name: usage_daily usage_daily_pkey; Type: CONSTRAINT; Schema: tenancy; Owner: -
+--
+
+ALTER TABLE ONLY tenancy.usage_daily
+    ADD CONSTRAINT usage_daily_pkey PRIMARY KEY (tenant_id, day);
+
+
+--
 -- Name: user_roles user_roles_pkey; Type: CONSTRAINT; Schema: tenancy; Owner: -
 --
 
@@ -333,6 +363,13 @@ CREATE INDEX idx_tenants_slug ON tenancy.tenants USING btree (slug);
 
 
 --
+-- Name: idx_usage_daily_day; Type: INDEX; Schema: tenancy; Owner: -
+--
+
+CREATE INDEX idx_usage_daily_day ON tenancy.usage_daily USING btree (day);
+
+
+--
 -- Name: idx_user_roles_role_id; Type: INDEX; Schema: tenancy; Owner: -
 --
 
@@ -414,6 +451,14 @@ ALTER TABLE ONLY tenancy.tenant_users
 
 ALTER TABLE ONLY tenancy.tenant_users
     ADD CONSTRAINT tenant_users_user_id_fkey FOREIGN KEY (user_id) REFERENCES auth.users(id) ON DELETE CASCADE;
+
+
+--
+-- Name: usage_daily usage_daily_tenant_id_fkey; Type: FK CONSTRAINT; Schema: tenancy; Owner: -
+--
+
+ALTER TABLE ONLY tenancy.usage_daily
+    ADD CONSTRAINT usage_daily_tenant_id_fkey FOREIGN KEY (tenant_id) REFERENCES tenancy.tenants(id) ON DELETE CASCADE;
 
 
 --

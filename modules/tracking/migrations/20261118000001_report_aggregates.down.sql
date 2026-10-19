@@ -1,0 +1,11 @@
+DROP FUNCTION IF EXISTS tracking.sp_report_incidents(uuid, date, date, uuid, uuid, character varying, uuid, integer, integer);
+DROP FUNCTION IF EXISTS tracking.sp_report_fleet_usage(uuid, date, date, uuid, uuid, character varying, uuid, integer, integer);
+DROP FUNCTION IF EXISTS tracking.sp_report_punctuality(uuid, date, date, uuid, uuid, uuid, integer, integer);
+DROP FUNCTION IF EXISTS tracking.sp_report_attendance(uuid, date, date, uuid, uuid, uuid, uuid, integer, integer);
+DROP FUNCTION IF EXISTS tracking.sp_usage_for_day(uuid, date);
+DROP FUNCTION IF EXISTS tracking.sp_roll_stop_delay_stats(uuid, integer);
+DROP FUNCTION IF EXISTS tracking.sp_trip_summaries_sweep(uuid, date);
+DROP FUNCTION IF EXISTS tracking.sp_trip_summarise(uuid, uuid);
+DROP TABLE IF EXISTS tracking.stop_delay_stats;
+DROP TABLE IF EXISTS tracking.rider_day_attendance;
+DROP TABLE IF EXISTS tracking.trip_summaries;

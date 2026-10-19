@@ -41,6 +41,10 @@ const (
 	// DocumentsWrite covers deleting one too (TRACK-016): filing a document and withdrawing it are
 	// the same job, and a separate delete permission no role would hold alone is noise.
 	DocumentsWrite = "tracking:documents:write"
+
+	// ReportsRead opens the reports (TRACK-013 D4): a role can see attendance and punctuality without
+	// seeing routes, stops or the live fleet.
+	ReportsRead = "tracking:reports:read"
 )
 
 func init() {
@@ -67,5 +71,6 @@ func init() {
 		{Code: DriversWrite, Module: "tracking", Name: "permission.tracking.drivers-write", Description: "permission.tracking.drivers-write.description"},
 		{Code: DriversDelete, Module: "tracking", Name: "permission.tracking.drivers-delete", Description: "permission.tracking.drivers-delete.description"},
 		{Code: DocumentsWrite, Module: "tracking", Name: "permission.tracking.documents-write", Description: "permission.tracking.documents-write.description"},
+		{Code: ReportsRead, Module: "tracking", Name: "permission.tracking.reports-read", Description: "permission.tracking.reports-read.description"},
 	})
 }

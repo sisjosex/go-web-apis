@@ -20,6 +20,7 @@ import (
 	"github.com/stretchr/testify/assert"
 
 	"josex/web/modules/core/testhelpers"
+	tenancyServices "josex/web/modules/tenancy/services"
 	"josex/web/modules/tracking/models"
 )
 
@@ -1751,4 +1752,83 @@ func SeedPortalSecondTenant(t *testing.T, helper *testhelpers.ApiTestHelper) (st
 		}
 	}
 	return slug, riderID
+}
+
+// ============================================================================
+// REPORTS (TRACK-013)
+// ============================================================================
+
+// StartTripMinutesAgo moves an in-progress trip's start back, so GPS points stamped since fall inside it.
+func StartTripMinutesAgo(t *testing.T, helper *testhelpers.ApiTestHelper, tripID string, minutes int) {
+	t.Helper()
+	if _, err := helper.DB().Execute(context.Background(),
+		`UPDATE tracking.trips SET started_at = now() - make_interval(mins => $2) WHERE id = $1`, tripID, minutes); err != nil {
+		t.Fatalf("start trip minutes ago: %v", err)
+	}
+}
+
+// TripSummaryRow reads a trip's report summary: its km, its done pickups and when it was rolled.
+func TripSummaryRow(t *testing.T, helper *testhelpers.ApiTestHelper, tripID string) (km float64, pickups int, rolledAt time.Time) {
+	t.Helper()
+	if err := helper.DB().QueryRow(context.Background(),
+		`SELECT COALESCE(distance_km, 0), pickups_done, rolled_at FROM tracking.trip_summaries WHERE trip_id = $1`, tripID).
+		Scan(&km, &pickups, &rolledAt); err != nil {
+		t.Fatalf("trip summary: %v", err)
+	}
+	return km, pickups, rolledAt
+}
+
+// TripAttendanceCount counts a trip's attendance rows in one status.
+func TripAttendanceCount(t *testing.T, helper *testhelpers.ApiTestHelper, tripID, status string) int {
+	t.Helper()
+	var n int
+	if err := helper.DB().QueryRow(context.Background(),
+		`SELECT COUNT(*) FROM tracking.rider_day_attendance WHERE trip_id = $1 AND status = $2`, tripID, status).Scan(&n); err != nil {
+		t.Fatalf("trip attendance: %v", err)
+	}
+	return n
+}
+
+// UsageDayRow reads the platform's usage rows of a tenant on one day: how many, and the vehicles active.
+func UsageDayRow(t *testing.T, helper *testhelpers.ApiTestHelper, tenantID string, day time.Time) (rows, vehiclesActive int) {
+	t.Helper()
+	if err := helper.DB().QueryRow(context.Background(), `
+		SELECT COUNT(*), COALESCE(MAX(vehicles_active), 0) FROM tenancy.usage_daily
+		WHERE tenant_id = $1 AND day = $2::DATE`, tenantID, day.Format(time.DateOnly)).Scan(&rows, &vehiclesActive); err != nil {
+		t.Fatalf("usage day: %v", err)
+	}
+	return rows, vehiclesActive
+}
+
+// MoveRiderToOrganization moves a rider to another organization of the tenant.
+func MoveRiderToOrganization(t *testing.T, helper *testhelpers.ApiTestHelper, riderID, organizationID string) {
+	t.Helper()
+	if _, err := helper.DB().Execute(context.Background(),
+		`UPDATE tracking.riders SET organization_id = $2 WHERE id = $1`, riderID, organizationID); err != nil {
+		t.Fatalf("move rider: %v", err)
+	}
+}
+
+// GrantOrganizationRole gives the seeded organization user's role one more permission for this test,
+// and forgets the user's cached access both ways.
+func GrantOrganizationRole(t *testing.T, helper *testhelpers.ApiTestHelper, permission string) {
+	t.Helper()
+	const role = "00000000-0000-0000-0000-0000000000a1"
+	ctx := context.Background()
+	var userID uuid.UUID
+	if err := helper.DB().QueryRow(ctx, `SELECT id FROM auth.users WHERE email = 'orguser@test.local'`).Scan(&userID); err != nil {
+		t.Fatalf("organization user: %v", err)
+	}
+	if _, err := helper.DB().Execute(ctx,
+		`INSERT INTO tenancy.role_permissions (role_id, permission_code) VALUES ($1, $2) ON CONFLICT DO NOTHING`, role, permission); err != nil {
+		t.Fatalf("grant: %v", err)
+	}
+	tenancyServices.InvalidateAccess(ctx, userID)
+	t.Cleanup(func() {
+		if _, err := helper.DB().Execute(ctx,
+			`DELETE FROM tenancy.role_permissions WHERE role_id = $1 AND permission_code = $2`, role, permission); err != nil {
+			t.Errorf("revoke: %v", err)
+		}
+		tenancyServices.InvalidateAccess(ctx, userID)
+	})
 }

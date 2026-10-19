@@ -3,6 +3,7 @@ package jobs
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log"
 	"strings"
@@ -47,7 +48,7 @@ var frameOf = map[string]string{
 // The trip's driver is told its day changed (TRACK-030), but for an approach or a late-ETA delay
 // (TRACK-066), which change nothing the driver's day shows. valkey nil publishes nothing; notify and signal nil notify and signal
 // nothing. Delivery is at least once: a repeated frame makes a client refetch the same trip, a
-// repeated trace writes the same line, a repeated notice writes nothing.
+// repeated trace writes the same line, a repeated summary the same row, a repeated notice writes nothing.
 func TripChangedHandler(db coreServices.DatabaseService, tenants *coreJobs.TenantDirectory, router geoInterfaces.Router, valkey coreServices.ValkeyService, notify *Notifier, signal *DriverSignal, progress *ProgressSignal) asynq.HandlerFunc {
 	return func(ctx context.Context, task *asynq.Task) error {
 		var payload TripChanged
@@ -69,6 +70,14 @@ func TripChangedHandler(db coreServices.DatabaseService, tenants *coreJobs.Tenan
 		if payload.Type == "complete" {
 			if _, traceErr = ApplyTripTrace(ctx, db, router, tenant, tripID); traceErr != nil {
 				log.Printf("⚠️  trip.changed %s: trace: %v", tripID, traceErr)
+			}
+		}
+		// An ended trip's report row, after the trace so its km are in (TRACK-013 D1); a failure fails
+		// the task like the trace's, and the nightly sweep catches what retries do not.
+		if payload.Type == "complete" || payload.Type == "cancel" {
+			if err := SummariseTrip(ctx, db, tenant, tripID); err != nil {
+				log.Printf("⚠️  trip.changed %s: summary: %v", tripID, err)
+				traceErr = errors.Join(traceErr, err)
 			}
 		}
 		subjectID, _ := uuid.Parse(payload.SubjectID)

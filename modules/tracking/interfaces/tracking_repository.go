@@ -111,6 +111,8 @@ type TrackingRepository interface {
 	ListRiderGroups(ctx context.Context, tenantID uuid.UUID, organizationID *string) ([]string, error)
 	TrackingOverview(ctx context.Context, tenantID uuid.UUID, date *string, scopeUserID *uuid.UUID) (*models.TrackingOverview, error)
 	TrackingSetup(ctx context.Context, tenantID uuid.UUID) (*models.TrackingSetup, error)
+	// Reports (TRACK-013): one page of a report, rows and summary still JSON.
+	Report(ctx context.Context, tenantID uuid.UUID, report string, q models.ReportQuery, from, to string, scopeUserID *uuid.UUID, page, pageSize int) (*models.ReportPage, error)
 	UpdateAssignment(ctx context.Context, tenantID uuid.UUID, assignmentID uuid.UUID, dto *models.UpdateAssignmentDto) (*models.AssignmentResponse, error)
 	DeleteAssignment(ctx context.Context, tenantID uuid.UUID, assignmentID uuid.UUID, twin bool) error
 	ListAssignments(ctx context.Context, tenantID uuid.UUID, query models.ListAssignmentsQuery, scopeUserID *uuid.UUID) ([]*models.RiderRouteAssignment, int64, error)

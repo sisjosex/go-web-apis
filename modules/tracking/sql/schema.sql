@@ -495,6 +495,30 @@ CREATE TABLE tracking.rider_contacts (
 
 
 --
+-- Name: rider_day_attendance; Type: TABLE; Schema: tracking; Owner: -
+--
+
+CREATE TABLE tracking.rider_day_attendance (
+    trip_id uuid NOT NULL,
+    rider_id uuid NOT NULL,
+    tenant_id uuid NOT NULL,
+    service_date date NOT NULL,
+    direction character varying(20) NOT NULL,
+    route_id uuid NOT NULL,
+    organization_id uuid NOT NULL,
+    status character varying(20) NOT NULL,
+    CONSTRAINT chk_rider_day_attendance_status CHECK (((status)::text = ANY ((ARRAY['boarded'::character varying, 'no_show'::character varying, 'absent'::character varying, 'cancelled'::character varying])::text[])))
+);
+
+
+--
+-- Name: TABLE rider_day_attendance; Type: COMMENT; Schema: tracking; Owner: -
+--
+
+COMMENT ON TABLE tracking.rider_day_attendance IS 'Each rider''s pickup on an ended trip: boarded, no_show, absent (an absence covered the day) or cancelled (TRACK-013 D1)';
+
+
+--
 -- Name: rider_places; Type: TABLE; Schema: tracking; Owner: -
 --
 
@@ -841,6 +865,30 @@ COMMENT ON TABLE tracking.share_links IS 'Public links to a trip: the sha256 of 
 
 
 --
+-- Name: stop_delay_stats; Type: TABLE; Schema: tracking; Owner: -
+--
+
+CREATE TABLE tracking.stop_delay_stats (
+    route_id uuid NOT NULL,
+    stop_place_id uuid NOT NULL,
+    weekday smallint NOT NULL,
+    tenant_id uuid NOT NULL,
+    samples integer NOT NULL,
+    p50_delay_min numeric(6,1) NOT NULL,
+    p90_delay_min numeric(6,1) NOT NULL,
+    computed_at timestamp with time zone DEFAULT now() NOT NULL,
+    CONSTRAINT chk_stop_delay_stats_weekday CHECK (((weekday >= 1) AND (weekday <= 7)))
+);
+
+
+--
+-- Name: TABLE stop_delay_stats; Type: COMMENT; Schema: tracking; Owner: -
+--
+
+COMMENT ON TABLE tracking.stop_delay_stats IS 'Minutes each stop of a route is reached past planned_at, p50 and p90 by ISO weekday, over completed trips of the last weeks (TRACK-013 D5)';
+
+
+--
 -- Name: stop_pair_samples; Type: TABLE; Schema: tracking; Owner: -
 --
 
@@ -1000,6 +1048,69 @@ COMMENT ON COLUMN tracking.trip_stops.approach_notified_at IS 'When the stop''s 
 --
 
 COMMENT ON COLUMN tracking.trip_stops.delay_notified_at IS 'When the stop''s late-ETA notice went out: the first fresh ETA past the threshold of its riders'' clients (TRACK-066 D3)';
+
+
+--
+-- Name: trip_summaries; Type: TABLE; Schema: tracking; Owner: -
+--
+
+CREATE TABLE tracking.trip_summaries (
+    trip_id uuid NOT NULL,
+    tenant_id uuid NOT NULL,
+    service_date date NOT NULL,
+    route_id uuid NOT NULL,
+    organization_id uuid,
+    organization_ids uuid[] DEFAULT '{}'::uuid[] NOT NULL,
+    vehicle_id uuid,
+    driver_id uuid,
+    status character varying(20) NOT NULL,
+    planned_start timestamp with time zone NOT NULL,
+    started_at timestamp with time zone,
+    ended_at timestamp with time zone,
+    distance_km numeric(8,2),
+    duration_min integer,
+    tasks_planned integer DEFAULT 0 NOT NULL,
+    pickups_done integer DEFAULT 0 NOT NULL,
+    no_shows integer DEFAULT 0 NOT NULL,
+    cancelled integer DEFAULT 0 NOT NULL,
+    max_onboard integer DEFAULT 0 NOT NULL,
+    capacity integer,
+    start_delay_min integer,
+    avg_stop_delay_min numeric(6,1),
+    max_stop_delay_min integer,
+    stops_late integer DEFAULT 0 NOT NULL,
+    alerts_count integer DEFAULT 0 NOT NULL,
+    rolled_at timestamp with time zone DEFAULT now() NOT NULL,
+    CONSTRAINT chk_trip_summaries_status CHECK (((status)::text = ANY ((ARRAY['completed'::character varying, 'cancelled'::character varying])::text[])))
+);
+
+
+--
+-- Name: TABLE trip_summaries; Type: COMMENT; Schema: tracking; Owner: -
+--
+
+COMMENT ON TABLE tracking.trip_summaries IS 'One row per ended trip: km, minutes, riders, lateness and alerts, rolled at trip close and by the nightly sweep (TRACK-013 D1)';
+
+
+--
+-- Name: COLUMN trip_summaries.organization_ids; Type: COMMENT; Schema: tracking; Owner: -
+--
+
+COMMENT ON COLUMN tracking.trip_summaries.organization_ids IS 'The organizations of the trip''s riders: what an organization user''s scope matches (TRACK-013 D4)';
+
+
+--
+-- Name: COLUMN trip_summaries.max_onboard; Type: COMMENT; Schema: tracking; Owner: -
+--
+
+COMMENT ON COLUMN tracking.trip_summaries.max_onboard IS 'The most riders aboard at once: done pickups minus done dropoffs, in done_at order';
+
+
+--
+-- Name: COLUMN trip_summaries.stops_late; Type: COMMENT; Schema: tracking; Owner: -
+--
+
+COMMENT ON COLUMN tracking.trip_summaries.stops_late IS 'Stops arrived more than 5 minutes after planned_at';
 
 
 --
@@ -1235,6 +1346,14 @@ ALTER TABLE ONLY tracking.rider_contacts
 
 
 --
+-- Name: rider_day_attendance rider_day_attendance_pkey; Type: CONSTRAINT; Schema: tracking; Owner: -
+--
+
+ALTER TABLE ONLY tracking.rider_day_attendance
+    ADD CONSTRAINT rider_day_attendance_pkey PRIMARY KEY (trip_id, rider_id);
+
+
+--
 -- Name: rider_places rider_places_pkey; Type: CONSTRAINT; Schema: tracking; Owner: -
 --
 
@@ -1323,6 +1442,14 @@ ALTER TABLE ONLY tracking.share_links
 
 
 --
+-- Name: stop_delay_stats stop_delay_stats_pkey; Type: CONSTRAINT; Schema: tracking; Owner: -
+--
+
+ALTER TABLE ONLY tracking.stop_delay_stats
+    ADD CONSTRAINT stop_delay_stats_pkey PRIMARY KEY (route_id, stop_place_id, weekday);
+
+
+--
 -- Name: stop_pair_samples stop_pair_samples_pkey; Type: CONSTRAINT; Schema: tracking; Owner: -
 --
 
@@ -1376,6 +1503,14 @@ ALTER TABLE ONLY tracking.trip_stop_tasks
 
 ALTER TABLE ONLY tracking.trip_stops
     ADD CONSTRAINT trip_stops_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: trip_summaries trip_summaries_pkey; Type: CONSTRAINT; Schema: tracking; Owner: -
+--
+
+ALTER TABLE ONLY tracking.trip_summaries
+    ADD CONSTRAINT trip_summaries_pkey PRIMARY KEY (trip_id);
 
 
 --
@@ -1626,6 +1761,27 @@ CREATE INDEX idx_rider_contacts_user_id ON tracking.rider_contacts USING btree (
 
 
 --
+-- Name: idx_rider_day_attendance_organization; Type: INDEX; Schema: tracking; Owner: -
+--
+
+CREATE INDEX idx_rider_day_attendance_organization ON tracking.rider_day_attendance USING btree (organization_id, service_date);
+
+
+--
+-- Name: idx_rider_day_attendance_rider; Type: INDEX; Schema: tracking; Owner: -
+--
+
+CREATE INDEX idx_rider_day_attendance_rider ON tracking.rider_day_attendance USING btree (rider_id, service_date);
+
+
+--
+-- Name: idx_rider_day_attendance_tenant; Type: INDEX; Schema: tracking; Owner: -
+--
+
+CREATE INDEX idx_rider_day_attendance_tenant ON tracking.rider_day_attendance USING btree (tenant_id, service_date);
+
+
+--
 -- Name: idx_rider_places_rider; Type: INDEX; Schema: tracking; Owner: -
 --
 
@@ -1815,6 +1971,13 @@ CREATE INDEX idx_share_links_trip ON tracking.share_links USING btree (trip_id);
 
 
 --
+-- Name: idx_stop_delay_stats_tenant; Type: INDEX; Schema: tracking; Owner: -
+--
+
+CREATE INDEX idx_stop_delay_stats_tenant ON tracking.stop_delay_stats USING btree (tenant_id);
+
+
+--
 -- Name: idx_stop_pair_samples_pair; Type: INDEX; Schema: tracking; Owner: -
 --
 
@@ -1903,6 +2066,41 @@ CREATE INDEX idx_trip_stop_tasks_subject_done ON tracking.trip_stop_tasks USING 
 --
 
 CREATE INDEX idx_trip_stops_stop_place ON tracking.trip_stops USING btree (stop_place_id);
+
+
+--
+-- Name: idx_trip_summaries_driver_date; Type: INDEX; Schema: tracking; Owner: -
+--
+
+CREATE INDEX idx_trip_summaries_driver_date ON tracking.trip_summaries USING btree (driver_id, service_date);
+
+
+--
+-- Name: idx_trip_summaries_organizations; Type: INDEX; Schema: tracking; Owner: -
+--
+
+CREATE INDEX idx_trip_summaries_organizations ON tracking.trip_summaries USING gin (organization_ids);
+
+
+--
+-- Name: idx_trip_summaries_route_date; Type: INDEX; Schema: tracking; Owner: -
+--
+
+CREATE INDEX idx_trip_summaries_route_date ON tracking.trip_summaries USING btree (route_id, service_date);
+
+
+--
+-- Name: idx_trip_summaries_tenant_date; Type: INDEX; Schema: tracking; Owner: -
+--
+
+CREATE INDEX idx_trip_summaries_tenant_date ON tracking.trip_summaries USING btree (tenant_id, service_date);
+
+
+--
+-- Name: idx_trip_summaries_vehicle_date; Type: INDEX; Schema: tracking; Owner: -
+--
+
+CREATE INDEX idx_trip_summaries_vehicle_date ON tracking.trip_summaries USING btree (vehicle_id, service_date);
 
 
 --
@@ -2175,6 +2373,14 @@ ALTER TABLE ONLY tracking.rider_contacts
 
 
 --
+-- Name: rider_day_attendance rider_day_attendance_trip_id_fkey; Type: FK CONSTRAINT; Schema: tracking; Owner: -
+--
+
+ALTER TABLE ONLY tracking.rider_day_attendance
+    ADD CONSTRAINT rider_day_attendance_trip_id_fkey FOREIGN KEY (trip_id) REFERENCES tracking.trips(id) ON DELETE CASCADE;
+
+
+--
 -- Name: rider_places rider_places_rider_id_fkey; Type: FK CONSTRAINT; Schema: tracking; Owner: -
 --
 
@@ -2359,6 +2565,22 @@ ALTER TABLE ONLY tracking.share_links
 
 
 --
+-- Name: stop_delay_stats stop_delay_stats_route_id_fkey; Type: FK CONSTRAINT; Schema: tracking; Owner: -
+--
+
+ALTER TABLE ONLY tracking.stop_delay_stats
+    ADD CONSTRAINT stop_delay_stats_route_id_fkey FOREIGN KEY (route_id) REFERENCES tracking.routes(id) ON DELETE CASCADE;
+
+
+--
+-- Name: stop_delay_stats stop_delay_stats_stop_place_id_fkey; Type: FK CONSTRAINT; Schema: tracking; Owner: -
+--
+
+ALTER TABLE ONLY tracking.stop_delay_stats
+    ADD CONSTRAINT stop_delay_stats_stop_place_id_fkey FOREIGN KEY (stop_place_id) REFERENCES tracking.stop_places(id) ON DELETE CASCADE;
+
+
+--
 -- Name: stop_pair_samples stop_pair_samples_from_stop_place_id_fkey; Type: FK CONSTRAINT; Schema: tracking; Owner: -
 --
 
@@ -2420,6 +2642,14 @@ ALTER TABLE ONLY tracking.trip_stops
 
 ALTER TABLE ONLY tracking.trip_stops
     ADD CONSTRAINT trip_stops_trip_id_fkey FOREIGN KEY (trip_id) REFERENCES tracking.trips(id) ON DELETE CASCADE;
+
+
+--
+-- Name: trip_summaries trip_summaries_trip_id_fkey; Type: FK CONSTRAINT; Schema: tracking; Owner: -
+--
+
+ALTER TABLE ONLY tracking.trip_summaries
+    ADD CONSTRAINT trip_summaries_trip_id_fkey FOREIGN KEY (trip_id) REFERENCES tracking.trips(id) ON DELETE CASCADE;
 
 
 --

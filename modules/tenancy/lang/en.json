@@ -35,5 +35,8 @@
   "tenant.module.not-found": "That module does not exist.",
   "tenant.module.not-enabled": "This module is not enabled for the business.",
   "tenant.module.required-by": "Another enabled module needs it. Turn that one off first.",
-  "tenant.module.locked": "This module is always on."
+  "tenant.module.locked": "This module is always on.",
+  "tenant.usage.range-too-wide": "The range cannot exceed 366 days",
+  "tenant.usage.range-invalid": "The end date must be on or after the start date",
+  "tenant.usage.list-failed": "Failed to retrieve the businesses' usage"
 }

@@ -318,8 +318,8 @@ func registerTenancy(d routeDeps, billingService billingInterfaces.BillingServic
 	// Platform routes — cross-tenant, super_admin only, no tenant scope
 	platform := d.apiV1.Group("/platform")
 	platform.Use(d.authMiddleware, authMW.RequireSystemRole(coreModels.SystemRoleSuperAdmin))
-	// Register platform-admin routes here as modules are added:
-	// platformRoutes.RegisterPlatformRoutes(platform, ...)
+	tenancyRoutes.RegisterPlatformRoutes(platform,
+		tenancyControllers.NewPlatformUsageController(tenancyRepos.NewUsageRepository(d.db)))
 
 	log.Println("✅ Tenancy module enabled and routes registered")
 	return chains

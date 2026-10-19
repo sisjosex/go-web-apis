@@ -327,6 +327,13 @@ const (
 	ShareRevokeFailed = "tracking.share.revoke.failed"
 	ShareReadFailed   = "tracking.share.read.failed"
 
+	// Reports (TRACK-013). RangeTooWide is a from..to over 366 days; RangeInvalid one that ends before it
+	// starts; ExportTooLarge an export matching more rows than the cap (D2).
+	ReportsRangeTooWide   = "tracking.reports.range-too-wide"
+	ReportsRangeInvalid   = "tracking.reports.range-invalid"
+	ReportsExportTooLarge = "tracking.reports.export-too-large"
+	ReportsReadFailed     = "tracking.reports.read.failed"
+
 	TenantNotFound = "tracking.tenant.not-found"
 
 	// Generic errors

@@ -160,6 +160,23 @@ pending task there, push text `notice.delay_eta.*`. Snapshots for (re)sync: `GET
 `GET /routes/:id/status` does not name the trip: a client finds it with `GET /trips?route_id=&status=in_progress`.
 The gateway logs one line per socket open and close, at debug level.
 
+**Reports (TRACK-013).** The reports read aggregates, never trips: `trip_summaries` (one row per ended
+trip — km, minutes, pickups, no-shows, peak aboard, start/stop delays, alerts; `organization_ids` = its riders'
+organizations), `rider_day_attendance` (each rider's pickup: boarded/no_show/absent/cancelled) and
+`stop_delay_stats` (p50/p90 minutes late per route, stop and ISO weekday, 8 weeks). `sp_trip_summarise`
+rolls a trip from scratch: the `outbox:trip.changed` handler calls it on complete/cancel, after the trace
+so `distance_km` is in; the daily `tracking:report-rollups` (03:00 UTC) sweeps the last 3 days for trips
+without a summary or changed after it, recomputes the stop stats, and writes yesterday's UTC usage
+(`sp_usage_for_day`: vehicles that completed a trip or sent a point, trips, points, riders boarded) to the
+platform's `tenancy.usage_daily`. `GET /tracking/reports/attendance|punctuality|fleet-usage|incidents`
+(permission `tracking:reports:read`; an organization user reaches them, narrowed to its organizations) each
+take `from to` (default the last 30 days, > 366 → 400 `range-too-wide`) and answer one SP row:
+`{ rows, summary, total_count, page, page_size }`. `GET /tracking/reports/:report/export` writes the same
+rows as CSV (UTF-8 BOM, headers `tracking.reports.csv.*` in the request's language); over
+`services.ReportExportMax` (10 000) rows → 413 before any row. `GET /platform/usage?from&to&tenant_id`
+(super_admin) reads `usage_daily` per tenant with `vehicles_active_max`/`_avg`; the billing rule over it is
+not here.
+
 Main DB holds `auth.*` + `tenancy.*`; one DB per tenant holds business schemas only. JWT carries
 `user_id + session_id`; tenancy middleware resolves `tenant_id` from `X-Tenant-Slug` per request.
 
@@ -244,6 +261,10 @@ Verified 2026-09-19 (APP-004):
 | `GET /tracking/assignments` | `page page_size rider_id route_id date` (cap 100) | `{ assignments, total_count, page, page_size }` — `date` narrows to the assignments in force that day; every row carries `rider_name`, `route_name`, `direction`, `pickup_stop_name`, `dropoff_stop_name`; `days_of_week` is the schedules' bitmask. Writes (`POST`, `PATCH /:id`, `POST /bulk`) answer `{ assignment \| assignments, warnings }` |
 | `GET /tracking/trips` | `page page_size date route_id status organization_id` (cap 100) | `{ trips, total_count, page, page_size }` — `date` defaults to each route's local today; every row carries `route_name`, `direction`, `license_plate`, `driver_name`, `stops_count`, `tasks_total` (not cancelled), `tasks_done` (done or no_show), `delay_seconds` (list only: next pending stop overdue by, 0 not due, null once ended), `service_block {subject: vehicle|driver, reason} | null` (an expired blocking document, read per row — also on `/mobile/driver/today`'s trips; TRACK-064); `GET /:id` and every trip write answer the row plus `stops[].tasks[]`; `GET /:id` also `polyline`, `distance_km`, `trace_source` (null until the trip completes) |
 | `GET /tracking/alerts` | `page page_size route_id status severity` (cap 100) | `{ alerts, total_count, page, page_size }` — newest first, `status` active (default)/resolved/all; every row carries `route_name`, `license_plate`, `trip_id`+`lat`/`lng` (driver incidents), `created_by_name`, `resolved_by_name`. `PATCH /:id/resolve` answers the row; 404 `alert.not-found`, 409 `alert.already-resolved`. Raise and resolve write `alert.changed` → an `alert` frame on `fleet:{tenant}` (and `trip:{id}`) |
+| `GET /tracking/reports/attendance` | `from to organization_id route_id rider_id page page_size` (cap 100) | `{ rows, summary, total_count, page, page_size }` — a row per rider `{ rider_id, rider_name, organization_name, days, boarded, no_shows, absent, cancelled, attendance_pct }` (boarded over boarded + no-shows + absent), least attended first; `summary { riders, days, boarded, no_shows, absent, attendance_pct }` |
+| `GET /tracking/reports/punctuality` | `from to route_id organization_id page page_size` (cap 100) | same envelope — a row per route `{ route_id, route_name, direction, organization_name, trips, on_time, on_time_pct, avg_start_delay_min, max_start_delay_min, avg_stop_delay_min, worst_stop {stop_name, p90_delay_min} \| null }` over completed trips (on time: start ≤ 5 min late and no stop > 5 min late), least punctual first |
+| `GET /tracking/reports/fleet-usage` | `from to route_id organization_id group_by=vehicle\|driver page page_size` (cap 100) | same envelope — a row per vehicle or driver `{ id, label, company_name, trips, km, hours, riders_boarded, days_active, avg_occupancy_pct }`, most km first; `summary { vehicles \| drivers, trips, km, hours, riders_boarded }` |
+| `GET /tracking/reports/incidents` | `from to route_id organization_id alert_type page page_size` (cap 100) | same envelope — `GET /tracking/alerts` rows raised in the range (UTC days), newest first; `summary { total, open, by_type {delay, breakdown, cancellation, emergency, other}, avg_resolve_min }` |
 | `GET /tracking/trips/:id/events` | — | array, oldest first — `{ id, type, payload, created_at, created_by_name }`, `type` = the transition, `override` or `incident` |
 | `GET /tracking/live/fleet` | `organization_id` | `{ vehicles: [{ vehicle_id, license_plate, trip_id, route_name, lat, lng, speed, heading, recorded_at }] }` — every vehicle that has reported, unpaginated; the org filter keeps vehicles whose trip carries its riders |
 | `GET /tracking/trips/:id/live` | — | the `GET /:id` detail plus `position` (the last position frame, or null) and `eta: [{ trip_stop_id, eta_at, estimate_source }]` per pending stop, empty unless the trip is in progress and has a position |

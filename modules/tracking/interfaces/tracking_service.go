@@ -107,6 +107,10 @@ type TrackingService interface {
 	ListRiderGroups(ctx context.Context, tenantID uuid.UUID, organizationID *string) ([]string, error)
 	TrackingOverview(ctx context.Context, tenantID uuid.UUID, date *string, scopeUserID *uuid.UUID) (*models.TrackingOverview, error)
 	TrackingSetup(ctx context.Context, tenantID uuid.UUID) (*models.TrackingSetup, error)
+	// Reports (TRACK-013): Report answers the report's typed page; ReportExport every row as a map, up
+	// to the export cap, and the range it covers.
+	Report(ctx context.Context, tenantID uuid.UUID, report string, q models.ReportQuery, scopeUserID *uuid.UUID) (any, error)
+	ReportExport(ctx context.Context, tenantID uuid.UUID, report string, q models.ReportQuery, scopeUserID *uuid.UUID) ([]map[string]any, string, string, error)
 	UpdateAssignment(ctx context.Context, tenantID uuid.UUID, assignmentID uuid.UUID, dto *models.UpdateAssignmentDto) (*models.AssignmentResponse, error)
 	DeleteAssignment(ctx context.Context, tenantID uuid.UUID, assignmentID uuid.UUID, twin bool) error
 	ListAssignments(ctx context.Context, tenantID uuid.UUID, query models.ListAssignmentsQuery, scopeUserID *uuid.UUID) (*models.ListAssignmentsResponse, error)

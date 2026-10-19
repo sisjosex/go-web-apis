@@ -2434,11 +2434,12 @@ func TestOperatorRidersUnchangedByGuardianScope(t *testing.T) {
 	operator := SetupTrackingTest(t)
 	defer operator.Close()
 
-	listed := ListRiders(t, operator, "?page=1&page_size=100")
-
+	// By name: the suite's own riders ("Test Rider") outnumber a page and sort before "Student".
 	ids := map[string]bool{}
-	for _, rider := range listed.Riders {
-		ids[rider.ID.String()] = true
+	for _, name := range []string{"John", "Jane"} {
+		for _, rider := range ListRiders(t, operator, "?page=1&page_size=100&search="+name).Riders {
+			ids[rider.ID.String()] = true
+		}
 	}
 	assert.True(t, ids[TestRiderJohnID], "operator should still see John")
 	assert.True(t, ids[TestRiderJaneID], "operator should still see Jane")

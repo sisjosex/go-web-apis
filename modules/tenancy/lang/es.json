@@ -35,5 +35,8 @@
   "tenant.module.not-found": "Ese módulo no existe.",
   "tenant.module.not-enabled": "Este módulo no está activo en el negocio.",
   "tenant.module.required-by": "Otro módulo activo lo necesita. Desactiva ese primero.",
-  "tenant.module.locked": "Este módulo está siempre activo."
+  "tenant.module.locked": "Este módulo está siempre activo.",
+  "tenant.usage.range-too-wide": "El rango no puede superar 366 días",
+  "tenant.usage.range-invalid": "La fecha final debe ser igual o posterior a la inicial",
+  "tenant.usage.list-failed": "Error al obtener el uso de los negocios"
 }
