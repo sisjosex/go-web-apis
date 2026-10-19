@@ -1,7 +1,6 @@
 CREATE OR REPLACE FUNCTION tracking.sp_rider_live(p_tenant_id uuid, p_rider_id uuid, p_scope_user_id uuid DEFAULT NULL::uuid, p_guardian_user_id uuid DEFAULT NULL::uuid)
  RETURNS TABLE(rider_id uuid, trip_id uuid, route_name character varying, license_plate character varying, stops jsonb, vehicle_position jsonb, pending_stops jsonb, planned_path jsonb, vehicle_type character varying, organization_kind character varying, destination jsonb)
  LANGUAGE plpgsql
- STABLE
 AS $function$
 DECLARE
     v_scope UUID[];
@@ -99,7 +98,11 @@ BEGIN
     LEFT JOIN tracking.organizations o ON o.id = r.organization_id
     LEFT JOIN tracking.vehicles v ON v.id = t.vehicle_id
     LEFT JOIN tracking.vehicle_last_position lp ON lp.vehicle_id = t.vehicle_id;
+
+    PERFORM tracking.fn_record_rider_access(
+        p_tenant_id, COALESCE(p_guardian_user_id, p_scope_user_id),
+        CASE WHEN p_guardian_user_id IS NOT NULL THEN 'portal' ELSE 'organization' END, 'live', ARRAY[p_rider_id]);
 END;
 $function$;
 
-COMMENT ON FUNCTION tracking.sp_rider_live(uuid,uuid,uuid,uuid) IS 'The rider''s trip in progress: its stops for the rider with coordinates, the vehicle''s last position, the trip''s pending stops for the ETA, the planned line, the vehicle type, the client''s kind and the destination; trip_id NULL when none; raises rider.not-found out of scope (MOBILE-010, MOBILE-023)';
+COMMENT ON FUNCTION tracking.sp_rider_live(uuid,uuid,uuid,uuid) IS 'The rider''s trip in progress: its stops for the rider with coordinates, the vehicle''s last position, the trip''s pending stops for the ETA, the planned line, the vehicle type, the client''s kind and the destination; trip_id NULL when none; raises rider.not-found out of scope; a portal or organization read is logged in rider_access_log (MOBILE-010, MOBILE-023, TRACK-063)';

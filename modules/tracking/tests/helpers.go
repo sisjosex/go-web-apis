@@ -1832,3 +1832,83 @@ func GrantOrganizationRole(t *testing.T, helper *testhelpers.ApiTestHelper, perm
 		tenancyServices.InvalidateAccess(ctx, userID)
 	})
 }
+
+// ============================================================================
+// ACCESS LOG AND RETENTION (TRACK-063)
+// ============================================================================
+
+type accessRow struct {
+	level, action string
+	reads         int
+}
+
+// accessRows answers riderID's log rows, newest first.
+func accessRows(t *testing.T, helper *testhelpers.ApiTestHelper, riderID string) []accessRow {
+	t.Helper()
+	rows, err := helper.DB().Query(context.Background(),
+		`SELECT level, action, reads FROM tracking.rider_access_log WHERE rider_id = $1 ORDER BY last_at DESC, id DESC`, riderID)
+	if err != nil {
+		t.Fatalf("access rows: %v", err)
+	}
+	defer rows.Close()
+	out := []accessRow{}
+	for rows.Next() {
+		var r accessRow
+		if err := rows.Scan(&r.level, &r.action, &r.reads); err != nil {
+			t.Fatalf("scan access row: %v", err)
+		}
+		out = append(out, r)
+	}
+	return out
+}
+
+func clearAccessLog(t *testing.T, helper *testhelpers.ApiTestHelper, riderID string) {
+	t.Helper()
+	execSQL(t, helper, `DELETE FROM tracking.rider_access_log WHERE rider_id = $1`, riderID)
+	t.Cleanup(func() {
+		_, _ = helper.DB().Execute(context.Background(), `DELETE FROM tracking.rider_access_log WHERE rider_id = $1`, riderID)
+	})
+}
+
+// RiderDeactivated answers whether the rider's retention clock runs.
+func RiderDeactivated(t *testing.T, helper *testhelpers.ApiTestHelper, riderID string) bool {
+	t.Helper()
+	var set bool
+	if err := helper.DB().QueryRow(context.Background(),
+		`SELECT deactivated_at IS NOT NULL FROM tracking.riders WHERE id = $1`, riderID).Scan(&set); err != nil {
+		t.Fatalf("deactivated_at: %v", err)
+	}
+	return set
+}
+
+// SeedAccessLogAges writes two portal reads of riderID: one 400 days old, one from this hour.
+func SeedAccessLogAges(t *testing.T, helper *testhelpers.ApiTestHelper, riderID string) {
+	t.Helper()
+	execSQL(t, helper, `INSERT INTO tracking.rider_access_log (tenant_id, rider_id, user_id, level, action, bucket, first_at, last_at)
+		VALUES ($1, $2, gen_random_uuid(), 'portal', 'status', now() - interval '400 days', now() - interval '400 days', now() - interval '400 days'),
+		       ($1, $2, gen_random_uuid(), 'portal', 'live', date_trunc('hour', now()), now(), now())`, TestTenantID, riderID)
+}
+
+// inactiveSince turns riderID inactive daysAgo days ago, with a phone, an email, a home and a saved place.
+func inactiveSince(t *testing.T, helper *testhelpers.ApiTestHelper, riderID string, daysAgo int) {
+	t.Helper()
+	execSQL(t, helper, `UPDATE tracking.riders SET status = 'inactive', deactivated_at = now() - $2 * interval '1 day',
+		phone = '+59170000000', email = 'rider@test.local', address = 'Av. Heroínas 100', identification_number = 'CI-1',
+		home_location = ST_SetSRID(ST_MakePoint(-66.157, -17.39), 4326)::geography WHERE id = $1`, riderID, daysAgo)
+	execSQL(t, helper, `INSERT INTO tracking.rider_places (rider_id, label, location, is_default)
+		VALUES ($1, 'Casa', ST_SetSRID(ST_MakePoint(-66.157, -17.39), 4326)::geography, TRUE)`, riderID)
+}
+
+func anonymised(t *testing.T, helper *testhelpers.ApiTestHelper, riderID string) bool {
+	t.Helper()
+	return countRows(t, helper, `SELECT count(*) FROM tracking.riders WHERE id = $1 AND anonymised_at IS NOT NULL
+		AND phone IS NULL AND email IS NULL AND address IS NULL AND identification_number IS NULL AND home_location IS NULL
+		AND first_name <> '' AND NOT EXISTS (SELECT 1 FROM tracking.rider_places p WHERE p.rider_id = $1)`, riderID) == 1
+}
+
+// ClearedContacts counts riderID's contacts with no name, phone, email or account left.
+func ClearedContacts(t *testing.T, helper *testhelpers.ApiTestHelper, riderID string) int {
+	t.Helper()
+	return countRows(t, helper, `SELECT count(*) FROM tracking.rider_contacts
+		WHERE rider_id = $1 AND user_id IS NULL AND name IS NULL AND phone IS NULL AND email IS NULL`, riderID)
+}

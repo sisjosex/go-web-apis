@@ -123,7 +123,11 @@ BEGIN
     LEFT JOIN tracking.stop_places pickup_stop ON pickup_stop.id = ra.pickup_stop_id
     LEFT JOIN tracking.stop_places dropoff_stop ON dropoff_stop.id = ra.dropoff_stop_id
     WHERE rider.id = p_rider_id;
+
+    PERFORM tracking.fn_record_rider_access(
+        p_tenant_id, COALESCE(p_guardian_user_id, p_scope_user_id),
+        CASE WHEN p_guardian_user_id IS NOT NULL THEN 'portal' ELSE 'organization' END, 'status', ARRAY[p_rider_id]);
 END;
 $function$;
 
-COMMENT ON FUNCTION tracking.sp_get_rider_status(uuid,uuid,uuid,uuid) IS 'A rider''s live status for the guardian view over their route''s current trip (TRACK-008 D3): the last event is their latest task transition, the stops are where that trip calls for them, and the last event names its task and whether it has a proof photo (MOBILE-032); scoped to p_scope_user_id''s organizations and to p_guardian_user_id''s own riders when either is set';
+COMMENT ON FUNCTION tracking.sp_get_rider_status(uuid,uuid,uuid,uuid) IS 'A rider''s live status for the guardian view over their route''s current trip (TRACK-008 D3): the last event is their latest task transition, the stops are where that trip calls for them, and the last event names its task and whether it has a proof photo (MOBILE-032); scoped to p_scope_user_id''s organizations and to p_guardian_user_id''s own riders when either is set; such a read is logged in rider_access_log (TRACK-063)';

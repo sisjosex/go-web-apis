@@ -83,6 +83,12 @@ BEGIN
             WHEN p_is_active IS NOT NULL THEN CASE WHEN p_is_active THEN 'active' ELSE 'inactive' END
             ELSE r.status
         END,
+        -- The contact retention counts from the day the rider stopped riding (TRACK-063 D3).
+        deactivated_at = CASE
+            WHEN p_is_active IS NULL THEN r.deactivated_at
+            WHEN p_is_active THEN NULL
+            ELSE COALESCE(r.deactivated_at, now())
+        END,
         home_location = CASE WHEN p_home_latitude IS NOT NULL AND p_home_longitude IS NOT NULL
             THEN ST_SetSRID(ST_MakePoint(p_home_longitude, p_home_latitude), 4326)::geography
             ELSE r.home_location END,

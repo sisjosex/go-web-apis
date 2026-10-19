@@ -646,6 +646,11 @@ func registerRiderRoutes(
 	r.DELETE("/riders/:rider_id/places/:place_id",
 		tenancyMW.RequirePermission(trackingPerms.RidersWrite),
 		trackingController.DeleteRiderPlace)
+	// Who outside the operator read the rider (TRACK-063 D2): the operator's own staff only.
+	r.GET("/riders/:rider_id/audit",
+		denyOrganization,
+		tenancyMW.RequirePermission(trackingPerms.RidersRead),
+		trackingController.ListRiderAccessLog)
 	r.GET("/riders/:rider_id", trackingController.GetRider)
 	// The card's code (TRACK-027): read as the rider is, rotated as a rider is changed.
 	r.GET("/riders/:rider_id/qr-token", trackingController.RiderQRToken)

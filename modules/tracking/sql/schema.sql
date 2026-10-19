@@ -476,6 +476,52 @@ CREATE TABLE tracking.rider_absences (
 
 
 --
+-- Name: rider_access_log; Type: TABLE; Schema: tracking; Owner: -
+--
+
+CREATE TABLE tracking.rider_access_log (
+    id bigint NOT NULL,
+    tenant_id uuid NOT NULL,
+    rider_id uuid NOT NULL,
+    user_id uuid NOT NULL,
+    level character varying(20) NOT NULL,
+    action character varying(20) NOT NULL,
+    bucket timestamp with time zone NOT NULL,
+    reads integer DEFAULT 1 NOT NULL,
+    first_at timestamp with time zone NOT NULL,
+    last_at timestamp with time zone NOT NULL,
+    CONSTRAINT chk_rider_access_log_action CHECK (((action)::text = ANY ((ARRAY['status'::character varying, 'today'::character varying, 'live'::character varying, 'absences'::character varying])::text[]))),
+    CONSTRAINT chk_rider_access_log_level CHECK (((level)::text = ANY ((ARRAY['portal'::character varying, 'organization'::character varying])::text[])))
+);
+
+
+--
+-- Name: TABLE rider_access_log; Type: COMMENT; Schema: tracking; Owner: -
+--
+
+COMMENT ON TABLE tracking.rider_access_log IS 'Reads of a rider by a guardian (portal) or a client''s user (organization), one row per user, rider, action and hour; reads counts the calls in that hour (TRACK-063 D1, D2)';
+
+
+--
+-- Name: rider_access_log_id_seq; Type: SEQUENCE; Schema: tracking; Owner: -
+--
+
+CREATE SEQUENCE tracking.rider_access_log_id_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: rider_access_log_id_seq; Type: SEQUENCE OWNED BY; Schema: tracking; Owner: -
+--
+
+ALTER SEQUENCE tracking.rider_access_log_id_seq OWNED BY tracking.rider_access_log.id;
+
+
+--
 -- Name: rider_contacts; Type: TABLE; Schema: tracking; Owner: -
 --
 
@@ -606,6 +652,8 @@ CREATE TABLE tracking.riders (
     service_legs character varying(10) DEFAULT 'both'::character varying NOT NULL,
     stop_place_id uuid,
     home_geocoded boolean DEFAULT false NOT NULL,
+    deactivated_at timestamp with time zone,
+    anonymised_at timestamp with time zone,
     CONSTRAINT check_rider_type CHECK (((rider_type)::text = ANY ((ARRAY['student'::character varying, 'employee'::character varying])::text[]))),
     CONSTRAINT chk_rider_service_legs CHECK (((service_legs)::text = ANY ((ARRAY['both'::character varying, 'outbound'::character varying, 'return'::character varying])::text[])))
 );
@@ -616,6 +664,20 @@ CREATE TABLE tracking.riders (
 --
 
 COMMENT ON COLUMN tracking.riders.home_geocoded IS 'The home pin came from geocoding the address at import, not from a person; moving the pin clears it (TRACK-072 D3)';
+
+
+--
+-- Name: COLUMN riders.deactivated_at; Type: COMMENT; Schema: tracking; Owner: -
+--
+
+COMMENT ON COLUMN tracking.riders.deactivated_at IS 'When the rider last turned inactive, NULL while active; the contact retention counts from here (TRACK-063 D3)';
+
+
+--
+-- Name: COLUMN riders.anonymised_at; Type: COMMENT; Schema: tracking; Owner: -
+--
+
+COMMENT ON COLUMN tracking.riders.anonymised_at IS 'When the retention pass cleared the rider''s contact data (TRACK-063 D3)';
 
 
 --
@@ -1218,6 +1280,13 @@ ALTER TABLE ONLY tracking.outbox ALTER COLUMN id SET DEFAULT nextval('tracking.o
 
 
 --
+-- Name: rider_access_log id; Type: DEFAULT; Schema: tracking; Owner: -
+--
+
+ALTER TABLE ONLY tracking.rider_access_log ALTER COLUMN id SET DEFAULT nextval('tracking.rider_access_log_id_seq'::regclass);
+
+
+--
 -- Name: calendars calendars_pkey; Type: CONSTRAINT; Schema: tracking; Owner: -
 --
 
@@ -1335,6 +1404,14 @@ ALTER TABLE ONLY tracking.calendar_dates
 
 ALTER TABLE ONLY tracking.rider_absences
     ADD CONSTRAINT rider_absences_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: rider_access_log rider_access_log_pkey; Type: CONSTRAINT; Schema: tracking; Owner: -
+--
+
+ALTER TABLE ONLY tracking.rider_access_log
+    ADD CONSTRAINT rider_access_log_pkey PRIMARY KEY (id);
 
 
 --
@@ -1602,6 +1679,14 @@ ALTER TABLE ONLY tracking.vehicles
 
 
 --
+-- Name: rider_access_log uq_rider_access_log_bucket; Type: CONSTRAINT; Schema: tracking; Owner: -
+--
+
+ALTER TABLE ONLY tracking.rider_access_log
+    ADD CONSTRAINT uq_rider_access_log_bucket UNIQUE (rider_id, user_id, action, bucket);
+
+
+--
 -- Name: notifications ux_notifications_dedupe; Type: CONSTRAINT; Schema: tracking; Owner: -
 --
 
@@ -1744,6 +1829,20 @@ CREATE INDEX idx_outbox_unpublished ON tracking.outbox USING btree (id) WHERE (p
 --
 
 CREATE INDEX idx_rider_absences_rider_from ON tracking.rider_absences USING btree (rider_id, date_from);
+
+
+--
+-- Name: idx_rider_access_log_rider_last; Type: INDEX; Schema: tracking; Owner: -
+--
+
+CREATE INDEX idx_rider_access_log_rider_last ON tracking.rider_access_log USING btree (rider_id, last_at DESC);
+
+
+--
+-- Name: idx_rider_access_log_tenant_last; Type: INDEX; Schema: tracking; Owner: -
+--
+
+CREATE INDEX idx_rider_access_log_tenant_last ON tracking.rider_access_log USING btree (tenant_id, last_at);
 
 
 --

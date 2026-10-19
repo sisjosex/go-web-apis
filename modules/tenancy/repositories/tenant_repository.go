@@ -366,9 +366,9 @@ func (r *tenantRepository) ListTenantsWithCustomDB(ctx context.Context) ([]*mode
 }
 
 // ListTenantDirectory lists every active tenant with its database URL, nil for the shared platform
-// database (INFRA-009).
+// database (INFRA-009), and its settings (TRACK-063).
 func (r *tenantRepository) ListTenantDirectory(ctx context.Context) ([]*models.Tenant, error) {
-	rows, err := r.dbService.Query(ctx, `SELECT id, slug, name, database_url FROM tenancy.sp_list_tenant_directory()`)
+	rows, err := r.dbService.Query(ctx, `SELECT id, slug, name, database_url, settings FROM tenancy.sp_list_tenant_directory()`)
 	if err != nil {
 		return nil, err
 	}
@@ -377,7 +377,7 @@ func (r *tenantRepository) ListTenantDirectory(ctx context.Context) ([]*models.T
 	var tenants []*models.Tenant
 	for rows.Next() {
 		var tenant models.Tenant
-		if err := rows.Scan(&tenant.ID, &tenant.Slug, &tenant.Name, &tenant.DatabaseURL); err != nil {
+		if err := rows.Scan(&tenant.ID, &tenant.Slug, &tenant.Name, &tenant.DatabaseURL, &tenant.Settings); err != nil {
 			return nil, err
 		}
 		tenants = append(tenants, &tenant)

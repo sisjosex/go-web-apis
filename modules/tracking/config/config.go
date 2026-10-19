@@ -12,6 +12,12 @@ type TrackingConfig struct {
 	LocationRetentionDays      int
 	LocationUpdateRateLimitSec int
 
+	// Retention (TRACK-063 D3): an inactive rider's contact data is cleared ContactRetentionDays after it
+	// stopped riding, unless the tenant's settings name tracking.contact_retention_days; the access log
+	// keeps AccessLogRetentionDays.
+	ContactRetentionDays   int
+	AccessLogRetentionDays int
+
 	// DefaultTimezone is the zone a route or organization gets when the form sends none (TRACK-038 D4).
 	DefaultTimezone string
 
@@ -58,6 +64,8 @@ func LoadTrackingConfig() *TrackingConfig {
 		MaxLocationBatchSize:       utils.GetEnvAsInt("TRACKING_MAX_LOCATION_BATCH_SIZE", 100),
 		LocationRetentionDays:      utils.GetEnvAsInt("TRACKING_LOCATION_RETENTION_DAYS", 2),
 		LocationUpdateRateLimitSec: utils.GetEnvAsInt("TRACKING_LOCATION_RATE_LIMIT_SEC", 5),
+		ContactRetentionDays:       utils.GetEnvAsInt("TRACKING_CONTACT_RETENTION_DAYS", 90),
+		AccessLogRetentionDays:     utils.GetEnvAsInt("TRACKING_ACCESS_LOG_RETENTION_DAYS", 365),
 		DefaultTimezone:            utils.GetEnv("TRACKING_DEFAULT_TIMEZONE", "America/La_Paz"),
 
 		// Notification settings

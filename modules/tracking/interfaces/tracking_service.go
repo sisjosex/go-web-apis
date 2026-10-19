@@ -136,6 +136,9 @@ type TrackingService interface {
 	CreateRiderAbsence(ctx context.Context, tenantID, riderID uuid.UUID, dto *models.CreateRiderAbsenceDto, userID, scopeUserID, guardianUserID *uuid.UUID) (*models.CreateRiderAbsenceResponse, error)
 	DeleteRiderAbsence(ctx context.Context, tenantID, riderID, absenceID uuid.UUID, scopeUserID, guardianUserID *uuid.UUID) error
 
+	// Who outside the operator read a rider (TRACK-063)
+	ListRiderAccessLog(ctx context.Context, tenantID, riderID uuid.UUID, query models.ListRiderAccessLogQuery) (*models.ListRiderAccessLogResponse, error)
+
 	// Share links (TRACK-060): tripID nil shares riderID's trip of today; the token is made here.
 	CreateShareLink(ctx context.Context, tenantID uuid.UUID, tenantSlug string, tripID, riderID *uuid.UUID, userID *uuid.UUID, guardian bool, ttlMinutes *int32) (*models.ShareLinkCreated, error)
 	ListShareLinks(ctx context.Context, tenantID, tripID uuid.UUID) ([]*models.ShareLink, error)

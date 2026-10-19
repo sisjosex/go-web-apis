@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"log"
@@ -191,6 +192,14 @@ func registerJobs(ctx context.Context, registry *jobs.Registry, db services.Data
 			Cron: trackingJobs.PositionsPartitionsCron, Period: daily,
 			Task: asynq.NewTask(trackingJobs.TaskPositionsPartitions, nil),
 		})
+		// Inactive riders' contact data past each tenant's retention, and the access log past its own
+		// (TRACK-063 D3).
+		registry.Handle(trackingJobs.TaskContactRetention, trackingJobs.ContactRetentionHandler(db, directory,
+			config.ModularAppConfig.Tracking.ContactRetentionDays, config.ModularAppConfig.Tracking.AccessLogRetentionDays))
+		registry.Schedule(jobs.Entry{
+			Cron: trackingJobs.ContactRetentionCron, Period: daily,
+			Task: asynq.NewTask(trackingJobs.TaskContactRetention, nil), Opts: []asynq.Option{asynq.Queue(jobs.QueueLow)},
+		})
 		// The reports' aggregates the trip close missed, the per-stop lateness and yesterday's usage
 		// in the platform database (TRACK-013 D1, D3).
 		registry.Handle(trackingJobs.TaskReportRollups, trackingJobs.ReportRollupsHandler(db,
@@ -220,6 +229,12 @@ func tenantLister(db services.DatabaseService) jobs.TenantLister {
 			tenant := jobs.Tenant{ID: t.ID.String(), Slug: t.Slug, Name: t.Name}
 			if t.DatabaseURL != nil {
 				tenant.DatabaseURL = *t.DatabaseURL
+			}
+			if t.Settings != nil {
+				// A malformed settings object is a tenant without settings: every reader has a default.
+				if err := json.Unmarshal([]byte(*t.Settings), &tenant.Settings); err != nil {
+					log.Printf("⚠️  tenant %s settings: %v", t.Slug, err)
+				}
 			}
 			out = append(out, tenant)
 		}

@@ -46,6 +46,8 @@ type Tenant struct {
 	Slug        string
 	Name        string
 	DatabaseURL string
+	// Settings is tenancy.tenants.settings, for a job that reads one of its keys (TRACK-063).
+	Settings map[string]any
 }
 
 // TenantLister answers every tenant the workers serve. cmd/server builds it from the platform

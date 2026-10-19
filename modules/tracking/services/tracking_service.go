@@ -448,6 +448,10 @@ func (s *TrackingService) DeleteRiderAbsence(ctx context.Context, tenantID, ride
 	return s.trackingRepo.DeleteRiderAbsence(ctx, tenantID, riderID, absenceID, scopeUserID, guardianUserID)
 }
 
+func (s *TrackingService) ListRiderAccessLog(ctx context.Context, tenantID, riderID uuid.UUID, query models.ListRiderAccessLogQuery) (*models.ListRiderAccessLogResponse, error) {
+	return s.trackingRepo.ListRiderAccessLog(ctx, tenantID, riderID, query)
+}
+
 func (s *TrackingService) ListRiderPlaces(ctx context.Context, tenantID, riderID uuid.UUID, scopeUserID *uuid.UUID) (*models.ListRiderPlacesResponse, error) {
 	places, err := s.trackingRepo.ListRiderPlaces(ctx, tenantID, riderID, scopeUserID)
 	if err != nil {
