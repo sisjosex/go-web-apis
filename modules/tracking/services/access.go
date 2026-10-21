@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"log"
 	"strings"
+	"time"
 
 	"github.com/google/uuid"
 
@@ -19,7 +20,7 @@ import (
 
 // AccessRepository is what the access slice needs from the tracking repository (TRACK-032).
 type AccessRepository interface {
-	GrantAppAccess(ctx context.Context, tenantID uuid.UUID, dto *models.GrantAccessDto, level string) (*models.AppAccessGrant, error)
+	GrantAppAccess(ctx context.Context, tenantID uuid.UUID, dto *models.GrantAccessDto, level, channel string, createdBy *uuid.UUID) (*models.AppAccessGrant, error)
 	CreateRider(ctx context.Context, tenantID uuid.UUID, dto *models.CreateRiderDto, scopeUserID *uuid.UUID) (*models.Rider, error)
 	CreateDriver(ctx context.Context, tenantID uuid.UUID, dto *models.CreateDriverDto) (*models.Driver, error)
 	RevokeAppAccess(ctx context.Context, tenantID, userID uuid.UUID, level string) error
@@ -29,8 +30,15 @@ type AccessRepository interface {
 	AddRiderGuardian(ctx context.Context, tenantID, riderID uuid.UUID, userID *uuid.UUID, name, email string, phone *string, scopeUserID *uuid.UUID) error
 	RemoveRiderGuardian(ctx context.Context, tenantID, riderID, userID uuid.UUID, scopeUserID *uuid.UUID) error
 	SetDriverAccount(ctx context.Context, tenantID, driverID uuid.UUID, userID *uuid.UUID) (*uuid.UUID, error)
-	UpsertOrganizationMember(ctx context.Context, tenantID, organizationID, userID uuid.UUID, role string) (*models.OrganizationMember, error)
-	DeleteOrganizationMember(ctx context.Context, tenantID, organizationID, userID uuid.UUID) error
+	UpsertOrganizationMember(ctx context.Context, tenantID, organizationID, userID uuid.UUID, role string, groups []string, scopeUserID *uuid.UUID) (*models.OrganizationMember, error)
+	DeleteOrganizationMember(ctx context.Context, tenantID, organizationID, userID uuid.UUID, scopeUserID *uuid.UUID) error
+	RequireOrganizationAdmin(ctx context.Context, tenantID, organizationID, userID uuid.UUID) error
+	// Invitations at scale (TRACK-062).
+	ListInvitableContacts(ctx context.Context, tenantID uuid.UUID, organizationID *uuid.UUID, riderIDs []uuid.UUID, scopeUserID *uuid.UUID) ([]models.InvitableContact, error)
+	ListOrganizationInvited(ctx context.Context, tenantID, organizationID uuid.UUID, scopeUserID *uuid.UUID, userIDs []uuid.UUID, page, pageSize int) ([]*models.OrganizationInvite, int64, error)
+	InvitedGuardian(ctx context.Context, tenantID, userID uuid.UUID, scopeUserID *uuid.UUID) (*models.InvitedGuardian, error)
+	ListAppInvites(ctx context.Context, tenantID uuid.UUID, userIDs []uuid.UUID, status string) ([]models.AppInvite, error)
+	MarkAppInviteSent(ctx context.Context, tenantID, userID uuid.UUID) (time.Time, error)
 }
 
 // AccessService grants and revokes app access from Tracking: the level is fixed by where it is
@@ -52,6 +60,9 @@ func (s *AccessService) ListRiderGuardians(ctx context.Context, tenantID, riderI
 	guardians, err := s.repo.ListRiderGuardians(ctx, tenantID, riderID, scopeUserID)
 	if err != nil || len(guardians) == 0 {
 		return guardians, err
+	}
+	if err := s.attachInvites(ctx, tenantID, guardians); err != nil {
+		return nil, err
 	}
 	tenantName, err := s.repo.TenantName(ctx, tenantID)
 	if err != nil {
@@ -187,7 +198,7 @@ func (s *AccessService) guardianLink(ctx context.Context, tenantID uuid.UUID, in
 	}
 	g, err := s.repo.GrantAppAccess(ctx, tenantID, &models.GrantAccessDto{
 		UserID: item.UserID, Email: item.Email, FirstName: item.FirstName, LastName: item.LastName, Phone: item.Phone,
-	}, tenancyModels.RolePortal)
+	}, tenancyModels.RolePortal, models.InviteEmail, nil)
 	if err != nil {
 		return nil, nil, guardianInvalid(index, err)
 	}
@@ -246,15 +257,23 @@ func (s *AccessService) ClearDriverAccount(ctx context.Context, tenantID, driver
 	return s.revokeIfUnlinked(ctx, tenantID, *previous, tenancyModels.RoleDriver)
 }
 
-func (s *AccessService) InviteOrganizationMember(ctx context.Context, tenantID, organizationID uuid.UUID, dto *models.GrantMemberDto, lang string) (*models.AccessGranted, error) {
+// InviteOrganizationMember adds or re-roles a member. An organization user (scopeUserID) may do it only
+// in an organization it administers (TRACK-067 D1), checked before the grant so a refused call
+// creates no account.
+func (s *AccessService) InviteOrganizationMember(ctx context.Context, tenantID, organizationID uuid.UUID, dto *models.GrantMemberDto, scopeUserID *uuid.UUID, lang string) (*models.AccessGranted, error) {
+	if scopeUserID != nil {
+		if err := s.repo.RequireOrganizationAdmin(ctx, tenantID, organizationID, *scopeUserID); err != nil {
+			return nil, err
+		}
+	}
 	return s.grant(ctx, tenantID, &dto.GrantAccessDto, tenancyModels.RoleOrganization, lang, func(g *models.AppAccessGrant) error {
-		_, err := s.repo.UpsertOrganizationMember(ctx, tenantID, organizationID, g.UserID, dto.Role)
+		_, err := s.repo.UpsertOrganizationMember(ctx, tenantID, organizationID, g.UserID, dto.Role, dto.Groups, scopeUserID)
 		return err
 	})
 }
 
-func (s *AccessService) RemoveOrganizationMember(ctx context.Context, tenantID, organizationID, userID uuid.UUID) error {
-	if err := s.repo.DeleteOrganizationMember(ctx, tenantID, organizationID, userID); err != nil {
+func (s *AccessService) RemoveOrganizationMember(ctx context.Context, tenantID, organizationID, userID uuid.UUID, scopeUserID *uuid.UUID) error {
+	if err := s.repo.DeleteOrganizationMember(ctx, tenantID, organizationID, userID, scopeUserID); err != nil {
 		return err
 	}
 	return s.revokeIfUnlinked(ctx, tenantID, userID, tenancyModels.RoleOrganization)
@@ -264,7 +283,7 @@ func (s *AccessService) RemoveOrganizationMember(ctx context.Context, tenantID, 
 // added. The created account itself stays: with no membership it reaches nothing, and the next grant
 // for the same email finds it instead of failing on the unique email.
 func (s *AccessService) grant(ctx context.Context, tenantID uuid.UUID, dto *models.GrantAccessDto, level, lang string, link func(*models.AppAccessGrant) error) (*models.AccessGranted, error) {
-	g, err := s.repo.GrantAppAccess(ctx, tenantID, dto, level)
+	g, err := s.repo.GrantAppAccess(ctx, tenantID, dto, level, models.InviteEmail, nil)
 	if err != nil {
 		return nil, err
 	}

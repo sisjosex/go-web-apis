@@ -1809,6 +1809,29 @@ func MoveRiderToOrganization(t *testing.T, helper *testhelpers.ApiTestHelper, ri
 	}
 }
 
+// guardianContact writes a guardian contact without an account on riderID — what an import or an
+// older rider form leaves, and what a bulk invite turns into accounts (TRACK-062).
+func guardianContact(t *testing.T, helper *testhelpers.ApiTestHelper, riderID string, name, phone, email *string) string {
+	t.Helper()
+	var id string
+	if err := helper.DB().QueryRow(context.Background(), `INSERT INTO tracking.rider_contacts (rider_id, relation, name, phone, email)
+		VALUES ($1, 'guardian', $2, $3, $4) RETURNING id`, riderID, name, phone, email).Scan(&id); err != nil {
+		t.Fatalf("guardian contact: %v", err)
+	}
+	return id
+}
+
+// ContactsLinkedTo counts the guardian rows of riderIDs that name the account userID.
+func ContactsLinkedTo(t *testing.T, helper *testhelpers.ApiTestHelper, userID string, riderIDs ...string) int {
+	t.Helper()
+	var n int
+	if err := helper.DB().QueryRow(context.Background(),
+		`SELECT COUNT(*) FROM tracking.rider_contacts WHERE rider_id = ANY($1::UUID[]) AND user_id = $2`, riderIDs, userID).Scan(&n); err != nil {
+		t.Fatalf("linked contacts: %v", err)
+	}
+	return n
+}
+
 // GrantOrganizationRole gives the seeded organization user's role one more permission for this test,
 // and forgets the user's cached access both ways.
 func GrantOrganizationRole(t *testing.T, helper *testhelpers.ApiTestHelper, permission string) {

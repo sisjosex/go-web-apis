@@ -12,7 +12,9 @@ AS $function$
         INNER JOIN tracking.organization_members om ON om.organization_id = rd.organization_id
         WHERE t.id = p_trip_id
           AND t.tenant_id = p_tenant_id
-          AND om.user_id = p_user_id);
+          AND om.user_id = p_user_id
+          -- TRACK-067 D2: a supervisor with groups watches only the trips carrying its riders.
+          AND (om.groups IS NULL OR rd.group_label = ANY(om.groups)));
 $function$;
 
-COMMENT ON FUNCTION tracking.sp_trip_visible_to_user(uuid,uuid,uuid) IS 'Whether an organization user may watch a trip live: it carries a passenger of one of their organizations (MOBILE-020)';
+COMMENT ON FUNCTION tracking.sp_trip_visible_to_user(uuid,uuid,uuid) IS 'Whether an organization user may watch a trip live: it carries a passenger of one of their organizations (MOBILE-020), of its groups for a supervisor (TRACK-067)';

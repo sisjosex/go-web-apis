@@ -47,8 +47,11 @@ func (ctrl *LiveController) GetLiveFleet(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, coreErrors.BuildErrorDetail(c, trackingErrors.TripListFailed, utils.ExtractValidationError(c, err)))
 		return
 	}
-	vehicles, err := ctrl.live.Fleet(c.Request.Context(), tenantID, query.OrganizationID)
+	vehicles, err := ctrl.live.Fleet(c.Request.Context(), tenantID, query.OrganizationID, userIDAtLevel(c, tenancyModels.RoleOrganization))
 	if err != nil {
+		if scopeRefused(c, err) {
+			return
+		}
 		c.JSON(http.StatusInternalServerError, coreErrors.BuildError(c, err))
 		return
 	}

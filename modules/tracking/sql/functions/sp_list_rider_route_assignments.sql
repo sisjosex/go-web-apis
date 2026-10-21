@@ -5,9 +5,11 @@ CREATE OR REPLACE FUNCTION tracking.sp_list_rider_route_assignments(p_tenant_id 
 AS $function$
 DECLARE
     v_scope UUID[];
+    v_riders UUID[];
 BEGIN
     IF p_scope_user_id IS NOT NULL THEN
         v_scope := tracking.fn_organization_scope(p_tenant_id, p_scope_user_id);
+        v_riders := tracking.fn_supervised_riders(p_tenant_id, p_scope_user_id);
     END IF;
 
     RETURN QUERY
@@ -19,6 +21,7 @@ BEGIN
       AND (v_scope IS NULL OR EXISTS (
           SELECT 1 FROM tracking.riders rd
           WHERE rd.id = a.rider_id AND rd.organization_id = ANY(v_scope)
+            AND (v_riders IS NULL OR rd.id = ANY(v_riders))
       ))
     ORDER BY a.rider_name ASC, a.valid_from ASC, a.id ASC
     LIMIT  p_page_size

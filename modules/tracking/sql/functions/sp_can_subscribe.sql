@@ -1,4 +1,4 @@
-CREATE OR REPLACE FUNCTION tracking.sp_can_subscribe(p_tenant_id uuid, p_user_id uuid, p_guardian boolean, p_channel text)
+CREATE OR REPLACE FUNCTION tracking.sp_can_subscribe(p_tenant_id uuid, p_user_id uuid, p_guardian boolean, p_channel text, p_organization boolean DEFAULT false)
  RETURNS boolean
  LANGUAGE plpgsql
  STABLE
@@ -12,6 +12,23 @@ BEGIN
         RETURN FALSE;
     END IF;
     v_id := CAST(v_parts[2] AS UUID);
+
+    -- TRACK-067: an organization user watches its own organization's fleet channel — unless it is a
+    -- supervisor with groups, whose channel would carry other groups' buses — and the trips it may see.
+    IF p_organization THEN
+        IF v_parts[1] = 'fleet' THEN
+            RETURN array_length(v_parts, 1) = 4 AND v_id = p_tenant_id AND v_parts[3] = 'org' AND v_parts[4] ~ v_uuid
+                AND EXISTS (
+                    SELECT 1 FROM tracking.organization_members m
+                    INNER JOIN tracking.organizations o ON o.id = m.organization_id
+                    WHERE m.organization_id = CAST(v_parts[4] AS UUID)
+                      AND m.user_id = p_user_id
+                      AND o.tenant_id = p_tenant_id)
+                AND tracking.fn_supervised_riders(p_tenant_id, p_user_id) IS NULL;
+        END IF;
+        RETURN v_parts[1] = 'trip' AND array_length(v_parts, 1) = 2
+            AND tracking.sp_trip_visible_to_user(p_tenant_id, v_id, p_user_id);
+    END IF;
 
     IF v_parts[1] = 'fleet' THEN
         IF p_guardian OR v_id <> p_tenant_id THEN
@@ -63,4 +80,4 @@ BEGIN
 END;
 $function$;
 
-COMMENT ON FUNCTION tracking.sp_can_subscribe(uuid,uuid,boolean,text) IS 'Whether the user may subscribe to a realtime channel: fleet, org fleet and trip channels of the tenant for operators; a guardian only rider:{id} of their own rider while it rides a trip in progress (TRACK-025); driver:{id} only the user linked to that driver (TRACK-030)';
+COMMENT ON FUNCTION tracking.sp_can_subscribe(uuid,uuid,boolean,text,boolean) IS 'Whether the user may subscribe to a realtime channel: fleet, org fleet and trip channels of the tenant for operators; a guardian only rider:{id} of their own rider while it rides a trip in progress (TRACK-025); driver:{id} only the user linked to that driver (TRACK-030); an organization user (p_organization) its organization''s fleet channel unless a supervisor with groups, and a trip carrying its riders (TRACK-067)';

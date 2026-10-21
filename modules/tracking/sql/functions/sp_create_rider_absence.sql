@@ -9,7 +9,7 @@ DECLARE
     v_trips UUID[];
     v_trip UUID;
 BEGIN
-    v_cutoff := tracking.fn_rider_absence_guard(p_tenant_id, p_rider_id, p_scope_user_id, p_guardian_user_id);
+    v_cutoff := tracking.fn_rider_absence_guard(p_tenant_id, p_rider_id, p_scope_user_id, p_guardian_user_id, true);
 
     IF p_date_to < p_date_from THEN
         RAISE EXCEPTION 'absence.invalid-range' USING ERRCODE = 'P0001';

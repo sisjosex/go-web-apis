@@ -32,18 +32,22 @@ type OtpServiceImpl struct {
 	otpRepository interfaces.OtpRepository
 	providers     map[string]otp.OtpProvider
 	config        *config.AuthConfig
+	sessionHooks  []SessionHook
 }
 
-// NewOtpService creates a new OTP service with provider registry
+// NewOtpService creates a new OTP service with provider registry; each hook runs after a code
+// signs someone in.
 func NewOtpService(
 	otpRepository interfaces.OtpRepository,
 	providers map[string]otp.OtpProvider,
 	config *config.AuthConfig,
+	hooks ...SessionHook,
 ) *OtpServiceImpl {
 	return &OtpServiceImpl{
 		otpRepository: otpRepository,
 		providers:     providers,
 		config:        config,
+		sessionHooks:  hooks,
 	}
 }
 
@@ -113,6 +117,7 @@ func (s *OtpServiceImpl) VerifyOtp(
 	if err != nil {
 		return nil, err
 	}
+	runSessionHooks(ctx, s.sessionHooks, sessionUser.UserId)
 
 	return &authModels.VerifyOtpResponse{
 		SessionId:  sessionUser.SessionId,

@@ -1,5 +1,5 @@
-CREATE OR REPLACE FUNCTION tenancy.sp_grant_app_access(p_tenant_id uuid, p_user_id uuid, p_email character varying, p_first_name character varying, p_last_name character varying, p_phone character varying, p_level character varying)
- RETURNS TABLE(user_id uuid, email character varying, first_name character varying, last_name character varying, status character varying, membership_added boolean, tenant_name character varying)
+CREATE OR REPLACE FUNCTION tenancy.sp_grant_app_access(p_tenant_id uuid, p_user_id uuid, p_email character varying, p_first_name character varying, p_last_name character varying, p_phone character varying, p_level character varying, p_channel character varying DEFAULT 'email'::character varying, p_created_by uuid DEFAULT NULL::uuid)
+ RETURNS TABLE(user_id uuid, email character varying, first_name character varying, last_name character varying, status character varying, membership_added boolean, tenant_name character varying, invite_sent_at timestamp with time zone)
  LANGUAGE plpgsql
 AS $function$
 DECLARE
@@ -13,6 +13,9 @@ DECLARE
 BEGIN
     IF p_level NOT IN ('portal', 'driver', 'organization') THEN
         RAISE EXCEPTION 'access.invalid-level' USING ERRCODE = 'P0001';
+    END IF;
+    IF p_channel NOT IN ('whatsapp', 'email') THEN
+        RAISE EXCEPTION 'access.invalid-channel' USING ERRCODE = 'P0001';
     END IF;
 
     SELECT t.name INTO v_tenant_name FROM tenancy.tenants t WHERE t.id = p_tenant_id;
@@ -77,12 +80,24 @@ BEGIN
         v_added := true;
     END IF;
 
+    -- TRACK-062 D3: the invitation comes with the access, once per account and business. The access
+    -- email goes out with a new membership; a WhatsApp one waits for the operator to send it.
+    INSERT INTO tenancy.app_invites (tenant_id, user_id, level, channel, destination, created_by, sent_at)
+    SELECT p_tenant_id, v_user_id, p_level, p_channel,
+           CASE WHEN p_channel = 'whatsapp' THEN NULLIF(TRIM(p_phone), '') ELSE CAST(u.email AS VARCHAR) END,
+           p_created_by,
+           CASE WHEN p_channel = 'email' AND v_added THEN now() END
+    FROM auth.users u
+    WHERE u.id = v_user_id
+    ON CONFLICT ON CONSTRAINT uq_app_invites_tenant_user DO NOTHING;
+
     RETURN QUERY
     SELECT u.id, CAST(u.email AS VARCHAR), CAST(u.first_name AS VARCHAR), CAST(u.last_name AS VARCHAR),
-           v_status, v_added, v_tenant_name
+           v_status, v_added, v_tenant_name, i.sent_at
     FROM auth.users u
+    LEFT JOIN tenancy.app_invites i ON i.tenant_id = p_tenant_id AND i.user_id = u.id
     WHERE u.id = v_user_id;
 END;
 $function$;
 
-COMMENT ON FUNCTION tenancy.sp_grant_app_access(uuid,uuid,character varying,character varying,character varying,character varying,character varying) IS 'Finds (by id or email) or creates an account and gives it an app access level in the tenant; raises access.web-account or access.level-mismatch when it already holds another level (TRACK-032 D4)';
+COMMENT ON FUNCTION tenancy.sp_grant_app_access(uuid,uuid,character varying,character varying,character varying,character varying,character varying,character varying,uuid) IS 'Finds (by id or email) or creates an account and gives it an app access level in the tenant; raises access.web-account or access.level-mismatch when it already holds another level (TRACK-032 D4); writes the account''s invitation in the business once, by p_channel (TRACK-062 D3)';

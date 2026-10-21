@@ -16,19 +16,25 @@ import (
 
 // The live slice of TRACK-025: the two snapshots and the subscribe check.
 
-// LiveFleet answers every reporting vehicle of the tenant, narrowed to an organization's trips.
-func (r *TrackingRepository) LiveFleet(ctx context.Context, tenantID uuid.UUID, organizationID *string) ([]models.LiveVehicle, error) {
+// LiveFleet answers every reporting vehicle of the tenant, narrowed to an organization's trips, and
+// for an organization user to the ones carrying its riders (TRACK-067).
+func (r *TrackingRepository) LiveFleet(ctx context.Context, tenantID uuid.UUID, organizationID *string, scopeUserID *uuid.UUID) ([]models.LiveVehicle, error) {
 	rows, err := r.dbService.Query(ctx,
-		`SELECT * FROM tracking.sp_live_fleet(p_tenant_id := $1, p_organization_id := $2::UUID)`, tenantID, organizationID)
+		`SELECT * FROM tracking.sp_live_fleet(p_tenant_id := $1, p_organization_id := $2::UUID, p_scope_user_id := $3)`,
+		tenantID, organizationID, scopeUserID)
 	if err != nil {
-		return nil, err
+		return nil, scopedErr(err, trackingErrors.TripListFailed)
 	}
-	return pgx.CollectRows(rows, func(row pgx.CollectableRow) (models.LiveVehicle, error) {
+	vehicles, err := pgx.CollectRows(rows, func(row pgx.CollectableRow) (models.LiveVehicle, error) {
 		var v models.LiveVehicle
 		err := row.Scan(&v.VehicleID, &v.LicensePlate, &v.TripID, &v.RouteID, &v.RouteName, &v.Lat, &v.Lng, &v.Speed, &v.Heading, &v.RecordedAt,
 			&v.OrganizationKind)
 		return v, err
 	})
+	if err != nil {
+		return nil, scopedErr(err, trackingErrors.TripListFailed)
+	}
+	return vehicles, nil
 }
 
 // TripLive answers the trip detail with its vehicle's last position, and the pending stops the ETA
@@ -134,12 +140,13 @@ func scanStory(story *models.LiveStory, path, destination []byte) error {
 	return nil
 }
 
-// CanSubscribe answers whether the user may listen to channel; guardian is the portal level.
-func (r *TrackingRepository) CanSubscribe(ctx context.Context, tenantID, userID uuid.UUID, guardian bool, channel string) (bool, error) {
+// CanSubscribe answers whether the user may listen to channel; guardian is the portal level,
+// organization the organization level (TRACK-067).
+func (r *TrackingRepository) CanSubscribe(ctx context.Context, tenantID, userID uuid.UUID, guardian, organization bool, channel string) (bool, error) {
 	var ok bool
 	err := r.dbService.QueryRow(ctx,
-		`SELECT tracking.sp_can_subscribe(p_tenant_id := $1, p_user_id := $2, p_guardian := $3, p_channel := $4)`,
-		tenantID, userID, guardian, channel).Scan(&ok)
+		`SELECT tracking.sp_can_subscribe(p_tenant_id := $1, p_user_id := $2, p_guardian := $3, p_channel := $4, p_organization := $5)`,
+		tenantID, userID, guardian, channel, organization).Scan(&ok)
 	return ok, err
 }
 

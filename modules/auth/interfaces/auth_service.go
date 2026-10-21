@@ -16,8 +16,8 @@ type AuthService interface {
 	InsertUser(userDTO authModels.CreateUserDto) (*coreModels.User, error)
 
 	// Authentication
-	LoginUser(userDTO authModels.LoginUserDto) (*authModels.SessionUser, error)
-	LoginExternal(userDTO authModels.LoginExternalDto) (*authModels.SessionUser, error)
+	LoginUser(ctx context.Context, userDTO authModels.LoginUserDto) (*authModels.SessionUser, error)
+	LoginExternal(ctx context.Context, userDTO authModels.LoginExternalDto) (*authModels.SessionUser, error)
 	LogoutUser(userDTO authModels.LogoutSessionDto) (*bool, error)
 
 	// Profile management

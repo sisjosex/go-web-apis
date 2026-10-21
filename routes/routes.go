@@ -256,11 +256,16 @@ func registerAuthAndBilling(d routeDeps) billingInterfaces.BillingService {
 		parser = nil
 	}
 
-	authService := authServices.NewAuthService(authRepos.NewAuthRepository(d.db))
+	// A sign-in accepts the account's app invitations (TRACK-062 D3); auth never imports tenancy.
+	var sessionHooks []authServices.SessionHook
+	if config.ModularAppConfig.Core.IsModuleEnabled("tenancy") {
+		sessionHooks = append(sessionHooks, tenancyRepos.NewInviteRepository(d.db).AcceptAppInvites)
+	}
+	authService := authServices.NewAuthService(authRepos.NewAuthRepository(d.db), sessionHooks...)
 	authController := authControllers.NewAuthController(authService, d.jwt, d.email, parser, d.db)
 	sessionController := authControllers.NewSessionController(authService)
 	authRoutes.RegisterAuthRoutes(d.apiV1, authController, sessionController, d.jwt)
-	authRoutes.RegisterOtpRoutes(d.apiV1, d.db, config.ModularAppConfig.Auth, d.jwt)
+	authRoutes.RegisterOtpRoutes(d.apiV1, d.db, config.ModularAppConfig.Auth, d.jwt, sessionHooks...)
 	authRoutes.RegisterPushDeviceRoutes(d.apiV1, authControllers.NewPushDeviceController(
 		authServices.NewPushDeviceService(authRepos.NewPushDeviceRepository(d.db))), d.jwt)
 

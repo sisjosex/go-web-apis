@@ -37,7 +37,11 @@ func mapAccessError(err error) error {
 // GrantAppAccess finds or creates the account and gives it the level, in the main database: the
 // account and tenant_users live there even when tracking runs in a dedicated tenant database, so the
 // call goes to the primary pool, not the request's.
-func (r *TrackingRepository) GrantAppAccess(ctx context.Context, tenantID uuid.UUID, dto *models.GrantAccessDto, level string) (*models.AppAccessGrant, error) {
+//
+// The grant also writes the account's invitation in the business (TRACK-062 D3): channel is how it
+// is meant to reach the person (models.InviteEmail unless the operator sends it by WhatsApp), and
+// createdBy who invited, nil when unknown.
+func (r *TrackingRepository) GrantAppAccess(ctx context.Context, tenantID uuid.UUID, dto *models.GrantAccessDto, level, channel string, createdBy *uuid.UUID) (*models.AppAccessGrant, error) {
 	var g models.AppAccessGrant
 	err := r.dbService.GetPrimaryPool().QueryRow(ctx, `
 		SELECT * FROM tenancy.sp_grant_app_access(
@@ -47,9 +51,11 @@ func (r *TrackingRepository) GrantAppAccess(ctx context.Context, tenantID uuid.U
 			p_first_name := $4,
 			p_last_name  := $5,
 			p_phone      := $6,
-			p_level      := $7
-		)`, tenantID, dto.UserID, dto.Email, dto.FirstName, dto.LastName, dto.Phone, level,
-	).Scan(&g.UserID, &g.Email, &g.FirstName, &g.LastName, &g.Status, &g.MembershipAdded, &g.TenantName)
+			p_level      := $7,
+			p_channel    := $8,
+			p_created_by := $9
+		)`, tenantID, dto.UserID, dto.Email, dto.FirstName, dto.LastName, dto.Phone, level, channel, createdBy,
+	).Scan(&g.UserID, &g.Email, &g.FirstName, &g.LastName, &g.Status, &g.MembershipAdded, &g.TenantName, &g.InviteSentAt)
 	if err != nil {
 		return nil, mapAccessError(err)
 	}
@@ -86,6 +92,21 @@ func (r *TrackingRepository) UserLinked(ctx context.Context, tenantID, userID uu
 		return false, mapAccessError(err)
 	}
 	return linked, nil
+}
+
+// RequireOrganizationAdmin refuses an organization user who does not administer the organization
+// (TRACK-067 D1): tracking.organization.scope-denied when it administers none, not-found otherwise.
+func (r *TrackingRepository) RequireOrganizationAdmin(ctx context.Context, tenantID, organizationID, userID uuid.UUID) error {
+	var admin bool
+	err := r.dbService.QueryRow(ctx,
+		`SELECT $3 = ANY(tracking.fn_organization_scope($1, $2, true))`, tenantID, userID, organizationID).Scan(&admin)
+	if err != nil {
+		return mapAccessError(err)
+	}
+	if !admin {
+		return &trackingErrors.TrackingError{Code: trackingErrors.OrganizationNotFound}
+	}
+	return nil
 }
 
 func (r *TrackingRepository) ListRiderGuardians(ctx context.Context, tenantID, riderID uuid.UUID, scopeUserID *uuid.UUID) ([]*models.RiderGuardian, error) {

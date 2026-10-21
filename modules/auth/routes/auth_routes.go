@@ -76,11 +76,12 @@ func RegisterOtpRoutes(
 	dbService coreServices.DatabaseService,
 	authConfig *config.AuthConfig,
 	jwtService services.JWTService,
+	hooks ...services.SessionHook,
 ) {
 	// Create auth routes group for OTP routes
 	authGroup := apiV1Group.Group("/auth")
 	{
 		// Setup OTP routes using the function from otp_routes.go
-		SetupOtpRoutes(authGroup, dbService, authConfig, jwtService)
+		SetupOtpRoutes(authGroup, dbService, authConfig, jwtService, hooks...)
 	}
 }

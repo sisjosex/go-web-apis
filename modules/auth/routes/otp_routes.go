@@ -19,6 +19,7 @@ func SetupOtpRoutes(
 	dbService coreServices.DatabaseService,
 	authConfig *config.AuthConfig,
 	jwtService otpServices.JWTService,
+	hooks ...otpServices.SessionHook,
 ) {
 	// Provider registry, one entry per channel that can send on its own. SMS and WhatsApp have no paid
 	// sender yet (AUTH-001 D2), so the service relays them to the account's email; registering a
@@ -32,7 +33,7 @@ func SetupOtpRoutes(
 	otpRepository := otpRepos.NewOtpRepository(dbService)
 
 	// Initialize service
-	otpService := otpServices.NewOtpService(otpRepository, providers, authConfig)
+	otpService := otpServices.NewOtpService(otpRepository, providers, authConfig, hooks...)
 
 	// Initialize parser for User-Agent
 	parser, err := uaparser.New("./config/regexes.yaml")

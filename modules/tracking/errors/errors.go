@@ -248,6 +248,12 @@ const (
 	RiderGuardianNotFound = "tracking.rider.guardian-not-found"
 	RiderGuardianInvalid  = "tracking.rider.guardian-invalid"
 
+	// Invitations at scale (TRACK-062): an invitation to send names a guardian account of the
+	// caller's riders; a bulk invite names an organization or riders.
+	InviteNotFound       = "tracking.invite.not-found"
+	InviteTargetRequired = "tracking.invite.target-required"
+	InviteFailed         = "tracking.invite.failed"
+
 	// Document errors (TR0201-TR0220)
 	DocumentNotFound          = "tracking.document.not-found"
 	DocumentCreateFailed      = "tracking.document.create.failed"

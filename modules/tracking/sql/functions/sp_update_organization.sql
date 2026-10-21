@@ -1,8 +1,13 @@
-CREATE OR REPLACE FUNCTION tracking.sp_update_organization(p_tenant_id uuid, p_organization_id uuid, p_kind character varying, p_name character varying, p_timezone character varying, p_is_active boolean, p_absence_cutoff_min integer DEFAULT NULL::integer, p_latitude numeric DEFAULT NULL::numeric, p_longitude numeric DEFAULT NULL::numeric, p_address character varying DEFAULT NULL::character varying, p_create_stop boolean DEFAULT true, p_empty_trip_cancel_min integer DEFAULT NULL::integer, p_delay_notice_min integer DEFAULT NULL::integer)
+CREATE OR REPLACE FUNCTION tracking.sp_update_organization(p_tenant_id uuid, p_organization_id uuid, p_kind character varying, p_name character varying, p_timezone character varying, p_is_active boolean, p_absence_cutoff_min integer DEFAULT NULL::integer, p_latitude numeric DEFAULT NULL::numeric, p_longitude numeric DEFAULT NULL::numeric, p_address character varying DEFAULT NULL::character varying, p_create_stop boolean DEFAULT true, p_empty_trip_cancel_min integer DEFAULT NULL::integer, p_delay_notice_min integer DEFAULT NULL::integer, p_scope_user_id uuid DEFAULT NULL::uuid)
  RETURNS TABLE(id uuid, tenant_id uuid, kind character varying, name character varying, timezone character varying, is_active boolean, created_at timestamp without time zone, updated_at timestamp without time zone, absence_cutoff_min integer, latitude numeric, longitude numeric, address character varying, stop_place_id uuid, empty_trip_cancel_min integer, delay_notice_min integer)
  LANGUAGE plpgsql
 AS $function$
 BEGIN
+    -- TRACK-067 D1: an organization admin edits its own organization; viewer and supervisor are refused.
+    IF p_scope_user_id IS NOT NULL AND NOT (p_organization_id = ANY(tracking.fn_organization_scope(p_tenant_id, p_scope_user_id, true))) THEN
+        RAISE EXCEPTION 'organization.not-found' USING ERRCODE = 'P0001';
+    END IF;
+
     UPDATE tracking.organizations o SET
         kind      = COALESCE(NULLIF(TRIM(p_kind), ''), o.kind),
         name      = COALESCE(NULLIF(TRIM(p_name), ''), o.name),
@@ -25,4 +30,4 @@ BEGIN
 END;
 $function$;
 
-COMMENT ON FUNCTION tracking.sp_update_organization(uuid,uuid,character varying,character varying,character varying,boolean,integer,numeric,numeric,character varying,boolean,integer,integer) IS 'Edits a client; its stop moves and renames with it, and a pinned client without one gets one unless p_create_stop is false (TRACK-045 D3)';
+COMMENT ON FUNCTION tracking.sp_update_organization(uuid,uuid,character varying,character varying,character varying,boolean,integer,numeric,numeric,character varying,boolean,integer,integer,uuid) IS 'Edits a client; its stop moves and renames with it, and a pinned client without one gets one unless p_create_stop is false (TRACK-045 D3); an organization user edits only one it administers (TRACK-067)';

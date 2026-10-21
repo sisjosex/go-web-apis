@@ -6,7 +6,7 @@ DECLARE
     v_cutoff INT;
     v_absence tracking.rider_absences%ROWTYPE;
 BEGIN
-    v_cutoff := tracking.fn_rider_absence_guard(p_tenant_id, p_rider_id, p_scope_user_id, p_guardian_user_id);
+    v_cutoff := tracking.fn_rider_absence_guard(p_tenant_id, p_rider_id, p_scope_user_id, p_guardian_user_id, true);
 
     SELECT a.* INTO v_absence
     FROM tracking.rider_absences a

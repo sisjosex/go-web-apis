@@ -1145,7 +1145,7 @@ func (r *TrackingRepository) CreateOrganization(ctx context.Context, tenantID uu
 	return &org, nil
 }
 
-func (r *TrackingRepository) UpdateOrganization(ctx context.Context, tenantID uuid.UUID, organizationID uuid.UUID, dto *models.UpdateOrganizationDto) (*models.Organization, error) {
+func (r *TrackingRepository) UpdateOrganization(ctx context.Context, tenantID uuid.UUID, organizationID uuid.UUID, dto *models.UpdateOrganizationDto, scopeUserID *uuid.UUID) (*models.Organization, error) {
 	var org models.Organization
 	err := r.dbService.QueryRow(ctx, `
 		SELECT * FROM tracking.sp_update_organization(
@@ -1161,10 +1161,11 @@ func (r *TrackingRepository) UpdateOrganization(ctx context.Context, tenantID uu
 			p_address         := $10,
 			p_create_stop     := COALESCE($11::BOOLEAN, true),
 			p_empty_trip_cancel_min := $12,
-			p_delay_notice_min := $13
+			p_delay_notice_min := $13,
+			p_scope_user_id   := $14
 		)
 	`, tenantID, organizationID, dto.Kind, dto.Name, dto.Timezone, dto.IsActive, dto.AbsenceCutoffMin, dto.Latitude, dto.Longitude, dto.Address, dto.CreateStop, dto.EmptyTripCancelMin,
-		dto.DelayNoticeMin,
+		dto.DelayNoticeMin, scopeUserID,
 	).Scan(scanOrganization(&org)...)
 	if err != nil {
 		return nil, mapOrganizationError(err, trackingErrors.OrganizationUpdateFailed)
@@ -1174,10 +1175,10 @@ func (r *TrackingRepository) UpdateOrganization(ctx context.Context, tenantID uu
 
 // ListOrganizations returns one page of the tenant's organizations plus the total the same filters
 // match. total_count comes back on every row and stays 0 when the page is empty.
-func (r *TrackingRepository) ListOrganizations(ctx context.Context, tenantID uuid.UUID, query models.ListOrganizationsQuery) ([]*models.Organization, int64, error) {
+func (r *TrackingRepository) ListOrganizations(ctx context.Context, tenantID uuid.UUID, query models.ListOrganizationsQuery, scopeUserID *uuid.UUID) ([]*models.Organization, int64, error) {
 	rows, err := r.dbService.Query(ctx,
-		`SELECT * FROM tracking.sp_list_organizations($1::UUID, $2::VARCHAR, $3::VARCHAR, $4::BOOLEAN, $5::INT, $6::INT)`,
-		tenantID, query.Search, query.Kind, query.IsActive, query.Page, query.PageSize)
+		`SELECT * FROM tracking.sp_list_organizations($1::UUID, $2::VARCHAR, $3::VARCHAR, $4::BOOLEAN, $5::INT, $6::INT, $7::UUID)`,
+		tenantID, query.Search, query.Kind, query.IsActive, query.Page, query.PageSize, scopeUserID)
 	if err != nil {
 		return nil, 0, &trackingErrors.TrackingError{Code: trackingErrors.OrganizationListFailed, Err: err}
 	}
@@ -1186,7 +1187,7 @@ func (r *TrackingRepository) ListOrganizations(ctx context.Context, tenantID uui
 	var totalCount int64
 	for rows.Next() {
 		var org models.Organization
-		if err := rows.Scan(append(scanOrganization(&org), &totalCount)...); err != nil {
+		if err := rows.Scan(append(scanOrganization(&org), &org.MyRole, &org.MyGroups, &totalCount)...); err != nil {
 			return nil, 0, err
 		}
 		organizations = append(organizations, &org)
@@ -1197,10 +1198,10 @@ func (r *TrackingRepository) ListOrganizations(ctx context.Context, tenantID uui
 	return organizations, totalCount, nil
 }
 
-func (r *TrackingRepository) GetOrganization(ctx context.Context, tenantID uuid.UUID, organizationID uuid.UUID) (*models.Organization, error) {
+func (r *TrackingRepository) GetOrganization(ctx context.Context, tenantID uuid.UUID, organizationID uuid.UUID, scopeUserID *uuid.UUID) (*models.Organization, error) {
 	var org models.Organization
-	err := r.dbService.QueryRow(ctx, `SELECT * FROM tracking.sp_get_organization($1, $2)`, tenantID, organizationID).
-		Scan(scanOrganization(&org)...)
+	err := r.dbService.QueryRow(ctx, `SELECT * FROM tracking.sp_get_organization($1, $2, $3)`, tenantID, organizationID, scopeUserID).
+		Scan(append(scanOrganization(&org), &org.MyRole, &org.MyGroups)...)
 	if err != nil {
 		return nil, &trackingErrors.TrackingError{Code: trackingErrors.OrganizationNotFound, Err: err}
 	}
@@ -1221,8 +1222,8 @@ func (r *TrackingRepository) DeleteOrganization(ctx context.Context, tenantID uu
 
 // ==================== ORGANIZATION MEMBERS ====================
 
-func (r *TrackingRepository) ListOrganizationMembers(ctx context.Context, tenantID uuid.UUID, organizationID uuid.UUID) ([]*models.OrganizationMember, error) {
-	rows, err := r.dbService.Query(ctx, `SELECT * FROM tracking.sp_list_organization_members($1, $2)`, tenantID, organizationID)
+func (r *TrackingRepository) ListOrganizationMembers(ctx context.Context, tenantID uuid.UUID, organizationID uuid.UUID, scopeUserID *uuid.UUID) ([]*models.OrganizationMember, error) {
+	rows, err := r.dbService.Query(ctx, `SELECT * FROM tracking.sp_list_organization_members($1, $2, $3)`, tenantID, organizationID, scopeUserID)
 	if err != nil {
 		return nil, mapOrganizationError(err, trackingErrors.OrganizationMemberListFailed)
 	}
@@ -1230,39 +1231,41 @@ func (r *TrackingRepository) ListOrganizationMembers(ctx context.Context, tenant
 	members := []*models.OrganizationMember{}
 	for rows.Next() {
 		var member models.OrganizationMember
-		if err := rows.Scan(&member.UserID, &member.Email, &member.FirstName, &member.LastName, &member.Role); err != nil {
+		if err := rows.Scan(&member.UserID, &member.Email, &member.FirstName, &member.LastName, &member.Role, &member.Groups); err != nil {
 			return nil, err
 		}
 		members = append(members, &member)
 	}
 	if err := rows.Err(); err != nil {
-		return nil, err
+		return nil, mapOrganizationError(err, trackingErrors.OrganizationMemberListFailed)
 	}
 	return members, nil
 }
 
 // UpsertOrganizationMember adds the member or changes the role of one already there — the SP settles
 // which, so the caller needs no branch.
-func (r *TrackingRepository) UpsertOrganizationMember(ctx context.Context, tenantID uuid.UUID, organizationID uuid.UUID, userID uuid.UUID, role string) (*models.OrganizationMember, error) {
+func (r *TrackingRepository) UpsertOrganizationMember(ctx context.Context, tenantID uuid.UUID, organizationID uuid.UUID, userID uuid.UUID, role string, groups []string, scopeUserID *uuid.UUID) (*models.OrganizationMember, error) {
 	var member models.OrganizationMember
 	err := r.dbService.QueryRow(ctx, `
 		SELECT * FROM tracking.sp_upsert_organization_member(
 			p_tenant_id       := $1,
 			p_organization_id := $2,
 			p_user_id         := $3,
-			p_role            := $4
+			p_role            := $4,
+			p_groups          := $5,
+			p_scope_user_id   := $6
 		)
-	`, tenantID, organizationID, userID, role,
-	).Scan(&member.UserID, &member.Email, &member.FirstName, &member.LastName, &member.Role)
+	`, tenantID, organizationID, userID, role, groups, scopeUserID,
+	).Scan(&member.UserID, &member.Email, &member.FirstName, &member.LastName, &member.Role, &member.Groups)
 	if err != nil {
 		return nil, mapOrganizationError(err, trackingErrors.OrganizationMemberSaveFailed)
 	}
 	return &member, nil
 }
 
-func (r *TrackingRepository) DeleteOrganizationMember(ctx context.Context, tenantID uuid.UUID, organizationID uuid.UUID, userID uuid.UUID) error {
+func (r *TrackingRepository) DeleteOrganizationMember(ctx context.Context, tenantID uuid.UUID, organizationID uuid.UUID, userID uuid.UUID, scopeUserID *uuid.UUID) error {
 	var deleted bool
-	err := r.dbService.QueryRow(ctx, `SELECT tracking.sp_delete_organization_member($1, $2, $3)`, tenantID, organizationID, userID).Scan(&deleted)
+	err := r.dbService.QueryRow(ctx, `SELECT tracking.sp_delete_organization_member($1, $2, $3, $4)`, tenantID, organizationID, userID, scopeUserID).Scan(&deleted)
 	if err != nil {
 		return mapOrganizationError(err, trackingErrors.OrganizationMemberSaveFailed)
 	}
@@ -1651,6 +1654,8 @@ func mapOrganizationError(err error, fallbackCode string) error {
 	var pgErr *pgconn.PgError
 	if errors.As(err, &pgErr) {
 		switch pgErr.Message {
+		case trackingErrors.OrganizationScopeDenied:
+			return &trackingErrors.TrackingError{Code: trackingErrors.OrganizationScopeDenied, Err: pgErr}
 		case "organization.not-found":
 			return &trackingErrors.TrackingError{Code: trackingErrors.OrganizationNotFound, Err: pgErr}
 		case "organization.has-riders":

@@ -43,6 +43,8 @@ var accessStatus = map[string]int{
 	trackingErrors.DriverUserAlreadyLinked:        http.StatusConflict,
 	trackingErrors.OrganizationScopeDenied:        http.StatusForbidden,
 	trackingErrors.RiderGuardianInvalid:           http.StatusBadRequest,
+	trackingErrors.InviteNotFound:                 http.StatusNotFound,
+	trackingErrors.InviteTargetRequired:           http.StatusBadRequest,
 }
 
 func accessError(c *gin.Context, err error) {
@@ -307,7 +309,8 @@ func (ctrl *AccessController) InviteOrganizationMember(c *gin.Context) {
 	if !bindGrant(c, &dto) {
 		return
 	}
-	granted, err := ctrl.access.InviteOrganizationMember(c.Request.Context(), tenantID, ids[0], &dto, c.GetString("lang"))
+	granted, err := ctrl.access.InviteOrganizationMember(c.Request.Context(), tenantID, ids[0], &dto,
+		userIDAtLevel(c, tenancyModels.RoleOrganization), c.GetString("lang"))
 	if err != nil {
 		accessError(c, err)
 		return
@@ -341,8 +344,9 @@ func (ctrl *AccessController) UpsertOrganizationMember(c *gin.Context) {
 		return
 	}
 	_ = conform.Strings(&body)
-	dto := models.GrantMemberDto{GrantAccessDto: models.GrantAccessDto{UserID: &ids[1]}, Role: body.Role}
-	granted, err := ctrl.access.InviteOrganizationMember(c.Request.Context(), tenantID, ids[0], &dto, c.GetString("lang"))
+	dto := models.GrantMemberDto{GrantAccessDto: models.GrantAccessDto{UserID: &ids[1]}, Role: body.Role, Groups: body.Groups}
+	granted, err := ctrl.access.InviteOrganizationMember(c.Request.Context(), tenantID, ids[0], &dto,
+		userIDAtLevel(c, tenancyModels.RoleOrganization), c.GetString("lang"))
 	if err != nil {
 		accessError(c, err)
 		return
@@ -365,7 +369,8 @@ func (ctrl *AccessController) RemoveOrganizationMember(c *gin.Context) {
 	if !ok {
 		return
 	}
-	if err := ctrl.access.RemoveOrganizationMember(c.Request.Context(), tenantID, ids[0], ids[1]); err != nil {
+	if err := ctrl.access.RemoveOrganizationMember(c.Request.Context(), tenantID, ids[0], ids[1],
+		userIDAtLevel(c, tenancyModels.RoleOrganization)); err != nil {
 		accessError(c, err)
 		return
 	}

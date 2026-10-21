@@ -119,9 +119,9 @@ type TrackingRepository interface {
 
 	// Organizations CRUD
 	CreateOrganization(ctx context.Context, tenantID uuid.UUID, dto *models.CreateOrganizationDto) (*models.Organization, error)
-	UpdateOrganization(ctx context.Context, tenantID uuid.UUID, organizationID uuid.UUID, dto *models.UpdateOrganizationDto) (*models.Organization, error)
-	ListOrganizations(ctx context.Context, tenantID uuid.UUID, query models.ListOrganizationsQuery) ([]*models.Organization, int64, error)
-	GetOrganization(ctx context.Context, tenantID uuid.UUID, organizationID uuid.UUID) (*models.Organization, error)
+	UpdateOrganization(ctx context.Context, tenantID uuid.UUID, organizationID uuid.UUID, dto *models.UpdateOrganizationDto, scopeUserID *uuid.UUID) (*models.Organization, error)
+	ListOrganizations(ctx context.Context, tenantID uuid.UUID, query models.ListOrganizationsQuery, scopeUserID *uuid.UUID) ([]*models.Organization, int64, error)
+	GetOrganization(ctx context.Context, tenantID uuid.UUID, organizationID uuid.UUID, scopeUserID *uuid.UUID) (*models.Organization, error)
 	DeleteOrganization(ctx context.Context, tenantID uuid.UUID, organizationID uuid.UUID) error
 
 	// Drivers CRUD (TRACK-006)
@@ -180,7 +180,7 @@ type TrackingRepository interface {
 	DeleteRiderPlace(ctx context.Context, tenantID, riderID, placeID uuid.UUID, scopeUserID *uuid.UUID) error
 
 	// Organization members
-	ListOrganizationMembers(ctx context.Context, tenantID uuid.UUID, organizationID uuid.UUID) ([]*models.OrganizationMember, error)
-	UpsertOrganizationMember(ctx context.Context, tenantID uuid.UUID, organizationID uuid.UUID, userID uuid.UUID, role string) (*models.OrganizationMember, error)
-	DeleteOrganizationMember(ctx context.Context, tenantID uuid.UUID, organizationID uuid.UUID, userID uuid.UUID) error
+	ListOrganizationMembers(ctx context.Context, tenantID uuid.UUID, organizationID uuid.UUID, scopeUserID *uuid.UUID) ([]*models.OrganizationMember, error)
+	UpsertOrganizationMember(ctx context.Context, tenantID uuid.UUID, organizationID uuid.UUID, userID uuid.UUID, role string, groups []string, scopeUserID *uuid.UUID) (*models.OrganizationMember, error)
+	DeleteOrganizationMember(ctx context.Context, tenantID uuid.UUID, organizationID uuid.UUID, userID uuid.UUID, scopeUserID *uuid.UUID) error
 }

@@ -335,6 +335,8 @@ CREATE TABLE tracking.organization_members (
     role character varying(20) NOT NULL,
     created_at timestamp without time zone DEFAULT CURRENT_TIMESTAMP NOT NULL,
     updated_at timestamp without time zone DEFAULT CURRENT_TIMESTAMP NOT NULL,
+    groups text[],
+    CONSTRAINT chk_organization_member_groups CHECK (((groups IS NULL) OR ((role)::text = 'supervisor'::text))),
     CONSTRAINT chk_organization_member_role CHECK (((role)::text = ANY ((ARRAY['admin'::character varying, 'viewer'::character varying, 'supervisor'::character varying])::text[])))
 );
 
@@ -344,6 +346,13 @@ CREATE TABLE tracking.organization_members (
 --
 
 COMMENT ON TABLE tracking.organization_members IS 'Which tenant users see an organization and with what role (TRACK-005 D3); the channel they may sign in through is TRACK-015''s access level, not a column here';
+
+
+--
+-- Name: COLUMN organization_members.groups; Type: COMMENT; Schema: tracking; Owner: -
+--
+
+COMMENT ON COLUMN tracking.organization_members.groups IS 'The rider groups (riders.group_label) a supervisor is limited to; NULL = the whole organization, only a supervisor carries them (TRACK-067 D2)';
 
 
 --

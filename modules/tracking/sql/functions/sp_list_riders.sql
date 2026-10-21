@@ -36,6 +36,7 @@ CREATE OR REPLACE FUNCTION tracking.sp_list_riders(p_tenant_id uuid, p_organizat
 AS $function$
 DECLARE
     v_scope UUID[];
+    v_riders UUID[];
     v_guardian_scope UUID[];
     v_direction VARCHAR;
     v_days SMALLINT;
@@ -53,6 +54,7 @@ BEGIN
 
     IF p_scope_user_id IS NOT NULL THEN
         v_scope := tracking.fn_organization_scope(p_tenant_id, p_scope_user_id);
+        v_riders := tracking.fn_supervised_riders(p_tenant_id, p_scope_user_id);
     END IF;
 
     IF p_guardian_user_id IS NOT NULL THEN
@@ -111,6 +113,7 @@ BEGIN
     ) asg ON true
     WHERE o.tenant_id = p_tenant_id
       AND (v_scope IS NULL OR r.organization_id = ANY(v_scope))
+      AND (v_riders IS NULL OR r.id = ANY(v_riders))
       AND (v_guardian_scope IS NULL OR r.id = ANY(v_guardian_scope))
       AND (p_organization_id IS NULL OR r.organization_id = p_organization_id)
       AND (p_rider_type IS NULL OR p_rider_type = '' OR r.rider_type = p_rider_type)

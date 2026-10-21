@@ -27,9 +27,11 @@ AS $function$
 DECLARE
     deleted_count INT;
     v_scope UUID[];
+    v_riders UUID[];
 BEGIN
     IF p_scope_user_id IS NOT NULL THEN
-        v_scope := tracking.fn_organization_scope(p_tenant_id, p_scope_user_id);
+        v_scope := tracking.fn_organization_scope(p_tenant_id, p_scope_user_id, true);
+        v_riders := tracking.fn_supervised_riders(p_tenant_id, p_scope_user_id);
     END IF;
 
     IF NOT EXISTS (
@@ -38,6 +40,7 @@ BEGIN
         WHERE r.id = p_rider_id
           AND o.tenant_id = p_tenant_id
           AND (v_scope IS NULL OR r.organization_id = ANY(v_scope))
+          AND (v_riders IS NULL OR r.id = ANY(v_riders))
     ) THEN
         RAISE EXCEPTION 'rider.not-found' USING ERRCODE = 'P0001';
     END IF;

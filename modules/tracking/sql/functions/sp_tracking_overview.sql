@@ -5,9 +5,11 @@ CREATE OR REPLACE FUNCTION tracking.sp_tracking_overview(p_tenant_id uuid, p_dat
 AS $function$
 DECLARE
     v_scope UUID[];
+    v_riders UUID[];
 BEGIN
     IF p_scope_user_id IS NOT NULL THEN
         v_scope := tracking.fn_organization_scope(p_tenant_id, p_scope_user_id);
+        v_riders := tracking.fn_supervised_riders(p_tenant_id, p_scope_user_id);
     END IF;
 
     RETURN QUERY
@@ -24,6 +26,7 @@ BEGIN
               INNER JOIN tracking.trip_stop_tasks k ON k.trip_stop_id = ts.id
               INNER JOIN tracking.riders rd ON rd.id = k.subject_id
               WHERE ts.trip_id = t.id AND k.subject_type = 'passenger' AND rd.organization_id = ANY(v_scope)
+                AND (v_riders IS NULL OR rd.id = ANY(v_riders))
           ))
     ),
     late AS (
@@ -52,6 +55,7 @@ BEGIN
             WHERE a.tenant_id = p_tenant_id
               AND COALESCE(p_date, CURRENT_DATE) BETWEEN a.date_from AND a.date_to
               AND (v_scope IS NULL OR rd.organization_id = ANY(v_scope))
+              AND (v_riders IS NULL OR rd.id = ANY(v_riders))
         ) AS INT),
         COALESCE((
             SELECT jsonb_agg(jsonb_build_object(

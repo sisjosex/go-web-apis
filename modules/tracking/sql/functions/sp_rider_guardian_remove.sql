@@ -5,7 +5,7 @@ AS $function$
 DECLARE
     v_count INT;
 BEGIN
-    PERFORM tracking.fn_require_rider(p_tenant_id, p_rider_id, p_scope_user_id);
+    PERFORM tracking.fn_require_rider(p_tenant_id, p_rider_id, p_scope_user_id, true);
 
     DELETE FROM tracking.rider_contacts rc
     WHERE rc.rider_id = p_rider_id AND rc.relation = 'guardian' AND rc.user_id = p_user_id

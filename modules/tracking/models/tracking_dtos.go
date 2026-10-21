@@ -816,6 +816,8 @@ type ListOrganizationsResponse struct {
 // same call adds a member and changes the role of one already there.
 type UpsertOrganizationMemberDto struct {
 	Role string `json:"role" binding:"required,oneof=admin viewer supervisor" conform:"trim,lowercase"`
+	// A supervisor's rider groups (TRACK-067 D2); ignored for any other role.
+	Groups []string `json:"groups" binding:"omitempty,max=20,dive,max=100"`
 }
 
 // === DTOs for Driver Management (TRACK-006) ===

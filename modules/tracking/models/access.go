@@ -1,6 +1,10 @@
 package models
 
-import "github.com/google/uuid"
+import (
+	"time"
+
+	"github.com/google/uuid"
+)
 
 // GrantAccessDto is the body of every "give this person the app" endpoint (TRACK-032): an existing
 // account by user_id, or a person by email and name, found or created. The level is the endpoint's,
@@ -17,6 +21,8 @@ type GrantAccessDto struct {
 type GrantMemberDto struct {
 	GrantAccessDto
 	Role string `json:"role" binding:"required,oneof=admin viewer supervisor" conform:"trim,lowercase"`
+	// A supervisor's rider groups (TRACK-067 D2); ignored for any other role.
+	Groups []string `json:"groups" binding:"omitempty,max=20,dive,max=100"`
 }
 
 // AppAccessGrant is what tenancy.sp_grant_app_access answers: the account, whether it was created
@@ -30,7 +36,17 @@ type AppAccessGrant struct {
 	Status          string
 	MembershipAdded bool
 	TenantName      string
+	// InviteSentAt is when the account's invitation in the business went out; nil until it has
+	// (TRACK-062).
+	InviteSentAt *time.Time
 }
+
+// The channels an app invitation goes out by (TRACK-062 D2): the access email, or WhatsApp opened
+// by the operator.
+const (
+	InviteEmail    = "email"
+	InviteWhatsApp = "whatsapp"
+)
 
 // GuardianContact is the status of a guardian kept as a contact, without an account (TRACK-048 D3).
 const GuardianContact = "contact"
@@ -57,4 +73,7 @@ type RiderGuardian struct {
 	Phone     *string    `json:"phone"`
 	IsPrimary bool       `json:"is_primary"`
 	Notice    string     `json:"notice"`
+	// Invite is the account's invitation in the business, nil for a contact or an account invited
+	// before invitations were kept (TRACK-062).
+	Invite *AppInvite `json:"invite"`
 }

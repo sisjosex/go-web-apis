@@ -155,7 +155,7 @@ func organizationsOf(ctx importModels.ImportContext, svc trackingInterfaces.Trac
 	}
 	names := map[string]uuid.UUID{}
 	byID := map[uuid.UUID]*models.Organization{}
-	if res, err := svc.ListOrganizations(ctx.Context(), ctx.TenantID, models.ListOrganizationsQuery{Page: 1, PageSize: importLookupPage}); err == nil {
+	if res, err := svc.ListOrganizations(ctx.Context(), ctx.TenantID, models.ListOrganizationsQuery{Page: 1, PageSize: importLookupPage}, nil); err == nil {
 		for _, o := range res.Organizations {
 			names[o.Name] = o.ID
 			byID[o.ID] = o

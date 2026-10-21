@@ -122,6 +122,10 @@ func userIDAtLevel(c *gin.Context, role string) *uuid.UUID {
 // actingUserID is the signed-in user a write is recorded against. It is read from the context the
 // auth middleware filled, never from the body.
 func (ctrl *TrackingController) actingUserID(c *gin.Context) *uuid.UUID {
+	return actingUser(c)
+}
+
+func actingUser(c *gin.Context) *uuid.UUID {
 	raw, exists := c.Get("user_id")
 	if !exists {
 		return nil
@@ -1697,8 +1701,11 @@ func (ctrl *TrackingController) UpdateOrganization(c *gin.Context) {
 	}
 	_ = conform.Strings(&dto)
 
-	organization, err := ctrl.trackingService.UpdateOrganization(c.Request.Context(), tenantID, organizationID, &dto)
+	organization, err := ctrl.trackingService.UpdateOrganization(c.Request.Context(), tenantID, organizationID, &dto, ctrl.scopeUserID(c))
 	if err != nil {
+		if scopeRefused(c, err) {
+			return
+		}
 		var trackingErr *trackingErrors.TrackingError
 		if errors.As(err, &trackingErr) && trackingErr.Code == trackingErrors.OrganizationNotFound {
 			c.JSON(http.StatusNotFound, coreErrors.BuildErrorSingle(c, trackingErr.Code))
@@ -1738,7 +1745,7 @@ func (ctrl *TrackingController) ListOrganizations(c *gin.Context) {
 	}
 	query.Search = strings.TrimSpace(query.Search)
 
-	result, err := ctrl.trackingService.ListOrganizations(c.Request.Context(), tenantID, query)
+	result, err := ctrl.trackingService.ListOrganizations(c.Request.Context(), tenantID, query, ctrl.scopeUserID(c))
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, coreErrors.BuildError(c, err))
 		return
@@ -1770,7 +1777,7 @@ func (ctrl *TrackingController) GetOrganization(c *gin.Context) {
 		return
 	}
 
-	organization, err := ctrl.trackingService.GetOrganization(c.Request.Context(), tenantID, organizationID)
+	organization, err := ctrl.trackingService.GetOrganization(c.Request.Context(), tenantID, organizationID, ctrl.scopeUserID(c))
 	if err != nil {
 		var trackingErr *trackingErrors.TrackingError
 		if errors.As(err, &trackingErr) && trackingErr.Code == trackingErrors.OrganizationNotFound {
@@ -2569,7 +2576,7 @@ func (ctrl *TrackingController) ListOrganizationMembers(c *gin.Context) {
 		return
 	}
 
-	members, err := ctrl.trackingService.ListOrganizationMembers(c.Request.Context(), tenantID, organizationID)
+	members, err := ctrl.trackingService.ListOrganizationMembers(c.Request.Context(), tenantID, organizationID, ctrl.scopeUserID(c))
 	if err != nil {
 		var trackingErr *trackingErrors.TrackingError
 		if errors.As(err, &trackingErr) && trackingErr.Code == trackingErrors.OrganizationNotFound {
@@ -2614,7 +2621,7 @@ func (ctrl *TrackingController) UpsertOrganizationMember(c *gin.Context) {
 	}
 	_ = conform.Strings(&dto)
 
-	member, err := ctrl.trackingService.UpsertOrganizationMember(c.Request.Context(), tenantID, organizationID, userID, dto.Role)
+	member, err := ctrl.trackingService.UpsertOrganizationMember(c.Request.Context(), tenantID, organizationID, userID, dto.Role, dto.Groups)
 	if err != nil {
 		var trackingErr *trackingErrors.TrackingError
 		if errors.As(err, &trackingErr) &&

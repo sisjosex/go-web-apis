@@ -6,7 +6,7 @@ DECLARE
     v_id      UUID;
     v_default BOOLEAN;
 BEGIN
-    PERFORM tracking.fn_rider_place_guard(p_tenant_id, p_rider_id, p_scope_user_id);
+    PERFORM tracking.fn_rider_place_guard(p_tenant_id, p_rider_id, p_scope_user_id, true);
     PERFORM 1 FROM tracking.riders r WHERE r.id = p_rider_id FOR UPDATE;
 
     v_default := COALESCE(p_is_default, false)

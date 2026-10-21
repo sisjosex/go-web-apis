@@ -287,6 +287,10 @@ type Organization struct {
 	// DelayNoticeMin is how late, in minutes, a stop's ETA may run before its families are told; 0
 	// never (TRACK-066 D4).
 	DelayNoticeMin int32 `json:"delay_notice_min"`
+	// The reader's own membership, on the list and the detail only: NULL for staff, else its role and,
+	// for a supervisor, the groups it is limited to (TRACK-067).
+	MyRole   *string  `json:"my_role"`
+	MyGroups []string `json:"my_groups"`
 }
 
 // OrganizationMember is a tenant user on an organization, with the identity joined from auth.users.
@@ -298,6 +302,8 @@ type OrganizationMember struct {
 	FirstName *string   `json:"first_name"`
 	LastName  *string   `json:"last_name"`
 	Role      string    `json:"role"` // admin, viewer, supervisor
+	// Groups are a supervisor's rider groups; nil = the whole organization (TRACK-067 D2).
+	Groups []string `json:"groups"`
 }
 
 // Driver is a person who drives a carrier's vehicles (TRACK-006). CompanyName and UserEmail are

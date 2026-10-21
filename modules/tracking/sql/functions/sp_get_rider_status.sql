@@ -4,10 +4,12 @@ CREATE OR REPLACE FUNCTION tracking.sp_get_rider_status(p_tenant_id uuid, p_ride
 AS $function$
 DECLARE
     v_scope UUID[];
+    v_riders UUID[];
     v_guardian_scope UUID[];
 BEGIN
     IF p_scope_user_id IS NOT NULL THEN
         v_scope := tracking.fn_organization_scope(p_tenant_id, p_scope_user_id);
+        v_riders := tracking.fn_supervised_riders(p_tenant_id, p_scope_user_id);
     END IF;
 
     IF p_guardian_user_id IS NOT NULL THEN
@@ -20,6 +22,7 @@ BEGIN
         WHERE r.id = p_rider_id
           AND o.tenant_id = p_tenant_id
           AND (v_scope IS NULL OR r.organization_id = ANY(v_scope))
+          AND (v_riders IS NULL OR r.id = ANY(v_riders))
           AND (v_guardian_scope IS NULL OR r.id = ANY(v_guardian_scope))
     ) THEN
         RAISE EXCEPTION 'rider.not-found' USING ERRCODE = 'P0001';

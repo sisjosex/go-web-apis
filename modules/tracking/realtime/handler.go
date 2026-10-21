@@ -146,13 +146,14 @@ func sessionOf(c *gin.Context) (Session, bool) {
 }
 
 // channelOfLevel refuses, before any query, a channel outside the session's level: a driver listens
-// to driver:{id} only, an organization user to trip:{id} only.
+// to driver:{id} only, an organization user to trip:{id} and its organization's fleet:{tenant}:org:{id}
+// (TRACK-067).
 func channelOfLevel(session Session, channel string) bool {
 	switch {
 	case session.Driver:
 		return strings.HasPrefix(channel, "driver:")
 	case session.Organization:
-		return strings.HasPrefix(channel, "trip:")
+		return strings.HasPrefix(channel, "trip:") || strings.HasPrefix(channel, "fleet:")
 	}
 	return true
 }

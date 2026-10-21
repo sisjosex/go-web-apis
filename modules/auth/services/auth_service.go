@@ -13,22 +13,34 @@ import (
 
 type authService struct {
 	authRepository interfaces.AuthRepository
+	sessionHooks   []SessionHook
 }
 
-func NewAuthService(authRepository interfaces.AuthRepository) interfaces.AuthService {
-	return &authService{authRepository: authRepository}
+// NewAuthService builds the service; each hook runs after a password or external sign-in succeeds.
+func NewAuthService(authRepository interfaces.AuthRepository, hooks ...SessionHook) interfaces.AuthService {
+	return &authService{authRepository: authRepository, sessionHooks: hooks}
 }
 
 func (s *authService) InsertUser(userDTO authModels.CreateUserDto) (*coreModels.User, error) {
 	return s.authRepository.InsertUser(userDTO)
 }
 
-func (s *authService) LoginUser(userDTO authModels.LoginUserDto) (*authModels.SessionUser, error) {
-	return s.authRepository.LoginUser(userDTO)
+func (s *authService) LoginUser(ctx context.Context, userDTO authModels.LoginUserDto) (*authModels.SessionUser, error) {
+	user, err := s.authRepository.LoginUser(userDTO)
+	return s.signedIn(ctx, user, err)
 }
 
-func (s *authService) LoginExternal(userDTO authModels.LoginExternalDto) (*authModels.SessionUser, error) {
-	return s.authRepository.LoginExternal(userDTO)
+func (s *authService) LoginExternal(ctx context.Context, userDTO authModels.LoginExternalDto) (*authModels.SessionUser, error) {
+	user, err := s.authRepository.LoginExternal(userDTO)
+	return s.signedIn(ctx, user, err)
+}
+
+// signedIn runs the session hooks once a sign-in made a session, and passes the result through.
+func (s *authService) signedIn(ctx context.Context, user *authModels.SessionUser, err error) (*authModels.SessionUser, error) {
+	if err == nil && user != nil {
+		runSessionHooks(ctx, s.sessionHooks, user.UserId)
+	}
+	return user, err
 }
 
 func (s *authService) LogoutUser(userDTO authModels.LogoutSessionDto) (*bool, error) {

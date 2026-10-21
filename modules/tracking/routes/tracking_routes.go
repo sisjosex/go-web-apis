@@ -121,9 +121,9 @@ func registerTenantRoutes(
 	r.Use(tenantMiddleware)
 
 	// An organization user sees its own people and the routes they ride, and edits those
-	// riders — nothing else (TRACK-015 D1). The fleet, the organizations themselves and every
-	// write outside riders are the operator's, so those routes deny the level outright rather
-	// than relying on a scope the SP behind them does not take.
+	// riders — nothing else (TRACK-015 D1) — plus its own organization, its members and its live
+	// map (TRACK-067 D1). The rest of the fleet and every other write are the operator's, so those
+	// routes deny the level outright rather than relying on a scope the SP behind them does not take.
 	denyOrganization := tenancyMW.DenyTenantRole(tenancyModels.RoleOrganization)
 
 	// The guardian's group: auth, then the chain that lets a portal account through.
@@ -141,7 +141,7 @@ func registerTenantRoutes(
 	registerDocumentRoutes(r, denyOrganization, trackingController)
 	registerRiderRoutes(r, p, denyOrganization, trackingController, riderReads)
 	registerTripRoutes(r, denyOrganization, trackingController)
-	registerLiveRoutes(r, p, denyOrganization, liveController)
+	registerLiveRoutes(r, p, liveController)
 	registerAccessRoutes(r, denyOrganization, access)
 	registerPlanningRoutes(r, denyOrganization, trackingController)
 	registerReportRoutes(r, trackingController)
@@ -196,6 +196,20 @@ func registerAccessRoutes(r *gin.RouterGroup, denyOrganization gin.HandlerFunc, 
 	r.DELETE("/riders/:rider_id/guardians/:user_id",
 		tenancyMW.RequirePermission(trackingPerms.RidersWrite),
 		access.RemoveRiderGuardian)
+	// Invitations at scale (TRACK-062): the same family grant for an organization or a selection, in
+	// the caller's scope — an organization user's needs its admin role (TRACK-067).
+	r.POST("/invites",
+		tenancyMW.RequirePermission(trackingPerms.RidersWrite),
+		access.Invite)
+	r.POST("/invites/:user_id/sent",
+		tenancyMW.RequirePermission(trackingPerms.RidersWrite),
+		access.MarkInviteSent)
+	r.POST("/invites/:user_id/resend",
+		tenancyMW.RequirePermission(trackingPerms.RidersWrite),
+		access.ResendInvite)
+	r.GET("/organizations/:organization_id/invites",
+		tenancyMW.RequirePermission(trackingPerms.RidersRead),
+		access.ListOrganizationInvites)
 	r.POST("/drivers",
 		denyOrganization,
 		tenancyMW.RequirePermission(trackingPerms.DriversWrite),
@@ -237,13 +251,14 @@ func registerPortalRoutes(router *gin.Engine, portal Portal) {
 }
 
 // registerLiveRoutes are the snapshots a live screen reads on open and on every resync (TRACK-025):
-// the operator's, like the trips they show. A rider's is also the guardian's map (MOBILE-010), so it
-// hangs off the portal-permissive chain p and the SP resolves the scope, as the rider's status does.
-func registerLiveRoutes(r, p *gin.RouterGroup, denyOrganization gin.HandlerFunc, live *controllers.LiveController) {
+// the operator's, like the trips they show, and an organization user's narrowed by the SP (TRACK-067).
+// A rider's is also the guardian's map (MOBILE-010), so it hangs off the portal-permissive chain p and
+// the SP resolves the scope, as the rider's status does.
+func registerLiveRoutes(r, p *gin.RouterGroup, live *controllers.LiveController) {
 	if live == nil {
 		return
 	}
-	r.GET("/live/fleet", denyOrganization, live.GetLiveFleet)
+	r.GET("/live/fleet", live.GetLiveFleet)
 	r.GET("/trips/:trip_id/live", live.GetTripLive)
 	p.GET("/riders/:rider_id/live", live.GetRiderLive)
 }
@@ -507,13 +522,12 @@ func registerExceptionRoutes(r *gin.RouterGroup, denyOrganization gin.HandlerFun
 
 // registerOrganizationRoutes covers the schools and employers, and who belongs to them.
 func registerOrganizationRoutes(r *gin.RouterGroup, denyOrganization gin.HandlerFunc, trackingController *controllers.TrackingController, access *controllers.AccessController) {
-	// Organizations
+	// Organizations. An organization user reads its own and its admin edits it (TRACK-067 D1): the
+	// SPs scope and role-check; creating and deleting one stay the operator's.
 	r.GET("/organizations",
-		denyOrganization,
 		tenancyMW.RequirePermission(trackingPerms.OrganizationsRead),
 		trackingController.ListOrganizations)
 	r.GET("/organizations/:organization_id",
-		denyOrganization,
 		tenancyMW.RequirePermission(trackingPerms.OrganizationsRead),
 		trackingController.GetOrganization)
 	r.POST("/organizations",
@@ -521,7 +535,6 @@ func registerOrganizationRoutes(r *gin.RouterGroup, denyOrganization gin.Handler
 		tenancyMW.RequirePermission(trackingPerms.OrganizationsWrite),
 		trackingController.CreateOrganization)
 	r.PATCH("/organizations/:organization_id",
-		denyOrganization,
 		tenancyMW.RequirePermission(trackingPerms.OrganizationsWrite),
 		trackingController.UpdateOrganization)
 	r.DELETE("/organizations/:organization_id",
@@ -530,21 +543,17 @@ func registerOrganizationRoutes(r *gin.RouterGroup, denyOrganization gin.Handler
 		trackingController.DeleteOrganization)
 
 	// Organization members. Every write goes through the access grant (TRACK-032), so a member is
-	// always an account at the organization level.
+	// always an account at the organization level; an organization's admin manages its own (TRACK-067).
 	r.GET("/organizations/:organization_id/members",
-		denyOrganization,
 		tenancyMW.RequirePermission(trackingPerms.OrganizationsRead),
 		trackingController.ListOrganizationMembers)
 	r.POST("/organizations/:organization_id/members",
-		denyOrganization,
 		tenancyMW.RequirePermission(trackingPerms.OrganizationsWrite),
 		access.InviteOrganizationMember)
 	r.PUT("/organizations/:organization_id/members/:user_id",
-		denyOrganization,
 		tenancyMW.RequirePermission(trackingPerms.OrganizationsWrite),
 		access.UpsertOrganizationMember)
 	r.DELETE("/organizations/:organization_id/members/:user_id",
-		denyOrganization,
 		tenancyMW.RequirePermission(trackingPerms.OrganizationsWrite),
 		access.RemoveOrganizationMember)
 }

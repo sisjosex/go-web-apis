@@ -143,7 +143,8 @@ subprotocol pair `bearer, <jwt>` and the tenant as `?tenant_slug=`; then `{op: s
 channel}` ↔ `{channel, type, seq, data}` (`type` position|stop|trip_status|task|eta, or `error` with
 `code: forbidden`, the socket kept). Each subscribe is `sp_can_subscribe`, cached 5 min per (user,
 channel): operators get `fleet:{tenant}[:org:{id}]`, `trip:{id}`, `rider:{id}`; a guardian only its own
-`rider:{id}` while it rides; organization and driver levels are refused at the upgrade. One Valkey
+`rider:{id}` while it rides; an organization user its trips' `trip:{id}` and its own `fleet:{tenant}:org:{id}`
+(not a supervisor with groups, TRACK-067); a driver only `driver:{id}`. One Valkey
 SUBSCRIBE per channel per process; position and eta are latest-wins per channel, anything else queues
 and past `WS_QUEUE_MAX` closes 1013; Valkey lost or shutdown closes 1012. `outbox:trip.changed` publishes
 every transition; the hub adds `eta` on a watched `trip:{id}`, and on a watched `rider:{id}` the same
@@ -249,7 +250,8 @@ Verified 2026-09-19 (APP-004):
 | `GET /tracking/routes` | `page page_size search company_id direction is_active` (cap 100) | `{ routes, total_count, page, page_size }` — search is name or code; every row carries `company_name`, `license_plate`, `driver_name`, `capacity` (the route's override, else its vehicle's) and `capacity_override` (PATCH `capacity: 0` clears it); `GET/POST/PATCH` of one route answer the same row |
 | `GET /tracking/documents` | `page page_size subject_type subject_id expiring_within_days` (cap 100) | `{ documents, total_count, page, page_size }` — every row carries `type_name`, `subject_name` and a `status` of valid/expiring/expired |
 | `GET /tracking/document-types` | `applies_to is_active` | array — the tenant's whole policy, unpaginated |
-| `GET /tracking/organizations` | `page page_size search kind is_active` (cap 100) | `{ organizations, total_count, page, page_size }` |
+| `GET /tracking/organizations` | `page page_size search kind is_active` (cap 100) | `{ organizations, total_count, page, page_size }` — every row carries `my_role, my_groups` (the reader's membership, null for staff; an organization user lists only its own, TRACK-067) |
+| `GET /tracking/organizations/:id/invites` | `status=pending\|sent\|accepted\|expired page page_size` (cap 100) | `{ invites, total_count, page, page_size }` — the guardian accounts of its riders with `riders`, the invitation's `channel, status, sent_at` (null without one) and `message` (TRACK-062) |
 | `GET /tracking/stop-places` | `page page_size search near radius_m` (cap 100) | `{ stop_places, total_count, page, page_size }` — `near=lat,lng` narrows to `radius_m` metres (default 1000), adds `distance_m` to every row and orders nearest first |
 | `GET /tracking/routes/:id/stops` | `date` (YYYY-MM-DD, default today) | array — the stops of the route version in force that day; every row carries `version_id` and `stop_place_id` |
 | `GET /tracking/routes/:id/versions` | — | array, newest first — each version with `effective_from`, `effective_to` and `stops_count` |

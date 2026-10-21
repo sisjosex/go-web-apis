@@ -1,4 +1,4 @@
-CREATE OR REPLACE FUNCTION tracking.fn_organization_scope(p_tenant_id uuid, p_user_id uuid)
+CREATE OR REPLACE FUNCTION tracking.fn_organization_scope(p_tenant_id uuid, p_user_id uuid, p_write boolean DEFAULT false)
  RETURNS uuid[]
  LANGUAGE plpgsql
  STABLE
@@ -12,7 +12,9 @@ BEGIN
     -- The join is the tenant guard: a membership in another tenant's organization is not a scope here.
     INNER JOIN tracking.organizations o ON o.id = om.organization_id
     WHERE om.user_id = p_user_id
-      AND o.tenant_id = p_tenant_id;
+      AND o.tenant_id = p_tenant_id
+      -- TRACK-067 D2: only an admin writes; viewer and supervisor read.
+      AND (NOT p_write OR om.role = 'admin');
 
     IF v_scope IS NULL OR array_length(v_scope, 1) IS NULL THEN
         RAISE EXCEPTION 'tracking.organization.scope-denied'
@@ -23,4 +25,4 @@ BEGIN
 END;
 $function$;
 
-COMMENT ON FUNCTION tracking.fn_organization_scope(uuid,uuid) IS 'The organizations a user may see inside one tenant (TRACK-015 D1); raises tracking.organization.scope-denied when they belong to none';
+COMMENT ON FUNCTION tracking.fn_organization_scope(uuid,uuid,boolean) IS 'The organizations a user may see inside one tenant (TRACK-015 D1), or with p_write the ones it administers (TRACK-067 D2); raises tracking.organization.scope-denied when there are none';

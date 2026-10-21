@@ -490,12 +490,12 @@ func (s *TrackingService) CreateOrganization(ctx context.Context, tenantID uuid.
 	return s.trackingRepo.CreateOrganization(ctx, tenantID, dto)
 }
 
-func (s *TrackingService) UpdateOrganization(ctx context.Context, tenantID uuid.UUID, organizationID uuid.UUID, dto *models.UpdateOrganizationDto) (*models.Organization, error) {
-	return s.trackingRepo.UpdateOrganization(ctx, tenantID, organizationID, dto)
+func (s *TrackingService) UpdateOrganization(ctx context.Context, tenantID uuid.UUID, organizationID uuid.UUID, dto *models.UpdateOrganizationDto, scopeUserID *uuid.UUID) (*models.Organization, error) {
+	return s.trackingRepo.UpdateOrganization(ctx, tenantID, organizationID, dto, scopeUserID)
 }
 
-func (s *TrackingService) ListOrganizations(ctx context.Context, tenantID uuid.UUID, query models.ListOrganizationsQuery) (*models.ListOrganizationsResponse, error) {
-	organizations, totalCount, err := s.trackingRepo.ListOrganizations(ctx, tenantID, query)
+func (s *TrackingService) ListOrganizations(ctx context.Context, tenantID uuid.UUID, query models.ListOrganizationsQuery, scopeUserID *uuid.UUID) (*models.ListOrganizationsResponse, error) {
+	organizations, totalCount, err := s.trackingRepo.ListOrganizations(ctx, tenantID, query, scopeUserID)
 	if err != nil {
 		return nil, err
 	}
@@ -507,8 +507,8 @@ func (s *TrackingService) ListOrganizations(ctx context.Context, tenantID uuid.U
 	}, nil
 }
 
-func (s *TrackingService) GetOrganization(ctx context.Context, tenantID uuid.UUID, organizationID uuid.UUID) (*models.Organization, error) {
-	return s.trackingRepo.GetOrganization(ctx, tenantID, organizationID)
+func (s *TrackingService) GetOrganization(ctx context.Context, tenantID uuid.UUID, organizationID uuid.UUID, scopeUserID *uuid.UUID) (*models.Organization, error) {
+	return s.trackingRepo.GetOrganization(ctx, tenantID, organizationID, scopeUserID)
 }
 
 func (s *TrackingService) DeleteOrganization(ctx context.Context, tenantID uuid.UUID, organizationID uuid.UUID) error {
@@ -517,16 +517,16 @@ func (s *TrackingService) DeleteOrganization(ctx context.Context, tenantID uuid.
 
 // ==================== ORGANIZATION MEMBERS ====================
 
-func (s *TrackingService) ListOrganizationMembers(ctx context.Context, tenantID uuid.UUID, organizationID uuid.UUID) ([]*models.OrganizationMember, error) {
-	return s.trackingRepo.ListOrganizationMembers(ctx, tenantID, organizationID)
+func (s *TrackingService) ListOrganizationMembers(ctx context.Context, tenantID uuid.UUID, organizationID uuid.UUID, scopeUserID *uuid.UUID) ([]*models.OrganizationMember, error) {
+	return s.trackingRepo.ListOrganizationMembers(ctx, tenantID, organizationID, scopeUserID)
 }
 
-func (s *TrackingService) UpsertOrganizationMember(ctx context.Context, tenantID uuid.UUID, organizationID uuid.UUID, userID uuid.UUID, role string) (*models.OrganizationMember, error) {
-	return s.trackingRepo.UpsertOrganizationMember(ctx, tenantID, organizationID, userID, role)
+func (s *TrackingService) UpsertOrganizationMember(ctx context.Context, tenantID uuid.UUID, organizationID uuid.UUID, userID uuid.UUID, role string, groups []string) (*models.OrganizationMember, error) {
+	return s.trackingRepo.UpsertOrganizationMember(ctx, tenantID, organizationID, userID, role, groups, nil)
 }
 
 func (s *TrackingService) DeleteOrganizationMember(ctx context.Context, tenantID uuid.UUID, organizationID uuid.UUID, userID uuid.UUID) error {
-	return s.trackingRepo.DeleteOrganizationMember(ctx, tenantID, organizationID, userID)
+	return s.trackingRepo.DeleteOrganizationMember(ctx, tenantID, organizationID, userID, nil)
 }
 
 // ==================== DRIVERS CRUD ====================

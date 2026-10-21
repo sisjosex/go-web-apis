@@ -39,9 +39,11 @@ CREATE OR REPLACE FUNCTION tracking.sp_get_route(p_tenant_id uuid, p_route_id uu
 AS $function$
 DECLARE
     v_scope UUID[];
+    v_riders UUID[];
 BEGIN
     IF p_scope_user_id IS NOT NULL THEN
         v_scope := tracking.fn_organization_scope(p_tenant_id, p_scope_user_id);
+        v_riders := tracking.fn_supervised_riders(p_tenant_id, p_scope_user_id);
     END IF;
 
     RETURN QUERY
@@ -94,6 +96,7 @@ BEGIN
           WHERE ra.route_id = r.id
             AND (ra.valid_until IS NULL OR ra.valid_until >= CURRENT_DATE)
             AND rr.organization_id = ANY(v_scope)
+            AND (v_riders IS NULL OR rr.id = ANY(v_riders))
       ));
 
     IF NOT FOUND THEN

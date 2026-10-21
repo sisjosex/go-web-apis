@@ -7,7 +7,7 @@ DECLARE
     v_scope UUID[];
 BEGIN
     IF p_scope_user_id IS NOT NULL THEN
-        v_scope := tracking.fn_organization_scope(p_tenant_id, p_scope_user_id);
+        v_scope := tracking.fn_organization_scope(p_tenant_id, p_scope_user_id, true);
     END IF;
 
     IF NOT EXISTS (

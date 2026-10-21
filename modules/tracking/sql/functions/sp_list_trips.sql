@@ -5,9 +5,11 @@ CREATE OR REPLACE FUNCTION tracking.sp_list_trips(p_tenant_id uuid, p_date date 
 AS $function$
 DECLARE
     v_scope UUID[];
+    v_riders UUID[];
 BEGIN
     IF p_scope_user_id IS NOT NULL THEN
         v_scope := tracking.fn_organization_scope(p_tenant_id, p_scope_user_id);
+        v_riders := tracking.fn_supervised_riders(p_tenant_id, p_scope_user_id);
     END IF;
     -- TRACK-069 D5: a range starts at p_date and spans at most a month.
     IF p_date_to IS NOT NULL AND (p_date IS NULL OR p_date_to < p_date OR p_date_to - p_date > 31) THEN
@@ -65,6 +67,7 @@ BEGIN
           WHERE ts.trip_id = t.id
             AND k.subject_type = 'passenger'
             AND rd.organization_id = ANY(v_scope)
+            AND (v_riders IS NULL OR rd.id = ANY(v_riders))
       ))
       AND (p_late_min IS NULL OR lt.planned_at <= now() - make_interval(mins => p_late_min))
     ORDER BY t.planned_start ASC, t.route_name ASC, t.id ASC

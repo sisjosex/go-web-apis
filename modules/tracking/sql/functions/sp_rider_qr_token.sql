@@ -4,10 +4,12 @@ CREATE OR REPLACE FUNCTION tracking.sp_rider_qr_token(p_tenant_id uuid, p_rider_
 AS $function$
 DECLARE
     v_scope UUID[];
+    v_riders UUID[];
     v_token TEXT;
 BEGIN
     IF p_scope_user_id IS NOT NULL THEN
-        v_scope := tracking.fn_organization_scope(p_tenant_id, p_scope_user_id);
+        v_scope := tracking.fn_organization_scope(p_tenant_id, p_scope_user_id, p_rotate);
+        v_riders := tracking.fn_supervised_riders(p_tenant_id, p_scope_user_id);
     END IF;
 
     IF p_rotate THEN
@@ -18,6 +20,7 @@ BEGIN
           AND r.id = p_rider_id
           AND o.tenant_id = p_tenant_id
           AND (v_scope IS NULL OR o.id = ANY(v_scope))
+          AND (v_riders IS NULL OR r.id = ANY(v_riders))
         RETURNING r.qr_token INTO v_token;
     ELSE
         SELECT r.qr_token INTO v_token
@@ -25,7 +28,8 @@ BEGIN
         INNER JOIN tracking.organizations o ON o.id = r.organization_id
         WHERE r.id = p_rider_id
           AND o.tenant_id = p_tenant_id
-          AND (v_scope IS NULL OR o.id = ANY(v_scope));
+          AND (v_scope IS NULL OR o.id = ANY(v_scope))
+          AND (v_riders IS NULL OR r.id = ANY(v_riders));
     END IF;
 
     IF v_token IS NULL THEN

@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"log"
-	"strings"
 	"time"
 
 	"josex/web/modules/tracking/interfaces"
@@ -23,8 +22,8 @@ func NewLiveService(repo interfaces.LiveRepository, eta *EtaService) *LiveServic
 	return &LiveService{repo: repo, eta: eta}
 }
 
-func (s *LiveService) Fleet(ctx context.Context, tenantID uuid.UUID, organizationID *string) ([]models.LiveVehicle, error) {
-	return s.repo.LiveFleet(ctx, tenantID, organizationID)
+func (s *LiveService) Fleet(ctx context.Context, tenantID uuid.UUID, organizationID *string, scopeUserID *uuid.UUID) ([]models.LiveVehicle, error) {
+	return s.repo.LiveFleet(ctx, tenantID, organizationID, scopeUserID)
 }
 
 // Trip is the trip's live snapshot: detail, last position and the ETA to each pending stop — one
@@ -115,15 +114,8 @@ func (s *LiveService) TripVisibleToUser(ctx context.Context, tenantID, tripID, u
 }
 
 // CanSubscribe answers whether the user may listen to channel; guardian is the portal level, and an
-// organization user may only watch a trip carrying a passenger of theirs (MOBILE-020 D2).
+// organization user watches a trip carrying a passenger of theirs (MOBILE-020 D2) or its own
+// organization's fleet channel (TRACK-067) — sp_can_subscribe decides both.
 func (s *LiveService) CanSubscribe(ctx context.Context, tenantID, userID uuid.UUID, guardian, organization bool, channel string) (bool, error) {
-	if !organization {
-		return s.repo.CanSubscribe(ctx, tenantID, userID, guardian, channel)
-	}
-	id, found := strings.CutPrefix(channel, "trip:")
-	tripID, err := uuid.Parse(id)
-	if !found || err != nil {
-		return false, nil
-	}
-	return s.TripVisibleToUser(ctx, tenantID, tripID, userID)
+	return s.repo.CanSubscribe(ctx, tenantID, userID, guardian, organization, channel)
 }

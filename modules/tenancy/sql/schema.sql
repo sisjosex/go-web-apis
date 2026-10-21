@@ -23,6 +23,33 @@ CREATE SCHEMA tenancy;
 
 
 --
+-- Name: app_invites; Type: TABLE; Schema: tenancy; Owner: -
+--
+
+CREATE TABLE tenancy.app_invites (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    tenant_id uuid NOT NULL,
+    user_id uuid NOT NULL,
+    level character varying(20) NOT NULL,
+    channel character varying(20) NOT NULL,
+    destination character varying(255),
+    created_by uuid,
+    sent_at timestamp with time zone,
+    accepted_at timestamp with time zone,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    CONSTRAINT chk_app_invites_channel CHECK (((channel)::text = ANY ((ARRAY['whatsapp'::character varying, 'email'::character varying])::text[]))),
+    CONSTRAINT chk_app_invites_level CHECK (((level)::text = ANY ((ARRAY['portal'::character varying, 'driver'::character varying, 'organization'::character varying])::text[])))
+);
+
+
+--
+-- Name: TABLE app_invites; Type: COMMENT; Schema: tenancy; Owner: -
+--
+
+COMMENT ON TABLE tenancy.app_invites IS 'An app access invitation per account and business: its channel and destination, when it went out and when the person first signed in after it (TRACK-062 D3); the status is derived, never stored';
+
+
+--
 -- Name: gps_devices; Type: TABLE; Schema: tenancy; Owner: -
 --
 
@@ -153,6 +180,14 @@ CREATE TABLE tenancy.user_roles (
 
 
 --
+-- Name: app_invites app_invites_pkey; Type: CONSTRAINT; Schema: tenancy; Owner: -
+--
+
+ALTER TABLE ONLY tenancy.app_invites
+    ADD CONSTRAINT app_invites_pkey PRIMARY KEY (id);
+
+
+--
 -- Name: gps_devices gps_devices_pkey; Type: CONSTRAINT; Schema: tenancy; Owner: -
 --
 
@@ -241,6 +276,14 @@ ALTER TABLE ONLY tenancy.gps_devices
 
 
 --
+-- Name: app_invites uq_app_invites_tenant_user; Type: CONSTRAINT; Schema: tenancy; Owner: -
+--
+
+ALTER TABLE ONLY tenancy.app_invites
+    ADD CONSTRAINT uq_app_invites_tenant_user UNIQUE (tenant_id, user_id);
+
+
+--
 -- Name: tenant_modules uq_tenant_module; Type: CONSTRAINT; Schema: tenancy; Owner: -
 --
 
@@ -262,6 +305,13 @@ ALTER TABLE ONLY tenancy.usage_daily
 
 ALTER TABLE ONLY tenancy.user_roles
     ADD CONSTRAINT user_roles_pkey PRIMARY KEY (user_id, role_id);
+
+
+--
+-- Name: idx_app_invites_user_open; Type: INDEX; Schema: tenancy; Owner: -
+--
+
+CREATE INDEX idx_app_invites_user_open ON tenancy.app_invites USING btree (user_id) WHERE (accepted_at IS NULL);
 
 
 --
@@ -395,6 +445,30 @@ CREATE TRIGGER trigger_tenant_modules_updated_at BEFORE UPDATE ON tenancy.tenant
 --
 
 CREATE TRIGGER trigger_update_tenant_updated_at BEFORE UPDATE ON tenancy.tenants FOR EACH ROW EXECUTE FUNCTION tenancy.update_tenant_updated_at();
+
+
+--
+-- Name: app_invites app_invites_created_by_fkey; Type: FK CONSTRAINT; Schema: tenancy; Owner: -
+--
+
+ALTER TABLE ONLY tenancy.app_invites
+    ADD CONSTRAINT app_invites_created_by_fkey FOREIGN KEY (created_by) REFERENCES auth.users(id) ON DELETE SET NULL;
+
+
+--
+-- Name: app_invites app_invites_tenant_id_fkey; Type: FK CONSTRAINT; Schema: tenancy; Owner: -
+--
+
+ALTER TABLE ONLY tenancy.app_invites
+    ADD CONSTRAINT app_invites_tenant_id_fkey FOREIGN KEY (tenant_id) REFERENCES tenancy.tenants(id) ON DELETE CASCADE;
+
+
+--
+-- Name: app_invites app_invites_user_id_fkey; Type: FK CONSTRAINT; Schema: tenancy; Owner: -
+--
+
+ALTER TABLE ONLY tenancy.app_invites
+    ADD CONSTRAINT app_invites_user_id_fkey FOREIGN KEY (user_id) REFERENCES auth.users(id) ON DELETE CASCADE;
 
 
 --

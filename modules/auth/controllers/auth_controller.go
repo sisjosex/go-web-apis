@@ -103,7 +103,7 @@ func (uc *AuthController) Login(c *gin.Context) {
 	loginUser.UserAgent = userAgent
 	loginUser.ClientType = declaredClient
 
-	sessionUser, err := uc.authService.LoginUser(loginUser)
+	sessionUser, err := uc.authService.LoginUser(c.Request.Context(), loginUser)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, coreErrors.BuildError(c, err))
 		return
@@ -182,7 +182,7 @@ func (uc *AuthController) LoginFacebook(c *gin.Context) {
 	// Facabeook Login
 	loginExternal.AuthProviderName = "facebook"
 
-	sessionUser, err := uc.authService.LoginExternal(loginExternal)
+	sessionUser, err := uc.authService.LoginExternal(c.Request.Context(), loginExternal)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, coreErrors.BuildError(c, err))
 		return
@@ -330,7 +330,7 @@ func (uc *AuthController) Register(ctx *gin.Context) {
 		browser = strings.TrimSpace(client.UserAgent.Family + " " + client.UserAgent.Major)
 	}
 
-	sessionUser, err := uc.authService.LoginUser(authModels.LoginUserDto{
+	sessionUser, err := uc.authService.LoginUser(ctx.Request.Context(), authModels.LoginUserDto{
 		Email:      newUser.Email,
 		Password:   newUser.Password,
 		IpAddress:  utils.GetClientIp(ctx),
