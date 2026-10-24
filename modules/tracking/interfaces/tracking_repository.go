@@ -110,6 +110,7 @@ type TrackingRepository interface {
 	ApplyOptimizationRun(ctx context.Context, tenantID, runID uuid.UUID, dto *models.ApplyOptimizationRunDto, userID *uuid.UUID) (*models.ApplyOptimizationRunResponse, error)
 	ListRiderGroups(ctx context.Context, tenantID uuid.UUID, organizationID *string) ([]string, error)
 	TrackingOverview(ctx context.Context, tenantID uuid.UUID, date *string, scopeUserID *uuid.UUID) (*models.TrackingOverview, error)
+	NavCounts(ctx context.Context, tenantID uuid.UUID, scopeUserID *uuid.UUID) (*models.NavCounts, error)
 	TrackingSetup(ctx context.Context, tenantID uuid.UUID) (*models.TrackingSetup, error)
 	// Reports (TRACK-013): one page of a report, rows and summary still JSON.
 	Report(ctx context.Context, tenantID uuid.UUID, report string, q models.ReportQuery, from, to string, scopeUserID *uuid.UUID, page, pageSize int) (*models.ReportPage, error)

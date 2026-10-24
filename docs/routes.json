@@ -3544,6 +3544,29 @@
     },
     {
       "method": "GET",
+      "path": "/api/v1/tracking/nav-counts",
+      "operation_id": "tracking.NavCounts",
+      "module": "tracking",
+      "handler": "josex/web/modules/tracking/controllers.(*TrackingController).NavCounts",
+      "sps": [
+        "tracking.sp_nav_counts"
+      ],
+      "reads": [
+        "tracking.compliance_documents",
+        "tracking.organization_members",
+        "tracking.organizations",
+        "tracking.riders",
+        "tracking.route_alerts",
+        "tracking.routes",
+        "tracking.transport_companies",
+        "tracking.trip_stop_tasks",
+        "tracking.trip_stops",
+        "tracking.trips"
+      ],
+      "writes": []
+    },
+    {
+      "method": "GET",
       "path": "/api/v1/tracking/optimization-runs/{run_id}",
       "operation_id": "tracking.GetOptimizationRun",
       "module": "tracking",
@@ -9471,6 +9494,23 @@
       "calls": [
         "tracking.fn_route_changed",
         "tracking.fn_route_today"
+      ]
+    },
+    "tracking.sp_nav_counts": {
+      "reads": [
+        "tracking.compliance_documents",
+        "tracking.riders",
+        "tracking.route_alerts",
+        "tracking.routes",
+        "tracking.transport_companies",
+        "tracking.trip_stop_tasks",
+        "tracking.trip_stops",
+        "tracking.trips"
+      ],
+      "writes": [],
+      "calls": [
+        "tracking.fn_organization_scope",
+        "tracking.fn_supervised_riders"
       ]
     },
     "tracking.sp_notify_event": {

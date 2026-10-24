@@ -346,6 +346,10 @@ func (s *TrackingService) TrackingOverview(ctx context.Context, tenantID uuid.UU
 	return s.trackingRepo.TrackingOverview(ctx, tenantID, date, scopeUserID)
 }
 
+func (s *TrackingService) NavCounts(ctx context.Context, tenantID uuid.UUID, scopeUserID *uuid.UUID) (*models.NavCounts, error) {
+	return s.trackingRepo.NavCounts(ctx, tenantID, scopeUserID)
+}
+
 func (s *TrackingService) TrackingSetup(ctx context.Context, tenantID uuid.UUID) (*models.TrackingSetup, error) {
 	return s.trackingRepo.TrackingSetup(ctx, tenantID)
 }

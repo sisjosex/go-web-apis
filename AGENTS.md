@@ -142,7 +142,7 @@ a `route_alerts` row with `trip_id` + `location`, plus an `incident` trip event 
 subprotocol pair `bearer, <jwt>` and the tenant as `?tenant_slug=`; then `{op: subscribe|unsubscribe,
 channel}` ↔ `{channel, type, seq, data}` (`type` position|stop|trip_status|task|eta, or `error` with
 `code: forbidden`, the socket kept). Each subscribe is `sp_can_subscribe`, cached 5 min per (user,
-channel): operators get `fleet:{tenant}[:org:{id}]`, `trip:{id}`, `rider:{id}`; a guardian only its own
+channel): operators get `fleet:{tenant}[:org:{id}]`, `trip:{id}`, `rider:{id}` and `nav:{tenant}` (the rail's `nav_counts`, pushed by alert/trip changes and the document pass, TRACK-081); a guardian only its own
 `rider:{id}` while it rides; an organization user its trips' `trip:{id}` and its own `fleet:{tenant}:org:{id}`
 (not a supervisor with groups, TRACK-067); a driver only `driver:{id}`. One Valkey
 SUBSCRIBE per channel per process; position and eta are latest-wins per channel, anything else queues

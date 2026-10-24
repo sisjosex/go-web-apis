@@ -9889,6 +9889,27 @@
         ],
         "type": "object"
       },
+      "tracking.NavCounts": {
+        "additionalProperties": false,
+        "properties": {
+          "alerts_active": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "documents_expiring": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "trips_in_progress": {
+            "format": "int32",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "trips_in_progress"
+        ],
+        "type": "object"
+      },
       "tracking.NewRiderGuardianDto": {
         "additionalProperties": false,
         "properties": {
@@ -26108,6 +26129,29 @@
           "tracking"
         ],
         "x-handler": "josex/web/modules/tracking/controllers.(*LiveController).GetLiveFleet"
+      }
+    },
+    "/api/v1/tracking/nav-counts": {
+      "get": {
+        "description": "Today's trips in progress, the active alerts and the documents expired or due within 30 days, in one read (TRACK-081); an organization user gets only its organizations' trips",
+        "operationId": "tracking.NavCounts",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/tracking.NavCounts"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "summary": "The taypi go rail's badges",
+        "tags": [
+          "tracking"
+        ],
+        "x-handler": "josex/web/modules/tracking/controllers.(*TrackingController).NavCounts"
       }
     },
     "/api/v1/tracking/optimization-runs/{run_id}": {

@@ -64,7 +64,8 @@ func RunDocumentAlertsPass(ctx context.Context, db coreServices.DatabaseService,
 }
 
 // PassHandler is the TaskDocumentAlerts handler: the pass over whatever tenants exist when it fires.
-func PassHandler(db coreServices.DatabaseService, tenants *coreJobs.TenantDirectory) asynq.HandlerFunc {
+// A tenant with documents claimed gets the rail's new counts (TRACK-081); valkey nil publishes nothing.
+func PassHandler(db coreServices.DatabaseService, tenants *coreJobs.TenantDirectory, valkey coreServices.ValkeyService) asynq.HandlerFunc {
 	return func(ctx context.Context, _ *asynq.Task) error {
 		list, err := tenants.List(ctx)
 		if err != nil {
@@ -75,6 +76,12 @@ func PassHandler(db coreServices.DatabaseService, tenants *coreJobs.TenantDirect
 			if r.Err != nil {
 				log.Printf("⚠️  document alerts %s: %v", r.Tenant.ID, r.Err)
 				failed++
+				continue
+			}
+			if r.Claimed > 0 {
+				if err := publishNavCounts(ctx, db, valkey, r.Tenant); err != nil {
+					log.Printf("⚠️  document alerts %s: nav counts: %v", r.Tenant.ID, err)
+				}
 			}
 		}
 		if failed > 0 {

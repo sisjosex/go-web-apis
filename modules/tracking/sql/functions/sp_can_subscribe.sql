@@ -30,6 +30,11 @@ BEGIN
             AND tracking.sp_trip_visible_to_user(p_tenant_id, v_id, p_user_id);
     END IF;
 
+    -- TRACK-081: the rail's badges, to the tenant's operators only.
+    IF v_parts[1] = 'nav' THEN
+        RETURN array_length(v_parts, 1) = 2 AND NOT p_guardian AND v_id = p_tenant_id;
+    END IF;
+
     IF v_parts[1] = 'fleet' THEN
         IF p_guardian OR v_id <> p_tenant_id THEN
             RETURN FALSE;
@@ -80,4 +85,4 @@ BEGIN
 END;
 $function$;
 
-COMMENT ON FUNCTION tracking.sp_can_subscribe(uuid,uuid,boolean,text,boolean) IS 'Whether the user may subscribe to a realtime channel: fleet, org fleet and trip channels of the tenant for operators; a guardian only rider:{id} of their own rider while it rides a trip in progress (TRACK-025); driver:{id} only the user linked to that driver (TRACK-030); an organization user (p_organization) its organization''s fleet channel unless a supervisor with groups, and a trip carrying its riders (TRACK-067)';
+COMMENT ON FUNCTION tracking.sp_can_subscribe(uuid,uuid,boolean,text,boolean) IS 'Whether the user may subscribe to a realtime channel: fleet, org fleet, trip and nav (TRACK-081) channels of the tenant for operators; a guardian only rider:{id} of their own rider while it rides a trip in progress (TRACK-025); driver:{id} only the user linked to that driver (TRACK-030); an organization user (p_organization) its organization''s fleet channel unless a supervisor with groups, and a trip carrying its riders (TRACK-067)';

@@ -106,6 +106,7 @@ type TrackingService interface {
 	ApplyOptimizationRun(ctx context.Context, tenantID, runID uuid.UUID, dto *models.ApplyOptimizationRunDto, userID *uuid.UUID) (*models.ApplyOptimizationRunResponse, error)
 	ListRiderGroups(ctx context.Context, tenantID uuid.UUID, organizationID *string) ([]string, error)
 	TrackingOverview(ctx context.Context, tenantID uuid.UUID, date *string, scopeUserID *uuid.UUID) (*models.TrackingOverview, error)
+	NavCounts(ctx context.Context, tenantID uuid.UUID, scopeUserID *uuid.UUID) (*models.NavCounts, error)
 	TrackingSetup(ctx context.Context, tenantID uuid.UUID) (*models.TrackingSetup, error)
 	// Reports (TRACK-013): Report answers the report's typed page; ReportExport every row as a map, up
 	// to the export cap, and the range it covers.

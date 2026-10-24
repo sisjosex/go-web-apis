@@ -129,7 +129,7 @@ func registerJobs(ctx context.Context, registry *jobs.Registry, db services.Data
 	})
 
 	if config.ModularAppConfig.Core.IsModuleEnabled("tracking") {
-		registry.Handle(trackingJobs.TaskDocumentAlerts, trackingJobs.PassHandler(db, directory))
+		registry.Handle(trackingJobs.TaskDocumentAlerts, trackingJobs.PassHandler(db, directory, valkey))
 		registry.Handle(trackingJobs.TaskDocumentDigest, trackingJobs.DigestHandler(services.NewEmailService(), tenantDirectory(db, directory)))
 		geoConf := config.ModularAppConfig.Geo
 		// A route's plan changed: rebuild its trips that have not started (TRACK-008 D4) and its planned
@@ -175,7 +175,7 @@ func registerJobs(ctx context.Context, registry *jobs.Registry, db services.Data
 		registry.Handle(trackingJobs.TaskTripChanged, trackingJobs.TripChangedHandler(db, directory,
 			router, valkey, notify, signal, progress))
 		// An alert was raised or resolved (TRACK-004 D1): an `alert` frame to the fleet and the trip.
-		registry.Handle(trackingJobs.TaskAlertChanged, trackingJobs.AlertChangedHandler(directory, valkey, notify))
+		registry.Handle(trackingJobs.TaskAlertChanged, trackingJobs.AlertChangedHandler(db, directory, valkey, notify))
 		// A route proposal was asked (TRACK-014): solved by VROOM, on its own breaker.
 		registry.Handle(trackingJobs.TaskOptimize, trackingJobs.OptimizeHandler(db, directory, geoRouting.NewOptimizer(geoConf)))
 		registry.Handle(trackingJobs.TaskPositionsPartitions, trackingJobs.PositionsPartitionsHandler(db, directory,

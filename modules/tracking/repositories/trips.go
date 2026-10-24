@@ -264,6 +264,17 @@ func (r *TrackingRepository) TrackingOverview(ctx context.Context, tenantID uuid
 	return &o, nil
 }
 
+// NavCounts reads the rail's badges in one call (TRACK-081); scopeUserID nil counts the whole tenant.
+func (r *TrackingRepository) NavCounts(ctx context.Context, tenantID uuid.UUID, scopeUserID *uuid.UUID) (*models.NavCounts, error) {
+	var n models.NavCounts
+	err := r.dbService.QueryRow(ctx, `SELECT * FROM tracking.sp_nav_counts(p_tenant_id := $1, p_scope_user_id := $2)`, tenantID, scopeUserID).
+		Scan(&n.TripsInProgress, &n.AlertsActive, &n.DocumentsExpiring)
+	if err != nil {
+		return nil, scopedErr(err, trackingErrors.TripListFailed)
+	}
+	return &n, nil
+}
+
 // TrackingSetup reads what the tenant has set up yet in one call (TRACK-050 D2).
 func (r *TrackingRepository) TrackingSetup(ctx context.Context, tenantID uuid.UUID) (*models.TrackingSetup, error) {
 	var s models.TrackingSetup

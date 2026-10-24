@@ -30,12 +30,13 @@ type AlertChanged struct {
 }
 
 // AlertChangedHandler consumes alert.changed: the row goes out as it is, as an `alert` frame, to the
-// tenant's fleet — where the alerts page listens and refetches — and to the trip when it names one.
+// tenant's fleet — where the alerts page listens and refetches — and to the trip when it names one,
+// with the rail's new counts on nav:{tenant} (TRACK-081).
 // A raised alert is also a `delay` notice to the guardians of the riders it touches (TRACK-012).
 // The tenant comes from the TaskID. valkey nil publishes nothing; notify nil notifies nothing.
 // Delivery is at least once: a repeated frame only makes a client refetch, a repeated notice writes
 // nothing.
-func AlertChangedHandler(tenants *coreJobs.TenantDirectory, valkey coreServices.ValkeyService, notify *Notifier) asynq.HandlerFunc {
+func AlertChangedHandler(db coreServices.DatabaseService, tenants *coreJobs.TenantDirectory, valkey coreServices.ValkeyService, notify *Notifier) asynq.HandlerFunc {
 	return func(ctx context.Context, task *asynq.Task) error {
 		var payload AlertChanged
 		if err := json.Unmarshal(task.Payload(), &payload); err != nil {
@@ -55,6 +56,9 @@ func AlertChangedHandler(tenants *coreJobs.TenantDirectory, valkey coreServices.
 			}
 			pipe := valkey.Client().Pipeline()
 			publishTo(ctx, pipe, channels, Frame{Type: FrameAlert, Data: task.Payload()})
+			if err := queueNavCounts(ctx, db, pipe, tenant); err != nil {
+				return err
+			}
 			if _, err := pipe.Exec(ctx); err != nil {
 				return err
 			}

@@ -102,7 +102,8 @@ func TripChangedHandler(db coreServices.DatabaseService, tenants *coreJobs.Tenan
 
 // PublishTripChanged sends one transition as a {type, data: {trip_id, type}} frame to everyone
 // watching the trip: its riders not yet off it, and the ones whose task or stop subjectID is
-// (uuid.Nil when none) — a rider's own dropoff still reaches its channel (TRACK-030 D1).
+// (uuid.Nil when none) — a rider's own dropoff still reaches its channel (TRACK-030 D1). A start, complete
+// or cancel also sends the rail's new counts (TRACK-081).
 func PublishTripChanged(ctx context.Context, db coreServices.DatabaseService, valkey coreServices.ValkeyService, tenant coreJobs.Tenant, tripID uuid.UUID, transition string, subjectID uuid.UUID) error {
 	frameType, ok := frameOf[transition]
 	if !ok || valkey == nil {
@@ -124,6 +125,11 @@ func PublishTripChanged(ctx context.Context, db coreServices.DatabaseService, va
 	channels := vehicleChannels(tenant.ID, models.IngestedVehicle{TripID: &tripID, RiderIDs: riders, OrganizationIDs: organizations})
 	pipe := valkey.Client().Pipeline()
 	publishTo(ctx, pipe, channels, Frame{Type: frameType, Data: data})
+	if navCountsMoved[transition] {
+		if err := queueNavCounts(ctx, db, pipe, tenant); err != nil {
+			return err
+		}
+	}
 	_, err = pipe.Exec(ctx)
 	return err
 }

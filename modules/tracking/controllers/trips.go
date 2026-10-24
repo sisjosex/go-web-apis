@@ -326,6 +326,23 @@ func (ctrl *TrackingController) TrackingOverview(ctx context.Context, in *Tracki
 	return api.OK(overview)
 }
 
+// NavCounts is GET /nav-counts: The taypi go rail's badges.
+func (ctrl *TrackingController) NavCounts(ctx context.Context, _ *api.None) (*api.Out[*models.NavCounts], error) {
+	c := api.Gin(ctx)
+	tenantID, err := ctrl.requireTenantID(c)
+	if err != nil {
+		return nil, err
+	}
+	counts, err := ctrl.trackingService.NavCounts(c.Request.Context(), tenantID, ctrl.scopeUserID(c))
+	if err != nil {
+		if err := scopeRefused(c, err); err != nil {
+			return nil, err
+		}
+		return nil, api.Fail(http.StatusInternalServerError, coreErrors.BuildError(c, err))
+	}
+	return api.OK(counts)
+}
+
 // TrackingSetup is GET /setup: The tracking home's setup assistant.
 func (ctrl *TrackingController) TrackingSetup(ctx context.Context, _ *api.None) (*api.Out[*models.TrackingSetup], error) {
 	c := api.Gin(ctx)

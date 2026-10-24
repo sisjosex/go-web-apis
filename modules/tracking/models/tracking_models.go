@@ -115,6 +115,13 @@ type TrackingOverview struct {
 	HasRoutes       bool          `json:"has_routes"`
 }
 
+// NavCounts is the taypi go rail's badges (TRACK-081): what an organization user may not see is nil.
+type NavCounts struct {
+	TripsInProgress   int32  `json:"trips_in_progress"`
+	AlertsActive      *int32 `json:"alerts_active,omitempty"`
+	DocumentsExpiring *int32 `json:"documents_expiring,omitempty"`
+}
+
 // TrackingSetup is what the tenant has set up yet, in the order the home's assistant asks for it
 // (TRACK-050 D2).
 type TrackingSetup struct {
