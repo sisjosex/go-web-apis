@@ -66,6 +66,23 @@
     },
     {
       "method": "POST",
+      "path": "/api/v1/auth/login/google",
+      "operation_id": "auth.LoginGoogle",
+      "module": "auth",
+      "handler": "josex/web/modules/auth/controllers.(*AuthController).LoginGoogle",
+      "sps": [
+        "auth.sp_login_external"
+      ],
+      "reads": [
+        "auth.user_sessions",
+        "auth.users"
+      ],
+      "writes": [
+        "auth.users"
+      ]
+    },
+    {
+      "method": "POST",
       "path": "/api/v1/auth/logout",
       "operation_id": "auth.Logout",
       "module": "auth",

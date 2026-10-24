@@ -73,5 +73,7 @@
   "otp.email.automated-note": "Este es un correo automático, por favor no respondas a este mensaje.",
   "auth.client-type.invalid": "X-Client-Type debe ser web o mobile",
   "auth.device.invalid": "Dispositivo no válido",
-  "auth.device.save.failed": "No se pudo guardar el dispositivo"
+  "auth.device.save.failed": "No se pudo guardar el dispositivo",
+  "user.login.google-invalid": "No pudimos verificar tu cuenta de Google. Inténtalo de nuevo.",
+  "user.login.google-disabled": "El ingreso con Google no está disponible."
 }

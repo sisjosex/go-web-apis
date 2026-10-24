@@ -16,6 +16,7 @@ import (
 	"net/http"
 	"strings"
 
+	"github.com/gin-gonic/gin"
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgconn"
@@ -31,6 +32,8 @@ type AuthController struct {
 	emailService coreServices.EmailService
 	parser       *uaparser.Parser
 	dbService    coreServices.DatabaseService
+	// nil while the server has no Google client (APP-016): /login/google answers 503.
+	google services.GoogleSignIn
 }
 
 func NewAuthController(
@@ -40,13 +43,17 @@ func NewAuthController(
 	agentParser *uaparser.Parser,
 	db coreServices.DatabaseService,
 ) *AuthController {
-	return &AuthController{
+	controller := &AuthController{
 		authService:  authService,
 		jwtService:   jwtService,
 		emailService: emailService,
 		parser:       agentParser,
 		dbService:    db,
 	}
+	if authConf := config.ModularAppConfig.Auth; authConf.EnableGoogleAuth && authConf.GoogleClientId != "" && authConf.GoogleClientSecret != "" {
+		controller.google = services.NewGoogleSignIn(authConf.GoogleClientId, authConf.GoogleClientSecret, authConf.GoogleTokenURL)
+	}
+	return controller
 }
 
 // LoginInput is Login's request.
@@ -134,6 +141,54 @@ func (uc *AuthController) LoginFacebook(ctx context.Context, in *LoginFacebookIn
 		return nil, api.Fail(http.StatusBadRequest, coreErrors.BuildErrorDetail(c, authErrors.UserLoginValidationFailed, utils.ExtractValidationError(c, err)))
 	}
 
+	return uc.loginExternal(c, authModels.LoginExternalDto{
+		AuthProviderName: "facebook",
+		AuthProviderId:   loginExternalRequestDto.AuthProviderId,
+		DeviceId:         loginExternalRequestDto.DeviceId,
+		FirstName:        loginExternalRequestDto.FirstName,
+		LastName:         loginExternalRequestDto.LastName,
+		Email:            loginExternalRequestDto.Email,
+		Phone:            loginExternalRequestDto.Phone,
+		Birthday:         loginExternalRequestDto.Birthday,
+	})
+}
+
+// LoginGoogleInput is LoginGoogle's request.
+type LoginGoogleInput struct {
+	JSON api.Body[authModels.LoginGoogleRequestDto]
+}
+
+// LoginGoogle is POST /login/google: Sign in with Google (APP-016).
+func (uc *AuthController) LoginGoogle(ctx context.Context, in *LoginGoogleInput) (*api.Out[*authModels.LoginSuccessResponse], error) {
+	c := api.Gin(ctx)
+	if uc.google == nil {
+		return nil, api.Fail(http.StatusServiceUnavailable, coreErrors.BuildErrorSingle(c, authErrors.UserLoginGoogleDisabled))
+	}
+
+	var request authModels.LoginGoogleRequestDto
+	if err := in.JSON.Into(ctx, &request); err != nil {
+		return nil, api.Fail(http.StatusBadRequest, coreErrors.BuildErrorDetail(c, authErrors.UserLoginValidationFailed, utils.ExtractValidationError(c, err)))
+	}
+
+	identity, err := uc.google.Exchange(c.Request.Context(), request.Code)
+	if err != nil {
+		return nil, api.Fail(http.StatusUnauthorized, coreErrors.BuildErrorSingle(c, authErrors.UserLoginGoogleInvalid))
+	}
+
+	// An address with an account signs into it, password or not; a new one is created (APP-016 D4).
+	email := identity.Email
+	return uc.loginExternal(c, authModels.LoginExternalDto{
+		AuthProviderName: "google",
+		AuthProviderId:   identity.Subject,
+		DeviceId:         request.DeviceId,
+		FirstName:        optionalString(identity.FirstName),
+		LastName:         optionalString(identity.LastName),
+		Email:            &email,
+	})
+}
+
+// loginExternal opens the session of a provider-proved account and issues its tokens.
+func (uc *AuthController) loginExternal(c *gin.Context, loginExternal authModels.LoginExternalDto) (*api.Out[*authModels.LoginSuccessResponse], error) {
 	declaredClient, err := clientType(c)
 	if err != nil {
 		return nil, err
@@ -141,34 +196,17 @@ func (uc *AuthController) LoginFacebook(ctx context.Context, in *LoginFacebookIn
 
 	userAgent := c.GetHeader("User-Agent")
 
-	var deviceInfo, deviceOs, browser string
-
 	// Parse user agent only if parser is available
 	if uc.parser != nil {
 		client := uc.parser.Parse(userAgent)
-		deviceInfo = strings.TrimSpace(client.Device.Family)
-		deviceOs = strings.TrimSpace(client.Os.Family)
-		browser = strings.TrimSpace(client.UserAgent.Family)
-	}
-
-	loginExternal := authModels.LoginExternalDto{
-		AuthProviderId: loginExternalRequestDto.AuthProviderId,
-		DeviceId:       loginExternalRequestDto.DeviceId,
-		FirstName:      loginExternalRequestDto.FirstName,
-		LastName:       loginExternalRequestDto.LastName,
-		Email:          loginExternalRequestDto.Email,
-		Phone:          loginExternalRequestDto.Phone,
-		Birthday:       loginExternalRequestDto.Birthday,
+		loginExternal.DeviceInfo = strings.TrimSpace(client.Device.Family)
+		loginExternal.DeviceOs = strings.TrimSpace(client.Os.Family)
+		loginExternal.Browser = strings.TrimSpace(client.UserAgent.Family)
 	}
 
 	loginExternal.IpAddress = utils.GetClientIp(c)
-	loginExternal.DeviceInfo = deviceInfo
-	loginExternal.DeviceOs = deviceOs
-	loginExternal.Browser = browser
 	loginExternal.UserAgent = userAgent
 	loginExternal.ClientType = declaredClient
-	// Facabeook Login
-	loginExternal.AuthProviderName = "facebook"
 
 	sessionUser, err := uc.authService.LoginExternal(c.Request.Context(), loginExternal)
 	if err != nil {
@@ -189,6 +227,14 @@ func (uc *AuthController) LoginFacebook(ctx context.Context, in *LoginFacebookIn
 		AccessToken:  accessToken,
 		RefreshToken: refreshtoken,
 	})
+}
+
+// optionalString is nil for an empty claim, so the SP keeps its own default.
+func optionalString(value string) *string {
+	if value == "" {
+		return nil
+	}
+	return &value
 }
 
 // RefreshTokenInput is RefreshToken's request.

@@ -26,6 +26,10 @@ type AuthConfig struct {
 	// OAuth providers
 	EnableFacebookAuth bool
 	EnableGoogleAuth   bool
+	// Google sign-in (APP-016): the web OAuth client; the token URL is empty in production (Google's own).
+	GoogleClientId     string
+	GoogleClientSecret string
+	GoogleTokenURL     string
 
 	// SMTP configuration
 	SMTPEnabled bool
@@ -65,6 +69,9 @@ func LoadAuthConfig() *AuthConfig {
 		// OAuth providers
 		EnableFacebookAuth: utils.GetEnvAsBool("ENABLE_FACEBOOK_AUTH", false),
 		EnableGoogleAuth:   utils.GetEnvAsBool("ENABLE_GOOGLE_AUTH", false),
+		GoogleClientId:     utils.GetEnv("GOOGLE_CLIENT_ID", ""),
+		GoogleClientSecret: utils.GetEnv("GOOGLE_CLIENT_SECRET", ""),
+		GoogleTokenURL:     utils.GetEnv("GOOGLE_TOKEN_URL", ""),
 
 		// SMTP configuration for emails
 		SMTPEnabled: utils.GetEnvAsBool("SMTP_ENABLED", false),

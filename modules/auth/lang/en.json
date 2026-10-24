@@ -73,5 +73,7 @@
   "otp.email.automated-note": "This is an automated email, please do not reply to this message.",
   "auth.client-type.invalid": "X-Client-Type must be web or mobile",
   "auth.device.invalid": "Invalid device",
-  "auth.device.save.failed": "Failed to save the device"
+  "auth.device.save.failed": "Failed to save the device",
+  "user.login.google-invalid": "We could not verify your Google account. Try again.",
+  "user.login.google-disabled": "Google sign-in is not available."
 }

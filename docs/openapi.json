@@ -99,6 +99,24 @@
         ],
         "type": "object"
       },
+      "auth.LoginGoogleRequestDto": {
+        "additionalProperties": false,
+        "properties": {
+          "code": {
+            "type": "string"
+          },
+          "device_id": {
+            "format": "uuid",
+            "nullable": true,
+            "type": "string"
+          }
+        },
+        "required": [
+          "code",
+          "device_id"
+        ],
+        "type": "object"
+      },
       "auth.LoginSuccessResponse": {
         "additionalProperties": false,
         "properties": {
@@ -15322,6 +15340,69 @@
           "auth"
         ],
         "x-handler": "josex/web/modules/auth/controllers.(*AuthController).LoginFacebook"
+      }
+    },
+    "/api/v1/auth/login/google": {
+      "post": {
+        "description": "Exchanges the code from the Google popup (GIS code flow, ux_mode popup), checks the ID token names this app and a verified address, then signs in the account with that email or creates it (APP-016 D4). 503 when the server has no Google client.",
+        "operationId": "auth.LoginGoogle",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/auth.LoginGoogleRequestDto"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/auth.LoginSuccessResponse"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/core.ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/core.ErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/core.ErrorResponse"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "summary": "Sign in with Google",
+        "tags": [
+          "auth"
+        ],
+        "x-handler": "josex/web/modules/auth/controllers.(*AuthController).LoginGoogle"
       }
     },
     "/api/v1/auth/logout": {

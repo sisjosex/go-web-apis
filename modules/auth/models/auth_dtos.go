@@ -27,6 +27,12 @@ type LoginUserDto struct {
 	ClientType string     `json:"client_type"` // web | mobile, from X-Client-Type (TRACK-015 D2)
 }
 
+// LoginGoogleRequestDto is the code the Google popup returned (APP-016); the API exchanges it itself.
+type LoginGoogleRequestDto struct {
+	Code     string     `json:"code" binding:"required"`
+	DeviceId *uuid.UUID `json:"device_id" binding:"required,uuidv4"`
+}
+
 // LoginExternalRequestDto for OAuth logins (Facebook, Google, etc.)
 type LoginExternalRequestDto struct {
 	AuthProviderId string               `json:"auth_provider_id" binding:"required" conform:"trim,lowercase"`

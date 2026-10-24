@@ -10,6 +10,10 @@ const (
 	UserRegisterFailed           = "user.register.failed"
 	UserRegisterValidationFailed = "user.register.validation-failed"
 
+	// Google sign-in (APP-016): a refused code or token, and a server with no Google client.
+	UserLoginGoogleInvalid  = "user.login.google-invalid"
+	UserLoginGoogleDisabled = "user.login.google-disabled"
+
 	// Profile errors
 	UserProfileGetFailed        = "user.profile.get.failed"
 	UserProfileUpdateFailed     = "user.profile.update.failed"
