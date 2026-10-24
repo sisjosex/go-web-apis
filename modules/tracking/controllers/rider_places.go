@@ -1,9 +1,11 @@
 package controllers
 
 import (
+	"context"
 	"errors"
 	"net/http"
 
+	"josex/web/modules/core/api"
 	coreErrors "josex/web/modules/core/errors"
 	"josex/web/modules/core/utils"
 	trackingErrors "josex/web/modules/tracking/errors"
@@ -21,154 +23,130 @@ var riderPlaceStatus = map[string]int{
 	trackingErrors.RiderPlaceDefault:  http.StatusConflict,
 }
 
-func riderPlaceErrorResponse(c *gin.Context, err error) {
-	if scopeRefused(c, err) {
-		return
+func riderPlaceErrorResponse(c *gin.Context, err error) error {
+	if err := scopeRefused(c, err); err != nil {
+		return err
 	}
 	var trackingErr *trackingErrors.TrackingError
 	if errors.As(err, &trackingErr) {
 		if status, ok := riderPlaceStatus[trackingErr.Code]; ok {
-			c.JSON(status, coreErrors.BuildErrorSingle(c, trackingErr.Code))
-			return
+			return api.Fail(status, coreErrors.BuildErrorSingle(c, trackingErr.Code))
 		}
 	}
-	c.JSON(http.StatusInternalServerError, coreErrors.BuildError(c, err))
+	return api.Fail(http.StatusInternalServerError, coreErrors.BuildError(c, err))
 }
 
-// ListRiderPlaces godoc
-// @Summary List a rider's saved places
-// @Description The default first: it is the rider's home.
-// @Tags Tracking - Riders
-// @Produce json
-// @Security BearerAuth
-// @Param rider_id path string true "Rider ID (UUID)"
-// @Success 200 {object} models.ListRiderPlacesResponse
-// @Failure 400 {object} coreErrors.ErrorResponse
-// @Failure 404 {object} coreErrors.ErrorResponse
-// @Router /tracking/riders/{rider_id}/places [get]
-func (ctrl *TrackingController) ListRiderPlaces(c *gin.Context) {
-	tenantID, ok := ctrl.requireTenantID(c)
-	if !ok {
-		return
+// ListRiderPlacesInput is ListRiderPlaces's request.
+type ListRiderPlacesInput struct {
+	RiderID string `path:"rider_id"`
+}
+
+// ListRiderPlaces is GET /riders/{rider_id}/places: List a rider's saved places.
+func (ctrl *TrackingController) ListRiderPlaces(ctx context.Context, _ *ListRiderPlacesInput) (*api.Out[*models.ListRiderPlacesResponse], error) {
+	c := api.Gin(ctx)
+	tenantID, err := ctrl.requireTenantID(c)
+	if err != nil {
+		return nil, err
 	}
-	riderID, ok := pathUUID(c, "rider_id")
-	if !ok {
-		return
+	riderID, err := pathUUID(c, "rider_id")
+	if err != nil {
+		return nil, err
 	}
 
 	result, err := ctrl.trackingService.ListRiderPlaces(c.Request.Context(), tenantID, riderID, ctrl.scopeUserID(c))
 	if err != nil {
-		riderPlaceErrorResponse(c, err)
-		return
+		return nil, riderPlaceErrorResponse(c, err)
 	}
-	c.JSON(http.StatusOK, result)
+	return api.OK(result)
 }
 
-// CreateRiderPlace godoc
-// @Summary Save a place for a rider
-// @Description The rider's first place, or one sent with is_default, becomes the rider's home.
-// @Tags Tracking - Riders
-// @Accept json
-// @Produce json
-// @Security BearerAuth
-// @Param rider_id path string true "Rider ID (UUID)"
-// @Param place body models.CreateRiderPlaceDto true "Place"
-// @Success 201 {object} models.RiderPlace
-// @Failure 400 {object} coreErrors.ErrorResponse
-// @Failure 404 {object} coreErrors.ErrorResponse
-// @Router /tracking/riders/{rider_id}/places [post]
-func (ctrl *TrackingController) CreateRiderPlace(c *gin.Context) {
-	tenantID, ok := ctrl.requireTenantID(c)
-	if !ok {
-		return
+// CreateRiderPlaceInput is CreateRiderPlace's request.
+type CreateRiderPlaceInput struct {
+	RiderID string `path:"rider_id"`
+	JSON    api.Body[models.CreateRiderPlaceDto]
+}
+
+// CreateRiderPlace is POST /riders/{rider_id}/places: Save a place for a rider.
+func (ctrl *TrackingController) CreateRiderPlace(ctx context.Context, in *CreateRiderPlaceInput) (*api.Out[*models.RiderPlace], error) {
+	c := api.Gin(ctx)
+	tenantID, err := ctrl.requireTenantID(c)
+	if err != nil {
+		return nil, err
 	}
-	riderID, ok := pathUUID(c, "rider_id")
-	if !ok {
-		return
+	riderID, err := pathUUID(c, "rider_id")
+	if err != nil {
+		return nil, err
 	}
 	var dto models.CreateRiderPlaceDto
-	if err := c.ShouldBindJSON(&dto); err != nil {
-		c.JSON(http.StatusBadRequest, coreErrors.BuildErrorDetail(c, trackingErrors.RiderPlaceCreateFailed, utils.ExtractValidationError(c, err)))
-		return
+	if err := in.JSON.Into(ctx, &dto); err != nil {
+		return nil, api.Fail(http.StatusBadRequest, coreErrors.BuildErrorDetail(c, trackingErrors.RiderPlaceCreateFailed, utils.ExtractValidationError(c, err)))
 	}
 
 	place, err := ctrl.trackingService.CreateRiderPlace(c.Request.Context(), tenantID, riderID, &dto, ctrl.scopeUserID(c))
 	if err != nil {
-		riderPlaceErrorResponse(c, err)
-		return
+		return nil, riderPlaceErrorResponse(c, err)
 	}
-	c.JSON(http.StatusCreated, place)
+	return api.OK(place)
 }
 
-// UpdateRiderPlace godoc
-// @Summary Edit a rider's place
-// @Description A field left out keeps its value; is_default true makes the place the rider's home.
-// @Tags Tracking - Riders
-// @Accept json
-// @Produce json
-// @Security BearerAuth
-// @Param rider_id path string true "Rider ID (UUID)"
-// @Param place_id path string true "Place ID (UUID)"
-// @Param place body models.UpdateRiderPlaceDto true "The fields to change"
-// @Success 200 {object} models.RiderPlace
-// @Failure 400 {object} coreErrors.ErrorResponse
-// @Failure 404 {object} coreErrors.ErrorResponse
-// @Router /tracking/riders/{rider_id}/places/{place_id} [patch]
-func (ctrl *TrackingController) UpdateRiderPlace(c *gin.Context) {
-	tenantID, ok := ctrl.requireTenantID(c)
-	if !ok {
-		return
+// UpdateRiderPlaceInput is UpdateRiderPlace's request.
+type UpdateRiderPlaceInput struct {
+	PlaceID string `path:"place_id"`
+	RiderID string `path:"rider_id"`
+	JSON    api.Body[models.UpdateRiderPlaceDto]
+}
+
+// UpdateRiderPlace is PATCH /riders/{rider_id}/places/{place_id}: Edit a rider's place.
+func (ctrl *TrackingController) UpdateRiderPlace(ctx context.Context, in *UpdateRiderPlaceInput) (*api.Out[*models.RiderPlace], error) {
+	c := api.Gin(ctx)
+	tenantID, err := ctrl.requireTenantID(c)
+	if err != nil {
+		return nil, err
 	}
-	riderID, ok := pathUUID(c, "rider_id")
-	if !ok {
-		return
+	riderID, err := pathUUID(c, "rider_id")
+	if err != nil {
+		return nil, err
 	}
-	placeID, ok := pathUUID(c, "place_id")
-	if !ok {
-		return
+	placeID, err := pathUUID(c, "place_id")
+	if err != nil {
+		return nil, err
 	}
 	var dto models.UpdateRiderPlaceDto
-	if err := c.ShouldBindJSON(&dto); err != nil {
-		c.JSON(http.StatusBadRequest, coreErrors.BuildErrorDetail(c, trackingErrors.RiderPlaceUpdateFailed, utils.ExtractValidationError(c, err)))
-		return
+	if err := in.JSON.Into(ctx, &dto); err != nil {
+		return nil, api.Fail(http.StatusBadRequest, coreErrors.BuildErrorDetail(c, trackingErrors.RiderPlaceUpdateFailed, utils.ExtractValidationError(c, err)))
 	}
 
 	place, err := ctrl.trackingService.UpdateRiderPlace(c.Request.Context(), tenantID, riderID, placeID, &dto, ctrl.scopeUserID(c))
 	if err != nil {
-		riderPlaceErrorResponse(c, err)
-		return
+		return nil, riderPlaceErrorResponse(c, err)
 	}
-	c.JSON(http.StatusOK, place)
+	return api.OK(place)
 }
 
-// DeleteRiderPlace godoc
-// @Summary Delete a rider's place
-// @Description The default place goes only when it is the last one, and takes the home pin with it.
-// @Tags Tracking - Riders
-// @Security BearerAuth
-// @Param rider_id path string true "Rider ID (UUID)"
-// @Param place_id path string true "Place ID (UUID)"
-// @Success 204
-// @Failure 404 {object} coreErrors.ErrorResponse
-// @Failure 409 {object} coreErrors.ErrorResponse
-// @Router /tracking/riders/{rider_id}/places/{place_id} [delete]
-func (ctrl *TrackingController) DeleteRiderPlace(c *gin.Context) {
-	tenantID, ok := ctrl.requireTenantID(c)
-	if !ok {
-		return
+// DeleteRiderPlaceInput is DeleteRiderPlace's request.
+type DeleteRiderPlaceInput struct {
+	PlaceID string `path:"place_id"`
+	RiderID string `path:"rider_id"`
+}
+
+// DeleteRiderPlace is DELETE /riders/{rider_id}/places/{place_id}: Delete a rider's place.
+func (ctrl *TrackingController) DeleteRiderPlace(ctx context.Context, _ *DeleteRiderPlaceInput) (*api.Empty, error) {
+	c := api.Gin(ctx)
+	tenantID, err := ctrl.requireTenantID(c)
+	if err != nil {
+		return nil, err
 	}
-	riderID, ok := pathUUID(c, "rider_id")
-	if !ok {
-		return
+	riderID, err := pathUUID(c, "rider_id")
+	if err != nil {
+		return nil, err
 	}
-	placeID, ok := pathUUID(c, "place_id")
-	if !ok {
-		return
+	placeID, err := pathUUID(c, "place_id")
+	if err != nil {
+		return nil, err
 	}
 
 	if err := ctrl.trackingService.DeleteRiderPlace(c.Request.Context(), tenantID, riderID, placeID, ctrl.scopeUserID(c)); err != nil {
-		riderPlaceErrorResponse(c, err)
-		return
+		return nil, riderPlaceErrorResponse(c, err)
 	}
-	c.Status(http.StatusNoContent)
+	return api.Done()
 }

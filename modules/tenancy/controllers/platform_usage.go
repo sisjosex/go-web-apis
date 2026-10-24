@@ -5,12 +5,12 @@ import (
 	"net/http"
 	"time"
 
+	"josex/web/modules/core/api"
 	coreErrors "josex/web/modules/core/errors"
 	"josex/web/modules/core/utils"
 	tenancyErrors "josex/web/modules/tenancy/errors"
 	"josex/web/modules/tenancy/models"
 
-	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 )
 
@@ -34,24 +34,17 @@ func NewPlatformUsageController(usage UsageReader) *PlatformUsageController {
 	return &PlatformUsageController{usage: usage}
 }
 
-// ListUsage godoc
-// @Summary What each business used per day
-// @Description Per business: its days between from and to (default the last 30, at most 366) with vehicles active (a trip completed or a GPS point), trips completed, GPS points and riders boarded, plus the range's peak and mean active vehicles. super_admin only
-// @Tags Platform
-// @Produce json
-// @Security BearerAuth
-// @Param from query string false "First day (YYYY-MM-DD)"
-// @Param to query string false "Last day (YYYY-MM-DD)"
-// @Param tenant_id query string false "One business (UUID)"
-// @Success 200 {object} models.PlatformUsageResponse
-// @Failure 400 {object} coreErrors.ErrorResponse
-// @Failure 403 {object} coreErrors.ErrorResponse
-// @Router /platform/usage [get]
-func (pc *PlatformUsageController) ListUsage(c *gin.Context) {
+// ListUsageInput is ListUsage's request.
+type ListUsageInput struct {
+	Query api.Query[models.PlatformUsageQuery]
+}
+
+// ListUsage is GET /usage: What each business used per day.
+func (pc *PlatformUsageController) ListUsage(ctx context.Context, in *ListUsageInput) (*api.Out[models.PlatformUsageResponse], error) {
+	c := api.Gin(ctx)
 	var query models.PlatformUsageQuery
-	if err := c.ShouldBindQuery(&query); err != nil {
-		c.JSON(http.StatusBadRequest, coreErrors.BuildErrorDetail(c, tenancyErrors.UsageListFailed, utils.ExtractValidationError(c, err)))
-		return
+	if err := in.Query.Into(ctx, &query); err != nil {
+		return nil, api.Fail(http.StatusBadRequest, coreErrors.BuildErrorDetail(c, tenancyErrors.UsageListFailed, utils.ExtractValidationError(c, err)))
 	}
 	to := time.Now().UTC().Truncate(24 * time.Hour)
 	if query.To != nil {
@@ -63,11 +56,9 @@ func (pc *PlatformUsageController) ListUsage(c *gin.Context) {
 	}
 	switch {
 	case to.Before(from):
-		c.JSON(http.StatusBadRequest, coreErrors.BuildErrorSingle(c, tenancyErrors.UsageRangeInvalid))
-		return
+		return nil, api.Fail(http.StatusBadRequest, coreErrors.BuildErrorSingle(c, tenancyErrors.UsageRangeInvalid))
 	case to.Sub(from) > usageMaxDays*24*time.Hour:
-		c.JSON(http.StatusBadRequest, coreErrors.BuildErrorSingle(c, tenancyErrors.UsageRangeTooWide))
-		return
+		return nil, api.Fail(http.StatusBadRequest, coreErrors.BuildErrorSingle(c, tenancyErrors.UsageRangeTooWide))
 	}
 	var tenantID *uuid.UUID
 	if query.TenantID != nil {
@@ -76,8 +67,7 @@ func (pc *PlatformUsageController) ListUsage(c *gin.Context) {
 	}
 	tenants, err := pc.usage.ListUsageDaily(c.Request.Context(), from.Format(time.DateOnly), to.Format(time.DateOnly), tenantID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, coreErrors.BuildError(c, err))
-		return
+		return nil, api.Fail(http.StatusInternalServerError, coreErrors.BuildError(c, err))
 	}
-	c.JSON(http.StatusOK, models.PlatformUsageResponse{Tenants: tenants})
+	return api.OK(models.PlatformUsageResponse{Tenants: tenants})
 }

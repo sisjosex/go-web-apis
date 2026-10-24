@@ -1,15 +1,16 @@
 package controllers
 
 import (
+	"context"
 	"net/http"
 
 	authErrors "josex/web/modules/auth/errors"
 	authInterfaces "josex/web/modules/auth/interfaces"
 	authModels "josex/web/modules/auth/models"
+	"josex/web/modules/core/api"
 	coreErrors "josex/web/modules/core/errors"
 	"josex/web/modules/core/utils"
 
-	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 )
 
@@ -23,57 +24,44 @@ func NewPushDeviceController(devices authInterfaces.PushDeviceService) *PushDevi
 	return &PushDeviceController{devices: devices}
 }
 
-// RegisterDevice godoc
-// @Summary Register or refresh this phone's push token
-// @Description Upsert on (account, device_id): send it on every app start, the token rotates. A token registered under another account moves to this one
-// @Tags Mobile
-// @Accept json
-// @Security BearerAuth
-// @Param body body authModels.RegisterPushDeviceDto true "The device"
-// @Success 204
-// @Failure 400 {object} coreErrors.ErrorResponse
-// @Failure 401 {object} coreErrors.ErrorResponse
-// @Failure 500 {object} coreErrors.ErrorResponse
-// @Router /mobile/devices [post]
-func (ctrl *PushDeviceController) RegisterDevice(c *gin.Context) {
+// RegisterDeviceInput is RegisterDevice's request.
+type RegisterDeviceInput struct {
+	JSON api.Body[authModels.RegisterPushDeviceDto]
+}
+
+// RegisterDevice is POST : Register or refresh this phone's push token.
+func (ctrl *PushDeviceController) RegisterDevice(ctx context.Context, in *RegisterDeviceInput) (*api.Empty, error) {
+	c := api.Gin(ctx)
 	userID, err := uuid.Parse(c.GetString("user_id"))
 	if err != nil {
-		c.JSON(http.StatusUnauthorized, coreErrors.BuildErrorSingle(c, authErrors.SessionUnauthorized))
-		return
+		return nil, api.Fail(http.StatusUnauthorized, coreErrors.BuildErrorSingle(c, authErrors.SessionUnauthorized))
 	}
 	var dto authModels.RegisterPushDeviceDto
-	if err := c.ShouldBindJSON(&dto); err != nil {
-		c.JSON(http.StatusBadRequest, coreErrors.BuildErrorDetail(c, authErrors.DeviceInvalid, utils.ExtractValidationError(c, err)))
-		return
+	if err := in.JSON.Into(ctx, &dto); err != nil {
+		return nil, api.Fail(http.StatusBadRequest, coreErrors.BuildErrorDetail(c, authErrors.DeviceInvalid, utils.ExtractValidationError(c, err)))
 	}
 
 	if err := ctrl.devices.Register(c.Request.Context(), userID, dto); err != nil {
-		c.JSON(http.StatusInternalServerError, coreErrors.BuildErrorSingle(c, authErrors.DeviceSaveFailed))
-		return
+		return nil, api.Fail(http.StatusInternalServerError, coreErrors.BuildErrorSingle(c, authErrors.DeviceSaveFailed))
 	}
-	c.Status(http.StatusNoContent)
+	return api.Done()
 }
 
-// ForgetDevice godoc
-// @Summary Stop pushing to this phone
-// @Description Call on logout. An unknown device_id is not an error
-// @Tags Mobile
-// @Security BearerAuth
-// @Param device_id path string true "The app's install id"
-// @Success 204
-// @Failure 401 {object} coreErrors.ErrorResponse
-// @Failure 500 {object} coreErrors.ErrorResponse
-// @Router /mobile/devices/{device_id} [delete]
-func (ctrl *PushDeviceController) ForgetDevice(c *gin.Context) {
+// ForgetDeviceInput is ForgetDevice's request.
+type ForgetDeviceInput struct {
+	DeviceID string `path:"device_id"`
+}
+
+// ForgetDevice is DELETE /{device_id}: Stop pushing to this phone.
+func (ctrl *PushDeviceController) ForgetDevice(ctx context.Context, in *ForgetDeviceInput) (*api.Empty, error) {
+	c := api.Gin(ctx)
 	userID, err := uuid.Parse(c.GetString("user_id"))
 	if err != nil {
-		c.JSON(http.StatusUnauthorized, coreErrors.BuildErrorSingle(c, authErrors.SessionUnauthorized))
-		return
+		return nil, api.Fail(http.StatusUnauthorized, coreErrors.BuildErrorSingle(c, authErrors.SessionUnauthorized))
 	}
 
-	if err := ctrl.devices.Forget(c.Request.Context(), userID, c.Param("device_id")); err != nil {
-		c.JSON(http.StatusInternalServerError, coreErrors.BuildErrorSingle(c, authErrors.DeviceSaveFailed))
-		return
+	if err := ctrl.devices.Forget(c.Request.Context(), userID, in.DeviceID); err != nil {
+		return nil, api.Fail(http.StatusInternalServerError, coreErrors.BuildErrorSingle(c, authErrors.DeviceSaveFailed))
 	}
-	c.Status(http.StatusNoContent)
+	return api.Done()
 }

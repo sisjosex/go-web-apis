@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"sync"
 
+	"josex/web/modules/core/api"
 	coreErrors "josex/web/modules/core/errors"
 	coreServices "josex/web/modules/core/services"
 	"josex/web/modules/core/utils"
@@ -37,164 +38,117 @@ func NewPortalController(notifications interfaces.NotificationService, directory
 const maxSettingsRiders = 100
 
 // portalErrorResponse answers a rider outside the account's scope 404, anything else 500.
-func portalErrorResponse(c *gin.Context, err error) {
+func portalErrorResponse(c *gin.Context, err error) error {
 	var trackingErr *trackingErrors.TrackingError
 	if errors.As(err, &trackingErr) && trackingErr.Code == trackingErrors.RiderNotFound {
-		c.JSON(http.StatusNotFound, coreErrors.BuildErrorSingle(c, trackingErr.Code))
-		return
+		return api.Fail(http.StatusNotFound, coreErrors.BuildErrorSingle(c, trackingErr.Code))
 	}
-	c.JSON(http.StatusInternalServerError, coreErrors.BuildError(c, err))
+	return api.Fail(http.StatusInternalServerError, coreErrors.BuildError(c, err))
 }
 
-// ListNotifications godoc
-// @Summary The account's notices
-// @Description Newest first, the account's own rows only. unread narrows to unread rows; unread_count is the whole badge either way
-// @Tags Tracking - Portal
-// @Produce json
-// @Security BearerAuth
-// @Param unread query bool false "Only unread rows"
-// @Param page query int false "Page number (default 1)"
-// @Param page_size query int false "Page size (default 20, max 100)"
-// @Success 200 {object} models.ListNotificationsResponse
-// @Failure 400 {object} coreErrors.ErrorResponse
-// @Failure 403 {object} coreErrors.ErrorResponse
-// @Failure 500 {object} coreErrors.ErrorResponse
-// @Router /mobile/portal/notifications [get]
-func (ctrl *PortalController) ListNotifications(c *gin.Context) {
-	tenantID, userID, ok := driverIDs(c)
-	if !ok {
-		return
+// ListNotificationsInput is ListNotifications's request.
+type ListNotificationsInput struct {
+	Query api.Query[models.ListNotificationsQuery]
+}
+
+// ListNotifications is GET /notifications: The account's notices.
+func (ctrl *PortalController) ListNotifications(ctx context.Context, in *ListNotificationsInput) (*api.Out[*models.ListNotificationsResponse], error) {
+	c := api.Gin(ctx)
+	tenantID, userID, err := driverIDs(c)
+	if err != nil {
+		return nil, err
 	}
 	var query models.ListNotificationsQuery
-	if err := c.ShouldBindQuery(&query); err != nil {
-		c.JSON(http.StatusBadRequest, coreErrors.BuildErrorDetail(c, trackingErrors.NotificationInvalid, utils.ExtractValidationError(c, err)))
-		return
+	if err := in.Query.Into(ctx, &query); err != nil {
+		return nil, api.Fail(http.StatusBadRequest, coreErrors.BuildErrorDetail(c, trackingErrors.NotificationInvalid, utils.ExtractValidationError(c, err)))
 	}
 
 	result, err := ctrl.notifications.List(c.Request.Context(), tenantID, userID, query)
 	if err != nil {
-		portalErrorResponse(c, err)
-		return
+		return nil, portalErrorResponse(c, err)
 	}
-	c.JSON(http.StatusOK, result)
+	return api.OK(result)
 }
 
-// MarkNotificationsRead godoc
-// @Summary Mark notices read
-// @Description The ids given (at most 100), or every unread row with all. Another account's id changes nothing
-// @Tags Tracking - Portal
-// @Accept json
-// @Security BearerAuth
-// @Param body body models.MarkNotificationsReadDto true "ids or all"
-// @Success 204
-// @Failure 400 {object} coreErrors.ErrorResponse
-// @Failure 403 {object} coreErrors.ErrorResponse
-// @Failure 500 {object} coreErrors.ErrorResponse
-// @Router /mobile/portal/notifications/read [post]
-func (ctrl *PortalController) MarkNotificationsRead(c *gin.Context) {
-	tenantID, userID, ok := driverIDs(c)
-	if !ok {
-		return
+// MarkNotificationsReadInput is MarkNotificationsRead's request.
+type MarkNotificationsReadInput struct {
+	JSON api.Body[models.MarkNotificationsReadDto]
+}
+
+// MarkNotificationsRead is POST /notifications/read: Mark notices read.
+func (ctrl *PortalController) MarkNotificationsRead(ctx context.Context, in *MarkNotificationsReadInput) (*api.Empty, error) {
+	c := api.Gin(ctx)
+	tenantID, userID, err := driverIDs(c)
+	if err != nil {
+		return nil, err
 	}
 	var dto models.MarkNotificationsReadDto
-	if err := c.ShouldBindJSON(&dto); err != nil {
-		c.JSON(http.StatusBadRequest, coreErrors.BuildErrorDetail(c, trackingErrors.NotificationInvalid, utils.ExtractValidationError(c, err)))
-		return
+	if err := in.JSON.Into(ctx, &dto); err != nil {
+		return nil, api.Fail(http.StatusBadRequest, coreErrors.BuildErrorDetail(c, trackingErrors.NotificationInvalid, utils.ExtractValidationError(c, err)))
 	}
 
 	if err := ctrl.notifications.MarkRead(c.Request.Context(), tenantID, userID, dto); err != nil {
-		portalErrorResponse(c, err)
-		return
+		return nil, portalErrorResponse(c, err)
 	}
-	c.Status(http.StatusNoContent)
+	return api.Done()
 }
 
-// NotificationSettings godoc
-// @Summary Which pushes each rider mutes
-// @Description One row per rider the account receives notices for; muted empty is every push on. A muted notice still lands in the feed
-// @Tags Tracking - Portal
-// @Produce json
-// @Security BearerAuth
-// @Success 200 {array} models.NotificationSetting
-// @Failure 403 {object} coreErrors.ErrorResponse
-// @Failure 500 {object} coreErrors.ErrorResponse
-// @Router /mobile/portal/notification-settings [get]
-func (ctrl *PortalController) NotificationSettings(c *gin.Context) {
-	tenantID, userID, ok := driverIDs(c)
-	if !ok {
-		return
+// NotificationSettings is GET /notification-settings: Which pushes each rider mutes.
+func (ctrl *PortalController) NotificationSettings(ctx context.Context, _ *api.None) (*api.Out[[]models.NotificationSetting], error) {
+	c := api.Gin(ctx)
+	tenantID, userID, err := driverIDs(c)
+	if err != nil {
+		return nil, err
 	}
 
 	settings, err := ctrl.notifications.Settings(c.Request.Context(), tenantID, userID)
 	if err != nil {
-		portalErrorResponse(c, err)
-		return
+		return nil, portalErrorResponse(c, err)
 	}
-	c.JSON(http.StatusOK, settings)
+	return api.OK(settings)
 }
 
-// SetNotificationSettings godoc
-// @Summary Replace what riders mute
-// @Description Each rider named gets exactly the muted list sent; riders not named keep theirs. A rider the account receives no notices for is 404 and nothing is saved. Answers the whole list
-// @Tags Tracking - Portal
-// @Accept json
-// @Produce json
-// @Security BearerAuth
-// @Param body body []models.NotificationSetting true "Per rider, the muted types"
-// @Success 200 {array} models.NotificationSetting
-// @Failure 400 {object} coreErrors.ErrorResponse
-// @Failure 403 {object} coreErrors.ErrorResponse
-// @Failure 404 {object} coreErrors.ErrorResponse
-// @Failure 500 {object} coreErrors.ErrorResponse
-// @Router /mobile/portal/notification-settings [put]
-func (ctrl *PortalController) SetNotificationSettings(c *gin.Context) {
-	tenantID, userID, ok := driverIDs(c)
-	if !ok {
-		return
+// SetNotificationSettingsInput is SetNotificationSettings's request.
+type SetNotificationSettingsInput struct {
+	JSON api.Body[[]models.NotificationSetting]
+}
+
+// SetNotificationSettings is PUT /notification-settings: Replace what riders mute.
+func (ctrl *PortalController) SetNotificationSettings(ctx context.Context, in *SetNotificationSettingsInput) (*api.Out[[]models.NotificationSetting], error) {
+	c := api.Gin(ctx)
+	tenantID, userID, err := driverIDs(c)
+	if err != nil {
+		return nil, err
 	}
 	// gin validates each element of a bound slice.
 	var body []models.NotificationSetting
-	if err := c.ShouldBindJSON(&body); err != nil {
-		c.JSON(http.StatusBadRequest, coreErrors.BuildErrorDetail(c, trackingErrors.NotificationInvalid, utils.ExtractValidationError(c, err)))
-		return
+	if err := in.JSON.Into(ctx, &body); err != nil {
+		return nil, api.Fail(http.StatusBadRequest, coreErrors.BuildErrorDetail(c, trackingErrors.NotificationInvalid, utils.ExtractValidationError(c, err)))
 	}
 	if len(body) > maxSettingsRiders {
-		c.JSON(http.StatusBadRequest, coreErrors.BuildErrorSingle(c, trackingErrors.NotificationInvalid))
-		return
+		return nil, api.Fail(http.StatusBadRequest, coreErrors.BuildErrorSingle(c, trackingErrors.NotificationInvalid))
 	}
 
 	settings, err := ctrl.notifications.SetSettings(c.Request.Context(), tenantID, userID, body)
 	if err != nil {
-		portalErrorResponse(c, err)
-		return
+		return nil, portalErrorResponse(c, err)
 	}
-	c.JSON(http.StatusOK, settings)
+	return api.OK(settings)
 }
 
-// Me godoc
-// @Summary The account's riders in every operator
-// @Description The guardian's home across operators (TRACK-061 D1): the account, and per tenant where it holds the portal role (newest membership first) its riders as GET /tracking/riders/today answers them. One operator's read failing marks that entry error with riders null; the others still answer. Bearer only, no X-Tenant-Slug
-// @Tags Tracking - Portal
-// @Produce json
-// @Security BearerAuth
-// @Success 200 {object} models.PortalMe
-// @Failure 403 {object} coreErrors.ErrorResponse
-// @Failure 500 {object} coreErrors.ErrorResponse
-// @Router /mobile/portal/me [get]
-func (ctrl *PortalController) Me(c *gin.Context) {
+// Me is GET /api/v1/mobile/portal/me: The account's riders in every operator.
+func (ctrl *PortalController) Me(ctx context.Context, _ *api.None) (*api.Out[models.PortalMe], error) {
+	c := api.Gin(ctx)
 	userID, err := uuid.Parse(c.GetString("user_id"))
 	if err != nil {
-		c.JSON(http.StatusForbidden, coreErrors.BuildErrorSingle(c, tenancyErrors.PermissionDenied))
-		return
+		return nil, api.Fail(http.StatusForbidden, coreErrors.BuildErrorSingle(c, tenancyErrors.PermissionDenied))
 	}
 	user, memberships, err := ctrl.directory.PortalAccount(c.Request.Context(), userID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, coreErrors.BuildError(c, err))
-		return
+		return nil, api.Fail(http.StatusInternalServerError, coreErrors.BuildError(c, err))
 	}
 	if len(memberships) == 0 {
-		c.JSON(http.StatusForbidden, coreErrors.BuildErrorSingle(c, tenancyErrors.PermissionDenied))
-		return
+		return nil, api.Fail(http.StatusForbidden, coreErrors.BuildErrorSingle(c, tenancyErrors.PermissionDenied))
 	}
 
 	// One read per operator, each on its own database, side by side: 1–3 of them for a family.
@@ -219,5 +173,5 @@ func (ctrl *PortalController) Me(c *gin.Context) {
 		}(&tenants[i], m)
 	}
 	wg.Wait()
-	c.JSON(http.StatusOK, models.PortalMe{User: user, Tenants: tenants})
+	return api.OK(models.PortalMe{User: user, Tenants: tenants})
 }

@@ -21,7 +21,7 @@ jobs:
         with:
           go-version-file: go.mod
 
-      # Every package, tools included: the dev build keeps /swagger.
+      # Every package, tools included: the dev build keeps /docs and /openapi.json.
       - name: build (dev)
         run: go build ./...
 

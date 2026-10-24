@@ -11,6 +11,7 @@ import (
 	"log"
 	"net/http"
 
+	"josex/web/modules/core/api"
 	coreErrors "josex/web/modules/core/errors"
 
 	"github.com/gin-gonic/gin"
@@ -77,4 +78,14 @@ func Respond(c *gin.Context, err error) bool {
 	}
 	c.JSON(http.StatusForbidden, coreErrors.BuildErrorDetail(c, Code, detail))
 	return true
+}
+
+// Refuse is Respond for a huma operation: the 403 to return when err is a reached plan limit, nil
+// otherwise — any other error is the caller's to answer.
+func Refuse(c *gin.Context, err error) error {
+	detail, ok := Reached(err)
+	if !ok {
+		return nil
+	}
+	return api.Fail(http.StatusForbidden, coreErrors.BuildErrorDetail(c, Code, detail))
 }

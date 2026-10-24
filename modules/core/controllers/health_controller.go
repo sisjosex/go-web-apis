@@ -5,9 +5,8 @@ import (
 	"net/http"
 	"time"
 
+	"josex/web/modules/core/api"
 	coreServices "josex/web/modules/core/services"
-
-	"github.com/gin-gonic/gin"
 )
 
 // readyTimeout caps the database ping so a hung database answers /readyz with a
@@ -28,16 +27,16 @@ func NewHealthController(dbService coreServices.DatabaseService, valkey coreServ
 	return &HealthController{dbService: dbService, valkey: valkey, needsValkey: needsValkey}
 }
 
+// Probe is what /livez and /readyz answer: ok, degraded or unavailable, and why when not ok.
+type Probe struct {
+	Status string `json:"status" enum:"ok,degraded,unavailable"`
+	Reason string `json:"reason,omitempty"`
+}
+
 // Livez reports that the process is up. It never touches a dependency: a
 // failing database must not make the orchestrator restart a healthy process.
-//
-// @Summary Liveness probe
-// @Tags health
-// @Produce json
-// @Success 200 {object} map[string]string
-// @Router /livez [get]
-func (hc *HealthController) Livez(c *gin.Context) {
-	c.JSON(http.StatusOK, gin.H{"status": "ok"})
+func (hc *HealthController) Livez(ctx context.Context, _ *api.None) (*api.Out[Probe], error) {
+	return api.OK(Probe{Status: "ok"})
 }
 
 // Readyz reports that the process can serve traffic — that is, that its primary
@@ -48,26 +47,18 @@ func (hc *HealthController) Livez(c *gin.Context) {
 // role answers 200 "degraded": REST keeps working and the rate limit fails open,
 // so taking the replica out of rotation would only turn a degradation into an
 // outage (INFRA-001 D5).
-//
-// @Summary Readiness probe
-// @Tags health
-// @Produce json
-// @Success 200 {object} map[string]string
-// @Failure 503 {object} map[string]string
-// @Router /readyz [get]
-func (hc *HealthController) Readyz(c *gin.Context) {
+func (hc *HealthController) Readyz(ctx context.Context, _ *api.None) (*api.Reply[Probe], error) {
+	c := api.Gin(ctx)
 	pool := hc.dbService.GetPrimaryPool()
 	if pool == nil {
-		c.JSON(http.StatusServiceUnavailable, gin.H{"status": "unavailable", "reason": "database not connected"})
-		return
+		return api.Respond(http.StatusServiceUnavailable, Probe{Status: "unavailable", Reason: "database not connected"})
 	}
 
 	ctx, cancel := context.WithTimeout(c.Request.Context(), readyTimeout)
 	defer cancel()
 
 	if err := pool.Ping(ctx); err != nil {
-		c.JSON(http.StatusServiceUnavailable, gin.H{"status": "unavailable", "reason": "database unreachable"})
-		return
+		return api.Respond(http.StatusServiceUnavailable, Probe{Status: "unavailable", Reason: "database unreachable"})
 	}
 
 	if hc.valkey != nil {
@@ -76,16 +67,13 @@ func (hc *HealthController) Readyz(c *gin.Context) {
 		coreServices.SetUp(coreServices.DependencyUp.WithLabelValues("valkey"), err == nil)
 		if err != nil {
 			if hc.needsValkey {
-				c.JSON(http.StatusServiceUnavailable, gin.H{"status": "unavailable", "reason": "valkey unreachable"})
-				return
+				return api.Respond(http.StatusServiceUnavailable, Probe{Status: "unavailable", Reason: "valkey unreachable"})
 			}
-			c.JSON(http.StatusOK, gin.H{"status": "degraded", "reason": "valkey unreachable"})
-			return
+			return api.Respond(http.StatusOK, Probe{Status: "degraded", Reason: "valkey unreachable"})
 		}
 	} else if hc.needsValkey {
-		c.JSON(http.StatusServiceUnavailable, gin.H{"status": "unavailable", "reason": "valkey not configured"})
-		return
+		return api.Respond(http.StatusServiceUnavailable, Probe{Status: "unavailable", Reason: "valkey not configured"})
 	}
 
-	c.JSON(http.StatusOK, gin.H{"status": "ok"})
+	return api.Respond(http.StatusOK, Probe{Status: "ok"})
 }

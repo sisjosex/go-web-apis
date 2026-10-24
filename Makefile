@@ -1,4 +1,4 @@
-.PHONY: help swagger build run \
+.PHONY: help contract build run \
         dev seed-dev \
         migrate migrate-list tenant-list tenant-migrate \
         test test-auth test-users test-core test-tenancy test-tracking test-inventory test-sales test-purchasing test-billing test-import test-geo test-all \
@@ -26,12 +26,12 @@ help:
 	@echo "  make tenant-migrate SLUG=acme             - Migrate a specific tenant"
 	@echo "  make tenant-migrate SLUG=all              - Migrate all tenants"
 	@echo ""
-	@echo "📚 SWAGGER & BUILD"
-	@echo "  make swagger          - Generate Swagger documentation"
+	@echo "📚 CONTRACT & BUILD"
+	@echo "  make contract         - Write docs/openapi.json and docs/routes.json from the routes' types (commit both)"
 	@echo "  make build            - Build server binary"
 	@echo ""
 	@echo "✅ QUALITY GATE"
-	@echo "  make gate             - fmt + lint + check + build, then each changed module's tests + route coverage, then the schema snapshot"
+	@echo "  make gate             - fmt + lint + check + build, then each changed module's tests + route coverage, the contract, then the schema snapshot"
 	@echo "                          (MODULES=\"tracking inventory\" overrides the modules picked from git diff)"
 	@echo "  make lint             - golangci-lint on changed code only (--new); make lint-all for the tree"
 	@echo "  make check            - tools/check: gofmt, tenant scope in SPs, DTO tenant binding (changed files)"
@@ -97,16 +97,16 @@ tenant-migrate:
 	go run ./cmd/cli t -migrate=$(SLUG)
 
 # ════════════════════════════════════════════════════════════════
-# SWAGGER
+# CONTRACT (INFRA-021)
 # ════════════════════════════════════════════════════════════════
-swagger:
-	@echo "🔄 Generating Swagger documentation..."
-	@if command -v swag > /dev/null 2>&1; then \
-		swag init -g cmd/server/main.go -d . --parseDependency --parseInternal --parseDepth 5 -o docs 2>&1 | grep -v "warning\|ParseComment"; \
-		[ -f docs/swagger.json ] && echo "✅ Swagger docs generated → http://localhost:8080/swagger/index.html" || echo "❌ docs/swagger.json not generated"; \
-	else \
-		echo "❌ swag not installed. Run: go install github.com/swaggo/swag/cmd/swag@latest"; \
-	fi
+# docs/openapi.json is built from the huma operations' types by mounting every route as the tests do
+# (the test database must exist); docs/routes.json adds the stored procedures each one reaches.
+contract:
+	go test ./tools/contract -run TestContract -count=1 -args -write
+	go run ./tools/routemap
+
+# The gate's stage: both files current, and no client broken against HEAD's contract.
+CONTRACT_CHECK := { go test ./tools/contract -run TestContract -count=1 && go run ./tools/routemap -check && go run ./tools/breaking; }
 
 # ════════════════════════════════════════════════════════════════
 # BUILD
@@ -120,7 +120,7 @@ build:
 # RUN (compiled)
 # ════════════════════════════════════════════════════════════════
 run: build
-	@echo "🚀 Server → http://localhost:8080  |  Swagger → http://localhost:8080/swagger/index.html"
+	@echo "🚀 Server → http://localhost:8080  |  Contract → http://localhost:8080/docs"
 	./$(BINARY)
 
 # ════════════════════════════════════════════════════════════════
@@ -289,6 +289,9 @@ gate:
 		then echo "ok ($$(( $$(date +%s) - start ))s)"; \
 		else echo "FAIL"; grep -E "^(---|===|FAIL|panic|\s+[a-z_]+\.go:[0-9]+|unmatched|route without|check -routes)" $(GATE_LOG) | grep -vE "^(--- PASS|=== (RUN|PAUSE|CONT))" | tail -40; echo "GATE FAILED at test-$$m"; rm -f $(GATE_LOG); exit 1; fi; \
 	done; \
+	printf "> contract "; start=$$(date +%s); \
+	if $(CONTRACT_CHECK) > $(GATE_LOG) 2>&1; then echo "ok ($$(( $$(date +%s) - start ))s)"; \
+	else echo "FAIL"; grep -E "stale|breaking|routes registered|FAIL|Error" $(GATE_LOG) | tail -40; echo "GATE FAILED at contract"; rm -f $(GATE_LOG); exit 1; fi; \
 	[ -z "$$mods" ] || { printf "> schema "; before=$$($(SCHEMA_SUMS)); \
 		if $(SCHEMA_DUMP) > $(GATE_LOG) 2>&1 && [ "$$before" = "$$($(SCHEMA_SUMS))" ]; \
 		then echo "ok"; \

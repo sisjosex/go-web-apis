@@ -1,10 +1,12 @@
 package controllers
 
 import (
+	"context"
 	"fmt"
 	"net/http"
 	"time"
 
+	"josex/web/modules/core/api"
 	coreErrors "josex/web/modules/core/errors"
 	"josex/web/modules/core/utils"
 	tenancyMW "josex/web/modules/tenancy/middleware"
@@ -28,40 +30,30 @@ func NewIngestController(ingest *services.PositionIngest) *IngestController {
 	return &IngestController{ingest: ingest}
 }
 
-// IngestPositions godoc
-// @Summary Post a batch of GPS points
-// @Description Up to 500 points, any order, late ones included. Authenticated either by X-Device-Token (a GPS device: its vehicle) or by a driver's Bearer + X-Tenant-Slug (the vehicle of their trip in progress). Replaying a point is a no-op. 202 path=queued (the worker stores it) or stored (Valkey absent: stored inline)
-// @Tags Tracking - Positions
-// @Accept json
-// @Produce json
-// @Security BearerAuth
-// @Param points body []models.PositionPoint true "GPS points"
-// @Success 202 {object} models.IngestResponse
-// @Failure 400 {object} coreErrors.ErrorResponse
-// @Failure 401 {object} coreErrors.ErrorResponse
-// @Failure 409 {object} coreErrors.ErrorResponse
-// @Failure 500 {object} coreErrors.ErrorResponse
-// @Router /tracking/ingest/positions [post]
-func (ctrl *IngestController) IngestPositions(c *gin.Context) {
+// IngestPositionsInput is IngestPositions's request.
+type IngestPositionsInput struct {
+	JSON api.Body[[]models.PositionPoint]
+}
+
+// IngestPositions is POST /ingest/positions: Post a batch of GPS points.
+func (ctrl *IngestController) IngestPositions(ctx context.Context, in *IngestPositionsInput) (*api.Out[models.IngestResponse], error) {
+	c := api.Gin(ctx)
 	tenantID, err := uuid.Parse(c.GetString("tenant_id"))
 	if err != nil {
-		c.JSON(http.StatusForbidden, coreErrors.BuildErrorSingle(c, trackingErrors.TenantRequired))
-		return
+		return nil, api.Fail(http.StatusForbidden, coreErrors.BuildErrorSingle(c, trackingErrors.TenantRequired))
 	}
 
 	var points []models.PositionPoint
-	if err := c.ShouldBindJSON(&points); err != nil {
-		c.JSON(http.StatusBadRequest, coreErrors.BuildErrorDetail(c, trackingErrors.IngestInvalid, utils.ExtractValidationError(c, err)))
-		return
+	if err := in.JSON.Into(ctx, &points); err != nil {
+		return nil, api.Fail(http.StatusBadRequest, coreErrors.BuildErrorDetail(c, trackingErrors.IngestInvalid, utils.ExtractValidationError(c, err)))
 	}
 	if detail := checkBatch(points, time.Now()); detail != "" {
-		c.JSON(http.StatusBadRequest, coreErrors.BuildErrorDetail(c, trackingErrors.IngestInvalid, detail))
-		return
+		return nil, api.Fail(http.StatusBadRequest, coreErrors.BuildErrorDetail(c, trackingErrors.IngestInvalid, detail))
 	}
 
-	vehicleID, ok := ctrl.vehicle(c, tenantID)
-	if !ok {
-		return
+	vehicleID, err := ctrl.vehicle(c, tenantID)
+	if err != nil {
+		return nil, err
 	}
 
 	stored := make([]models.StoredPoint, len(points))
@@ -73,33 +65,29 @@ func (ctrl *IngestController) IngestPositions(c *gin.Context) {
 	}
 	path, err := ctrl.ingest.Ingest(c.Request.Context(), tenantID, stored)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, coreErrors.BuildErrorDetail(c, trackingErrors.IngestFailed, err.Error()))
-		return
+		return nil, api.Fail(http.StatusInternalServerError, coreErrors.BuildErrorDetail(c, trackingErrors.IngestFailed, err.Error()))
 	}
-	c.JSON(http.StatusAccepted, models.IngestResponse{Accepted: len(stored), Path: path})
+	return api.OK(models.IngestResponse{Accepted: len(stored), Path: path})
 }
 
 // vehicle is whose points these are: the device's own, or the vehicle of the driver's trip in
 // progress. It writes the refusal itself when there is none.
-func (ctrl *IngestController) vehicle(c *gin.Context, tenantID uuid.UUID) (uuid.UUID, bool) {
+func (ctrl *IngestController) vehicle(c *gin.Context, tenantID uuid.UUID) (uuid.UUID, error) {
 	if raw, ok := c.Get(tenancyMW.GPSVehicleKey); ok {
-		return raw.(uuid.UUID), true
+		return raw.(uuid.UUID), nil
 	}
 	userID, err := uuid.Parse(c.GetString("user_id"))
 	if err != nil {
-		c.JSON(http.StatusUnauthorized, coreErrors.BuildErrorSingle(c, trackingErrors.TenantRequired))
-		return uuid.Nil, false
+		return uuid.Nil, api.Fail(http.StatusUnauthorized, coreErrors.BuildErrorSingle(c, trackingErrors.TenantRequired))
 	}
 	vehicleID, err := ctrl.ingest.DriverVehicle(c.Request.Context(), tenantID, userID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, coreErrors.BuildErrorDetail(c, trackingErrors.IngestFailed, err.Error()))
-		return uuid.Nil, false
+		return uuid.Nil, api.Fail(http.StatusInternalServerError, coreErrors.BuildErrorDetail(c, trackingErrors.IngestFailed, err.Error()))
 	}
 	if vehicleID == nil {
-		c.JSON(http.StatusConflict, coreErrors.BuildErrorSingle(c, trackingErrors.IngestNoActiveTrip))
-		return uuid.Nil, false
+		return uuid.Nil, api.Fail(http.StatusConflict, coreErrors.BuildErrorSingle(c, trackingErrors.IngestNoActiveTrip))
 	}
-	return *vehicleID, true
+	return *vehicleID, nil
 }
 
 // checkBatch is what binding cannot say about a top-level array: its size, each point's fields and

@@ -1,6 +1,7 @@
 package routes
 
 import (
+	"josex/web/modules/core/api"
 	"josex/web/modules/purchasing/controllers"
 	"josex/web/modules/purchasing/interfaces"
 	purchasingPerms "josex/web/modules/purchasing/permissions"
@@ -21,65 +22,35 @@ func RegisterPurchasingRoutes(
 	r := apiV1.Group("/purchasing", authMiddleware, tenantMiddleware)
 
 	// Suppliers
-	r.GET("/suppliers", ctrl.ListSuppliers)
-	r.GET("/suppliers/:id", ctrl.GetSupplier)
-	r.POST("/suppliers",
-		tenancyMW.RequirePermission(purchasingPerms.SuppliersWrite),
-		ctrl.CreateSupplier)
+	api.Get(r, "/suppliers", ctrl.ListSuppliers, api.Doc{})
+	api.Get(r, "/suppliers/{id}", ctrl.GetSupplier, api.Doc{})
+	api.Post(r, "/suppliers", ctrl.CreateSupplier, api.Doc{Status: 201}, tenancyMW.RequirePermission(purchasingPerms.SuppliersWrite))
 
 	// Purchase Orders
-	r.GET("/purchase-orders", ctrl.ListPurchaseOrders)
-	r.GET("/purchase-orders/:id", ctrl.GetPurchaseOrder)
-	r.POST("/purchase-orders",
-		tenancyMW.RequirePermission(purchasingPerms.OrdersCreate),
-		ctrl.CreatePurchaseOrder)
-	r.PATCH("/purchase-orders/:id/approve",
-		tenancyMW.RequirePermission(purchasingPerms.OrdersApprove),
-		ctrl.ApprovePurchaseOrder)
-	r.PATCH("/purchase-orders/:id/receive",
-		tenancyMW.RequirePermission(purchasingPerms.OrdersReceive),
-		ctrl.ReceivePurchaseOrder)
+	api.Get(r, "/purchase-orders", ctrl.ListPurchaseOrders, api.Doc{})
+	api.Get(r, "/purchase-orders/{id}", ctrl.GetPurchaseOrder, api.Doc{})
+	api.Post(r, "/purchase-orders", ctrl.CreatePurchaseOrder, api.Doc{Status: 201}, tenancyMW.RequirePermission(purchasingPerms.OrdersCreate))
+	api.Patch(r, "/purchase-orders/{id}/approve", ctrl.ApprovePurchaseOrder, api.Doc{}, tenancyMW.RequirePermission(purchasingPerms.OrdersApprove))
+	api.Patch(r, "/purchase-orders/{id}/receive", ctrl.ReceivePurchaseOrder, api.Doc{}, tenancyMW.RequirePermission(purchasingPerms.OrdersReceive))
 
 	// Purchase Order Items
-	r.POST("/purchase-orders/:id/items",
-		tenancyMW.RequirePermission(purchasingPerms.OrdersCreate),
-		ctrl.AddPurchaseOrderItem)
+	api.Post(r, "/purchase-orders/{id}/items", ctrl.AddPurchaseOrderItem, api.Doc{Status: 201}, tenancyMW.RequirePermission(purchasingPerms.OrdersCreate))
 
 	// Purchase Order Invoices
-	r.POST("/purchase-orders/:id/invoices",
-		tenancyMW.RequirePermission(purchasingPerms.InvoicesManage),
-		ctrl.AddInvoice)
+	api.Post(r, "/purchase-orders/{id}/invoices", ctrl.AddInvoice, api.Doc{Status: 201}, tenancyMW.RequirePermission(purchasingPerms.InvoicesManage))
 
 	// Reports
-	r.GET("/pending-payments",
-		tenancyMW.RequirePermission(purchasingPerms.ReportsRead),
-		ctrl.GetPendingPayments)
-	r.GET("/price-comparison",
-		tenancyMW.RequirePermission(purchasingPerms.ReportsRead),
-		ctrl.GetPriceComparison)
+	api.Get(r, "/pending-payments", ctrl.GetPendingPayments, api.Doc{}, tenancyMW.RequirePermission(purchasingPerms.ReportsRead))
+	api.Get(r, "/price-comparison", ctrl.GetPriceComparison, api.Doc{}, tenancyMW.RequirePermission(purchasingPerms.ReportsRead))
 
 	// FIFO Batches
-	r.GET("/batches",
-		tenancyMW.RequirePermission(purchasingPerms.BatchesRead),
-		ctrl.GetProductBatches)
-	r.GET("/batches/oldest",
-		tenancyMW.RequirePermission(purchasingPerms.BatchesRead),
-		ctrl.GetOldestBatchForSale)
-	r.POST("/batches",
-		tenancyMW.RequirePermission(purchasingPerms.BatchesCreate),
-		ctrl.CreateProductBatch)
+	api.Get(r, "/batches", ctrl.GetProductBatches, api.Doc{}, tenancyMW.RequirePermission(purchasingPerms.BatchesRead))
+	api.Get(r, "/batches/oldest", ctrl.GetOldestBatchForSale, api.Doc{}, tenancyMW.RequirePermission(purchasingPerms.BatchesRead))
+	api.Post(r, "/batches", ctrl.CreateProductBatch, api.Doc{Status: 201}, tenancyMW.RequirePermission(purchasingPerms.BatchesCreate))
 
 	// RFQ
-	r.GET("/rfq/:rfq_id/responses",
-		tenancyMW.RequirePermission(purchasingPerms.RFQRead),
-		ctrl.GetRFQResponses)
-	r.GET("/rfq/:rfq_id/comparison",
-		tenancyMW.RequirePermission(purchasingPerms.RFQRead),
-		ctrl.GetRFQComparison)
-	r.POST("/rfq",
-		tenancyMW.RequirePermission(purchasingPerms.RFQManage),
-		ctrl.CreateRFQ)
-	r.PATCH("/rfq/:rfq_id/responses/:response_id/select",
-		tenancyMW.RequirePermission(purchasingPerms.RFQManage),
-		ctrl.SelectRFQResponse)
+	api.Get(r, "/rfq/{rfq_id}/responses", ctrl.GetRFQResponses, api.Doc{}, tenancyMW.RequirePermission(purchasingPerms.RFQRead))
+	api.Get(r, "/rfq/{rfq_id}/comparison", ctrl.GetRFQComparison, api.Doc{}, tenancyMW.RequirePermission(purchasingPerms.RFQRead))
+	api.Post(r, "/rfq", ctrl.CreateRFQ, api.Doc{Status: 201}, tenancyMW.RequirePermission(purchasingPerms.RFQManage))
+	api.Patch(r, "/rfq/{rfq_id}/responses/{response_id}/select", ctrl.SelectRFQResponse, api.Doc{}, tenancyMW.RequirePermission(purchasingPerms.RFQManage))
 }

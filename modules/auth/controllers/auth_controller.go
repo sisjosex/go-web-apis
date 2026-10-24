@@ -1,12 +1,14 @@
 package controllers
 
 import (
+	"context"
 	"errors"
 	"josex/web/config"
 	authErrors "josex/web/modules/auth/errors"
 	authInterfaces "josex/web/modules/auth/interfaces"
 	authModels "josex/web/modules/auth/models"
 	"josex/web/modules/auth/services"
+	"josex/web/modules/core/api"
 	coreErrors "josex/web/modules/core/errors"
 	coreModels "josex/web/modules/core/models" // Used in Swagger annotations
 	coreServices "josex/web/modules/core/services"
@@ -14,7 +16,6 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/gin-gonic/gin"
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgconn"
@@ -48,28 +49,23 @@ func NewAuthController(
 	}
 }
 
-// Login godoc
-// @Summary Allow login based on email authentication, email can be confirmed after login
-// @Description Allow login based on email authentication, email can be confirmed after login
-// @Tags Auth
-// @Accept  json
-// @Produce  json
-// @Param request body authModels.LoginUserRequestDto true "Datos de usuario"
-// @Success 200 {object} authModels.LoginSuccessResponse
-// @Failure 400 {object} coreErrors.ErrorResponse
-// @Router /auth/login [post]
-// @Security ApiKeyAuth
-func (uc *AuthController) Login(c *gin.Context) {
+// LoginInput is Login's request.
+type LoginInput struct {
+	JSON api.Body[authModels.LoginUserRequestDto]
+}
+
+// Login is POST /login: Allow login based on email authentication, email can be confirmed after login.
+func (uc *AuthController) Login(ctx context.Context, in *LoginInput) (*api.Out[*authModels.LoginSuccessResponse], error) {
+	c := api.Gin(ctx)
 	var loginUserRequest authModels.LoginUserRequestDto
 
-	if err := c.ShouldBindJSON(&loginUserRequest); err != nil {
-		c.JSON(http.StatusBadRequest, coreErrors.BuildErrorDetail(c, authErrors.UserLoginValidationFailed, utils.ExtractValidationError(c, err)))
-		return
+	if err := in.JSON.Into(ctx, &loginUserRequest); err != nil {
+		return nil, api.Fail(http.StatusBadRequest, coreErrors.BuildErrorDetail(c, authErrors.UserLoginValidationFailed, utils.ExtractValidationError(c, err)))
 	}
 
-	declaredClient, ok := clientType(c)
-	if !ok {
-		return
+	declaredClient, err := clientType(c)
+	if err != nil {
+		return nil, err
 	}
 
 	userAgent := c.GetHeader("User-Agent")
@@ -105,50 +101,42 @@ func (uc *AuthController) Login(c *gin.Context) {
 
 	sessionUser, err := uc.authService.LoginUser(c.Request.Context(), loginUser)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, coreErrors.BuildError(c, err))
-		return
+		return nil, api.Fail(http.StatusBadRequest, coreErrors.BuildError(c, err))
 	}
 
 	accessToken, err := uc.jwtService.GenerateAccessToken(sessionUser.UserId, sessionUser.SessionId, sessionUser.SystemRole)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, coreErrors.BuildError(c, err))
-		return
+		return nil, api.Fail(http.StatusBadRequest, coreErrors.BuildError(c, err))
 	}
 
 	refreshtoken, err := uc.jwtService.GenerateRefreshToken(sessionUser.UserId, sessionUser.SessionId, sessionUser.SystemRole)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, coreErrors.BuildError(c, err))
-		return
+		return nil, api.Fail(http.StatusBadRequest, coreErrors.BuildError(c, err))
 	}
 
-	c.JSON(http.StatusOK, &authModels.LoginSuccessResponse{
+	return api.OK(&authModels.LoginSuccessResponse{
 		AccessToken:  accessToken,
 		RefreshToken: refreshtoken,
 	})
 }
 
-// LoginFacebook godoc
-// @Summary Allow login based on Facebook authentication
-// @Description Allow login based on Facebook authentication
-// @Tags Auth
-// @Accept  json
-// @Produce  json
-// @Param request body authModels.LoginExternalRequestDto true "Datos de usuario"
-// @Success 200 {object} authModels.LoginSuccessResponse
-// @Failure 400 {object} coreErrors.ErrorResponse
-// @Router /auth/login/facebook [post]
-// @Security ApiKeyAuth
-func (uc *AuthController) LoginFacebook(c *gin.Context) {
+// LoginFacebookInput is LoginFacebook's request.
+type LoginFacebookInput struct {
+	JSON api.Body[authModels.LoginExternalRequestDto]
+}
+
+// LoginFacebook is POST /login/facebook: Allow login based on Facebook authentication.
+func (uc *AuthController) LoginFacebook(ctx context.Context, in *LoginFacebookInput) (*api.Out[*authModels.LoginSuccessResponse], error) {
+	c := api.Gin(ctx)
 	var loginExternalRequestDto authModels.LoginExternalRequestDto
 
-	if err := c.ShouldBindJSON(&loginExternalRequestDto); err != nil {
-		c.JSON(http.StatusBadRequest, coreErrors.BuildErrorDetail(c, authErrors.UserLoginValidationFailed, utils.ExtractValidationError(c, err)))
-		return
+	if err := in.JSON.Into(ctx, &loginExternalRequestDto); err != nil {
+		return nil, api.Fail(http.StatusBadRequest, coreErrors.BuildErrorDetail(c, authErrors.UserLoginValidationFailed, utils.ExtractValidationError(c, err)))
 	}
 
-	declaredClient, ok := clientType(c)
-	if !ok {
-		return
+	declaredClient, err := clientType(c)
+	if err != nil {
+		return nil, err
 	}
 
 	userAgent := c.GetHeader("User-Agent")
@@ -184,54 +172,44 @@ func (uc *AuthController) LoginFacebook(c *gin.Context) {
 
 	sessionUser, err := uc.authService.LoginExternal(c.Request.Context(), loginExternal)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, coreErrors.BuildError(c, err))
-		return
+		return nil, api.Fail(http.StatusBadRequest, coreErrors.BuildError(c, err))
 	}
 
 	accessToken, err := uc.jwtService.GenerateAccessToken(sessionUser.UserId, sessionUser.SessionId, sessionUser.SystemRole)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, coreErrors.BuildError(c, err))
-		return
+		return nil, api.Fail(http.StatusBadRequest, coreErrors.BuildError(c, err))
 	}
 
 	refreshtoken, err := uc.jwtService.GenerateRefreshToken(sessionUser.UserId, sessionUser.SessionId, sessionUser.SystemRole)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, coreErrors.BuildError(c, err))
-		return
+		return nil, api.Fail(http.StatusBadRequest, coreErrors.BuildError(c, err))
 	}
 
-	c.JSON(http.StatusOK, &authModels.LoginSuccessResponse{
+	return api.OK(&authModels.LoginSuccessResponse{
 		AccessToken:  accessToken,
 		RefreshToken: refreshtoken,
 	})
 }
 
-// RefreshToken godoc
-// @Summary Refresh access token
-// @Description Refresh access token using refresh token and validate active session
-// @Tags Auth
-// @Accept  json
-// @Produce  json
-// @Param request body authModels.RefreshTokenRequestDto true "Refresh token"
-// @Success 200 {object} authModels.RefreshTokenResponse
-// @Failure 400 {object} coreErrors.ErrorResponse
-// @Failure 401 {object} coreErrors.ErrorResponse
-// @Router /auth/token/refresh [post]
-// @Security ApiKeyAuth
-func (uc *AuthController) RefreshToken(c *gin.Context) {
+// RefreshTokenInput is RefreshToken's request.
+type RefreshTokenInput struct {
+	JSON api.Body[authModels.RefreshTokenRequestDto]
+}
+
+// RefreshToken is POST /refresh_token: Refresh access token.
+func (uc *AuthController) RefreshToken(ctx context.Context, in *RefreshTokenInput) (*api.Out[*authModels.RefreshTokenResponse], error) {
+	c := api.Gin(ctx)
 	var req authModels.RefreshTokenRequestDto
 
-	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, coreErrors.BuildErrorDetail(c, authErrors.UserLoginValidationFailed, utils.ExtractValidationError(c, err)))
-		return
+	if err := in.JSON.Into(ctx, &req); err != nil {
+		return nil, api.Fail(http.StatusBadRequest, coreErrors.BuildErrorDetail(c, authErrors.UserLoginValidationFailed, utils.ExtractValidationError(c, err)))
 	}
 
 	// Use RefreshAccessToken which internally validates the refresh token with the correct secret
 	// and returns a new access token
 	newAccessToken, err := uc.jwtService.RefreshAccessToken(req.RefreshToken)
 	if err != nil {
-		c.JSON(http.StatusUnauthorized, coreErrors.BuildError(c, err))
-		return
+		return nil, api.Fail(http.StatusUnauthorized, coreErrors.BuildError(c, err))
 	}
 
 	// Now we need to extract claims from refresh token to validate session
@@ -242,34 +220,29 @@ func (uc *AuthController) RefreshToken(c *gin.Context) {
 	})
 
 	if err != nil {
-		c.JSON(http.StatusUnauthorized, coreErrors.BuildErrorSingle(c, authErrors.TokenRefreshInvalid))
-		return
+		return nil, api.Fail(http.StatusUnauthorized, coreErrors.BuildErrorSingle(c, authErrors.TokenRefreshInvalid))
 	}
 
 	claims, ok := token.Claims.(jwt.MapClaims)
 	if !ok {
-		c.JSON(http.StatusUnauthorized, coreErrors.BuildErrorSingle(c, authErrors.TokenRefreshClaimsInvalid))
-		return
+		return nil, api.Fail(http.StatusUnauthorized, coreErrors.BuildErrorSingle(c, authErrors.TokenRefreshClaimsInvalid))
 	}
 
 	// Parse user_id and session_id from claims
 	userID, err := uuid.Parse(claims["user_id"].(string))
 	if err != nil {
-		c.JSON(http.StatusUnauthorized, coreErrors.BuildErrorSingle(c, authErrors.TokenRefreshClaimsInvalid))
-		return
+		return nil, api.Fail(http.StatusUnauthorized, coreErrors.BuildErrorSingle(c, authErrors.TokenRefreshClaimsInvalid))
 	}
 
 	sessionID, err := uuid.Parse(claims["session_id"].(string))
 	if err != nil {
-		c.JSON(http.StatusUnauthorized, coreErrors.BuildErrorSingle(c, authErrors.TokenRefreshClaimsInvalid))
-		return
+		return nil, api.Fail(http.StatusUnauthorized, coreErrors.BuildErrorSingle(c, authErrors.TokenRefreshClaimsInvalid))
 	}
 
 	// Validate that the session is still active in database
 	err = uc.authService.ValidateSession(userID, sessionID)
 	if err != nil {
-		c.JSON(http.StatusUnauthorized, coreErrors.BuildError(c, err))
-		return
+		return nil, api.Fail(http.StatusUnauthorized, coreErrors.BuildError(c, err))
 	}
 
 	// A new refresh token rides along (MOBILE-011 D4): its lifetime restarts on every refresh, so a
@@ -280,48 +253,41 @@ func (uc *AuthController) RefreshToken(c *gin.Context) {
 	}
 	newRefreshToken, err := uc.jwtService.GenerateRefreshToken(userID, sessionID, systemRole)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, coreErrors.BuildError(c, err))
-		return
+		return nil, api.Fail(http.StatusInternalServerError, coreErrors.BuildError(c, err))
 	}
 
-	c.JSON(http.StatusOK, &authModels.RefreshTokenResponse{
+	return api.OK(&authModels.RefreshTokenResponse{
 		AccessToken:  newAccessToken,
 		RefreshToken: newRefreshToken,
 	})
 }
 
-// Register godoc
-// @Summary Register
-// @Description Register
-// @Tags Auth
-// @Accept  json
-// @Produce  json
-// @Param request body authModels.CreateUserDto true "User"
-// @Success 200 {object} coreModels.User
-// @Failure 400 {object} coreErrors.ErrorResponse
-// @Router /auth/register [post]
-// @Security ApiKeyAuth
-func (uc *AuthController) Register(ctx *gin.Context) {
+// RegisterInput is Register's request.
+type RegisterInput struct {
+	JSON api.Body[authModels.CreateUserDto]
+}
+
+// Register is POST /register: Register.
+func (uc *AuthController) Register(ctx context.Context, in *RegisterInput) (*api.Out[*authModels.LoginSuccessResponse], error) {
+	c := api.Gin(ctx)
 	var newUser authModels.CreateUserDto
 
-	if err := ctx.ShouldBindJSON(&newUser); err != nil {
-		ctx.JSON(http.StatusBadRequest, coreErrors.BuildErrorDetail(ctx, authErrors.UserRegisterValidationFailed, utils.ExtractValidationError(ctx, err)))
-		return
+	if err := in.JSON.Into(ctx, &newUser); err != nil {
+		return nil, api.Fail(http.StatusBadRequest, coreErrors.BuildErrorDetail(c, authErrors.UserRegisterValidationFailed, utils.ExtractValidationError(c, err)))
 	}
 
 	if _, err := uc.authService.InsertUser(newUser); err != nil {
-		ctx.JSON(http.StatusBadRequest, coreErrors.BuildError(ctx, err))
-		return
+		return nil, api.Fail(http.StatusBadRequest, coreErrors.BuildError(c, err))
 	}
 
 	// Auto-login: create a session immediately so the client receives tokens
 	// and can proceed to onboarding without a separate login step.
-	declaredClient, ok := clientType(ctx)
-	if !ok {
-		return
+	declaredClient, err := clientType(c)
+	if err != nil {
+		return nil, err
 	}
 
-	userAgent := ctx.GetHeader("User-Agent")
+	userAgent := c.GetHeader("User-Agent")
 	var deviceInfo, deviceOs, browser string
 	if uc.parser != nil {
 		client := uc.parser.Parse(userAgent)
@@ -330,10 +296,10 @@ func (uc *AuthController) Register(ctx *gin.Context) {
 		browser = strings.TrimSpace(client.UserAgent.Family + " " + client.UserAgent.Major)
 	}
 
-	sessionUser, err := uc.authService.LoginUser(ctx.Request.Context(), authModels.LoginUserDto{
+	sessionUser, err := uc.authService.LoginUser(c.Request.Context(), authModels.LoginUserDto{
 		Email:      newUser.Email,
 		Password:   newUser.Password,
-		IpAddress:  utils.GetClientIp(ctx),
+		IpAddress:  utils.GetClientIp(c),
 		DeviceInfo: deviceInfo,
 		DeviceOs:   deviceOs,
 		Browser:    browser,
@@ -341,50 +307,36 @@ func (uc *AuthController) Register(ctx *gin.Context) {
 		ClientType: declaredClient,
 	})
 	if err != nil {
-		ctx.JSON(http.StatusInternalServerError, coreErrors.BuildError(ctx, err))
-		return
+		return nil, api.Fail(http.StatusInternalServerError, coreErrors.BuildError(c, err))
 	}
 
 	accessToken, err := uc.jwtService.GenerateAccessToken(sessionUser.UserId, sessionUser.SessionId, sessionUser.SystemRole)
 	if err != nil {
-		ctx.JSON(http.StatusInternalServerError, coreErrors.BuildError(ctx, err))
-		return
+		return nil, api.Fail(http.StatusInternalServerError, coreErrors.BuildError(c, err))
 	}
 
 	refreshToken, err := uc.jwtService.GenerateRefreshToken(sessionUser.UserId, sessionUser.SessionId, sessionUser.SystemRole)
 	if err != nil {
-		ctx.JSON(http.StatusInternalServerError, coreErrors.BuildError(ctx, err))
-		return
+		return nil, api.Fail(http.StatusInternalServerError, coreErrors.BuildError(c, err))
 	}
 
-	ctx.JSON(http.StatusOK, &authModels.LoginSuccessResponse{
+	return api.OK(&authModels.LoginSuccessResponse{
 		AccessToken:  accessToken,
 		RefreshToken: refreshToken,
 	})
 }
 
-// Logout godoc
-// @Summary Logout
-// @Description Logout
-// @Tags Auth
-// @Accept  json
-// @Produce  json
-// @Param Authorization header string true "Bearer Token"
-// @Success 200 {object} bool
-// @Failure 400 {object} coreErrors.ErrorResponse
-// @Router /auth/logout [post]
-// @Security ApiKeyAuth
-func (uc *AuthController) Logout(c *gin.Context) {
+// Logout is POST /logout: Logout.
+func (uc *AuthController) Logout(ctx context.Context, _ *api.None) (*api.Out[*bool], error) {
+	c := api.Gin(ctx)
 	userId, err := uuid.Parse(c.GetString("user_id"))
 	if err != nil {
-		c.JSON(http.StatusBadRequest, coreErrors.BuildError(c, err))
-		return
+		return nil, api.Fail(http.StatusBadRequest, coreErrors.BuildError(c, err))
 	}
 
 	sessionId, err := uuid.Parse(c.GetString("session_id"))
 	if err != nil {
-		c.JSON(http.StatusBadRequest, coreErrors.BuildError(c, err))
-		return
+		return nil, api.Fail(http.StatusBadRequest, coreErrors.BuildError(c, err))
 	}
 
 	logoutSessionDto := authModels.LogoutSessionDto{
@@ -394,120 +346,92 @@ func (uc *AuthController) Logout(c *gin.Context) {
 
 	unregisteredSession, err := uc.authService.LogoutUser(logoutSessionDto)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, coreErrors.BuildError(c, err))
-		return
+		return nil, api.Fail(http.StatusBadRequest, coreErrors.BuildError(c, err))
 	}
 
-	c.JSON(http.StatusOK, unregisteredSession)
+	return api.OK(unregisteredSession)
 }
 
-// GetProfile godoc
-// @Summary Get user profile
-// @Description Get authenticated user profile information
-// @Tags Auth
-// @Accept  json
-// @Produce  json
-// @Param Authorization header string true "Bearer Token"
-// @Success 200 {object} coreModels.User
-// @Failure 400 {object} coreErrors.ErrorResponse
-// @Router /auth/profile [get]
-// @Security ApiKeyAuth
-func (uc *AuthController) GetProfile(ctx *gin.Context) {
+// GetProfile is GET /profile: Get user profile.
+func (uc *AuthController) GetProfile(ctx context.Context, _ *api.None) (*api.Out[*coreModels.User], error) {
+	c := api.Gin(ctx)
 	var getProfileDto authModels.GetProfileDto
-	userID, err := uuid.Parse(ctx.GetString("user_id"))
+	userID, err := uuid.Parse(c.GetString("user_id"))
 	if err != nil {
-		ctx.JSON(http.StatusBadRequest, coreErrors.BuildError(ctx, err))
-		return
+		return nil, api.Fail(http.StatusBadRequest, coreErrors.BuildError(c, err))
 	}
 	getProfileDto.ID = userID
 
 	user, err := uc.authService.GetProfile(getProfileDto)
 	if err != nil {
-		ctx.JSON(http.StatusBadRequest, coreErrors.BuildError(ctx, err))
-		return
+		return nil, api.Fail(http.StatusBadRequest, coreErrors.BuildError(c, err))
 	}
-	if role := ctx.GetString("system_role"); role != "" {
+	if role := c.GetString("system_role"); role != "" {
 		user.SystemRole = &role
 	}
 
-	ctx.JSON(http.StatusOK, user)
+	return api.OK(user)
 }
 
-// UpdateProfile godoc
-// @Summary Update user profile
-// @Description Update authenticated user profile information (partial updates allowed)
-// @Tags Auth
-// @Accept  json
-// @Produce  json
-// @Param Authorization header string true "Bearer Token"
-// @Param request body authModels.UpdateProfileDto true "Profile data"
-// @Success 200 {object} coreModels.User
-// @Failure 400 {object} coreErrors.ErrorResponse
-// @Router /auth/profile [patch]
-// @Security ApiKeyAuth
-func (uc *AuthController) UpdateProfile(ctx *gin.Context) {
+// UpdateProfileInput is UpdateProfile's request.
+type UpdateProfileInput struct {
+	JSON api.Body[authModels.UpdateProfileDto]
+}
+
+// UpdateProfile is PATCH /profile: Update user profile.
+func (uc *AuthController) UpdateProfile(ctx context.Context, in *UpdateProfileInput) (*api.Out[*coreModels.User], error) {
+	c := api.Gin(ctx)
 	var updateUser authModels.UpdateProfileDto
-	userID, err := uuid.Parse(ctx.GetString("user_id"))
+	userID, err := uuid.Parse(c.GetString("user_id"))
 	if err != nil {
-		ctx.JSON(http.StatusBadRequest, coreErrors.BuildError(ctx, err))
-		return
+		return nil, api.Fail(http.StatusBadRequest, coreErrors.BuildError(c, err))
 	}
 	updateUser.ID = userID
 
-	if err := ctx.ShouldBindJSON(&updateUser); err != nil {
-		ctx.JSON(http.StatusBadRequest, coreErrors.BuildErrorDetail(ctx, authErrors.UserProfileValidationFailed, utils.ExtractValidationError(ctx, err)))
-		return
+	if err := in.JSON.Into(ctx, &updateUser); err != nil {
+		return nil, api.Fail(http.StatusBadRequest, coreErrors.BuildErrorDetail(c, authErrors.UserProfileValidationFailed, utils.ExtractValidationError(c, err)))
 	}
 	// A photo is one published to the media bucket, or none (MEDIA-001 D5): an outside link would
 	// let its host track whoever views the profile.
 	if picture := updateUser.ProfilePictureUrl; picture != nil && *picture != "" && !coreServices.IsMediaURL(*picture) {
-		ctx.JSON(http.StatusUnprocessableEntity, coreErrors.BuildErrorSingle(ctx, authErrors.ProfilePictureURLInvalid))
-		return
+		return nil, api.Fail(http.StatusUnprocessableEntity, coreErrors.BuildErrorSingle(c, authErrors.ProfilePictureURLInvalid))
 	}
 
 	// The language switch is its own statement, run only when one was sent (APP-009 D2).
 	if updateUser.Locale != nil {
-		if err := uc.authService.SetLocale(ctx.Request.Context(), userID, *updateUser.Locale); err != nil {
-			ctx.JSON(http.StatusBadRequest, coreErrors.BuildError(ctx, err))
-			return
+		if err := uc.authService.SetLocale(c.Request.Context(), userID, *updateUser.Locale); err != nil {
+			return nil, api.Fail(http.StatusBadRequest, coreErrors.BuildError(c, err))
 		}
 	}
 
 	user, err := uc.authService.UpdateProfile(updateUser)
 	if err != nil {
-		ctx.JSON(http.StatusBadRequest, coreErrors.BuildError(ctx, err))
-		return
+		return nil, api.Fail(http.StatusBadRequest, coreErrors.BuildError(c, err))
 	}
 
-	ctx.JSON(http.StatusOK, user)
+	return api.OK(user)
 }
 
-// GenerateEmailVerificationToken godoc
-// @Summary Request email verification
-// @Description Generate and send email verification token
-// @Tags Auth
-// @Accept  json
-// @Produce  json
-// @Param Authorization header string true "Bearer Token"
-// @Param request body authModels.VerifyEmailRequestDto false "Email data"
-// @Success 200 {object} bool
-// @Failure 400 {object} coreErrors.ErrorResponse
-// @Router /auth/email/verification [post]
-// @Security ApiKeyAuth
-func (uc *AuthController) GenerateEmailVerificationToken(ctx *gin.Context) {
+// GenerateEmailVerificationTokenInput is GenerateEmailVerificationToken's request; the body is
+// optional, its email defaulting to the account's own.
+type GenerateEmailVerificationTokenInput struct {
+	JSON api.Body[authModels.VerifyEmailRequestDto]
+}
+
+// GenerateEmailVerificationToken sends an email verification link.
+func (uc *AuthController) GenerateEmailVerificationToken(ctx context.Context, in *GenerateEmailVerificationTokenInput) (*api.Out[bool], error) {
+	c := api.Gin(ctx)
 	var verifyEmailRequestDto authModels.VerifyEmailRequestDto
 
-	if ctx.Request.ContentLength > 0 {
-		if err := ctx.ShouldBindJSON(&verifyEmailRequestDto); err != nil {
-			ctx.JSON(http.StatusBadRequest, coreErrors.BuildErrorDetail(ctx, authErrors.UserRequestEmailError, utils.ExtractValidationError(ctx, err)))
-			return
+	if c.Request.ContentLength > 0 {
+		if err := in.JSON.Into(ctx, &verifyEmailRequestDto); err != nil {
+			return nil, api.Fail(http.StatusBadRequest, coreErrors.BuildErrorDetail(c, authErrors.UserRequestEmailError, utils.ExtractValidationError(c, err)))
 		}
 	}
 
-	userID, err := uuid.Parse(ctx.GetString("user_id"))
+	userID, err := uuid.Parse(c.GetString("user_id"))
 	if err != nil {
-		ctx.JSON(http.StatusBadRequest, coreErrors.BuildError(ctx, err))
-		return
+		return nil, api.Fail(http.StatusBadRequest, coreErrors.BuildError(c, err))
 	}
 
 	verifyEmailRequest := &authModels.VerifyEmailRequest{
@@ -520,28 +444,25 @@ func (uc *AuthController) GenerateEmailVerificationToken(ctx *gin.Context) {
 	if recipient == nil {
 		user, err := uc.authService.GetProfile(authModels.GetProfileDto{ID: userID})
 		if err != nil || user.Email == nil {
-			ctx.JSON(http.StatusBadRequest, coreErrors.BuildErrorSingle(ctx, authErrors.UserRequestEmailError))
-			return
+			return nil, api.Fail(http.StatusBadRequest, coreErrors.BuildErrorSingle(c, authErrors.UserRequestEmailError))
 		}
 		recipient = user.Email
 	}
 
-	tx, err := uc.dbService.BeginTransaction(ctx)
+	tx, err := uc.dbService.BeginTransaction(c)
 	if err != nil {
-		ctx.JSON(http.StatusBadRequest, coreErrors.BuildError(ctx, err))
-		return
+		return nil, api.Fail(http.StatusBadRequest, coreErrors.BuildError(c, err))
 	}
 
 	token, err := uc.authService.GenerateEmailVerificationToken(*verifyEmailRequest, tx)
 	if err != nil {
-		ctx.JSON(http.StatusBadRequest, coreErrors.BuildError(ctx, err))
-		tx.Rollback(ctx)
-		return
+		_ = tx.Rollback(c)
+		return nil, api.Fail(http.StatusBadRequest, coreErrors.BuildError(c, err))
 	}
 
 	// Send verification email
 	coreConf := config.ModularAppConfig.Core
-	lang := ctx.GetString("lang")
+	lang := c.GetString("lang")
 	emailData := map[string]string{
 		"VerificationURL": coreConf.FrontendURL + "/confirm-email?token=" + token.Token.String(),
 		"Title":           utils.GetTranslation(lang, "verify-email.email.title"),
@@ -559,73 +480,58 @@ func (uc *AuthController) GenerateEmailVerificationToken(ctx *gin.Context) {
 	if err != nil {
 		// Not sent → no token (AUTH-002): the user is told and can retry at once. The cause stays in the
 		// log; SMTP details are not the client's business.
-		tx.Rollback(ctx)
-		ctx.JSON(http.StatusServiceUnavailable, coreErrors.BuildErrorSingle(ctx, authErrors.UserChangeEmailSendingError))
-		return
+		_ = tx.Rollback(c)
+		return nil, api.Fail(http.StatusServiceUnavailable, coreErrors.BuildErrorSingle(c, authErrors.UserChangeEmailSendingError))
 	}
 
-	err = tx.Commit(ctx)
+	err = tx.Commit(c)
 	if err != nil {
-		ctx.JSON(http.StatusBadRequest, coreErrors.BuildError(ctx, err))
-		return
+		return nil, api.Fail(http.StatusBadRequest, coreErrors.BuildError(c, err))
 	}
 
 	// `true`: the token goes out by email only — in the answer it would confirm an address unread.
-	ctx.JSON(http.StatusOK, true)
+	return api.OK(true)
 }
 
-// ConfirmEmailAddress godoc
-// @Summary Confirm email address
-// @Description Confirm email address with verification token
-// @Tags Auth
-// @Accept  json
-// @Produce  json
-// @Param request body authModels.VerifyEmailToken true "Verification token"
-// @Success 200 {object} bool
-// @Failure 400 {object} coreErrors.ErrorResponse
-// @Router /auth/email/verification [put]
-// @Security ApiKeyAuth
-func (uc *AuthController) ConfirmEmailAddress(ctx *gin.Context) {
+// ConfirmEmailAddressInput is ConfirmEmailAddress's request.
+type ConfirmEmailAddressInput struct {
+	JSON api.Body[authModels.VerifyEmailToken]
+}
+
+// ConfirmEmailAddress is PUT /email/verification: Confirm email address.
+func (uc *AuthController) ConfirmEmailAddress(ctx context.Context, in *ConfirmEmailAddressInput) (*api.Out[*bool], error) {
+	c := api.Gin(ctx)
 	var verifyEmailRequest authModels.VerifyEmailToken
 
-	if err := ctx.ShouldBindJSON(&verifyEmailRequest); err != nil {
-		ctx.JSON(http.StatusBadRequest, coreErrors.BuildErrorDetail(ctx, authErrors.UserEmailVerification, utils.ExtractValidationError(ctx, err)))
-		return
+	if err := in.JSON.Into(ctx, &verifyEmailRequest); err != nil {
+		return nil, api.Fail(http.StatusBadRequest, coreErrors.BuildErrorDetail(c, authErrors.UserEmailVerification, utils.ExtractValidationError(c, err)))
 	}
 
 	confirmed, err := uc.authService.ConfirmEmailAddress(verifyEmailRequest)
 	if err != nil {
-		ctx.JSON(http.StatusBadRequest, coreErrors.BuildError(ctx, err))
-		return
+		return nil, api.Fail(http.StatusBadRequest, coreErrors.BuildError(c, err))
 	}
 
-	ctx.JSON(http.StatusOK, confirmed)
+	return api.OK(confirmed)
 }
 
-// ChangePassword godoc
-// @Summary Change user password
-// @Description Change password for authenticated user
-// @Tags Auth
-// @Accept  json
-// @Produce  json
-// @Param Authorization header string true "Bearer Token"
-// @Param request body authModels.ChangePasswordRequestDto true "Password data"
-// @Success 200 {object} bool
-// @Failure 400 {object} coreErrors.ErrorResponse
-// @Router /auth/password [put]
-// @Security ApiKeyAuth
-func (uc *AuthController) ChangePassword(ctx *gin.Context) {
+// ChangePasswordInput is ChangePassword's request.
+type ChangePasswordInput struct {
+	JSON api.Body[authModels.ChangePasswordRequestDto]
+}
+
+// ChangePassword is PUT /password: Change user password.
+func (uc *AuthController) ChangePassword(ctx context.Context, in *ChangePasswordInput) (*api.Out[*bool], error) {
+	c := api.Gin(ctx)
 	var changePasswordEequestDto authModels.ChangePasswordRequestDto
 
-	if err := ctx.ShouldBindJSON(&changePasswordEequestDto); err != nil {
-		ctx.JSON(http.StatusBadRequest, coreErrors.BuildErrorDetail(ctx, authErrors.UserChangePasswordError, utils.ExtractValidationError(ctx, err)))
-		return
+	if err := in.JSON.Into(ctx, &changePasswordEequestDto); err != nil {
+		return nil, api.Fail(http.StatusBadRequest, coreErrors.BuildErrorDetail(c, authErrors.UserChangePasswordError, utils.ExtractValidationError(c, err)))
 	}
 
-	userID, err := uuid.Parse(ctx.GetString("user_id"))
+	userID, err := uuid.Parse(c.GetString("user_id"))
 	if err != nil {
-		ctx.JSON(http.StatusBadRequest, coreErrors.BuildError(ctx, err))
-		return
+		return nil, api.Fail(http.StatusBadRequest, coreErrors.BuildError(c, err))
 	}
 
 	changePasswordDto := authModels.ChangePasswordDto{
@@ -634,62 +540,51 @@ func (uc *AuthController) ChangePassword(ctx *gin.Context) {
 		PasswordNew:     changePasswordEequestDto.PasswordNew,
 	}
 	// The session making the change stays signed in; every other one ends in the same SP call.
-	if sessionID, err := uuid.Parse(ctx.GetString("session_id")); err == nil {
+	if sessionID, err := uuid.Parse(c.GetString("session_id")); err == nil {
 		changePasswordDto.CurrentSessionId = &sessionID
 	}
 
 	changed, err := uc.authService.ChangePassword(changePasswordDto)
 	if err != nil {
-		ctx.JSON(http.StatusUnauthorized, coreErrors.BuildError(ctx, err))
-		return
+		return nil, api.Fail(http.StatusUnauthorized, coreErrors.BuildError(c, err))
 	}
 
-	ctx.JSON(http.StatusOK, changed)
+	return api.OK(changed)
 }
 
-// GeneratePasswordResetToken godoc
-// @Summary Request password reset
-// @Description Generate and send password reset token
-// @Tags Auth
-// @Accept  json
-// @Produce  json
-// @Param request body authModels.PasswordResetRequestDto true "Account data"
-// @Description The answer is `true` whether or not the email has an account, and never carries the
-// @Description token: the link in the email is the only way to it.
-// @Success 200 {object} bool
-// @Failure 400 {object} coreErrors.ErrorResponse
-// @Router /auth/password/reset [post]
-// @Security ApiKeyAuth
-func (uc *AuthController) GeneratePasswordResetToken(ctx *gin.Context) {
+// GeneratePasswordResetTokenInput is GeneratePasswordResetToken's request.
+type GeneratePasswordResetTokenInput struct {
+	JSON api.Body[authModels.PasswordResetRequestDto]
+}
+
+// GeneratePasswordResetToken is POST /password/reset: Request password reset.
+func (uc *AuthController) GeneratePasswordResetToken(ctx context.Context, in *GeneratePasswordResetTokenInput) (*api.Out[bool], error) {
+	c := api.Gin(ctx)
 	var passwordResetRequestDto authModels.PasswordResetRequestDto
 
-	if err := ctx.ShouldBindJSON(&passwordResetRequestDto); err != nil {
-		ctx.JSON(http.StatusBadRequest, coreErrors.BuildErrorDetail(ctx, authErrors.UserPasswordResetError, utils.ExtractValidationError(ctx, err)))
-		return
+	if err := in.JSON.Into(ctx, &passwordResetRequestDto); err != nil {
+		return nil, api.Fail(http.StatusBadRequest, coreErrors.BuildErrorDetail(c, authErrors.UserPasswordResetError, utils.ExtractValidationError(c, err)))
 	}
 
-	tx, err := uc.dbService.BeginTransaction(ctx)
+	tx, err := uc.dbService.BeginTransaction(c)
 	if err != nil {
-		ctx.JSON(http.StatusBadRequest, coreErrors.BuildError(ctx, err))
-		return
+		return nil, api.Fail(http.StatusBadRequest, coreErrors.BuildError(c, err))
 	}
 
 	token, err := uc.authService.GeneratePasswordResetToken(passwordResetRequestDto, tx)
 	if err != nil {
-		tx.Rollback(ctx)
+		_ = tx.Rollback(c)
 		// An unknown email gets the answer a known one does, and no email.
 		var pgErr *pgconn.PgError
 		if errors.As(err, &pgErr) && pgErr.Message == authErrors.UserPasswordResetAccountMissing {
-			ctx.JSON(http.StatusOK, true)
-			return
+			return api.OK(true)
 		}
-		ctx.JSON(http.StatusBadRequest, coreErrors.BuildError(ctx, err))
-		return
+		return nil, api.Fail(http.StatusBadRequest, coreErrors.BuildError(c, err))
 	}
 
 	// Send password reset email
 	coreConf := config.ModularAppConfig.Core
-	lang := ctx.GetString("lang")
+	lang := c.GetString("lang")
 	emailData := map[string]string{
 		"PasswordResetURL": coreConf.FrontendURL + "/reset-password?token=" + token.Token.String(),
 		"Title":            utils.GetTranslation(lang, "password-reset.email.title"),
@@ -706,71 +601,58 @@ func (uc *AuthController) GeneratePasswordResetToken(ctx *gin.Context) {
 	err = uc.emailService.SendEmail(*passwordResetRequestDto.Email, subject, templatePath, emailData)
 	if err != nil {
 		// Not sent → no token (AUTH-002), so the next try is not refused as "already sent".
-		tx.Rollback(ctx)
-		ctx.JSON(http.StatusServiceUnavailable, coreErrors.BuildErrorSingle(ctx, authErrors.UserForgorPasswordEmailSendingError))
-		return
+		_ = tx.Rollback(c)
+		return nil, api.Fail(http.StatusServiceUnavailable, coreErrors.BuildErrorSingle(c, authErrors.UserForgorPasswordEmailSendingError))
 	}
 
-	err = tx.Commit(ctx)
+	err = tx.Commit(c)
 	if err != nil {
-		ctx.JSON(http.StatusBadRequest, coreErrors.BuildError(ctx, err))
-		return
+		return nil, api.Fail(http.StatusBadRequest, coreErrors.BuildError(c, err))
 	}
 
-	ctx.JSON(http.StatusOK, true)
+	return api.OK(true)
 }
 
-// ValidateResetToken godoc
-// @Summary Validate password reset token
-// @Description Check whether a password reset token is still valid (not used, not expired)
-// @Tags Auth
-// @Produce json
-// @Param token query string true "Reset token"
-// @Success 200 {object} bool
-// @Failure 400 {object} coreErrors.ErrorResponse
-// @Failure 410 {object} coreErrors.ErrorResponse
-// @Router /auth/password/reset [get]
-func (uc *AuthController) ValidateResetToken(ctx *gin.Context) {
+// ValidateResetTokenInput is ValidateResetToken's request.
+type ValidateResetTokenInput struct {
+	Query api.Query[authModels.ValidateResetTokenDto]
+}
+
+// ValidateResetToken is GET /password/reset: Validate password reset token.
+func (uc *AuthController) ValidateResetToken(ctx context.Context, in *ValidateResetTokenInput) (*api.Out[*bool], error) {
+	c := api.Gin(ctx)
 	var dto authModels.ValidateResetTokenDto
 
-	if err := ctx.ShouldBindQuery(&dto); err != nil {
-		ctx.JSON(http.StatusBadRequest, coreErrors.BuildErrorDetail(ctx, authErrors.UserPasswordResetError, utils.ExtractValidationError(ctx, err)))
-		return
+	if err := in.Query.Into(ctx, &dto); err != nil {
+		return nil, api.Fail(http.StatusBadRequest, coreErrors.BuildErrorDetail(c, authErrors.UserPasswordResetError, utils.ExtractValidationError(c, err)))
 	}
 
 	valid, err := uc.authService.ValidateResetToken(dto)
 	if err != nil {
-		ctx.JSON(http.StatusGone, coreErrors.BuildErrorSingle(ctx, authErrors.UserPasswordResetTokenInvalid))
-		return
+		return nil, api.Fail(http.StatusGone, coreErrors.BuildErrorSingle(c, authErrors.UserPasswordResetTokenInvalid))
 	}
 
-	ctx.JSON(http.StatusOK, valid)
+	return api.OK(valid)
 }
 
-// ResetPasswordWithToken godoc
-// @Summary Reset password with token
-// @Description Reset password using reset token
-// @Tags Auth
-// @Accept  json
-// @Produce  json
-// @Param request body authModels.PasswordResetWithTokenDto true "Reset data"
-// @Success 200 {object} bool
-// @Failure 400 {object} coreErrors.ErrorResponse
-// @Router /auth/password/reset [put]
-// @Security ApiKeyAuth
-func (uc *AuthController) ResetPasswordWithToken(ctx *gin.Context) {
+// ResetPasswordWithTokenInput is ResetPasswordWithToken's request.
+type ResetPasswordWithTokenInput struct {
+	JSON api.Body[authModels.PasswordResetWithTokenDto]
+}
+
+// ResetPasswordWithToken is PUT /password/reset: Reset password with token.
+func (uc *AuthController) ResetPasswordWithToken(ctx context.Context, in *ResetPasswordWithTokenInput) (*api.Out[*bool], error) {
+	c := api.Gin(ctx)
 	var passwordResetWithTokenDto authModels.PasswordResetWithTokenDto
 
-	if err := ctx.ShouldBindJSON(&passwordResetWithTokenDto); err != nil {
-		ctx.JSON(http.StatusBadRequest, coreErrors.BuildErrorDetail(ctx, authErrors.UserPasswordResetError, utils.ExtractValidationError(ctx, err)))
-		return
+	if err := in.JSON.Into(ctx, &passwordResetWithTokenDto); err != nil {
+		return nil, api.Fail(http.StatusBadRequest, coreErrors.BuildErrorDetail(c, authErrors.UserPasswordResetError, utils.ExtractValidationError(c, err)))
 	}
 
 	changed, err := uc.authService.ResetPasswordWithToken(passwordResetWithTokenDto)
 	if err != nil {
-		ctx.JSON(http.StatusBadRequest, coreErrors.BuildError(ctx, err))
-		return
+		return nil, api.Fail(http.StatusBadRequest, coreErrors.BuildError(c, err))
 	}
 
-	ctx.JSON(http.StatusOK, changed)
+	return api.OK(changed)
 }

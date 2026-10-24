@@ -1,9 +1,11 @@
 package controllers
 
 import (
+	"context"
 	"errors"
 	"net/http"
 
+	"josex/web/modules/core/api"
 	coreErrors "josex/web/modules/core/errors"
 	"josex/web/modules/core/utils"
 	trackingErrors "josex/web/modules/tracking/errors"
@@ -20,501 +22,395 @@ import (
 
 // scheduleErrorResponse maps the schedule codes to statuses and reports whether it has already
 // written the response.
-func scheduleErrorResponse(c *gin.Context, err error) bool {
+func scheduleErrorResponse(c *gin.Context, err error) error {
 	var trackingErr *trackingErrors.TrackingError
 	if !errors.As(err, &trackingErr) {
-		return false
+		return nil
 	}
 	switch trackingErr.Code {
 	case trackingErrors.RouteNotFound, trackingErrors.ScheduleNotFound, trackingErrors.CalendarNotFound:
-		c.JSON(http.StatusNotFound, coreErrors.BuildErrorSingle(c, trackingErr.Code))
-		return true
+		return api.Fail(http.StatusNotFound, coreErrors.BuildErrorSingle(c, trackingErr.Code))
 	case trackingErrors.ScheduleOverlap:
-		c.JSON(http.StatusConflict, coreErrors.BuildErrorSingle(c, trackingErr.Code))
-		return true
+		return api.Fail(http.StatusConflict, coreErrors.BuildErrorSingle(c, trackingErr.Code))
 	case trackingErrors.ScheduleSplitDate, trackingErrors.ScheduleDaysOfWeek, trackingErrors.ScheduleRange,
 		trackingErrors.ScheduleArrivalOutboundOnly:
-		c.JSON(http.StatusBadRequest, coreErrors.BuildErrorSingle(c, trackingErr.Code))
-		return true
+		return api.Fail(http.StatusBadRequest, coreErrors.BuildErrorSingle(c, trackingErr.Code))
 	}
-	return false
+	return nil
 }
 
-// ListRouteSchedules godoc
-// @Summary List a route's schedules
-// @Description When the route runs: a weekday bitmask (bit 0 Monday) and a departure time, over a range of dates
-// @Tags Tracking - Schedules
-// @Produce json
-// @Security BearerAuth
-// @Param route_id path string true "Route ID (UUID)"
-// @Success 200 {array} models.RouteSchedule
-// @Failure 400 {object} coreErrors.ErrorResponse
-// @Failure 404 {object} coreErrors.ErrorResponse
-// @Failure 500 {object} coreErrors.ErrorResponse
-// @Router /tracking/routes/{route_id}/schedules [get]
-func (ctrl *TrackingController) ListRouteSchedules(c *gin.Context) {
-	tenantID, ok := ctrl.requireTenantID(c)
-	if !ok {
-		return
-	}
-	routeID, err := uuid.Parse(c.Param("route_id"))
+// ListRouteSchedulesInput is ListRouteSchedules's request.
+type ListRouteSchedulesInput struct {
+	RouteID string `path:"route_id"`
+}
+
+// ListRouteSchedules is GET /routes/{route_id}/schedules: List a route's schedules.
+func (ctrl *TrackingController) ListRouteSchedules(ctx context.Context, in *ListRouteSchedulesInput) (*api.Out[[]*models.RouteSchedule], error) {
+	c := api.Gin(ctx)
+	tenantID, err := ctrl.requireTenantID(c)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, coreErrors.BuildErrorSingle(c, coreErrors.InvalidUUID))
-		return
+		return nil, err
+	}
+	routeID, err := uuid.Parse(in.RouteID)
+	if err != nil {
+		return nil, api.Fail(http.StatusBadRequest, coreErrors.BuildErrorSingle(c, coreErrors.InvalidUUID))
 	}
 
 	schedules, err := ctrl.trackingService.ListRouteSchedules(c.Request.Context(), tenantID, routeID)
 	if err != nil {
-		if scheduleErrorResponse(c, err) {
-			return
+		if err := scheduleErrorResponse(c, err); err != nil {
+			return nil, err
 		}
-		c.JSON(http.StatusInternalServerError, coreErrors.BuildError(c, err))
-		return
+		return nil, api.Fail(http.StatusInternalServerError, coreErrors.BuildError(c, err))
 	}
-	c.JSON(http.StatusOK, schedules)
+	return api.OK(schedules)
 }
 
-// CreateRouteSchedule godoc
-// @Summary Add a recurrence to a route
-// @Description days_of_week is a bitmask, bit 0 Monday … bit 6 Sunday; start_time is HH:MM
-// @Tags Tracking - Schedules
-// @Accept json
-// @Produce json
-// @Security BearerAuth
-// @Param route_id path string true "Route ID (UUID)"
-// @Param schedule body models.CreateRouteScheduleDto true "Weekdays, departure time and validity"
-// @Success 201 {object} models.RouteSchedule
-// @Failure 400 {object} coreErrors.ErrorResponse
-// @Failure 404 {object} coreErrors.ErrorResponse
-// @Failure 409 {object} coreErrors.ErrorResponse
-// @Failure 500 {object} coreErrors.ErrorResponse
-// @Router /tracking/routes/{route_id}/schedules [post]
-func (ctrl *TrackingController) CreateRouteSchedule(c *gin.Context) {
-	tenantID, ok := ctrl.requireTenantID(c)
-	if !ok {
-		return
-	}
-	routeID, err := uuid.Parse(c.Param("route_id"))
+// CreateRouteScheduleInput is CreateRouteSchedule's request.
+type CreateRouteScheduleInput struct {
+	RouteID string `path:"route_id"`
+	JSON    api.Body[models.CreateRouteScheduleDto]
+}
+
+// CreateRouteSchedule is POST /routes/{route_id}/schedules: Add a recurrence to a route.
+func (ctrl *TrackingController) CreateRouteSchedule(ctx context.Context, in *CreateRouteScheduleInput) (*api.Out[*models.RouteSchedule], error) {
+	c := api.Gin(ctx)
+	tenantID, err := ctrl.requireTenantID(c)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, coreErrors.BuildErrorSingle(c, coreErrors.InvalidUUID))
-		return
+		return nil, err
+	}
+	routeID, err := uuid.Parse(in.RouteID)
+	if err != nil {
+		return nil, api.Fail(http.StatusBadRequest, coreErrors.BuildErrorSingle(c, coreErrors.InvalidUUID))
 	}
 	var dto models.CreateRouteScheduleDto
-	if err := c.ShouldBindJSON(&dto); err != nil {
-		c.JSON(http.StatusBadRequest, coreErrors.BuildErrorDetail(c, trackingErrors.ScheduleCreateFailed, utils.ExtractValidationError(c, err)))
-		return
+	if err := in.JSON.Into(ctx, &dto); err != nil {
+		return nil, api.Fail(http.StatusBadRequest, coreErrors.BuildErrorDetail(c, trackingErrors.ScheduleCreateFailed, utils.ExtractValidationError(c, err)))
 	}
 	if (dto.StartTime == nil) == (dto.ArrivalTime == nil) {
-		c.JSON(http.StatusBadRequest, coreErrors.BuildErrorSingle(c, trackingErrors.ScheduleTimeChoice))
-		return
+		return nil, api.Fail(http.StatusBadRequest, coreErrors.BuildErrorSingle(c, trackingErrors.ScheduleTimeChoice))
 	}
 
 	schedule, err := ctrl.trackingService.CreateRouteSchedule(c.Request.Context(), tenantID, routeID, &dto)
 	if err != nil {
-		if scheduleErrorResponse(c, err) {
-			return
+		if err := scheduleErrorResponse(c, err); err != nil {
+			return nil, err
 		}
-		c.JSON(http.StatusInternalServerError, coreErrors.BuildError(c, err))
-		return
+		return nil, api.Fail(http.StatusInternalServerError, coreErrors.BuildError(c, err))
 	}
-	c.JSON(http.StatusCreated, schedule)
+	return api.OK(schedule)
 }
 
-// UpdateRouteSchedule godoc
-// @Summary Edit a schedule in place
-// @Description Fixes a schedule that was entered wrong; changing one from a date onward is the split endpoint
-// @Tags Tracking - Schedules
-// @Accept json
-// @Produce json
-// @Security BearerAuth
-// @Param route_id path string true "Route ID (UUID)"
-// @Param schedule_id path string true "Schedule ID (UUID)"
-// @Param schedule body models.UpdateRouteScheduleDto true "The fields to change"
-// @Success 200 {object} models.RouteSchedule
-// @Failure 400 {object} coreErrors.ErrorResponse
-// @Failure 404 {object} coreErrors.ErrorResponse
-// @Failure 409 {object} coreErrors.ErrorResponse
-// @Failure 500 {object} coreErrors.ErrorResponse
-// @Router /tracking/routes/{route_id}/schedules/{schedule_id} [patch]
-func (ctrl *TrackingController) UpdateRouteSchedule(c *gin.Context) {
-	tenantID, ok := ctrl.requireTenantID(c)
-	if !ok {
-		return
-	}
-	scheduleID, err := uuid.Parse(c.Param("schedule_id"))
+// UpdateRouteScheduleInput is UpdateRouteSchedule's request.
+type UpdateRouteScheduleInput struct {
+	RouteID    string `path:"route_id"`
+	ScheduleID string `path:"schedule_id"`
+	JSON       api.Body[models.UpdateRouteScheduleDto]
+}
+
+// UpdateRouteSchedule is PATCH /routes/{route_id}/schedules/{schedule_id}: Edit a schedule in place.
+func (ctrl *TrackingController) UpdateRouteSchedule(ctx context.Context, in *UpdateRouteScheduleInput) (*api.Out[*models.RouteSchedule], error) {
+	c := api.Gin(ctx)
+	tenantID, err := ctrl.requireTenantID(c)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, coreErrors.BuildErrorSingle(c, coreErrors.InvalidUUID))
-		return
+		return nil, err
+	}
+	scheduleID, err := uuid.Parse(in.ScheduleID)
+	if err != nil {
+		return nil, api.Fail(http.StatusBadRequest, coreErrors.BuildErrorSingle(c, coreErrors.InvalidUUID))
 	}
 	var dto models.UpdateRouteScheduleDto
-	if err := c.ShouldBindJSON(&dto); err != nil {
-		c.JSON(http.StatusBadRequest, coreErrors.BuildErrorDetail(c, trackingErrors.ScheduleUpdateFailed, utils.ExtractValidationError(c, err)))
-		return
+	if err := in.JSON.Into(ctx, &dto); err != nil {
+		return nil, api.Fail(http.StatusBadRequest, coreErrors.BuildErrorDetail(c, trackingErrors.ScheduleUpdateFailed, utils.ExtractValidationError(c, err)))
 	}
 	if dto.StartTime != nil && dto.ArrivalTime != nil {
-		c.JSON(http.StatusBadRequest, coreErrors.BuildErrorSingle(c, trackingErrors.ScheduleTimeChoice))
-		return
+		return nil, api.Fail(http.StatusBadRequest, coreErrors.BuildErrorSingle(c, trackingErrors.ScheduleTimeChoice))
 	}
 
 	schedule, err := ctrl.trackingService.UpdateRouteSchedule(c.Request.Context(), tenantID, scheduleID, &dto)
 	if err != nil {
-		if scheduleErrorResponse(c, err) {
-			return
+		if err := scheduleErrorResponse(c, err); err != nil {
+			return nil, err
 		}
-		c.JSON(http.StatusInternalServerError, coreErrors.BuildError(c, err))
-		return
+		return nil, api.Fail(http.StatusInternalServerError, coreErrors.BuildError(c, err))
 	}
-	c.JSON(http.StatusOK, schedule)
+	return api.OK(schedule)
 }
 
-// DeleteRouteSchedule godoc
-// @Summary Remove a recurrence from a route
-// @Tags Tracking - Schedules
-// @Produce json
-// @Security BearerAuth
-// @Param route_id path string true "Route ID (UUID)"
-// @Param schedule_id path string true "Schedule ID (UUID)"
-// @Success 204 "No Content"
-// @Failure 400 {object} coreErrors.ErrorResponse
-// @Failure 404 {object} coreErrors.ErrorResponse
-// @Failure 500 {object} coreErrors.ErrorResponse
-// @Router /tracking/routes/{route_id}/schedules/{schedule_id} [delete]
-func (ctrl *TrackingController) DeleteRouteSchedule(c *gin.Context) {
-	tenantID, ok := ctrl.requireTenantID(c)
-	if !ok {
-		return
-	}
-	scheduleID, err := uuid.Parse(c.Param("schedule_id"))
+// DeleteRouteScheduleInput is DeleteRouteSchedule's request.
+type DeleteRouteScheduleInput struct {
+	RouteID    string `path:"route_id"`
+	ScheduleID string `path:"schedule_id"`
+}
+
+// DeleteRouteSchedule is DELETE /routes/{route_id}/schedules/{schedule_id}: Remove a recurrence from a route.
+func (ctrl *TrackingController) DeleteRouteSchedule(ctx context.Context, in *DeleteRouteScheduleInput) (*api.Empty, error) {
+	c := api.Gin(ctx)
+	tenantID, err := ctrl.requireTenantID(c)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, coreErrors.BuildErrorSingle(c, coreErrors.InvalidUUID))
-		return
+		return nil, err
+	}
+	scheduleID, err := uuid.Parse(in.ScheduleID)
+	if err != nil {
+		return nil, api.Fail(http.StatusBadRequest, coreErrors.BuildErrorSingle(c, coreErrors.InvalidUUID))
 	}
 
 	if err := ctrl.trackingService.DeleteRouteSchedule(c.Request.Context(), tenantID, scheduleID); err != nil {
-		if scheduleErrorResponse(c, err) {
-			return
+		if err := scheduleErrorResponse(c, err); err != nil {
+			return nil, err
 		}
-		c.JSON(http.StatusInternalServerError, coreErrors.BuildError(c, err))
-		return
+		return nil, api.Fail(http.StatusInternalServerError, coreErrors.BuildError(c, err))
 	}
-	c.Status(http.StatusNoContent)
+	return api.Done()
 }
 
-// SplitRouteSchedule godoc
-// @Summary Change a schedule from a date onward
-// @Description Closes the schedule the day before from_date and opens a new one carrying the changes, so the days before keep the plan they had
-// @Tags Tracking - Schedules
-// @Accept json
-// @Produce json
-// @Security BearerAuth
-// @Param route_id path string true "Route ID (UUID)"
-// @Param schedule_id path string true "Schedule ID (UUID)"
-// @Param split body models.SplitRouteScheduleDto true "The date the change takes effect and what changes"
-// @Success 201 {object} models.SplitRouteScheduleResponse
-// @Failure 400 {object} coreErrors.ErrorResponse
-// @Failure 404 {object} coreErrors.ErrorResponse
-// @Failure 409 {object} coreErrors.ErrorResponse
-// @Failure 500 {object} coreErrors.ErrorResponse
-// @Router /tracking/routes/{route_id}/schedules/{schedule_id}/split [post]
-func (ctrl *TrackingController) SplitRouteSchedule(c *gin.Context) {
-	tenantID, ok := ctrl.requireTenantID(c)
-	if !ok {
-		return
-	}
-	scheduleID, err := uuid.Parse(c.Param("schedule_id"))
+// SplitRouteScheduleInput is SplitRouteSchedule's request.
+type SplitRouteScheduleInput struct {
+	RouteID    string `path:"route_id"`
+	ScheduleID string `path:"schedule_id"`
+	JSON       api.Body[models.SplitRouteScheduleDto]
+}
+
+// SplitRouteSchedule is POST /routes/{route_id}/schedules/{schedule_id}/split: Change a schedule from a date onward.
+func (ctrl *TrackingController) SplitRouteSchedule(ctx context.Context, in *SplitRouteScheduleInput) (*api.Out[*models.SplitRouteScheduleResponse], error) {
+	c := api.Gin(ctx)
+	tenantID, err := ctrl.requireTenantID(c)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, coreErrors.BuildErrorSingle(c, coreErrors.InvalidUUID))
-		return
+		return nil, err
+	}
+	scheduleID, err := uuid.Parse(in.ScheduleID)
+	if err != nil {
+		return nil, api.Fail(http.StatusBadRequest, coreErrors.BuildErrorSingle(c, coreErrors.InvalidUUID))
 	}
 	var dto models.SplitRouteScheduleDto
-	if err := c.ShouldBindJSON(&dto); err != nil {
-		c.JSON(http.StatusBadRequest, coreErrors.BuildErrorDetail(c, trackingErrors.ScheduleSplitFailed, utils.ExtractValidationError(c, err)))
-		return
+	if err := in.JSON.Into(ctx, &dto); err != nil {
+		return nil, api.Fail(http.StatusBadRequest, coreErrors.BuildErrorDetail(c, trackingErrors.ScheduleSplitFailed, utils.ExtractValidationError(c, err)))
 	}
 
 	result, err := ctrl.trackingService.SplitRouteSchedule(c.Request.Context(), tenantID, scheduleID, &dto)
 	if err != nil {
-		if scheduleErrorResponse(c, err) {
-			return
+		if err := scheduleErrorResponse(c, err); err != nil {
+			return nil, err
 		}
-		c.JSON(http.StatusInternalServerError, coreErrors.BuildError(c, err))
-		return
+		return nil, api.Fail(http.StatusInternalServerError, coreErrors.BuildError(c, err))
 	}
-	c.JSON(http.StatusCreated, result)
+	return api.OK(result)
 }
 
 // ==================== CALENDARS ====================
 
 // calendarErrorResponse maps the calendar codes to statuses and reports whether it has already
 // written the response.
-func calendarErrorResponse(c *gin.Context, err error) bool {
+func calendarErrorResponse(c *gin.Context, err error) error {
 	var trackingErr *trackingErrors.TrackingError
 	if !errors.As(err, &trackingErr) {
-		return false
+		return nil
 	}
 	switch trackingErr.Code {
 	case trackingErrors.CalendarNotFound, trackingErrors.OrganizationNotFound:
-		c.JSON(http.StatusNotFound, coreErrors.BuildErrorSingle(c, trackingErr.Code))
-		return true
+		return api.Fail(http.StatusNotFound, coreErrors.BuildErrorSingle(c, trackingErr.Code))
 	case trackingErrors.CalendarInUse, trackingErrors.CalendarDuplicateDate:
-		c.JSON(http.StatusConflict, coreErrors.BuildErrorSingle(c, trackingErr.Code))
-		return true
+		return api.Fail(http.StatusConflict, coreErrors.BuildErrorSingle(c, trackingErr.Code))
 	}
-	return false
+	return nil
 }
 
-// ListCalendars godoc
-// @Summary List the tenant's calendars
-// @Tags Tracking - Calendars
-// @Produce json
-// @Security BearerAuth
-// @Param search query string false "Match the calendar name"
-// @Param page query int false "Page number (default 1)"
-// @Param page_size query int false "Page size (default 20, max 100)"
-// @Success 200 {object} models.ListCalendarsResponse
-// @Failure 400 {object} coreErrors.ErrorResponse
-// @Failure 500 {object} coreErrors.ErrorResponse
-// @Router /tracking/calendars [get]
-func (ctrl *TrackingController) ListCalendars(c *gin.Context) {
-	tenantID, ok := ctrl.requireTenantID(c)
-	if !ok {
-		return
+// ListCalendarsInput is ListCalendars's request.
+type ListCalendarsInput struct {
+	Query api.Query[models.ListCalendarsQuery]
+}
+
+// ListCalendars is GET /calendars: List the tenant's calendars.
+func (ctrl *TrackingController) ListCalendars(ctx context.Context, in *ListCalendarsInput) (*api.Out[*models.ListCalendarsResponse], error) {
+	c := api.Gin(ctx)
+	tenantID, err := ctrl.requireTenantID(c)
+	if err != nil {
+		return nil, err
 	}
 	var query models.ListCalendarsQuery
-	if err := c.ShouldBindQuery(&query); err != nil {
-		c.JSON(http.StatusBadRequest, coreErrors.BuildErrorDetail(c, trackingErrors.CalendarListFailed, utils.ExtractValidationError(c, err)))
-		return
+	if err := in.Query.Into(ctx, &query); err != nil {
+		return nil, api.Fail(http.StatusBadRequest, coreErrors.BuildErrorDetail(c, trackingErrors.CalendarListFailed, utils.ExtractValidationError(c, err)))
 	}
 
 	result, err := ctrl.trackingService.ListCalendars(c.Request.Context(), tenantID, query)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, coreErrors.BuildError(c, err))
-		return
+		return nil, api.Fail(http.StatusInternalServerError, coreErrors.BuildError(c, err))
 	}
-	c.JSON(http.StatusOK, result)
+	return api.OK(result)
 }
 
-// CreateCalendar godoc
-// @Summary Create a calendar
-// @Description A named set of dates a schedule points at — a school year, the public holidays
-// @Tags Tracking - Calendars
-// @Accept json
-// @Produce json
-// @Security BearerAuth
-// @Param calendar body models.CreateCalendarDto true "Calendar data"
-// @Success 201 {object} models.Calendar
-// @Failure 400 {object} coreErrors.ErrorResponse
-// @Failure 404 {object} coreErrors.ErrorResponse
-// @Failure 500 {object} coreErrors.ErrorResponse
-// @Router /tracking/calendars [post]
-func (ctrl *TrackingController) CreateCalendar(c *gin.Context) {
-	tenantID, ok := ctrl.requireTenantID(c)
-	if !ok {
-		return
+// CreateCalendarInput is CreateCalendar's request.
+type CreateCalendarInput struct {
+	JSON api.Body[models.CreateCalendarDto]
+}
+
+// CreateCalendar is POST /calendars: Create a calendar.
+func (ctrl *TrackingController) CreateCalendar(ctx context.Context, in *CreateCalendarInput) (*api.Out[*models.Calendar], error) {
+	c := api.Gin(ctx)
+	tenantID, err := ctrl.requireTenantID(c)
+	if err != nil {
+		return nil, err
 	}
 	var dto models.CreateCalendarDto
-	if err := c.ShouldBindJSON(&dto); err != nil {
-		c.JSON(http.StatusBadRequest, coreErrors.BuildErrorDetail(c, trackingErrors.CalendarCreateFailed, utils.ExtractValidationError(c, err)))
-		return
+	if err := in.JSON.Into(ctx, &dto); err != nil {
+		return nil, api.Fail(http.StatusBadRequest, coreErrors.BuildErrorDetail(c, trackingErrors.CalendarCreateFailed, utils.ExtractValidationError(c, err)))
 	}
 
 	calendar, err := ctrl.trackingService.CreateCalendar(c.Request.Context(), tenantID, &dto)
 	if err != nil {
-		if calendarErrorResponse(c, err) {
-			return
+		if err := calendarErrorResponse(c, err); err != nil {
+			return nil, err
 		}
-		c.JSON(http.StatusInternalServerError, coreErrors.BuildError(c, err))
-		return
+		return nil, api.Fail(http.StatusInternalServerError, coreErrors.BuildError(c, err))
 	}
-	c.JSON(http.StatusCreated, calendar)
+	return api.OK(calendar)
 }
 
-// UpdateCalendar godoc
-// @Summary Edit a calendar
-// @Tags Tracking - Calendars
-// @Accept json
-// @Produce json
-// @Security BearerAuth
-// @Param calendar_id path string true "Calendar ID (UUID)"
-// @Param calendar body models.UpdateCalendarDto true "The fields to change"
-// @Success 200 {object} models.Calendar
-// @Failure 400 {object} coreErrors.ErrorResponse
-// @Failure 404 {object} coreErrors.ErrorResponse
-// @Failure 500 {object} coreErrors.ErrorResponse
-// @Router /tracking/calendars/{calendar_id} [patch]
-func (ctrl *TrackingController) UpdateCalendar(c *gin.Context) {
-	tenantID, ok := ctrl.requireTenantID(c)
-	if !ok {
-		return
-	}
-	calendarID, err := uuid.Parse(c.Param("calendar_id"))
+// UpdateCalendarInput is UpdateCalendar's request.
+type UpdateCalendarInput struct {
+	CalendarID string `path:"calendar_id"`
+	JSON       api.Body[models.UpdateCalendarDto]
+}
+
+// UpdateCalendar is PATCH /calendars/{calendar_id}: Edit a calendar.
+func (ctrl *TrackingController) UpdateCalendar(ctx context.Context, in *UpdateCalendarInput) (*api.Out[*models.Calendar], error) {
+	c := api.Gin(ctx)
+	tenantID, err := ctrl.requireTenantID(c)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, coreErrors.BuildErrorSingle(c, coreErrors.InvalidUUID))
-		return
+		return nil, err
+	}
+	calendarID, err := uuid.Parse(in.CalendarID)
+	if err != nil {
+		return nil, api.Fail(http.StatusBadRequest, coreErrors.BuildErrorSingle(c, coreErrors.InvalidUUID))
 	}
 	var dto models.UpdateCalendarDto
-	if err := c.ShouldBindJSON(&dto); err != nil {
-		c.JSON(http.StatusBadRequest, coreErrors.BuildErrorDetail(c, trackingErrors.CalendarUpdateFailed, utils.ExtractValidationError(c, err)))
-		return
+	if err := in.JSON.Into(ctx, &dto); err != nil {
+		return nil, api.Fail(http.StatusBadRequest, coreErrors.BuildErrorDetail(c, trackingErrors.CalendarUpdateFailed, utils.ExtractValidationError(c, err)))
 	}
 
 	calendar, err := ctrl.trackingService.UpdateCalendar(c.Request.Context(), tenantID, calendarID, &dto)
 	if err != nil {
-		if calendarErrorResponse(c, err) {
-			return
+		if err := calendarErrorResponse(c, err); err != nil {
+			return nil, err
 		}
-		c.JSON(http.StatusInternalServerError, coreErrors.BuildError(c, err))
-		return
+		return nil, api.Fail(http.StatusInternalServerError, coreErrors.BuildError(c, err))
 	}
-	c.JSON(http.StatusOK, calendar)
+	return api.OK(calendar)
 }
 
-// GetCalendar godoc
-// @Summary Get a calendar
-// @Description One calendar with how many dates it holds
-// @Tags Tracking - Calendars
-// @Produce json
-// @Security BearerAuth
-// @Param calendar_id path string true "Calendar ID (UUID)"
-// @Success 200 {object} models.Calendar
-// @Failure 400 {object} coreErrors.ErrorResponse
-// @Failure 404 {object} coreErrors.ErrorResponse
-// @Failure 500 {object} coreErrors.ErrorResponse
-// @Router /tracking/calendars/{calendar_id} [get]
-func (ctrl *TrackingController) GetCalendar(c *gin.Context) {
-	tenantID, ok := ctrl.requireTenantID(c)
-	if !ok {
-		return
-	}
-	calendarID, err := uuid.Parse(c.Param("calendar_id"))
+// GetCalendarInput is GetCalendar's request.
+type GetCalendarInput struct {
+	CalendarID string `path:"calendar_id"`
+}
+
+// GetCalendar is GET /calendars/{calendar_id}: Get a calendar.
+func (ctrl *TrackingController) GetCalendar(ctx context.Context, in *GetCalendarInput) (*api.Out[*models.Calendar], error) {
+	c := api.Gin(ctx)
+	tenantID, err := ctrl.requireTenantID(c)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, coreErrors.BuildErrorSingle(c, coreErrors.InvalidUUID))
-		return
+		return nil, err
+	}
+	calendarID, err := uuid.Parse(in.CalendarID)
+	if err != nil {
+		return nil, api.Fail(http.StatusBadRequest, coreErrors.BuildErrorSingle(c, coreErrors.InvalidUUID))
 	}
 
 	calendar, err := ctrl.trackingService.GetCalendar(c.Request.Context(), tenantID, calendarID)
 	if err != nil {
-		if calendarErrorResponse(c, err) {
-			return
+		if err := calendarErrorResponse(c, err); err != nil {
+			return nil, err
 		}
-		c.JSON(http.StatusInternalServerError, coreErrors.BuildError(c, err))
-		return
+		return nil, api.Fail(http.StatusInternalServerError, coreErrors.BuildError(c, err))
 	}
-	c.JSON(http.StatusOK, calendar)
+	return api.OK(calendar)
 }
 
-// DeleteCalendar godoc
-// @Summary Delete a calendar
-// @Description Refused while a schedule still points at it
-// @Tags Tracking - Calendars
-// @Produce json
-// @Security BearerAuth
-// @Param calendar_id path string true "Calendar ID (UUID)"
-// @Success 204 "No Content"
-// @Failure 400 {object} coreErrors.ErrorResponse
-// @Failure 404 {object} coreErrors.ErrorResponse
-// @Failure 409 {object} coreErrors.ErrorResponse
-// @Failure 500 {object} coreErrors.ErrorResponse
-// @Router /tracking/calendars/{calendar_id} [delete]
-func (ctrl *TrackingController) DeleteCalendar(c *gin.Context) {
-	tenantID, ok := ctrl.requireTenantID(c)
-	if !ok {
-		return
-	}
-	calendarID, err := uuid.Parse(c.Param("calendar_id"))
+// DeleteCalendarInput is DeleteCalendar's request.
+type DeleteCalendarInput struct {
+	CalendarID string `path:"calendar_id"`
+}
+
+// DeleteCalendar is DELETE /calendars/{calendar_id}: Delete a calendar.
+func (ctrl *TrackingController) DeleteCalendar(ctx context.Context, in *DeleteCalendarInput) (*api.Empty, error) {
+	c := api.Gin(ctx)
+	tenantID, err := ctrl.requireTenantID(c)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, coreErrors.BuildErrorSingle(c, coreErrors.InvalidUUID))
-		return
+		return nil, err
+	}
+	calendarID, err := uuid.Parse(in.CalendarID)
+	if err != nil {
+		return nil, api.Fail(http.StatusBadRequest, coreErrors.BuildErrorSingle(c, coreErrors.InvalidUUID))
 	}
 
 	if err := ctrl.trackingService.DeleteCalendar(c.Request.Context(), tenantID, calendarID); err != nil {
-		if calendarErrorResponse(c, err) {
-			return
+		if err := calendarErrorResponse(c, err); err != nil {
+			return nil, err
 		}
-		c.JSON(http.StatusInternalServerError, coreErrors.BuildError(c, err))
-		return
+		return nil, api.Fail(http.StatusInternalServerError, coreErrors.BuildError(c, err))
 	}
-	c.Status(http.StatusNoContent)
+	return api.Done()
 }
 
-// ListCalendarDates godoc
-// @Summary List a calendar's dates
-// @Tags Tracking - Calendars
-// @Produce json
-// @Security BearerAuth
-// @Param calendar_id path string true "Calendar ID (UUID)"
-// @Param from query string false "Earliest date (YYYY-MM-DD)"
-// @Param to query string false "Latest date (YYYY-MM-DD)"
-// @Success 200 {array} models.CalendarDate
-// @Failure 400 {object} coreErrors.ErrorResponse
-// @Failure 404 {object} coreErrors.ErrorResponse
-// @Failure 500 {object} coreErrors.ErrorResponse
-// @Router /tracking/calendars/{calendar_id}/dates [get]
-func (ctrl *TrackingController) ListCalendarDates(c *gin.Context) {
-	tenantID, ok := ctrl.requireTenantID(c)
-	if !ok {
-		return
-	}
-	calendarID, err := uuid.Parse(c.Param("calendar_id"))
+// ListCalendarDatesInput is ListCalendarDates's request.
+type ListCalendarDatesInput struct {
+	CalendarID string `path:"calendar_id"`
+	Query      api.Query[models.ListCalendarDatesQuery]
+}
+
+// ListCalendarDates is GET /calendars/{calendar_id}/dates: List a calendar's dates.
+func (ctrl *TrackingController) ListCalendarDates(ctx context.Context, in *ListCalendarDatesInput) (*api.Out[[]*models.CalendarDate], error) {
+	c := api.Gin(ctx)
+	tenantID, err := ctrl.requireTenantID(c)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, coreErrors.BuildErrorSingle(c, coreErrors.InvalidUUID))
-		return
+		return nil, err
+	}
+	calendarID, err := uuid.Parse(in.CalendarID)
+	if err != nil {
+		return nil, api.Fail(http.StatusBadRequest, coreErrors.BuildErrorSingle(c, coreErrors.InvalidUUID))
 	}
 	var query models.ListCalendarDatesQuery
-	if err := c.ShouldBindQuery(&query); err != nil {
-		c.JSON(http.StatusBadRequest, coreErrors.BuildErrorDetail(c, trackingErrors.CalendarDatesFailed, utils.ExtractValidationError(c, err)))
-		return
+	if err := in.Query.Into(ctx, &query); err != nil {
+		return nil, api.Fail(http.StatusBadRequest, coreErrors.BuildErrorDetail(c, trackingErrors.CalendarDatesFailed, utils.ExtractValidationError(c, err)))
 	}
 
 	dates, err := ctrl.trackingService.ListCalendarDates(c.Request.Context(), tenantID, calendarID, query.From, query.To)
 	if err != nil {
-		if calendarErrorResponse(c, err) {
-			return
+		if err := calendarErrorResponse(c, err); err != nil {
+			return nil, err
 		}
-		c.JSON(http.StatusInternalServerError, coreErrors.BuildError(c, err))
-		return
+		return nil, api.Fail(http.StatusInternalServerError, coreErrors.BuildError(c, err))
 	}
-	c.JSON(http.StatusOK, dates)
+	return api.OK(dates)
 }
 
-// ReplaceCalendarDates godoc
-// @Summary Replace a calendar's whole date list
-// @Description One request is the calendar, so a school year is saved once rather than one holiday at a time
-// @Tags Tracking - Calendars
-// @Accept json
-// @Produce json
-// @Security BearerAuth
-// @Param calendar_id path string true "Calendar ID (UUID)"
-// @Param dates body []models.CalendarDateDto true "The whole list of dates"
-// @Success 200 {array} models.CalendarDate
-// @Failure 400 {object} coreErrors.ErrorResponse
-// @Failure 404 {object} coreErrors.ErrorResponse
-// @Failure 409 {object} coreErrors.ErrorResponse
-// @Failure 500 {object} coreErrors.ErrorResponse
-// @Router /tracking/calendars/{calendar_id}/dates [put]
-func (ctrl *TrackingController) ReplaceCalendarDates(c *gin.Context) {
-	tenantID, ok := ctrl.requireTenantID(c)
-	if !ok {
-		return
-	}
-	calendarID, err := uuid.Parse(c.Param("calendar_id"))
+// ReplaceCalendarDatesInput is ReplaceCalendarDates's request.
+type ReplaceCalendarDatesInput struct {
+	CalendarID string `path:"calendar_id"`
+	JSON       api.Body[[]models.CalendarDateDto]
+}
+
+// ReplaceCalendarDates is PUT /calendars/{calendar_id}/dates: Replace a calendar's whole date list.
+func (ctrl *TrackingController) ReplaceCalendarDates(ctx context.Context, in *ReplaceCalendarDatesInput) (*api.Out[[]*models.CalendarDate], error) {
+	c := api.Gin(ctx)
+	tenantID, err := ctrl.requireTenantID(c)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, coreErrors.BuildErrorSingle(c, coreErrors.InvalidUUID))
-		return
+		return nil, err
+	}
+	calendarID, err := uuid.Parse(in.CalendarID)
+	if err != nil {
+		return nil, api.Fail(http.StatusBadRequest, coreErrors.BuildErrorSingle(c, coreErrors.InvalidUUID))
 	}
 	dates := []models.CalendarDateDto{}
-	if err := c.ShouldBindJSON(&dates); err != nil {
-		c.JSON(http.StatusBadRequest, coreErrors.BuildErrorDetail(c, trackingErrors.CalendarDatesFailed, utils.ExtractValidationError(c, err)))
-		return
+	if err := in.JSON.Into(ctx, &dates); err != nil {
+		return nil, api.Fail(http.StatusBadRequest, coreErrors.BuildErrorDetail(c, trackingErrors.CalendarDatesFailed, utils.ExtractValidationError(c, err)))
 	}
 
 	stored, err := ctrl.trackingService.ReplaceCalendarDates(c.Request.Context(), tenantID, calendarID, dates)
 	if err != nil {
-		if calendarErrorResponse(c, err) {
-			return
+		if err := calendarErrorResponse(c, err); err != nil {
+			return nil, err
 		}
-		c.JSON(http.StatusInternalServerError, coreErrors.BuildError(c, err))
-		return
+		return nil, api.Fail(http.StatusInternalServerError, coreErrors.BuildError(c, err))
 	}
-	c.JSON(http.StatusOK, stored)
+	return api.OK(stored)
 }

@@ -2,12 +2,14 @@ package controllers
 
 import (
 	"bytes"
+	"context"
 	"encoding/csv"
 	"errors"
 	"fmt"
 	"net/http"
 	"strings"
 
+	"josex/web/modules/core/api"
 	coreErrors "josex/web/modules/core/errors"
 	"josex/web/modules/core/utils"
 	trackingErrors "josex/web/modules/tracking/errors"
@@ -25,18 +27,17 @@ var reportStatus = map[string]int{
 	trackingErrors.ReportsExportTooLarge: http.StatusRequestEntityTooLarge,
 }
 
-func reportErrorResponse(c *gin.Context, err error) {
-	if scopeRefused(c, err) {
-		return
+func reportErrorResponse(c *gin.Context, err error) error {
+	if err := scopeRefused(c, err); err != nil {
+		return err
 	}
 	var trackingErr *trackingErrors.TrackingError
 	if errors.As(err, &trackingErr) {
 		if status, ok := reportStatus[trackingErr.Code]; ok {
-			c.JSON(status, coreErrors.BuildErrorSingle(c, trackingErr.Code))
-			return
+			return api.Fail(status, coreErrors.BuildErrorSingle(c, trackingErr.Code))
 		}
 	}
-	c.JSON(http.StatusInternalServerError, coreErrors.BuildError(c, err))
+	return api.Fail(http.StatusInternalServerError, coreErrors.BuildError(c, err))
 }
 
 // reportColumn is one CSV column: the row's key (a dot reaches into an object) and the suffix of its
@@ -71,141 +72,77 @@ var reportColumns = map[string][]reportColumn{
 	},
 }
 
+// ReportInput is a report's request: its filters and page.
+type ReportInput struct {
+	Query api.Query[models.ReportQuery]
+}
+
 // report binds a report's query and answers its page; every read is narrowed to an organization
-// user's organizations (D4).
-func (ctrl *TrackingController) report(c *gin.Context, report string) {
-	tenantID, ok := ctrl.requireTenantID(c)
-	if !ok {
-		return
+// user's organizations (D4). T is the report's shape, which the service decodes it into.
+func report[T any](ctx context.Context, ctrl *TrackingController, in *ReportInput, name string) (*api.Out[T], error) {
+	c := api.Gin(ctx)
+	tenantID, err := ctrl.requireTenantID(c)
+	if err != nil {
+		return nil, err
 	}
 	var query models.ReportQuery
-	if err := c.ShouldBindQuery(&query); err != nil {
-		c.JSON(http.StatusBadRequest, coreErrors.BuildErrorDetail(c, trackingErrors.ReportsReadFailed, utils.ExtractValidationError(c, err)))
-		return
+	if err := in.Query.Into(ctx, &query); err != nil {
+		return nil, api.Fail(http.StatusBadRequest, coreErrors.BuildErrorDetail(c, trackingErrors.ReportsReadFailed, utils.ExtractValidationError(c, err)))
 	}
-	out, err := ctrl.trackingService.Report(c.Request.Context(), tenantID, report, query, ctrl.scopeUserID(c))
+	out, err := ctrl.trackingService.Report(c.Request.Context(), tenantID, name, query, ctrl.scopeUserID(c))
 	if err != nil {
-		reportErrorResponse(c, err)
-		return
+		return nil, reportErrorResponse(c, err)
 	}
-	c.JSON(http.StatusOK, out)
+	return api.OK(out.(T))
 }
 
-// ReportAttendance godoc
-// @Summary Attendance report
-// @Description Riders with their boarded, no-show, absent and cancelled rides between from and to (default the last 30 days, at most 366), least attended first. attendance_pct is boarded over boarded + no-shows + absent; null when none
-// @Tags Tracking - Reports
-// @Produce json
-// @Security BearerAuth
-// @Param from query string false "First day (YYYY-MM-DD)"
-// @Param to query string false "Last day (YYYY-MM-DD)"
-// @Param organization_id query string false "Organization ID (UUID)"
-// @Param route_id query string false "Route ID (UUID)"
-// @Param rider_id query string false "Rider ID (UUID)"
-// @Param page query int false "Page number (default 1)"
-// @Param page_size query int false "Page size (default 20, max 100)"
-// @Success 200 {object} models.AttendanceReport
-// @Failure 400 {object} coreErrors.ErrorResponse
-// @Failure 403 {object} coreErrors.ErrorResponse
-// @Router /tracking/reports/attendance [get]
-func (ctrl *TrackingController) ReportAttendance(c *gin.Context) {
-	ctrl.report(c, models.ReportAttendance)
+// ReportAttendance is riders with their boarded, no-show, absent and cancelled rides between from
+// and to, least attended first.
+func (ctrl *TrackingController) ReportAttendance(ctx context.Context, in *ReportInput) (*api.Out[*models.AttendanceReport], error) {
+	return report[*models.AttendanceReport](ctx, ctrl, in, models.ReportAttendance)
 }
 
-// ReportPunctuality godoc
-// @Summary Punctuality report
-// @Description Routes with their completed trips on time (started within 5 minutes of plan and no stop over 5 minutes late), start and stop delays and the stop reached latest by p90, least punctual first
-// @Tags Tracking - Reports
-// @Produce json
-// @Security BearerAuth
-// @Param from query string false "First day (YYYY-MM-DD)"
-// @Param to query string false "Last day (YYYY-MM-DD)"
-// @Param route_id query string false "Route ID (UUID)"
-// @Param organization_id query string false "Organization ID (UUID)"
-// @Param page query int false "Page number (default 1)"
-// @Param page_size query int false "Page size (default 20, max 100)"
-// @Success 200 {object} models.PunctualityReport
-// @Failure 400 {object} coreErrors.ErrorResponse
-// @Failure 403 {object} coreErrors.ErrorResponse
-// @Router /tracking/reports/punctuality [get]
-func (ctrl *TrackingController) ReportPunctuality(c *gin.Context) {
-	ctrl.report(c, models.ReportPunctuality)
+// ReportPunctuality is routes with their completed trips on time, least punctual first.
+func (ctrl *TrackingController) ReportPunctuality(ctx context.Context, in *ReportInput) (*api.Out[*models.PunctualityReport], error) {
+	return report[*models.PunctualityReport](ctx, ctrl, in, models.ReportPunctuality)
 }
 
-// ReportFleetUsage godoc
-// @Summary Fleet usage report
-// @Description Vehicles (group_by=vehicle, label the plate) or drivers (driver, label the name) with their completed trips, km, hours, riders boarded, days out and mean peak occupancy, most km first
-// @Tags Tracking - Reports
-// @Produce json
-// @Security BearerAuth
-// @Param from query string false "First day (YYYY-MM-DD)"
-// @Param to query string false "Last day (YYYY-MM-DD)"
-// @Param route_id query string false "Route ID (UUID)"
-// @Param organization_id query string false "Organization ID (UUID)"
-// @Param group_by query string false "vehicle (default) or driver"
-// @Param page query int false "Page number (default 1)"
-// @Param page_size query int false "Page size (default 20, max 100)"
-// @Success 200 {object} models.FleetUsageReport
-// @Failure 400 {object} coreErrors.ErrorResponse
-// @Failure 403 {object} coreErrors.ErrorResponse
-// @Router /tracking/reports/fleet-usage [get]
-func (ctrl *TrackingController) ReportFleetUsage(c *gin.Context) {
-	ctrl.report(c, models.ReportFleetUsage)
+// ReportFleetUsage is vehicles or drivers with their trips, km, hours and occupancy, most km first.
+func (ctrl *TrackingController) ReportFleetUsage(ctx context.Context, in *ReportInput) (*api.Out[*models.FleetUsageReport], error) {
+	return report[*models.FleetUsageReport](ctx, ctrl, in, models.ReportFleetUsage)
 }
 
-// ReportIncidents godoc
-// @Summary Incidents report
-// @Description The alerts raised between from and to (UTC days), newest first, in GET /tracking/alerts' row shape, with counts by status and type and the mean minutes to resolve
-// @Tags Tracking - Reports
-// @Produce json
-// @Security BearerAuth
-// @Param from query string false "First day (YYYY-MM-DD)"
-// @Param to query string false "Last day (YYYY-MM-DD)"
-// @Param route_id query string false "Route ID (UUID)"
-// @Param organization_id query string false "Organization ID (UUID)"
-// @Param alert_type query string false "delay, breakdown, cancellation, emergency or other"
-// @Param page query int false "Page number (default 1)"
-// @Param page_size query int false "Page size (default 20, max 100)"
-// @Success 200 {object} models.IncidentsReport
-// @Failure 400 {object} coreErrors.ErrorResponse
-// @Failure 403 {object} coreErrors.ErrorResponse
-// @Router /tracking/reports/incidents [get]
-func (ctrl *TrackingController) ReportIncidents(c *gin.Context) {
-	ctrl.report(c, models.ReportIncidents)
+// ReportIncidents is the alerts raised in the range, newest first, with counts by status and type.
+func (ctrl *TrackingController) ReportIncidents(ctx context.Context, in *ReportInput) (*api.Out[*models.IncidentsReport], error) {
+	return report[*models.IncidentsReport](ctx, ctrl, in, models.ReportIncidents)
 }
 
-// ExportReport godoc
-// @Summary Export a report as CSV
-// @Description Every row the report's filters match, as UTF-8 CSV with a BOM and headers in the request's language; numbers unformatted, dates ISO. Over 10 000 rows is 413 (D2)
-// @Tags Tracking - Reports
-// @Produce text/csv
-// @Security BearerAuth
-// @Param report path string true "attendance, punctuality, fleet-usage or incidents"
-// @Success 200 {file} string
-// @Failure 400 {object} coreErrors.ErrorResponse
-// @Failure 404 {object} coreErrors.ErrorResponse
-// @Failure 413 {object} coreErrors.ErrorResponse
-// @Router /tracking/reports/{report}/export [get]
-func (ctrl *TrackingController) ExportReport(c *gin.Context) {
-	report := c.Param("report")
+// ExportReportInput is ExportReport's request.
+type ExportReportInput struct {
+	Report string `path:"report" doc:"attendance, punctuality, fleet-usage or incidents"`
+	Query  api.Query[models.ReportQuery]
+}
+
+// ExportReport answers every row the report's filters match, as UTF-8 CSV with a BOM and headers in
+// the request's language; numbers unformatted, dates ISO. Over 10 000 rows is 413 (D2).
+func (ctrl *TrackingController) ExportReport(ctx context.Context, in *ExportReportInput) (*api.File, error) {
+	c := api.Gin(ctx)
+	report := in.Report
 	columns, ok := reportColumns[report]
 	if !ok {
-		c.AbortWithStatus(http.StatusNotFound)
-		return
+		return nil, api.Fail(http.StatusNotFound, nil)
 	}
-	tenantID, ok := ctrl.requireTenantID(c)
-	if !ok {
-		return
+	tenantID, err := ctrl.requireTenantID(c)
+	if err != nil {
+		return nil, err
 	}
 	var query models.ReportQuery
-	if err := c.ShouldBindQuery(&query); err != nil {
-		c.JSON(http.StatusBadRequest, coreErrors.BuildErrorDetail(c, trackingErrors.ReportsReadFailed, utils.ExtractValidationError(c, err)))
-		return
+	if err := in.Query.Into(ctx, &query); err != nil {
+		return nil, api.Fail(http.StatusBadRequest, coreErrors.BuildErrorDetail(c, trackingErrors.ReportsReadFailed, utils.ExtractValidationError(c, err)))
 	}
 	rows, from, to, err := ctrl.trackingService.ReportExport(c.Request.Context(), tenantID, report, query, ctrl.scopeUserID(c))
 	if err != nil {
-		reportErrorResponse(c, err)
-		return
+		return nil, reportErrorResponse(c, err)
 	}
 	lang := c.GetString("lang")
 	header := make([]string, len(columns))
@@ -229,11 +166,13 @@ func (ctrl *TrackingController) ExportReport(c *gin.Context) {
 	}
 	w.Flush()
 	if err := w.Error(); err != nil {
-		c.JSON(http.StatusInternalServerError, coreErrors.BuildError(c, err))
-		return
+		return nil, api.Fail(http.StatusInternalServerError, coreErrors.BuildError(c, err))
 	}
-	c.Header("Content-Disposition", fmt.Sprintf(`attachment; filename="%s-%s-%s.csv"`, report, from, to))
-	c.Data(http.StatusOK, "text/csv; charset=utf-8", buf.Bytes())
+	return &api.File{
+		ContentType:        "text/csv; charset=utf-8",
+		ContentDisposition: fmt.Sprintf(`attachment; filename="%s-%s-%s.csv"`, report, from, to),
+		Body:               buf.Bytes(),
+	}, nil
 }
 
 // csvValue is the cell of key in row, a dot reaching into an object; empty for null or absent.

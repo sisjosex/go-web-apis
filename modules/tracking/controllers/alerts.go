@@ -1,9 +1,11 @@
 package controllers
 
 import (
+	"context"
 	"errors"
 	"net/http"
 
+	"josex/web/modules/core/api"
 	coreErrors "josex/web/modules/core/errors"
 	"josex/web/modules/core/utils"
 	trackingErrors "josex/web/modules/tracking/errors"
@@ -20,108 +22,84 @@ var alertStatus = map[string]int{
 	trackingErrors.AlertAlreadyResolved: http.StatusConflict,
 }
 
-func alertErrorResponse(c *gin.Context, err error) {
+func alertErrorResponse(c *gin.Context, err error) error {
 	var trackingErr *trackingErrors.TrackingError
 	if errors.As(err, &trackingErr) {
 		if status, ok := alertStatus[trackingErr.Code]; ok {
-			c.JSON(status, coreErrors.BuildErrorSingle(c, trackingErr.Code))
-			return
+			return api.Fail(status, coreErrors.BuildErrorSingle(c, trackingErr.Code))
 		}
 	}
-	c.JSON(http.StatusInternalServerError, coreErrors.BuildError(c, err))
+	return api.Fail(http.StatusInternalServerError, coreErrors.BuildError(c, err))
 }
 
-// ListRouteAlerts godoc
-// @Summary List alerts
-// @Description Newest first. status defaults to active; all reads every status. Every row carries the route name, the plate and who raised and resolved it; trip_id and lat/lng are set on a driver's incident
-// @Tags Tracking - Alerts
-// @Produce json
-// @Security BearerAuth
-// @Param route_id query string false "Route ID (UUID)"
-// @Param status query string false "active (default), resolved or all"
-// @Param severity query string false "low, medium, high or critical"
-// @Param page query int false "Page number (default 1)"
-// @Param page_size query int false "Page size (default 20, max 100)"
-// @Success 200 {object} models.ListAlertsResponse
-// @Failure 400 {object} coreErrors.ErrorResponse
-// @Failure 500 {object} coreErrors.ErrorResponse
-// @Router /tracking/alerts [get]
-func (ctrl *TrackingController) ListRouteAlerts(c *gin.Context) {
-	tenantID, ok := ctrl.requireTenantID(c)
-	if !ok {
-		return
+// ListRouteAlertsInput is ListRouteAlerts's request.
+type ListRouteAlertsInput struct {
+	Query api.Query[models.ListAlertsQuery]
+}
+
+// ListRouteAlerts is GET /alerts: List alerts.
+func (ctrl *TrackingController) ListRouteAlerts(ctx context.Context, in *ListRouteAlertsInput) (*api.Out[*models.ListAlertsResponse], error) {
+	c := api.Gin(ctx)
+	tenantID, err := ctrl.requireTenantID(c)
+	if err != nil {
+		return nil, err
 	}
 	var query models.ListAlertsQuery
-	if err := c.ShouldBindQuery(&query); err != nil {
-		c.JSON(http.StatusBadRequest, coreErrors.BuildErrorDetail(c, trackingErrors.AlertListFailed, utils.ExtractValidationError(c, err)))
-		return
+	if err := in.Query.Into(ctx, &query); err != nil {
+		return nil, api.Fail(http.StatusBadRequest, coreErrors.BuildErrorDetail(c, trackingErrors.AlertListFailed, utils.ExtractValidationError(c, err)))
 	}
 
 	result, err := ctrl.trackingService.ListRouteAlerts(c.Request.Context(), tenantID, query)
 	if err != nil {
-		alertErrorResponse(c, err)
-		return
+		return nil, alertErrorResponse(c, err)
 	}
-	c.JSON(http.StatusOK, result)
+	return api.OK(result)
 }
 
-// ResolveRouteAlert godoc
-// @Summary Resolve an alert
-// @Description An active alert only; the signed-in user is recorded as resolved_by. Answers the row as the list does
-// @Tags Tracking - Alerts
-// @Produce json
-// @Security BearerAuth
-// @Param alert_id path string true "Alert ID (UUID)"
-// @Success 200 {object} models.RouteAlert
-// @Failure 400 {object} coreErrors.ErrorResponse
-// @Failure 404 {object} coreErrors.ErrorResponse
-// @Failure 409 {object} coreErrors.ErrorResponse
-// @Failure 500 {object} coreErrors.ErrorResponse
-// @Router /tracking/alerts/{alert_id}/resolve [patch]
-func (ctrl *TrackingController) ResolveRouteAlert(c *gin.Context) {
-	tenantID, ok := ctrl.requireTenantID(c)
-	if !ok {
-		return
+// ResolveRouteAlertInput is ResolveRouteAlert's request.
+type ResolveRouteAlertInput struct {
+	AlertID string `path:"alert_id"`
+}
+
+// ResolveRouteAlert is PATCH /alerts/{alert_id}/resolve: Resolve an alert.
+func (ctrl *TrackingController) ResolveRouteAlert(ctx context.Context, _ *ResolveRouteAlertInput) (*api.Out[*models.RouteAlert], error) {
+	c := api.Gin(ctx)
+	tenantID, err := ctrl.requireTenantID(c)
+	if err != nil {
+		return nil, err
 	}
-	alertID, ok := pathUUID(c, "alert_id")
-	if !ok {
-		return
+	alertID, err := pathUUID(c, "alert_id")
+	if err != nil {
+		return nil, err
 	}
 
 	result, err := ctrl.trackingService.ResolveRouteAlert(c.Request.Context(), tenantID, alertID, ctrl.actingUserID(c))
 	if err != nil {
-		alertErrorResponse(c, err)
-		return
+		return nil, alertErrorResponse(c, err)
 	}
-	c.JSON(http.StatusOK, result)
+	return api.OK(result)
 }
 
-// ListTripEvents godoc
-// @Summary A trip's event log
-// @Description Oldest first: every transition, override and incident, with what it carried and who made it
-// @Tags Tracking - Trips
-// @Produce json
-// @Security BearerAuth
-// @Param trip_id path string true "Trip ID (UUID)"
-// @Success 200 {array} models.TripEvent
-// @Failure 400 {object} coreErrors.ErrorResponse
-// @Failure 404 {object} coreErrors.ErrorResponse
-// @Failure 500 {object} coreErrors.ErrorResponse
-// @Router /tracking/trips/{trip_id}/events [get]
-func (ctrl *TrackingController) ListTripEvents(c *gin.Context) {
-	tenantID, ok := ctrl.requireTenantID(c)
-	if !ok {
-		return
+// ListTripEventsInput is ListTripEvents's request.
+type ListTripEventsInput struct {
+	TripID string `path:"trip_id"`
+}
+
+// ListTripEvents is GET /trips/{trip_id}/events: A trip's event log.
+func (ctrl *TrackingController) ListTripEvents(ctx context.Context, _ *ListTripEventsInput) (*api.Out[[]*models.TripEvent], error) {
+	c := api.Gin(ctx)
+	tenantID, err := ctrl.requireTenantID(c)
+	if err != nil {
+		return nil, err
 	}
-	tripID, ok := pathUUID(c, "trip_id")
-	if !ok {
-		return
+	tripID, err := pathUUID(c, "trip_id")
+	if err != nil {
+		return nil, err
 	}
 
 	result, err := ctrl.trackingService.ListTripEvents(c.Request.Context(), tenantID, tripID)
 	if err != nil {
-		tripErrorResponse(c, err)
-		return
+		return nil, tripErrorResponse(c, err)
 	}
-	c.JSON(http.StatusOK, result)
+	return api.OK(result)
 }

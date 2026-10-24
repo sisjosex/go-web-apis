@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 
+	"josex/web/modules/core/api"
 	coreErrors "josex/web/modules/core/errors"
 	coreServices "josex/web/modules/core/services"
 	"josex/web/modules/core/services/storage"
@@ -54,33 +55,25 @@ type UploadTicket struct {
 	ExpiresAt time.Time         `json:"expires_at"`
 }
 
-// CreateUpload godoc
-// @Summary Request an upload ticket
-// @Description Signs a 5-minute PUT straight to storage; the declared type and size are part of the signature
-// @Tags Storage
-// @Accept json
-// @Produce json
-// @Security BearerAuth
-// @Param ticket body UploadTicketRequest true "What is being uploaded"
-// @Success 201 {object} UploadTicket
-// @Failure 400 {object} coreErrors.ErrorResponse
-// @Failure 403 {object} coreErrors.ErrorResponse
-// @Router /storage/uploads [post]
-func (ctrl *StorageController) CreateUpload(c *gin.Context) {
+// CreateUploadInput is CreateUpload's request.
+type CreateUploadInput struct {
+	JSON api.Body[UploadTicketRequest]
+}
+
+// CreateUpload is POST /storage/uploads: Request an upload ticket.
+func (ctrl *StorageController) CreateUpload(ctx context.Context, in *CreateUploadInput) (*api.Out[UploadTicket], error) {
+	c := api.Gin(ctx)
 	var req UploadTicketRequest
-	if err := c.ShouldBindBodyWith(&req, binding.JSON); err != nil {
-		c.JSON(http.StatusBadRequest, coreErrors.BuildErrorDetail(c, coreErrors.StorageUploadInvalid, utils.ExtractValidationError(c, err)))
-		return
+	if err := in.JSON.IntoCached(ctx, &req); err != nil {
+		return nil, api.Fail(http.StatusBadRequest, coreErrors.BuildErrorDetail(c, coreErrors.StorageUploadInvalid, utils.ExtractValidationError(c, err)))
 	}
 	purpose, ok := ctrl.purposes.Lookup(req.Purpose)
 	if !ok {
-		c.JSON(http.StatusBadRequest, coreErrors.BuildErrorSingle(c, coreErrors.StorageUploadInvalid))
-		return
+		return nil, api.Fail(http.StatusBadRequest, coreErrors.BuildErrorSingle(c, coreErrors.StorageUploadInvalid))
 	}
 	ext, ok := purpose.Types[req.ContentType]
 	if !ok || req.Size > purpose.MaxBytes {
-		c.JSON(http.StatusBadRequest, coreErrors.BuildErrorSingle(c, coreErrors.StorageUploadInvalid))
-		return
+		return nil, api.Fail(http.StatusBadRequest, coreErrors.BuildErrorSingle(c, coreErrors.StorageUploadInvalid))
 	}
 
 	// A public purpose's key is under the user; any other's under the tenant the chain set as a
@@ -90,8 +83,7 @@ func (ctrl *StorageController) CreateUpload(c *gin.Context) {
 		owner, err = uuid.Parse(c.GetString("user_id"))
 	}
 	if err != nil {
-		c.JSON(http.StatusForbidden, coreErrors.BuildErrorSingle(c, coreErrors.UserInsufficientPermissions))
-		return
+		return nil, api.Fail(http.StatusForbidden, coreErrors.BuildErrorSingle(c, coreErrors.UserInsufficientPermissions))
 	}
 	key := storage.PendingKey(owner, ext)
 	if purpose.Public {
@@ -100,14 +92,13 @@ func (ctrl *StorageController) CreateUpload(c *gin.Context) {
 
 	url, headers, err := purpose.Store.PresignPut(c.Request.Context(), key, req.ContentType, req.Size, uploadTicketTTL)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, coreErrors.BuildError(c, err))
-		return
+		return nil, api.Fail(http.StatusInternalServerError, coreErrors.BuildError(c, err))
 	}
 	flat := make(map[string]string, len(headers))
 	for name := range headers {
 		flat[name] = headers.Get(name)
 	}
-	c.JSON(http.StatusCreated, UploadTicket{
+	return api.OK(UploadTicket{
 		Key:       key,
 		UploadURL: url,
 		Headers:   flat,
@@ -141,65 +132,51 @@ type ClaimedUpload struct {
 	URL string `json:"url"`
 }
 
-// ClaimUpload godoc
-// @Summary Publish an uploaded image
-// @Description Checks a public purpose's upload (its size, and bytes that are the signed type) and publishes it at an immutable URL of the media bucket
-// @Tags Storage
-// @Accept json
-// @Produce json
-// @Security BearerAuth
-// @Param claim body ClaimUploadRequest true "The ticket's key"
-// @Success 200 {object} ClaimedUpload
-// @Failure 404 {object} coreErrors.ErrorResponse
-// @Failure 422 {object} coreErrors.ErrorResponse
-// @Router /storage/uploads/claim [post]
-func (ctrl *StorageController) ClaimUpload(c *gin.Context) {
+// ClaimUploadInput is ClaimUpload's request.
+type ClaimUploadInput struct {
+	JSON api.Body[ClaimUploadRequest]
+}
+
+// ClaimUpload checks a public purpose's upload (its size, and bytes that are the signed type) and
+// publishes it at an immutable URL of the media bucket.
+func (ctrl *StorageController) ClaimUpload(ctx context.Context, in *ClaimUploadInput) (*api.Out[ClaimedUpload], error) {
+	c := api.Gin(ctx)
 	user, err := uuid.Parse(c.GetString("user_id"))
 	if err != nil {
-		c.JSON(http.StatusForbidden, coreErrors.BuildErrorSingle(c, coreErrors.UserInsufficientPermissions))
-		return
+		return nil, api.Fail(http.StatusForbidden, coreErrors.BuildErrorSingle(c, coreErrors.UserInsufficientPermissions))
 	}
 	var req ClaimUploadRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, coreErrors.BuildErrorDetail(c, coreErrors.StorageUploadInvalid, utils.ExtractValidationError(c, err)))
-		return
+	if err := in.JSON.Into(ctx, &req); err != nil {
+		return nil, api.Fail(http.StatusBadRequest, coreErrors.BuildErrorDetail(c, coreErrors.StorageUploadInvalid, utils.ExtractValidationError(c, err)))
 	}
 	purpose, name, contentType, ok := ctrl.publicPending(user, req.Key)
 	if !ok {
-		c.JSON(http.StatusNotFound, coreErrors.BuildErrorSingle(c, coreErrors.StorageUploadNotFound))
-		return
+		return nil, api.Fail(http.StatusNotFound, coreErrors.BuildErrorSingle(c, coreErrors.StorageUploadNotFound))
 	}
 
 	// Two store calls (INFRA-007 D1): a range read gives the bytes to sniff and the total size, a
 	// server-side copy publishes them with the checked type and the immutable cache.
-	ctx := c.Request.Context()
 	head, total, err := purpose.Store.GetRange(ctx, req.Key, 0, sniffLen)
 	if errors.Is(err, storage.ErrNotFound) {
-		c.JSON(http.StatusNotFound, coreErrors.BuildErrorSingle(c, coreErrors.StorageUploadNotFound))
-		return
+		return nil, api.Fail(http.StatusNotFound, coreErrors.BuildErrorSingle(c, coreErrors.StorageUploadNotFound))
 	}
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, coreErrors.BuildError(c, err))
-		return
+		return nil, api.Fail(http.StatusInternalServerError, coreErrors.BuildError(c, err))
 	}
 	detected, _, _ := strings.Cut(http.DetectContentType(head), ";")
 	if total > purpose.MaxBytes || detected != contentType {
 		if err := purpose.Store.Delete(ctx, req.Key); err != nil {
 			log.Printf("⚠️  storage: delete refused upload %s: %v", req.Key, err)
 		}
-		c.JSON(http.StatusUnprocessableEntity, coreErrors.BuildErrorSingle(c, coreErrors.StorageFileInvalid))
-		return
+		return nil, api.Fail(http.StatusUnprocessableEntity, coreErrors.BuildErrorSingle(c, coreErrors.StorageFileInvalid))
 	}
 
 	published := purpose.Name + "/" + name
 	err = purpose.Store.Copy(ctx, req.Key, published, storage.PutOptions{ContentType: contentType, CacheControl: coreServices.ImmutableCache})
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, coreErrors.BuildError(c, err))
-		return
+		return nil, api.Fail(http.StatusInternalServerError, coreErrors.BuildError(c, err))
 	}
-	c.JSON(http.StatusOK, ClaimedUpload{URL: coreServices.MediaURL(published)})
-
-	// The pending object goes after the answer, detached from the request's cancellation.
+	// The pending object goes once published, detached from the request's cancellation.
 	go func() {
 		ctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), cleanupTimeout)
 		defer cancel()
@@ -207,6 +184,7 @@ func (ctrl *StorageController) ClaimUpload(c *gin.Context) {
 			log.Printf("⚠️  storage: delete claimed upload %s: %v", req.Key, err)
 		}
 	}()
+	return api.OK(ClaimedUpload{URL: coreServices.MediaURL(published)})
 }
 
 // publicPending checks a key is one a public purpose's ticket could have issued to this user —

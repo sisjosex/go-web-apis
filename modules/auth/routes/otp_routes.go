@@ -6,6 +6,7 @@ import (
 	otpRepos "josex/web/modules/auth/repositories"
 	otpServices "josex/web/modules/auth/services"
 	otpProviders "josex/web/modules/auth/services/otp"
+	"josex/web/modules/core/api"
 	coreServices "josex/web/modules/core/services"
 	"log"
 
@@ -47,10 +48,10 @@ func SetupOtpRoutes(
 
 	// Setup routes
 	// OTP Request endpoints (per channel)
-	authGroup.POST("/otp/whatsapp/request", otpController.RequestOtpWhatsApp)
-	authGroup.POST("/otp/sms/request", otpController.RequestOtpSms)
-	authGroup.POST("/otp/email/request", otpController.RequestOtpEmail)
+	api.Post(authGroup, "/otp/whatsapp/request", otpController.RequestOtpWhatsApp, api.Doc{Summary: "Request OTP via WhatsApp (relayed by email while it has no provider)", Errors: []int{400, 500, 503}})
+	api.Post(authGroup, "/otp/sms/request", otpController.RequestOtpSms, api.Doc{Summary: "Request OTP via SMS (relayed by email while it has no provider)", Errors: []int{400, 500, 503}})
+	api.Post(authGroup, "/otp/email/request", otpController.RequestOtpEmail, api.Doc{Summary: "Request OTP via Email", Errors: []int{400, 500, 503}})
 
 	// OTP Verification (unified endpoint for all channels)
-	authGroup.POST("/otp/verify", otpController.VerifyOtp)
+	api.Post(authGroup, "/otp/verify", otpController.VerifyOtp, api.Doc{Summary: "Verify OTP code", Errors: []int{400, 500}})
 }

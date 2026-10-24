@@ -1,9 +1,11 @@
 package controllers
 
 import (
+	"context"
 	goErrors "errors"
 	"net/http"
 
+	"josex/web/modules/core/api"
 	coreErrors "josex/web/modules/core/errors"
 	"josex/web/modules/inventory/errors"
 	"josex/web/modules/inventory/interfaces"
@@ -40,33 +42,26 @@ func parseSkuIDQuery(c *gin.Context) (*uuid.UUID, bool) {
 	return &skuID, true
 }
 
-// CreateBatch godoc
-// @Summary Create a new batch for a product
-// @Description Create a new inventory batch with lot number and expiry date
-// @Tags Batches
-// @Accept json
-// @Produce json
-// @Param batch body models.CreateBatchDto true "Batch data"
-// @Success 201 {object} models.BatchResponse
-// @Failure 400 {object} map[string]interface{} "Invalid request"
-// @Failure 404 {object} map[string]interface{} "Product not found"
-// @Router /batches [post]
-func (ctrl *BatchController) CreateBatch(c *gin.Context) {
+// CreateBatchInput is CreateBatch's request.
+type CreateBatchInput struct {
+	JSON api.Body[models.CreateBatchDto]
+}
+
+// CreateBatch is POST /batches: Create a new batch for a product.
+func (ctrl *BatchController) CreateBatch(ctx context.Context, in *CreateBatchInput) (*api.Out[*models.BatchResponse], error) {
+	c := api.Gin(ctx)
 	tenantIDRaw, exists := c.Get("tenant_id")
 	if !exists || tenantIDRaw == nil {
-		c.JSON(http.StatusUnauthorized, coreErrors.BuildErrorSingle(c, "auth.invalid-tenant"))
-		return
+		return nil, api.Fail(http.StatusUnauthorized, coreErrors.BuildErrorSingle(c, "auth.invalid-tenant"))
 	}
 	tenantID, err := uuid.Parse(tenantIDRaw.(string))
 	if err != nil {
-		c.JSON(http.StatusUnauthorized, coreErrors.BuildErrorSingle(c, "auth.invalid-tenant"))
-		return
+		return nil, api.Fail(http.StatusUnauthorized, coreErrors.BuildErrorSingle(c, "auth.invalid-tenant"))
 	}
 
 	var dto models.CreateBatchDto
-	if err := c.ShouldBindJSON(&dto); err != nil {
-		c.JSON(http.StatusBadRequest, coreErrors.BuildErrorDetail(c, "validation.error", err.Error()))
-		return
+	if err := in.JSON.Into(ctx, &dto); err != nil {
+		return nil, api.Fail(http.StatusBadRequest, coreErrors.BuildErrorDetail(c, "validation.error", err.Error()))
 	}
 
 	batch, err := ctrl.service.CreateBatch(c.Request.Context(), tenantID, &dto)
@@ -75,326 +70,262 @@ func (ctrl *BatchController) CreateBatch(c *gin.Context) {
 		if goErrors.As(err, &pgErr) {
 			switch pgErr.Message {
 			case errors.ProductNotFound:
-				c.JSON(http.StatusNotFound, coreErrors.BuildErrorSingle(c, errors.ProductNotFound))
-				return
+				return nil, api.Fail(http.StatusNotFound, coreErrors.BuildErrorSingle(c, errors.ProductNotFound))
 			case errors.SkuNotFound:
-				c.JSON(http.StatusNotFound, coreErrors.BuildErrorSingle(c, errors.SkuNotFound))
-				return
+				return nil, api.Fail(http.StatusNotFound, coreErrors.BuildErrorSingle(c, errors.SkuNotFound))
 			// INV-014 D1 — a lot on a stock-by-variant product has to name its
 			// combination; falling through to the unassigned bucket is what this
 			// refuses, because sp_add_order_item can never sell out of it.
 			case errors.SkuRequired:
-				c.JSON(http.StatusBadRequest, coreErrors.BuildErrorSingle(c, errors.SkuRequired))
-				return
+				return nil, api.Fail(http.StatusBadRequest, coreErrors.BuildErrorSingle(c, errors.SkuRequired))
 			}
 		}
-		c.JSON(http.StatusInternalServerError, coreErrors.BuildError(c, err))
-		return
+		return nil, api.Fail(http.StatusInternalServerError, coreErrors.BuildError(c, err))
 	}
 
-	c.JSON(http.StatusCreated, batch)
+	return api.OK(batch)
 }
 
-// GetBatch godoc
-// @Summary Get batch details
-// @Description Get detailed information about a specific batch
-// @Tags Batches
-// @Accept json
-// @Produce json
-// @Param id path string true "Batch ID"
-// @Success 200 {object} models.BatchResponse
-// @Failure 404 {object} map[string]interface{} "Batch not found"
-// @Router /batches/{id} [get]
-func (ctrl *BatchController) GetBatch(c *gin.Context) {
+// GetBatchInput is GetBatch's request.
+type GetBatchInput struct {
+	ID string `path:"id"`
+}
+
+// GetBatch is GET /batches/{id}: Get batch details.
+func (ctrl *BatchController) GetBatch(ctx context.Context, in *GetBatchInput) (*api.Out[*models.BatchResponse], error) {
+	c := api.Gin(ctx)
 	tenantIDRaw, exists := c.Get("tenant_id")
 	if !exists || tenantIDRaw == nil {
-		c.JSON(http.StatusUnauthorized, coreErrors.BuildErrorSingle(c, "auth.invalid-tenant"))
-		return
+		return nil, api.Fail(http.StatusUnauthorized, coreErrors.BuildErrorSingle(c, "auth.invalid-tenant"))
 	}
 	tenantID, err := uuid.Parse(tenantIDRaw.(string))
 	if err != nil {
-		c.JSON(http.StatusUnauthorized, coreErrors.BuildErrorSingle(c, "auth.invalid-tenant"))
-		return
+		return nil, api.Fail(http.StatusUnauthorized, coreErrors.BuildErrorSingle(c, "auth.invalid-tenant"))
 	}
 
-	batchID, err := uuid.Parse(c.Param("id"))
+	batchID, err := uuid.Parse(in.ID)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, coreErrors.BuildErrorSingle(c, errors.BatchNotFound))
-		return
+		return nil, api.Fail(http.StatusBadRequest, coreErrors.BuildErrorSingle(c, errors.BatchNotFound))
 	}
 
 	batch, err := ctrl.service.GetBatch(c.Request.Context(), tenantID, batchID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, coreErrors.BuildError(c, err))
-		return
+		return nil, api.Fail(http.StatusInternalServerError, coreErrors.BuildError(c, err))
 	}
 
 	if batch == nil {
-		c.JSON(http.StatusNotFound, coreErrors.BuildErrorSingle(c, errors.BatchNotFound))
-		return
+		return nil, api.Fail(http.StatusNotFound, coreErrors.BuildErrorSingle(c, errors.BatchNotFound))
 	}
 
-	c.JSON(http.StatusOK, batch)
+	return api.OK(batch)
 }
 
-// ListBatchesByProduct godoc
-// @Summary List all batches for a product
-// @Description One page of a product's batches, ordered by expiry date (FIFO)
-// @Tags Batches
-// @Accept json
-// @Produce json
-// @Param productId path string true "Product ID"
-// @Param onlyActive query bool false "Only active batches (default: true)"
-// @Param skuId query string false "Only batches of this combination"
-// @Param page query int false "Page number, 1-based" default(1)
-// @Param page_size query int false "Rows per page, max 100" default(20)
-// @Success 200 {object} models.ListBatchesResponse
-// @Failure 400 {object} map[string]interface{} "Invalid request"
-// @Router /products/{productId}/batches [get]
-func (ctrl *BatchController) ListBatchesByProduct(c *gin.Context) {
+// ListBatchesByProductInput is ListBatchesByProduct's request.
+type ListBatchesByProductInput struct {
+	ProductId string `path:"productId"`
+	Query     api.Query[models.ListBatchesQuery]
+}
+
+// ListBatchesByProduct is GET /batches/product/{productId}: List all batches for a product.
+func (ctrl *BatchController) ListBatchesByProduct(ctx context.Context, in *ListBatchesByProductInput) (*api.Out[*models.ListBatchesResponse], error) {
+	c := api.Gin(ctx)
 	tenantIDRaw, exists := c.Get("tenant_id")
 	if !exists || tenantIDRaw == nil {
-		c.JSON(http.StatusUnauthorized, coreErrors.BuildErrorSingle(c, "auth.invalid-tenant"))
-		return
+		return nil, api.Fail(http.StatusUnauthorized, coreErrors.BuildErrorSingle(c, "auth.invalid-tenant"))
 	}
 	tenantID, err := uuid.Parse(tenantIDRaw.(string))
 	if err != nil {
-		c.JSON(http.StatusUnauthorized, coreErrors.BuildErrorSingle(c, "auth.invalid-tenant"))
-		return
+		return nil, api.Fail(http.StatusUnauthorized, coreErrors.BuildErrorSingle(c, "auth.invalid-tenant"))
 	}
 
-	productID, err := uuid.Parse(c.Param("productId"))
+	productID, err := uuid.Parse(in.ProductId)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, coreErrors.BuildErrorSingle(c, errors.ProductNotFound))
-		return
+		return nil, api.Fail(http.StatusBadRequest, coreErrors.BuildErrorSingle(c, errors.ProductNotFound))
 	}
 
 	var query models.ListBatchesQuery
-	if err := c.ShouldBindQuery(&query); err != nil {
-		c.JSON(http.StatusBadRequest, coreErrors.BuildErrorDetail(c, "validation.invalid", err.Error()))
-		return
+	if err := in.Query.Into(ctx, &query); err != nil {
+		return nil, api.Fail(http.StatusBadRequest, coreErrors.BuildErrorDetail(c, "validation.invalid", err.Error()))
 	}
 
 	batches, err := ctrl.service.ListBatchesByProduct(c.Request.Context(), tenantID, productID, query)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, coreErrors.BuildError(c, err))
-		return
+		return nil, api.Fail(http.StatusInternalServerError, coreErrors.BuildError(c, err))
 	}
 
-	c.JSON(http.StatusOK, batches)
+	return api.OK(batches)
 }
 
-// GetOldestBatchForSale godoc
-// @Summary Get oldest batch for sale (FIFO)
-// @Description Get the oldest active batch for a product, used for FIFO sales
-// @Tags Batches
-// @Accept json
-// @Produce json
-// @Param productId path string true "Product ID"
-// @Param skuId query string false "Combination to pick from (default: the product SKU)"
-// @Success 200 {object} models.BatchResponse
-// @Failure 404 {object} map[string]interface{} "No active batches found"
-// @Router /products/{productId}/batches/oldest [get]
-func (ctrl *BatchController) GetOldestBatchForSale(c *gin.Context) {
+// GetOldestBatchForSaleInput is GetOldestBatchForSale's request.
+type GetOldestBatchForSaleInput struct {
+	ProductId string `path:"productId"`
+}
+
+// GetOldestBatchForSale is GET /batches/product/{productId}/oldest: Get oldest batch for sale (FIFO).
+func (ctrl *BatchController) GetOldestBatchForSale(ctx context.Context, in *GetOldestBatchForSaleInput) (*api.Out[*models.BatchResponse], error) {
+	c := api.Gin(ctx)
 	tenantIDRaw, exists := c.Get("tenant_id")
 	if !exists || tenantIDRaw == nil {
-		c.JSON(http.StatusUnauthorized, coreErrors.BuildErrorSingle(c, "auth.invalid-tenant"))
-		return
+		return nil, api.Fail(http.StatusUnauthorized, coreErrors.BuildErrorSingle(c, "auth.invalid-tenant"))
 	}
 	tenantID, err := uuid.Parse(tenantIDRaw.(string))
 	if err != nil {
-		c.JSON(http.StatusUnauthorized, coreErrors.BuildErrorSingle(c, "auth.invalid-tenant"))
-		return
+		return nil, api.Fail(http.StatusUnauthorized, coreErrors.BuildErrorSingle(c, "auth.invalid-tenant"))
 	}
 
-	productID, err := uuid.Parse(c.Param("productId"))
+	productID, err := uuid.Parse(in.ProductId)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, coreErrors.BuildErrorSingle(c, errors.ProductNotFound))
-		return
+		return nil, api.Fail(http.StatusBadRequest, coreErrors.BuildErrorSingle(c, errors.ProductNotFound))
 	}
 
 	skuID, ok := parseSkuIDQuery(c)
 	if !ok {
-		c.JSON(http.StatusBadRequest, coreErrors.BuildErrorSingle(c, errors.SkuNotFound))
-		return
+		return nil, api.Fail(http.StatusBadRequest, coreErrors.BuildErrorSingle(c, errors.SkuNotFound))
 	}
 
 	batch, err := ctrl.service.GetOldestBatchForSale(c.Request.Context(), tenantID, productID, skuID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, coreErrors.BuildError(c, err))
-		return
+		return nil, api.Fail(http.StatusInternalServerError, coreErrors.BuildError(c, err))
 	}
 
 	if batch == nil {
-		c.JSON(http.StatusNotFound, coreErrors.BuildErrorSingle(c, errors.BatchNotFound))
-		return
+		return nil, api.Fail(http.StatusNotFound, coreErrors.BuildErrorSingle(c, errors.BatchNotFound))
 	}
 
-	c.JSON(http.StatusOK, batch)
+	return api.OK(batch)
 }
 
 // mapBatchWriteError turns the guards sp_update_batch and sp_void_batch raise
 // into their HTTP shapes. has-movements is a 409: the request is well formed,
 // it collides with state that is already booked (INV-014 D3).
-func mapBatchWriteError(c *gin.Context, err error) bool {
+func mapBatchWriteError(c *gin.Context, err error) error {
 	var pgErr *pgconn.PgError
 	if !goErrors.As(err, &pgErr) {
-		return false
+		return nil
 	}
 
 	switch pgErr.Message {
 	case errors.BatchNotFound:
-		c.JSON(http.StatusNotFound, coreErrors.BuildErrorSingle(c, errors.BatchNotFound))
+		return api.Fail(http.StatusNotFound, coreErrors.BuildErrorSingle(c, errors.BatchNotFound))
 	case errors.BatchHasMovements:
-		c.JSON(http.StatusConflict, coreErrors.BuildErrorSingle(c, errors.BatchHasMovements))
+		return api.Fail(http.StatusConflict, coreErrors.BuildErrorSingle(c, errors.BatchHasMovements))
 	case errors.BatchVoided:
-		c.JSON(http.StatusConflict, coreErrors.BuildErrorSingle(c, errors.BatchVoided))
+		return api.Fail(http.StatusConflict, coreErrors.BuildErrorSingle(c, errors.BatchVoided))
 	case errors.BatchLotNumberRequired:
-		c.JSON(http.StatusBadRequest, coreErrors.BuildErrorSingle(c, errors.BatchLotNumberRequired))
+		return api.Fail(http.StatusBadRequest, coreErrors.BuildErrorSingle(c, errors.BatchLotNumberRequired))
 	case errors.BatchExpiryDateMustBeFuture:
-		c.JSON(http.StatusBadRequest, coreErrors.BuildErrorSingle(c, errors.BatchExpiryDateMustBeFuture))
+		return api.Fail(http.StatusBadRequest, coreErrors.BuildErrorSingle(c, errors.BatchExpiryDateMustBeFuture))
 	default:
-		return false
+		return nil
 	}
-
-	return true
 }
 
-// UpdateBatch godoc
-// @Summary Correct a lot
-// @Description Correct a lot's lot number and expiry date, while it has no movements
-// @Tags Batches
-// @Accept json
-// @Produce json
-// @Param id path string true "Batch ID"
-// @Param batch body models.UpdateBatchDto true "Fields to correct"
-// @Success 200 {object} models.BatchResponse
-// @Failure 400 {object} map[string]interface{} "Invalid request"
-// @Failure 404 {object} map[string]interface{} "Batch not found"
-// @Failure 409 {object} map[string]interface{} "Batch already consumed or voided"
-// @Router /batches/{id} [patch]
-func (ctrl *BatchController) UpdateBatch(c *gin.Context) {
+// UpdateBatchInput is UpdateBatch's request.
+type UpdateBatchInput struct {
+	ID   string `path:"id"`
+	JSON api.Body[models.UpdateBatchDto]
+}
+
+// UpdateBatch is PATCH /batches/{id}: Correct a lot.
+func (ctrl *BatchController) UpdateBatch(ctx context.Context, in *UpdateBatchInput) (*api.Out[*models.BatchResponse], error) {
+	c := api.Gin(ctx)
 	tenantIDRaw, exists := c.Get("tenant_id")
 	if !exists || tenantIDRaw == nil {
-		c.JSON(http.StatusUnauthorized, coreErrors.BuildErrorSingle(c, "auth.invalid-tenant"))
-		return
+		return nil, api.Fail(http.StatusUnauthorized, coreErrors.BuildErrorSingle(c, "auth.invalid-tenant"))
 	}
 	tenantID, err := uuid.Parse(tenantIDRaw.(string))
 	if err != nil {
-		c.JSON(http.StatusUnauthorized, coreErrors.BuildErrorSingle(c, "auth.invalid-tenant"))
-		return
+		return nil, api.Fail(http.StatusUnauthorized, coreErrors.BuildErrorSingle(c, "auth.invalid-tenant"))
 	}
 
-	batchID, err := uuid.Parse(c.Param("id"))
+	batchID, err := uuid.Parse(in.ID)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, coreErrors.BuildErrorSingle(c, errors.BatchNotFound))
-		return
+		return nil, api.Fail(http.StatusBadRequest, coreErrors.BuildErrorSingle(c, errors.BatchNotFound))
 	}
 
 	var dto models.UpdateBatchDto
-	if err := c.ShouldBindJSON(&dto); err != nil {
-		c.JSON(http.StatusBadRequest, coreErrors.BuildErrorDetail(c, "validation.error", err.Error()))
-		return
+	if err := in.JSON.Into(ctx, &dto); err != nil {
+		return nil, api.Fail(http.StatusBadRequest, coreErrors.BuildErrorDetail(c, "validation.error", err.Error()))
 	}
 
 	batch, err := ctrl.service.UpdateBatch(c.Request.Context(), tenantID, batchID, &dto)
 	if err != nil {
-		if mapBatchWriteError(c, err) {
-			return
+		if err := mapBatchWriteError(c, err); err != nil {
+			return nil, err
 		}
-		c.JSON(http.StatusInternalServerError, coreErrors.BuildError(c, err))
-		return
+		return nil, api.Fail(http.StatusInternalServerError, coreErrors.BuildError(c, err))
 	}
 
 	if batch == nil {
-		c.JSON(http.StatusNotFound, coreErrors.BuildErrorSingle(c, errors.BatchNotFound))
-		return
+		return nil, api.Fail(http.StatusNotFound, coreErrors.BuildErrorSingle(c, errors.BatchNotFound))
 	}
 
-	c.JSON(http.StatusOK, batch)
+	return api.OK(batch)
 }
 
-// VoidBatch godoc
-// @Summary Void a lot
-// @Description Write a lot off by setting its status to void. Never deletes the row.
-// @Tags Batches
-// @Accept json
-// @Produce json
-// @Param id path string true "Batch ID"
-// @Success 200 {object} models.BatchResponse
-// @Failure 404 {object} map[string]interface{} "Batch not found"
-// @Failure 409 {object} map[string]interface{} "Batch already consumed or voided"
-// @Router /batches/{id} [delete]
-func (ctrl *BatchController) VoidBatch(c *gin.Context) {
+// VoidBatchInput is VoidBatch's request.
+type VoidBatchInput struct {
+	ID string `path:"id"`
+}
+
+// VoidBatch is DELETE /batches/{id}: Void a lot.
+func (ctrl *BatchController) VoidBatch(ctx context.Context, in *VoidBatchInput) (*api.Out[*models.BatchResponse], error) {
+	c := api.Gin(ctx)
 	tenantIDRaw, exists := c.Get("tenant_id")
 	if !exists || tenantIDRaw == nil {
-		c.JSON(http.StatusUnauthorized, coreErrors.BuildErrorSingle(c, "auth.invalid-tenant"))
-		return
+		return nil, api.Fail(http.StatusUnauthorized, coreErrors.BuildErrorSingle(c, "auth.invalid-tenant"))
 	}
 	tenantID, err := uuid.Parse(tenantIDRaw.(string))
 	if err != nil {
-		c.JSON(http.StatusUnauthorized, coreErrors.BuildErrorSingle(c, "auth.invalid-tenant"))
-		return
+		return nil, api.Fail(http.StatusUnauthorized, coreErrors.BuildErrorSingle(c, "auth.invalid-tenant"))
 	}
 
-	batchID, err := uuid.Parse(c.Param("id"))
+	batchID, err := uuid.Parse(in.ID)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, coreErrors.BuildErrorSingle(c, errors.BatchNotFound))
-		return
+		return nil, api.Fail(http.StatusBadRequest, coreErrors.BuildErrorSingle(c, errors.BatchNotFound))
 	}
 
 	batch, err := ctrl.service.VoidBatch(c.Request.Context(), tenantID, batchID)
 	if err != nil {
-		if mapBatchWriteError(c, err) {
-			return
+		if err := mapBatchWriteError(c, err); err != nil {
+			return nil, err
 		}
-		c.JSON(http.StatusInternalServerError, coreErrors.BuildError(c, err))
-		return
+		return nil, api.Fail(http.StatusInternalServerError, coreErrors.BuildError(c, err))
 	}
 
 	if batch == nil {
-		c.JSON(http.StatusNotFound, coreErrors.BuildErrorSingle(c, errors.BatchNotFound))
-		return
+		return nil, api.Fail(http.StatusNotFound, coreErrors.BuildErrorSingle(c, errors.BatchNotFound))
 	}
 
-	c.JSON(http.StatusOK, batch)
+	return api.OK(batch)
 }
 
-// RedistributeBatches godoc
-// @Summary Split a stranded lot onto real combinations
-// @Description Split a default-SKU lot into per-combination lots keeping its lot number, dates and unit cost
-// @Tags Batches
-// @Accept json
-// @Produce json
-// @Param id path string true "Product ID"
-// @Param redistribution body models.RedistributeBatchesDto true "Lot and targets"
-// @Success 200 {object} models.RedistributeBatchesResponse
-// @Failure 400 {object} map[string]interface{} "Amounts do not add up, or a target is not a combination"
-// @Failure 404 {object} map[string]interface{} "Batch not found"
-// @Failure 409 {object} map[string]interface{} "Batch already consumed or voided"
-// @Router /products/{id}/batches/redistribute [post]
-func (ctrl *BatchController) RedistributeBatches(c *gin.Context) {
+// RedistributeBatchesInput is RedistributeBatches's request.
+type RedistributeBatchesInput struct {
+	ID   string `path:"id"`
+	JSON api.Body[models.RedistributeBatchesDto]
+}
+
+// RedistributeBatches is POST /products/{id}/batches/redistribute: Split a stranded lot onto real combinations.
+func (ctrl *BatchController) RedistributeBatches(ctx context.Context, in *RedistributeBatchesInput) (*api.Out[*models.RedistributeBatchesResponse], error) {
+	c := api.Gin(ctx)
 	tenantIDRaw, exists := c.Get("tenant_id")
 	if !exists || tenantIDRaw == nil {
-		c.JSON(http.StatusUnauthorized, coreErrors.BuildErrorSingle(c, "auth.invalid-tenant"))
-		return
+		return nil, api.Fail(http.StatusUnauthorized, coreErrors.BuildErrorSingle(c, "auth.invalid-tenant"))
 	}
 	tenantID, err := uuid.Parse(tenantIDRaw.(string))
 	if err != nil {
-		c.JSON(http.StatusUnauthorized, coreErrors.BuildErrorSingle(c, "auth.invalid-tenant"))
-		return
+		return nil, api.Fail(http.StatusUnauthorized, coreErrors.BuildErrorSingle(c, "auth.invalid-tenant"))
 	}
 
-	productID, err := uuid.Parse(c.Param("id"))
+	productID, err := uuid.Parse(in.ID)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, coreErrors.BuildErrorSingle(c, errors.ProductNotFound))
-		return
+		return nil, api.Fail(http.StatusBadRequest, coreErrors.BuildErrorSingle(c, errors.ProductNotFound))
 	}
 
 	var dto models.RedistributeBatchesDto
-	if err := c.ShouldBindJSON(&dto); err != nil {
-		c.JSON(http.StatusBadRequest, coreErrors.BuildErrorDetail(c, "validation.error", err.Error()))
-		return
+	if err := in.JSON.Into(ctx, &dto); err != nil {
+		return nil, api.Fail(http.StatusBadRequest, coreErrors.BuildErrorDetail(c, "validation.error", err.Error()))
 	}
 
 	var createdBy *uuid.UUID
@@ -404,69 +335,56 @@ func (ctrl *BatchController) RedistributeBatches(c *gin.Context) {
 
 	result, err := ctrl.service.RedistributeBatches(c.Request.Context(), tenantID, productID, &dto, createdBy)
 	if err != nil {
-		if mapBatchWriteError(c, err) {
-			return
+		if err := mapBatchWriteError(c, err); err != nil {
+			return nil, err
 		}
 
 		var pgErr *pgconn.PgError
 		if goErrors.As(err, &pgErr) {
 			switch pgErr.Message {
 			case errors.ProductNotFound:
-				c.JSON(http.StatusNotFound, coreErrors.BuildErrorSingle(c, errors.ProductNotFound))
-				return
+				return nil, api.Fail(http.StatusNotFound, coreErrors.BuildErrorSingle(c, errors.ProductNotFound))
 			case errors.SkuNotFound:
-				c.JSON(http.StatusNotFound, coreErrors.BuildErrorSingle(c, errors.SkuNotFound))
-				return
+				return nil, api.Fail(http.StatusNotFound, coreErrors.BuildErrorSingle(c, errors.SkuNotFound))
 			// The amounts have to add up to exactly the lot: a body that does not
 			// is the caller's to fix, not a conflict with stored state.
 			case errors.SkusRedistributionMismatch:
-				c.JSON(http.StatusBadRequest, coreErrors.BuildErrorSingle(c, errors.SkusRedistributionMismatch))
-				return
+				return nil, api.Fail(http.StatusBadRequest, coreErrors.BuildErrorSingle(c, errors.SkusRedistributionMismatch))
 			}
 		}
 
-		c.JSON(http.StatusInternalServerError, coreErrors.BuildError(c, err))
-		return
+		return nil, api.Fail(http.StatusInternalServerError, coreErrors.BuildError(c, err))
 	}
 
-	c.JSON(http.StatusOK, result)
+	return api.OK(result)
 }
 
-// GetExpiringBatches godoc
-// @Summary Get all batches expiring soon
-// @Description One page of the batches that will expire within the warning window, soonest first
-// @Tags Batches
-// @Accept json
-// @Produce json
-// @Param warningDays query int false "Number of days to check for expiry (default: 30)"
-// @Param page query int false "Page number, 1-based" default(1)
-// @Param page_size query int false "Rows per page, max 100" default(20)
-// @Success 200 {object} models.ListBatchesResponse
-// @Failure 400 {object} map[string]interface{} "Invalid request"
-// @Router /batches/expiring [get]
-func (ctrl *BatchController) GetExpiringBatches(c *gin.Context) {
+// GetExpiringBatchesInput is GetExpiringBatches's request.
+type GetExpiringBatchesInput struct {
+	Query api.Query[models.ListExpiringBatchesQuery]
+}
+
+// GetExpiringBatches is GET /batches/expiring: Get all batches expiring soon.
+func (ctrl *BatchController) GetExpiringBatches(ctx context.Context, in *GetExpiringBatchesInput) (*api.Out[*models.ListBatchesResponse], error) {
+	c := api.Gin(ctx)
 	tenantIDRaw, exists := c.Get("tenant_id")
 	if !exists || tenantIDRaw == nil {
-		c.JSON(http.StatusUnauthorized, coreErrors.BuildErrorSingle(c, "auth.invalid-tenant"))
-		return
+		return nil, api.Fail(http.StatusUnauthorized, coreErrors.BuildErrorSingle(c, "auth.invalid-tenant"))
 	}
 	tenantID, err := uuid.Parse(tenantIDRaw.(string))
 	if err != nil {
-		c.JSON(http.StatusUnauthorized, coreErrors.BuildErrorSingle(c, "auth.invalid-tenant"))
-		return
+		return nil, api.Fail(http.StatusUnauthorized, coreErrors.BuildErrorSingle(c, "auth.invalid-tenant"))
 	}
 
 	var query models.ListExpiringBatchesQuery
-	if err := c.ShouldBindQuery(&query); err != nil {
-		c.JSON(http.StatusBadRequest, coreErrors.BuildErrorDetail(c, "validation.invalid", err.Error()))
-		return
+	if err := in.Query.Into(ctx, &query); err != nil {
+		return nil, api.Fail(http.StatusBadRequest, coreErrors.BuildErrorDetail(c, "validation.invalid", err.Error()))
 	}
 
 	batches, err := ctrl.service.GetExpiringBatches(c.Request.Context(), tenantID, query)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, coreErrors.BuildError(c, err))
-		return
+		return nil, api.Fail(http.StatusInternalServerError, coreErrors.BuildError(c, err))
 	}
 
-	c.JSON(http.StatusOK, batches)
+	return api.OK(batches)
 }

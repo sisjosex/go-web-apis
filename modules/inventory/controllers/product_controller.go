@@ -1,15 +1,16 @@
 package controllers
 
 import (
+	"context"
 	"errors"
 	"net/http"
 	"strings"
 
-	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
 
+	"josex/web/modules/core/api"
 	coreErrors "josex/web/modules/core/errors"
 	"josex/web/modules/core/limits"
 	inventoryErrors "josex/web/modules/inventory/errors"
@@ -27,108 +28,86 @@ func NewProductController(productService inventoryInterfaces.ProductService) *Pr
 	}
 }
 
-// CreateProductWithVariants godoc
-// @Summary Create a product with variants
-// @Description Create a new product with optional variants (groups and options)
-// @Tags inventory
-// @Accept json
-// @Produce json
-// @Param request body models.CreateProductDto true "Product creation request"
-// @Success 201 {object} models.CreateProductResponse
-// @Failure 400 {object} map[string]interface{}
-// @Failure 409 {object} map[string]interface{}
-// @Router /api/v1/inventory/products [post]
-func (ctrl *ProductController) CreateProductWithVariants(c *gin.Context) {
+// CreateProductWithVariantsInput is CreateProductWithVariants's request.
+type CreateProductWithVariantsInput struct {
+	JSON api.Body[models.CreateProductDto]
+}
+
+// CreateProductWithVariants is POST /products: Create a product with variants.
+func (ctrl *ProductController) CreateProductWithVariants(ctx context.Context, in *CreateProductWithVariantsInput) (*api.Out[*models.CreateProductResponse], error) {
+	c := api.Gin(ctx)
 	tenantIDRaw, exists := c.Get("tenant_id")
 	if !exists || tenantIDRaw == nil {
-		c.JSON(http.StatusUnauthorized, coreErrors.BuildErrorSingle(c, "auth.invalid-tenant"))
-		return
+		return nil, api.Fail(http.StatusUnauthorized, coreErrors.BuildErrorSingle(c, "auth.invalid-tenant"))
 	}
 	tenantID, err := uuid.Parse(tenantIDRaw.(string))
 	if err != nil {
-		c.JSON(http.StatusUnauthorized, coreErrors.BuildErrorSingle(c, "auth.invalid-tenant"))
-		return
+		return nil, api.Fail(http.StatusUnauthorized, coreErrors.BuildErrorSingle(c, "auth.invalid-tenant"))
 	}
 
 	var dto models.CreateProductDto
 
-	if err := c.ShouldBindJSON(&dto); err != nil {
-		c.JSON(http.StatusBadRequest, coreErrors.BuildErrorDetail(c, "validation.invalid", err.Error()))
-		return
+	if err := in.JSON.Into(ctx, &dto); err != nil {
+		return nil, api.Fail(http.StatusBadRequest, coreErrors.BuildErrorDetail(c, "validation.invalid", err.Error()))
 	}
 
 	product, err := ctrl.productService.CreateProductWithVariants(c.Request.Context(), tenantID, dto)
 	if err != nil {
-		if limits.Respond(c, err) {
-			return
+		if err := limits.Refuse(c, err); err != nil {
+			return nil, err
 		}
 		var pgErr *pgconn.PgError
 		if errors.As(err, &pgErr) {
 			switch pgErr.Message {
 			case inventoryErrors.ProductSkuAlreadyExists:
-				c.JSON(http.StatusConflict, coreErrors.BuildErrorSingle(c, inventoryErrors.ProductSkuAlreadyExists))
-				return
+				return nil, api.Fail(http.StatusConflict, coreErrors.BuildErrorSingle(c, inventoryErrors.ProductSkuAlreadyExists))
 			// The variant tree can now fail on create for the same reasons it
 			// fails on update; before INV-012 all three arrived here as a 500.
 			case inventoryErrors.ProductVariantGroupDuplicateType:
-				c.JSON(http.StatusConflict, coreErrors.BuildErrorSingle(c, inventoryErrors.ProductVariantGroupDuplicateType))
-				return
+				return nil, api.Fail(http.StatusConflict, coreErrors.BuildErrorSingle(c, inventoryErrors.ProductVariantGroupDuplicateType))
 			case inventoryErrors.ProductVariantOptionDuplicateName:
-				c.JSON(http.StatusConflict, coreErrors.BuildErrorSingle(c, inventoryErrors.ProductVariantOptionDuplicateName))
-				return
+				return nil, api.Fail(http.StatusConflict, coreErrors.BuildErrorSingle(c, inventoryErrors.ProductVariantOptionDuplicateName))
 			case inventoryErrors.ProductVariantGroupAxisNotSingleChoice:
-				c.JSON(http.StatusBadRequest, coreErrors.BuildErrorSingle(c, inventoryErrors.ProductVariantGroupAxisNotSingleChoice))
-				return
+				return nil, api.Fail(http.StatusBadRequest, coreErrors.BuildErrorSingle(c, inventoryErrors.ProductVariantGroupAxisNotSingleChoice))
 			// INV-012 D2 — the create SP generates the combinations of a product
 			// that declares an axis, so what the generator refuses now refuses
 			// the creation itself.
 			case inventoryErrors.SkusCapExceeded:
-				c.JSON(http.StatusConflict, coreErrors.BuildErrorSingle(c, inventoryErrors.SkusCapExceeded))
-				return
+				return nil, api.Fail(http.StatusConflict, coreErrors.BuildErrorSingle(c, inventoryErrors.SkusCapExceeded))
 			case inventoryErrors.SkusSkuCollision:
-				c.JSON(http.StatusConflict, coreErrors.BuildErrorSingle(c, inventoryErrors.SkusSkuCollision))
-				return
+				return nil, api.Fail(http.StatusConflict, coreErrors.BuildErrorSingle(c, inventoryErrors.SkusSkuCollision))
 			}
 		}
-		c.JSON(http.StatusInternalServerError, coreErrors.BuildError(c, err))
-		return
+		return nil, api.Fail(http.StatusInternalServerError, coreErrors.BuildError(c, err))
 	}
 
-	c.JSON(http.StatusCreated, product)
+	return api.OK(product)
 }
 
-// UpdateProductWithVariants godoc
-// @Summary Update a product and its variants
-// @Description Update name, description and base price, and diff the variant tree by id. Omitting "variants" leaves the tree untouched; {"groups": []} removes every group. The SKU is immutable.
-// @Tags inventory
-// @Accept json
-// @Produce json
-// @Param id path string true "Product ID"
-// @Param request body models.UpdateProductDto true "Product update request"
-// @Success 200 {object} models.UpdateProductResponse
-// @Failure 400 {object} map[string]interface{}
-// @Failure 404 {object} map[string]interface{}
-// @Failure 409 {object} map[string]interface{}
-// @Router /api/v1/inventory/products/:id [put]
-func (ctrl *ProductController) UpdateProductWithVariants(c *gin.Context) {
+// UpdateProductWithVariantsInput is UpdateProductWithVariants's request.
+type UpdateProductWithVariantsInput struct {
+	ID   string `path:"id"`
+	JSON api.Body[models.UpdateProductDto]
+}
+
+// UpdateProductWithVariants is PUT /products/{id}: Update a product and its variants.
+func (ctrl *ProductController) UpdateProductWithVariants(ctx context.Context, in *UpdateProductWithVariantsInput) (*api.Out[*models.UpdateProductResponse], error) {
+	c := api.Gin(ctx)
 	tenantIDRaw, exists := c.Get("tenant_id")
 	if !exists || tenantIDRaw == nil {
-		c.JSON(http.StatusUnauthorized, coreErrors.BuildErrorSingle(c, "auth.invalid-tenant"))
-		return
+		return nil, api.Fail(http.StatusUnauthorized, coreErrors.BuildErrorSingle(c, "auth.invalid-tenant"))
 	}
 	tenantID, err := uuid.Parse(tenantIDRaw.(string))
 	if err != nil {
-		c.JSON(http.StatusUnauthorized, coreErrors.BuildErrorSingle(c, "auth.invalid-tenant"))
-		return
+		return nil, api.Fail(http.StatusUnauthorized, coreErrors.BuildErrorSingle(c, "auth.invalid-tenant"))
 	}
 
-	productID := c.Param("id")
+	productID := in.ID
 
 	var dto models.UpdateProductDto
 
-	if err := c.ShouldBindJSON(&dto); err != nil {
-		c.JSON(http.StatusBadRequest, coreErrors.BuildErrorDetail(c, "validation.invalid", err.Error()))
-		return
+	if err := in.JSON.Into(ctx, &dto); err != nil {
+		return nil, api.Fail(http.StatusBadRequest, coreErrors.BuildErrorDetail(c, "validation.invalid", err.Error()))
 	}
 
 	product, err := ctrl.productService.UpdateProductWithVariants(c.Request.Context(), tenantID, productID, dto)
@@ -137,62 +116,49 @@ func (ctrl *ProductController) UpdateProductWithVariants(c *gin.Context) {
 		if errors.As(err, &pgErr) {
 			switch pgErr.Message {
 			case inventoryErrors.ProductNotFound:
-				c.JSON(http.StatusNotFound, coreErrors.BuildErrorSingle(c, inventoryErrors.ProductNotFound))
-				return
+				return nil, api.Fail(http.StatusNotFound, coreErrors.BuildErrorSingle(c, inventoryErrors.ProductNotFound))
 			case inventoryErrors.ProductVariantGroupDuplicateType:
-				c.JSON(http.StatusConflict, coreErrors.BuildErrorSingle(c, inventoryErrors.ProductVariantGroupDuplicateType))
-				return
+				return nil, api.Fail(http.StatusConflict, coreErrors.BuildErrorSingle(c, inventoryErrors.ProductVariantGroupDuplicateType))
 			case inventoryErrors.ProductVariantOptionDuplicateName:
-				c.JSON(http.StatusConflict, coreErrors.BuildErrorSingle(c, inventoryErrors.ProductVariantOptionDuplicateName))
-				return
+				return nil, api.Fail(http.StatusConflict, coreErrors.BuildErrorSingle(c, inventoryErrors.ProductVariantOptionDuplicateName))
 			case inventoryErrors.ProductVariantGroupNotInProduct:
-				c.JSON(http.StatusBadRequest, coreErrors.BuildErrorSingle(c, inventoryErrors.ProductVariantGroupNotInProduct))
-				return
+				return nil, api.Fail(http.StatusBadRequest, coreErrors.BuildErrorSingle(c, inventoryErrors.ProductVariantGroupNotInProduct))
 			case inventoryErrors.ProductVariantOptionNotInGroup:
-				c.JSON(http.StatusBadRequest, coreErrors.BuildErrorSingle(c, inventoryErrors.ProductVariantOptionNotInGroup))
-				return
+				return nil, api.Fail(http.StatusBadRequest, coreErrors.BuildErrorSingle(c, inventoryErrors.ProductVariantOptionNotInGroup))
 			// INV-008 D3 — an axis edit that would take stock or history down
 			// with it. The SP refuses instead of cascading.
 			case inventoryErrors.SkusAxisHasStock:
-				c.JSON(http.StatusConflict, coreErrors.BuildErrorSingle(c, inventoryErrors.SkusAxisHasStock))
-				return
+				return nil, api.Fail(http.StatusConflict, coreErrors.BuildErrorSingle(c, inventoryErrors.SkusAxisHasStock))
 			case inventoryErrors.SkusAxisHasHistory:
-				c.JSON(http.StatusConflict, coreErrors.BuildErrorSingle(c, inventoryErrors.SkusAxisHasHistory))
-				return
+				return nil, api.Fail(http.StatusConflict, coreErrors.BuildErrorSingle(c, inventoryErrors.SkusAxisHasHistory))
 			case inventoryErrors.ProductVariantGroupAxisNotSingleChoice:
-				c.JSON(http.StatusBadRequest, coreErrors.BuildErrorSingle(c, inventoryErrors.ProductVariantGroupAxisNotSingleChoice))
-				return
+				return nil, api.Fail(http.StatusBadRequest, coreErrors.BuildErrorSingle(c, inventoryErrors.ProductVariantGroupAxisNotSingleChoice))
 			}
 		}
-		c.JSON(http.StatusInternalServerError, coreErrors.BuildError(c, err))
-		return
+		return nil, api.Fail(http.StatusInternalServerError, coreErrors.BuildError(c, err))
 	}
 
-	c.JSON(http.StatusOK, product)
+	return api.OK(product)
 }
 
-// GetProduct godoc
-// @Summary Get product by ID
-// @Description Retrieve a product with all its details
-// @Tags inventory
-// @Produce json
-// @Param id path string true "Product ID"
-// @Success 200 {object} models.ProductDetail
-// @Failure 404 {object} map[string]interface{}
-// @Router /api/v1/inventory/products/:id [get]
-func (ctrl *ProductController) GetProduct(c *gin.Context) {
+// GetProductInput is GetProduct's request.
+type GetProductInput struct {
+	ID string `path:"id"`
+}
+
+// GetProduct is GET /products/{id}: Get product by ID.
+func (ctrl *ProductController) GetProduct(ctx context.Context, in *GetProductInput) (*api.Out[*models.ProductDetail], error) {
+	c := api.Gin(ctx)
 	tenantIDRaw, exists := c.Get("tenant_id")
 	if !exists || tenantIDRaw == nil {
-		c.JSON(http.StatusUnauthorized, coreErrors.BuildErrorSingle(c, "auth.invalid-tenant"))
-		return
+		return nil, api.Fail(http.StatusUnauthorized, coreErrors.BuildErrorSingle(c, "auth.invalid-tenant"))
 	}
 	tenantID, err := uuid.Parse(tenantIDRaw.(string))
 	if err != nil {
-		c.JSON(http.StatusUnauthorized, coreErrors.BuildErrorSingle(c, "auth.invalid-tenant"))
-		return
+		return nil, api.Fail(http.StatusUnauthorized, coreErrors.BuildErrorSingle(c, "auth.invalid-tenant"))
 	}
 
-	productID := c.Param("id")
+	productID := in.ID
 
 	product, err := ctrl.productService.GetProduct(c.Request.Context(), tenantID, productID)
 	if err != nil {
@@ -200,43 +166,36 @@ func (ctrl *ProductController) GetProduct(c *gin.Context) {
 		if errors.As(err, &pgErr) {
 			switch pgErr.Message {
 			case inventoryErrors.ProductNotFound:
-				c.JSON(http.StatusNotFound, coreErrors.BuildErrorSingle(c, inventoryErrors.ProductNotFound))
-				return
+				return nil, api.Fail(http.StatusNotFound, coreErrors.BuildErrorSingle(c, inventoryErrors.ProductNotFound))
 			}
 		}
 		if errors.Is(err, pgx.ErrNoRows) {
-			c.JSON(http.StatusNotFound, coreErrors.BuildErrorSingle(c, inventoryErrors.ProductNotFound))
-			return
+			return nil, api.Fail(http.StatusNotFound, coreErrors.BuildErrorSingle(c, inventoryErrors.ProductNotFound))
 		}
-		c.JSON(http.StatusInternalServerError, coreErrors.BuildError(c, err))
-		return
+		return nil, api.Fail(http.StatusInternalServerError, coreErrors.BuildError(c, err))
 	}
 
-	c.JSON(http.StatusOK, product)
+	return api.OK(product)
 }
 
-// GetProductBySkU godoc
-// @Summary Get product by SKU
-// @Description Retrieve a product by its SKU code
-// @Tags inventory
-// @Produce json
-// @Param sku path string true "Product SKU"
-// @Success 200 {object} models.ProductDetail
-// @Failure 404 {object} map[string]interface{}
-// @Router /api/v1/inventory/products/sku/:sku [get]
-func (ctrl *ProductController) GetProductBySkU(c *gin.Context) {
+// GetProductBySkUInput is GetProductBySkU's request.
+type GetProductBySkUInput struct {
+	SKU string `path:"sku"`
+}
+
+// GetProductBySkU is GET /products/sku/{sku}: Get product by SKU.
+func (ctrl *ProductController) GetProductBySkU(ctx context.Context, in *GetProductBySkUInput) (*api.Out[*models.ProductDetail], error) {
+	c := api.Gin(ctx)
 	tenantIDRaw, exists := c.Get("tenant_id")
 	if !exists || tenantIDRaw == nil {
-		c.JSON(http.StatusUnauthorized, coreErrors.BuildErrorSingle(c, "auth.invalid-tenant"))
-		return
+		return nil, api.Fail(http.StatusUnauthorized, coreErrors.BuildErrorSingle(c, "auth.invalid-tenant"))
 	}
 	tenantID, err := uuid.Parse(tenantIDRaw.(string))
 	if err != nil {
-		c.JSON(http.StatusUnauthorized, coreErrors.BuildErrorSingle(c, "auth.invalid-tenant"))
-		return
+		return nil, api.Fail(http.StatusUnauthorized, coreErrors.BuildErrorSingle(c, "auth.invalid-tenant"))
 	}
 
-	sku := c.Param("sku")
+	sku := in.SKU
 
 	product, err := ctrl.productService.GetProductBySkU(c.Request.Context(), tenantID, sku)
 	if err != nil {
@@ -244,44 +203,38 @@ func (ctrl *ProductController) GetProductBySkU(c *gin.Context) {
 		if errors.As(err, &pgErr) {
 			switch pgErr.Message {
 			case inventoryErrors.ProductNotFound:
-				c.JSON(http.StatusNotFound, coreErrors.BuildErrorSingle(c, inventoryErrors.ProductNotFound))
-				return
+				return nil, api.Fail(http.StatusNotFound, coreErrors.BuildErrorSingle(c, inventoryErrors.ProductNotFound))
 			}
 		}
-		c.JSON(http.StatusInternalServerError, coreErrors.BuildError(c, err))
-		return
+		return nil, api.Fail(http.StatusInternalServerError, coreErrors.BuildError(c, err))
 	}
 
-	c.JSON(http.StatusOK, product)
+	return api.OK(product)
 }
 
-// AddProductMedia godoc
-// @Summary Add media to a product or variant option
-// @Tags inventory
-// @Accept json
-// @Produce json
-// @Param id path string true "Product ID"
-// @Param request body models.AddProductMediaDto true "Media data"
-// @Success 201 {object} models.AddProductMediaResponse
-// @Router /api/v1/inventory/products/:id/media [post]
-func (ctrl *ProductController) AddProductMedia(c *gin.Context) {
+// AddProductMediaInput is AddProductMedia's request.
+type AddProductMediaInput struct {
+	ID   string `path:"id"`
+	JSON api.Body[models.AddProductMediaDto]
+}
+
+// AddProductMedia is POST /products/{id}/media: Add media to a product or variant option.
+func (ctrl *ProductController) AddProductMedia(ctx context.Context, in *AddProductMediaInput) (*api.Out[*models.AddProductMediaResponse], error) {
+	c := api.Gin(ctx)
 	tenantIDRaw, exists := c.Get("tenant_id")
 	if !exists || tenantIDRaw == nil {
-		c.JSON(http.StatusUnauthorized, coreErrors.BuildErrorSingle(c, "auth.invalid-tenant"))
-		return
+		return nil, api.Fail(http.StatusUnauthorized, coreErrors.BuildErrorSingle(c, "auth.invalid-tenant"))
 	}
 	tenantID, err := uuid.Parse(tenantIDRaw.(string))
 	if err != nil {
-		c.JSON(http.StatusUnauthorized, coreErrors.BuildErrorSingle(c, "auth.invalid-tenant"))
-		return
+		return nil, api.Fail(http.StatusUnauthorized, coreErrors.BuildErrorSingle(c, "auth.invalid-tenant"))
 	}
 
-	productID := c.Param("id")
+	productID := in.ID
 
 	var dto models.AddProductMediaDto
-	if err := c.ShouldBindJSON(&dto); err != nil {
-		c.JSON(http.StatusBadRequest, coreErrors.BuildErrorDetail(c, "validation.invalid", err.Error()))
-		return
+	if err := in.JSON.Into(ctx, &dto); err != nil {
+		return nil, api.Fail(http.StatusBadRequest, coreErrors.BuildErrorDetail(c, "validation.invalid", err.Error()))
 	}
 
 	result, err := ctrl.productService.AddProductMedia(c.Request.Context(), tenantID, productID, dto)
@@ -290,91 +243,81 @@ func (ctrl *ProductController) AddProductMedia(c *gin.Context) {
 		if errors.As(err, &pgErr) {
 			switch pgErr.Message {
 			case inventoryErrors.ProductNotFound:
-				c.JSON(http.StatusNotFound, coreErrors.BuildErrorSingle(c, inventoryErrors.ProductNotFound))
-				return
+				return nil, api.Fail(http.StatusNotFound, coreErrors.BuildErrorSingle(c, inventoryErrors.ProductNotFound))
 			}
 		}
-		c.JSON(http.StatusInternalServerError, coreErrors.BuildError(c, err))
-		return
+		return nil, api.Fail(http.StatusInternalServerError, coreErrors.BuildError(c, err))
 	}
 
-	c.JSON(http.StatusCreated, result)
+	return api.OK(result)
 }
 
-// RemoveProductMedia godoc
-// @Summary Remove a media item from a product
-// @Tags inventory
-// @Produce json
-// @Param id path string true "Product ID"
-// @Param media_id path string true "Media ID"
-// @Success 200 {object} map[string]string
-// @Router /api/v1/inventory/products/:id/media/:media_id [delete]
-func (ctrl *ProductController) RemoveProductMedia(c *gin.Context) {
+// RemoveProductMediaInput is RemoveProductMedia's request.
+type RemoveProductMediaInput struct {
+	ID      string `path:"id"`
+	MediaID string `path:"media_id"`
+}
+
+// RemoveProductMediaResponse is RemoveProductMedia's answer.
+type RemoveProductMediaResponse struct {
+	Message string `json:"message"`
+}
+
+// RemoveProductMedia is DELETE /products/{id}/media/{media_id}: Remove a media item from a product.
+func (ctrl *ProductController) RemoveProductMedia(ctx context.Context, in *RemoveProductMediaInput) (*api.Out[RemoveProductMediaResponse], error) {
+	c := api.Gin(ctx)
 	tenantIDRaw, exists := c.Get("tenant_id")
 	if !exists || tenantIDRaw == nil {
-		c.JSON(http.StatusUnauthorized, coreErrors.BuildErrorSingle(c, "auth.invalid-tenant"))
-		return
+		return nil, api.Fail(http.StatusUnauthorized, coreErrors.BuildErrorSingle(c, "auth.invalid-tenant"))
 	}
 	tenantID, err := uuid.Parse(tenantIDRaw.(string))
 	if err != nil {
-		c.JSON(http.StatusUnauthorized, coreErrors.BuildErrorSingle(c, "auth.invalid-tenant"))
-		return
+		return nil, api.Fail(http.StatusUnauthorized, coreErrors.BuildErrorSingle(c, "auth.invalid-tenant"))
 	}
 
-	mediaID := c.Param("media_id")
+	mediaID := in.MediaID
 
 	if err := ctrl.productService.RemoveProductMedia(c.Request.Context(), tenantID, mediaID); err != nil {
 		var pgErr *pgconn.PgError
 		if errors.As(err, &pgErr) {
 			switch pgErr.Message {
 			case inventoryErrors.ProductNotFound:
-				c.JSON(http.StatusNotFound, coreErrors.BuildErrorSingle(c, inventoryErrors.ProductNotFound))
-				return
+				return nil, api.Fail(http.StatusNotFound, coreErrors.BuildErrorSingle(c, inventoryErrors.ProductNotFound))
 			}
 		}
-		c.JSON(http.StatusInternalServerError, coreErrors.BuildError(c, err))
-		return
+		return nil, api.Fail(http.StatusInternalServerError, coreErrors.BuildError(c, err))
 	}
 
-	c.JSON(http.StatusOK, gin.H{"message": "Media removed successfully"})
+	return api.OK(RemoveProductMediaResponse{Message: "Media removed successfully"})
 }
 
-// ListProducts godoc
-// @Summary List all products
-// @Description One page of active products, newest first, each with the categories it is filed under. Optionally narrowed to one category and/or a name/SKU search.
-// @Tags inventory
-// @Produce json
-// @Param page query int false "Page number, 1-based" default(1)
-// @Param page_size query int false "Rows per page, max 100" default(20)
-// @Param category_id query string false "Only products assigned to this category"
-// @Param search query string false "Case-insensitive match on name or SKU"
-// @Success 200 {object} models.ListProductsResponse
-// @Failure 400 {object} map[string]interface{}
-// @Router /api/v1/inventory/products [get]
-func (ctrl *ProductController) ListProducts(c *gin.Context) {
+// ListProductsInput is ListProducts's request.
+type ListProductsInput struct {
+	Query api.Query[models.ListProductsQuery]
+}
+
+// ListProducts is GET /products: List all products.
+func (ctrl *ProductController) ListProducts(ctx context.Context, in *ListProductsInput) (*api.Out[*models.ListProductsResponse], error) {
+	c := api.Gin(ctx)
 	tenantIDRaw, exists := c.Get("tenant_id")
 	if !exists || tenantIDRaw == nil {
-		c.JSON(http.StatusUnauthorized, coreErrors.BuildErrorSingle(c, "auth.invalid-tenant"))
-		return
+		return nil, api.Fail(http.StatusUnauthorized, coreErrors.BuildErrorSingle(c, "auth.invalid-tenant"))
 	}
 	tenantID, err := uuid.Parse(tenantIDRaw.(string))
 	if err != nil {
-		c.JSON(http.StatusUnauthorized, coreErrors.BuildErrorSingle(c, "auth.invalid-tenant"))
-		return
+		return nil, api.Fail(http.StatusUnauthorized, coreErrors.BuildErrorSingle(c, "auth.invalid-tenant"))
 	}
 
 	var query models.ListProductsQuery
-	if err := c.ShouldBindQuery(&query); err != nil {
-		c.JSON(http.StatusBadRequest, coreErrors.BuildErrorDetail(c, "validation.invalid", err.Error()))
-		return
+	if err := in.Query.Into(ctx, &query); err != nil {
+		return nil, api.Fail(http.StatusBadRequest, coreErrors.BuildErrorDetail(c, "validation.invalid", err.Error()))
 	}
 	query.Search = strings.TrimSpace(query.Search)
 
 	result, err := ctrl.productService.ListProducts(c.Request.Context(), tenantID, query)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, coreErrors.BuildError(c, err))
-		return
+		return nil, api.Fail(http.StatusInternalServerError, coreErrors.BuildError(c, err))
 	}
 
-	c.JSON(http.StatusOK, result)
+	return api.OK(result)
 }

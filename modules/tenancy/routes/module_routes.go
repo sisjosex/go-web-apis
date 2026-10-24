@@ -3,6 +3,7 @@ package routes
 import (
 	authMiddleware "josex/web/modules/auth/middleware"
 	"josex/web/modules/auth/services"
+	"josex/web/modules/core/api"
 	coreModels "josex/web/modules/core/models"
 	"josex/web/modules/tenancy/controllers"
 	"josex/web/modules/tenancy/interfaces"
@@ -21,7 +22,7 @@ func RegisterModuleRoutes(
 	jwtService services.JWTService,
 ) {
 	// GET /modules — list available system modules (no tenant scope needed)
-	router.GET("/modules", authMiddleware.AuthMiddleware(jwtService), moduleController.ListAvailableModules)
+	api.Get(router, "/modules", moduleController.ListAvailableModules, api.Doc{}, authMiddleware.AuthMiddleware(jwtService))
 
 	// Tenant-scoped module routes
 	tenantRoutes := router.Group("/tenants/:tenant_slug/modules")
@@ -29,16 +30,16 @@ func RegisterModuleRoutes(
 	tenantRoutes.Use(tenantMiddleware.TenantMiddleware(tenantService))
 	{
 		// GET /tenants/:tenant_slug/modules
-		tenantRoutes.GET("", moduleController.GetTenantModules)
+		api.Get(tenantRoutes, "", moduleController.GetTenantModules, api.Doc{})
 
 		// Owner/admin only for mutations
 		adminRoutes := tenantRoutes.Group("")
 		adminRoutes.Use(tenantMiddleware.RequireTenantRole(tenancyModels.RoleOwner, tenancyModels.RoleAdmin, coreModels.SystemRoleSuperAdmin))
 		{
 			// PUT /tenants/:tenant_slug/modules/:module_code
-			adminRoutes.PUT("/:module_code", moduleController.UpsertTenantModule)
+			api.Put(adminRoutes, "/{module_code}", moduleController.UpsertTenantModule, api.Doc{})
 			// DELETE /tenants/:tenant_slug/modules/:module_code
-			adminRoutes.DELETE("/:module_code", moduleController.DisableTenantModule)
+			api.Delete(adminRoutes, "/{module_code}", moduleController.DisableTenantModule, api.Doc{})
 		}
 	}
 }

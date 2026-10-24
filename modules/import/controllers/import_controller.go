@@ -1,6 +1,7 @@
 package controllers
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -12,6 +13,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 
+	"josex/web/modules/core/api"
 	coreErrors "josex/web/modules/core/errors"
 	importConfig "josex/web/modules/import/config"
 	importErrors "josex/web/modules/import/errors"
@@ -32,131 +34,81 @@ func (ctrl *ImportController) maxFileSizeBytes() int64 {
 	return int64(ctrl.importService.Limits().MaxFileSizeMB) << 20
 }
 
-// Validate godoc
-// @Summary      Dry-run validate an uploaded CSV
-// @Description  Detects the resource from the CSV header (or the explicit resource field), validates every row, and returns per-row valid|invalid|duplicate feedback keyed by CSV line number. Writes nothing.
-// @Tags         Import
-// @Accept       multipart/form-data
-// @Produce      json
-// @Param        Authorization  header    string  true   "Bearer Token"
-// @Param        X-Tenant-Slug  header    string  true   "Tenant slug"
-// @Param        file           formData  file    true   "CSV file (max 5 MB, 500 rows)"
-// @Param        resource       formData  string  false  "Resource key (auto-detected from the header when omitted)"
-// @Param        scope          formData  string  false  "Comma-separated resource or module keys detection is limited to (e.g. inventory)"
-// @Param        options        formData  string  false  "Resource-specific options as a JSON object"
-// @Param        images         formData  file    false  "Optional ZIP of images referenced by the CSV (e.g. profile_picture)"
-// @Success      200  {object}  importModels.ValidateResponse
-// @Failure      400  {object}  coreErrors.ErrorResponse
-// @Failure      401  {object}  coreErrors.ErrorResponse
-// @Router       /import/validate [post]
-// @Security     ApiKeyAuth
-func (ctrl *ImportController) Validate(c *gin.Context) {
-	parsed, ok := ctrl.readUpload(c)
-	if !ok {
-		return
+// Validate is POST /validate: Dry-run validate an uploaded CSV.
+func (ctrl *ImportController) Validate(ctx context.Context, _ *UploadInput) (*api.Out[*importModels.ValidateResponse], error) {
+	c := api.Gin(ctx)
+	parsed, err := ctrl.readUpload(c)
+	if err != nil {
+		return nil, err
 	}
 
 	result, err := ctrl.importService.Validate(ctrl.buildContext(c, parsed), parsed.target, parsed.data)
 	if err != nil {
-		ctrl.mapError(c, err)
-		return
+		return nil, ctrl.mapError(c, err)
 	}
 
-	c.JSON(http.StatusOK, result)
+	return api.OK(result)
 }
 
-// Import godoc
-// @Summary      Process an uploaded CSV
-// @Description  Detects the resource, creates each valid row, and returns per-row created|failed|skipped outcomes plus a persisted run summary (who/when/counts/warnings).
-// @Tags         Import
-// @Accept       multipart/form-data
-// @Produce      json
-// @Param        Authorization  header    string  true   "Bearer Token"
-// @Param        X-Tenant-Slug  header    string  true   "Tenant slug"
-// @Param        file           formData  file    true   "CSV file (max 5 MB, 500 rows)"
-// @Param        resource       formData  string  false  "Resource key (auto-detected from the header when omitted)"
-// @Param        scope          formData  string  false  "Comma-separated resource or module keys detection is limited to (e.g. inventory)"
-// @Param        options        formData  string  false  "Resource-specific options as a JSON object"
-// @Param        images         formData  file    false  "Optional ZIP of images referenced by the CSV (e.g. profile_picture)"
-// @Success      200  {object}  importModels.ImportResponse
-// @Failure      400  {object}  coreErrors.ErrorResponse
-// @Failure      401  {object}  coreErrors.ErrorResponse
-// @Router       /import [post]
-// @Security     ApiKeyAuth
-func (ctrl *ImportController) Import(c *gin.Context) {
-	parsed, ok := ctrl.readUpload(c)
-	if !ok {
-		return
+// Import is POST : Process an uploaded CSV.
+func (ctrl *ImportController) Import(ctx context.Context, _ *UploadInput) (*api.Out[*importModels.ImportResponse], error) {
+	c := api.Gin(ctx)
+	parsed, err := ctrl.readUpload(c)
+	if err != nil {
+		return nil, err
 	}
 
 	result, err := ctrl.importService.Import(ctrl.buildContext(c, parsed), parsed.target, parsed.data)
 	if err != nil {
-		ctrl.mapError(c, err)
-		return
+		return nil, ctrl.mapError(c, err)
 	}
 
-	c.JSON(http.StatusOK, result)
+	return api.OK(result)
 }
 
-// Detect godoc
-// @Summary      Detect a CSV's resource
-// @Description  Resolves the resource a CSV belongs to from its header line alone, inside the optional scope, without reading or validating any row — so a client can queue several files in import order before running them.
-// @Tags         Import
-// @Accept       multipart/form-data
-// @Produce      json
-// @Param        Authorization  header    string  true   "Bearer Token"
-// @Param        X-Tenant-Slug  header    string  true   "Tenant slug"
-// @Param        file           formData  file    true   "CSV file (max 5 MB)"
-// @Param        scope          formData  string  false  "Comma-separated resource or module keys detection is limited to (e.g. inventory)"
-// @Success      200  {object}  importModels.DetectResponse
-// @Failure      400  {object}  coreErrors.ErrorResponse
-// @Failure      401  {object}  coreErrors.ErrorResponse
-// @Router       /import/detect [post]
-// @Security     ApiKeyAuth
-func (ctrl *ImportController) Detect(c *gin.Context) {
-	parsed, ok := ctrl.readUpload(c)
-	if !ok {
-		return
+// Detect is POST /detect: Detect a CSV's resource.
+func (ctrl *ImportController) Detect(ctx context.Context, _ *UploadInput) (*api.Out[*importModels.DetectResponse], error) {
+	c := api.Gin(ctx)
+	parsed, err := ctrl.readUpload(c)
+	if err != nil {
+		return nil, err
 	}
 
 	result, err := ctrl.importService.Detect(parsed.target, parsed.data)
 	if err != nil {
-		ctrl.mapError(c, err)
-		return
+		return nil, ctrl.mapError(c, err)
 	}
 
-	c.JSON(http.StatusOK, result)
+	return api.OK(result)
 }
 
-// Meta godoc
-// @Summary      Import limits
-// @Description  Returns the configured upload constraints (max file size, max rows) so the UI hint stays in sync with the server.
-// @Tags         Import
-// @Produce      json
-// @Param        Authorization  header    string  true  "Bearer Token"
-// @Param        X-Tenant-Slug  header    string  true  "Tenant slug"
-// @Success      200  {object}  importModels.ImportLimits
-// @Failure      401  {object}  coreErrors.ErrorResponse
-// @Router       /import/meta [get]
-// @Security     ApiKeyAuth
-func (ctrl *ImportController) Meta(c *gin.Context) {
-	c.JSON(http.StatusOK, ctrl.importService.Limits())
+// Meta is GET /meta: Import limits.
+func (ctrl *ImportController) Meta(ctx context.Context, _ *api.None) (*api.Out[importModels.ImportLimits], error) {
+	return api.OK(ctrl.importService.Limits())
 }
 
-// Resources godoc
-// @Summary      Resources a scope reaches
-// @Description  Lists the import resources a scope of resource or module keys reaches, with the module that owns each, in detection order. An empty scope lists every registered resource.
-// @Tags         Import
-// @Produce      json
-// @Param        Authorization  header    string  true   "Bearer Token"
-// @Param        X-Tenant-Slug  header    string  true   "Tenant slug"
-// @Param        scope          query     string  false  "Comma-separated resource or module keys (e.g. inventory)"
-// @Success      200  {array}   importModels.ImportResourceInfo
-// @Failure      401  {object}  coreErrors.ErrorResponse
-// @Router       /import/resources [get]
-// @Security     ApiKeyAuth
-func (ctrl *ImportController) Resources(c *gin.Context) {
-	c.JSON(http.StatusOK, ctrl.importService.Resources(parseScope(c.Query("scope"))))
+// UploadForm is the multipart form Validate, Import and Detect read.
+type UploadForm struct {
+	File     string `json:"file" format:"binary" doc:"The CSV"`
+	Resource string `json:"resource,omitempty" doc:"Resource key; detected from the header when empty"`
+	Scope    string `json:"scope,omitempty" doc:"Comma-separated resource or module keys detection may pick from"`
+	Options  string `json:"options,omitempty" doc:"JSON-encoded importModels.ImportOptions"`
+	Images   string `json:"images,omitempty" format:"binary" doc:"Optional zip of the rows' images"`
+}
+
+// UploadInput is the request of the routes that take an uploaded CSV.
+type UploadInput struct {
+	Form api.Form[UploadForm]
+}
+
+// ResourcesInput is Resources's request.
+type ResourcesInput struct {
+	Scope string `query:"scope"`
+}
+
+// Resources is GET /resources: Resources a scope reaches.
+func (ctrl *ImportController) Resources(ctx context.Context, in *ResourcesInput) (*api.Out[[]importModels.ImportResourceInfo], error) {
+	return api.OK(ctrl.importService.Resources(parseScope(in.Scope)))
 }
 
 // parseScope splits the comma-separated scope field into its keys, dropping
@@ -172,53 +124,41 @@ func parseScope(raw string) []string {
 	return scope
 }
 
-// Template godoc
-// @Summary      Download a CSV template
-// @Description  Returns a CSV containing just the header row for a resource, built from its descriptor's columns.
-// @Tags         Import
-// @Produce      text/csv
-// @Param        Authorization  header    string  true   "Bearer Token"
-// @Param        X-Tenant-Slug  header    string  true   "Tenant slug"
-// @Param        resource       query     string  true   "Resource key (e.g. users)"
-// @Success      200  {file}    string
-// @Failure      400  {object}  coreErrors.ErrorResponse
-// @Failure      401  {object}  coreErrors.ErrorResponse
-// @Router       /import/template [get]
-// @Security     ApiKeyAuth
-func (ctrl *ImportController) Template(c *gin.Context) {
-	resource := c.Query("resource")
-	data, err := ctrl.importService.Template(resource)
-	if err != nil {
-		ctrl.mapError(c, err)
-		return
-	}
-
-	filename := fmt.Sprintf("import-template-%s.csv", resource)
-	c.Header("Content-Disposition", fmt.Sprintf("attachment; filename=%s", filename))
-	c.Data(http.StatusOK, "text/csv; charset=utf-8", data)
+// TemplateInput is Template's request.
+type TemplateInput struct {
+	Resource string `query:"resource"`
 }
 
-// Schema godoc
-// @Summary      Column schema for a resource
-// @Description  Returns the resource's columns with their type, required flag and optional validation pattern, so a client can render and check an editor per column without knowing the resource.
-// @Tags         Import
-// @Produce      json
-// @Param        Authorization  header    string  true   "Bearer Token"
-// @Param        X-Tenant-Slug  header    string  true   "Tenant slug"
-// @Param        resource       query     string  true   "Resource key (e.g. users)"
-// @Success      200  {object}  importModels.SchemaResponse
-// @Failure      400  {object}  coreErrors.ErrorResponse
-// @Failure      401  {object}  coreErrors.ErrorResponse
-// @Router       /import/schema [get]
-// @Security     ApiKeyAuth
-func (ctrl *ImportController) Schema(c *gin.Context) {
-	result, err := ctrl.importService.Schema(c.Query("resource"))
+// Template answers a CSV with just the header row for a resource, built from its descriptor's columns.
+func (ctrl *ImportController) Template(ctx context.Context, in *TemplateInput) (*api.File, error) {
+	c := api.Gin(ctx)
+	data, err := ctrl.importService.Template(in.Resource)
 	if err != nil {
-		ctrl.mapError(c, err)
-		return
+		return nil, ctrl.mapError(c, err)
 	}
 
-	c.JSON(http.StatusOK, result)
+	filename := fmt.Sprintf("import-template-%s.csv", in.Resource)
+	return &api.File{
+		ContentType:        "text/csv; charset=utf-8",
+		ContentDisposition: "attachment; filename=" + filename,
+		Body:               data,
+	}, nil
+}
+
+// SchemaInput is Schema's request.
+type SchemaInput struct {
+	Resource string `query:"resource"`
+}
+
+// Schema is GET /schema: Column schema for a resource.
+func (ctrl *ImportController) Schema(ctx context.Context, in *SchemaInput) (*api.Out[*importModels.SchemaResponse], error) {
+	c := api.Gin(ctx)
+	result, err := ctrl.importService.Schema(in.Resource)
+	if err != nil {
+		return nil, ctrl.mapError(c, err)
+	}
+
+	return api.OK(result)
 }
 
 // upload is one parsed multipart request: the CSV bytes, the resource and scope
@@ -234,72 +174,65 @@ type upload struct {
 // readUpload reads and size-checks the CSV file, the optional resource and
 // options fields, and the optional companion image archive. On any failure it
 // writes the error response and returns ok=false.
-func (ctrl *ImportController) readUpload(c *gin.Context) (upload, bool) {
+func (ctrl *ImportController) readUpload(c *gin.Context) (upload, error) {
 	maxBytes := ctrl.maxFileSizeBytes()
 
 	fileHeader, err := c.FormFile("file")
 	if err != nil {
-		c.JSON(http.StatusBadRequest, coreErrors.BuildErrorSingle(c, importErrors.ImportFileRequired))
-		return upload{}, false
+		return upload{}, api.Fail(http.StatusBadRequest, coreErrors.BuildErrorSingle(c, importErrors.ImportFileRequired))
 	}
 	if fileHeader.Size > maxBytes {
-		c.JSON(http.StatusBadRequest, coreErrors.BuildErrorSingle(c, importErrors.ImportFileTooLarge))
-		return upload{}, false
+		return upload{}, api.Fail(http.StatusBadRequest, coreErrors.BuildErrorSingle(c, importErrors.ImportFileTooLarge))
 	}
 
 	data, err := readMultipart(fileHeader, maxBytes)
 	if err != nil {
-		ctrl.mapError(c, err)
-		return upload{}, false
+		return upload{}, ctrl.mapError(c, err)
 	}
 
 	var options importModels.ImportOptions
 	if optionsRaw := c.PostForm("options"); optionsRaw != "" {
 		if err := json.Unmarshal([]byte(optionsRaw), &options); err != nil {
-			c.JSON(http.StatusBadRequest, coreErrors.BuildErrorSingle(c, importErrors.ImportOptionsInvalid))
-			return upload{}, false
+			return upload{}, api.Fail(http.StatusBadRequest, coreErrors.BuildErrorSingle(c, importErrors.ImportOptionsInvalid))
 		}
 	}
 
-	images, ok := ctrl.readImages(c)
-	if !ok {
-		return upload{}, false
+	images, err := ctrl.readImages(c)
+	if err != nil {
+		return upload{}, err
 	}
 
 	target := importModels.ImportTarget{
 		Resource: strings.TrimSpace(c.PostForm("resource")),
 		Scope:    parseScope(c.PostForm("scope")),
 	}
-	return upload{data: data, target: target, options: options, images: images}, true
+	return upload{data: data, target: target, options: options, images: images}, nil
 }
 
 // readImages inflates the optional `images` archive. Absent is not an error —
 // the CSV alone is a valid upload.
-func (ctrl *ImportController) readImages(c *gin.Context) (importModels.ImportImages, bool) {
+func (ctrl *ImportController) readImages(c *gin.Context) (importModels.ImportImages, error) {
 	archiveHeader, err := c.FormFile("images")
 	if err != nil {
-		return nil, true
+		return nil, nil
 	}
 
 	maxBytes := int64(importConfig.MaxImagesZipMB()) << 20
 	if archiveHeader.Size > maxBytes {
-		c.JSON(http.StatusBadRequest, coreErrors.BuildErrorSingle(c, importErrors.ImportImagesTooLarge))
-		return nil, false
+		return nil, api.Fail(http.StatusBadRequest, coreErrors.BuildErrorSingle(c, importErrors.ImportImagesTooLarge))
 	}
 
 	archive, err := readMultipart(archiveHeader, maxBytes)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, coreErrors.BuildErrorSingle(c, importErrors.ImportImagesInvalid))
-		return nil, false
+		return nil, api.Fail(http.StatusBadRequest, coreErrors.BuildErrorSingle(c, importErrors.ImportImagesInvalid))
 	}
 
 	images, err := ctrl.importService.ExtractImages(archive)
 	if err != nil {
-		ctrl.mapError(c, err)
-		return nil, false
+		return nil, ctrl.mapError(c, err)
 	}
 
-	return images, true
+	return images, nil
 }
 
 // readMultipart reads an uploaded part through a limited reader so a lying
@@ -345,33 +278,33 @@ func (ctrl *ImportController) buildContext(c *gin.Context, parsed upload) import
 }
 
 // mapError translates a service sentinel error to the matching HTTP status and code.
-func (ctrl *ImportController) mapError(c *gin.Context, err error) {
+func (ctrl *ImportController) mapError(c *gin.Context, err error) error {
 	switch {
 	case errors.Is(err, importErrors.ErrUnknownFormat):
-		c.JSON(http.StatusBadRequest, coreErrors.BuildErrorSingle(c, importErrors.ImportDetectUnknownFormat))
+		return api.Fail(http.StatusBadRequest, coreErrors.BuildErrorSingle(c, importErrors.ImportDetectUnknownFormat))
 	case errors.Is(err, importErrors.ErrOutOfScope):
-		c.JSON(http.StatusBadRequest, coreErrors.BuildErrorSingle(c, importErrors.ImportDetectOutOfScope))
+		return api.Fail(http.StatusBadRequest, coreErrors.BuildErrorSingle(c, importErrors.ImportDetectOutOfScope))
 	case errors.Is(err, importErrors.ErrTooManyRows):
-		c.JSON(http.StatusBadRequest, coreErrors.BuildErrorSingle(c, importErrors.ImportTooManyRows))
+		return api.Fail(http.StatusBadRequest, coreErrors.BuildErrorSingle(c, importErrors.ImportTooManyRows))
 	case errors.Is(err, importErrors.ErrFileEmpty):
-		c.JSON(http.StatusBadRequest, coreErrors.BuildErrorSingle(c, importErrors.ImportFileEmpty))
+		return api.Fail(http.StatusBadRequest, coreErrors.BuildErrorSingle(c, importErrors.ImportFileEmpty))
 	case errors.Is(err, importErrors.ErrFileNoRows):
-		c.JSON(http.StatusBadRequest, coreErrors.BuildErrorSingle(c, importErrors.ImportFileNoRows))
+		return api.Fail(http.StatusBadRequest, coreErrors.BuildErrorSingle(c, importErrors.ImportFileNoRows))
 	case errors.Is(err, importErrors.ErrFileInvalid):
-		c.JSON(http.StatusBadRequest, coreErrors.BuildErrorSingle(c, importErrors.ImportFileInvalid))
+		return api.Fail(http.StatusBadRequest, coreErrors.BuildErrorSingle(c, importErrors.ImportFileInvalid))
 	case errors.Is(err, importErrors.ErrFileTooLarge):
-		c.JSON(http.StatusBadRequest, coreErrors.BuildErrorSingle(c, importErrors.ImportFileTooLarge))
+		return api.Fail(http.StatusBadRequest, coreErrors.BuildErrorSingle(c, importErrors.ImportFileTooLarge))
 	case errors.Is(err, importErrors.ErrImagesInvalid):
-		c.JSON(http.StatusBadRequest, coreErrors.BuildErrorSingle(c, importErrors.ImportImagesInvalid))
+		return api.Fail(http.StatusBadRequest, coreErrors.BuildErrorSingle(c, importErrors.ImportImagesInvalid))
 	case errors.Is(err, importErrors.ErrImagesTooLarge):
-		c.JSON(http.StatusBadRequest, coreErrors.BuildErrorSingle(c, importErrors.ImportImagesTooLarge))
+		return api.Fail(http.StatusBadRequest, coreErrors.BuildErrorSingle(c, importErrors.ImportImagesTooLarge))
 	case errors.Is(err, importErrors.ErrImagesTooManyFiles):
-		c.JSON(http.StatusBadRequest, coreErrors.BuildErrorSingle(c, importErrors.ImportImagesTooManyFiles))
+		return api.Fail(http.StatusBadRequest, coreErrors.BuildErrorSingle(c, importErrors.ImportImagesTooManyFiles))
 	case errors.Is(err, importErrors.ErrImagesEntryTooLarge):
-		c.JSON(http.StatusBadRequest, coreErrors.BuildErrorSingle(c, importErrors.ImportImagesEntryTooLarge))
+		return api.Fail(http.StatusBadRequest, coreErrors.BuildErrorSingle(c, importErrors.ImportImagesEntryTooLarge))
 	case errors.Is(err, importErrors.ErrImagesEntryFormat):
-		c.JSON(http.StatusBadRequest, coreErrors.BuildErrorSingle(c, importErrors.ImportImagesEntryFormat))
+		return api.Fail(http.StatusBadRequest, coreErrors.BuildErrorSingle(c, importErrors.ImportImagesEntryFormat))
 	default:
-		c.JSON(http.StatusInternalServerError, coreErrors.BuildError(c, err))
+		return api.Fail(http.StatusInternalServerError, coreErrors.BuildError(c, err))
 	}
 }

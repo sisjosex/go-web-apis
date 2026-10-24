@@ -10,7 +10,7 @@ import (
 type CreateUserDto struct {
 	FirstName         string               `json:"first_name" binding:"required"`
 	LastName          string               `json:"last_name" binding:"required"`
-	Email             string               `form:"email" binding:"required,email-valid" conform:"trim,lowercase"`
+	Email             string               `json:"email" binding:"required,email-valid" conform:"trim,lowercase"`
 	Password          string               `json:"password"`
 	Phone             string               `json:"phone"`
 	Birthday          *coreModels.DateOnly `json:"birthday" time_format:"2006-01-02"`
@@ -30,7 +30,7 @@ type UpdateUserDto struct {
 	LastName          *string              `json:"last_name"`
 	Phone             *string              `json:"phone"`
 	Birthday          *coreModels.DateOnly `json:"birthday" time_format:"2006-01-02"`
-	Email             *string              `form:"email" binding:"omitempty,email-valid" conform:"trim,lowercase"`
+	Email             *string              `json:"email" binding:"omitempty,email-valid" conform:"trim,lowercase"`
 	PasswordCurrent   *string              `json:"password_current"`
 	PasswordNew       *string              `json:"password_new"`
 	IsActive          *bool                `json:"is_active"`

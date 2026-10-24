@@ -1,14 +1,15 @@
 package controllers
 
 import (
+	"context"
 	"errors"
 	"net/http"
 	"strconv"
 
-	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgconn"
 
+	"josex/web/modules/core/api"
 	coreErrors "josex/web/modules/core/errors"
 	coreModels "josex/web/modules/core/models"
 	salesErrors "josex/web/modules/sales/errors"
@@ -29,112 +30,113 @@ func NewSalesOrderController(service interfaces.SalesOrderService) *SalesOrderCo
 	}
 }
 
-// CreateSalesOrder godoc
-// @Summary Create a new sales order
-// @Tags Sales - Orders
-// @Accept json
-// @Produce json
-// @Param request body models.CreateSalesOrderRequestDto true "Order data"
-// @Success 201 {object} models.SalesOrder
-// @Failure 400 {object} coreErrors.ErrorResponse
-// @Failure 404 {object} coreErrors.ErrorResponse
-// @Router /sales/orders [post]
-func (ctrl *SalesOrderController) CreateSalesOrder(c *gin.Context) {
+// CreateSalesOrderInput is CreateSalesOrder's request.
+type CreateSalesOrderInput struct {
+	JSON api.Body[models.CreateSalesOrderRequestDto]
+}
+
+// CreateSalesOrderResponse is CreateSalesOrder's answer.
+type CreateSalesOrderResponse struct {
+	Data *models.SalesOrder `json:"data"`
+}
+
+// CreateSalesOrder is POST : Create a new sales order.
+func (ctrl *SalesOrderController) CreateSalesOrder(ctx context.Context, in *CreateSalesOrderInput) (*api.Out[CreateSalesOrderResponse], error) {
+	c := api.Gin(ctx)
 	tenantIDRaw, exists := c.Get("tenant_id")
 	if !exists || tenantIDRaw == nil {
-		c.JSON(http.StatusUnauthorized, coreErrors.BuildErrorSingle(c, "auth.invalid-tenant"))
-		return
+		return nil, api.Fail(http.StatusUnauthorized, coreErrors.BuildErrorSingle(c, "auth.invalid-tenant"))
 	}
 	tenantID, err := uuid.Parse(tenantIDRaw.(string))
 	if err != nil {
-		c.JSON(http.StatusUnauthorized, coreErrors.BuildErrorSingle(c, "auth.invalid-tenant"))
-		return
+		return nil, api.Fail(http.StatusUnauthorized, coreErrors.BuildErrorSingle(c, "auth.invalid-tenant"))
 	}
 
 	var dto models.CreateSalesOrderRequestDto
-	if err := c.ShouldBindJSON(&dto); err != nil {
-		c.JSON(http.StatusBadRequest, coreErrors.BuildErrorDetail(c, "validation.failed", err.Error()))
-		return
+	if err := in.JSON.Into(ctx, &dto); err != nil {
+		return nil, api.Fail(http.StatusBadRequest, coreErrors.BuildErrorDetail(c, "validation.failed", err.Error()))
 	}
 
 	order, err := ctrl.service.CreateSalesOrder(c.Request.Context(), tenantID, &dto)
 	if err != nil {
 		status := utils.GetHTTPStatusFromError(err)
-		c.JSON(status, coreErrors.BuildError(c, err))
-		return
+		return nil, api.Fail(status, coreErrors.BuildError(c, err))
 	}
 
-	c.JSON(http.StatusCreated, gin.H{"data": order})
+	return api.OK(CreateSalesOrderResponse{Data: order})
 }
 
-// GetSalesOrder godoc
-// @Summary Get a sales order by ID
-// @Tags Sales - Orders
-// @Produce json
-// @Param id path string true "Order ID"
-// @Success 200 {object} models.SalesOrder
-// @Failure 404 {object} coreErrors.ErrorResponse
-// @Router /sales/orders/{id} [get]
-func (ctrl *SalesOrderController) GetSalesOrder(c *gin.Context) {
+// GetSalesOrderInput is GetSalesOrder's request.
+type GetSalesOrderInput struct {
+	ID string `path:"id"`
+}
+
+// GetSalesOrderResponse is GetSalesOrder's answer.
+type GetSalesOrderResponse struct {
+	Data *models.SalesOrder `json:"data"`
+}
+
+// GetSalesOrder is GET /{id}: Get a sales order by ID.
+func (ctrl *SalesOrderController) GetSalesOrder(ctx context.Context, in *GetSalesOrderInput) (*api.Out[GetSalesOrderResponse], error) {
+	c := api.Gin(ctx)
 	tenantIDRaw, exists := c.Get("tenant_id")
 	if !exists || tenantIDRaw == nil {
-		c.JSON(http.StatusUnauthorized, coreErrors.BuildErrorSingle(c, "auth.invalid-tenant"))
-		return
+		return nil, api.Fail(http.StatusUnauthorized, coreErrors.BuildErrorSingle(c, "auth.invalid-tenant"))
 	}
 	tenantID, err := uuid.Parse(tenantIDRaw.(string))
 	if err != nil {
-		c.JSON(http.StatusUnauthorized, coreErrors.BuildErrorSingle(c, "auth.invalid-tenant"))
-		return
+		return nil, api.Fail(http.StatusUnauthorized, coreErrors.BuildErrorSingle(c, "auth.invalid-tenant"))
 	}
 
-	id, err := uuid.Parse(c.Param("id"))
+	id, err := uuid.Parse(in.ID)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, coreErrors.BuildErrorSingle(c, "validation.invalid-uuid"))
-		return
+		return nil, api.Fail(http.StatusBadRequest, coreErrors.BuildErrorSingle(c, "validation.invalid-uuid"))
 	}
 
 	order, err := ctrl.service.GetSalesOrderByID(c.Request.Context(), tenantID, id)
 	if err != nil {
 		status := utils.GetHTTPStatusFromError(err)
-		c.JSON(status, coreErrors.BuildError(c, err))
-		return
+		return nil, api.Fail(status, coreErrors.BuildError(c, err))
 	}
 
 	// Get order items
 	items, _ := ctrl.service.GetOrderItems(c.Request.Context(), tenantID, id)
 	order.Items = items
 
-	c.JSON(http.StatusOK, gin.H{"data": order})
+	return api.OK(GetSalesOrderResponse{Data: order})
 }
 
-// ListSalesOrders godoc
-// @Summary List sales orders for tenant
-// @Tags Sales - Orders
-// @Produce json
-// @Param limit query int false "Limit (default 20)"
-// @Param offset query int false "Offset (default 0)"
-// @Success 200 {array} models.SalesOrder
-// @Router /sales/orders [get]
-func (ctrl *SalesOrderController) ListSalesOrders(c *gin.Context) {
+// ListSalesOrdersInput is ListSalesOrders's request.
+type ListSalesOrdersInput struct {
+	Limit  string `query:"limit"`
+	Offset string `query:"offset"`
+}
+
+// ListSalesOrdersResponse is ListSalesOrders's answer.
+type ListSalesOrdersResponse struct {
+	Data []models.SalesOrder `json:"data"`
+}
+
+// ListSalesOrders is GET : List sales orders for tenant.
+func (ctrl *SalesOrderController) ListSalesOrders(ctx context.Context, in *ListSalesOrdersInput) (*api.Out[ListSalesOrdersResponse], error) {
+	c := api.Gin(ctx)
 	tenantIDRaw, exists := c.Get("tenant_id")
 	if !exists || tenantIDRaw == nil {
-		c.JSON(http.StatusUnauthorized, coreErrors.BuildErrorSingle(c, "auth.invalid-tenant"))
-		return
+		return nil, api.Fail(http.StatusUnauthorized, coreErrors.BuildErrorSingle(c, "auth.invalid-tenant"))
 	}
 	tenantID, err := uuid.Parse(tenantIDRaw.(string))
 	if err != nil {
-		c.JSON(http.StatusUnauthorized, coreErrors.BuildErrorSingle(c, "auth.invalid-tenant"))
-		return
+		return nil, api.Fail(http.StatusUnauthorized, coreErrors.BuildErrorSingle(c, "auth.invalid-tenant"))
 	}
 
 	limit := 20
 	offset := 0
-	if l := c.Query("limit"); l != "" {
+	if l := in.Limit; l != "" {
 		if parsed, err := strconv.Atoi(l); err == nil {
 			limit = parsed
 		}
 	}
-	if o := c.Query("offset"); o != "" {
+	if o := in.Offset; o != "" {
 		if parsed, err := strconv.Atoi(o); err == nil {
 			offset = parsed
 		}
@@ -143,94 +145,87 @@ func (ctrl *SalesOrderController) ListSalesOrders(c *gin.Context) {
 	orders, err := ctrl.service.GetAllSalesOrders(c.Request.Context(), tenantID, limit, offset)
 	if err != nil {
 		status := utils.GetHTTPStatusFromError(err)
-		c.JSON(status, coreErrors.BuildError(c, err))
-		return
+		return nil, api.Fail(status, coreErrors.BuildError(c, err))
 	}
 
-	c.JSON(http.StatusOK, gin.H{"data": orders})
+	return api.OK(ListSalesOrdersResponse{Data: orders})
 }
 
-// UpdateSalesOrder godoc
-// @Summary Update a sales order
-// @Tags Sales - Orders
-// @Accept json
-// @Produce json
-// @Param id path string true "Order ID"
-// @Param request body models.UpdateSalesOrderRequestDto true "Updated order data"
-// @Success 200 {object} models.SalesOrder
-// @Failure 400 {object} coreErrors.ErrorResponse
-// @Failure 404 {object} coreErrors.ErrorResponse
-// @Router /sales/orders/{id} [patch]
-func (ctrl *SalesOrderController) UpdateSalesOrder(c *gin.Context) {
+// UpdateSalesOrderInput is UpdateSalesOrder's request.
+type UpdateSalesOrderInput struct {
+	ID   string `path:"id"`
+	JSON api.Body[models.UpdateSalesOrderRequestDto]
+}
+
+// UpdateSalesOrderResponse is UpdateSalesOrder's answer.
+type UpdateSalesOrderResponse struct {
+	Data *models.SalesOrder `json:"data"`
+}
+
+// UpdateSalesOrder is PATCH /{id}: Update a sales order.
+func (ctrl *SalesOrderController) UpdateSalesOrder(ctx context.Context, in *UpdateSalesOrderInput) (*api.Out[UpdateSalesOrderResponse], error) {
+	c := api.Gin(ctx)
 	tenantIDRaw, exists := c.Get("tenant_id")
 	if !exists || tenantIDRaw == nil {
-		c.JSON(http.StatusUnauthorized, coreErrors.BuildErrorSingle(c, "auth.invalid-tenant"))
-		return
+		return nil, api.Fail(http.StatusUnauthorized, coreErrors.BuildErrorSingle(c, "auth.invalid-tenant"))
 	}
 	tenantID, err := uuid.Parse(tenantIDRaw.(string))
 	if err != nil {
-		c.JSON(http.StatusUnauthorized, coreErrors.BuildErrorSingle(c, "auth.invalid-tenant"))
-		return
+		return nil, api.Fail(http.StatusUnauthorized, coreErrors.BuildErrorSingle(c, "auth.invalid-tenant"))
 	}
 
-	id, err := uuid.Parse(c.Param("id"))
+	id, err := uuid.Parse(in.ID)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, coreErrors.BuildErrorSingle(c, "validation.invalid-uuid"))
-		return
+		return nil, api.Fail(http.StatusBadRequest, coreErrors.BuildErrorSingle(c, "validation.invalid-uuid"))
 	}
 
 	var dto models.UpdateSalesOrderRequestDto
-	if err := c.ShouldBindJSON(&dto); err != nil {
-		c.JSON(http.StatusBadRequest, coreErrors.BuildErrorDetail(c, "validation.failed", err.Error()))
-		return
+	if err := in.JSON.Into(ctx, &dto); err != nil {
+		return nil, api.Fail(http.StatusBadRequest, coreErrors.BuildErrorDetail(c, "validation.failed", err.Error()))
 	}
 
 	order, err := ctrl.service.UpdateSalesOrder(c.Request.Context(), tenantID, id, &dto)
 	if err != nil {
 		status := utils.GetHTTPStatusFromError(err)
-		c.JSON(status, coreErrors.BuildError(c, err))
-		return
+		return nil, api.Fail(status, coreErrors.BuildError(c, err))
 	}
 
-	c.JSON(http.StatusOK, gin.H{"data": order})
+	return api.OK(UpdateSalesOrderResponse{Data: order})
 }
 
 // ========== PHASE 1: Batch Assignment & Order Completion ==========
 
-// AddOrderItem godoc
-// @Summary Add an item to an order with batch assignment
-// @Tags Sales - Orders
-// @Accept json
-// @Produce json
-// @Param id path string true "Order ID"
-// @Param request body models.AddOrderItemRequestDto true "Item data"
-// @Success 201 {object} models.OrderItem
-// @Failure 400 {object} coreErrors.ErrorResponse
-// @Failure 404 {object} coreErrors.ErrorResponse
-// @Failure 409 {object} coreErrors.ErrorResponse
-// @Router /sales/orders/{id}/items [post]
-func (ctrl *SalesOrderController) AddOrderItem(c *gin.Context) {
+// AddOrderItemInput is AddOrderItem's request.
+type AddOrderItemInput struct {
+	ID   string `path:"id"`
+	JSON api.Body[models.AddOrderItemRequestDto]
+}
+
+// AddOrderItemResponse is AddOrderItem's answer.
+type AddOrderItemResponse struct {
+	Data *models.OrderItem `json:"data"`
+}
+
+// AddOrderItem is POST /{id}/items: Add an item to an order with batch assignment.
+func (ctrl *SalesOrderController) AddOrderItem(ctx context.Context, in *AddOrderItemInput) (*api.Out[AddOrderItemResponse], error) {
+	c := api.Gin(ctx)
 	tenantIDRaw, exists := c.Get("tenant_id")
 	if !exists || tenantIDRaw == nil {
-		c.JSON(http.StatusUnauthorized, coreErrors.BuildErrorSingle(c, "auth.invalid-tenant"))
-		return
+		return nil, api.Fail(http.StatusUnauthorized, coreErrors.BuildErrorSingle(c, "auth.invalid-tenant"))
 	}
 	tenantID, err := uuid.Parse(tenantIDRaw.(string))
 	if err != nil {
-		c.JSON(http.StatusUnauthorized, coreErrors.BuildErrorSingle(c, "auth.invalid-tenant"))
-		return
+		return nil, api.Fail(http.StatusUnauthorized, coreErrors.BuildErrorSingle(c, "auth.invalid-tenant"))
 	}
 
-	orderID, err := uuid.Parse(c.Param("id"))
+	orderID, err := uuid.Parse(in.ID)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, coreErrors.BuildErrorSingle(c, "validation.invalid-uuid"))
-		return
+		return nil, api.Fail(http.StatusBadRequest, coreErrors.BuildErrorSingle(c, "validation.invalid-uuid"))
 	}
 
 	var dto models.AddOrderItemRequestDto
-	if err := c.ShouldBindJSON(&dto); err != nil {
-		c.JSON(http.StatusBadRequest, coreErrors.BuildErrorDetail(c, "validation.failed", err.Error()))
-		return
+	if err := in.JSON.Into(ctx, &dto); err != nil {
+		return nil, api.Fail(http.StatusBadRequest, coreErrors.BuildErrorDetail(c, "validation.failed", err.Error()))
 	}
 
 	item, err := ctrl.service.AddOrderItemWithBatch(c.Request.Context(), tenantID, orderID, dto.ProductID, dto.Quantity, dto.UnitPrice, dto.SkuID)
@@ -242,386 +237,368 @@ func (ctrl *SalesOrderController) AddOrderItem(c *gin.Context) {
 		if errors.As(err, &pgErr) {
 			switch pgErr.Message {
 			case salesErrors.OrderItemSkuRequired:
-				c.JSON(http.StatusBadRequest, coreErrors.BuildErrorSingle(c, salesErrors.OrderItemSkuRequired))
-				return
+				return nil, api.Fail(http.StatusBadRequest, coreErrors.BuildErrorSingle(c, salesErrors.OrderItemSkuRequired))
 			case salesErrors.OrderItemSkuNotFound:
-				c.JSON(http.StatusNotFound, coreErrors.BuildErrorSingle(c, salesErrors.OrderItemSkuNotFound))
-				return
+				return nil, api.Fail(http.StatusNotFound, coreErrors.BuildErrorSingle(c, salesErrors.OrderItemSkuNotFound))
 			}
 		}
 
 		status := utils.GetHTTPStatusFromError(err)
-		c.JSON(status, coreErrors.BuildError(c, err))
-		return
+		return nil, api.Fail(status, coreErrors.BuildError(c, err))
 	}
 
-	c.JSON(http.StatusCreated, gin.H{"data": item})
+	return api.OK(AddOrderItemResponse{Data: item})
 }
 
-// CompleteOrder godoc
-// @Summary Complete a sales order and consume inventory
-// @Tags Sales - Orders
-// @Accept json
-// @Produce json
-// @Param id path string true "Order ID"
-// @Success 200 {object} models.SalesOrder
-// @Failure 404 {object} coreErrors.ErrorResponse
-// @Failure 409 {object} coreErrors.ErrorResponse
-// @Router /sales/orders/{id}/complete [patch]
-func (ctrl *SalesOrderController) CompleteOrder(c *gin.Context) {
+// CompleteOrderInput is CompleteOrder's request.
+type CompleteOrderInput struct {
+	ID string `path:"id"`
+}
+
+// CompleteOrderResponse is CompleteOrder's answer.
+type CompleteOrderResponse struct {
+	Data *models.SalesOrder `json:"data"`
+}
+
+// CompleteOrder is PATCH /{id}/complete: Complete a sales order and consume inventory.
+func (ctrl *SalesOrderController) CompleteOrder(ctx context.Context, in *CompleteOrderInput) (*api.Out[CompleteOrderResponse], error) {
+	c := api.Gin(ctx)
 	tenantIDRaw, exists := c.Get("tenant_id")
 	if !exists || tenantIDRaw == nil {
-		c.JSON(http.StatusUnauthorized, coreErrors.BuildErrorSingle(c, "auth.invalid-tenant"))
-		return
+		return nil, api.Fail(http.StatusUnauthorized, coreErrors.BuildErrorSingle(c, "auth.invalid-tenant"))
 	}
 	tenantID, err := uuid.Parse(tenantIDRaw.(string))
 	if err != nil {
-		c.JSON(http.StatusUnauthorized, coreErrors.BuildErrorSingle(c, "auth.invalid-tenant"))
-		return
+		return nil, api.Fail(http.StatusUnauthorized, coreErrors.BuildErrorSingle(c, "auth.invalid-tenant"))
 	}
 
-	orderID, err := uuid.Parse(c.Param("id"))
+	orderID, err := uuid.Parse(in.ID)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, coreErrors.BuildErrorSingle(c, "validation.invalid-uuid"))
-		return
+		return nil, api.Fail(http.StatusBadRequest, coreErrors.BuildErrorSingle(c, "validation.invalid-uuid"))
 	}
 
 	order, err := ctrl.service.CompleteOrder(c.Request.Context(), tenantID, orderID)
 	if err != nil {
 		status := utils.GetHTTPStatusFromError(err)
-		c.JSON(status, coreErrors.BuildError(c, err))
-		return
+		return nil, api.Fail(status, coreErrors.BuildError(c, err))
 	}
 
-	c.JSON(http.StatusOK, gin.H{"data": order})
+	return api.OK(CompleteOrderResponse{Data: order})
 }
 
 // ========== PHASE 2: Reporting & Cancellation ==========
 
-// CancelOrder godoc
-// @Summary Cancel a sales order and release batch assignments
-// @Tags Sales - Orders
-// @Accept json
-// @Produce json
-// @Param id path string true "Order ID"
-// @Success 200 {object} models.SalesOrder
-// @Failure 404 {object} coreErrors.ErrorResponse
-// @Failure 409 {object} coreErrors.ErrorResponse
-// @Router /sales/orders/{id}/cancel [patch]
-func (ctrl *SalesOrderController) CancelOrder(c *gin.Context) {
+// CancelOrderInput is CancelOrder's request.
+type CancelOrderInput struct {
+	ID string `path:"id"`
+}
+
+// CancelOrderResponse is CancelOrder's answer.
+type CancelOrderResponse struct {
+	Data *models.SalesOrder `json:"data"`
+}
+
+// CancelOrder is PATCH /{id}/cancel: Cancel a sales order and release batch assignments.
+func (ctrl *SalesOrderController) CancelOrder(ctx context.Context, in *CancelOrderInput) (*api.Out[CancelOrderResponse], error) {
+	c := api.Gin(ctx)
 	tenantIDRaw, exists := c.Get("tenant_id")
 	if !exists || tenantIDRaw == nil {
-		c.JSON(http.StatusUnauthorized, coreErrors.BuildErrorSingle(c, "auth.invalid-tenant"))
-		return
+		return nil, api.Fail(http.StatusUnauthorized, coreErrors.BuildErrorSingle(c, "auth.invalid-tenant"))
 	}
 	tenantID, err := uuid.Parse(tenantIDRaw.(string))
 	if err != nil {
-		c.JSON(http.StatusUnauthorized, coreErrors.BuildErrorSingle(c, "auth.invalid-tenant"))
-		return
+		return nil, api.Fail(http.StatusUnauthorized, coreErrors.BuildErrorSingle(c, "auth.invalid-tenant"))
 	}
 
-	orderID, err := uuid.Parse(c.Param("id"))
+	orderID, err := uuid.Parse(in.ID)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, coreErrors.BuildErrorSingle(c, "validation.invalid-uuid"))
-		return
+		return nil, api.Fail(http.StatusBadRequest, coreErrors.BuildErrorSingle(c, "validation.invalid-uuid"))
 	}
 
 	order, err := ctrl.service.CancelOrder(c.Request.Context(), tenantID, orderID)
 	if err != nil {
 		status := utils.GetHTTPStatusFromError(err)
-		c.JSON(status, coreErrors.BuildError(c, err))
-		return
+		return nil, api.Fail(status, coreErrors.BuildError(c, err))
 	}
 
-	c.JSON(http.StatusOK, gin.H{"data": order})
+	return api.OK(CancelOrderResponse{Data: order})
 }
 
-// GetOrderWithBatches godoc
-// @Summary Get order details with batch assignments
-// @Tags Sales - Orders
-// @Produce json
-// @Param id path string true "Order ID"
-// @Success 200 {object} models.OrderWithBatches
-// @Failure 404 {object} coreErrors.ErrorResponse
-// @Router /sales/orders/{id}/with-batches [get]
-func (ctrl *SalesOrderController) GetOrderWithBatches(c *gin.Context) {
+// GetOrderWithBatchesInput is GetOrderWithBatches's request.
+type GetOrderWithBatchesInput struct {
+	ID string `path:"id"`
+}
+
+// GetOrderWithBatchesResponse is GetOrderWithBatches's answer.
+type GetOrderWithBatchesResponse struct {
+	Data *models.OrderWithBatches `json:"data"`
+}
+
+// GetOrderWithBatches is GET /{id}/with-batches: Get order details with batch assignments.
+func (ctrl *SalesOrderController) GetOrderWithBatches(ctx context.Context, in *GetOrderWithBatchesInput) (*api.Out[GetOrderWithBatchesResponse], error) {
+	c := api.Gin(ctx)
 	tenantIDRaw, exists := c.Get("tenant_id")
 	if !exists || tenantIDRaw == nil {
-		c.JSON(http.StatusUnauthorized, coreErrors.BuildErrorSingle(c, "auth.invalid-tenant"))
-		return
+		return nil, api.Fail(http.StatusUnauthorized, coreErrors.BuildErrorSingle(c, "auth.invalid-tenant"))
 	}
 	tenantID, err := uuid.Parse(tenantIDRaw.(string))
 	if err != nil {
-		c.JSON(http.StatusUnauthorized, coreErrors.BuildErrorSingle(c, "auth.invalid-tenant"))
-		return
+		return nil, api.Fail(http.StatusUnauthorized, coreErrors.BuildErrorSingle(c, "auth.invalid-tenant"))
 	}
 
-	orderID, err := uuid.Parse(c.Param("id"))
+	orderID, err := uuid.Parse(in.ID)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, coreErrors.BuildErrorSingle(c, "validation.invalid-uuid"))
-		return
+		return nil, api.Fail(http.StatusBadRequest, coreErrors.BuildErrorSingle(c, "validation.invalid-uuid"))
 	}
 
 	order, err := ctrl.service.GetOrderWithBatches(c.Request.Context(), tenantID, orderID)
 	if err != nil {
 		status := utils.GetHTTPStatusFromError(err)
-		c.JSON(status, coreErrors.BuildError(c, err))
-		return
+		return nil, api.Fail(status, coreErrors.BuildError(c, err))
 	}
 
-	c.JSON(http.StatusOK, gin.H{"data": order})
+	return api.OK(GetOrderWithBatchesResponse{Data: order})
 }
 
-// GetSalesReport godoc
-// @Summary Get sales report for date range
-// @Tags Sales - Reports
-// @Produce json
-// @Param start_date query string true "Start date (YYYY-MM-DD)"
-// @Param end_date query string true "End date (YYYY-MM-DD)"
-// @Success 200 {object} models.SalesReportResponse
-// @Failure 400 {object} coreErrors.ErrorResponse
-// @Router /sales/reports/sales [get]
-func (ctrl *SalesOrderController) GetSalesReport(c *gin.Context) {
+// GetSalesReportInput is GetSalesReport's request.
+type GetSalesReportInput struct {
+	StartDate string `query:"start_date"`
+	EndDate   string `query:"end_date"`
+}
+
+// GetSalesReportResponse is GetSalesReport's answer.
+type GetSalesReportResponse struct {
+	Data models.SalesReportResponse `json:"data"`
+}
+
+// GetSalesReport is GET /sales: Get sales report for date range.
+func (ctrl *SalesOrderController) GetSalesReport(ctx context.Context, in *GetSalesReportInput) (*api.Out[GetSalesReportResponse], error) {
+	c := api.Gin(ctx)
 	tenantIDRaw, exists := c.Get("tenant_id")
 	if !exists || tenantIDRaw == nil {
-		c.JSON(http.StatusUnauthorized, coreErrors.BuildErrorSingle(c, "auth.invalid-tenant"))
-		return
+		return nil, api.Fail(http.StatusUnauthorized, coreErrors.BuildErrorSingle(c, "auth.invalid-tenant"))
 	}
 	tenantID, err := uuid.Parse(tenantIDRaw.(string))
 	if err != nil {
-		c.JSON(http.StatusUnauthorized, coreErrors.BuildErrorSingle(c, "auth.invalid-tenant"))
-		return
+		return nil, api.Fail(http.StatusUnauthorized, coreErrors.BuildErrorSingle(c, "auth.invalid-tenant"))
 	}
 
-	startDateStr := c.Query("start_date")
-	endDateStr := c.Query("end_date")
+	startDateStr := in.StartDate
+	endDateStr := in.EndDate
 
 	if startDateStr == "" || endDateStr == "" {
-		c.JSON(http.StatusBadRequest, coreErrors.BuildErrorDetail(c, "validation.failed", "start_date and end_date are required"))
-		return
+		return nil, api.Fail(http.StatusBadRequest, coreErrors.BuildErrorDetail(c, "validation.failed", "start_date and end_date are required"))
 	}
 
 	var startDate coreModels.DateOnly
 	errStart := startDate.UnmarshalJSON([]byte(`"` + startDateStr + `"`))
 	if errStart != nil {
-		c.JSON(http.StatusBadRequest, coreErrors.BuildErrorDetail(c, "validation.failed", "invalid start_date format"))
-		return
+		return nil, api.Fail(http.StatusBadRequest, coreErrors.BuildErrorDetail(c, "validation.failed", "invalid start_date format"))
 	}
 
 	var endDate coreModels.DateOnly
 	errEnd := endDate.UnmarshalJSON([]byte(`"` + endDateStr + `"`))
 	if errEnd != nil {
-		c.JSON(http.StatusBadRequest, coreErrors.BuildErrorDetail(c, "validation.failed", "invalid end_date format"))
-		return
+		return nil, api.Fail(http.StatusBadRequest, coreErrors.BuildErrorDetail(c, "validation.failed", "invalid end_date format"))
 	}
 
 	reports, err := ctrl.service.GetSalesReport(c.Request.Context(), tenantID, startDate, endDate)
 	if err != nil {
 		status := utils.GetHTTPStatusFromError(err)
-		c.JSON(status, coreErrors.BuildError(c, err))
-		return
+		return nil, api.Fail(status, coreErrors.BuildError(c, err))
 	}
 
-	c.JSON(http.StatusOK, gin.H{"data": models.SalesReportResponse{Metrics: reports}})
+	return api.OK(GetSalesReportResponse{Data: models.SalesReportResponse{Metrics: reports}})
 }
 
 // ========== PHASE 3: Returns & Payments ==========
 
-// CreateReturn godoc
-// @Summary Create a return request for a completed order
-// @Tags Sales - Returns
-// @Accept json
-// @Produce json
-// @Param request body models.CreateReturnRequestDto true "Return data"
-// @Success 201 {object} models.Return
-// @Failure 400 {object} coreErrors.ErrorResponse
-// @Failure 404 {object} coreErrors.ErrorResponse
-// @Failure 409 {object} coreErrors.ErrorResponse
-// @Router /sales/returns [post]
-func (ctrl *SalesOrderController) CreateReturn(c *gin.Context) {
+// CreateReturnInput is CreateReturn's request.
+type CreateReturnInput struct {
+	JSON api.Body[models.CreateReturnRequestDto]
+}
+
+// CreateReturnResponse is CreateReturn's answer.
+type CreateReturnResponse struct {
+	Data *models.Return `json:"data"`
+}
+
+// CreateReturn is POST : Create a return request for a completed order.
+func (ctrl *SalesOrderController) CreateReturn(ctx context.Context, in *CreateReturnInput) (*api.Out[CreateReturnResponse], error) {
+	c := api.Gin(ctx)
 	tenantIDRaw, exists := c.Get("tenant_id")
 	if !exists || tenantIDRaw == nil {
-		c.JSON(http.StatusUnauthorized, coreErrors.BuildErrorSingle(c, "auth.invalid-tenant"))
-		return
+		return nil, api.Fail(http.StatusUnauthorized, coreErrors.BuildErrorSingle(c, "auth.invalid-tenant"))
 	}
 	tenantID, err := uuid.Parse(tenantIDRaw.(string))
 	if err != nil {
-		c.JSON(http.StatusUnauthorized, coreErrors.BuildErrorSingle(c, "auth.invalid-tenant"))
-		return
+		return nil, api.Fail(http.StatusUnauthorized, coreErrors.BuildErrorSingle(c, "auth.invalid-tenant"))
 	}
 
 	var dto models.CreateReturnRequestDto
-	if err := c.ShouldBindJSON(&dto); err != nil {
-		c.JSON(http.StatusBadRequest, coreErrors.BuildErrorDetail(c, "validation.failed", err.Error()))
-		return
+	if err := in.JSON.Into(ctx, &dto); err != nil {
+		return nil, api.Fail(http.StatusBadRequest, coreErrors.BuildErrorDetail(c, "validation.failed", err.Error()))
 	}
 
 	ret, err := ctrl.service.CreateReturn(c.Request.Context(), tenantID, dto.OrderID, dto.Reason)
 	if err != nil {
 		status := utils.GetHTTPStatusFromError(err)
-		c.JSON(status, coreErrors.BuildError(c, err))
-		return
+		return nil, api.Fail(status, coreErrors.BuildError(c, err))
 	}
 
-	c.JSON(http.StatusCreated, gin.H{"data": ret})
+	return api.OK(CreateReturnResponse{Data: ret})
 }
 
-// ApproveReturn godoc
-// @Summary Approve a return request and restore inventory
-// @Tags Sales - Returns
-// @Accept json
-// @Produce json
-// @Param id path string true "Return ID"
-// @Success 200 {object} models.Return
-// @Failure 404 {object} coreErrors.ErrorResponse
-// @Failure 409 {object} coreErrors.ErrorResponse
-// @Router /sales/returns/{id}/approve [patch]
-func (ctrl *SalesOrderController) ApproveReturn(c *gin.Context) {
+// ApproveReturnInput is ApproveReturn's request.
+type ApproveReturnInput struct {
+	ID string `path:"id"`
+}
+
+// ApproveReturnResponse is ApproveReturn's answer.
+type ApproveReturnResponse struct {
+	Data *models.Return `json:"data"`
+}
+
+// ApproveReturn is PATCH /{id}/approve: Approve a return request and restore inventory.
+func (ctrl *SalesOrderController) ApproveReturn(ctx context.Context, in *ApproveReturnInput) (*api.Out[ApproveReturnResponse], error) {
+	c := api.Gin(ctx)
 	tenantIDRaw, exists := c.Get("tenant_id")
 	if !exists || tenantIDRaw == nil {
-		c.JSON(http.StatusUnauthorized, coreErrors.BuildErrorSingle(c, "auth.invalid-tenant"))
-		return
+		return nil, api.Fail(http.StatusUnauthorized, coreErrors.BuildErrorSingle(c, "auth.invalid-tenant"))
 	}
 	tenantID, err := uuid.Parse(tenantIDRaw.(string))
 	if err != nil {
-		c.JSON(http.StatusUnauthorized, coreErrors.BuildErrorSingle(c, "auth.invalid-tenant"))
-		return
+		return nil, api.Fail(http.StatusUnauthorized, coreErrors.BuildErrorSingle(c, "auth.invalid-tenant"))
 	}
 
-	returnID, err := uuid.Parse(c.Param("id"))
+	returnID, err := uuid.Parse(in.ID)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, coreErrors.BuildErrorSingle(c, "validation.invalid-uuid"))
-		return
+		return nil, api.Fail(http.StatusBadRequest, coreErrors.BuildErrorSingle(c, "validation.invalid-uuid"))
 	}
 
 	ret, err := ctrl.service.ApproveReturn(c.Request.Context(), tenantID, returnID)
 	if err != nil {
 		status := utils.GetHTTPStatusFromError(err)
-		c.JSON(status, coreErrors.BuildError(c, err))
-		return
+		return nil, api.Fail(status, coreErrors.BuildError(c, err))
 	}
 
-	c.JSON(http.StatusOK, gin.H{"data": ret})
+	return api.OK(ApproveReturnResponse{Data: ret})
 }
 
-// GetReturns godoc
-// @Summary Get returns for an order
-// @Tags Sales - Returns
-// @Produce json
-// @Param order_id query string required "Order ID"
-// @Success 200 {object} []models.Return
-// @Failure 400 {object} coreErrors.ErrorResponse
-// @Router /sales/returns [get]
-func (ctrl *SalesOrderController) GetReturns(c *gin.Context) {
+// GetReturnsInput is GetReturns's request.
+type GetReturnsInput struct {
+	OrderID string `query:"order_id"`
+}
+
+// GetReturnsResponse is GetReturns's answer.
+type GetReturnsResponse struct {
+	Data []models.Return `json:"data"`
+}
+
+// GetReturns is GET : Get returns for an order.
+func (ctrl *SalesOrderController) GetReturns(ctx context.Context, in *GetReturnsInput) (*api.Out[GetReturnsResponse], error) {
+	c := api.Gin(ctx)
 	tenantIDRaw, exists := c.Get("tenant_id")
 	if !exists || tenantIDRaw == nil {
-		c.JSON(http.StatusUnauthorized, coreErrors.BuildErrorSingle(c, "auth.invalid-tenant"))
-		return
+		return nil, api.Fail(http.StatusUnauthorized, coreErrors.BuildErrorSingle(c, "auth.invalid-tenant"))
 	}
 	tenantID, err := uuid.Parse(tenantIDRaw.(string))
 	if err != nil {
-		c.JSON(http.StatusUnauthorized, coreErrors.BuildErrorSingle(c, "auth.invalid-tenant"))
-		return
+		return nil, api.Fail(http.StatusUnauthorized, coreErrors.BuildErrorSingle(c, "auth.invalid-tenant"))
 	}
 
-	orderIDStr := c.Query("order_id")
+	orderIDStr := in.OrderID
 	if orderIDStr == "" {
-		c.JSON(http.StatusBadRequest, coreErrors.BuildErrorDetail(c, "validation.failed", "order_id is required"))
-		return
+		return nil, api.Fail(http.StatusBadRequest, coreErrors.BuildErrorDetail(c, "validation.failed", "order_id is required"))
 	}
 
 	orderID, err := uuid.Parse(orderIDStr)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, coreErrors.BuildErrorSingle(c, "validation.invalid-uuid"))
-		return
+		return nil, api.Fail(http.StatusBadRequest, coreErrors.BuildErrorSingle(c, "validation.invalid-uuid"))
 	}
 
 	returns, err := ctrl.service.GetReturnsByOrder(c.Request.Context(), tenantID, orderID)
 	if err != nil {
 		status := utils.GetHTTPStatusFromError(err)
-		c.JSON(status, coreErrors.BuildError(c, err))
-		return
+		return nil, api.Fail(status, coreErrors.BuildError(c, err))
 	}
 
-	c.JSON(http.StatusOK, gin.H{"data": returns})
+	return api.OK(GetReturnsResponse{Data: returns})
 }
 
-// CreatePayment godoc
-// @Summary Create a payment record for an order
-// @Tags Sales - Payments
-// @Accept json
-// @Produce json
-// @Param request body models.CreatePaymentRequestDto true "Payment data"
-// @Success 201 {object} models.Payment
-// @Failure 400 {object} coreErrors.ErrorResponse
-// @Failure 404 {object} coreErrors.ErrorResponse
-// @Router /sales/payments [post]
-func (ctrl *SalesOrderController) CreatePayment(c *gin.Context) {
+// CreatePaymentInput is CreatePayment's request.
+type CreatePaymentInput struct {
+	JSON api.Body[models.CreatePaymentRequestDto]
+}
+
+// CreatePaymentResponse is CreatePayment's answer.
+type CreatePaymentResponse struct {
+	Data *models.Payment `json:"data"`
+}
+
+// CreatePayment is POST : Create a payment record for an order.
+func (ctrl *SalesOrderController) CreatePayment(ctx context.Context, in *CreatePaymentInput) (*api.Out[CreatePaymentResponse], error) {
+	c := api.Gin(ctx)
 	tenantIDRaw, exists := c.Get("tenant_id")
 	if !exists || tenantIDRaw == nil {
-		c.JSON(http.StatusUnauthorized, coreErrors.BuildErrorSingle(c, "auth.invalid-tenant"))
-		return
+		return nil, api.Fail(http.StatusUnauthorized, coreErrors.BuildErrorSingle(c, "auth.invalid-tenant"))
 	}
 	tenantID, err := uuid.Parse(tenantIDRaw.(string))
 	if err != nil {
-		c.JSON(http.StatusUnauthorized, coreErrors.BuildErrorSingle(c, "auth.invalid-tenant"))
-		return
+		return nil, api.Fail(http.StatusUnauthorized, coreErrors.BuildErrorSingle(c, "auth.invalid-tenant"))
 	}
 
 	var dto models.CreatePaymentRequestDto
-	if err := c.ShouldBindJSON(&dto); err != nil {
-		c.JSON(http.StatusBadRequest, coreErrors.BuildErrorDetail(c, "validation.failed", err.Error()))
-		return
+	if err := in.JSON.Into(ctx, &dto); err != nil {
+		return nil, api.Fail(http.StatusBadRequest, coreErrors.BuildErrorDetail(c, "validation.failed", err.Error()))
 	}
 
 	payment, err := ctrl.service.CreatePayment(c.Request.Context(), tenantID, dto.OrderID, dto.Amount, dto.PaymentMethod, dto.ReferenceNumber, dto.Notes)
 	if err != nil {
 		status := utils.GetHTTPStatusFromError(err)
-		c.JSON(status, coreErrors.BuildError(c, err))
-		return
+		return nil, api.Fail(status, coreErrors.BuildError(c, err))
 	}
 
-	c.JSON(http.StatusCreated, gin.H{"data": payment})
+	return api.OK(CreatePaymentResponse{Data: payment})
 }
 
-// GetPayments godoc
-// @Summary Get payments for an order
-// @Tags Sales - Payments
-// @Produce json
-// @Param order_id query string required "Order ID"
-// @Success 200 {object} []models.Payment
-// @Failure 400 {object} coreErrors.ErrorResponse
-// @Router /sales/payments [get]
-func (ctrl *SalesOrderController) GetPayments(c *gin.Context) {
+// GetPaymentsInput is GetPayments's request.
+type GetPaymentsInput struct {
+	OrderID string `query:"order_id"`
+}
+
+// GetPaymentsResponse is GetPayments's answer.
+type GetPaymentsResponse struct {
+	Data []models.Payment `json:"data"`
+}
+
+// GetPayments is GET : Get payments for an order.
+func (ctrl *SalesOrderController) GetPayments(ctx context.Context, in *GetPaymentsInput) (*api.Out[GetPaymentsResponse], error) {
+	c := api.Gin(ctx)
 	tenantIDRaw, exists := c.Get("tenant_id")
 	if !exists || tenantIDRaw == nil {
-		c.JSON(http.StatusUnauthorized, coreErrors.BuildErrorSingle(c, "auth.invalid-tenant"))
-		return
+		return nil, api.Fail(http.StatusUnauthorized, coreErrors.BuildErrorSingle(c, "auth.invalid-tenant"))
 	}
 	tenantID, err := uuid.Parse(tenantIDRaw.(string))
 	if err != nil {
-		c.JSON(http.StatusUnauthorized, coreErrors.BuildErrorSingle(c, "auth.invalid-tenant"))
-		return
+		return nil, api.Fail(http.StatusUnauthorized, coreErrors.BuildErrorSingle(c, "auth.invalid-tenant"))
 	}
 
-	orderIDStr := c.Query("order_id")
+	orderIDStr := in.OrderID
 	if orderIDStr == "" {
-		c.JSON(http.StatusBadRequest, coreErrors.BuildErrorDetail(c, "validation.failed", "order_id is required"))
-		return
+		return nil, api.Fail(http.StatusBadRequest, coreErrors.BuildErrorDetail(c, "validation.failed", "order_id is required"))
 	}
 
 	orderID, err := uuid.Parse(orderIDStr)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, coreErrors.BuildErrorSingle(c, "validation.invalid-uuid"))
-		return
+		return nil, api.Fail(http.StatusBadRequest, coreErrors.BuildErrorSingle(c, "validation.invalid-uuid"))
 	}
 
 	payments, err := ctrl.service.GetPayments(c.Request.Context(), tenantID, orderID)
 	if err != nil {
 		status := utils.GetHTTPStatusFromError(err)
-		c.JSON(status, coreErrors.BuildError(c, err))
-		return
+		return nil, api.Fail(status, coreErrors.BuildError(c, err))
 	}
 
-	c.JSON(http.StatusOK, gin.H{"data": payments})
+	return api.OK(GetPaymentsResponse{Data: payments})
 }

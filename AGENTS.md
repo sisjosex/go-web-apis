@@ -30,7 +30,7 @@ package. Two kinds of failure:
 - `unmatched test request (no route answers it — wrong method or path): PATCH /api/v1/x/abc (404)` — a
   test asserts on a route that does not exist (wrong verb, a typo, a removed route). Fix or delete it.
 
-Routes whose handler lives in `routes/` (the jobs monitor UI, `/tracking/ws`) and swagger are not checked.
+Routes whose handler lives in `routes/` (the jobs monitor UI, `/tracking/ws`, `/openapi.json`, `/docs`) are not checked.
 
 ## Commands — from `api/`
 
@@ -46,7 +46,7 @@ make test-all                         # every module (db-reset first)
 make migrate MODULE=x NAME=y          # .up.sql + .down.sql pair — tables only
 make schema                           # db-reset, then rewrite every sql/schema.sql (commit it with the migration)
 make tenant-migrate SLUG=x            # apply to one tenant DB
-make swagger                          # regenerate docs
+make contract                         # write docs/openapi.json + docs/routes.json from the routes' types (commit both)
 make geo-build | geo-switch DATE=… | geo-rollback | geo-up   # geo data, docker/geo/README.md
 ```
 
@@ -227,12 +227,39 @@ adds an upload by registering a `storage.Purpose` on `routeDeps.purposes` in `ro
 out as 60 s `PresignGet` links. `MediaService` writes public images to the media bucket server-side (the
 imports), type from the extension allow-list, `immutable` cache; the row stores the full URL.
 
+## Handlers are huma operations (INFRA-021)
+
+A JSON route is registered with `api.Get|Post|Put|Patch|Delete(group, "/x/{id}", ctrl.H, api.Doc{…}, mw...)`
+from `modules/core/api`, and its handler is `func(ctx context.Context, in *HInput) (*api.Out[T], error)`.
+The contract (`docs/openapi.json`) is built from those types, so the input struct and `T` *are* the docs.
+
+- **Inputs.** Path params ``ID string `path:"id"` `` (the handler still parses the UUID, so a bad one answers
+  what it always did); a raw query key ``Page int `query:"page" default:"1"` ``; a query DTO
+  `Query api.Query[models.XQuery]` bound with `in.Query.Into(ctx, &q)`; a body `JSON api.Body[models.XDto]`
+  bound with `in.JSON.Into(ctx, &dto)` — never a field named `Body` (huma would read the body itself).
+  Binding stays Gin's: `binding`/`form` tags, defaults, `conform`, error bodies unchanged.
+- **Outputs.** `return api.OK(v)` (status = `Doc.Status`, 200 when zero); several success statuses →
+  `*api.Reply[T]` + `api.Respond(status, v)`; no body → `*api.Empty` + `api.Done()`.
+- **Errors.** `return nil, api.Fail(status, coreErrors.BuildError…(c, …))`; `c := api.Gin(ctx)` is the Gin
+  context for tenant/user/lang and the builders. A helper that used to write and return `false` now
+  returns an `error` (`api.Fail`), the caller `return nil, err`.
+- **Doc.** `Summary` (one line), `Description`, `Status`, `Errors` (the error statuses it answers — each
+  documented as `core.ErrorResponse`), `Public: true` when it takes no bearer token.
+- **Not huma:** the WebSocket, the jobs UI, and a route that streams or sets raw bytes — plain Gin, and
+  the map lists them as undocumented.
+
 ## REST conventions
 
 `/api/v1/{resource}` plural kebab-case · `Authorization: Bearer` · `X-Tenant-Slug` · errors via
 `BuildErrorSingle` (one code) / `BuildErrorDetail` (binding, field detail) / `BuildError` (unexpected).
 
-**List endpoints have no uniform contract — read the handler before writing a client or a test.**
+**The contract is `docs/openapi.json`** (served at `/docs` outside production): every operation's params,
+body and response types, generated from the handlers (INFRA-021). `docs/routes.json` adds the SPs each one
+reaches and the tables they write; `spec-agent/specs/context/system-map.md` adds who calls it. The gate's
+`contract` stage fails when either file is stale, and when a change breaks a client against HEAD's
+contract unless `docs/breaking.allow` lists the operation.
+
+**List endpoints have no uniform shape — read the operation in the contract before writing a client.**
 Verified 2026-09-19 (APP-004):
 
 | Endpoint | Params | Body |

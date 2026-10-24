@@ -1,12 +1,15 @@
 package controllers
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"net/http"
 	"sort"
+	"time"
 
 	"josex/web/config"
+	"josex/web/modules/core/api"
 	coreErrors "josex/web/modules/core/errors"
 	"josex/web/modules/core/registry"
 	"josex/web/modules/core/utils"
@@ -28,10 +31,17 @@ func NewModuleController(moduleService interfaces.ModuleService) *ModuleControll
 	return &ModuleController{moduleService: moduleService}
 }
 
+// ListAvailableModulesResponse is ListAvailableModules's answer.
+type ListAvailableModulesResponse struct {
+	Modules   []registry.ModuleDescriptor `json:"modules"`
+	Verticals []registry.Vertical         `json:"verticals"`
+}
+
 // ListAvailableModules returns the modules this deployment runs (ENABLED_MODULES), each with what it
 // requires and complements, and the business types the onboarding offers (TENANCY-003 D1) — a type
 // keeps only the modules this deployment runs, and one left with users alone is not offered.
-func (mc *ModuleController) ListAvailableModules(c *gin.Context) {
+func (mc *ModuleController) ListAvailableModules(ctx context.Context, _ *api.None) (*api.Out[ListAvailableModulesResponse], error) {
+	c := api.Gin(ctx)
 	coreConf := config.ModularAppConfig.Core
 	all := registry.GetAll()
 
@@ -58,7 +68,7 @@ func (mc *ModuleController) ListAvailableModules(c *gin.Context) {
 		}
 	}
 
-	c.JSON(http.StatusOK, gin.H{"modules": available, "verticals": verticals})
+	return api.OK(ListAvailableModulesResponse{Modules: available, Verticals: verticals})
 }
 
 // localized answers the descriptor's description and features in lang (TENANCY-004 D2), from the owning
@@ -83,49 +93,46 @@ func translateOr(lang, key, fallback string) string {
 
 // moduleWriteError answers a module write's refusal: 409 for a locked module or one others still need,
 // else 400.
-func moduleWriteError(c *gin.Context, err error) {
+func moduleWriteError(c *gin.Context, err error) error {
 	var requiredBy *tenancyErrors.ModuleRequiredByError
 	if errors.As(err, &requiredBy) {
-		c.JSON(http.StatusConflict, coreErrors.BuildErrorDetail(c, tenancyErrors.ModuleRequiredBy, gin.H{"required_by": requiredBy.Dependents}))
-		return
+		return api.Fail(http.StatusConflict, coreErrors.BuildErrorDetail(c, tenancyErrors.ModuleRequiredBy, gin.H{"required_by": requiredBy.Dependents}))
 	}
 	var locked *tenancyErrors.ModuleLockedError
 	if errors.As(err, &locked) {
-		c.JSON(http.StatusConflict, coreErrors.BuildErrorSingle(c, tenancyErrors.ModuleLocked))
-		return
+		return api.Fail(http.StatusConflict, coreErrors.BuildErrorSingle(c, tenancyErrors.ModuleLocked))
 	}
-	c.JSON(http.StatusBadRequest, coreErrors.BuildError(c, err))
+	return api.Fail(http.StatusBadRequest, coreErrors.BuildError(c, err))
+}
+
+// EnrichedModule is a tenant's module with its catalogue entry, localized.
+type EnrichedModule struct {
+	models.TenantModuleResponse
+	Name        string   `json:"name,omitempty"`
+	Description string   `json:"description,omitempty"`
+	Icon        string   `json:"icon,omitempty"`
+	Route       string   `json:"route,omitempty"`
+	Category    string   `json:"category,omitempty"`
+	Features    []string `json:"features,omitempty"`
+	AdminOnly   bool     `json:"admin_only,omitempty"`
 }
 
 // GetTenantModules returns the list of modules enabled for a tenant.
 // Requires tenant context from TenantMiddleware.
-func (mc *ModuleController) GetTenantModules(c *gin.Context) {
+func (mc *ModuleController) GetTenantModules(ctx context.Context, _ *api.None) (*api.Out[[]EnrichedModule], error) {
+	c := api.Gin(ctx)
 	tenantIDStr, exists := c.Get("tenant_id")
 	if !exists {
-		c.JSON(http.StatusUnauthorized, coreErrors.BuildErrorSingle(c, tenancyErrors.TenantUserUnauthorized))
-		return
+		return nil, api.Fail(http.StatusUnauthorized, coreErrors.BuildErrorSingle(c, tenancyErrors.TenantUserUnauthorized))
 	}
 	tenantID, err := uuid.Parse(tenantIDStr.(string))
 	if err != nil {
-		c.JSON(http.StatusBadRequest, coreErrors.BuildError(c, err))
-		return
+		return nil, api.Fail(http.StatusBadRequest, coreErrors.BuildError(c, err))
 	}
 
 	tenantModules, err := mc.moduleService.GetTenantModules(c.Request.Context(), tenantID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, coreErrors.BuildError(c, err))
-		return
-	}
-
-	type EnrichedModule struct {
-		models.TenantModuleResponse
-		Name        string   `json:"name,omitempty"`
-		Description string   `json:"description,omitempty"`
-		Icon        string   `json:"icon,omitempty"`
-		Route       string   `json:"route,omitempty"`
-		Category    string   `json:"category,omitempty"`
-		Features    []string `json:"features,omitempty"`
-		AdminOnly   bool     `json:"admin_only,omitempty"`
+		return nil, api.Fail(http.StatusInternalServerError, coreErrors.BuildError(c, err))
 	}
 
 	lang := c.GetString("lang")
@@ -152,50 +159,60 @@ func (mc *ModuleController) GetTenantModules(c *gin.Context) {
 		result = append(result, em)
 	}
 
-	c.JSON(http.StatusOK, result)
+	return api.OK(result)
+}
+
+// UpsertTenantModuleInput is UpsertTenantModule's request.
+type UpsertTenantModuleInput struct {
+	ModuleCode string `path:"module_code"`
+	JSON       api.Body[models.UpsertTenantModuleDto]
+}
+
+// UpsertTenantModuleResponse is UpsertTenantModule's answer.
+type UpsertTenantModuleResponse struct {
+	ModuleCode string    `json:"module_code"`
+	IsEnabled  bool      `json:"is_enabled"`
+	Config     string    `json:"config"`
+	EnabledAt  time.Time `json:"enabled_at"`
+	Enabled    []string  `json:"enabled"`
 }
 
 // UpsertTenantModule enables or updates the configuration for a module in a tenant.
 // Requires owner or admin role.
-func (mc *ModuleController) UpsertTenantModule(c *gin.Context) {
+func (mc *ModuleController) UpsertTenantModule(ctx context.Context, in *UpsertTenantModuleInput) (*api.Out[UpsertTenantModuleResponse], error) {
+	c := api.Gin(ctx)
 	tenantIDStr, _ := c.Get("tenant_id")
 	tenantID, err := uuid.Parse(tenantIDStr.(string))
 	if err != nil {
-		c.JSON(http.StatusBadRequest, coreErrors.BuildError(c, err))
-		return
+		return nil, api.Fail(http.StatusBadRequest, coreErrors.BuildError(c, err))
 	}
 
 	userIDStr, _ := c.Get("user_id")
 	userID, err := uuid.Parse(userIDStr.(string))
 	if err != nil {
-		c.JSON(http.StatusBadRequest, coreErrors.BuildError(c, err))
-		return
+		return nil, api.Fail(http.StatusBadRequest, coreErrors.BuildError(c, err))
 	}
 
-	moduleCode := c.Param("module_code")
+	moduleCode := in.ModuleCode
 
 	if _, ok := registry.Get(moduleCode); !ok {
-		c.JSON(http.StatusNotFound, coreErrors.BuildErrorSingle(c, tenancyErrors.ModuleNotFound))
-		return
+		return nil, api.Fail(http.StatusNotFound, coreErrors.BuildErrorSingle(c, tenancyErrors.ModuleNotFound))
 	}
 
 	var dto models.UpsertTenantModuleDto
-	if err := c.ShouldBindJSON(&dto); err != nil {
-		c.JSON(http.StatusBadRequest, coreErrors.BuildError(c, err))
-		return
+	if err := in.JSON.Into(ctx, &dto); err != nil {
+		return nil, api.Fail(http.StatusBadRequest, coreErrors.BuildError(c, err))
 	}
 
 	module, err := mc.moduleService.UpsertTenantModule(c.Request.Context(), tenantID, moduleCode, dto, userID)
 	if err != nil {
-		moduleWriteError(c, err)
-		return
+		return nil, moduleWriteError(c, err)
 	}
 
 	// What is on now, requirements included, so the client updates its list without a second read.
 	enabled, err := mc.moduleService.GetTenantEnabledModuleCodes(c.Request.Context(), tenantID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, coreErrors.BuildError(c, err))
-		return
+		return nil, api.Fail(http.StatusInternalServerError, coreErrors.BuildError(c, err))
 	}
 	codes := make([]string, 0, len(enabled))
 	for code := range enabled {
@@ -203,31 +220,34 @@ func (mc *ModuleController) UpsertTenantModule(c *gin.Context) {
 	}
 	sort.Strings(codes)
 
-	c.JSON(http.StatusOK, gin.H{
-		"module_code": module.ModuleCode,
-		"is_enabled":  module.IsEnabled,
-		"config":      module.Config,
-		"enabled_at":  module.EnabledAt,
-		"enabled":     codes,
-	})
+	return api.OK(UpsertTenantModuleResponse{ModuleCode: module.ModuleCode, IsEnabled: module.IsEnabled, Config: module.Config, EnabledAt: module.EnabledAt, Enabled: codes})
+}
+
+// DisableTenantModuleInput is DisableTenantModule's request.
+type DisableTenantModuleInput struct {
+	ModuleCode string `path:"module_code"`
+}
+
+// DisableTenantModuleResponse is DisableTenantModule's answer.
+type DisableTenantModuleResponse struct {
+	Success bool `json:"success"`
 }
 
 // DisableTenantModule disables a module for a tenant.
 // Requires owner or admin role.
-func (mc *ModuleController) DisableTenantModule(c *gin.Context) {
+func (mc *ModuleController) DisableTenantModule(ctx context.Context, in *DisableTenantModuleInput) (*api.Out[DisableTenantModuleResponse], error) {
+	c := api.Gin(ctx)
 	tenantIDStr, _ := c.Get("tenant_id")
 	tenantID, err := uuid.Parse(tenantIDStr.(string))
 	if err != nil {
-		c.JSON(http.StatusBadRequest, coreErrors.BuildError(c, err))
-		return
+		return nil, api.Fail(http.StatusBadRequest, coreErrors.BuildError(c, err))
 	}
 
-	moduleCode := c.Param("module_code")
+	moduleCode := in.ModuleCode
 
 	if err := mc.moduleService.DisableTenantModule(c.Request.Context(), tenantID, moduleCode); err != nil {
-		moduleWriteError(c, err)
-		return
+		return nil, moduleWriteError(c, err)
 	}
 
-	c.JSON(http.StatusOK, gin.H{"success": true})
+	return api.OK(DisableTenantModuleResponse{Success: true})
 }

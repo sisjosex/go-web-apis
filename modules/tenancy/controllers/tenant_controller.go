@@ -1,11 +1,13 @@
 package controllers
 
 import (
+	"context"
 	"errors"
 	"net/http"
 
 	"josex/web/config"
 	billingInterfaces "josex/web/modules/billing/interfaces"
+	"josex/web/modules/core/api"
 	coreErrors "josex/web/modules/core/errors"
 	coreModels "josex/web/modules/core/models"
 	"josex/web/modules/core/utils"
@@ -31,91 +33,73 @@ func NewTenantController(tenantService interfaces.TenantService, billingService 
 	}
 }
 
-// CreateTenant godoc
-// @Summary Create a new tenant (authenticated users)
-// @Description Create a new tenant with optional custom database URL. Creator becomes owner automatically.
-// @Tags Tenants
-// @Accept json
-// @Produce json
-// @Param request body models.CreateTenantDto true "Tenant data"
-// @Success 201 {object} models.TenantDetailResponse
-// @Failure 400 {object} coreErrors.ErrorResponse
-// @Router /tenants [post]
-// @Security ApiKeyAuth
-func (tc *TenantController) CreateTenant(c *gin.Context) {
+// CreateTenantInput is CreateTenant's request.
+type CreateTenantInput struct {
+	JSON api.Body[models.CreateTenantDto]
+}
+
+// CreateTenant is POST : Create a new tenant (authenticated users).
+func (tc *TenantController) CreateTenant(ctx context.Context, in *CreateTenantInput) (*api.Out[*models.TenantDetailResponse], error) {
+	c := api.Gin(ctx)
 	// Check if multitenancy is enabled
 	tenancyConf := config.ModularAppConfig.Tenancy
 	if tenancyConf == nil || !tenancyConf.Enabled {
-		c.JSON(http.StatusServiceUnavailable, coreErrors.BuildErrorSingle(c, tenancyErrors.MultitenancyDisabled))
-		return
+		return nil, api.Fail(http.StatusServiceUnavailable, coreErrors.BuildErrorSingle(c, tenancyErrors.MultitenancyDisabled))
 	}
 
 	// Get user ID from context (set by AuthMiddleware)
 	userIDStr, exists := c.Get("user_id")
 	if !exists {
-		c.JSON(http.StatusUnauthorized, coreErrors.BuildErrorSingle(c, tenancyErrors.TenantUserUnauthorized))
-		return
+		return nil, api.Fail(http.StatusUnauthorized, coreErrors.BuildErrorSingle(c, tenancyErrors.TenantUserUnauthorized))
 	}
 
 	userID, err := uuid.Parse(userIDStr.(string))
 	if err != nil {
-		c.JSON(http.StatusUnauthorized, coreErrors.BuildError(c, err))
-		return
+		return nil, api.Fail(http.StatusUnauthorized, coreErrors.BuildError(c, err))
 	}
 
 	var dto models.CreateTenantDto
-	if err := c.ShouldBindJSON(&dto); err != nil {
-		c.JSON(http.StatusBadRequest, coreErrors.BuildErrorDetail(c, tenancyErrors.TenantCreateFailed, utils.ExtractValidationError(c, err)))
-		return
+	if err := in.JSON.Into(ctx, &dto); err != nil {
+		return nil, api.Fail(http.StatusBadRequest, coreErrors.BuildErrorDetail(c, tenancyErrors.TenantCreateFailed, utils.ExtractValidationError(c, err)))
 	}
 
 	// Create tenant with user as owner
 	tenant, err := tc.tenantService.CreateTenant(c.Request.Context(), &dto, userID)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, coreErrors.BuildError(c, err))
-		return
+		return nil, api.Fail(http.StatusBadRequest, coreErrors.BuildError(c, err))
 	}
 
-	c.JSON(http.StatusCreated, tenant)
+	return api.OK(tenant)
 }
 
-// CreateTenantSelfService godoc
-// @Summary Create tenant (self-service with subscription limits)
-// @Description Allow authenticated users to create tenants with limits based on their subscription plan
-// @Tags Tenants
-// @Accept json
-// @Produce json
-// @Param request body models.CreateTenantDto true "Tenant data"
-// @Success 201 {object} models.TenantDetailResponse
-// @Failure 400 {object} coreErrors.ErrorResponse
-// @Failure 403 {object} coreErrors.ErrorResponse
-// @Router /tenants/self-service [post]
-// @Security ApiKeyAuth
-func (tc *TenantController) CreateTenantSelfService(c *gin.Context) {
+// CreateTenantSelfServiceInput is CreateTenantSelfService's request.
+type CreateTenantSelfServiceInput struct {
+	JSON api.Body[models.CreateTenantDto]
+}
+
+// CreateTenantSelfService is POST /self-service: Create tenant (self-service with subscription limits).
+func (tc *TenantController) CreateTenantSelfService(ctx context.Context, in *CreateTenantSelfServiceInput) (*api.Out[*models.TenantDetailResponse], error) {
+	c := api.Gin(ctx)
 	// Check if multitenancy is enabled
 	tenancyConf := config.ModularAppConfig.Tenancy
 	if tenancyConf == nil || !tenancyConf.Enabled {
-		c.JSON(http.StatusServiceUnavailable, coreErrors.BuildErrorSingle(c, tenancyErrors.MultitenancyDisabled))
-		return
+		return nil, api.Fail(http.StatusServiceUnavailable, coreErrors.BuildErrorSingle(c, tenancyErrors.MultitenancyDisabled))
 	}
 
 	// Check if self-service is enabled
 	if !tenancyConf.AllowSelfService {
-		c.JSON(http.StatusForbidden, coreErrors.BuildErrorSingle(c, tenancyErrors.TenantSelfServiceDisabled))
-		return
+		return nil, api.Fail(http.StatusForbidden, coreErrors.BuildErrorSingle(c, tenancyErrors.TenantSelfServiceDisabled))
 	}
 
 	// Get user info from context (set by AuthMiddleware)
 	userIDStr, exists := c.Get("user_id")
 	if !exists {
-		c.JSON(http.StatusUnauthorized, coreErrors.BuildErrorSingle(c, tenancyErrors.TenantUserUnauthorized))
-		return
+		return nil, api.Fail(http.StatusUnauthorized, coreErrors.BuildErrorSingle(c, tenancyErrors.TenantUserUnauthorized))
 	}
 
 	userID, err := uuid.Parse(userIDStr.(string))
 	if err != nil {
-		c.JSON(http.StatusUnauthorized, coreErrors.BuildError(c, err))
-		return
+		return nil, api.Fail(http.StatusUnauthorized, coreErrors.BuildError(c, err))
 	}
 
 	// Get system role (super_admin bypasses limits)
@@ -127,281 +111,237 @@ func (tc *TenantController) CreateTenantSelfService(c *gin.Context) {
 
 	// Super admins can create unlimited tenants
 	if systemRole != coreModels.SystemRoleSuperAdmin {
-		// Count current owned tenants
-		count, err := tc.tenantService.CountUserOwnedTenants(c.Request.Context(), userID)
-		if err != nil {
-			c.JSON(http.StatusInternalServerError, coreErrors.BuildError(c, err))
-			return
-		}
-
-		// Check limit against the user's active subscription plan
-		limitReached, err := tc.billingService.IsLimitReached(c.Request.Context(), userID, "tenants", count)
-		if err != nil {
-			c.JSON(http.StatusInternalServerError, coreErrors.BuildError(c, err))
-			return
-		}
-		if limitReached {
-			c.JSON(http.StatusForbidden, coreErrors.BuildErrorSingle(c, tenancyErrors.TenantLimitReached))
-			return
+		if err := tc.ensureTenantAllowance(c, userID); err != nil {
+			return nil, err
 		}
 	}
 
 	var dto models.CreateTenantDto
-	if err := c.ShouldBindJSON(&dto); err != nil {
-		c.JSON(http.StatusBadRequest, coreErrors.BuildErrorDetail(c, tenancyErrors.TenantCreateFailed, utils.ExtractValidationError(c, err)))
-		return
+	if err := in.JSON.Into(ctx, &dto); err != nil {
+		return nil, api.Fail(http.StatusBadRequest, coreErrors.BuildErrorDetail(c, tenancyErrors.TenantCreateFailed, utils.ExtractValidationError(c, err)))
 	}
 
 	// Self-service users cannot use custom database URLs (security)
 	if systemRole != coreModels.SystemRoleSuperAdmin && dto.DatabaseURL != nil && *dto.DatabaseURL != "" {
-		c.JSON(http.StatusForbidden, coreErrors.BuildErrorSingle(c, "tenant.database-url.not-allowed"))
-		return
+		return nil, api.Fail(http.StatusForbidden, coreErrors.BuildErrorSingle(c, "tenant.database-url.not-allowed"))
 	}
 
 	// Create tenant with user as owner
 	tenant, err := tc.tenantService.CreateTenant(c.Request.Context(), &dto, userID)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, coreErrors.BuildError(c, err))
-		return
+		return nil, api.Fail(http.StatusBadRequest, coreErrors.BuildError(c, err))
 	}
 
-	c.JSON(http.StatusCreated, tenant)
+	return api.OK(tenant)
 }
 
-// GetUserTenants godoc
-// @Summary Get user's accessible tenants
-// @Description Returns list of tenants that the authenticated user can access
-// @Tags Tenants
-// @Produce json
-// @Success 200 {array} models.UserTenantResponse
-// @Failure 401 {object} coreErrors.ErrorResponse
-// @Router /tenants/my-tenants [get]
-// @Security ApiKeyAuth
-func (tc *TenantController) GetUserTenants(c *gin.Context) {
+// ensureTenantAllowance refuses with 403 when the user already owns as many workspaces as their
+// active plan allows.
+func (tc *TenantController) ensureTenantAllowance(c *gin.Context, userID uuid.UUID) error {
+	count, err := tc.tenantService.CountUserOwnedTenants(c.Request.Context(), userID)
+	if err != nil {
+		return api.Fail(http.StatusInternalServerError, coreErrors.BuildError(c, err))
+	}
+	limitReached, err := tc.billingService.IsLimitReached(c.Request.Context(), userID, "tenants", count)
+	if err != nil {
+		return api.Fail(http.StatusInternalServerError, coreErrors.BuildError(c, err))
+	}
+	if limitReached {
+		return api.Fail(http.StatusForbidden, coreErrors.BuildErrorSingle(c, tenancyErrors.TenantLimitReached))
+	}
+	return nil
+}
+
+// GetUserTenants is GET /me: Get user's accessible tenants.
+func (tc *TenantController) GetUserTenants(ctx context.Context, _ *api.None) (*api.Out[[]*models.UserTenantResponse], error) {
+	c := api.Gin(ctx)
 	// Check if multitenancy is enabled
 	tenancyConf := config.ModularAppConfig.Tenancy
 	if tenancyConf == nil || !tenancyConf.Enabled {
-		c.JSON(http.StatusServiceUnavailable, coreErrors.BuildErrorSingle(c, tenancyErrors.MultitenancyDisabled))
-		return
+		return nil, api.Fail(http.StatusServiceUnavailable, coreErrors.BuildErrorSingle(c, tenancyErrors.MultitenancyDisabled))
 	}
 
 	userIDStr, exists := c.Get("user_id")
 	if !exists {
-		c.JSON(http.StatusUnauthorized, coreErrors.BuildErrorSingle(c, tenancyErrors.TenantUserUnauthorized))
-		return
+		return nil, api.Fail(http.StatusUnauthorized, coreErrors.BuildErrorSingle(c, tenancyErrors.TenantUserUnauthorized))
 	}
 
 	userID, err := uuid.Parse(userIDStr.(string))
 	if err != nil {
-		c.JSON(http.StatusUnauthorized, coreErrors.BuildError(c, err))
-		return
+		return nil, api.Fail(http.StatusUnauthorized, coreErrors.BuildError(c, err))
 	}
 
 	tenants, err := tc.tenantService.GetUserTenants(c.Request.Context(), userID)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, coreErrors.BuildError(c, err))
-		return
+		return nil, api.Fail(http.StatusBadRequest, coreErrors.BuildError(c, err))
 	}
 
-	c.JSON(http.StatusOK, tenants)
+	return api.OK(tenants)
 }
 
-// UpdateTenant godoc
-// @Summary Update tenant information (owner/admin only)
-// @Description Update tenant name, database URL, schema, or settings
-// @Tags Tenants
-// @Accept json
-// @Produce json
-// @Param tenant_slug path string true "Tenant slug"
-// @Param request body models.UpdateTenantDto true "Updated tenant data"
-// @Success 200 {object} models.TenantDetailResponse
-// @Failure 400 {object} coreErrors.ErrorResponse
-// @Router /tenants/{tenant_slug} [patch]
-// @Security ApiKeyAuth
-func (tc *TenantController) UpdateTenant(c *gin.Context) {
+// UpdateTenantInput is UpdateTenant's request.
+type UpdateTenantInput struct {
+	JSON api.Body[models.UpdateTenantDto]
+}
+
+// UpdateTenant is PATCH : Update tenant information (owner/admin only).
+func (tc *TenantController) UpdateTenant(ctx context.Context, in *UpdateTenantInput) (*api.Out[*models.TenantDetailResponse], error) {
+	c := api.Gin(ctx)
 	tenantIDStr, exists := c.Get("tenant_id")
 	if !exists {
-		c.JSON(http.StatusUnauthorized, coreErrors.BuildErrorSingle(c, tenancyErrors.TenantUserUnauthorized))
-		return
+		return nil, api.Fail(http.StatusUnauthorized, coreErrors.BuildErrorSingle(c, tenancyErrors.TenantUserUnauthorized))
 	}
 
 	tenantID, err := uuid.Parse(tenantIDStr.(string))
 	if err != nil {
-		c.JSON(http.StatusBadRequest, coreErrors.BuildError(c, err))
-		return
+		return nil, api.Fail(http.StatusBadRequest, coreErrors.BuildError(c, err))
 	}
 
 	var dto models.UpdateTenantDto
-	if err := c.ShouldBindJSON(&dto); err != nil {
-		c.JSON(http.StatusBadRequest, coreErrors.BuildErrorDetail(c, tenancyErrors.TenantUpdateFailed, utils.ExtractValidationError(c, err)))
-		return
+	if err := in.JSON.Into(ctx, &dto); err != nil {
+		return nil, api.Fail(http.StatusBadRequest, coreErrors.BuildErrorDetail(c, tenancyErrors.TenantUpdateFailed, utils.ExtractValidationError(c, err)))
 	}
 
 	tenant, err := tc.tenantService.UpdateTenant(c.Request.Context(), tenantID, &dto)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, coreErrors.BuildError(c, err))
-		return
+		return nil, api.Fail(http.StatusBadRequest, coreErrors.BuildError(c, err))
 	}
 
-	c.JSON(http.StatusOK, tenant)
+	return api.OK(tenant)
 }
 
-// AddUserToTenant godoc
-// @Summary Add a user to tenant (owner/admin only)
-// @Description Add a user to the tenant with specified role
-// @Tags Tenants
-// @Accept json
-// @Produce json
-// @Param tenant_slug path string true "Tenant slug"
-// @Param request body models.AddUserToTenantDto true "User and role data"
-// @Success 200 {object} map[string]string
-// @Failure 400 {object} coreErrors.ErrorResponse
-// @Router /tenants/{tenant_slug}/users [post]
-// @Security ApiKeyAuth
-func (tc *TenantController) AddUserToTenant(c *gin.Context) {
+// AddUserToTenantInput is AddUserToTenant's request.
+type AddUserToTenantInput struct {
+	JSON api.Body[models.AddUserToTenantDto]
+}
+
+// AddUserToTenantResponse is AddUserToTenant's answer.
+type AddUserToTenantResponse struct {
+	Message string `json:"message"`
+}
+
+// AddUserToTenant is POST /users: Add a user to tenant (owner/admin only).
+func (tc *TenantController) AddUserToTenant(ctx context.Context, in *AddUserToTenantInput) (*api.Out[AddUserToTenantResponse], error) {
+	c := api.Gin(ctx)
 	tenantIDStr, exists := c.Get("tenant_id")
 	if !exists {
-		c.JSON(http.StatusUnauthorized, coreErrors.BuildErrorSingle(c, tenancyErrors.TenantUserUnauthorized))
-		return
+		return nil, api.Fail(http.StatusUnauthorized, coreErrors.BuildErrorSingle(c, tenancyErrors.TenantUserUnauthorized))
 	}
 
 	tenantID, err := uuid.Parse(tenantIDStr.(string))
 	if err != nil {
-		c.JSON(http.StatusBadRequest, coreErrors.BuildError(c, err))
-		return
+		return nil, api.Fail(http.StatusBadRequest, coreErrors.BuildError(c, err))
 	}
 
 	// Get requester user ID from JWT context
 	requesterUserIDStr, exists := c.Get("user_id")
 	if !exists {
-		c.JSON(http.StatusUnauthorized, coreErrors.BuildErrorSingle(c, tenancyErrors.TenantUserUnauthorized))
-		return
+		return nil, api.Fail(http.StatusUnauthorized, coreErrors.BuildErrorSingle(c, tenancyErrors.TenantUserUnauthorized))
 	}
 
 	requesterUserID, err := uuid.Parse(requesterUserIDStr.(string))
 	if err != nil {
-		c.JSON(http.StatusBadRequest, coreErrors.BuildError(c, err))
-		return
+		return nil, api.Fail(http.StatusBadRequest, coreErrors.BuildError(c, err))
 	}
 
 	var dto models.AddUserToTenantDto
-	if err := c.ShouldBindJSON(&dto); err != nil {
-		c.JSON(http.StatusBadRequest, coreErrors.BuildErrorDetail(c, tenancyErrors.TenantUserAddFailed, utils.ExtractValidationError(c, err)))
-		return
+	if err := in.JSON.Into(ctx, &dto); err != nil {
+		return nil, api.Fail(http.StatusBadRequest, coreErrors.BuildErrorDetail(c, tenancyErrors.TenantUserAddFailed, utils.ExtractValidationError(c, err)))
 	}
 
 	err = tc.tenantService.AddUserToTenant(c.Request.Context(), tenantID, requesterUserID, &dto)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, coreErrors.BuildError(c, err))
-		return
+		return nil, api.Fail(http.StatusBadRequest, coreErrors.BuildError(c, err))
 	}
 
-	c.JSON(http.StatusOK, gin.H{"message": "User added to tenant successfully"})
+	return api.OK(AddUserToTenantResponse{Message: "User added to tenant successfully"})
 }
 
-// RemoveUserFromTenant godoc
-// @Summary Remove a user from tenant (owner/admin only)
-// @Description Remove a user from the tenant
-// @Tags Tenants
-// @Accept json
-// @Produce json
-// @Param tenant_slug path string true "Tenant slug"
-// @Param user_id path string true "User ID"
-// @Success 200 {object} map[string]string
-// @Failure 400 {object} coreErrors.ErrorResponse
-// @Router /tenants/{tenant_slug}/users/{user_id} [delete]
-// @Security ApiKeyAuth
-func (tc *TenantController) RemoveUserFromTenant(c *gin.Context) {
+// RemoveUserFromTenantInput is RemoveUserFromTenant's request.
+type RemoveUserFromTenantInput struct {
+	UserID string `path:"user_id"`
+}
+
+// RemoveUserFromTenantResponse is RemoveUserFromTenant's answer.
+type RemoveUserFromTenantResponse struct {
+	Message string `json:"message"`
+}
+
+// RemoveUserFromTenant is DELETE /users/{user_id}: Remove a user from tenant (owner/admin only).
+func (tc *TenantController) RemoveUserFromTenant(ctx context.Context, in *RemoveUserFromTenantInput) (*api.Out[RemoveUserFromTenantResponse], error) {
+	c := api.Gin(ctx)
 	tenantIDStr, exists := c.Get("tenant_id")
 	if !exists {
-		c.JSON(http.StatusUnauthorized, coreErrors.BuildErrorSingle(c, tenancyErrors.TenantUserUnauthorized))
-		return
+		return nil, api.Fail(http.StatusUnauthorized, coreErrors.BuildErrorSingle(c, tenancyErrors.TenantUserUnauthorized))
 	}
 
 	tenantID, err := uuid.Parse(tenantIDStr.(string))
 	if err != nil {
-		c.JSON(http.StatusBadRequest, coreErrors.BuildError(c, err))
-		return
+		return nil, api.Fail(http.StatusBadRequest, coreErrors.BuildError(c, err))
 	}
 
 	// Get requester user ID from JWT context
 	requesterUserIDStr, exists := c.Get("user_id")
 	if !exists {
-		c.JSON(http.StatusUnauthorized, coreErrors.BuildErrorSingle(c, tenancyErrors.TenantUserUnauthorized))
-		return
+		return nil, api.Fail(http.StatusUnauthorized, coreErrors.BuildErrorSingle(c, tenancyErrors.TenantUserUnauthorized))
 	}
 
 	requesterUserID, err := uuid.Parse(requesterUserIDStr.(string))
 	if err != nil {
-		c.JSON(http.StatusBadRequest, coreErrors.BuildError(c, err))
-		return
+		return nil, api.Fail(http.StatusBadRequest, coreErrors.BuildError(c, err))
 	}
 
-	userIDParam := c.Param("user_id")
+	userIDParam := in.UserID
 	userID, err := uuid.Parse(userIDParam)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, coreErrors.BuildError(c, err))
-		return
+		return nil, api.Fail(http.StatusBadRequest, coreErrors.BuildError(c, err))
 	}
 
 	err = tc.tenantService.RemoveUserFromTenant(c.Request.Context(), tenantID, requesterUserID, userID)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, coreErrors.BuildError(c, err))
-		return
+		return nil, api.Fail(http.StatusBadRequest, coreErrors.BuildError(c, err))
 	}
 
-	c.JSON(http.StatusOK, gin.H{"message": "User removed from tenant successfully"})
+	return api.OK(RemoveUserFromTenantResponse{Message: "User removed from tenant successfully"})
 }
 
-// UpdateUserRole godoc
-// @Summary Update a user's role in the tenant (owner/admin only)
-// @Description Change the role of a tenant member. Only owner can assign the owner role.
-// @Tags Tenants
-// @Accept json
-// @Produce json
-// @Param tenant_slug path string true "Tenant slug"
-// @Param user_id path string true "User ID"
-// @Param request body models.UpdateUserRoleDto true "New role"
-// @Success 204
-// @Failure 400 {object} coreErrors.ErrorResponse
-// @Failure 403 {object} coreErrors.ErrorResponse
-// @Router /tenants/{tenant_slug}/users/{user_id}/role [patch]
-// @Security ApiKeyAuth
-func (tc *TenantController) UpdateUserRole(c *gin.Context) {
+// UpdateUserRoleInput is UpdateUserRole's request.
+type UpdateUserRoleInput struct {
+	UserID string `path:"user_id"`
+	JSON   api.Body[models.UpdateUserRoleDto]
+}
+
+// UpdateUserRole is PATCH /users/{user_id}/role: Update a user's role in the tenant (owner/admin only).
+func (tc *TenantController) UpdateUserRole(ctx context.Context, in *UpdateUserRoleInput) (*api.Empty, error) {
+	c := api.Gin(ctx)
 	tenantIDStr, exists := c.Get("tenant_id")
 	if !exists {
-		c.JSON(http.StatusUnauthorized, coreErrors.BuildErrorSingle(c, tenancyErrors.TenantUserUnauthorized))
-		return
+		return nil, api.Fail(http.StatusUnauthorized, coreErrors.BuildErrorSingle(c, tenancyErrors.TenantUserUnauthorized))
 	}
 
 	tenantID, err := uuid.Parse(tenantIDStr.(string))
 	if err != nil {
-		c.JSON(http.StatusBadRequest, coreErrors.BuildError(c, err))
-		return
+		return nil, api.Fail(http.StatusBadRequest, coreErrors.BuildError(c, err))
 	}
 
 	requesterIDStr, exists := c.Get("user_id")
 	if !exists {
-		c.JSON(http.StatusUnauthorized, coreErrors.BuildErrorSingle(c, tenancyErrors.TenantUserUnauthorized))
-		return
+		return nil, api.Fail(http.StatusUnauthorized, coreErrors.BuildErrorSingle(c, tenancyErrors.TenantUserUnauthorized))
 	}
 
 	requesterID, err := uuid.Parse(requesterIDStr.(string))
 	if err != nil {
-		c.JSON(http.StatusBadRequest, coreErrors.BuildError(c, err))
-		return
+		return nil, api.Fail(http.StatusBadRequest, coreErrors.BuildError(c, err))
 	}
 
-	userID, err := uuid.Parse(c.Param("user_id"))
+	userID, err := uuid.Parse(in.UserID)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, coreErrors.BuildErrorSingle(c, coreErrors.InvalidUUID))
-		return
+		return nil, api.Fail(http.StatusBadRequest, coreErrors.BuildErrorSingle(c, coreErrors.InvalidUUID))
 	}
 
 	var dto models.UpdateUserRoleDto
-	if err := c.ShouldBindJSON(&dto); err != nil {
-		c.JSON(http.StatusBadRequest, coreErrors.BuildErrorDetail(c, tenancyErrors.TenantUserUpdateFailed, utils.ExtractValidationError(c, err)))
-		return
+	if err := in.JSON.Into(ctx, &dto); err != nil {
+		return nil, api.Fail(http.StatusBadRequest, coreErrors.BuildErrorDetail(c, tenancyErrors.TenantUserUpdateFailed, utils.ExtractValidationError(c, err)))
 	}
 
 	err = tc.tenantService.UpdateUserRole(c.Request.Context(), tenantID, requesterID, userID, dto.Role)
@@ -410,60 +350,50 @@ func (tc *TenantController) UpdateUserRole(c *gin.Context) {
 		if errors.As(err, &pgErr) {
 			switch pgErr.Message {
 			case "tenant.user.not-found":
-				c.JSON(http.StatusNotFound, coreErrors.BuildErrorSingle(c, tenancyErrors.TenantUserNotFound))
-				return
+				return nil, api.Fail(http.StatusNotFound, coreErrors.BuildErrorSingle(c, tenancyErrors.TenantUserNotFound))
 			case "tenant.user.invalid-role":
-				c.JSON(http.StatusBadRequest, coreErrors.BuildErrorSingle(c, tenancyErrors.TenantUserInvalidRole))
-				return
+				return nil, api.Fail(http.StatusBadRequest, coreErrors.BuildErrorSingle(c, tenancyErrors.TenantUserInvalidRole))
 			case "tenant.user.not-authorized", "tenant.user.insufficient-permissions":
-				c.JSON(http.StatusForbidden, coreErrors.BuildErrorSingle(c, tenancyErrors.TenantUserInsufficientPermissions))
-				return
+				return nil, api.Fail(http.StatusForbidden, coreErrors.BuildErrorSingle(c, tenancyErrors.TenantUserInsufficientPermissions))
 			case "tenant.user.cannot-change-own-role":
-				c.JSON(http.StatusBadRequest, coreErrors.BuildErrorSingle(c, tenancyErrors.TenantUserUpdateFailed))
-				return
+				return nil, api.Fail(http.StatusBadRequest, coreErrors.BuildErrorSingle(c, tenancyErrors.TenantUserUpdateFailed))
 			}
 		}
-		c.JSON(http.StatusInternalServerError, coreErrors.BuildError(c, err))
-		return
+		return nil, api.Fail(http.StatusInternalServerError, coreErrors.BuildError(c, err))
 	}
 
-	c.Status(http.StatusNoContent)
+	return api.Done()
 }
 
-// RunTenantMigrations godoc
-// @Summary Run migrations on tenant database
-// @Description Execute all pending migrations on a tenant's custom database (admin/super_admin only)
-// @Tags Tenants
-// @Produce json
-// @Param tenant_slug path string true "Tenant slug"
-// @Success 200 {object} map[string]string
-// @Failure 400 {object} coreErrors.ErrorResponse
-// @Failure 403 {object} coreErrors.ErrorResponse
-// @Failure 404 {object} coreErrors.ErrorResponse
-// @Router /tenants/{tenant_slug}/migrate [post]
-// @Security ApiKeyAuth
-func (tc *TenantController) RunTenantMigrations(c *gin.Context) {
+// RunTenantMigrationsInput is RunTenantMigrations's request.
+type RunTenantMigrationsInput struct {
+	TenantSlug string `path:"tenant_slug"`
+}
+
+// RunTenantMigrationsResponse is RunTenantMigrations's answer.
+type RunTenantMigrationsResponse struct {
+	Message string `json:"message"`
+	Tenant  string `json:"tenant"`
+}
+
+// RunTenantMigrations is POST /migrate: Run migrations on tenant database.
+func (tc *TenantController) RunTenantMigrations(ctx context.Context, in *RunTenantMigrationsInput) (*api.Out[RunTenantMigrationsResponse], error) {
+	c := api.Gin(ctx)
 	// Check system role (only super_admin or admin)
 	systemRole, exists := c.Get("system_role")
 	if !exists || (systemRole != coreModels.SystemRoleSuperAdmin && systemRole != models.RoleAdmin) {
-		c.JSON(http.StatusForbidden, coreErrors.BuildErrorSingle(c, tenancyErrors.TenantUserInsufficientPermissions))
-		return
+		return nil, api.Fail(http.StatusForbidden, coreErrors.BuildErrorSingle(c, tenancyErrors.TenantUserInsufficientPermissions))
 	}
 
-	tenantSlug := c.Param("tenant_slug")
+	tenantSlug := in.TenantSlug
 	if tenantSlug == "" {
-		c.JSON(http.StatusBadRequest, coreErrors.BuildErrorSingle(c, coreErrors.InvalidUUID))
-		return
+		return nil, api.Fail(http.StatusBadRequest, coreErrors.BuildErrorSingle(c, coreErrors.InvalidUUID))
 	}
 
 	err := tc.tenantService.RunTenantMigrations(c.Request.Context(), tenantSlug)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, coreErrors.BuildError(c, err))
-		return
+		return nil, api.Fail(http.StatusBadRequest, coreErrors.BuildError(c, err))
 	}
 
-	c.JSON(http.StatusOK, gin.H{
-		"message": "Migrations executed successfully",
-		"tenant":  tenantSlug,
-	})
+	return api.OK(RunTenantMigrationsResponse{Message: "Migrations executed successfully", Tenant: tenantSlug})
 }

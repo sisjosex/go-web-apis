@@ -1,9 +1,11 @@
 package controllers
 
 import (
+	"context"
 	"errors"
 	"net/http"
 
+	"josex/web/modules/core/api"
 	coreErrors "josex/web/modules/core/errors"
 	"josex/web/modules/core/utils"
 	trackingErrors "josex/web/modules/tracking/errors"
@@ -17,178 +19,142 @@ import (
 
 // exceptionErrorResponse maps the exception and preview codes to statuses and reports whether it has
 // already written the response.
-func exceptionErrorResponse(c *gin.Context, err error) bool {
+func exceptionErrorResponse(c *gin.Context, err error) error {
 	var trackingErr *trackingErrors.TrackingError
 	if !errors.As(err, &trackingErr) {
-		return false
+		return nil
 	}
 	switch trackingErr.Code {
 	case trackingErrors.RouteNotFound, trackingErrors.ExceptionNotFound,
 		trackingErrors.VehicleNotFound, trackingErrors.DriverNotFound, trackingErrors.StopPlaceNotFound:
-		c.JSON(http.StatusNotFound, coreErrors.BuildErrorSingle(c, trackingErr.Code))
-		return true
+		return api.Fail(http.StatusNotFound, coreErrors.BuildErrorSingle(c, trackingErr.Code))
 	case trackingErrors.ExceptionPayload, trackingErrors.ExceptionRange, trackingErrors.RoutePreviewRange:
-		c.JSON(http.StatusBadRequest, coreErrors.BuildErrorSingle(c, trackingErr.Code))
-		return true
+		return api.Fail(http.StatusBadRequest, coreErrors.BuildErrorSingle(c, trackingErr.Code))
 	case trackingErrors.ServiceBlocked:
-		c.JSON(http.StatusConflict, coreErrors.BuildErrorDetail(c, trackingErr.Code, trackingErr.Detail))
-		return true
+		return api.Fail(http.StatusConflict, coreErrors.BuildErrorDetail(c, trackingErr.Code, trackingErr.Detail))
 	}
-	return false
+	return nil
 }
 
-// ListRouteExceptions godoc
-// @Summary List a route's exceptions
-// @Description What happens differently on one day or a few; an exception overlapping the window is part of the answer
-// @Tags Tracking - Exceptions
-// @Produce json
-// @Security BearerAuth
-// @Param route_id path string true "Route ID (UUID)"
-// @Param date_from query string false "Earliest date (YYYY-MM-DD)"
-// @Param date_to query string false "Latest date (YYYY-MM-DD)"
-// @Success 200 {array} models.RouteException
-// @Failure 400 {object} coreErrors.ErrorResponse
-// @Failure 404 {object} coreErrors.ErrorResponse
-// @Failure 500 {object} coreErrors.ErrorResponse
-// @Router /tracking/routes/{route_id}/exceptions [get]
-func (ctrl *TrackingController) ListRouteExceptions(c *gin.Context) {
-	tenantID, ok := ctrl.requireTenantID(c)
-	if !ok {
-		return
-	}
-	routeID, err := uuid.Parse(c.Param("route_id"))
+// ListRouteExceptionsInput is ListRouteExceptions's request.
+type ListRouteExceptionsInput struct {
+	RouteID string `path:"route_id"`
+	Query   api.Query[models.ListRouteExceptionsQuery]
+}
+
+// ListRouteExceptions is GET /routes/{route_id}/exceptions: List a route's exceptions.
+func (ctrl *TrackingController) ListRouteExceptions(ctx context.Context, in *ListRouteExceptionsInput) (*api.Out[[]*models.RouteException], error) {
+	c := api.Gin(ctx)
+	tenantID, err := ctrl.requireTenantID(c)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, coreErrors.BuildErrorSingle(c, coreErrors.InvalidUUID))
-		return
+		return nil, err
+	}
+	routeID, err := uuid.Parse(in.RouteID)
+	if err != nil {
+		return nil, api.Fail(http.StatusBadRequest, coreErrors.BuildErrorSingle(c, coreErrors.InvalidUUID))
 	}
 	var query models.ListRouteExceptionsQuery
-	if err := c.ShouldBindQuery(&query); err != nil {
-		c.JSON(http.StatusBadRequest, coreErrors.BuildErrorDetail(c, trackingErrors.ExceptionListFailed, utils.ExtractValidationError(c, err)))
-		return
+	if err := in.Query.Into(ctx, &query); err != nil {
+		return nil, api.Fail(http.StatusBadRequest, coreErrors.BuildErrorDetail(c, trackingErrors.ExceptionListFailed, utils.ExtractValidationError(c, err)))
 	}
 
 	exceptions, err := ctrl.trackingService.ListRouteExceptions(c.Request.Context(), tenantID, routeID, query.DateFrom, query.DateTo)
 	if err != nil {
-		if exceptionErrorResponse(c, err) {
-			return
+		if err := exceptionErrorResponse(c, err); err != nil {
+			return nil, err
 		}
-		c.JSON(http.StatusInternalServerError, coreErrors.BuildError(c, err))
-		return
+		return nil, api.Fail(http.StatusInternalServerError, coreErrors.BuildError(c, err))
 	}
-	c.JSON(http.StatusOK, exceptions)
+	return api.OK(exceptions)
 }
 
-// CreateRouteException godoc
-// @Summary Record what happens differently over a range of dates
-// @Description kind is one of cancel, change_time, change_vehicle, change_driver, skip_stop, add_stop, detour; payload carries exactly the keys that kind defines
-// @Tags Tracking - Exceptions
-// @Accept json
-// @Produce json
-// @Security BearerAuth
-// @Param route_id path string true "Route ID (UUID)"
-// @Param exception body models.CreateRouteExceptionDto true "The dates, the kind and its payload"
-// @Success 201 {object} models.RouteException
-// @Failure 400 {object} coreErrors.ErrorResponse
-// @Failure 404 {object} coreErrors.ErrorResponse
-// @Failure 500 {object} coreErrors.ErrorResponse
-// @Router /tracking/routes/{route_id}/exceptions [post]
-func (ctrl *TrackingController) CreateRouteException(c *gin.Context) {
-	tenantID, ok := ctrl.requireTenantID(c)
-	if !ok {
-		return
-	}
-	routeID, err := uuid.Parse(c.Param("route_id"))
+// CreateRouteExceptionInput is CreateRouteException's request.
+type CreateRouteExceptionInput struct {
+	RouteID string `path:"route_id"`
+	JSON    api.Body[models.CreateRouteExceptionDto]
+}
+
+// CreateRouteException is POST /routes/{route_id}/exceptions: Record what happens differently over a range of dates.
+func (ctrl *TrackingController) CreateRouteException(ctx context.Context, in *CreateRouteExceptionInput) (*api.Out[*models.RouteException], error) {
+	c := api.Gin(ctx)
+	tenantID, err := ctrl.requireTenantID(c)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, coreErrors.BuildErrorSingle(c, coreErrors.InvalidUUID))
-		return
+		return nil, err
+	}
+	routeID, err := uuid.Parse(in.RouteID)
+	if err != nil {
+		return nil, api.Fail(http.StatusBadRequest, coreErrors.BuildErrorSingle(c, coreErrors.InvalidUUID))
 	}
 	var dto models.CreateRouteExceptionDto
-	if err := c.ShouldBindJSON(&dto); err != nil {
-		c.JSON(http.StatusBadRequest, coreErrors.BuildErrorDetail(c, trackingErrors.ExceptionCreateFailed, utils.ExtractValidationError(c, err)))
-		return
+	if err := in.JSON.Into(ctx, &dto); err != nil {
+		return nil, api.Fail(http.StatusBadRequest, coreErrors.BuildErrorDetail(c, trackingErrors.ExceptionCreateFailed, utils.ExtractValidationError(c, err)))
 	}
 
 	exception, err := ctrl.trackingService.CreateRouteException(c.Request.Context(), tenantID, routeID, &dto, ctrl.actingUserID(c))
 	if err != nil {
-		if exceptionErrorResponse(c, err) {
-			return
+		if err := exceptionErrorResponse(c, err); err != nil {
+			return nil, err
 		}
-		c.JSON(http.StatusInternalServerError, coreErrors.BuildError(c, err))
-		return
+		return nil, api.Fail(http.StatusInternalServerError, coreErrors.BuildError(c, err))
 	}
-	c.JSON(http.StatusCreated, exception)
+	return api.OK(exception)
 }
 
-// DeleteRouteException godoc
-// @Summary Take an exception back
-// @Tags Tracking - Exceptions
-// @Produce json
-// @Security BearerAuth
-// @Param route_id path string true "Route ID (UUID)"
-// @Param exception_id path string true "Exception ID (UUID)"
-// @Success 204 "No Content"
-// @Failure 400 {object} coreErrors.ErrorResponse
-// @Failure 404 {object} coreErrors.ErrorResponse
-// @Failure 500 {object} coreErrors.ErrorResponse
-// @Router /tracking/routes/{route_id}/exceptions/{exception_id} [delete]
-func (ctrl *TrackingController) DeleteRouteException(c *gin.Context) {
-	tenantID, ok := ctrl.requireTenantID(c)
-	if !ok {
-		return
-	}
-	exceptionID, err := uuid.Parse(c.Param("exception_id"))
+// DeleteRouteExceptionInput is DeleteRouteException's request.
+type DeleteRouteExceptionInput struct {
+	ExceptionID string `path:"exception_id"`
+	RouteID     string `path:"route_id"`
+}
+
+// DeleteRouteException is DELETE /routes/{route_id}/exceptions/{exception_id}: Take an exception back.
+func (ctrl *TrackingController) DeleteRouteException(ctx context.Context, in *DeleteRouteExceptionInput) (*api.Empty, error) {
+	c := api.Gin(ctx)
+	tenantID, err := ctrl.requireTenantID(c)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, coreErrors.BuildErrorSingle(c, coreErrors.InvalidUUID))
-		return
+		return nil, err
+	}
+	exceptionID, err := uuid.Parse(in.ExceptionID)
+	if err != nil {
+		return nil, api.Fail(http.StatusBadRequest, coreErrors.BuildErrorSingle(c, coreErrors.InvalidUUID))
 	}
 
 	if err := ctrl.trackingService.DeleteRouteException(c.Request.Context(), tenantID, exceptionID); err != nil {
-		if exceptionErrorResponse(c, err) {
-			return
+		if err := exceptionErrorResponse(c, err); err != nil {
+			return nil, err
 		}
-		c.JSON(http.StatusInternalServerError, coreErrors.BuildError(c, err))
-		return
+		return nil, api.Fail(http.StatusInternalServerError, coreErrors.BuildError(c, err))
 	}
-	c.Status(http.StatusNoContent)
+	return api.Done()
 }
 
-// PreviewRoute godoc
-// @Summary The plan a route runs over a window
-// @Description Schedules, calendar, stop-list version and exceptions resolved into one row per departure; writes nothing, and a window wider than 92 days is refused
-// @Tags Tracking - Schedules
-// @Produce json
-// @Security BearerAuth
-// @Param route_id path string true "Route ID (UUID)"
-// @Param from query string true "First date (YYYY-MM-DD)"
-// @Param to query string true "Last date (YYYY-MM-DD)"
-// @Success 200 {array} models.RoutePreviewDay
-// @Failure 400 {object} coreErrors.ErrorResponse
-// @Failure 404 {object} coreErrors.ErrorResponse
-// @Failure 500 {object} coreErrors.ErrorResponse
-// @Router /tracking/routes/{route_id}/preview [get]
-func (ctrl *TrackingController) PreviewRoute(c *gin.Context) {
-	tenantID, ok := ctrl.requireTenantID(c)
-	if !ok {
-		return
-	}
-	routeID, err := uuid.Parse(c.Param("route_id"))
+// PreviewRouteInput is PreviewRoute's request.
+type PreviewRouteInput struct {
+	RouteID string `path:"route_id"`
+	Query   api.Query[models.RoutePreviewQuery]
+}
+
+// PreviewRoute is GET /routes/{route_id}/preview: The plan a route runs over a window.
+func (ctrl *TrackingController) PreviewRoute(ctx context.Context, in *PreviewRouteInput) (*api.Out[[]*models.RoutePreviewDay], error) {
+	c := api.Gin(ctx)
+	tenantID, err := ctrl.requireTenantID(c)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, coreErrors.BuildErrorSingle(c, coreErrors.InvalidUUID))
-		return
+		return nil, err
+	}
+	routeID, err := uuid.Parse(in.RouteID)
+	if err != nil {
+		return nil, api.Fail(http.StatusBadRequest, coreErrors.BuildErrorSingle(c, coreErrors.InvalidUUID))
 	}
 	var query models.RoutePreviewQuery
-	if err := c.ShouldBindQuery(&query); err != nil {
-		c.JSON(http.StatusBadRequest, coreErrors.BuildErrorDetail(c, trackingErrors.RoutePreviewFailed, utils.ExtractValidationError(c, err)))
-		return
+	if err := in.Query.Into(ctx, &query); err != nil {
+		return nil, api.Fail(http.StatusBadRequest, coreErrors.BuildErrorDetail(c, trackingErrors.RoutePreviewFailed, utils.ExtractValidationError(c, err)))
 	}
 
 	days, err := ctrl.trackingService.PreviewRoute(c.Request.Context(), tenantID, routeID, query.From, query.To)
 	if err != nil {
-		if exceptionErrorResponse(c, err) {
-			return
+		if err := exceptionErrorResponse(c, err); err != nil {
+			return nil, err
 		}
-		c.JSON(http.StatusInternalServerError, coreErrors.BuildError(c, err))
-		return
+		return nil, api.Fail(http.StatusInternalServerError, coreErrors.BuildError(c, err))
 	}
-	c.JSON(http.StatusOK, days)
+	return api.OK(days)
 }

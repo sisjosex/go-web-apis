@@ -58,8 +58,8 @@ type LoginExternalDto struct {
 
 // LoginSuccessResponse returned after successful login
 type LoginSuccessResponse struct {
-	AccessToken  *string `json:"access_token"`  // JWT token
-	RefreshToken *string `json:"refresh_token"` // JWT token
+	AccessToken  *string `json:"access_token" nullable:"false"`  // JWT token
+	RefreshToken *string `json:"refresh_token" nullable:"false"` // JWT token
 }
 
 // RefreshTokenRequestDto for token refresh

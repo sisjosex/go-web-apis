@@ -1,9 +1,11 @@
 package controllers
 
 import (
+	"context"
 	"errors"
 	"net/http"
 
+	"josex/web/modules/core/api"
 	coreErrors "josex/web/modules/core/errors"
 	"josex/web/modules/core/utils"
 	trackingErrors "josex/web/modules/tracking/errors"
@@ -26,19 +28,19 @@ var vehicleSetupStatus = map[string]int{
 	trackingErrors.ServiceBlocked:               http.StatusConflict,
 }
 
-func vehicleSetupError(c *gin.Context, err error) {
+func vehicleSetupError(c *gin.Context, err error) error {
 	var trackingErr *trackingErrors.TrackingError
 	if errors.As(err, &trackingErr) {
 		if status, ok := vehicleSetupStatus[trackingErr.Code]; ok {
 			if trackingErr.Detail != nil {
-				c.JSON(status, coreErrors.BuildErrorDetail(c, trackingErr.Code, trackingErr.Detail))
+				return api.Fail(status, coreErrors.BuildErrorDetail(c, trackingErr.Code, trackingErr.Detail))
 			} else {
-				c.JSON(status, coreErrors.BuildErrorSingle(c, trackingErr.Code))
+				return api.Fail(status, coreErrors.BuildErrorSingle(c, trackingErr.Code))
 			}
-			return
+
 		}
 	}
-	c.JSON(http.StatusInternalServerError, coreErrors.BuildError(c, err))
+	return api.Fail(http.StatusInternalServerError, coreErrors.BuildError(c, err))
 }
 
 // optionalUUID parses a query value that may be absent; ok is false when it is present and malformed.
@@ -53,122 +55,91 @@ func optionalUUID(raw *string) (*uuid.UUID, bool) {
 	return &id, true
 }
 
-// SetVehicleDriver godoc
-// @Summary Set a vehicle's usual driver
-// @Description Who usually drives the vehicle; its routes without their own driver run with this one
-// @Description from today (TRACK-034 D1). A null driver_id clears it.
-// @Tags Tracking - Vehicles
-// @Accept json
-// @Produce json
-// @Security BearerAuth
-// @Param vehicle_id path string true "Vehicle ID (UUID)"
-// @Param body body models.SetVehicleDriverDto true "The driver, or null"
-// @Success 200 {object} models.Vehicle
-// @Failure 400 {object} coreErrors.ErrorResponse
-// @Failure 404 {object} coreErrors.ErrorResponse
-// @Failure 422 {object} coreErrors.ErrorResponse
-// @Router /tracking/vehicles/{vehicle_id}/driver [put]
-func (ctrl *TrackingController) SetVehicleDriver(c *gin.Context) {
-	tenantID, ok := ctrl.requireTenantID(c)
-	if !ok {
-		return
-	}
-	vehicleID, err := uuid.Parse(c.Param("vehicle_id"))
+// SetVehicleDriverInput is SetVehicleDriver's request.
+type SetVehicleDriverInput struct {
+	VehicleID string `path:"vehicle_id"`
+	JSON      api.Body[models.SetVehicleDriverDto]
+}
+
+// SetVehicleDriver is PUT /vehicles/{vehicle_id}/driver: Set a vehicle's usual driver.
+func (ctrl *TrackingController) SetVehicleDriver(ctx context.Context, in *SetVehicleDriverInput) (*api.Out[*models.Vehicle], error) {
+	c := api.Gin(ctx)
+	tenantID, err := ctrl.requireTenantID(c)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, coreErrors.BuildErrorSingle(c, coreErrors.InvalidUUID))
-		return
+		return nil, err
+	}
+	vehicleID, err := uuid.Parse(in.VehicleID)
+	if err != nil {
+		return nil, api.Fail(http.StatusBadRequest, coreErrors.BuildErrorSingle(c, coreErrors.InvalidUUID))
 	}
 	var dto models.SetVehicleDriverDto
-	if err := c.ShouldBindJSON(&dto); err != nil {
-		c.JSON(http.StatusBadRequest, coreErrors.BuildErrorDetail(c, trackingErrors.VehicleDriverFailed, utils.ExtractValidationError(c, err)))
-		return
+	if err := in.JSON.Into(ctx, &dto); err != nil {
+		return nil, api.Fail(http.StatusBadRequest, coreErrors.BuildErrorDetail(c, trackingErrors.VehicleDriverFailed, utils.ExtractValidationError(c, err)))
 	}
 	vehicle, err := ctrl.trackingService.SetVehicleDriver(c.Request.Context(), tenantID, vehicleID, dto.DriverID)
 	if err != nil {
-		vehicleSetupError(c, err)
-		return
+		return nil, vehicleSetupError(c, err)
 	}
-	c.JSON(http.StatusOK, vehicle)
+	return api.OK(vehicle)
 }
 
-// MoveVehicleCompany godoc
-// @Summary Move a vehicle to another company
-// @Description The vehicle changes carrier; move_routes takes its routes and their pairs with it, false
-// @Description leaves them without a vehicle. A usual driver of another carrier is dropped (TRACK-070 D4).
-// @Tags Tracking - Vehicles
-// @Accept json
-// @Produce json
-// @Security BearerAuth
-// @Param vehicle_id path string true "Vehicle ID (UUID)"
-// @Param body body models.MoveVehicleCompanyDto true "Target company and whether the routes go"
-// @Success 200 {object} models.MovedVehicle
-// @Failure 400 {object} coreErrors.ErrorResponse
-// @Failure 404 {object} coreErrors.ErrorResponse
-// @Failure 409 {object} coreErrors.ErrorResponse
-// @Router /tracking/vehicles/{vehicle_id}/company [post]
-func (ctrl *TrackingController) MoveVehicleCompany(c *gin.Context) {
-	tenantID, ok := ctrl.requireTenantID(c)
-	if !ok {
-		return
-	}
-	vehicleID, err := uuid.Parse(c.Param("vehicle_id"))
+// MoveVehicleCompanyInput is MoveVehicleCompany's request.
+type MoveVehicleCompanyInput struct {
+	VehicleID string `path:"vehicle_id"`
+	JSON      api.Body[models.MoveVehicleCompanyDto]
+}
+
+// MoveVehicleCompany is POST /vehicles/{vehicle_id}/company: Move a vehicle to another company.
+func (ctrl *TrackingController) MoveVehicleCompany(ctx context.Context, in *MoveVehicleCompanyInput) (*api.Out[*models.MovedVehicle], error) {
+	c := api.Gin(ctx)
+	tenantID, err := ctrl.requireTenantID(c)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, coreErrors.BuildErrorSingle(c, coreErrors.InvalidUUID))
-		return
+		return nil, err
+	}
+	vehicleID, err := uuid.Parse(in.VehicleID)
+	if err != nil {
+		return nil, api.Fail(http.StatusBadRequest, coreErrors.BuildErrorSingle(c, coreErrors.InvalidUUID))
 	}
 	var dto models.MoveVehicleCompanyDto
-	if err := c.ShouldBindJSON(&dto); err != nil {
-		c.JSON(http.StatusBadRequest, coreErrors.BuildErrorDetail(c, trackingErrors.VehicleMoveFailed, utils.ExtractValidationError(c, err)))
-		return
+	if err := in.JSON.Into(ctx, &dto); err != nil {
+		return nil, api.Fail(http.StatusBadRequest, coreErrors.BuildErrorDetail(c, trackingErrors.VehicleMoveFailed, utils.ExtractValidationError(c, err)))
 	}
 	moved, err := ctrl.trackingService.MoveVehicleCompany(c.Request.Context(), tenantID, vehicleID, &dto)
 	if err != nil {
-		vehicleSetupError(c, err)
-		return
+		return nil, vehicleSetupError(c, err)
 	}
-	c.JSON(http.StatusOK, moved)
+	return api.OK(moved)
 }
 
-// VehicleConflicts godoc
-// @Summary Schedule clashes of an assignment
-// @Description The runs that would overlap if route_id ran on the vehicle — or, without it, the
-// @Description vehicle's own routes with driver_id driving them (TRACK-034 D2). Nothing is refused:
-// @Description the screen warns and lets the operator assign anyway.
-// @Tags Tracking - Vehicles
-// @Produce json
-// @Security BearerAuth
-// @Param vehicle_id path string true "Vehicle ID (UUID)"
-// @Param route_id query string false "The route being assigned (UUID)"
-// @Param driver_id query string false "The driver being set (UUID)"
-// @Success 200 {object} models.VehicleConflictsResponse
-// @Failure 400 {object} coreErrors.ErrorResponse
-// @Failure 404 {object} coreErrors.ErrorResponse
-// @Router /tracking/vehicles/{vehicle_id}/conflicts [get]
-func (ctrl *TrackingController) VehicleConflicts(c *gin.Context) {
-	tenantID, ok := ctrl.requireTenantID(c)
-	if !ok {
-		return
-	}
-	vehicleID, err := uuid.Parse(c.Param("vehicle_id"))
+// VehicleConflictsInput is VehicleConflicts's request.
+type VehicleConflictsInput struct {
+	VehicleID string `path:"vehicle_id"`
+	Query     api.Query[models.VehicleConflictsQuery]
+}
+
+// VehicleConflicts is GET /vehicles/{vehicle_id}/conflicts: Schedule clashes of an assignment.
+func (ctrl *TrackingController) VehicleConflicts(ctx context.Context, in *VehicleConflictsInput) (*api.Out[*models.VehicleConflictsResponse], error) {
+	c := api.Gin(ctx)
+	tenantID, err := ctrl.requireTenantID(c)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, coreErrors.BuildErrorSingle(c, coreErrors.InvalidUUID))
-		return
+		return nil, err
+	}
+	vehicleID, err := uuid.Parse(in.VehicleID)
+	if err != nil {
+		return nil, api.Fail(http.StatusBadRequest, coreErrors.BuildErrorSingle(c, coreErrors.InvalidUUID))
 	}
 	var query models.VehicleConflictsQuery
-	if err := c.ShouldBindQuery(&query); err != nil {
-		c.JSON(http.StatusBadRequest, coreErrors.BuildErrorDetail(c, trackingErrors.VehicleConflictsFailed, utils.ExtractValidationError(c, err)))
-		return
+	if err := in.Query.Into(ctx, &query); err != nil {
+		return nil, api.Fail(http.StatusBadRequest, coreErrors.BuildErrorDetail(c, trackingErrors.VehicleConflictsFailed, utils.ExtractValidationError(c, err)))
 	}
 	routeID, okRoute := optionalUUID(query.RouteID)
 	driverID, okDriver := optionalUUID(query.DriverID)
 	if !okRoute || !okDriver {
-		c.JSON(http.StatusBadRequest, coreErrors.BuildErrorSingle(c, coreErrors.InvalidUUID))
-		return
+		return nil, api.Fail(http.StatusBadRequest, coreErrors.BuildErrorSingle(c, coreErrors.InvalidUUID))
 	}
 	response, err := ctrl.trackingService.VehicleScheduleConflicts(c.Request.Context(), tenantID, vehicleID, routeID, driverID)
 	if err != nil {
-		vehicleSetupError(c, err)
-		return
+		return nil, vehicleSetupError(c, err)
 	}
-	c.JSON(http.StatusOK, response)
+	return api.OK(response)
 }

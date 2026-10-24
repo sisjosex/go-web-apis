@@ -1,15 +1,16 @@
 package controllers
 
 import (
+	"context"
 	"errors"
 	"net/http"
 	"strconv"
 
-	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
 
+	"josex/web/modules/core/api"
 	coreErrors "josex/web/modules/core/errors"
 	inventoryErrors "josex/web/modules/inventory/errors"
 	inventoryInterfaces "josex/web/modules/inventory/interfaces"
@@ -26,34 +27,27 @@ func NewCategoryController(categoryService inventoryInterfaces.CategoryService) 
 	}
 }
 
-// CreateCategory godoc
-// @Summary Create a new product category
-// @Description Create a new product category with hierarchical support
-// @Tags inventory-categories
-// @Accept json
-// @Produce json
-// @Param request body models.CreateCategoryDto true "Category creation request"
-// @Success 201 {object} models.CategoryResponse
-// @Failure 400 {object} map[string]interface{}
-// @Failure 409 {object} map[string]interface{}
-// @Router /api/v1/inventory/categories [post]
-func (ctrl *CategoryController) CreateCategory(c *gin.Context) {
+// CreateCategoryInput is CreateCategory's request.
+type CreateCategoryInput struct {
+	JSON api.Body[models.CreateCategoryDto]
+}
+
+// CreateCategory is POST /categories: Create a new product category.
+func (ctrl *CategoryController) CreateCategory(ctx context.Context, in *CreateCategoryInput) (*api.Out[*models.CategoryResponse], error) {
+	c := api.Gin(ctx)
 	tenantIDRaw, exists := c.Get("tenant_id")
 	if !exists || tenantIDRaw == nil {
-		c.JSON(http.StatusUnauthorized, coreErrors.BuildErrorSingle(c, "auth.invalid-tenant"))
-		return
+		return nil, api.Fail(http.StatusUnauthorized, coreErrors.BuildErrorSingle(c, "auth.invalid-tenant"))
 	}
 	tenantID, err := uuid.Parse(tenantIDRaw.(string))
 	if err != nil {
-		c.JSON(http.StatusUnauthorized, coreErrors.BuildErrorSingle(c, "auth.invalid-tenant"))
-		return
+		return nil, api.Fail(http.StatusUnauthorized, coreErrors.BuildErrorSingle(c, "auth.invalid-tenant"))
 	}
 
 	var dto models.CreateCategoryDto
 
-	if err := c.ShouldBindJSON(&dto); err != nil {
-		c.JSON(http.StatusBadRequest, coreErrors.BuildErrorDetail(c, "validation.invalid", err.Error()))
-		return
+	if err := in.JSON.Into(ctx, &dto); err != nil {
+		return nil, api.Fail(http.StatusBadRequest, coreErrors.BuildErrorDetail(c, "validation.invalid", err.Error()))
 	}
 
 	category, err := ctrl.categoryService.CreateCategory(c.Request.Context(), tenantID, &dto)
@@ -62,15 +56,12 @@ func (ctrl *CategoryController) CreateCategory(c *gin.Context) {
 		if errors.As(err, &pgErr) {
 			switch pgErr.Message {
 			case inventoryErrors.CategorySlugAlreadyExists:
-				c.JSON(http.StatusConflict, coreErrors.BuildErrorSingle(c, inventoryErrors.CategorySlugAlreadyExists))
-				return
+				return nil, api.Fail(http.StatusConflict, coreErrors.BuildErrorSingle(c, inventoryErrors.CategorySlugAlreadyExists))
 			case inventoryErrors.CategoryParentNotFound:
-				c.JSON(http.StatusNotFound, coreErrors.BuildErrorSingle(c, inventoryErrors.CategoryParentNotFound))
-				return
+				return nil, api.Fail(http.StatusNotFound, coreErrors.BuildErrorSingle(c, inventoryErrors.CategoryParentNotFound))
 			}
 		}
-		c.JSON(http.StatusInternalServerError, coreErrors.BuildError(c, err))
-		return
+		return nil, api.Fail(http.StatusInternalServerError, coreErrors.BuildError(c, err))
 	}
 
 	resp := &models.CategoryResponse{
@@ -87,39 +78,32 @@ func (ctrl *CategoryController) CreateCategory(c *gin.Context) {
 		UpdatedAt:    category.UpdatedAt.String(),
 	}
 
-	c.JSON(http.StatusCreated, resp)
+	return api.OK(resp)
 }
 
-// UpdateCategory godoc
-// @Summary Update a product category
-// @Description Update an existing product category
-// @Tags inventory-categories
-// @Accept json
-// @Produce json
-// @Param id path string true "Category ID"
-// @Param request body models.UpdateCategoryDto true "Category update request"
-// @Success 200 {object} models.CategoryResponse
-// @Failure 400 {object} map[string]interface{}
-// @Failure 404 {object} map[string]interface{}
-// @Router /api/v1/inventory/categories/:id [put]
-func (ctrl *CategoryController) UpdateCategory(c *gin.Context) {
+// UpdateCategoryInput is UpdateCategory's request.
+type UpdateCategoryInput struct {
+	ID   string `path:"id"`
+	JSON api.Body[models.UpdateCategoryDto]
+}
+
+// UpdateCategory is PUT /categories/{id}: Update a product category.
+func (ctrl *CategoryController) UpdateCategory(ctx context.Context, in *UpdateCategoryInput) (*api.Out[*models.CategoryResponse], error) {
+	c := api.Gin(ctx)
 	tenantIDRaw, exists := c.Get("tenant_id")
 	if !exists || tenantIDRaw == nil {
-		c.JSON(http.StatusUnauthorized, coreErrors.BuildErrorSingle(c, "auth.invalid-tenant"))
-		return
+		return nil, api.Fail(http.StatusUnauthorized, coreErrors.BuildErrorSingle(c, "auth.invalid-tenant"))
 	}
 	tenantID, err := uuid.Parse(tenantIDRaw.(string))
 	if err != nil {
-		c.JSON(http.StatusUnauthorized, coreErrors.BuildErrorSingle(c, "auth.invalid-tenant"))
-		return
+		return nil, api.Fail(http.StatusUnauthorized, coreErrors.BuildErrorSingle(c, "auth.invalid-tenant"))
 	}
 
-	categoryID := c.Param("id")
+	categoryID := in.ID
 	var dto models.UpdateCategoryDto
 
-	if err := c.ShouldBindJSON(&dto); err != nil {
-		c.JSON(http.StatusBadRequest, coreErrors.BuildErrorDetail(c, "validation.invalid", err.Error()))
-		return
+	if err := in.JSON.Into(ctx, &dto); err != nil {
+		return nil, api.Fail(http.StatusBadRequest, coreErrors.BuildErrorDetail(c, "validation.invalid", err.Error()))
 	}
 
 	category, err := ctrl.categoryService.UpdateCategory(c.Request.Context(), tenantID, categoryID, &dto)
@@ -128,18 +112,14 @@ func (ctrl *CategoryController) UpdateCategory(c *gin.Context) {
 		if errors.As(err, &pgErr) {
 			switch pgErr.Message {
 			case inventoryErrors.CategoryNotFound:
-				c.JSON(http.StatusNotFound, coreErrors.BuildErrorSingle(c, inventoryErrors.CategoryNotFound))
-				return
+				return nil, api.Fail(http.StatusNotFound, coreErrors.BuildErrorSingle(c, inventoryErrors.CategoryNotFound))
 			case inventoryErrors.CategorySlugAlreadyExists:
-				c.JSON(http.StatusConflict, coreErrors.BuildErrorSingle(c, inventoryErrors.CategorySlugAlreadyExists))
-				return
+				return nil, api.Fail(http.StatusConflict, coreErrors.BuildErrorSingle(c, inventoryErrors.CategorySlugAlreadyExists))
 			case inventoryErrors.CategoryCircularHierarchy:
-				c.JSON(http.StatusBadRequest, coreErrors.BuildErrorSingle(c, inventoryErrors.CategoryCircularHierarchy))
-				return
+				return nil, api.Fail(http.StatusBadRequest, coreErrors.BuildErrorSingle(c, inventoryErrors.CategoryCircularHierarchy))
 			}
 		}
-		c.JSON(http.StatusInternalServerError, coreErrors.BuildError(c, err))
-		return
+		return nil, api.Fail(http.StatusInternalServerError, coreErrors.BuildError(c, err))
 	}
 
 	resp := &models.CategoryResponse{
@@ -156,32 +136,32 @@ func (ctrl *CategoryController) UpdateCategory(c *gin.Context) {
 		UpdatedAt:    category.UpdatedAt.String(),
 	}
 
-	c.JSON(http.StatusOK, resp)
+	return api.OK(resp)
 }
 
-// DeleteCategory godoc
-// @Summary Delete a product category
-// @Description Soft delete a product category (cannot have products assigned)
-// @Tags inventory-categories
-// @Produce json
-// @Param id path string true "Category ID"
-// @Success 200 {object} map[string]interface{}
-// @Failure 400 {object} map[string]interface{}
-// @Failure 404 {object} map[string]interface{}
-// @Router /api/v1/inventory/categories/:id [delete]
-func (ctrl *CategoryController) DeleteCategory(c *gin.Context) {
+// DeleteCategoryInput is DeleteCategory's request.
+type DeleteCategoryInput struct {
+	ID string `path:"id"`
+}
+
+// DeleteCategoryResponse is DeleteCategory's answer.
+type DeleteCategoryResponse struct {
+	Message string `json:"message"`
+}
+
+// DeleteCategory is DELETE /categories/{id}: Delete a product category.
+func (ctrl *CategoryController) DeleteCategory(ctx context.Context, in *DeleteCategoryInput) (*api.Out[DeleteCategoryResponse], error) {
+	c := api.Gin(ctx)
 	tenantIDRaw, exists := c.Get("tenant_id")
 	if !exists || tenantIDRaw == nil {
-		c.JSON(http.StatusUnauthorized, coreErrors.BuildErrorSingle(c, "auth.invalid-tenant"))
-		return
+		return nil, api.Fail(http.StatusUnauthorized, coreErrors.BuildErrorSingle(c, "auth.invalid-tenant"))
 	}
 	tenantID, err := uuid.Parse(tenantIDRaw.(string))
 	if err != nil {
-		c.JSON(http.StatusUnauthorized, coreErrors.BuildErrorSingle(c, "auth.invalid-tenant"))
-		return
+		return nil, api.Fail(http.StatusUnauthorized, coreErrors.BuildErrorSingle(c, "auth.invalid-tenant"))
 	}
 
-	categoryID := c.Param("id")
+	categoryID := in.ID
 
 	_, err = ctrl.categoryService.DeleteCategory(c.Request.Context(), tenantID, categoryID)
 	if err != nil {
@@ -189,42 +169,35 @@ func (ctrl *CategoryController) DeleteCategory(c *gin.Context) {
 		if errors.As(err, &pgErr) {
 			switch pgErr.Message {
 			case inventoryErrors.CategoryNotFound:
-				c.JSON(http.StatusNotFound, coreErrors.BuildErrorSingle(c, inventoryErrors.CategoryNotFound))
-				return
+				return nil, api.Fail(http.StatusNotFound, coreErrors.BuildErrorSingle(c, inventoryErrors.CategoryNotFound))
 			case inventoryErrors.CategoryHasProducts:
-				c.JSON(http.StatusBadRequest, coreErrors.BuildErrorSingle(c, inventoryErrors.CategoryHasProducts))
-				return
+				return nil, api.Fail(http.StatusBadRequest, coreErrors.BuildErrorSingle(c, inventoryErrors.CategoryHasProducts))
 			}
 		}
-		c.JSON(http.StatusInternalServerError, coreErrors.BuildError(c, err))
-		return
+		return nil, api.Fail(http.StatusInternalServerError, coreErrors.BuildError(c, err))
 	}
 
-	c.JSON(http.StatusOK, gin.H{"message": "Category deleted successfully"})
+	return api.OK(DeleteCategoryResponse{Message: "Category deleted successfully"})
 }
 
-// GetCategory godoc
-// @Summary Get a product category
-// @Description Retrieve a single product category by ID with product count
-// @Tags inventory-categories
-// @Produce json
-// @Param id path string true "Category ID"
-// @Success 200 {object} models.CategoryResponse
-// @Failure 404 {object} map[string]interface{}
-// @Router /api/v1/inventory/categories/:id [get]
-func (ctrl *CategoryController) GetCategory(c *gin.Context) {
+// GetCategoryInput is GetCategory's request.
+type GetCategoryInput struct {
+	ID string `path:"id"`
+}
+
+// GetCategory is GET /categories/{id}: Get a product category.
+func (ctrl *CategoryController) GetCategory(ctx context.Context, in *GetCategoryInput) (*api.Out[*models.CategoryResponse], error) {
+	c := api.Gin(ctx)
 	tenantIDRaw, exists := c.Get("tenant_id")
 	if !exists || tenantIDRaw == nil {
-		c.JSON(http.StatusUnauthorized, coreErrors.BuildErrorSingle(c, "auth.invalid-tenant"))
-		return
+		return nil, api.Fail(http.StatusUnauthorized, coreErrors.BuildErrorSingle(c, "auth.invalid-tenant"))
 	}
 	tenantID, err := uuid.Parse(tenantIDRaw.(string))
 	if err != nil {
-		c.JSON(http.StatusUnauthorized, coreErrors.BuildErrorSingle(c, "auth.invalid-tenant"))
-		return
+		return nil, api.Fail(http.StatusUnauthorized, coreErrors.BuildErrorSingle(c, "auth.invalid-tenant"))
 	}
 
-	categoryID := c.Param("id")
+	categoryID := in.ID
 
 	category, err := ctrl.categoryService.GetCategory(c.Request.Context(), tenantID, categoryID)
 	if err != nil {
@@ -232,16 +205,13 @@ func (ctrl *CategoryController) GetCategory(c *gin.Context) {
 		if errors.As(err, &pgErr) {
 			switch pgErr.Message {
 			case inventoryErrors.CategoryNotFound:
-				c.JSON(http.StatusNotFound, coreErrors.BuildErrorSingle(c, inventoryErrors.CategoryNotFound))
-				return
+				return nil, api.Fail(http.StatusNotFound, coreErrors.BuildErrorSingle(c, inventoryErrors.CategoryNotFound))
 			}
 		}
 		if errors.Is(err, pgx.ErrNoRows) {
-			c.JSON(http.StatusNotFound, coreErrors.BuildErrorSingle(c, inventoryErrors.CategoryNotFound))
-			return
+			return nil, api.Fail(http.StatusNotFound, coreErrors.BuildErrorSingle(c, inventoryErrors.CategoryNotFound))
 		}
-		c.JSON(http.StatusInternalServerError, coreErrors.BuildError(c, err))
-		return
+		return nil, api.Fail(http.StatusInternalServerError, coreErrors.BuildError(c, err))
 	}
 
 	resp := &models.CategoryResponse{
@@ -258,47 +228,44 @@ func (ctrl *CategoryController) GetCategory(c *gin.Context) {
 		UpdatedAt:    category.UpdatedAt.String(),
 	}
 
-	c.JSON(http.StatusOK, resp)
+	return api.OK(resp)
 }
 
-// ListCategories godoc
-// @Summary List product categories
-// @Description Retrieve a paginated list of product categories (optionally filtered by parent)
-// @Tags inventory-categories
-// @Produce json
-// @Param parent_id query string false "Parent category ID"
-// @Param is_active query bool false "Filter by active status"
-// @Param page query int false "Page number" default(1)
-// @Param limit query int false "Items per page" default(20)
-// @Success 200 {object} models.ListCategoriesResponse
-// @Router /api/v1/inventory/categories [get]
-func (ctrl *CategoryController) ListCategories(c *gin.Context) {
+// ListCategoriesInput is ListCategories's request.
+type ListCategoriesInput struct {
+	ParentID string `query:"parent_id"`
+	IsActive string `query:"is_active"`
+	Page     string `query:"page"`
+	Limit    string `query:"limit"`
+}
+
+// ListCategories is GET /categories: List product categories.
+func (ctrl *CategoryController) ListCategories(ctx context.Context, in *ListCategoriesInput) (*api.Out[models.ListCategoriesResponse], error) {
+	c := api.Gin(ctx)
 	tenantIDRaw, exists := c.Get("tenant_id")
 	if !exists || tenantIDRaw == nil {
-		c.JSON(http.StatusUnauthorized, coreErrors.BuildErrorSingle(c, "auth.invalid-tenant"))
-		return
+		return nil, api.Fail(http.StatusUnauthorized, coreErrors.BuildErrorSingle(c, "auth.invalid-tenant"))
 	}
 	tenantID, err := uuid.Parse(tenantIDRaw.(string))
 	if err != nil {
-		c.JSON(http.StatusUnauthorized, coreErrors.BuildErrorSingle(c, "auth.invalid-tenant"))
-		return
+		return nil, api.Fail(http.StatusUnauthorized, coreErrors.BuildErrorSingle(c, "auth.invalid-tenant"))
 	}
 
-	parentID := c.Query("parent_id")
+	parentID := in.ParentID
 	isActive := true
-	if isActiveStr := c.Query("is_active"); isActiveStr != "" {
+	if isActiveStr := in.IsActive; isActiveStr != "" {
 		isActive = isActiveStr == "true"
 	}
 
 	page := 1
-	if pageStr := c.Query("page"); pageStr != "" {
+	if pageStr := in.Page; pageStr != "" {
 		if p, err := strconv.Atoi(pageStr); err == nil && p > 0 {
 			page = p
 		}
 	}
 
 	limit := 20
-	if limitStr := c.Query("limit"); limitStr != "" {
+	if limitStr := in.Limit; limitStr != "" {
 		if l, err := strconv.Atoi(limitStr); err == nil && l > 0 {
 			limit = l
 		}
@@ -313,8 +280,7 @@ func (ctrl *CategoryController) ListCategories(c *gin.Context) {
 
 	categories, err := ctrl.categoryService.ListCategories(c.Request.Context(), tenantID, parentIDPtr, isActive, limit, offset)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, coreErrors.BuildError(c, err))
-		return
+		return nil, api.Fail(http.StatusInternalServerError, coreErrors.BuildError(c, err))
 	}
 
 	respCategories := make([]models.CategoryResponse, len(categories))
@@ -333,48 +299,44 @@ func (ctrl *CategoryController) ListCategories(c *gin.Context) {
 		}
 	}
 
-	c.JSON(http.StatusOK, models.ListCategoriesResponse{
+	return api.OK(models.ListCategoriesResponse{
 		Categories: respCategories,
 		Total:      int64(len(respCategories)),
 	})
 }
 
-// SearchCategories godoc
-// @Summary Search product categories
-// @Description Search categories by name, slug, or description
-// @Tags inventory-categories
-// @Produce json
-// @Param search_term query string true "Search term"
-// @Param is_active query bool false "Filter by active status"
-// @Param limit query int false "Results limit" default(50)
-// @Success 200 {array} models.CategoryResponse
-// @Router /api/v1/inventory/categories/search [get]
-func (ctrl *CategoryController) SearchCategories(c *gin.Context) {
+// SearchCategoriesInput is SearchCategories's request.
+type SearchCategoriesInput struct {
+	SearchTerm string `query:"search_term"`
+	IsActive   string `query:"is_active"`
+	Limit      string `query:"limit"`
+}
+
+// SearchCategories is GET /categories/search: Search product categories.
+func (ctrl *CategoryController) SearchCategories(ctx context.Context, in *SearchCategoriesInput) (*api.Out[[]models.CategoryResponse], error) {
+	c := api.Gin(ctx)
 	tenantIDRaw, exists := c.Get("tenant_id")
 	if !exists || tenantIDRaw == nil {
-		c.JSON(http.StatusUnauthorized, coreErrors.BuildErrorSingle(c, "auth.invalid-tenant"))
-		return
+		return nil, api.Fail(http.StatusUnauthorized, coreErrors.BuildErrorSingle(c, "auth.invalid-tenant"))
 	}
 	tenantID, err := uuid.Parse(tenantIDRaw.(string))
 	if err != nil {
-		c.JSON(http.StatusUnauthorized, coreErrors.BuildErrorSingle(c, "auth.invalid-tenant"))
-		return
+		return nil, api.Fail(http.StatusUnauthorized, coreErrors.BuildErrorSingle(c, "auth.invalid-tenant"))
 	}
 
-	searchTerm := c.Query("search_term")
+	searchTerm := in.SearchTerm
 	if searchTerm == "" {
-		c.JSON(http.StatusBadRequest, coreErrors.BuildErrorDetail(c, "validation.invalid", "search_term is required"))
-		return
+		return nil, api.Fail(http.StatusBadRequest, coreErrors.BuildErrorDetail(c, "validation.invalid", "search_term is required"))
 	}
 
 	var isActive *bool
-	if isActiveStr := c.Query("is_active"); isActiveStr != "" {
+	if isActiveStr := in.IsActive; isActiveStr != "" {
 		val := isActiveStr == "true"
 		isActive = &val
 	}
 
 	limit := 50
-	if limitStr := c.Query("limit"); limitStr != "" {
+	if limitStr := in.Limit; limitStr != "" {
 		if l, err := strconv.Atoi(limitStr); err == nil && l > 0 {
 			limit = l
 		}
@@ -382,8 +344,7 @@ func (ctrl *CategoryController) SearchCategories(c *gin.Context) {
 
 	categories, err := ctrl.categoryService.SearchCategories(c.Request.Context(), tenantID, searchTerm, isActive, limit)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, coreErrors.BuildError(c, err))
-		return
+		return nil, api.Fail(http.StatusInternalServerError, coreErrors.BuildError(c, err))
 	}
 
 	respCategories := make([]models.CategoryResponse, len(categories))
@@ -401,36 +362,34 @@ func (ctrl *CategoryController) SearchCategories(c *gin.Context) {
 		}
 	}
 
-	c.JSON(http.StatusOK, respCategories)
+	return api.OK(respCategories)
 }
 
-// AssignProductToCategory godoc
-// @Summary Assign product to category
-// @Description Assign a product to a category
-// @Tags inventory-categories
-// @Accept json
-// @Produce json
-// @Param productId path string true "Product ID"
-// @Param id path string true "Category ID"
-// @Success 201 {object} map[string]interface{}
-// @Failure 400 {object} map[string]interface{}
-// @Failure 404 {object} map[string]interface{}
-// @Failure 409 {object} map[string]interface{}
-// @Router /api/v1/inventory/products/:productId/categories/:id [post]
-func (ctrl *CategoryController) AssignProductToCategory(c *gin.Context) {
+// AssignProductToCategoryInput is AssignProductToCategory's request.
+type AssignProductToCategoryInput struct {
+	CategoryID string `path:"category_id"`
+	ID         string `path:"id"`
+}
+
+// AssignProductToCategoryResponse is AssignProductToCategory's answer.
+type AssignProductToCategoryResponse struct {
+	Message string `json:"message"`
+}
+
+// AssignProductToCategory is POST /products/{id}/categories/{category_id}: Assign product to category.
+func (ctrl *CategoryController) AssignProductToCategory(ctx context.Context, in *AssignProductToCategoryInput) (*api.Out[AssignProductToCategoryResponse], error) {
+	c := api.Gin(ctx)
 	tenantIDRaw, exists := c.Get("tenant_id")
 	if !exists || tenantIDRaw == nil {
-		c.JSON(http.StatusUnauthorized, coreErrors.BuildErrorSingle(c, "auth.invalid-tenant"))
-		return
+		return nil, api.Fail(http.StatusUnauthorized, coreErrors.BuildErrorSingle(c, "auth.invalid-tenant"))
 	}
 	tenantID, err := uuid.Parse(tenantIDRaw.(string))
 	if err != nil {
-		c.JSON(http.StatusUnauthorized, coreErrors.BuildErrorSingle(c, "auth.invalid-tenant"))
-		return
+		return nil, api.Fail(http.StatusUnauthorized, coreErrors.BuildErrorSingle(c, "auth.invalid-tenant"))
 	}
 
-	productID := c.Param("id")
-	categoryID := c.Param("category_id")
+	productID := in.ID
+	categoryID := in.CategoryID
 
 	err = ctrl.categoryService.AssignProductToCategory(c.Request.Context(), tenantID, productID, categoryID)
 	if err != nil {
@@ -438,48 +397,44 @@ func (ctrl *CategoryController) AssignProductToCategory(c *gin.Context) {
 		if errors.As(err, &pgErr) {
 			switch pgErr.Message {
 			case inventoryErrors.CategoryNotFound:
-				c.JSON(http.StatusNotFound, coreErrors.BuildErrorSingle(c, inventoryErrors.CategoryNotFound))
-				return
+				return nil, api.Fail(http.StatusNotFound, coreErrors.BuildErrorSingle(c, inventoryErrors.CategoryNotFound))
 			case inventoryErrors.ProductNotFound:
-				c.JSON(http.StatusNotFound, coreErrors.BuildErrorSingle(c, inventoryErrors.ProductNotFound))
-				return
+				return nil, api.Fail(http.StatusNotFound, coreErrors.BuildErrorSingle(c, inventoryErrors.ProductNotFound))
 			case inventoryErrors.ProductAlreadyInCategory:
-				c.JSON(http.StatusConflict, coreErrors.BuildErrorSingle(c, inventoryErrors.ProductAlreadyInCategory))
-				return
+				return nil, api.Fail(http.StatusConflict, coreErrors.BuildErrorSingle(c, inventoryErrors.ProductAlreadyInCategory))
 			}
 		}
-		c.JSON(http.StatusInternalServerError, coreErrors.BuildError(c, err))
-		return
+		return nil, api.Fail(http.StatusInternalServerError, coreErrors.BuildError(c, err))
 	}
 
-	c.JSON(http.StatusCreated, gin.H{"message": "Product assigned to category successfully"})
+	return api.OK(AssignProductToCategoryResponse{Message: "Product assigned to category successfully"})
 }
 
-// RemoveProductFromCategory godoc
-// @Summary Remove product from category
-// @Description Remove a product from a category
-// @Tags inventory-categories
-// @Produce json
-// @Param productId path string true "Product ID"
-// @Param id path string true "Category ID"
-// @Success 200 {object} map[string]interface{}
-// @Failure 400 {object} map[string]interface{}
-// @Failure 404 {object} map[string]interface{}
-// @Router /api/v1/inventory/products/:productId/categories/:id [delete]
-func (ctrl *CategoryController) RemoveProductFromCategory(c *gin.Context) {
+// RemoveProductFromCategoryInput is RemoveProductFromCategory's request.
+type RemoveProductFromCategoryInput struct {
+	CategoryID string `path:"category_id"`
+	ID         string `path:"id"`
+}
+
+// RemoveProductFromCategoryResponse is RemoveProductFromCategory's answer.
+type RemoveProductFromCategoryResponse struct {
+	Message string `json:"message"`
+}
+
+// RemoveProductFromCategory is DELETE /products/{id}/categories/{category_id}: Remove product from category.
+func (ctrl *CategoryController) RemoveProductFromCategory(ctx context.Context, in *RemoveProductFromCategoryInput) (*api.Out[RemoveProductFromCategoryResponse], error) {
+	c := api.Gin(ctx)
 	tenantIDRaw, exists := c.Get("tenant_id")
 	if !exists || tenantIDRaw == nil {
-		c.JSON(http.StatusUnauthorized, coreErrors.BuildErrorSingle(c, "auth.invalid-tenant"))
-		return
+		return nil, api.Fail(http.StatusUnauthorized, coreErrors.BuildErrorSingle(c, "auth.invalid-tenant"))
 	}
 	tenantID, err := uuid.Parse(tenantIDRaw.(string))
 	if err != nil {
-		c.JSON(http.StatusUnauthorized, coreErrors.BuildErrorSingle(c, "auth.invalid-tenant"))
-		return
+		return nil, api.Fail(http.StatusUnauthorized, coreErrors.BuildErrorSingle(c, "auth.invalid-tenant"))
 	}
 
-	productID := c.Param("id")
-	categoryID := c.Param("category_id")
+	productID := in.ID
+	categoryID := in.CategoryID
 
 	err = ctrl.categoryService.RemoveProductFromCategory(c.Request.Context(), tenantID, productID, categoryID)
 	if err != nil {
@@ -487,54 +442,47 @@ func (ctrl *CategoryController) RemoveProductFromCategory(c *gin.Context) {
 		if errors.As(err, &pgErr) {
 			switch pgErr.Message {
 			case inventoryErrors.CategoryNotFound:
-				c.JSON(http.StatusNotFound, coreErrors.BuildErrorSingle(c, inventoryErrors.CategoryNotFound))
-				return
+				return nil, api.Fail(http.StatusNotFound, coreErrors.BuildErrorSingle(c, inventoryErrors.CategoryNotFound))
 			case inventoryErrors.ProductNotFound:
-				c.JSON(http.StatusNotFound, coreErrors.BuildErrorSingle(c, inventoryErrors.ProductNotFound))
-				return
+				return nil, api.Fail(http.StatusNotFound, coreErrors.BuildErrorSingle(c, inventoryErrors.ProductNotFound))
 			}
 		}
-		c.JSON(http.StatusInternalServerError, coreErrors.BuildError(c, err))
-		return
+		return nil, api.Fail(http.StatusInternalServerError, coreErrors.BuildError(c, err))
 	}
 
-	c.JSON(http.StatusOK, gin.H{"message": "Product removed from category successfully"})
+	return api.OK(RemoveProductFromCategoryResponse{Message: "Product removed from category successfully"})
 }
 
-// GetProductsByCategory godoc
-// @Summary Get products in category
-// @Description Retrieve all products assigned to a specific category
-// @Tags inventory-categories
-// @Produce json
-// @Param id path string true "Category ID"
-// @Param page query int false "Page number" default(1)
-// @Param limit query int false "Items per page" default(20)
-// @Success 200 {array} models.GetProductsByCategoryResponse
-// @Failure 404 {object} map[string]interface{}
-// @Router /api/v1/inventory/categories/:id/products [get]
-func (ctrl *CategoryController) GetProductsByCategory(c *gin.Context) {
+// GetProductsByCategoryInput is GetProductsByCategory's request.
+type GetProductsByCategoryInput struct {
+	ID    string `path:"id"`
+	Page  string `query:"page"`
+	Limit string `query:"limit"`
+}
+
+// GetProductsByCategory is GET /categories/{id}/products: Get products in category.
+func (ctrl *CategoryController) GetProductsByCategory(ctx context.Context, in *GetProductsByCategoryInput) (*api.Out[[]models.GetProductsByCategoryResponse], error) {
+	c := api.Gin(ctx)
 	tenantIDRaw, exists := c.Get("tenant_id")
 	if !exists || tenantIDRaw == nil {
-		c.JSON(http.StatusUnauthorized, coreErrors.BuildErrorSingle(c, "auth.invalid-tenant"))
-		return
+		return nil, api.Fail(http.StatusUnauthorized, coreErrors.BuildErrorSingle(c, "auth.invalid-tenant"))
 	}
 	tenantID, err := uuid.Parse(tenantIDRaw.(string))
 	if err != nil {
-		c.JSON(http.StatusUnauthorized, coreErrors.BuildErrorSingle(c, "auth.invalid-tenant"))
-		return
+		return nil, api.Fail(http.StatusUnauthorized, coreErrors.BuildErrorSingle(c, "auth.invalid-tenant"))
 	}
 
-	categoryID := c.Param("id")
+	categoryID := in.ID
 
 	page := 1
-	if pageStr := c.Query("page"); pageStr != "" {
+	if pageStr := in.Page; pageStr != "" {
 		if p, err := strconv.Atoi(pageStr); err == nil && p > 0 {
 			page = p
 		}
 	}
 
 	limit := 20
-	if limitStr := c.Query("limit"); limitStr != "" {
+	if limitStr := in.Limit; limitStr != "" {
 		if l, err := strconv.Atoi(limitStr); err == nil && l > 0 {
 			limit = l
 		}
@@ -548,55 +496,49 @@ func (ctrl *CategoryController) GetProductsByCategory(c *gin.Context) {
 		if errors.As(err, &pgErr) {
 			switch pgErr.Message {
 			case inventoryErrors.CategoryNotFound:
-				c.JSON(http.StatusNotFound, coreErrors.BuildErrorSingle(c, inventoryErrors.CategoryNotFound))
-				return
+				return nil, api.Fail(http.StatusNotFound, coreErrors.BuildErrorSingle(c, inventoryErrors.CategoryNotFound))
 			}
 		}
-		c.JSON(http.StatusInternalServerError, coreErrors.BuildError(c, err))
-		return
+		return nil, api.Fail(http.StatusInternalServerError, coreErrors.BuildError(c, err))
 	}
 
 	// Ensure we return an empty array instead of null
 	if products == nil {
 		products = []models.GetProductsByCategoryResponse{}
 	}
-	c.JSON(http.StatusOK, products)
+	return api.OK(products)
 }
 
-// GetCategoriesByProduct godoc
-// @Summary Get categories of a product
-// @Description Retrieve all categories a specific product is assigned to
-// @Tags inventory-categories
-// @Produce json
-// @Param id path string true "Product ID"
-// @Param page query int false "Page number" default(1)
-// @Param limit query int false "Items per page" default(100)
-// @Success 200 {array} models.CategoryResponse
-// @Failure 404 {object} map[string]interface{}
-// @Router /api/v1/inventory/products/:id/categories [get]
-func (ctrl *CategoryController) GetCategoriesByProduct(c *gin.Context) {
+// GetCategoriesByProductInput is GetCategoriesByProduct's request.
+type GetCategoriesByProductInput struct {
+	ID    string `path:"id"`
+	Page  string `query:"page"`
+	Limit string `query:"limit"`
+}
+
+// GetCategoriesByProduct is GET /products/{id}/categories: Get categories of a product.
+func (ctrl *CategoryController) GetCategoriesByProduct(ctx context.Context, in *GetCategoriesByProductInput) (*api.Out[[]models.CategoryResponse], error) {
+	c := api.Gin(ctx)
 	tenantIDRaw, exists := c.Get("tenant_id")
 	if !exists || tenantIDRaw == nil {
-		c.JSON(http.StatusUnauthorized, coreErrors.BuildErrorSingle(c, "auth.invalid-tenant"))
-		return
+		return nil, api.Fail(http.StatusUnauthorized, coreErrors.BuildErrorSingle(c, "auth.invalid-tenant"))
 	}
 	tenantID, err := uuid.Parse(tenantIDRaw.(string))
 	if err != nil {
-		c.JSON(http.StatusUnauthorized, coreErrors.BuildErrorSingle(c, "auth.invalid-tenant"))
-		return
+		return nil, api.Fail(http.StatusUnauthorized, coreErrors.BuildErrorSingle(c, "auth.invalid-tenant"))
 	}
 
-	productID := c.Param("id")
+	productID := in.ID
 
 	page := 1
-	if pageStr := c.Query("page"); pageStr != "" {
+	if pageStr := in.Page; pageStr != "" {
 		if p, err := strconv.Atoi(pageStr); err == nil && p > 0 {
 			page = p
 		}
 	}
 
 	limit := 100
-	if limitStr := c.Query("limit"); limitStr != "" {
+	if limitStr := in.Limit; limitStr != "" {
 		if l, err := strconv.Atoi(limitStr); err == nil && l > 0 {
 			limit = l
 		}
@@ -610,12 +552,10 @@ func (ctrl *CategoryController) GetCategoriesByProduct(c *gin.Context) {
 		if errors.As(err, &pgErr) {
 			switch pgErr.Message {
 			case inventoryErrors.ProductNotFound:
-				c.JSON(http.StatusNotFound, coreErrors.BuildErrorSingle(c, inventoryErrors.ProductNotFound))
-				return
+				return nil, api.Fail(http.StatusNotFound, coreErrors.BuildErrorSingle(c, inventoryErrors.ProductNotFound))
 			}
 		}
-		c.JSON(http.StatusInternalServerError, coreErrors.BuildError(c, err))
-		return
+		return nil, api.Fail(http.StatusInternalServerError, coreErrors.BuildError(c, err))
 	}
 
 	respCategories := make([]models.CategoryResponse, len(categories))
@@ -633,7 +573,7 @@ func (ctrl *CategoryController) GetCategoriesByProduct(c *gin.Context) {
 		}
 	}
 
-	c.JSON(http.StatusOK, respCategories)
+	return api.OK(respCategories)
 }
 
 // Helper function to convert optional UUID pointer to string pointer
@@ -647,4 +587,3 @@ func uuidPtrToStringPtr(id *uuid.UUID) *string {
 	}
 	return nil
 }
-

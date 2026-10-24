@@ -19,6 +19,7 @@ import (
 	billingRepos "josex/web/modules/billing/repositories"
 	billingRoutes "josex/web/modules/billing/routes"
 	billingServices "josex/web/modules/billing/services"
+	coreAPI "josex/web/modules/core/api"
 	coreControllers "josex/web/modules/core/controllers"
 	coreErrors "josex/web/modules/core/errors"
 	coreJobs "josex/web/modules/core/jobs"
@@ -137,6 +138,8 @@ func (chains tenantChains) withModule(code string, allowMobileRoles ...string) g
 // SetupRoutes mounts the HTTP API. valkey is nil when REDIS_URL is unset; hub is nil when this
 // process runs no WebSocket gateway (every role but all and realtime).
 func SetupRoutes(r *gin.Engine, dbService coreServices.DatabaseService, valkey coreServices.ValkeyService, hub *realtime.Hub) {
+	// Every JSON route registers into one contract (INFRA-021); a new engine starts a new one.
+	coreAPI.Reset()
 	d := baseDeps(r, dbService, valkey, hub, false)
 
 	billingService := registerAuthAndBilling(d)

@@ -1,9 +1,11 @@
 package controllers
 
 import (
+	"context"
 	"errors"
 	"net/http"
 
+	"josex/web/modules/core/api"
 	coreErrors "josex/web/modules/core/errors"
 	"josex/web/modules/core/utils"
 	trackingErrors "josex/web/modules/tracking/errors"
@@ -30,274 +32,222 @@ var assignmentStatus = map[string]int{
 
 // assignmentErrorResponse maps the assignment codes to statuses and reports whether it has already
 // written the response. A code carrying a Detail — the refused item of a bulk request — answers it.
-func assignmentErrorResponse(c *gin.Context, err error) bool {
+func assignmentErrorResponse(c *gin.Context, err error) error {
 	var trackingErr *trackingErrors.TrackingError
 	if !errors.As(err, &trackingErr) {
-		return false
+		return nil
 	}
 	status, ok := assignmentStatus[trackingErr.Code]
 	if !ok {
-		return false
+		return nil
 	}
 	if trackingErr.Detail != nil {
-		c.JSON(status, coreErrors.BuildErrorDetail(c, trackingErr.Code, trackingErr.Detail))
+		return api.Fail(status, coreErrors.BuildErrorDetail(c, trackingErr.Code, trackingErr.Detail))
 	} else {
-		c.JSON(status, coreErrors.BuildErrorSingle(c, trackingErr.Code))
+		return api.Fail(status, coreErrors.BuildErrorSingle(c, trackingErr.Code))
 	}
-	return true
+
 }
 
-// ListAssignments godoc
-// @Summary List rider route assignments
-// @Description Every row carries the rider, route and stop names and the route's direction; date narrows to the assignments in force that day
-// @Tags Tracking - Assignments
-// @Produce json
-// @Security BearerAuth
-// @Param rider_id query string false "Rider ID (UUID)"
-// @Param route_id query string false "Route ID (UUID)"
-// @Param date query string false "In force on this day (YYYY-MM-DD)"
-// @Param page query int false "Page number (default 1)"
-// @Param page_size query int false "Page size (default 20, max 100)"
-// @Success 200 {object} models.ListAssignmentsResponse
-// @Failure 400 {object} coreErrors.ErrorResponse
-// @Failure 500 {object} coreErrors.ErrorResponse
-// @Router /tracking/assignments [get]
-func (ctrl *TrackingController) ListAssignments(c *gin.Context) {
-	tenantID, ok := ctrl.requireTenantID(c)
-	if !ok {
-		return
+// ListAssignmentsInput is ListAssignments's request.
+type ListAssignmentsInput struct {
+	Query api.Query[models.ListAssignmentsQuery]
+}
+
+// ListAssignments is GET /assignments: List rider route assignments.
+func (ctrl *TrackingController) ListAssignments(ctx context.Context, in *ListAssignmentsInput) (*api.Out[*models.ListAssignmentsResponse], error) {
+	c := api.Gin(ctx)
+	tenantID, err := ctrl.requireTenantID(c)
+	if err != nil {
+		return nil, err
 	}
 	var query models.ListAssignmentsQuery
-	if err := c.ShouldBindQuery(&query); err != nil {
-		c.JSON(http.StatusBadRequest, coreErrors.BuildErrorDetail(c, trackingErrors.AssignmentListFailed, utils.ExtractValidationError(c, err)))
-		return
+	if err := in.Query.Into(ctx, &query); err != nil {
+		return nil, api.Fail(http.StatusBadRequest, coreErrors.BuildErrorDetail(c, trackingErrors.AssignmentListFailed, utils.ExtractValidationError(c, err)))
 	}
 
 	result, err := ctrl.trackingService.ListAssignments(c.Request.Context(), tenantID, query, ctrl.scopeUserID(c))
 	if err != nil {
-		if assignmentErrorResponse(c, err) {
-			return
+		if err := assignmentErrorResponse(c, err); err != nil {
+			return nil, err
 		}
-		c.JSON(http.StatusInternalServerError, coreErrors.BuildError(c, err))
-		return
+		return nil, api.Fail(http.StatusInternalServerError, coreErrors.BuildError(c, err))
 	}
-	c.JSON(http.StatusOK, result)
+	return api.OK(result)
 }
 
-// CreateAssignment godoc
-// @Summary Assign a rider to a route
-// @Description days_of_week is a bitmask, bit 0 Monday … bit 6 Sunday; valid_until empty is open-ended. Answers the route's capacity warnings, which never block
-// @Tags Tracking - Assignments
-// @Accept json
-// @Produce json
-// @Security BearerAuth
-// @Param assignment body models.AssignRiderDto true "Rider, route, weekdays, stops and validity"
-// @Success 201 {object} models.AssignmentResponse
-// @Failure 400 {object} coreErrors.ErrorResponse
-// @Failure 404 {object} coreErrors.ErrorResponse
-// @Failure 409 {object} coreErrors.ErrorResponse
-// @Failure 500 {object} coreErrors.ErrorResponse
-// @Router /tracking/assignments [post]
-func (ctrl *TrackingController) CreateAssignment(c *gin.Context) {
-	tenantID, ok := ctrl.requireTenantID(c)
-	if !ok {
-		return
+// CreateAssignmentInput is CreateAssignment's request.
+type CreateAssignmentInput struct {
+	JSON api.Body[models.AssignRiderDto]
+}
+
+// CreateAssignment is POST /assignments: Assign a rider to a route.
+func (ctrl *TrackingController) CreateAssignment(ctx context.Context, in *CreateAssignmentInput) (*api.Out[*models.AssignmentResponse], error) {
+	c := api.Gin(ctx)
+	tenantID, err := ctrl.requireTenantID(c)
+	if err != nil {
+		return nil, err
 	}
 	var dto models.AssignRiderDto
-	if err := c.ShouldBindJSON(&dto); err != nil {
-		c.JSON(http.StatusBadRequest, coreErrors.BuildErrorDetail(c, trackingErrors.AssignmentCreateFailed, utils.ExtractValidationError(c, err)))
-		return
+	if err := in.JSON.Into(ctx, &dto); err != nil {
+		return nil, api.Fail(http.StatusBadRequest, coreErrors.BuildErrorDetail(c, trackingErrors.AssignmentCreateFailed, utils.ExtractValidationError(c, err)))
 	}
 
 	result, err := ctrl.trackingService.CreateAssignment(c.Request.Context(), tenantID, &dto)
 	if err != nil {
-		if assignmentErrorResponse(c, err) {
-			return
+		if err := assignmentErrorResponse(c, err); err != nil {
+			return nil, err
 		}
-		c.JSON(http.StatusInternalServerError, coreErrors.BuildError(c, err))
-		return
+		return nil, api.Fail(http.StatusInternalServerError, coreErrors.BuildError(c, err))
 	}
-	c.JSON(http.StatusCreated, result)
+	return api.OK(result)
 }
 
-// CreateAssignmentsBulk godoc
-// @Summary Assign many riders at once
-// @Description All or none: the first item refused rolls back every one and the error's detail names its zero-based index
-// @Tags Tracking - Assignments
-// @Accept json
-// @Produce json
-// @Security BearerAuth
-// @Param assignments body []models.AssignRiderDto true "The assignments to create"
-// @Success 201 {object} models.BulkAssignmentResponse
-// @Failure 400 {object} coreErrors.ErrorResponse
-// @Failure 404 {object} coreErrors.ErrorResponse
-// @Failure 409 {object} coreErrors.ErrorResponse
-// @Failure 500 {object} coreErrors.ErrorResponse
-// @Router /tracking/assignments/bulk [post]
-func (ctrl *TrackingController) CreateAssignmentsBulk(c *gin.Context) {
-	tenantID, ok := ctrl.requireTenantID(c)
-	if !ok {
-		return
+// CreateAssignmentsBulkInput is CreateAssignmentsBulk's request.
+type CreateAssignmentsBulkInput struct {
+	JSON api.Body[[]models.AssignRiderDto]
+}
+
+// CreateAssignmentsBulk is POST /assignments/bulk: Assign many riders at once.
+func (ctrl *TrackingController) CreateAssignmentsBulk(ctx context.Context, in *CreateAssignmentsBulkInput) (*api.Out[*models.BulkAssignmentResponse], error) {
+	c := api.Gin(ctx)
+	tenantID, err := ctrl.requireTenantID(c)
+	if err != nil {
+		return nil, err
 	}
 	dtos := []models.AssignRiderDto{}
-	if err := c.ShouldBindJSON(&dtos); err != nil {
-		c.JSON(http.StatusBadRequest, coreErrors.BuildErrorDetail(c, trackingErrors.AssignmentCreateFailed, utils.ExtractValidationError(c, err)))
-		return
+	if err := in.JSON.Into(ctx, &dtos); err != nil {
+		return nil, api.Fail(http.StatusBadRequest, coreErrors.BuildErrorDetail(c, trackingErrors.AssignmentCreateFailed, utils.ExtractValidationError(c, err)))
 	}
 	if len(dtos) == 0 {
-		c.JSON(http.StatusBadRequest, coreErrors.BuildErrorSingle(c, trackingErrors.AssignmentCreateFailed))
-		return
+		return nil, api.Fail(http.StatusBadRequest, coreErrors.BuildErrorSingle(c, trackingErrors.AssignmentCreateFailed))
 	}
 
 	result, err := ctrl.trackingService.CreateAssignments(c.Request.Context(), tenantID, dtos)
 	if err != nil {
-		if assignmentErrorResponse(c, err) {
-			return
+		if err := assignmentErrorResponse(c, err); err != nil {
+			return nil, err
 		}
-		c.JSON(http.StatusInternalServerError, coreErrors.BuildError(c, err))
-		return
+		return nil, api.Fail(http.StatusInternalServerError, coreErrors.BuildError(c, err))
 	}
-	c.JSON(http.StatusCreated, result)
+	return api.OK(result)
 }
 
-// BulkAssignRiders godoc
-// @Summary Add many riders to a route
-// @Description Up to 100 riders in one call (TRACK-039 D1), each with its home as its stop and on the return too when the route has one; a rider without a home pin or already on another route that day is skipped with its reason and the rest still go in
-// @Tags Tracking - Assignments
-// @Accept json
-// @Produce json
-// @Security BearerAuth
-// @Param route_id path string true "Route ID (UUID)"
-// @Param body body models.BulkAssignRidersDto true "Riders, and optionally days and start"
-// @Success 200 {object} models.BulkAssignRidersResponse
-// @Failure 400 {object} coreErrors.ErrorResponse
-// @Failure 404 {object} coreErrors.ErrorResponse
-// @Router /tracking/routes/{route_id}/assignments/bulk [post]
-func (ctrl *TrackingController) BulkAssignRiders(c *gin.Context) {
-	tenantID, ok := ctrl.requireTenantID(c)
-	if !ok {
-		return
-	}
-	routeID, err := uuid.Parse(c.Param("route_id"))
+// BulkAssignRidersInput is BulkAssignRiders's request.
+type BulkAssignRidersInput struct {
+	RouteID string `path:"route_id"`
+	JSON    api.Body[models.BulkAssignRidersDto]
+}
+
+// BulkAssignRiders is POST /routes/{route_id}/assignments/bulk: Add many riders to a route.
+func (ctrl *TrackingController) BulkAssignRiders(ctx context.Context, in *BulkAssignRidersInput) (*api.Out[*models.BulkAssignRidersResponse], error) {
+	c := api.Gin(ctx)
+	tenantID, err := ctrl.requireTenantID(c)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, coreErrors.BuildErrorSingle(c, coreErrors.InvalidUUID))
-		return
+		return nil, err
+	}
+	routeID, err := uuid.Parse(in.RouteID)
+	if err != nil {
+		return nil, api.Fail(http.StatusBadRequest, coreErrors.BuildErrorSingle(c, coreErrors.InvalidUUID))
 	}
 	var dto models.BulkAssignRidersDto
-	if err := c.ShouldBindJSON(&dto); err != nil {
-		c.JSON(http.StatusBadRequest, coreErrors.BuildErrorDetail(c, trackingErrors.AssignmentCreateFailed, utils.ExtractValidationError(c, err)))
-		return
+	if err := in.JSON.Into(ctx, &dto); err != nil {
+		return nil, api.Fail(http.StatusBadRequest, coreErrors.BuildErrorDetail(c, trackingErrors.AssignmentCreateFailed, utils.ExtractValidationError(c, err)))
 	}
 	result, err := ctrl.trackingService.BulkAssignRiders(c.Request.Context(), tenantID, routeID, &dto)
 	if err != nil {
-		if assignmentErrorResponse(c, err) {
-			return
+		if err := assignmentErrorResponse(c, err); err != nil {
+			return nil, err
 		}
-		c.JSON(http.StatusInternalServerError, coreErrors.BuildError(c, err))
-		return
+		return nil, api.Fail(http.StatusInternalServerError, coreErrors.BuildError(c, err))
 	}
-	c.JSON(http.StatusOK, result)
+	return api.OK(result)
 }
 
-// ListRiderGroups godoc
-// @Summary The groups riders use
-// @Description The distinct groups ("5to B") of the tenant's riders, optionally of one organization (TRACK-039 D2)
-// @Tags Tracking - Riders
-// @Produce json
-// @Security BearerAuth
-// @Param organization_id query string false "Organization ID (UUID)"
-// @Success 200 {object} map[string][]string
-// @Router /tracking/riders/groups [get]
-func (ctrl *TrackingController) ListRiderGroups(c *gin.Context) {
-	tenantID, ok := ctrl.requireTenantID(c)
-	if !ok {
-		return
+// ListRiderGroupsInput is ListRiderGroups's request.
+type ListRiderGroupsInput struct {
+	Query api.Query[models.ListRiderGroupsQuery]
+}
+
+// ListRiderGroupsResponse is ListRiderGroups's answer.
+type ListRiderGroupsResponse struct {
+	Groups []string `json:"groups"`
+}
+
+// ListRiderGroups is GET /riders/groups: The groups riders use.
+func (ctrl *TrackingController) ListRiderGroups(ctx context.Context, in *ListRiderGroupsInput) (*api.Out[ListRiderGroupsResponse], error) {
+	c := api.Gin(ctx)
+	tenantID, err := ctrl.requireTenantID(c)
+	if err != nil {
+		return nil, err
 	}
 	var query models.ListRiderGroupsQuery
-	if err := c.ShouldBindQuery(&query); err != nil {
-		c.JSON(http.StatusBadRequest, coreErrors.BuildErrorDetail(c, trackingErrors.RiderListFailed, utils.ExtractValidationError(c, err)))
-		return
+	if err := in.Query.Into(ctx, &query); err != nil {
+		return nil, api.Fail(http.StatusBadRequest, coreErrors.BuildErrorDetail(c, trackingErrors.RiderListFailed, utils.ExtractValidationError(c, err)))
 	}
 	groups, err := ctrl.trackingService.ListRiderGroups(c.Request.Context(), tenantID, query.OrganizationID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, coreErrors.BuildError(c, err))
-		return
+		return nil, api.Fail(http.StatusInternalServerError, coreErrors.BuildError(c, err))
 	}
-	c.JSON(http.StatusOK, gin.H{"groups": groups})
+	return api.OK(ListRiderGroupsResponse{Groups: groups})
 }
 
-// UpdateAssignment godoc
-// @Summary Edit an assignment
-// @Description Every field but the rider; a field left out keeps its value. Answers the route's capacity warnings
-// @Tags Tracking - Assignments
-// @Accept json
-// @Produce json
-// @Security BearerAuth
-// @Param assignment_id path string true "Assignment ID (UUID)"
-// @Param assignment body models.UpdateAssignmentDto true "The fields to change"
-// @Success 200 {object} models.AssignmentResponse
-// @Failure 400 {object} coreErrors.ErrorResponse
-// @Failure 404 {object} coreErrors.ErrorResponse
-// @Failure 409 {object} coreErrors.ErrorResponse
-// @Failure 500 {object} coreErrors.ErrorResponse
-// @Router /tracking/assignments/{assignment_id} [patch]
-func (ctrl *TrackingController) UpdateAssignment(c *gin.Context) {
-	tenantID, ok := ctrl.requireTenantID(c)
-	if !ok {
-		return
-	}
-	assignmentID, err := uuid.Parse(c.Param("assignment_id"))
+// UpdateAssignmentInput is UpdateAssignment's request.
+type UpdateAssignmentInput struct {
+	AssignmentID string `path:"assignment_id"`
+	JSON         api.Body[models.UpdateAssignmentDto]
+}
+
+// UpdateAssignment is PATCH /assignments/{assignment_id}: Edit an assignment.
+func (ctrl *TrackingController) UpdateAssignment(ctx context.Context, in *UpdateAssignmentInput) (*api.Out[*models.AssignmentResponse], error) {
+	c := api.Gin(ctx)
+	tenantID, err := ctrl.requireTenantID(c)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, coreErrors.BuildErrorSingle(c, coreErrors.InvalidUUID))
-		return
+		return nil, err
+	}
+	assignmentID, err := uuid.Parse(in.AssignmentID)
+	if err != nil {
+		return nil, api.Fail(http.StatusBadRequest, coreErrors.BuildErrorSingle(c, coreErrors.InvalidUUID))
 	}
 	var dto models.UpdateAssignmentDto
-	if err := c.ShouldBindJSON(&dto); err != nil {
-		c.JSON(http.StatusBadRequest, coreErrors.BuildErrorDetail(c, trackingErrors.AssignmentUpdateFailed, utils.ExtractValidationError(c, err)))
-		return
+	if err := in.JSON.Into(ctx, &dto); err != nil {
+		return nil, api.Fail(http.StatusBadRequest, coreErrors.BuildErrorDetail(c, trackingErrors.AssignmentUpdateFailed, utils.ExtractValidationError(c, err)))
 	}
 
 	result, err := ctrl.trackingService.UpdateAssignment(c.Request.Context(), tenantID, assignmentID, &dto)
 	if err != nil {
-		if assignmentErrorResponse(c, err) {
-			return
+		if err := assignmentErrorResponse(c, err); err != nil {
+			return nil, err
 		}
-		c.JSON(http.StatusInternalServerError, coreErrors.BuildError(c, err))
-		return
+		return nil, api.Fail(http.StatusInternalServerError, coreErrors.BuildError(c, err))
 	}
-	c.JSON(http.StatusOK, result)
+	return api.OK(result)
 }
 
-// DeleteAssignment godoc
-// @Summary Remove an assignment
-// @Tags Tracking - Assignments
-// @Produce json
-// @Security BearerAuth
-// @Param assignment_id path string true "Assignment ID (UUID)"
-// @Param twin query bool false "false keeps its twin on the paired route (TRACK-070 D5); default true"
-// @Success 204 "No Content"
-// @Failure 400 {object} coreErrors.ErrorResponse
-// @Failure 404 {object} coreErrors.ErrorResponse
-// @Failure 500 {object} coreErrors.ErrorResponse
-// @Router /tracking/assignments/{assignment_id} [delete]
-func (ctrl *TrackingController) DeleteAssignment(c *gin.Context) {
-	tenantID, ok := ctrl.requireTenantID(c)
-	if !ok {
-		return
-	}
-	assignmentID, err := uuid.Parse(c.Param("assignment_id"))
+// DeleteAssignmentInput is DeleteAssignment's request.
+type DeleteAssignmentInput struct {
+	AssignmentID string `path:"assignment_id"`
+	Twin         string `query:"twin"`
+}
+
+// DeleteAssignment is DELETE /assignments/{assignment_id}: Remove an assignment.
+func (ctrl *TrackingController) DeleteAssignment(ctx context.Context, in *DeleteAssignmentInput) (*api.Empty, error) {
+	c := api.Gin(ctx)
+	tenantID, err := ctrl.requireTenantID(c)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, coreErrors.BuildErrorSingle(c, coreErrors.InvalidUUID))
-		return
+		return nil, err
+	}
+	assignmentID, err := uuid.Parse(in.AssignmentID)
+	if err != nil {
+		return nil, api.Fail(http.StatusBadRequest, coreErrors.BuildErrorSingle(c, coreErrors.InvalidUUID))
 	}
 
-	twin := c.Query("twin") != "false"
+	twin := in.Twin != "false"
 	if err := ctrl.trackingService.DeleteAssignment(c.Request.Context(), tenantID, assignmentID, twin); err != nil {
-		if assignmentErrorResponse(c, err) {
-			return
+		if err := assignmentErrorResponse(c, err); err != nil {
+			return nil, err
 		}
-		c.JSON(http.StatusInternalServerError, coreErrors.BuildError(c, err))
-		return
+		return nil, api.Fail(http.StatusInternalServerError, coreErrors.BuildError(c, err))
 	}
-	c.Status(http.StatusNoContent)
+	return api.Done()
 }

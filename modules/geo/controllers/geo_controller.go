@@ -1,9 +1,11 @@
 package controllers
 
 import (
+	"context"
 	"errors"
 	"net/http"
 
+	"josex/web/modules/core/api"
 	coreErrors "josex/web/modules/core/errors"
 	"josex/web/modules/core/utils"
 	geoErrors "josex/web/modules/geo/errors"
@@ -23,130 +25,100 @@ func NewGeoController(service interfaces.GeoService) *GeoController {
 	return &GeoController{service: service}
 }
 
-// Geocode godoc
-// @Summary Search addresses: streets, places and POIs by name
-// @Description Near lat/lng, a close match outranks a better one far away.
-// @Tags Geo
-// @Produce json
-// @Param q query string true "What to look for, at least 2 characters"
-// @Param lat query number false "Rank matches near this point first (with lng)"
-// @Param lng query number false "Rank matches near this point first (with lat)"
-// @Param limit query int false "1-20, default 8"
-// @Success 200 {object} models.GeocodeResponse
-// @Failure 400 {object} coreErrors.ErrorResponse
-// @Router /geo/geocode [get]
-// @Security ApiKeyAuth
-func (ctrl *GeoController) Geocode(c *gin.Context) {
+// GeocodeInput is Geocode's request.
+type GeocodeInput struct {
+	Query api.Query[models.GeocodeQuery]
+}
+
+// Geocode is GET /geocode: Search addresses: streets, places and POIs by name.
+func (ctrl *GeoController) Geocode(ctx context.Context, in *GeocodeInput) (*api.Out[models.GeocodeResponse], error) {
+	c := api.Gin(ctx)
 	var q models.GeocodeQuery
-	if err := c.ShouldBindQuery(&q); err != nil {
-		c.JSON(http.StatusBadRequest, coreErrors.BuildErrorDetail(c, geoErrors.ValidationFailed, utils.ExtractValidationError(c, err)))
-		return
+	if err := in.Query.Into(ctx, &q); err != nil {
+		return nil, api.Fail(http.StatusBadRequest, coreErrors.BuildErrorDetail(c, geoErrors.ValidationFailed, utils.ExtractValidationError(c, err)))
 	}
 	if (q.Lat == nil) != (q.Lng == nil) {
-		c.JSON(http.StatusBadRequest, coreErrors.BuildErrorSingle(c, geoErrors.PointIncomplete))
-		return
+		return nil, api.Fail(http.StatusBadRequest, coreErrors.BuildErrorSingle(c, geoErrors.PointIncomplete))
 	}
 
 	places, err := ctrl.service.Search(c.Request.Context(), &q)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, coreErrors.BuildErrorSingle(c, geoErrors.GeocodeFailed))
-		return
+		return nil, api.Fail(http.StatusInternalServerError, coreErrors.BuildErrorSingle(c, geoErrors.GeocodeFailed))
 	}
-	c.JSON(http.StatusOK, models.GeocodeResponse{Results: places})
+	return api.OK(models.GeocodeResponse{Results: places})
 }
 
-// Reverse godoc
-// @Summary The nearest known place to a point, within 500 m
-// @Tags Geo
-// @Produce json
-// @Param lat query number true "Latitude"
-// @Param lng query number true "Longitude"
-// @Success 200 {object} models.Place
-// @Failure 400 {object} coreErrors.ErrorResponse
-// @Failure 404 {object} coreErrors.ErrorResponse
-// @Router /geo/reverse [get]
-// @Security ApiKeyAuth
-func (ctrl *GeoController) Reverse(c *gin.Context) {
+// ReverseInput is Reverse's request.
+type ReverseInput struct {
+	Query api.Query[models.ReverseQuery]
+}
+
+// Reverse is GET /reverse: The nearest known place to a point, within 500 m.
+func (ctrl *GeoController) Reverse(ctx context.Context, in *ReverseInput) (*api.Out[*models.Place], error) {
+	c := api.Gin(ctx)
 	var q models.ReverseQuery
-	if err := c.ShouldBindQuery(&q); err != nil {
-		c.JSON(http.StatusBadRequest, coreErrors.BuildErrorDetail(c, geoErrors.ValidationFailed, utils.ExtractValidationError(c, err)))
-		return
+	if err := in.Query.Into(ctx, &q); err != nil {
+		return nil, api.Fail(http.StatusBadRequest, coreErrors.BuildErrorDetail(c, geoErrors.ValidationFailed, utils.ExtractValidationError(c, err)))
 	}
 
 	place, err := ctrl.service.Reverse(c.Request.Context(), *q.Lat, *q.Lng)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, coreErrors.BuildErrorSingle(c, geoErrors.ReverseFailed))
-		return
+		return nil, api.Fail(http.StatusInternalServerError, coreErrors.BuildErrorSingle(c, geoErrors.ReverseFailed))
 	}
 	if place == nil {
-		c.JSON(http.StatusNotFound, coreErrors.BuildErrorSingle(c, geoErrors.ReverseNotFound))
-		return
+		return nil, api.Fail(http.StatusNotFound, coreErrors.BuildErrorSingle(c, geoErrors.ReverseNotFound))
 	}
-	c.JSON(http.StatusOK, place)
+	return api.OK(place)
 }
 
-// Route godoc
-// @Summary The route through the locations in order, by bus or on foot
-// @Tags Geo
-// @Accept json
-// @Produce json
-// @Param request body models.RouteRequest true "2-20 locations and a costing"
-// @Success 200 {object} models.Route
-// @Failure 400 {object} coreErrors.ErrorResponse
-// @Failure 422 {object} coreErrors.ErrorResponse "no route joins the locations"
-// @Failure 503 {object} coreErrors.ErrorResponse "routing unavailable, retry later"
-// @Router /geo/route [post]
-// @Security ApiKeyAuth
-func (ctrl *GeoController) Route(c *gin.Context) {
+// RouteInput is Route's request.
+type RouteInput struct {
+	JSON api.Body[models.RouteRequest]
+}
+
+// Route is POST /route: The route through the locations in order, by bus or on foot.
+func (ctrl *GeoController) Route(ctx context.Context, in *RouteInput) (*api.Out[*models.Route], error) {
+	c := api.Gin(ctx)
 	var req models.RouteRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, coreErrors.BuildErrorDetail(c, geoErrors.ValidationFailed, utils.ExtractValidationError(c, err)))
-		return
+	if err := in.JSON.Into(ctx, &req); err != nil {
+		return nil, api.Fail(http.StatusBadRequest, coreErrors.BuildErrorDetail(c, geoErrors.ValidationFailed, utils.ExtractValidationError(c, err)))
 	}
 
 	route, err := ctrl.service.Route(c.Request.Context(), &req)
 	if err != nil {
-		ctrl.routingError(c, err, geoErrors.RouteUnavailable)
-		return
+		return nil, ctrl.routingError(c, err, geoErrors.RouteUnavailable)
 	}
-	c.JSON(http.StatusOK, route)
+	return api.OK(route)
 }
 
-// Eta godoc
-// @Summary Travel time between two points; still answers when routing is down
-// @Description estimate_source says how: valhalla, historical, or fallback (straight line at a fixed speed).
-// @Tags Geo
-// @Accept json
-// @Produce json
-// @Param request body models.EtaRequest true "from, to and a costing"
-// @Success 200 {object} models.Eta
-// @Failure 400 {object} coreErrors.ErrorResponse
-// @Failure 422 {object} coreErrors.ErrorResponse "no route joins the points"
-// @Router /geo/eta [post]
-// @Security ApiKeyAuth
-func (ctrl *GeoController) Eta(c *gin.Context) {
+// EtaInput is Eta's request.
+type EtaInput struct {
+	JSON api.Body[models.EtaRequest]
+}
+
+// Eta is POST /eta: Travel time between two points; still answers when routing is down.
+func (ctrl *GeoController) Eta(ctx context.Context, in *EtaInput) (*api.Out[*models.Eta], error) {
+	c := api.Gin(ctx)
 	var req models.EtaRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, coreErrors.BuildErrorDetail(c, geoErrors.ValidationFailed, utils.ExtractValidationError(c, err)))
-		return
+	if err := in.JSON.Into(ctx, &req); err != nil {
+		return nil, api.Fail(http.StatusBadRequest, coreErrors.BuildErrorDetail(c, geoErrors.ValidationFailed, utils.ExtractValidationError(c, err)))
 	}
 
 	eta, err := ctrl.service.Eta(c.Request.Context(), &req)
 	if err != nil {
-		ctrl.routingError(c, err, geoErrors.EtaFailed)
-		return
+		return nil, ctrl.routingError(c, err, geoErrors.EtaFailed)
 	}
-	c.JSON(http.StatusOK, eta)
+	return api.OK(eta)
 }
 
 // routingError maps the routing port's errors; anything else is fallbackCode with a 500.
-func (ctrl *GeoController) routingError(c *gin.Context, err error, fallbackCode string) {
+func (ctrl *GeoController) routingError(c *gin.Context, err error, fallbackCode string) error {
 	switch {
 	case errors.Is(err, interfaces.ErrNoRoute):
-		c.JSON(http.StatusUnprocessableEntity, coreErrors.BuildErrorSingle(c, geoErrors.RouteNotFound))
+		return api.Fail(http.StatusUnprocessableEntity, coreErrors.BuildErrorSingle(c, geoErrors.RouteNotFound))
 	case errors.Is(err, interfaces.ErrRouteUnavailable):
-		c.JSON(http.StatusServiceUnavailable, coreErrors.BuildErrorSingle(c, geoErrors.RouteUnavailable))
+		return api.Fail(http.StatusServiceUnavailable, coreErrors.BuildErrorSingle(c, geoErrors.RouteUnavailable))
 	default:
-		c.JSON(http.StatusInternalServerError, coreErrors.BuildErrorSingle(c, fallbackCode))
+		return api.Fail(http.StatusInternalServerError, coreErrors.BuildErrorSingle(c, fallbackCode))
 	}
 }

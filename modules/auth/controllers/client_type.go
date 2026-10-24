@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	authErrors "josex/web/modules/auth/errors"
+	"josex/web/modules/core/api"
 	coreErrors "josex/web/modules/core/errors"
 
 	"github.com/gin-gonic/gin"
@@ -21,15 +22,14 @@ const (
 // through here so the header is read, defaulted and refused in exactly one place: an absent header
 // is the web app, and an unknown value is a 400 rather than a silently mislabelled session.
 // It answers the request itself when it refuses, and reports whether the caller may continue.
-func clientType(c *gin.Context) (string, bool) {
+func clientType(c *gin.Context) (string, error) {
 	declared := strings.ToLower(strings.TrimSpace(c.GetHeader("X-Client-Type")))
 	switch declared {
 	case "":
-		return ClientTypeWeb, true
+		return ClientTypeWeb, nil
 	case ClientTypeWeb, ClientTypeMobile:
-		return declared, true
+		return declared, nil
 	default:
-		c.JSON(http.StatusBadRequest, coreErrors.BuildErrorSingle(c, authErrors.ClientTypeInvalid))
-		return "", false
+		return "", api.Fail(http.StatusBadRequest, coreErrors.BuildErrorSingle(c, authErrors.ClientTypeInvalid))
 	}
 }

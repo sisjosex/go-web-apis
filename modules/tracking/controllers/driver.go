@@ -1,9 +1,11 @@
 package controllers
 
 import (
+	"context"
 	"fmt"
 	"net/http"
 
+	"josex/web/modules/core/api"
 	coreErrors "josex/web/modules/core/errors"
 	"josex/web/modules/core/utils"
 	trackingErrors "josex/web/modules/tracking/errors"
@@ -25,118 +27,90 @@ func NewDriverController(driverService interfaces.DriverService) *DriverControll
 }
 
 // driverIDs are the tenant and the account the chain resolved.
-func driverIDs(c *gin.Context) (uuid.UUID, uuid.UUID, bool) {
+func driverIDs(c *gin.Context) (uuid.UUID, uuid.UUID, error) {
 	tenantID, err := uuid.Parse(c.GetString("tenant_id"))
 	if err != nil {
-		c.JSON(http.StatusForbidden, coreErrors.BuildErrorSingle(c, trackingErrors.TenantRequired))
-		return uuid.Nil, uuid.Nil, false
+		return uuid.Nil, uuid.Nil, api.Fail(http.StatusForbidden, coreErrors.BuildErrorSingle(c, trackingErrors.TenantRequired))
 	}
 	userID, err := uuid.Parse(c.GetString("user_id"))
 	if err != nil {
-		c.JSON(http.StatusUnauthorized, coreErrors.BuildErrorSingle(c, trackingErrors.TenantRequired))
-		return uuid.Nil, uuid.Nil, false
+		return uuid.Nil, uuid.Nil, api.Fail(http.StatusUnauthorized, coreErrors.BuildErrorSingle(c, trackingErrors.TenantRequired))
 	}
-	return tenantID, userID, true
+	return tenantID, userID, nil
 }
 
-// Today godoc
-// @Summary The driver's day
-// @Description The driver's trips of each route's local today, any status, each with its stops, tasks and riders — what the phone keeps offline. ETag is the hash of the day; sending it back as If-None-Match answers 304 while nothing changed
-// @Tags Tracking - Driver
-// @Produce json
-// @Security BearerAuth
-// @Param If-None-Match header string false "ETag of the day the phone holds"
-// @Success 200 {object} models.DriverToday
-// @Success 304
-// @Failure 403 {object} coreErrors.ErrorResponse
-// @Failure 500 {object} coreErrors.ErrorResponse
-// @Router /mobile/driver/today [get]
-func (ctrl *DriverController) Today(c *gin.Context) {
-	tenantID, userID, ok := driverIDs(c)
-	if !ok {
-		return
+// RevalidateInput is the request of a read the client revalidates with the ETag it holds.
+type RevalidateInput struct {
+	IfNoneMatch string `header:"If-None-Match" doc:"The ETag the client holds"`
+}
+
+// Today is the driver's trips of each route's local today, any status, each with its stops, tasks and
+// riders — what the phone keeps offline. ETag is the hash of the day; sending it back as
+// If-None-Match answers 304 while nothing changed.
+func (ctrl *DriverController) Today(ctx context.Context, in *RevalidateInput) (*api.Cached[*models.DriverToday], error) {
+	c := api.Gin(ctx)
+	tenantID, userID, err := driverIDs(c)
+	if err != nil {
+		return nil, err
 	}
 
 	day, etag, err := ctrl.driverService.Today(c.Request.Context(), tenantID, userID)
 	if err != nil {
-		tripErrorResponse(c, err)
-		return
+		return nil, tripErrorResponse(c, err)
 	}
-	c.Header("ETag", etag)
-	c.Header("Cache-Control", "private, no-cache")
-	if c.GetHeader("If-None-Match") == etag {
-		c.Status(http.StatusNotModified)
-		return
-	}
-	c.JSON(http.StatusOK, day)
+	return api.Revalidate(in.IfNoneMatch, etag, "private, no-cache", day)
 }
 
-// StartTrip godoc
-// @Summary Start one of the driver's trips
-// @Description planned → in_progress. Another driver's trip is 404
-// @Tags Tracking - Driver
-// @Produce json
-// @Security BearerAuth
-// @Param trip_id path string true "Trip ID (UUID)"
-// @Success 200 {object} models.TripDetail
-// @Failure 400 {object} coreErrors.ErrorResponse
-// @Failure 403 {object} coreErrors.ErrorResponse
-// @Failure 404 {object} coreErrors.ErrorResponse
-// @Failure 409 {object} coreErrors.ErrorResponse
-// @Router /mobile/driver/trips/{trip_id}/start [post]
-func (ctrl *DriverController) StartTrip(c *gin.Context) {
-	tenantID, userID, ok := driverIDs(c)
-	if !ok {
-		return
+// StartTripInput is StartTrip's request.
+type StartTripInput struct {
+	TripID string `path:"trip_id"`
+}
+
+// StartTrip is POST /trips/{trip_id}/start: Start one of the driver's trips.
+func (ctrl *DriverController) StartTrip(ctx context.Context, _ *StartTripInput) (*api.Out[*models.TripDetail], error) {
+	c := api.Gin(ctx)
+	tenantID, userID, err := driverIDs(c)
+	if err != nil {
+		return nil, err
 	}
-	tripID, ok := pathUUID(c, "trip_id")
-	if !ok {
-		return
+	tripID, err := pathUUID(c, "trip_id")
+	if err != nil {
+		return nil, err
 	}
 
 	detail, err := ctrl.driverService.StartTrip(c.Request.Context(), tenantID, userID, tripID)
 	if err != nil {
-		tripErrorResponse(c, err)
-		return
+		return nil, tripErrorResponse(c, err)
 	}
-	c.JSON(http.StatusOK, detail)
+	return api.OK(detail)
 }
 
-// Sync godoc
-// @Summary Replay what the phone did offline
-// @Description Up to 100 ops, applied in the order they were done (client_recorded_at) and stamped with that time. Each answers applied, replayed (already applied by an earlier sync) or rejected with its code; a rejected op sent again is rejected again with the same code. One op's refusal never stops the next
-// @Tags Tracking - Driver
-// @Accept json
-// @Produce json
-// @Security BearerAuth
-// @Param ops body models.DriverSyncDto true "Queued ops"
-// @Success 200 {object} models.DriverSyncResponse
-// @Failure 400 {object} coreErrors.ErrorResponse
-// @Failure 403 {object} coreErrors.ErrorResponse
-// @Failure 500 {object} coreErrors.ErrorResponse
-// @Router /mobile/driver/sync [post]
-func (ctrl *DriverController) Sync(c *gin.Context) {
-	tenantID, userID, ok := driverIDs(c)
-	if !ok {
-		return
+// SyncInput is Sync's request.
+type SyncInput struct {
+	JSON api.Body[models.DriverSyncDto]
+}
+
+// Sync is POST /sync: Replay what the phone did offline.
+func (ctrl *DriverController) Sync(ctx context.Context, in *SyncInput) (*api.Out[models.DriverSyncResponse], error) {
+	c := api.Gin(ctx)
+	tenantID, userID, err := driverIDs(c)
+	if err != nil {
+		return nil, err
 	}
 
 	var dto models.DriverSyncDto
-	if err := c.ShouldBindJSON(&dto); err != nil {
-		c.JSON(http.StatusBadRequest, coreErrors.BuildErrorDetail(c, trackingErrors.DriverSyncInvalid, utils.ExtractValidationError(c, err)))
-		return
+	if err := in.JSON.Into(ctx, &dto); err != nil {
+		return nil, api.Fail(http.StatusBadRequest, coreErrors.BuildErrorDetail(c, trackingErrors.DriverSyncInvalid, utils.ExtractValidationError(c, err)))
 	}
 	if detail := checkOps(dto.Ops); detail != "" {
-		c.JSON(http.StatusBadRequest, coreErrors.BuildErrorDetail(c, trackingErrors.DriverSyncInvalid, detail))
-		return
+		return nil, api.Fail(http.StatusBadRequest, coreErrors.BuildErrorDetail(c, trackingErrors.DriverSyncInvalid, detail))
 	}
 
 	results, err := ctrl.driverService.Sync(c.Request.Context(), tenantID, userID, dto.Ops)
 	if err != nil {
-		tripErrorResponse(c, err)
-		return
+		return nil, tripErrorResponse(c, err)
 	}
-	c.JSON(http.StatusOK, models.DriverSyncResponse{Results: results})
+	return api.OK(models.DriverSyncResponse{Results: results})
 }
 
 // checkOps is what binding cannot say about an op: that its args name the target its op needs. It
@@ -159,120 +133,94 @@ func checkOps(ops []models.DriverSyncOp) string {
 	return ""
 }
 
-// ResolveRider godoc
-// @Summary Resolve a scanned rider card
-// @Description The rider the card's code names and their pending pickup on the driver's trip in progress, null when there is none. The code may be typed by hand: case and blanks are ignored. An unknown, rotated or another tenant's code is 404
-// @Tags Tracking - Driver
-// @Produce json
-// @Security BearerAuth
-// @Param code path string true "Card code"
-// @Success 200 {object} models.DriverRider
-// @Failure 403 {object} coreErrors.ErrorResponse
-// @Failure 404 {object} coreErrors.ErrorResponse
-// @Router /mobile/driver/riders/{code} [get]
-func (ctrl *DriverController) ResolveRider(c *gin.Context) {
-	tenantID, userID, ok := driverIDs(c)
-	if !ok {
-		return
-	}
-
-	rider, err := ctrl.driverService.ResolveRider(c.Request.Context(), tenantID, userID, c.Param("code"))
-	if err != nil {
-		tripErrorResponse(c, err)
-		return
-	}
-	c.JSON(http.StatusOK, rider)
+// ResolveRiderInput is ResolveRider's request.
+type ResolveRiderInput struct {
+	Code string `path:"code"`
 }
 
-// FindRiders godoc
-// @Summary Find a rider without their card
-// @Description The riders on the driver's trips in progress whose name contains q, or whose card code is q, each with their pending pickup; at most 20, by name
-// @Tags Tracking - Driver
-// @Produce json
-// @Security BearerAuth
-// @Param q query string true "Part of a name, or a card code"
-// @Success 200 {object} models.DriverFindRidersResponse
-// @Failure 400 {object} coreErrors.ErrorResponse
-// @Failure 403 {object} coreErrors.ErrorResponse
-// @Router /mobile/driver/riders [get]
-func (ctrl *DriverController) FindRiders(c *gin.Context) {
-	tenantID, userID, ok := driverIDs(c)
-	if !ok {
-		return
+// ResolveRider is GET /riders/{code}: Resolve a scanned rider card.
+func (ctrl *DriverController) ResolveRider(ctx context.Context, in *ResolveRiderInput) (*api.Out[*models.DriverRider], error) {
+	c := api.Gin(ctx)
+	tenantID, userID, err := driverIDs(c)
+	if err != nil {
+		return nil, err
+	}
+
+	rider, err := ctrl.driverService.ResolveRider(c.Request.Context(), tenantID, userID, in.Code)
+	if err != nil {
+		return nil, tripErrorResponse(c, err)
+	}
+	return api.OK(rider)
+}
+
+// FindRidersInput is FindRiders's request.
+type FindRidersInput struct {
+	Query api.Query[models.DriverFindRidersQuery]
+}
+
+// FindRiders is GET /riders: Find a rider without their card.
+func (ctrl *DriverController) FindRiders(ctx context.Context, in *FindRidersInput) (*api.Out[models.DriverFindRidersResponse], error) {
+	c := api.Gin(ctx)
+	tenantID, userID, err := driverIDs(c)
+	if err != nil {
+		return nil, err
 	}
 	var query models.DriverFindRidersQuery
-	if err := c.ShouldBindQuery(&query); err != nil {
-		c.JSON(http.StatusBadRequest, coreErrors.BuildErrorDetail(c, trackingErrors.DriverRiderInvalid, utils.ExtractValidationError(c, err)))
-		return
+	if err := in.Query.Into(ctx, &query); err != nil {
+		return nil, api.Fail(http.StatusBadRequest, coreErrors.BuildErrorDetail(c, trackingErrors.DriverRiderInvalid, utils.ExtractValidationError(c, err)))
 	}
 
 	riders, err := ctrl.driverService.FindRiders(c.Request.Context(), tenantID, userID, query.Q)
 	if err != nil {
-		tripErrorResponse(c, err)
-		return
+		return nil, tripErrorResponse(c, err)
 	}
-	c.JSON(http.StatusOK, models.DriverFindRidersResponse{Riders: riders})
+	return api.OK(models.DriverFindRidersResponse{Riders: riders})
 }
 
-// CreateProof godoc
-// @Summary Sign a drop-off photo's upload
-// @Description A 5-minute PUT of size bytes of WebP (at most 300 KB) to a pending key of the tenant; task.done names the key as proof.photo_key and the sync stores the photo under the task (MOBILE-032)
-// @Tags Tracking - Driver
-// @Accept json
-// @Produce json
-// @Security BearerAuth
-// @Param proof body models.DriverProofDto true "Size of the photo"
-// @Success 201 {object} models.DriverProofTicket
-// @Failure 400 {object} coreErrors.ErrorResponse
-// @Failure 403 {object} coreErrors.ErrorResponse
-// @Router /mobile/driver/proofs [post]
-func (ctrl *DriverController) CreateProof(c *gin.Context) {
-	tenantID, _, ok := driverIDs(c)
-	if !ok {
-		return
+// CreateProofInput is CreateProof's request.
+type CreateProofInput struct {
+	JSON api.Body[models.DriverProofDto]
+}
+
+// CreateProof is POST /proofs: Sign a drop-off photo's upload.
+func (ctrl *DriverController) CreateProof(ctx context.Context, in *CreateProofInput) (*api.Out[*models.DriverProofTicket], error) {
+	c := api.Gin(ctx)
+	tenantID, _, err := driverIDs(c)
+	if err != nil {
+		return nil, err
 	}
 	var dto models.DriverProofDto
-	if err := c.ShouldBindJSON(&dto); err != nil {
-		c.JSON(http.StatusBadRequest, coreErrors.BuildErrorDetail(c, trackingErrors.DriverProofInvalid, utils.ExtractValidationError(c, err)))
-		return
+	if err := in.JSON.Into(ctx, &dto); err != nil {
+		return nil, api.Fail(http.StatusBadRequest, coreErrors.BuildErrorDetail(c, trackingErrors.DriverProofInvalid, utils.ExtractValidationError(c, err)))
 	}
 
 	ticket, err := ctrl.driverService.ProofTicket(c.Request.Context(), tenantID, dto.Size)
 	if err != nil {
-		tripErrorResponse(c, err)
-		return
+		return nil, tripErrorResponse(c, err)
 	}
-	c.JSON(http.StatusCreated, ticket)
+	return api.OK(ticket)
 }
 
-// ReportIncident godoc
-// @Summary Report an incident on one of the driver's trips
-// @Description A route alert on the trip's route and vehicle that names the trip and where the phone was; the board hears of it through the trip's change event. Severity follows the type: emergency critical, breakdown high, delay medium. Another driver's trip is 404
-// @Tags Tracking - Driver
-// @Accept json
-// @Produce json
-// @Security BearerAuth
-// @Param incident body models.DriverIncidentDto true "Incident"
-// @Success 201 {object} models.DriverIncidentResponse
-// @Failure 400 {object} coreErrors.ErrorResponse
-// @Failure 403 {object} coreErrors.ErrorResponse
-// @Failure 404 {object} coreErrors.ErrorResponse
-// @Router /mobile/driver/incidents [post]
-func (ctrl *DriverController) ReportIncident(c *gin.Context) {
-	tenantID, userID, ok := driverIDs(c)
-	if !ok {
-		return
+// ReportIncidentInput is ReportIncident's request.
+type ReportIncidentInput struct {
+	JSON api.Body[models.DriverIncidentDto]
+}
+
+// ReportIncident is POST /incidents: Report an incident on one of the driver's trips.
+func (ctrl *DriverController) ReportIncident(ctx context.Context, in *ReportIncidentInput) (*api.Out[models.DriverIncidentResponse], error) {
+	c := api.Gin(ctx)
+	tenantID, userID, err := driverIDs(c)
+	if err != nil {
+		return nil, err
 	}
 	var dto models.DriverIncidentDto
-	if err := c.ShouldBindJSON(&dto); err != nil {
-		c.JSON(http.StatusBadRequest, coreErrors.BuildErrorDetail(c, trackingErrors.DriverIncidentInvalid, utils.ExtractValidationError(c, err)))
-		return
+	if err := in.JSON.Into(ctx, &dto); err != nil {
+		return nil, api.Fail(http.StatusBadRequest, coreErrors.BuildErrorDetail(c, trackingErrors.DriverIncidentInvalid, utils.ExtractValidationError(c, err)))
 	}
 
 	alert, err := ctrl.driverService.ReportIncident(c.Request.Context(), tenantID, userID, &dto)
 	if err != nil {
-		tripErrorResponse(c, err)
-		return
+		return nil, tripErrorResponse(c, err)
 	}
-	c.JSON(http.StatusCreated, models.DriverIncidentResponse{Alert: *alert})
+	return api.OK(models.DriverIncidentResponse{Alert: *alert})
 }

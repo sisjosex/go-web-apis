@@ -1,16 +1,17 @@
 package controllers
 
 import (
+	"context"
 	"errors"
 	"net/http"
 
-	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgconn"
 
 	authErrors "josex/web/modules/auth/errors"
 	authInterfaces "josex/web/modules/auth/interfaces"
 	authModels "josex/web/modules/auth/models"
+	"josex/web/modules/core/api"
 	coreErrors "josex/web/modules/core/errors"
 )
 
@@ -27,30 +28,18 @@ func NewSessionController(authService authInterfaces.AuthService) *SessionContro
 	}
 }
 
-// GetActiveSessions godoc
-// @Summary Get active sessions
-// @Description Get all sessions (active and inactive) for authenticated user
-// @Tags Sessions
-// @Accept  json
-// @Produce  json
-// @Param Authorization header string true "Bearer Token"
-// @Success 200 {array} authModels.UserSession
-// @Failure 400 {object} coreErrors.ErrorResponse
-// @Failure 401 {object} coreErrors.ErrorResponse
-// @Router /auth/sessions [get]
-// @Security ApiKeyAuth
-func (sc *SessionController) GetActiveSessions(c *gin.Context) {
+// GetActiveSessions is GET /sessions: Get active sessions.
+func (sc *SessionController) GetActiveSessions(ctx context.Context, _ *api.None) (*api.Out[[]authModels.UserSession], error) {
+	c := api.Gin(ctx)
 	userIDStr := c.GetString("user_id")
 	userID, err := uuid.Parse(userIDStr)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, coreErrors.BuildErrorSingle(c, coreErrors.InvalidUUID))
-		return
+		return nil, api.Fail(http.StatusBadRequest, coreErrors.BuildErrorSingle(c, coreErrors.InvalidUUID))
 	}
 
 	sessions, err := sc.authService.GetUserSessions(userID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, coreErrors.BuildError(c, err))
-		return
+		return nil, api.Fail(http.StatusInternalServerError, coreErrors.BuildError(c, err))
 	}
 
 	// None is `[]`, never `null`; the session this request came with says so.
@@ -62,65 +51,54 @@ func (sc *SessionController) GetActiveSessions(c *gin.Context) {
 		sessions[i].IsCurrent = sessions[i].SessionID.String() == current
 	}
 
-	c.JSON(http.StatusOK, sessions)
+	return api.OK(sessions)
 }
 
-// LogoutSession godoc
-// @Summary Logout specific session
-// @Description Logout a specific session by ID (must belong to authenticated user)
-// @Tags Sessions
-// @Accept  json
-// @Produce  json
-// @Param Authorization header string true "Bearer Token"
-// @Param id path string true "Session ID (UUID)"
-// @Success 200 {object} map[string]bool
-// @Failure 400 {object} coreErrors.ErrorResponse "Already signed out"
-// @Failure 401 {object} coreErrors.ErrorResponse
-// @Failure 404 {object} coreErrors.ErrorResponse "No such session for this user"
-// @Router /auth/sessions/{id} [delete]
-// @Security ApiKeyAuth
-func (sc *SessionController) LogoutSession(c *gin.Context) {
+// LogoutSessionInput is LogoutSession's request.
+type LogoutSessionInput struct {
+	ID string `path:"id"`
+}
+
+// LogoutSessionResponse is LogoutSession's answer.
+type LogoutSessionResponse struct {
+	Success bool `json:"success"`
+}
+
+// LogoutSession is DELETE /sessions/{id}: Logout specific session.
+func (sc *SessionController) LogoutSession(ctx context.Context, in *LogoutSessionInput) (*api.Out[LogoutSessionResponse], error) {
+	c := api.Gin(ctx)
 	userIDStr := c.GetString("user_id")
 	userID, err := uuid.Parse(userIDStr)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, coreErrors.BuildErrorSingle(c, coreErrors.InvalidUUID))
-		return
+		return nil, api.Fail(http.StatusBadRequest, coreErrors.BuildErrorSingle(c, coreErrors.InvalidUUID))
 	}
 
-	sessionIDStr := c.Param("id")
+	sessionIDStr := in.ID
 	sessionID, err := uuid.Parse(sessionIDStr)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, coreErrors.BuildErrorSingle(c, coreErrors.InvalidUUID))
-		return
+		return nil, api.Fail(http.StatusBadRequest, coreErrors.BuildErrorSingle(c, coreErrors.InvalidUUID))
 	}
 
 	err = sc.authService.LogoutSession(userID, sessionID)
 	if err != nil {
-		c.JSON(logoutSessionStatus(err), coreErrors.BuildError(c, err))
-		return
+		return nil, api.Fail(logoutSessionStatus(err), coreErrors.BuildError(c, err))
 	}
 
-	c.JSON(http.StatusOK, gin.H{"success": true})
+	return api.OK(LogoutSessionResponse{Success: true})
 }
 
-// LogoutAllSessions godoc
-// @Summary Logout all sessions
-// @Description Logout all sessions for authenticated user except current one
-// @Tags Sessions
-// @Accept  json
-// @Produce  json
-// @Param Authorization header string true "Bearer Token"
-// @Success 200 {object} map[string]int
-// @Failure 400 {object} coreErrors.ErrorResponse
-// @Failure 401 {object} coreErrors.ErrorResponse
-// @Router /auth/sessions [delete]
-// @Security ApiKeyAuth
-func (sc *SessionController) LogoutAllSessions(c *gin.Context) {
+// LogoutAllSessionsResponse is LogoutAllSessions's answer.
+type LogoutAllSessionsResponse struct {
+	LoggedOutCount int `json:"logged_out_count"`
+}
+
+// LogoutAllSessions is DELETE /sessions: Logout all sessions.
+func (sc *SessionController) LogoutAllSessions(ctx context.Context, _ *api.None) (*api.Out[LogoutAllSessionsResponse], error) {
+	c := api.Gin(ctx)
 	userIDStr := c.GetString("user_id")
 	userID, err := uuid.Parse(userIDStr)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, coreErrors.BuildErrorSingle(c, coreErrors.InvalidUUID))
-		return
+		return nil, api.Fail(http.StatusBadRequest, coreErrors.BuildErrorSingle(c, coreErrors.InvalidUUID))
 	}
 
 	// Get current session ID to exclude it from logout
@@ -135,11 +113,10 @@ func (sc *SessionController) LogoutAllSessions(c *gin.Context) {
 
 	count, err := sc.authService.LogoutAllSessions(userID, currentSessionID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, coreErrors.BuildError(c, err))
-		return
+		return nil, api.Fail(http.StatusInternalServerError, coreErrors.BuildError(c, err))
 	}
 
-	c.JSON(http.StatusOK, gin.H{"logged_out_count": count})
+	return api.OK(LogoutAllSessionsResponse{LoggedOutCount: count})
 }
 
 // logoutSessionStatus maps the SP's session errors: another user's session is as absent as a missing

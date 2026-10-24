@@ -1,9 +1,11 @@
 package controllers
 
 import (
+	"context"
 	"errors"
 	"net/http"
 
+	"josex/web/modules/core/api"
 	coreErrors "josex/web/modules/core/errors"
 	"josex/web/modules/core/utils"
 	trackingErrors "josex/web/modules/tracking/errors"
@@ -41,371 +43,299 @@ var (
 )
 
 // tripErrorResponse answers the trip codes with their status and anything else with a 500. company-mismatch and service.blocked carry the offending field as their detail.
-func tripErrorResponse(c *gin.Context, err error) {
+func tripErrorResponse(c *gin.Context, err error) error {
 	var trackingErr *trackingErrors.TrackingError
 	if errors.As(err, &trackingErr) {
 		if status, ok := tripStatus[trackingErr.Code]; ok {
 			if trackingErr.Detail != nil {
-				c.JSON(status, coreErrors.BuildErrorDetail(c, trackingErr.Code, trackingErr.Detail))
+				return api.Fail(status, coreErrors.BuildErrorDetail(c, trackingErr.Code, trackingErr.Detail))
 			} else {
-				c.JSON(status, coreErrors.BuildErrorSingle(c, trackingErr.Code))
+				return api.Fail(status, coreErrors.BuildErrorSingle(c, trackingErr.Code))
 			}
-			return
+
 		}
 	}
-	c.JSON(http.StatusInternalServerError, coreErrors.BuildError(c, err))
+	return api.Fail(http.StatusInternalServerError, coreErrors.BuildError(c, err))
 }
 
 // pathUUID parses a path id, answering 400 when it is not one.
-func pathUUID(c *gin.Context, name string) (uuid.UUID, bool) {
+func pathUUID(c *gin.Context, name string) (uuid.UUID, error) {
 	id, err := uuid.Parse(c.Param(name))
 	if err != nil {
-		c.JSON(http.StatusBadRequest, coreErrors.BuildErrorSingle(c, coreErrors.InvalidUUID))
-		return uuid.Nil, false
+		return uuid.Nil, api.Fail(http.StatusBadRequest, coreErrors.BuildErrorSingle(c, coreErrors.InvalidUUID))
 	}
-	return id, true
+	return id, nil
 }
 
 // pathAction resolves the :action segment against one of the maps above; an action not listed is
 // a path that does not exist, answered as gin answers any unknown path.
-func pathAction(c *gin.Context, actions map[string]string) (string, bool) {
+func pathAction(c *gin.Context, actions map[string]string) (string, error) {
 	action, ok := actions[c.Param("action")]
 	if !ok {
-		c.AbortWithStatus(http.StatusNotFound)
+		return "", api.Fail(http.StatusNotFound, nil)
 	}
-	return action, ok
+	return action, nil
 }
 
-// ListTrips godoc
-// @Summary List a day's trips
-// @Description By planned start. date empty is each route's own today; organization_id narrows to the trips carrying one of its riders. Every row carries the route, plate and driver names, stops_count, tasks_total (not cancelled) and tasks_done (done or no_show)
-// @Tags Tracking - Trips
-// @Produce json
-// @Security BearerAuth
-// @Param date query string false "Service date (YYYY-MM-DD)"
-// @Param route_id query string false "Route ID (UUID)"
-// @Param status query string false "planned, in_progress, completed or cancelled"
-// @Param organization_id query string false "Organization ID (UUID)"
-// @Param page query int false "Page number (default 1)"
-// @Param page_size query int false "Page size (default 20, max 100)"
-// @Success 200 {object} models.ListTripsResponse
-// @Failure 400 {object} coreErrors.ErrorResponse
-// @Failure 500 {object} coreErrors.ErrorResponse
-// @Router /tracking/trips [get]
-func (ctrl *TrackingController) ListTrips(c *gin.Context) {
-	tenantID, ok := ctrl.requireTenantID(c)
-	if !ok {
-		return
+// ListTripsInput is ListTrips's request.
+type ListTripsInput struct {
+	Query api.Query[models.ListTripsQuery]
+}
+
+// ListTrips is GET /trips: List a day's trips.
+func (ctrl *TrackingController) ListTrips(ctx context.Context, in *ListTripsInput) (*api.Out[*models.ListTripsResponse], error) {
+	c := api.Gin(ctx)
+	tenantID, err := ctrl.requireTenantID(c)
+	if err != nil {
+		return nil, err
 	}
 	var query models.ListTripsQuery
-	if err := c.ShouldBindQuery(&query); err != nil {
-		c.JSON(http.StatusBadRequest, coreErrors.BuildErrorDetail(c, trackingErrors.TripListFailed, utils.ExtractValidationError(c, err)))
-		return
+	if err := in.Query.Into(ctx, &query); err != nil {
+		return nil, api.Fail(http.StatusBadRequest, coreErrors.BuildErrorDetail(c, trackingErrors.TripListFailed, utils.ExtractValidationError(c, err)))
 	}
 
 	query.ScopeUserID = ctrl.scopeUserID(c)
 	result, err := ctrl.trackingService.ListTrips(c.Request.Context(), tenantID, query)
 	if err != nil {
-		tripErrorResponse(c, err)
-		return
+		return nil, tripErrorResponse(c, err)
 	}
-	c.JSON(http.StatusOK, result)
+	return api.OK(result)
 }
 
-// GetTrip godoc
-// @Summary Get a trip with its stops and tasks
-// @Tags Tracking - Trips
-// @Produce json
-// @Security BearerAuth
-// @Param trip_id path string true "Trip ID (UUID)"
-// @Success 200 {object} models.TripDetail
-// @Failure 400 {object} coreErrors.ErrorResponse
-// @Failure 404 {object} coreErrors.ErrorResponse
-// @Failure 500 {object} coreErrors.ErrorResponse
-// @Router /tracking/trips/{trip_id} [get]
-func (ctrl *TrackingController) GetTrip(c *gin.Context) {
-	tenantID, ok := ctrl.requireTenantID(c)
-	if !ok {
-		return
+// GetTripInput is GetTrip's request.
+type GetTripInput struct {
+	TripID string `path:"trip_id"`
+}
+
+// GetTrip is GET /trips/{trip_id}: Get a trip with its stops and tasks.
+func (ctrl *TrackingController) GetTrip(ctx context.Context, _ *GetTripInput) (*api.Out[*models.TripDetail], error) {
+	c := api.Gin(ctx)
+	tenantID, err := ctrl.requireTenantID(c)
+	if err != nil {
+		return nil, err
 	}
-	tripID, ok := pathUUID(c, "trip_id")
-	if !ok {
-		return
+	tripID, err := pathUUID(c, "trip_id")
+	if err != nil {
+		return nil, err
 	}
 
 	result, err := ctrl.trackingService.GetTrip(c.Request.Context(), tenantID, tripID)
 	if err != nil {
-		tripErrorResponse(c, err)
-		return
+		return nil, tripErrorResponse(c, err)
 	}
-	c.JSON(http.StatusOK, result)
+	return api.OK(result)
 }
 
-// GetTripTaskProof godoc
-// @Summary Link to a drop-off's proof photo
-// @Description A 60-second signed link to the photo the driver took at the drop-off (MOBILE-032). An organization user reaches its riders' tasks, a guardian their own riders'; no photo, or a task out of scope, is 404
-// @Tags Tracking - Trips
-// @Produce json
-// @Security BearerAuth
-// @Param task_id path string true "Trip stop task ID (UUID)"
-// @Success 200 {object} models.TripTaskProof
-// @Failure 400 {object} coreErrors.ErrorResponse
-// @Failure 404 {object} coreErrors.ErrorResponse
-// @Router /tracking/trip-stop-tasks/{task_id}/proof [get]
-func (ctrl *TrackingController) GetTripTaskProof(c *gin.Context) {
-	tenantID, ok := ctrl.requireTenantID(c)
-	if !ok {
-		return
+// GetTripTaskProofInput is GetTripTaskProof's request.
+type GetTripTaskProofInput struct {
+	TaskID string `path:"task_id"`
+}
+
+// GetTripTaskProof is GET /trip-stop-tasks/{task_id}/proof: Link to a drop-off's proof photo.
+func (ctrl *TrackingController) GetTripTaskProof(ctx context.Context, _ *GetTripTaskProofInput) (*api.Out[*models.TripTaskProof], error) {
+	c := api.Gin(ctx)
+	tenantID, err := ctrl.requireTenantID(c)
+	if err != nil {
+		return nil, err
 	}
-	taskID, ok := pathUUID(c, "task_id")
-	if !ok {
-		return
+	taskID, err := pathUUID(c, "task_id")
+	if err != nil {
+		return nil, err
 	}
 
-	ctx := c.Request.Context()
+	// ctx is the request's context
 	key, err := ctrl.trackingService.TripTaskProofKey(ctx, tenantID, taskID, ctrl.scopeUserID(c), ctrl.guardianUserID(c))
 	if err != nil {
-		tripErrorResponse(c, err)
-		return
+		return nil, tripErrorResponse(c, err)
 	}
 	proof, err := ctrl.proofFiles.URL(ctx, key)
 	if err != nil {
-		tripErrorResponse(c, err)
-		return
+		return nil, tripErrorResponse(c, err)
 	}
-	c.JSON(http.StatusOK, proof)
+	return api.OK(proof)
 }
 
-// GetTripStatus godoc
-// @Summary Get a trip's live status
-// @Description Rider counts, the next pending stop, the seconds it has been due, and the vehicle's last position
-// @Tags Tracking - Trips
-// @Produce json
-// @Security BearerAuth
-// @Param trip_id path string true "Trip ID (UUID)"
-// @Success 200 {object} models.TripStatus
-// @Failure 400 {object} coreErrors.ErrorResponse
-// @Failure 404 {object} coreErrors.ErrorResponse
-// @Failure 500 {object} coreErrors.ErrorResponse
-// @Router /tracking/trips/{trip_id}/status [get]
-func (ctrl *TrackingController) GetTripStatus(c *gin.Context) {
-	tenantID, ok := ctrl.requireTenantID(c)
-	if !ok {
-		return
+// GetTripStatusInput is GetTripStatus's request.
+type GetTripStatusInput struct {
+	TripID string `path:"trip_id"`
+}
+
+// GetTripStatus is GET /trips/{trip_id}/status: Get a trip's live status.
+func (ctrl *TrackingController) GetTripStatus(ctx context.Context, _ *GetTripStatusInput) (*api.Out[*models.TripStatus], error) {
+	c := api.Gin(ctx)
+	tenantID, err := ctrl.requireTenantID(c)
+	if err != nil {
+		return nil, err
 	}
-	tripID, ok := pathUUID(c, "trip_id")
-	if !ok {
-		return
+	tripID, err := pathUUID(c, "trip_id")
+	if err != nil {
+		return nil, err
 	}
 
 	result, err := ctrl.trackingService.GetTripStatus(c.Request.Context(), tenantID, tripID)
 	if err != nil {
-		tripErrorResponse(c, err)
-		return
+		return nil, tripErrorResponse(c, err)
 	}
-	c.JSON(http.StatusOK, result)
+	return api.OK(result)
 }
 
-// UpdateTrip godoc
-// @Summary Override a trip
-// @Description Vehicle, driver or planned start of a trip not ended; a field left out keeps its value. The trip becomes is_overridden and the materialiser keeps its header
-// @Tags Tracking - Trips
-// @Accept json
-// @Produce json
-// @Security BearerAuth
-// @Param trip_id path string true "Trip ID (UUID)"
-// @Param trip body models.UpdateTripDto true "The fields to change"
-// @Success 200 {object} models.TripDetail
-// @Failure 400 {object} coreErrors.ErrorResponse
-// @Failure 404 {object} coreErrors.ErrorResponse
-// @Failure 409 {object} coreErrors.ErrorResponse
-// @Failure 500 {object} coreErrors.ErrorResponse
-// @Router /tracking/trips/{trip_id} [patch]
-func (ctrl *TrackingController) UpdateTrip(c *gin.Context) {
-	tenantID, ok := ctrl.requireTenantID(c)
-	if !ok {
-		return
+// UpdateTripInput is UpdateTrip's request.
+type UpdateTripInput struct {
+	TripID string `path:"trip_id"`
+	JSON   api.Body[models.UpdateTripDto]
+}
+
+// UpdateTrip is PATCH /trips/{trip_id}: Override a trip.
+func (ctrl *TrackingController) UpdateTrip(ctx context.Context, in *UpdateTripInput) (*api.Out[*models.TripDetail], error) {
+	c := api.Gin(ctx)
+	tenantID, err := ctrl.requireTenantID(c)
+	if err != nil {
+		return nil, err
 	}
-	tripID, ok := pathUUID(c, "trip_id")
-	if !ok {
-		return
+	tripID, err := pathUUID(c, "trip_id")
+	if err != nil {
+		return nil, err
 	}
 	var dto models.UpdateTripDto
-	if err := c.ShouldBindJSON(&dto); err != nil {
-		c.JSON(http.StatusBadRequest, coreErrors.BuildErrorDetail(c, trackingErrors.TripUpdateFailed, utils.ExtractValidationError(c, err)))
-		return
+	if err := in.JSON.Into(ctx, &dto); err != nil {
+		return nil, api.Fail(http.StatusBadRequest, coreErrors.BuildErrorDetail(c, trackingErrors.TripUpdateFailed, utils.ExtractValidationError(c, err)))
 	}
 
 	result, err := ctrl.trackingService.UpdateTrip(c.Request.Context(), tenantID, tripID, &dto, ctrl.actingUserID(c))
 	if err != nil {
-		tripErrorResponse(c, err)
-		return
+		return nil, tripErrorResponse(c, err)
 	}
-	c.JSON(http.StatusOK, result)
+	return api.OK(result)
 }
 
-// TransitionTrip godoc
-// @Summary Start, complete or cancel a trip
-// @Description start: planned → in_progress · complete: in_progress → completed · cancel: planned or in_progress → cancelled, its pending tasks cancelled and the trip is_overridden
-// @Tags Tracking - Trips
-// @Produce json
-// @Security BearerAuth
-// @Param trip_id path string true "Trip ID (UUID)"
-// @Param action path string true "The transition" Enums(start, complete, cancel)
-// @Success 200 {object} models.TripDetail
-// @Failure 400 {object} coreErrors.ErrorResponse
-// @Failure 404 {object} coreErrors.ErrorResponse
-// @Failure 409 {object} coreErrors.ErrorResponse
-// @Failure 500 {object} coreErrors.ErrorResponse
-// @Router /tracking/trips/{trip_id}/{action} [post]
-func (ctrl *TrackingController) TransitionTrip(c *gin.Context) {
-	tenantID, ok := ctrl.requireTenantID(c)
-	if !ok {
-		return
+// TransitionTripInput is TransitionTrip's request.
+type TransitionTripInput struct {
+	Action string `path:"action"`
+	TripID string `path:"trip_id"`
+}
+
+// TransitionTrip is POST /trips/{trip_id}/{action}: Start, complete or cancel a trip.
+func (ctrl *TrackingController) TransitionTrip(ctx context.Context, _ *TransitionTripInput) (*api.Out[*models.TripDetail], error) {
+	c := api.Gin(ctx)
+	tenantID, err := ctrl.requireTenantID(c)
+	if err != nil {
+		return nil, err
 	}
-	tripID, ok := pathUUID(c, "trip_id")
-	if !ok {
-		return
+	tripID, err := pathUUID(c, "trip_id")
+	if err != nil {
+		return nil, err
 	}
-	action, ok := pathAction(c, tripActions)
-	if !ok {
-		return
+	action, err := pathAction(c, tripActions)
+	if err != nil {
+		return nil, err
 	}
 
 	result, err := ctrl.trackingService.TransitionTrip(c.Request.Context(), tenantID, tripID, action, ctrl.actingUserID(c))
 	if err != nil {
-		tripErrorResponse(c, err)
-		return
+		return nil, tripErrorResponse(c, err)
 	}
-	c.JSON(http.StatusOK, result)
+	return api.OK(result)
 }
 
-// TransitionTripStop godoc
-// @Summary Arrive at or skip a stop
-// @Description Of an in-progress trip. skip turns the stop's pending pickups into no_show and its pending dropoffs into cancelled
-// @Tags Tracking - Trips
-// @Produce json
-// @Security BearerAuth
-// @Param stop_id path string true "Trip stop ID (UUID)"
-// @Param action path string true "The transition" Enums(arrive, skip)
-// @Success 200 {object} models.TripDetail
-// @Failure 400 {object} coreErrors.ErrorResponse
-// @Failure 404 {object} coreErrors.ErrorResponse
-// @Failure 409 {object} coreErrors.ErrorResponse
-// @Failure 500 {object} coreErrors.ErrorResponse
-// @Router /tracking/trip-stops/{stop_id}/{action} [post]
-func (ctrl *TrackingController) TransitionTripStop(c *gin.Context) {
-	tenantID, ok := ctrl.requireTenantID(c)
-	if !ok {
-		return
+// TransitionTripStopInput is TransitionTripStop's request.
+type TransitionTripStopInput struct {
+	Action string `path:"action"`
+	StopID string `path:"stop_id"`
+}
+
+// TransitionTripStop is POST /trip-stops/{stop_id}/{action}: Arrive at or skip a stop.
+func (ctrl *TrackingController) TransitionTripStop(ctx context.Context, _ *TransitionTripStopInput) (*api.Out[*models.TripDetail], error) {
+	c := api.Gin(ctx)
+	tenantID, err := ctrl.requireTenantID(c)
+	if err != nil {
+		return nil, err
 	}
-	stopID, ok := pathUUID(c, "stop_id")
-	if !ok {
-		return
+	stopID, err := pathUUID(c, "stop_id")
+	if err != nil {
+		return nil, err
 	}
-	action, ok := pathAction(c, tripStopActions)
-	if !ok {
-		return
+	action, err := pathAction(c, tripStopActions)
+	if err != nil {
+		return nil, err
 	}
 
 	result, err := ctrl.trackingService.TransitionTripStop(c.Request.Context(), tenantID, stopID, action, ctrl.actingUserID(c))
 	if err != nil {
-		tripErrorResponse(c, err)
-		return
+		return nil, tripErrorResponse(c, err)
 	}
-	c.JSON(http.StatusOK, result)
+	return api.OK(result)
 }
 
-// TransitionTripTask godoc
-// @Summary Mark a pickup or dropoff done, or the rider a no-show
-// @Description Of an in-progress trip, at a stop not skipped. Idempotent on client_op_id: the same id again answers 200 and changes nothing; an id already used on another task is 409
-// @Tags Tracking - Trips
-// @Accept json
-// @Produce json
-// @Security BearerAuth
-// @Param task_id path string true "Trip stop task ID (UUID)"
-// @Param action path string true "The transition" Enums(done, no-show)
-// @Param transition body models.TripTaskTransitionDto true "client_op_id and an optional proof"
-// @Success 200 {object} models.TripDetail
-// @Failure 400 {object} coreErrors.ErrorResponse
-// @Failure 404 {object} coreErrors.ErrorResponse
-// @Failure 409 {object} coreErrors.ErrorResponse
-// @Failure 500 {object} coreErrors.ErrorResponse
-// @Router /tracking/trip-stop-tasks/{task_id}/{action} [post]
-func (ctrl *TrackingController) TransitionTripTask(c *gin.Context) {
-	tenantID, ok := ctrl.requireTenantID(c)
-	if !ok {
-		return
+// TransitionTripTaskInput is TransitionTripTask's request.
+type TransitionTripTaskInput struct {
+	Action string `path:"action"`
+	TaskID string `path:"task_id"`
+	JSON   api.Body[models.TripTaskTransitionDto]
+}
+
+// TransitionTripTask is POST /trip-stop-tasks/{task_id}/{action}: Mark a pickup or dropoff done, or the rider a no-show.
+func (ctrl *TrackingController) TransitionTripTask(ctx context.Context, in *TransitionTripTaskInput) (*api.Out[*models.TripDetail], error) {
+	c := api.Gin(ctx)
+	tenantID, err := ctrl.requireTenantID(c)
+	if err != nil {
+		return nil, err
 	}
-	taskID, ok := pathUUID(c, "task_id")
-	if !ok {
-		return
+	taskID, err := pathUUID(c, "task_id")
+	if err != nil {
+		return nil, err
 	}
-	action, ok := pathAction(c, tripTaskActions)
-	if !ok {
-		return
+	action, err := pathAction(c, tripTaskActions)
+	if err != nil {
+		return nil, err
 	}
 	var dto models.TripTaskTransitionDto
-	if err := c.ShouldBindJSON(&dto); err != nil {
-		c.JSON(http.StatusBadRequest, coreErrors.BuildErrorDetail(c, trackingErrors.TripTransitionFailed, utils.ExtractValidationError(c, err)))
-		return
+	if err := in.JSON.Into(ctx, &dto); err != nil {
+		return nil, api.Fail(http.StatusBadRequest, coreErrors.BuildErrorDetail(c, trackingErrors.TripTransitionFailed, utils.ExtractValidationError(c, err)))
 	}
 
 	result, err := ctrl.trackingService.TransitionTripTask(c.Request.Context(), tenantID, taskID, action, &dto, ctrl.actingUserID(c))
 	if err != nil {
-		tripErrorResponse(c, err)
-		return
+		return nil, tripErrorResponse(c, err)
 	}
-	c.JSON(http.StatusOK, result)
+	return api.OK(result)
 }
 
-// TrackingOverview godoc
-// @Summary The tracking home
-// @Description The day's trips in progress, planned and completed, the riders absent, the ten most late trips with their route, destination and minutes, and whether any route exists (TRACK-041 D2); an organization user's numbers are their organizations'
-// @Tags Tracking - Trips
-// @Produce json
-// @Security BearerAuth
-// @Param date query string false "Day (YYYY-MM-DD); each route's own today when empty"
-// @Success 200 {object} models.TrackingOverview
-// @Router /tracking/overview [get]
-func (ctrl *TrackingController) TrackingOverview(c *gin.Context) {
-	tenantID, ok := ctrl.requireTenantID(c)
-	if !ok {
-		return
+// TrackingOverviewInput is TrackingOverview's request.
+type TrackingOverviewInput struct {
+	Query api.Query[models.TrackingOverviewQuery]
+}
+
+// TrackingOverview is GET /overview: The tracking home.
+func (ctrl *TrackingController) TrackingOverview(ctx context.Context, in *TrackingOverviewInput) (*api.Out[*models.TrackingOverview], error) {
+	c := api.Gin(ctx)
+	tenantID, err := ctrl.requireTenantID(c)
+	if err != nil {
+		return nil, err
 	}
 	var query models.TrackingOverviewQuery
-	if err := c.ShouldBindQuery(&query); err != nil {
-		c.JSON(http.StatusBadRequest, coreErrors.BuildErrorDetail(c, trackingErrors.TripListFailed, utils.ExtractValidationError(c, err)))
-		return
+	if err := in.Query.Into(ctx, &query); err != nil {
+		return nil, api.Fail(http.StatusBadRequest, coreErrors.BuildErrorDetail(c, trackingErrors.TripListFailed, utils.ExtractValidationError(c, err)))
 	}
 	overview, err := ctrl.trackingService.TrackingOverview(c.Request.Context(), tenantID, query.Date, ctrl.scopeUserID(c))
 	if err != nil {
-		if scopeRefused(c, err) {
-			return
+		if err := scopeRefused(c, err); err != nil {
+			return nil, err
 		}
-		c.JSON(http.StatusInternalServerError, coreErrors.BuildError(c, err))
-		return
+		return nil, api.Fail(http.StatusInternalServerError, coreErrors.BuildError(c, err))
 	}
-	c.JSON(http.StatusOK, overview)
+	return api.OK(overview)
 }
 
-// TrackingSetup godoc
-// @Summary The tracking home's setup assistant
-// @Description Whether the tenant has any company, driver, vehicle, route and rider yet, in the order the first-run assistant asks for them (TRACK-050 D2)
-// @Tags Tracking - Trips
-// @Produce json
-// @Security BearerAuth
-// @Success 200 {object} models.TrackingSetup
-// @Router /tracking/setup [get]
-func (ctrl *TrackingController) TrackingSetup(c *gin.Context) {
-	tenantID, ok := ctrl.requireTenantID(c)
-	if !ok {
-		return
+// TrackingSetup is GET /setup: The tracking home's setup assistant.
+func (ctrl *TrackingController) TrackingSetup(ctx context.Context, _ *api.None) (*api.Out[*models.TrackingSetup], error) {
+	c := api.Gin(ctx)
+	tenantID, err := ctrl.requireTenantID(c)
+	if err != nil {
+		return nil, err
 	}
 	setup, err := ctrl.trackingService.TrackingSetup(c.Request.Context(), tenantID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, coreErrors.BuildError(c, err))
-		return
+		return nil, api.Fail(http.StatusInternalServerError, coreErrors.BuildError(c, err))
 	}
-	c.JSON(http.StatusOK, setup)
+	return api.OK(setup)
 }

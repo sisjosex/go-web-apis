@@ -1,6 +1,7 @@
 package routes
 
 import (
+	"josex/web/modules/core/api"
 	coreControllers "josex/web/modules/core/controllers"
 	coreServices "josex/web/modules/core/services"
 
@@ -17,6 +18,6 @@ import (
 func RegisterHealthRoutes(r *gin.Engine, dbService coreServices.DatabaseService, valkey coreServices.ValkeyService, needsValkey bool) {
 	healthController := coreControllers.NewHealthController(dbService, valkey, needsValkey)
 
-	r.GET("/livez", healthController.Livez)
-	r.GET("/readyz", healthController.Readyz)
+	api.Get(&r.RouterGroup, "/livez", healthController.Livez, api.Doc{Summary: "Liveness probe"})
+	api.Get(&r.RouterGroup, "/readyz", healthController.Readyz, api.Doc{Summary: "Readiness probe", Description: "200 ok or degraded (Valkey down where it is optional), 503 unavailable."})
 }

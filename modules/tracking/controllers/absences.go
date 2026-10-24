@@ -1,9 +1,11 @@
 package controllers
 
 import (
+	"context"
 	"errors"
 	"net/http"
 
+	"josex/web/modules/core/api"
 	coreErrors "josex/web/modules/core/errors"
 	"josex/web/modules/core/utils"
 	trackingErrors "josex/web/modules/tracking/errors"
@@ -24,162 +26,132 @@ var absenceStatus = map[string]int{
 	trackingErrors.RiderNoHomeLocation: http.StatusConflict,
 }
 
-func absenceErrorResponse(c *gin.Context, err error) {
-	if scopeRefused(c, err) {
-		return
+func absenceErrorResponse(c *gin.Context, err error) error {
+	if err := scopeRefused(c, err); err != nil {
+		return err
 	}
 	var trackingErr *trackingErrors.TrackingError
 	if errors.As(err, &trackingErr) {
 		if status, ok := absenceStatus[trackingErr.Code]; ok {
-			c.JSON(status, coreErrors.BuildErrorSingle(c, trackingErr.Code))
-			return
+			return api.Fail(status, coreErrors.BuildErrorSingle(c, trackingErr.Code))
 		}
 	}
-	c.JSON(http.StatusInternalServerError, coreErrors.BuildError(c, err))
+	return api.Fail(http.StatusInternalServerError, coreErrors.BuildError(c, err))
 }
 
-// ListRiderAbsences godoc
-// @Summary List a rider's absences
-// @Description Oldest first, those overlapping [from, to]. A guardian reads only their own riders.
-// @Tags Tracking - Riders
-// @Produce json
-// @Security BearerAuth
-// @Param rider_id path string true "Rider ID (UUID)"
-// @Param from query string false "From (YYYY-MM-DD)"
-// @Param to query string false "To (YYYY-MM-DD)"
-// @Success 200 {array} models.RiderAbsence
-// @Failure 400 {object} coreErrors.ErrorResponse
-// @Failure 404 {object} coreErrors.ErrorResponse
-// @Router /tracking/riders/{rider_id}/absences [get]
-func (ctrl *TrackingController) ListRiderAbsences(c *gin.Context) {
-	tenantID, ok := ctrl.requireTenantID(c)
-	if !ok {
-		return
+// ListRiderAbsencesInput is ListRiderAbsences's request.
+type ListRiderAbsencesInput struct {
+	RiderID string `path:"rider_id"`
+	Query   api.Query[models.ListRiderAbsencesQuery]
+}
+
+// ListRiderAbsences is GET /riders/{rider_id}/absences: List a rider's absences.
+func (ctrl *TrackingController) ListRiderAbsences(ctx context.Context, in *ListRiderAbsencesInput) (*api.Out[[]*models.RiderAbsence], error) {
+	c := api.Gin(ctx)
+	tenantID, err := ctrl.requireTenantID(c)
+	if err != nil {
+		return nil, err
 	}
-	riderID, ok := pathUUID(c, "rider_id")
-	if !ok {
-		return
+	riderID, err := pathUUID(c, "rider_id")
+	if err != nil {
+		return nil, err
 	}
 	var query models.ListRiderAbsencesQuery
-	if err := c.ShouldBindQuery(&query); err != nil {
-		c.JSON(http.StatusBadRequest, coreErrors.BuildErrorDetail(c, trackingErrors.AbsenceListFailed, utils.ExtractValidationError(c, err)))
-		return
+	if err := in.Query.Into(ctx, &query); err != nil {
+		return nil, api.Fail(http.StatusBadRequest, coreErrors.BuildErrorDetail(c, trackingErrors.AbsenceListFailed, utils.ExtractValidationError(c, err)))
 	}
 
 	result, err := ctrl.trackingService.ListRiderAbsences(c.Request.Context(), tenantID, riderID, query, ctrl.scopeUserID(c), ctrl.guardianUserID(c))
 	if err != nil {
-		absenceErrorResponse(c, err)
-		return
+		return nil, absenceErrorResponse(c, err)
 	}
-	c.JSON(http.StatusOK, result)
+	return api.OK(result)
 }
 
-// CreateRiderAbsence godoc
-// @Summary Report a rider's absence
-// @Description Cancels the rider's pending tasks on the range's trips that have not ended. A guardian may report only before the organization's cut-off.
-// @Tags Tracking - Riders
-// @Accept json
-// @Produce json
-// @Security BearerAuth
-// @Param rider_id path string true "Rider ID (UUID)"
-// @Param absence body models.CreateRiderAbsenceDto true "Absence"
-// @Success 201 {object} models.CreateRiderAbsenceResponse
-// @Failure 400 {object} coreErrors.ErrorResponse
-// @Failure 404 {object} coreErrors.ErrorResponse
-// @Failure 409 {object} coreErrors.ErrorResponse
-// @Router /tracking/riders/{rider_id}/absences [post]
-func (ctrl *TrackingController) CreateRiderAbsence(c *gin.Context) {
-	tenantID, ok := ctrl.requireTenantID(c)
-	if !ok {
-		return
+// CreateRiderAbsenceInput is CreateRiderAbsence's request.
+type CreateRiderAbsenceInput struct {
+	RiderID string `path:"rider_id"`
+	JSON    api.Body[models.CreateRiderAbsenceDto]
+}
+
+// CreateRiderAbsence is POST /riders/{rider_id}/absences: Report a rider's absence.
+func (ctrl *TrackingController) CreateRiderAbsence(ctx context.Context, in *CreateRiderAbsenceInput) (*api.Out[*models.CreateRiderAbsenceResponse], error) {
+	c := api.Gin(ctx)
+	tenantID, err := ctrl.requireTenantID(c)
+	if err != nil {
+		return nil, err
 	}
-	riderID, ok := pathUUID(c, "rider_id")
-	if !ok {
-		return
+	riderID, err := pathUUID(c, "rider_id")
+	if err != nil {
+		return nil, err
 	}
 	var dto models.CreateRiderAbsenceDto
-	if err := c.ShouldBindJSON(&dto); err != nil {
-		c.JSON(http.StatusBadRequest, coreErrors.BuildErrorDetail(c, trackingErrors.AbsenceCreateFailed, utils.ExtractValidationError(c, err)))
-		return
+	if err := in.JSON.Into(ctx, &dto); err != nil {
+		return nil, api.Fail(http.StatusBadRequest, coreErrors.BuildErrorDetail(c, trackingErrors.AbsenceCreateFailed, utils.ExtractValidationError(c, err)))
 	}
 
 	result, err := ctrl.trackingService.CreateRiderAbsence(c.Request.Context(), tenantID, riderID, &dto,
 		ctrl.actingUserID(c), ctrl.scopeUserID(c), ctrl.guardianUserID(c))
 	if err != nil {
-		absenceErrorResponse(c, err)
-		return
+		return nil, absenceErrorResponse(c, err)
 	}
-	c.JSON(http.StatusCreated, result)
+	return api.OK(result)
 }
 
-// DeleteRiderAbsence godoc
-// @Summary Delete a rider's absence
-// @Description The rider is seated again on the planned trips the materialiser still owns. A guardian may delete only before the organization's cut-off.
-// @Tags Tracking - Riders
-// @Security BearerAuth
-// @Param rider_id path string true "Rider ID (UUID)"
-// @Param absence_id path string true "Absence ID (UUID)"
-// @Success 204
-// @Failure 404 {object} coreErrors.ErrorResponse
-// @Failure 409 {object} coreErrors.ErrorResponse
-// @Router /tracking/riders/{rider_id}/absences/{absence_id} [delete]
-func (ctrl *TrackingController) DeleteRiderAbsence(c *gin.Context) {
-	tenantID, ok := ctrl.requireTenantID(c)
-	if !ok {
-		return
+// DeleteRiderAbsenceInput is DeleteRiderAbsence's request.
+type DeleteRiderAbsenceInput struct {
+	AbsenceID string `path:"absence_id"`
+	RiderID   string `path:"rider_id"`
+}
+
+// DeleteRiderAbsence is DELETE /riders/{rider_id}/absences/{absence_id}: Delete a rider's absence.
+func (ctrl *TrackingController) DeleteRiderAbsence(ctx context.Context, _ *DeleteRiderAbsenceInput) (*api.Empty, error) {
+	c := api.Gin(ctx)
+	tenantID, err := ctrl.requireTenantID(c)
+	if err != nil {
+		return nil, err
 	}
-	riderID, ok := pathUUID(c, "rider_id")
-	if !ok {
-		return
+	riderID, err := pathUUID(c, "rider_id")
+	if err != nil {
+		return nil, err
 	}
-	absenceID, ok := pathUUID(c, "absence_id")
-	if !ok {
-		return
+	absenceID, err := pathUUID(c, "absence_id")
+	if err != nil {
+		return nil, err
 	}
 
 	if err := ctrl.trackingService.DeleteRiderAbsence(c.Request.Context(), tenantID, riderID, absenceID,
 		ctrl.scopeUserID(c), ctrl.guardianUserID(c)); err != nil {
-		absenceErrorResponse(c, err)
-		return
+		return nil, absenceErrorResponse(c, err)
 	}
-	c.Status(http.StatusNoContent)
+	return api.Done()
 }
 
-// SuggestRiderStops godoc
-// @Summary Suggest stops near a rider's home
-// @Description Stops within max_walk_m (straight line) of the rider's home on the current version of an active route of the direction, nearest first then most free seats.
-// @Tags Tracking - Riders
-// @Produce json
-// @Security BearerAuth
-// @Param rider_id path string true "Rider ID (UUID)"
-// @Param direction query string true "outbound or inbound"
-// @Param days query int false "Weekday bitmask, bit 0 Monday (default 127)"
-// @Param max_walk_m query int false "Walk in metres (default 800, max 3000)"
-// @Param limit query int false "Rows (default 10, max 50)"
-// @Success 200 {object} models.SuggestRiderStopsResponse
-// @Failure 400 {object} coreErrors.ErrorResponse
-// @Failure 404 {object} coreErrors.ErrorResponse
-// @Failure 409 {object} coreErrors.ErrorResponse
-// @Router /tracking/riders/{rider_id}/suggestions [get]
-func (ctrl *TrackingController) SuggestRiderStops(c *gin.Context) {
-	tenantID, ok := ctrl.requireTenantID(c)
-	if !ok {
-		return
+// SuggestRiderStopsInput is SuggestRiderStops's request.
+type SuggestRiderStopsInput struct {
+	RiderID string `path:"rider_id"`
+	Query   api.Query[models.SuggestRiderStopsQuery]
+}
+
+// SuggestRiderStops is GET /riders/{rider_id}/suggestions: Suggest stops near a rider's home.
+func (ctrl *TrackingController) SuggestRiderStops(ctx context.Context, in *SuggestRiderStopsInput) (*api.Out[*models.SuggestRiderStopsResponse], error) {
+	c := api.Gin(ctx)
+	tenantID, err := ctrl.requireTenantID(c)
+	if err != nil {
+		return nil, err
 	}
-	riderID, ok := pathUUID(c, "rider_id")
-	if !ok {
-		return
+	riderID, err := pathUUID(c, "rider_id")
+	if err != nil {
+		return nil, err
 	}
 	var query models.SuggestRiderStopsQuery
-	if err := c.ShouldBindQuery(&query); err != nil {
-		c.JSON(http.StatusBadRequest, coreErrors.BuildErrorDetail(c, trackingErrors.RiderSuggestionsFailed, utils.ExtractValidationError(c, err)))
-		return
+	if err := in.Query.Into(ctx, &query); err != nil {
+		return nil, api.Fail(http.StatusBadRequest, coreErrors.BuildErrorDetail(c, trackingErrors.RiderSuggestionsFailed, utils.ExtractValidationError(c, err)))
 	}
 
 	result, err := ctrl.trackingService.SuggestRiderStops(c.Request.Context(), tenantID, riderID, query)
 	if err != nil {
-		absenceErrorResponse(c, err)
-		return
+		return nil, absenceErrorResponse(c, err)
 	}
-	c.JSON(http.StatusOK, result)
+	return api.OK(result)
 }

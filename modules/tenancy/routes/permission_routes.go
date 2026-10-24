@@ -3,6 +3,7 @@ package routes
 import (
 	authMiddleware "josex/web/modules/auth/middleware"
 	"josex/web/modules/auth/services"
+	"josex/web/modules/core/api"
 	"josex/web/modules/tenancy/controllers"
 
 	"github.com/gin-gonic/gin"
@@ -18,5 +19,5 @@ func RegisterPermissionRoutes(
 	auth := authMiddleware.AuthMiddleware(jwtService)
 
 	// GET /api/v1/permissions?module=inventory — list available permissions (auth required)
-	router.GET("/permissions", auth, permController.ListAvailablePermissions)
+	api.Get(router, "/permissions", permController.ListAvailablePermissions, api.Doc{}, auth)
 }

@@ -1,6 +1,7 @@
 package controllers
 
 import (
+	"context"
 	"errors"
 	"log"
 	"net/http"
@@ -10,6 +11,7 @@ import (
 	"josex/web/modules/auth/interfaces"
 	authModels "josex/web/modules/auth/models"
 	"josex/web/modules/auth/services"
+	"josex/web/modules/core/api"
 	coreErrors "josex/web/modules/core/errors"
 	coreUtils "josex/web/modules/core/utils"
 
@@ -39,58 +41,33 @@ func NewOtpController(
 	}
 }
 
-// RequestOtpWhatsApp godoc
-// @Summary Request OTP via WhatsApp (relayed by email while it has no provider)
-// @Tags Auth - OTP
-// @Accept  json
-// @Produce json
-// @Param   request body authModels.RequestOtpRequestDto true "Request OTP"
-// @Success 200 {object} authModels.RequestOtpResponse
-// @Failure 400 {object} object "Invalid destination or channel, or phone without an account"
-// @Failure 503 {object} object "Channel disabled or provider unavailable"
-// @Failure 500 {object} object "Server error"
-// @Router  /auth/otp/whatsapp/request [post]
-func (uc *OtpController) RequestOtpWhatsApp(c *gin.Context) {
-	uc.requestOtp(c, "whatsapp")
+// RequestOtpInput is the three OTP request handlers' request.
+type RequestOtpInput struct {
+	JSON api.Body[authModels.RequestOtpRequestDto]
 }
 
-// RequestOtpSms godoc
-// @Summary Request OTP via SMS (relayed by email while it has no provider)
-// @Tags Auth - OTP
-// @Accept  json
-// @Produce json
-// @Param   request body authModels.RequestOtpRequestDto true "Request OTP"
-// @Success 200 {object} authModels.RequestOtpResponse
-// @Failure 400 {object} object "Invalid destination or channel, or phone without an account"
-// @Failure 503 {object} object "Channel disabled or provider unavailable"
-// @Failure 500 {object} object "Server error"
-// @Router  /auth/otp/sms/request [post]
-func (uc *OtpController) RequestOtpSms(c *gin.Context) {
-	uc.requestOtp(c, "sms")
+// RequestOtpWhatsApp sends a code by WhatsApp (relayed by email while it has no provider).
+func (uc *OtpController) RequestOtpWhatsApp(ctx context.Context, in *RequestOtpInput) (*api.Out[*authModels.RequestOtpResponse], error) {
+	return uc.requestOtp(ctx, in, "whatsapp")
 }
 
-// RequestOtpEmail godoc
-// @Summary Request OTP via Email
-// @Tags Auth - OTP
-// @Accept  json
-// @Produce json
-// @Param   request body authModels.RequestOtpRequestDto true "Request OTP"
-// @Success 200 {object} authModels.RequestOtpResponse
-// @Failure 400 {object} object "Invalid destination or channel, or phone without an account"
-// @Failure 503 {object} object "Channel disabled or provider unavailable"
-// @Failure 500 {object} object "Server error"
-// @Router  /auth/otp/email/request [post]
-func (uc *OtpController) RequestOtpEmail(c *gin.Context) {
-	uc.requestOtp(c, "email")
+// RequestOtpSms sends a code by SMS (relayed by email while it has no provider).
+func (uc *OtpController) RequestOtpSms(ctx context.Context, in *RequestOtpInput) (*api.Out[*authModels.RequestOtpResponse], error) {
+	return uc.requestOtp(ctx, in, "sms")
+}
+
+// RequestOtpEmail sends a code by email.
+func (uc *OtpController) RequestOtpEmail(ctx context.Context, in *RequestOtpInput) (*api.Out[*authModels.RequestOtpResponse], error) {
+	return uc.requestOtp(ctx, in, "email")
 }
 
 // requestOtp is the body of the three request handlers; the route names the channel.
-func (uc *OtpController) requestOtp(c *gin.Context, channel string) {
+func (uc *OtpController) requestOtp(ctx context.Context, in *RequestOtpInput, channel string) (*api.Out[*authModels.RequestOtpResponse], error) {
+	c := api.Gin(ctx)
 	var requestDto authModels.RequestOtpRequestDto
 
-	if err := c.ShouldBindJSON(&requestDto); err != nil {
-		c.JSON(http.StatusBadRequest, coreErrors.BuildErrorDetail(c, authErrors.OtpRequestFailed, coreUtils.ExtractValidationError(c, err)))
-		return
+	if err := in.JSON.Into(ctx, &requestDto); err != nil {
+		return nil, api.Fail(http.StatusBadRequest, coreErrors.BuildErrorDetail(c, authErrors.OtpRequestFailed, coreUtils.ExtractValidationError(c, err)))
 	}
 
 	userAgent := c.GetHeader("User-Agent")
@@ -118,11 +95,10 @@ func (uc *OtpController) requestOtp(c *gin.Context, channel string) {
 	response, err := uc.otpService.RequestOtp(c, otpDto)
 	if err != nil {
 		status, body := requestOtpError(c, err)
-		c.JSON(status, body)
-		return
+		return nil, api.Fail(status, body)
 	}
 
-	c.JSON(http.StatusOK, response)
+	return api.OK(response)
 }
 
 // requestOtpError maps a request error to its response: the caller's input (an SP code) is 400 with
@@ -139,27 +115,23 @@ func requestOtpError(c *gin.Context, err error) (int, *coreErrors.ErrorResponse)
 	return http.StatusInternalServerError, coreErrors.BuildErrorSingle(c, authErrors.OtpRequestFailed)
 }
 
-// VerifyOtp godoc
-// @Summary Verify OTP code
-// @Tags Auth - OTP
-// @Accept  json
-// @Produce json
-// @Param   request body authModels.VerifyOtpRequestDto true "Verify OTP"
-// @Success 200 {object} authModels.VerifyOtpResponse
-// @Failure 400 {object} object "Invalid or expired OTP"
-// @Failure 500 {object} object "Server error"
-// @Router  /auth/otp/verify [post]
-func (uc *OtpController) VerifyOtp(c *gin.Context) {
+// VerifyOtpInput is VerifyOtp's request.
+type VerifyOtpInput struct {
+	JSON api.Body[authModels.VerifyOtpRequestDto]
+}
+
+// VerifyOtp is POST /otp/verify: Verify OTP code.
+func (uc *OtpController) VerifyOtp(ctx context.Context, in *VerifyOtpInput) (*api.Out[*authModels.VerifyOtpResponse], error) {
+	c := api.Gin(ctx)
 	var verifyDto authModels.VerifyOtpRequestDto
 
-	if err := c.ShouldBindJSON(&verifyDto); err != nil {
-		c.JSON(http.StatusBadRequest, coreErrors.BuildErrorDetail(c, authErrors.OtpVerifyFailed, coreUtils.ExtractValidationError(c, err)))
-		return
+	if err := in.JSON.Into(ctx, &verifyDto); err != nil {
+		return nil, api.Fail(http.StatusBadRequest, coreErrors.BuildErrorDetail(c, authErrors.OtpVerifyFailed, coreUtils.ExtractValidationError(c, err)))
 	}
 
-	declaredClient, ok := clientType(c)
-	if !ok {
-		return
+	declaredClient, err := clientType(c)
+	if err != nil {
+		return nil, err
 	}
 
 	userAgent := c.GetHeader("User-Agent")
@@ -186,32 +158,28 @@ func (uc *OtpController) VerifyOtp(c *gin.Context) {
 
 	response, err := uc.otpService.VerifyOtp(c.Request.Context(), otpVerifyDto)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, coreErrors.BuildError(c, err))
-		return
+		return nil, api.Fail(http.StatusBadRequest, coreErrors.BuildError(c, err))
 	}
 	// A right code for an email with no active account opens nothing, and says so the way a wrong
 	// code does — the answer must not tell which emails exist.
 	if response.UserId == uuid.Nil {
-		c.JSON(http.StatusBadRequest, coreErrors.BuildErrorSingle(c, authErrors.OtpCodeWrong))
-		return
+		return nil, api.Fail(http.StatusBadRequest, coreErrors.BuildErrorSingle(c, authErrors.OtpCodeWrong))
 	}
 
 	// Generate JWT tokens
 	accessToken, err := uc.jwtService.GenerateAccessToken(response.UserId, response.SessionId, response.SystemRole)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, coreErrors.BuildError(c, err))
-		return
+		return nil, api.Fail(http.StatusInternalServerError, coreErrors.BuildError(c, err))
 	}
 
 	refreshToken, err := uc.jwtService.GenerateRefreshToken(response.UserId, response.SessionId, response.SystemRole)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, coreErrors.BuildError(c, err))
-		return
+		return nil, api.Fail(http.StatusInternalServerError, coreErrors.BuildError(c, err))
 	}
 
 	// Add tokens to response
 	response.AccessToken = accessToken
 	response.RefreshToken = refreshToken
 
-	c.JSON(http.StatusOK, response)
+	return api.OK(response)
 }

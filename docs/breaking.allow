@@ -1,0 +1,6 @@
+# Operations allowed to break a client in this commit (INFRA-021), one per line:
+#
+#   METHOD /api/v1/path   # SPEC-KEY why the old shape cannot stay
+#
+# The gate's contract stage reads it against HEAD's docs/openapi.json. Empty the file once the
+# change is committed: an entry left here would let the next break through unreviewed.

@@ -117,6 +117,7 @@ func main() {
 				}
 			}
 			findings = append(findings, checkSQL(f, tenantTables)...)
+			findings = append(findings, checkFunctionComment(f)...)
 		}
 	}
 
@@ -162,6 +163,21 @@ func targetFiles(all bool) ([]string, error) {
 }
 
 var checkedPaths = []string{"*.go", "*.up.sql", "modules/*/sql/functions/*.sql"}
+
+var reFunctionComment = regexp.MustCompile(`(?i)\bCOMMENT\s+ON\s+FUNCTION\b`)
+
+// checkFunctionComment asks a changed function file for its COMMENT ON FUNCTION: the one sentence of
+// what it is for, which the system map shows next to the routes that reach it (INFRA-021).
+func checkFunctionComment(file string) []finding {
+	src, err := os.ReadFile(file)
+	if err != nil {
+		return []finding{{file, 0, err.Error()}}
+	}
+	if reFunctionComment.Match(src) {
+		return nil
+	}
+	return []finding{{file, 1, "function file without COMMENT ON FUNCTION — say in one sentence what it is for (sql.md)"}}
+}
 
 func isFunctionFile(file string) bool {
 	return strings.Contains(file, "/sql/functions/") && strings.HasSuffix(file, ".sql")

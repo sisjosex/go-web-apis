@@ -1,11 +1,13 @@
 package controllers
 
 import (
+	"context"
 	"errors"
 	"net/http"
 
 	billingErrors "josex/web/modules/billing/errors"
 	billingModels "josex/web/modules/billing/models"
+	"josex/web/modules/core/api"
 	coreErrors "josex/web/modules/core/errors"
 	"josex/web/modules/core/utils"
 
@@ -16,134 +18,104 @@ import (
 )
 
 // tenantID is the business the tenant chain resolved from X-Tenant-Slug.
-func tenantID(c *gin.Context) (uuid.UUID, bool) {
+func tenantID(c *gin.Context) (uuid.UUID, error) {
 	raw, ok := c.Get("tenant_id")
 	if !ok {
-		c.JSON(http.StatusUnauthorized, coreErrors.BuildErrorSingle(c, coreErrors.UserUnauthorized))
-		return uuid.Nil, false
+		return uuid.Nil, api.Fail(http.StatusUnauthorized, coreErrors.BuildErrorSingle(c, coreErrors.UserUnauthorized))
 	}
 	id, err := uuid.Parse(raw.(string))
 	if err != nil {
-		c.JSON(http.StatusUnauthorized, coreErrors.BuildErrorSingle(c, coreErrors.UserUnauthorized))
-		return uuid.Nil, false
+		return uuid.Nil, api.Fail(http.StatusUnauthorized, coreErrors.BuildErrorSingle(c, coreErrors.UserUnauthorized))
 	}
-	return id, true
+	return id, nil
 }
 
-// GetTenantPlan godoc
-// @Summary The business's plan
-// @Description Plan, cycle, status and end of the X-Tenant-Slug business, the limits it has now (the free plan's once expired), the price list and where to pay (BILLING-001).
-// @Tags Billing
-// @Produce json
-// @Success 200 {object} billingModels.TenantPlan
-// @Router /billing/tenant/plan [get]
-// @Security ApiKeyAuth
-func (ctrl *BillingController) GetTenantPlan(c *gin.Context) {
-	id, ok := tenantID(c)
-	if !ok {
-		return
+// GetTenantPlan is GET /tenant/plan: The business's plan.
+func (ctrl *BillingController) GetTenantPlan(ctx context.Context, _ *api.None) (*api.Out[*billingModels.TenantPlan], error) {
+	c := api.Gin(ctx)
+	id, err := tenantID(c)
+	if err != nil {
+		return nil, err
 	}
 	plan, err := ctrl.billingService.GetTenantPlan(c.Request.Context(), id)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, coreErrors.BuildError(c, err))
-		return
+		return nil, api.Fail(http.StatusInternalServerError, coreErrors.BuildError(c, err))
 	}
-	c.JSON(http.StatusOK, plan)
+	return api.OK(plan)
 }
 
-// GetTenantUsage godoc
-// @Summary The business's usage against its limits
-// @Description Riders, vehicles, products and members the business holds, each with its plan limit (-1 unlimited).
-// @Tags Billing
-// @Produce json
-// @Success 200 {object} billingModels.UsageResponse
-// @Router /billing/usage [get]
-// @Security ApiKeyAuth
-func (ctrl *BillingController) GetTenantUsage(c *gin.Context) {
-	id, ok := tenantID(c)
-	if !ok {
-		return
+// GetTenantUsage is GET /usage: The business's usage against its limits.
+func (ctrl *BillingController) GetTenantUsage(ctx context.Context, _ *api.None) (*api.Out[*billingModels.UsageResponse], error) {
+	c := api.Gin(ctx)
+	id, err := tenantID(c)
+	if err != nil {
+		return nil, err
 	}
 	usage, err := ctrl.billingService.GetTenantUsage(c.Request.Context(), id)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, coreErrors.BuildError(c, err))
-		return
+		return nil, api.Fail(http.StatusInternalServerError, coreErrors.BuildError(c, err))
 	}
-	c.JSON(http.StatusOK, usage)
+	return api.OK(usage)
 }
 
-// NotifyPayment godoc
-// @Summary "Ya pagué"
-// @Description Records the business's bank QR payment for a plan and cycle, for the platform to confirm (BILLING-001 D3).
-// @Tags Billing
-// @Accept json
-// @Produce json
-// @Param body body billingModels.NotifyPaymentDto true "Plan, cycle and bank reference"
-// @Success 201 {object} billingModels.TenantPayment
-// @Router /billing/payments/notice [post]
-// @Security ApiKeyAuth
-func (ctrl *BillingController) NotifyPayment(c *gin.Context) {
-	id, ok := tenantID(c)
-	if !ok {
-		return
+// NotifyPaymentInput is NotifyPayment's request.
+type NotifyPaymentInput struct {
+	JSON api.Body[billingModels.NotifyPaymentDto]
+}
+
+// NotifyPayment is POST /payments/notice: "Ya pagué".
+func (ctrl *BillingController) NotifyPayment(ctx context.Context, in *NotifyPaymentInput) (*api.Out[*billingModels.TenantPayment], error) {
+	c := api.Gin(ctx)
+	id, err := tenantID(c)
+	if err != nil {
+		return nil, err
 	}
 	userID, err := extractUserID(c)
 	if err != nil {
-		c.JSON(http.StatusUnauthorized, coreErrors.BuildErrorSingle(c, coreErrors.UserUnauthorized))
-		return
+		return nil, api.Fail(http.StatusUnauthorized, coreErrors.BuildErrorSingle(c, coreErrors.UserUnauthorized))
 	}
 	var dto billingModels.NotifyPaymentDto
-	if err := c.ShouldBindJSON(&dto); err != nil {
-		c.JSON(http.StatusBadRequest, coreErrors.BuildErrorDetail(c, billingErrors.BillingValidationFailed, utils.ExtractValidationError(c, err)))
-		return
+	if err := in.JSON.Into(ctx, &dto); err != nil {
+		return nil, api.Fail(http.StatusBadRequest, coreErrors.BuildErrorDetail(c, billingErrors.BillingValidationFailed, utils.ExtractValidationError(c, err)))
 	}
 	_ = conform.Strings(&dto)
 	payment, err := ctrl.billingService.NotifyPayment(c.Request.Context(), id, userID, &dto)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, coreErrors.BuildError(c, err))
-		return
+		return nil, api.Fail(http.StatusInternalServerError, coreErrors.BuildError(c, err))
 	}
-	c.JSON(http.StatusCreated, payment)
+	return api.OK(payment)
 }
 
-// ListNotifiedPayments godoc
-// @Summary Payments waiting for confirmation
-// @Description The platform's queue of notified payments, oldest first; super_admin only.
-// @Tags Billing
-// @Produce json
-// @Success 200 {array} billingModels.NotifiedPayment
-// @Router /billing/payments/pending [get]
-// @Security ApiKeyAuth
-func (ctrl *BillingController) ListNotifiedPayments(c *gin.Context) {
+// ListNotifiedPaymentsResponse is ListNotifiedPayments's answer.
+type ListNotifiedPaymentsResponse struct {
+	Payments []billingModels.NotifiedPayment `json:"payments"`
+}
+
+// ListNotifiedPayments is GET /payments/pending: Payments waiting for confirmation.
+func (ctrl *BillingController) ListNotifiedPayments(ctx context.Context, _ *api.None) (*api.Out[ListNotifiedPaymentsResponse], error) {
+	c := api.Gin(ctx)
 	payments, err := ctrl.billingService.ListNotifiedPayments(c.Request.Context())
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, coreErrors.BuildError(c, err))
-		return
+		return nil, api.Fail(http.StatusInternalServerError, coreErrors.BuildError(c, err))
 	}
-	c.JSON(http.StatusOK, gin.H{"payments": payments})
+	return api.OK(ListNotifiedPaymentsResponse{Payments: payments})
 }
 
-// ConfirmPayment godoc
-// @Summary Confirm a payment
-// @Description Completes a notified payment and extends the business's plan one cycle from the later of now and its end (BILLING-001 D3); super_admin only.
-// @Tags Billing
-// @Produce json
-// @Param id path string true "Payment ID"
-// @Success 200 {object} billingModels.TenantPayment
-// @Failure 404 {object} coreErrors.ErrorResponse
-// @Failure 409 {object} coreErrors.ErrorResponse
-// @Router /billing/payments/{id}/confirm [post]
-// @Security ApiKeyAuth
-func (ctrl *BillingController) ConfirmPayment(c *gin.Context) {
-	paymentID, err := uuid.Parse(c.Param("id"))
+// ConfirmPaymentInput is ConfirmPayment's request.
+type ConfirmPaymentInput struct {
+	ID string `path:"id"`
+}
+
+// ConfirmPayment is POST /payments/{id}/confirm: Confirm a payment.
+func (ctrl *BillingController) ConfirmPayment(ctx context.Context, in *ConfirmPaymentInput) (*api.Out[*billingModels.TenantPayment], error) {
+	c := api.Gin(ctx)
+	paymentID, err := uuid.Parse(in.ID)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, coreErrors.BuildErrorSingle(c, coreErrors.InvalidUUID))
-		return
+		return nil, api.Fail(http.StatusBadRequest, coreErrors.BuildErrorSingle(c, coreErrors.InvalidUUID))
 	}
 	userID, err := extractUserID(c)
 	if err != nil {
-		c.JSON(http.StatusUnauthorized, coreErrors.BuildErrorSingle(c, coreErrors.UserUnauthorized))
-		return
+		return nil, api.Fail(http.StatusUnauthorized, coreErrors.BuildErrorSingle(c, coreErrors.UserUnauthorized))
 	}
 	payment, err := ctrl.billingService.ConfirmPayment(c.Request.Context(), paymentID, userID)
 	if err != nil {
@@ -151,140 +123,113 @@ func (ctrl *BillingController) ConfirmPayment(c *gin.Context) {
 		if errors.As(err, &pgErr) {
 			switch pgErr.Message {
 			case billingErrors.PaymentNotFound:
-				c.JSON(http.StatusNotFound, coreErrors.BuildErrorSingle(c, billingErrors.PaymentNotFound))
-				return
+				return nil, api.Fail(http.StatusNotFound, coreErrors.BuildErrorSingle(c, billingErrors.PaymentNotFound))
 			case billingErrors.PaymentNotPending:
-				c.JSON(http.StatusConflict, coreErrors.BuildErrorSingle(c, billingErrors.PaymentNotPending))
-				return
+				return nil, api.Fail(http.StatusConflict, coreErrors.BuildErrorSingle(c, billingErrors.PaymentNotPending))
 			}
 		}
-		c.JSON(http.StatusInternalServerError, coreErrors.BuildError(c, err))
-		return
+		return nil, api.Fail(http.StatusInternalServerError, coreErrors.BuildError(c, err))
 	}
-	c.JSON(http.StatusOK, payment)
+	return api.OK(payment)
 }
 
 // paymentWriteError answers the codes a payment write raises; reports whether it wrote the response.
-func paymentWriteError(c *gin.Context, err error) bool {
+func paymentWriteError(c *gin.Context, err error) error {
 	var pgErr *pgconn.PgError
 	if !errors.As(err, &pgErr) {
-		return false
+		return nil
 	}
 	switch pgErr.Message {
 	case billingErrors.PaymentNotFound, billingErrors.TenantNotFound:
-		c.JSON(http.StatusNotFound, coreErrors.BuildErrorSingle(c, pgErr.Message))
-		return true
+		return api.Fail(http.StatusNotFound, coreErrors.BuildErrorSingle(c, pgErr.Message))
 	case billingErrors.PaymentNotPending:
-		c.JSON(http.StatusConflict, coreErrors.BuildErrorSingle(c, pgErr.Message))
-		return true
+		return api.Fail(http.StatusConflict, coreErrors.BuildErrorSingle(c, pgErr.Message))
 	case billingErrors.AdjustReasonRequired:
-		c.JSON(http.StatusBadRequest, coreErrors.BuildErrorSingle(c, pgErr.Message))
-		return true
+		return api.Fail(http.StatusBadRequest, coreErrors.BuildErrorSingle(c, pgErr.Message))
 	}
-	return false
+	return nil
 }
 
-// RejectPayment godoc
-// @Summary Reject a payment
-// @Description Turns a notified payment down with the reason the customer is emailed; the plan does not change (BILLING-002 D3); super_admin only.
-// @Tags Billing
-// @Accept json
-// @Produce json
-// @Param id path string true "Payment ID"
-// @Param body body billingModels.RejectPaymentDto true "Why"
-// @Success 200 {object} billingModels.TenantPayment
-// @Failure 404 {object} coreErrors.ErrorResponse
-// @Failure 409 {object} coreErrors.ErrorResponse
-// @Router /billing/payments/{id}/reject [post]
-// @Security ApiKeyAuth
-func (ctrl *BillingController) RejectPayment(c *gin.Context) {
-	paymentID, err := uuid.Parse(c.Param("id"))
+// RejectPaymentInput is RejectPayment's request.
+type RejectPaymentInput struct {
+	ID   string `path:"id"`
+	JSON api.Body[billingModels.RejectPaymentDto]
+}
+
+// RejectPayment is POST /payments/{id}/reject: Reject a payment.
+func (ctrl *BillingController) RejectPayment(ctx context.Context, in *RejectPaymentInput) (*api.Out[*billingModels.TenantPayment], error) {
+	c := api.Gin(ctx)
+	paymentID, err := uuid.Parse(in.ID)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, coreErrors.BuildErrorSingle(c, coreErrors.InvalidUUID))
-		return
+		return nil, api.Fail(http.StatusBadRequest, coreErrors.BuildErrorSingle(c, coreErrors.InvalidUUID))
 	}
 	userID, err := extractUserID(c)
 	if err != nil {
-		c.JSON(http.StatusUnauthorized, coreErrors.BuildErrorSingle(c, coreErrors.UserUnauthorized))
-		return
+		return nil, api.Fail(http.StatusUnauthorized, coreErrors.BuildErrorSingle(c, coreErrors.UserUnauthorized))
 	}
 	var dto billingModels.RejectPaymentDto
-	if err := c.ShouldBindJSON(&dto); err != nil {
-		c.JSON(http.StatusBadRequest, coreErrors.BuildErrorDetail(c, billingErrors.BillingValidationFailed, utils.ExtractValidationError(c, err)))
-		return
+	if err := in.JSON.Into(ctx, &dto); err != nil {
+		return nil, api.Fail(http.StatusBadRequest, coreErrors.BuildErrorDetail(c, billingErrors.BillingValidationFailed, utils.ExtractValidationError(c, err)))
 	}
 	_ = conform.Strings(&dto)
 	payment, err := ctrl.billingService.RejectPayment(c.Request.Context(), paymentID, dto.Reason, userID)
 	if err != nil {
-		if !paymentWriteError(c, err) {
-			c.JSON(http.StatusInternalServerError, coreErrors.BuildError(c, err))
+		if err := paymentWriteError(c, err); err != nil {
+			return nil, err
 		}
-		return
+		return nil, api.Fail(http.StatusInternalServerError, coreErrors.BuildError(c, err))
 	}
-	c.JSON(http.StatusOK, payment)
+	return api.OK(payment)
 }
 
-// ListTenantSubscriptions godoc
-// @Summary Every business and its plan
-// @Description The platform's businesses list: plan, cycle, status, end and the notice under review, searched by name or code (BILLING-002 D3); super_admin only.
-// @Tags Billing
-// @Produce json
-// @Param search query string false "Name or code"
-// @Param page query int false "Page" default(1)
-// @Param page_size query int false "Page size" default(20)
-// @Success 200 {object} billingModels.ListTenantSubscriptionsResponse
-// @Router /billing/admin/subscriptions [get]
-// @Security ApiKeyAuth
-func (ctrl *BillingController) ListTenantSubscriptions(c *gin.Context) {
+// ListTenantSubscriptionsInput is ListTenantSubscriptions's request.
+type ListTenantSubscriptionsInput struct {
+	Query api.Query[billingModels.ListTenantSubscriptionsQuery]
+}
+
+// ListTenantSubscriptions is GET /admin/subscriptions: Every business and its plan.
+func (ctrl *BillingController) ListTenantSubscriptions(ctx context.Context, in *ListTenantSubscriptionsInput) (*api.Out[*billingModels.ListTenantSubscriptionsResponse], error) {
+	c := api.Gin(ctx)
 	var query billingModels.ListTenantSubscriptionsQuery
-	if err := c.ShouldBindQuery(&query); err != nil {
-		c.JSON(http.StatusBadRequest, coreErrors.BuildErrorDetail(c, billingErrors.BillingValidationFailed, utils.ExtractValidationError(c, err)))
-		return
+	if err := in.Query.Into(ctx, &query); err != nil {
+		return nil, api.Fail(http.StatusBadRequest, coreErrors.BuildErrorDetail(c, billingErrors.BillingValidationFailed, utils.ExtractValidationError(c, err)))
 	}
 	out, err := ctrl.billingService.ListTenantSubscriptions(c.Request.Context(), query)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, coreErrors.BuildError(c, err))
-		return
+		return nil, api.Fail(http.StatusInternalServerError, coreErrors.BuildError(c, err))
 	}
-	c.JSON(http.StatusOK, out)
+	return api.OK(out)
 }
 
-// AdjustTenantSubscription godoc
-// @Summary Set a business's plan by hand
-// @Description Plan, cycle, status and end with a required reason; recorded as an adjustment with before and after (BILLING-002 D3); super_admin only.
-// @Tags Billing
-// @Accept json
-// @Produce json
-// @Param business_id path string true "Business ID"
-// @Param body body billingModels.AdjustSubscriptionDto true "The plan and why"
-// @Success 200 {object} billingModels.TenantPlan
-// @Failure 404 {object} coreErrors.ErrorResponse
-// @Router /billing/admin/tenants/{business_id}/subscription [put]
-// @Security ApiKeyAuth
-func (ctrl *BillingController) AdjustTenantSubscription(c *gin.Context) {
+// AdjustTenantSubscriptionInput is AdjustTenantSubscription's request.
+type AdjustTenantSubscriptionInput struct {
+	BusinessID string `path:"business_id"`
+	JSON       api.Body[billingModels.AdjustSubscriptionDto]
+}
+
+// AdjustTenantSubscription is PUT /admin/tenants/{business_id}/subscription: Set a business's plan by hand.
+func (ctrl *BillingController) AdjustTenantSubscription(ctx context.Context, in *AdjustTenantSubscriptionInput) (*api.Out[*billingModels.TenantPlan], error) {
+	c := api.Gin(ctx)
 	// The business the platform acts on, named in the path — never the caller's own tenant.
-	tenantID, err := uuid.Parse(c.Param("business_id"))
+	tenantID, err := uuid.Parse(in.BusinessID)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, coreErrors.BuildErrorSingle(c, coreErrors.InvalidUUID))
-		return
+		return nil, api.Fail(http.StatusBadRequest, coreErrors.BuildErrorSingle(c, coreErrors.InvalidUUID))
 	}
 	userID, err := extractUserID(c)
 	if err != nil {
-		c.JSON(http.StatusUnauthorized, coreErrors.BuildErrorSingle(c, coreErrors.UserUnauthorized))
-		return
+		return nil, api.Fail(http.StatusUnauthorized, coreErrors.BuildErrorSingle(c, coreErrors.UserUnauthorized))
 	}
 	var dto billingModels.AdjustSubscriptionDto
-	if err := c.ShouldBindJSON(&dto); err != nil {
-		c.JSON(http.StatusBadRequest, coreErrors.BuildErrorDetail(c, billingErrors.BillingValidationFailed, utils.ExtractValidationError(c, err)))
-		return
+	if err := in.JSON.Into(ctx, &dto); err != nil {
+		return nil, api.Fail(http.StatusBadRequest, coreErrors.BuildErrorDetail(c, billingErrors.BillingValidationFailed, utils.ExtractValidationError(c, err)))
 	}
 	_ = conform.Strings(&dto)
 	plan, err := ctrl.billingService.AdjustTenantSubscription(c.Request.Context(), tenantID, &dto, userID)
 	if err != nil {
-		if !paymentWriteError(c, err) {
-			c.JSON(http.StatusInternalServerError, coreErrors.BuildError(c, err))
+		if err := paymentWriteError(c, err); err != nil {
+			return nil, err
 		}
-		return
+		return nil, api.Fail(http.StatusInternalServerError, coreErrors.BuildError(c, err))
 	}
-	c.JSON(http.StatusOK, plan)
+	return api.OK(plan)
 }

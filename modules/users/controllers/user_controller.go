@@ -1,16 +1,17 @@
 package controllers
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"net/http"
-	"strconv"
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgconn"
 
 	"josex/web/config"
+	"josex/web/modules/core/api"
 	coreErrors "josex/web/modules/core/errors"
 	"josex/web/modules/core/limits"
 	coreModels "josex/web/modules/core/models"
@@ -21,9 +22,6 @@ import (
 	userInterfaces "josex/web/modules/users/interfaces"
 	userModels "josex/web/modules/users/models"
 )
-
-// Ensure coreModels is used (for Swagger annotations)
-var _ coreModels.User
 
 type UserController struct {
 	userService      userInterfaces.UserService
@@ -42,12 +40,47 @@ func NewUserController(userService userInterfaces.UserService, emailService core
 // requestTenant is the workspace the tenancy middleware resolved; the user routes only reach a user there
 // (USERS-013). A request without one resolves to uuid.Nil, which matches no membership.
 func requestTenant(c *gin.Context) uuid.UUID {
-	if s, ok := c.Get("tenant_id"); ok {
-		if tid, err := uuid.Parse(s.(string)); err == nil {
-			return tid
-		}
+	tid, _ := contextUUID(c, "tenant_id")
+	return tid
+}
+
+// contextUUID is the UUID a middleware stored under key, false when it is absent or not a UUID.
+func contextUUID(c *gin.Context, key string) (uuid.UUID, bool) {
+	s, ok := c.Get(key)
+	if !ok {
+		return uuid.Nil, false
 	}
-	return uuid.Nil
+	id, err := uuid.Parse(s.(string))
+	return id, err == nil
+}
+
+// CreateUserInput is POST /users: the new account.
+type CreateUserInput struct {
+	JSON api.Body[userModels.CreateUserDto]
+}
+
+// UpdateUserInput is PUT /users/{id}: the fields to change.
+type UpdateUserInput struct {
+	ID   string `path:"id"`
+	JSON api.Body[userModels.UpdateUserDto]
+}
+
+// ListUsersInput is GET /users' query. A page or limit below 1 falls back to the default; a limit
+// over the configured maximum is capped.
+type ListUsersInput struct {
+	Page   int    `query:"page" default:"1" doc:"Page number"`
+	Limit  int    `query:"limit" doc:"Items per page; the configured default when absent, capped at the maximum"`
+	Search string `query:"search" doc:"Search in email, first name, last name"`
+	Status string `query:"status" doc:"active, inactive or expired"`
+	Sort   string `query:"sort" doc:"created_at (default), email, first_name or last_name"`
+	Order  string `query:"order" doc:"asc or desc (default)"`
+	Level  string `query:"level" doc:"portal, driver, organization or web; any other value is a 400"`
+}
+
+// SoftDeleteResult is DELETE /users/{id}'s answer.
+type SoftDeleteResult struct {
+	Success    bool `json:"success"`
+	SoftDelete bool `json:"soft_delete"`
 }
 
 // pgMessage answers the stored procedure's error key, or "" for any other error.
@@ -59,12 +92,12 @@ func pgMessage(err error) string {
 	return ""
 }
 
-func (uc *UserController) Create(c *gin.Context) {
+func (uc *UserController) Create(ctx context.Context, in *CreateUserInput) (*api.Out[*coreModels.User], error) {
+	c := api.Gin(ctx)
 	var newUser userModels.CreateUserDto
 
-	if err := c.ShouldBindJSON(&newUser); err != nil {
-		c.JSON(http.StatusBadRequest, coreErrors.BuildErrorDetail(c, usersErrors.UserValidationFailed, utils.ExtractValidationError(c, err)))
-		return
+	if err := in.JSON.Into(ctx, &newUser); err != nil {
+		return nil, api.Fail(http.StatusBadRequest, coreErrors.BuildErrorDetail(c, usersErrors.UserValidationFailed, utils.ExtractValidationError(c, err)))
 	}
 
 	// Generate a secure temporary password when the admin left it blank
@@ -75,11 +108,10 @@ func (uc *UserController) Create(c *gin.Context) {
 	}
 
 	// Inside a workspace, a seat must be free before the account exists (BILLING-001 D2).
-	if tenantIDStr, ok := c.Get("tenant_id"); ok {
-		if tenantID, err := uuid.Parse(tenantIDStr.(string)); err == nil {
-			if err := uc.userService.EnsureTenantSeat(c.Request.Context(), tenantID); limits.Respond(c, err) {
-				return
-			}
+	tenantID, inTenant := contextUUID(c, "tenant_id")
+	if inTenant {
+		if err := limits.Refuse(c, uc.userService.EnsureTenantSeat(c.Request.Context(), tenantID)); err != nil {
+			return nil, err
 		}
 	}
 
@@ -87,88 +119,84 @@ func (uc *UserController) Create(c *gin.Context) {
 	if err != nil {
 		var pgErr *pgconn.PgError
 		if errors.As(err, &pgErr) && pgErr.Message == "user.create.email.already-exists" {
-			c.JSON(http.StatusConflict, coreErrors.BuildErrorSingle(c, usersErrors.UserEmailAlreadyInUse))
-			return
+			return nil, api.Fail(http.StatusConflict, coreErrors.BuildErrorSingle(c, usersErrors.UserEmailAlreadyInUse))
 		}
-		c.JSON(http.StatusBadRequest, coreErrors.BuildError(c, err))
-		return
+		return nil, api.Fail(http.StatusBadRequest, coreErrors.BuildError(c, err))
 	}
 
-	// If operating inside a tenant context, add the new user as a member of that tenant
-	if tenantIDStr, ok := c.Get("tenant_id"); ok {
-		if tenantID, err := uuid.Parse(tenantIDStr.(string)); err == nil {
-			if requesterIDStr, ok := c.Get("user_id"); ok {
-				if requesterID, err := uuid.Parse(requesterIDStr.(string)); err == nil {
-					if newUserID, err := uuid.Parse(user.ID); err == nil {
-						tenantRole := newUser.TenantRole
-						if tenantRole == "" {
-							tenantRole = tenancyModels.RoleMember
-						}
-						_ = uc.userService.AssignToTenant(tenantID, requesterID, newUserID, tenantRole)
-					}
-				}
-			}
-
-			var performedByPtr *uuid.UUID
-			if userIDStr, ok := c.Get("user_id"); ok {
-				if uid, err := uuid.Parse(userIDStr.(string)); err == nil {
-					performedByPtr = &uid
-				}
-			}
-			var targetIDPtr *uuid.UUID
-			if newUserID, err := uuid.Parse(user.ID); err == nil {
-				targetIDPtr = &newUserID
-			}
-			auditSvc := uc.userAuditService
-			go func() {
-				_ = auditSvc.Record(tenantID, "user.created", targetIDPtr, performedByPtr, nil, "user")
-			}()
-		}
+	if inTenant {
+		uc.joinTenant(c, tenantID, user, newUser.TenantRole)
 	}
+	go uc.sendInvitation(user, tempPassword)
 
-	// Send invitation email (fire-and-forget — don't fail the request if email fails)
-	appConf := config.ModularAppConfig.Core
-	go func() {
-		templatePath := coreServices.GetTemplatePath("users", "user-invitation.html")
-		firstName := ""
-		if user.FirstName != nil {
-			firstName = *user.FirstName
-		}
-		email := ""
-		if user.Email != nil {
-			email = *user.Email
-		}
-		data := map[string]string{
-			"Title":              fmt.Sprintf("Welcome to %s", appConf.AppName),
-			"Greeting":           fmt.Sprintf("Welcome, %s!", firstName),
-			"Description":        fmt.Sprintf("Your account has been created on %s. Use the credentials below to sign in.", appConf.AppName),
-			"Email":              email,
-			"TempPassword":       tempPassword,
-			"ChangePasswordNote": "For security, please change your password after your first login.",
-			"LoginURL":           fmt.Sprintf("%s/login", appConf.FrontendURL),
-			"ButtonText":         "Sign in now",
-			"SignOff":            fmt.Sprintf("The %s team", appConf.AppName),
-			"AutomatedNote":      "This is an automated message. Please do not reply.",
-		}
-		_ = uc.emailService.SendEmail(email, fmt.Sprintf("Your %s account is ready", appConf.AppName), templatePath, data)
-	}()
-
-	c.JSON(http.StatusCreated, user)
+	return api.OK(user)
 }
 
-func (uc *UserController) Update(c *gin.Context) {
+// joinTenant adds the new user to the request's workspace with role (member when empty) and
+// records the creation in its audit log.
+func (uc *UserController) joinTenant(c *gin.Context, tenantID uuid.UUID, user *coreModels.User, role string) {
+	requesterID, hasRequester := contextUUID(c, "user_id")
+	newUserID, err := uuid.Parse(user.ID)
+	if hasRequester && err == nil {
+		if role == "" {
+			role = tenancyModels.RoleMember
+		}
+		_ = uc.userService.AssignToTenant(tenantID, requesterID, newUserID, role)
+	}
+
+	var performedByPtr, targetIDPtr *uuid.UUID
+	if hasRequester {
+		performedByPtr = &requesterID
+	}
+	if err == nil {
+		targetIDPtr = &newUserID
+	}
+	auditSvc := uc.userAuditService
+	go func() {
+		_ = auditSvc.Record(tenantID, "user.created", targetIDPtr, performedByPtr, nil, "user")
+	}()
+}
+
+// sendInvitation emails the new user their credentials. Fire-and-forget: a failed email does not
+// fail the request.
+func (uc *UserController) sendInvitation(user *coreModels.User, tempPassword string) {
+	appConf := config.ModularAppConfig.Core
+	templatePath := coreServices.GetTemplatePath("users", "user-invitation.html")
+	firstName := ""
+	if user.FirstName != nil {
+		firstName = *user.FirstName
+	}
+	email := ""
+	if user.Email != nil {
+		email = *user.Email
+	}
+	data := map[string]string{
+		"Title":              "Welcome to " + appConf.AppName,
+		"Greeting":           fmt.Sprintf("Welcome, %s!", firstName),
+		"Description":        fmt.Sprintf("Your account has been created on %s. Use the credentials below to sign in.", appConf.AppName),
+		"Email":              email,
+		"TempPassword":       tempPassword,
+		"ChangePasswordNote": "For security, please change your password after your first login.",
+		"LoginURL":           appConf.FrontendURL + "/login",
+		"ButtonText":         "Sign in now",
+		"SignOff":            fmt.Sprintf("The %s team", appConf.AppName),
+		"AutomatedNote":      "This is an automated message. Please do not reply.",
+	}
+	_ = uc.emailService.SendEmail(email, fmt.Sprintf("Your %s account is ready", appConf.AppName), templatePath, data)
+}
+
+func (uc *UserController) Update(ctx context.Context, in *UpdateUserInput) (*api.Out[*coreModels.User], error) {
+	c := api.Gin(ctx)
 	var updateUser userModels.UpdateUserDto
-	id, err := uuid.Parse(c.Param("id"))
+	id, err := uuid.Parse(in.ID)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, coreErrors.BuildError(c, err))
-		return
+		return nil, api.Fail(http.StatusBadRequest, coreErrors.BuildError(c, err))
 	}
 
 	updateUser.ID = id
 
-	if err := c.ShouldBindJSON(&updateUser); err != nil {
-		c.JSON(http.StatusBadRequest, coreErrors.BuildErrorDetail(c, usersErrors.UserValidationFailed, utils.ExtractValidationError(c, err)))
-		return
+	if err := in.JSON.Into(ctx, &updateUser); err != nil {
+		return nil, api.Fail(http.StatusBadRequest, coreErrors.BuildErrorDetail(c, usersErrors.UserValidationFailed, utils.ExtractValidationError(c, err)))
 	}
 
 	// Pass tenant and performer to the repository so the AFTER UPDATE trigger
@@ -188,39 +216,18 @@ func (uc *UserController) Update(c *gin.Context) {
 	if err != nil {
 		switch pgMessage(err) {
 		case usersErrors.UserNotFound:
-			c.JSON(http.StatusNotFound, coreErrors.BuildError(c, err))
-			return
+			return nil, api.Fail(http.StatusNotFound, coreErrors.BuildError(c, err))
 		case usersErrors.UserUpdateSharedAccount:
-			c.JSON(http.StatusConflict, coreErrors.BuildError(c, err))
-			return
+			return nil, api.Fail(http.StatusConflict, coreErrors.BuildError(c, err))
 		}
-		c.JSON(http.StatusBadRequest, coreErrors.BuildErrorDetail(c, usersErrors.UserUpdateFailed, err.Error()))
-		return
+		return nil, api.Fail(http.StatusBadRequest, coreErrors.BuildErrorDetail(c, usersErrors.UserUpdateFailed, err.Error()))
 	}
 
-	c.JSON(http.StatusOK, user)
+	return api.OK(user)
 }
 
-// ListUsers godoc
-// @Summary List users with pagination and filters
-// @Description Get paginated list of users with optional search and filters
-// @Tags Users
-// @Accept  json
-// @Produce  json
-// @Param Authorization header string true "Bearer Token"
-// @Param page query int false "Page number (default: 1)" minimum(1)
-// @Param limit query int false "Items per page (default: 20, max: 100)" minimum(1) maximum(100)
-// @Param search query string false "Search in email, first name, last name"
-// @Param status query string false "Filter by status" Enums(active, inactive, expired)
-// @Param sort query string false "Sort field (default: created_at)" Enums(created_at, email, first_name, last_name)
-// @Param order query string false "Sort order (default: desc)" Enums(asc, desc)
-// @Param level query string false "Access level" Enums(portal, driver, organization, web)
-// @Success 200 {object} userModels.UserListResponse
-// @Failure 400 {object} coreErrors.ErrorResponse
-// @Failure 401 {object} coreErrors.ErrorResponse
-// @Router /users [get]
-// @Security ApiKeyAuth
-func (uc *UserController) GetStats(c *gin.Context) {
+func (uc *UserController) GetStats(ctx context.Context, _ *api.None) (*api.Out[*userModels.UserStatsResponse], error) {
+	c := api.Gin(ctx)
 	var tenantID uuid.UUID
 	if tenantIDStr, ok := c.Get("tenant_id"); ok {
 		if tid, err := uuid.Parse(tenantIDStr.(string)); err == nil {
@@ -237,19 +244,21 @@ func (uc *UserController) GetStats(c *gin.Context) {
 
 	stats, err := uc.userService.GetStats(tenantID, excludeUserID)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, coreErrors.BuildError(c, err))
-		return
+		return nil, api.Fail(http.StatusBadRequest, coreErrors.BuildError(c, err))
 	}
 
-	c.JSON(http.StatusOK, stats)
+	return api.OK(stats)
 }
 
-func (uc *UserController) ListUsers(c *gin.Context) {
+func (uc *UserController) ListUsers(ctx context.Context, in *ListUsersInput) (*api.Out[*userModels.UserListResponse], error) {
+	c := api.Gin(ctx)
 	usersConfig := config.ModularAppConfig.Users
 
 	// Parse pagination parameters
-	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
-	limit, _ := strconv.Atoi(c.DefaultQuery("limit", strconv.Itoa(usersConfig.DefaultPageSize)))
+	page, limit := in.Page, in.Limit
+	if limit == 0 {
+		limit = usersConfig.DefaultPageSize
+	}
 
 	// Validate page number
 	if page < 1 {
@@ -267,17 +276,16 @@ func (uc *UserController) ListUsers(c *gin.Context) {
 	query := userModels.UserListQuery{
 		Page:   page,
 		Limit:  limit,
-		Search: c.Query("search"),
-		Status: c.Query("status"),
-		Sort:   c.Query("sort"),
-		Order:  c.Query("order"),
-		Level:  c.Query("level"),
+		Search: in.Search,
+		Status: in.Status,
+		Sort:   in.Sort,
+		Order:  in.Order,
+		Level:  in.Level,
 	}
 	switch query.Level {
 	case "", "portal", "driver", "organization", "web":
 	default:
-		c.JSON(http.StatusBadRequest, coreErrors.BuildErrorSingle(c, usersErrors.UserValidationFailed))
-		return
+		return nil, api.Fail(http.StatusBadRequest, coreErrors.BuildErrorSingle(c, usersErrors.UserValidationFailed))
 	}
 
 	// Scope results to the current tenant (set by tenancy middleware)
@@ -296,74 +304,41 @@ func (uc *UserController) ListUsers(c *gin.Context) {
 
 	response, err := uc.userService.ListUsers(query)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, coreErrors.BuildError(c, err))
-		return
+		return nil, api.Fail(http.StatusBadRequest, coreErrors.BuildError(c, err))
 	}
 
-	c.JSON(http.StatusOK, response)
+	return api.OK(response)
 }
 
-// GetUserById godoc
-// @Summary Get user by ID
-// @Description Get a single user by their ID
-// @Tags Users
-// @Accept  json
-// @Produce  json
-// @Param Authorization header string true "Bearer Token"
-// @Param id path string true "User ID (UUID)"
-// @Success 200 {object} coreModels.User
-// @Failure 400 {object} coreErrors.ErrorResponse
-// @Failure 401 {object} coreErrors.ErrorResponse
-// @Failure 404 {object} coreErrors.ErrorResponse
-// @Router /users/{id} [get]
-// @Security ApiKeyAuth
-func (uc *UserController) GetUserById(c *gin.Context) {
-	userIDStr := c.Param("id")
+func (uc *UserController) GetUserById(ctx context.Context, in *api.ByID) (*api.Out[*coreModels.User], error) {
+	c := api.Gin(ctx)
+	userIDStr := in.ID
 	userID, err := uuid.Parse(userIDStr)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, coreErrors.BuildErrorSingle(c, coreErrors.InvalidUUID))
-		return
+		return nil, api.Fail(http.StatusBadRequest, coreErrors.BuildErrorSingle(c, coreErrors.InvalidUUID))
 	}
 
 	user, err := uc.userService.GetUserById(requestTenant(c), userID)
 	if err != nil {
-		c.JSON(http.StatusNotFound, coreErrors.BuildError(c, err))
-		return
+		return nil, api.Fail(http.StatusNotFound, coreErrors.BuildError(c, err))
 	}
 
-	c.JSON(http.StatusOK, user)
+	return api.OK(user)
 }
 
-// SoftDeleteUser godoc
-// @Summary Soft delete user
-// @Description Soft delete a user (sets deleted_at timestamp and invalidates sessions). Respects ALLOW_USER_DELETION and ENABLE_SOFT_DELETE config.
-// @Tags Users
-// @Accept  json
-// @Produce  json
-// @Param Authorization header string true "Bearer Token"
-// @Param id path string true "User ID (UUID)"
-// @Param request body userModels.SoftDeleteUserDto false "Deletion details"
-// @Success 200 {object} map[string]bool
-// @Failure 400 {object} coreErrors.ErrorResponse
-// @Failure 401 {object} coreErrors.ErrorResponse
-// @Failure 403 {object} coreErrors.ErrorResponse "User deletion is disabled"
-// @Failure 404 {object} coreErrors.ErrorResponse
-// @Router /users/{id} [delete]
-// @Security ApiKeyAuth
-func (uc *UserController) SoftDeleteUser(c *gin.Context) {
+func (uc *UserController) SoftDeleteUser(ctx context.Context, in *api.ByID) (*api.Out[SoftDeleteResult], error) {
+	c := api.Gin(ctx)
 	usersConfig := config.ModularAppConfig.Users
 
 	// Check if user deletion is allowed
 	if !usersConfig.AllowUserDeletion {
-		c.JSON(http.StatusForbidden, coreErrors.BuildErrorSingle(c, usersErrors.UserDeleteNotAllowed))
-		return
+		return nil, api.Fail(http.StatusForbidden, coreErrors.BuildErrorSingle(c, usersErrors.UserDeleteNotAllowed))
 	}
 
-	userIDStr := c.Param("id")
+	userIDStr := in.ID
 	userID, err := uuid.Parse(userIDStr)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, coreErrors.BuildErrorSingle(c, coreErrors.InvalidUUID))
-		return
+		return nil, api.Fail(http.StatusBadRequest, coreErrors.BuildErrorSingle(c, coreErrors.InvalidUUID))
 	}
 
 	// Use soft delete if enabled, otherwise permanent delete
@@ -375,12 +350,10 @@ func (uc *UserController) SoftDeleteUser(c *gin.Context) {
 	}
 
 	if pgMessage(err) == usersErrors.UserNotFound {
-		c.JSON(http.StatusNotFound, coreErrors.BuildError(c, err))
-		return
+		return nil, api.Fail(http.StatusNotFound, coreErrors.BuildError(c, err))
 	}
 	if err != nil {
-		c.JSON(http.StatusBadRequest, coreErrors.BuildError(c, err))
-		return
+		return nil, api.Fail(http.StatusBadRequest, coreErrors.BuildError(c, err))
 	}
 
 	if tenantIDStr, ok := c.Get("tenant_id"); ok {
@@ -399,30 +372,14 @@ func (uc *UserController) SoftDeleteUser(c *gin.Context) {
 		}
 	}
 
-	c.JSON(http.StatusOK, gin.H{
-		"success":     true,
-		"soft_delete": usersConfig.EnableSoftDelete,
-	})
+	return api.OK(SoftDeleteResult{Success: true, SoftDelete: usersConfig.EnableSoftDelete})
 }
 
-// ResetPassword godoc
-// @Summary      Trigger a password reset email for a user
-// @Description  Generates a password reset token and sends the reset email to the target user. Always returns 200 to avoid user enumeration.
-// @Tags         Users
-// @Accept       json
-// @Produce      json
-// @Param        Authorization  header  string  true  "Bearer Token"
-// @Param        id             path    string  true  "User UUID"
-// @Success      200
-// @Failure      400  {object}  coreErrors.ErrorResponse
-// @Failure      401  {object}  coreErrors.ErrorResponse
-// @Router       /users/{id}/reset-password [post]
-// @Security     ApiKeyAuth
-func (uc *UserController) ResetPassword(c *gin.Context) {
-	id, err := uuid.Parse(c.Param("id"))
+func (uc *UserController) ResetPassword(ctx context.Context, in *api.ByID) (*api.Out[any], error) {
+	c := api.Gin(ctx)
+	id, err := uuid.Parse(in.ID)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, coreErrors.BuildErrorSingle(c, coreErrors.InvalidUUID))
-		return
+		return nil, api.Fail(http.StatusBadRequest, coreErrors.BuildErrorSingle(c, coreErrors.InvalidUUID))
 	}
 
 	result, err := uc.userService.ResetPassword(requestTenant(c), id)
@@ -433,12 +390,10 @@ func (uc *UserController) ResetPassword(c *gin.Context) {
 			case "user.not-found",
 				"password.reset.account-not-exists",
 				"password.reset.token-already-sent":
-				c.JSON(http.StatusOK, nil)
-				return
+				return nil, api.Fail(http.StatusOK, nil)
 			}
 		}
-		c.JSON(http.StatusInternalServerError, coreErrors.BuildError(c, err))
-		return
+		return nil, api.Fail(http.StatusInternalServerError, coreErrors.BuildError(c, err))
 	}
 
 	if tenantIDStr, ok := c.Get("tenant_id"); ok {
@@ -476,5 +431,5 @@ func (uc *UserController) ResetPassword(c *gin.Context) {
 		_ = uc.emailService.SendEmail(result.Email, subject, templatePath, emailData)
 	}()
 
-	c.JSON(http.StatusOK, nil)
+	return api.OK[any](nil)
 }

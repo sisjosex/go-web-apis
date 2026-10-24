@@ -1,13 +1,14 @@
 package controllers
 
 import (
+	"context"
 	"errors"
 	"net/http"
 
-	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgconn"
 
+	"josex/web/modules/core/api"
 	coreErrors "josex/web/modules/core/errors"
 	inventoryErrors "josex/web/modules/inventory/errors"
 	inventoryInterfaces "josex/web/modules/inventory/interfaces"
@@ -24,36 +25,29 @@ func NewStockController(stockService inventoryInterfaces.StockService) *StockCon
 	}
 }
 
-// UpdateReorderLevel godoc
-// @Summary Update product reorder level
-// @Description Update the minimum stock level for a product
-// @Tags inventory
-// @Accept json
-// @Produce json
-// @Param product_id path string true "Product ID"
-// @Param request body models.UpdateReorderLevelDto true "Reorder level request"
-// @Success 200 {object} models.UpdateReorderLevelResponse
-// @Failure 400 {object} map[string]interface{}
-// @Failure 404 {object} map[string]interface{}
-// @Router /api/v1/inventory/products/:product_id/reorder-level [patch]
-func (ctrl *StockController) UpdateReorderLevel(c *gin.Context) {
+// UpdateReorderLevelInput is UpdateReorderLevel's request.
+type UpdateReorderLevelInput struct {
+	ID   string `path:"id"`
+	JSON api.Body[models.UpdateReorderLevelDto]
+}
+
+// UpdateReorderLevel is PATCH /products/{id}/reorder-level: Update product reorder level.
+func (ctrl *StockController) UpdateReorderLevel(ctx context.Context, in *UpdateReorderLevelInput) (*api.Out[*models.UpdateReorderLevelResponse], error) {
+	c := api.Gin(ctx)
 	tenantIDRaw, exists := c.Get("tenant_id")
 	if !exists || tenantIDRaw == nil {
-		c.JSON(http.StatusUnauthorized, coreErrors.BuildErrorSingle(c, "auth.invalid-tenant"))
-		return
+		return nil, api.Fail(http.StatusUnauthorized, coreErrors.BuildErrorSingle(c, "auth.invalid-tenant"))
 	}
 	tenantID, err := uuid.Parse(tenantIDRaw.(string))
 	if err != nil {
-		c.JSON(http.StatusUnauthorized, coreErrors.BuildErrorSingle(c, "auth.invalid-tenant"))
-		return
+		return nil, api.Fail(http.StatusUnauthorized, coreErrors.BuildErrorSingle(c, "auth.invalid-tenant"))
 	}
 
-	productID := c.Param("id")
+	productID := in.ID
 	var dto models.UpdateReorderLevelDto
 
-	if err := c.ShouldBindJSON(&dto); err != nil {
-		c.JSON(http.StatusBadRequest, coreErrors.BuildErrorDetail(c, "validation.invalid", err.Error()))
-		return
+	if err := in.JSON.Into(ctx, &dto); err != nil {
+		return nil, api.Fail(http.StatusBadRequest, coreErrors.BuildErrorDetail(c, "validation.invalid", err.Error()))
 	}
 
 	userID := c.GetString("user_id")
@@ -63,45 +57,35 @@ func (ctrl *StockController) UpdateReorderLevel(c *gin.Context) {
 		if errors.As(err, &pgErr) {
 			switch pgErr.Message {
 			case inventoryErrors.ProductNotFound:
-				c.JSON(http.StatusNotFound, coreErrors.BuildErrorSingle(c, inventoryErrors.ProductNotFound))
-				return
+				return nil, api.Fail(http.StatusNotFound, coreErrors.BuildErrorSingle(c, inventoryErrors.ProductNotFound))
 			}
 		}
-		c.JSON(http.StatusInternalServerError, coreErrors.BuildError(c, err))
-		return
+		return nil, api.Fail(http.StatusInternalServerError, coreErrors.BuildError(c, err))
 	}
 
-	c.JSON(http.StatusOK, result)
+	return api.OK(result)
 }
 
-// ReserveStock godoc
-// @Summary Reserve stock for a sales order
-// @Description Reserve inventory when a sales order is created
-// @Tags inventory
-// @Accept json
-// @Produce json
-// @Param request body models.ReserveStockDto true "Reserve request"
-// @Success 200 {object} models.StockReservationResponse
-// @Failure 400 {object} map[string]string
-// @Failure 404 {object} map[string]string
-// @Failure 409 {object} map[string]string
-// @Router /api/v1/inventory/reserve [post]
-func (ctrl *StockController) ReserveStock(c *gin.Context) {
+// ReserveStockInput is ReserveStock's request.
+type ReserveStockInput struct {
+	JSON api.Body[models.ReserveStockDto]
+}
+
+// ReserveStock is POST /reserve: Reserve stock for a sales order.
+func (ctrl *StockController) ReserveStock(ctx context.Context, in *ReserveStockInput) (*api.Out[*models.StockReservationResponse], error) {
+	c := api.Gin(ctx)
 	tenantIDRaw, exists := c.Get("tenant_id")
 	if !exists || tenantIDRaw == nil {
-		c.JSON(http.StatusUnauthorized, coreErrors.BuildErrorSingle(c, "auth.invalid-tenant"))
-		return
+		return nil, api.Fail(http.StatusUnauthorized, coreErrors.BuildErrorSingle(c, "auth.invalid-tenant"))
 	}
 	tenantID, err := uuid.Parse(tenantIDRaw.(string))
 	if err != nil {
-		c.JSON(http.StatusUnauthorized, coreErrors.BuildErrorSingle(c, "auth.invalid-tenant"))
-		return
+		return nil, api.Fail(http.StatusUnauthorized, coreErrors.BuildErrorSingle(c, "auth.invalid-tenant"))
 	}
 
 	var dto models.ReserveStockDto
-	if err := c.ShouldBindJSON(&dto); err != nil {
-		c.JSON(http.StatusBadRequest, coreErrors.BuildErrorDetail(c, inventoryErrors.InsufficientStock, err.Error()))
-		return
+	if err := in.JSON.Into(ctx, &dto); err != nil {
+		return nil, api.Fail(http.StatusBadRequest, coreErrors.BuildErrorDetail(c, inventoryErrors.InsufficientStock, err.Error()))
 	}
 
 	result, err := ctrl.stockService.ReserveStock(c.Request.Context(), tenantID, dto.ProductID, dto.Quantity, dto.SkuID)
@@ -110,55 +94,43 @@ func (ctrl *StockController) ReserveStock(c *gin.Context) {
 		if errors.As(err, &pgErr) {
 			switch pgErr.Message {
 			case inventoryErrors.ProductNotFound:
-				c.JSON(http.StatusNotFound, coreErrors.BuildErrorSingle(c, inventoryErrors.ProductNotFound))
-				return
+				return nil, api.Fail(http.StatusNotFound, coreErrors.BuildErrorSingle(c, inventoryErrors.ProductNotFound))
 			case inventoryErrors.SkuNotFound:
-				c.JSON(http.StatusNotFound, coreErrors.BuildErrorSingle(c, inventoryErrors.SkuNotFound))
-				return
+				return nil, api.Fail(http.StatusNotFound, coreErrors.BuildErrorSingle(c, inventoryErrors.SkuNotFound))
 			// INV-011 D1 — the client asked to reserve "the product" on a product
 			// whose stock lives on combinations; its arithmetic is wrong, not its state.
 			case inventoryErrors.ReserveSkuRequired:
-				c.JSON(http.StatusBadRequest, coreErrors.BuildErrorSingle(c, inventoryErrors.ReserveSkuRequired))
-				return
+				return nil, api.Fail(http.StatusBadRequest, coreErrors.BuildErrorSingle(c, inventoryErrors.ReserveSkuRequired))
 			case inventoryErrors.InsufficientStock:
-				c.JSON(http.StatusConflict, coreErrors.BuildErrorSingle(c, inventoryErrors.InsufficientStock))
-				return
+				return nil, api.Fail(http.StatusConflict, coreErrors.BuildErrorSingle(c, inventoryErrors.InsufficientStock))
 			}
 		}
-		c.JSON(http.StatusInternalServerError, coreErrors.BuildError(c, err))
-		return
+		return nil, api.Fail(http.StatusInternalServerError, coreErrors.BuildError(c, err))
 	}
 
-	c.JSON(http.StatusOK, result)
+	return api.OK(result)
 }
 
-// ReleaseReservedStock godoc
-// @Summary Release reserved stock
-// @Description Release inventory when a sales order is cancelled
-// @Tags inventory
-// @Accept json
-// @Produce json
-// @Param request body models.ReleaseReservedStockDto true "Release request"
-// @Success 200 {object} models.StockReservationResponse
-// @Failure 400 {object} map[string]string
-// @Failure 404 {object} map[string]string
-// @Router /api/v1/inventory/release-reserved [post]
-func (ctrl *StockController) ReleaseReservedStock(c *gin.Context) {
+// ReleaseReservedStockInput is ReleaseReservedStock's request.
+type ReleaseReservedStockInput struct {
+	JSON api.Body[models.ReleaseReservedStockDto]
+}
+
+// ReleaseReservedStock is POST /release-reserved: Release reserved stock.
+func (ctrl *StockController) ReleaseReservedStock(ctx context.Context, in *ReleaseReservedStockInput) (*api.Out[*models.StockReservationResponse], error) {
+	c := api.Gin(ctx)
 	tenantIDRaw, exists := c.Get("tenant_id")
 	if !exists || tenantIDRaw == nil {
-		c.JSON(http.StatusUnauthorized, coreErrors.BuildErrorSingle(c, "auth.invalid-tenant"))
-		return
+		return nil, api.Fail(http.StatusUnauthorized, coreErrors.BuildErrorSingle(c, "auth.invalid-tenant"))
 	}
 	tenantID, err := uuid.Parse(tenantIDRaw.(string))
 	if err != nil {
-		c.JSON(http.StatusUnauthorized, coreErrors.BuildErrorSingle(c, "auth.invalid-tenant"))
-		return
+		return nil, api.Fail(http.StatusUnauthorized, coreErrors.BuildErrorSingle(c, "auth.invalid-tenant"))
 	}
 
 	var dto models.ReleaseReservedStockDto
-	if err := c.ShouldBindJSON(&dto); err != nil {
-		c.JSON(http.StatusBadRequest, coreErrors.BuildErrorDetail(c, inventoryErrors.InsufficientStock, err.Error()))
-		return
+	if err := in.JSON.Into(ctx, &dto); err != nil {
+		return nil, api.Fail(http.StatusBadRequest, coreErrors.BuildErrorDetail(c, inventoryErrors.InsufficientStock, err.Error()))
 	}
 
 	result, err := ctrl.stockService.ReleaseReservedStock(c.Request.Context(), tenantID, dto.ProductID, dto.Quantity, dto.SkuID)
@@ -167,19 +139,15 @@ func (ctrl *StockController) ReleaseReservedStock(c *gin.Context) {
 		if errors.As(err, &pgErr) {
 			switch pgErr.Message {
 			case inventoryErrors.ProductNotFound:
-				c.JSON(http.StatusNotFound, coreErrors.BuildErrorSingle(c, inventoryErrors.ProductNotFound))
-				return
+				return nil, api.Fail(http.StatusNotFound, coreErrors.BuildErrorSingle(c, inventoryErrors.ProductNotFound))
 			case inventoryErrors.SkuNotFound:
-				c.JSON(http.StatusNotFound, coreErrors.BuildErrorSingle(c, inventoryErrors.SkuNotFound))
-				return
+				return nil, api.Fail(http.StatusNotFound, coreErrors.BuildErrorSingle(c, inventoryErrors.SkuNotFound))
 			case inventoryErrors.ReserveSkuRequired:
-				c.JSON(http.StatusBadRequest, coreErrors.BuildErrorSingle(c, inventoryErrors.ReserveSkuRequired))
-				return
+				return nil, api.Fail(http.StatusBadRequest, coreErrors.BuildErrorSingle(c, inventoryErrors.ReserveSkuRequired))
 			}
 		}
-		c.JSON(http.StatusInternalServerError, coreErrors.BuildError(c, err))
-		return
+		return nil, api.Fail(http.StatusInternalServerError, coreErrors.BuildError(c, err))
 	}
 
-	c.JSON(http.StatusOK, result)
+	return api.OK(result)
 }

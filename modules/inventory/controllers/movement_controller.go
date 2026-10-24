@@ -1,14 +1,15 @@
 package controllers
 
 import (
+	"context"
 	"errors"
 	"net/http"
 
-	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
 
+	"josex/web/modules/core/api"
 	coreErrors "josex/web/modules/core/errors"
 	inventoryErrors "josex/web/modules/inventory/errors"
 	inventoryInterfaces "josex/web/modules/inventory/interfaces"
@@ -25,35 +26,27 @@ func NewMovementController(movementService inventoryInterfaces.MovementService) 
 	}
 }
 
-// RecordMovement godoc
-// @Summary Record an inventory movement
-// @Description Record a stock movement (purchase, sale, adjustment, etc.)
-// @Tags inventory
-// @Accept json
-// @Produce json
-// @Param request body models.RecordMovementDto true "Movement request"
-// @Success 201 {object} models.RecordMovementResponse
-// @Failure 400 {object} map[string]interface{}
-// @Failure 404 {object} map[string]interface{}
-// @Failure 409 {object} map[string]interface{}
-// @Router /api/v1/inventory/movements [post]
-func (ctrl *MovementController) RecordMovement(c *gin.Context) {
+// RecordMovementInput is RecordMovement's request.
+type RecordMovementInput struct {
+	JSON api.Body[models.RecordMovementDto]
+}
+
+// RecordMovement is POST /movements: Record an inventory movement.
+func (ctrl *MovementController) RecordMovement(ctx context.Context, in *RecordMovementInput) (*api.Out[*models.RecordMovementResponse], error) {
+	c := api.Gin(ctx)
 	tenantIDRaw, exists := c.Get("tenant_id")
 	if !exists || tenantIDRaw == nil {
-		c.JSON(http.StatusUnauthorized, coreErrors.BuildErrorSingle(c, "auth.invalid-tenant"))
-		return
+		return nil, api.Fail(http.StatusUnauthorized, coreErrors.BuildErrorSingle(c, "auth.invalid-tenant"))
 	}
 	tenantID, err := uuid.Parse(tenantIDRaw.(string))
 	if err != nil {
-		c.JSON(http.StatusUnauthorized, coreErrors.BuildErrorSingle(c, "auth.invalid-tenant"))
-		return
+		return nil, api.Fail(http.StatusUnauthorized, coreErrors.BuildErrorSingle(c, "auth.invalid-tenant"))
 	}
 
 	var dto models.RecordMovementDto
 
-	if err := c.ShouldBindJSON(&dto); err != nil {
-		c.JSON(http.StatusBadRequest, coreErrors.BuildErrorDetail(c, "validation.invalid", err.Error()))
-		return
+	if err := in.JSON.Into(ctx, &dto); err != nil {
+		return nil, api.Fail(http.StatusBadRequest, coreErrors.BuildErrorDetail(c, "validation.invalid", err.Error()))
 	}
 
 	userID := c.GetString("user_id")
@@ -63,152 +56,121 @@ func (ctrl *MovementController) RecordMovement(c *gin.Context) {
 		if errors.As(err, &pgErr) {
 			switch pgErr.Message {
 			case inventoryErrors.ProductNotFound:
-				c.JSON(http.StatusNotFound, coreErrors.BuildErrorSingle(c, inventoryErrors.ProductNotFound))
-				return
+				return nil, api.Fail(http.StatusNotFound, coreErrors.BuildErrorSingle(c, inventoryErrors.ProductNotFound))
 			case inventoryErrors.SkuNotFound:
-				c.JSON(http.StatusNotFound, coreErrors.BuildErrorSingle(c, inventoryErrors.SkuNotFound))
-				return
+				return nil, api.Fail(http.StatusNotFound, coreErrors.BuildErrorSingle(c, inventoryErrors.SkuNotFound))
 			// INV-011 D1 — a movement on a stock-by-variant product has to name its
 			// combination; falling back to the unassigned bucket is what this refuses.
 			case inventoryErrors.MovementSkuRequired:
-				c.JSON(http.StatusBadRequest, coreErrors.BuildErrorSingle(c, inventoryErrors.MovementSkuRequired))
-				return
+				return nil, api.Fail(http.StatusBadRequest, coreErrors.BuildErrorSingle(c, inventoryErrors.MovementSkuRequired))
 			case inventoryErrors.InsufficientStock:
-				c.JSON(http.StatusConflict, coreErrors.BuildErrorSingle(c, inventoryErrors.InsufficientStock))
-				return
+				return nil, api.Fail(http.StatusConflict, coreErrors.BuildErrorSingle(c, inventoryErrors.InsufficientStock))
 			case inventoryErrors.InvalidMovementType:
-				c.JSON(http.StatusBadRequest, coreErrors.BuildErrorSingle(c, inventoryErrors.InvalidMovementType))
-				return
+				return nil, api.Fail(http.StatusBadRequest, coreErrors.BuildErrorSingle(c, inventoryErrors.InvalidMovementType))
 			// INV-013 D1/D3 — three ways the body can be internally inconsistent, all
 			// of them the caller's to fix and none of them a conflict with stored
 			// state, so 400 rather than the 409 insufficient-stock takes.
 			case inventoryErrors.MovementDirectionRequired:
-				c.JSON(http.StatusBadRequest, coreErrors.BuildErrorSingle(c, inventoryErrors.MovementDirectionRequired))
-				return
+				return nil, api.Fail(http.StatusBadRequest, coreErrors.BuildErrorSingle(c, inventoryErrors.MovementDirectionRequired))
 			case inventoryErrors.MovementDirectionConflict:
-				c.JSON(http.StatusBadRequest, coreErrors.BuildErrorSingle(c, inventoryErrors.MovementDirectionConflict))
-				return
+				return nil, api.Fail(http.StatusBadRequest, coreErrors.BuildErrorSingle(c, inventoryErrors.MovementDirectionConflict))
 			case inventoryErrors.MovementUnitCostRequired:
-				c.JSON(http.StatusBadRequest, coreErrors.BuildErrorSingle(c, inventoryErrors.MovementUnitCostRequired))
-				return
+				return nil, api.Fail(http.StatusBadRequest, coreErrors.BuildErrorSingle(c, inventoryErrors.MovementUnitCostRequired))
 			}
 		}
-		c.JSON(http.StatusInternalServerError, coreErrors.BuildError(c, err))
-		return
+		return nil, api.Fail(http.StatusInternalServerError, coreErrors.BuildError(c, err))
 	}
 
-	c.JSON(http.StatusCreated, movement)
+	return api.OK(movement)
 }
 
-// GetMovement godoc
-// @Summary Get movement by ID
-// @Description Retrieve a specific inventory movement
-// @Tags inventory
-// @Produce json
-// @Param id path string true "Movement ID"
-// @Success 200 {object} models.InventoryMovement
-// @Failure 404 {object} map[string]interface{}
-// @Router /api/v1/inventory/movements/:id [get]
-func (ctrl *MovementController) GetMovement(c *gin.Context) {
+// GetMovementInput is GetMovement's request.
+type GetMovementInput struct {
+	ID string `path:"id"`
+}
+
+// GetMovement is GET /movements/{id}: Get movement by ID.
+func (ctrl *MovementController) GetMovement(ctx context.Context, in *GetMovementInput) (*api.Out[*models.InventoryMovement], error) {
+	c := api.Gin(ctx)
 	tenantIDRaw, exists := c.Get("tenant_id")
 	if !exists || tenantIDRaw == nil {
-		c.JSON(http.StatusUnauthorized, coreErrors.BuildErrorSingle(c, "auth.invalid-tenant"))
-		return
+		return nil, api.Fail(http.StatusUnauthorized, coreErrors.BuildErrorSingle(c, "auth.invalid-tenant"))
 	}
 	tenantID, err := uuid.Parse(tenantIDRaw.(string))
 	if err != nil {
-		c.JSON(http.StatusUnauthorized, coreErrors.BuildErrorSingle(c, "auth.invalid-tenant"))
-		return
+		return nil, api.Fail(http.StatusUnauthorized, coreErrors.BuildErrorSingle(c, "auth.invalid-tenant"))
 	}
 
-	movementID := c.Param("id")
+	movementID := in.ID
 
 	movement, err := ctrl.movementService.GetMovement(c.Request.Context(), tenantID, movementID)
 	if err != nil {
 		// The SP answers no row for an id the tenant does not have.
 		if errors.Is(err, pgx.ErrNoRows) {
-			c.JSON(http.StatusNotFound, coreErrors.BuildErrorSingle(c, inventoryErrors.MovementNotFound))
-			return
+			return nil, api.Fail(http.StatusNotFound, coreErrors.BuildErrorSingle(c, inventoryErrors.MovementNotFound))
 		}
 		var pgErr *pgconn.PgError
 		if errors.As(err, &pgErr) {
 			switch pgErr.Message {
 			case inventoryErrors.MovementNotFound:
-				c.JSON(http.StatusNotFound, coreErrors.BuildErrorSingle(c, inventoryErrors.MovementNotFound))
-				return
+				return nil, api.Fail(http.StatusNotFound, coreErrors.BuildErrorSingle(c, inventoryErrors.MovementNotFound))
 			}
 		}
-		c.JSON(http.StatusInternalServerError, coreErrors.BuildError(c, err))
-		return
+		return nil, api.Fail(http.StatusInternalServerError, coreErrors.BuildError(c, err))
 	}
 
-	c.JSON(http.StatusOK, movement)
+	return api.OK(movement)
 }
 
-// ListMovements godoc
-// @Summary List inventory movements
-// @Description Paginated movement history, optionally filtered by product, type and date range
-// @Tags inventory
-// @Produce json
-// @Param product_id query string false "Product ID"
-// @Param movement_type query string false "Movement type (PURCHASE, SALE, ADJUSTMENT, TRANSFER, RETURN, WASTE, PRODUCTION)"
-// @Param date_from query string false "Inclusive lower bound, YYYY-MM-DD"
-// @Param date_to query string false "Inclusive upper bound, YYYY-MM-DD"
-// @Param page query int false "Page number, 1-based" default(1)
-// @Param page_size query int false "Rows per page, max 100" default(20)
-// @Success 200 {object} models.ListMovementsResponse
-// @Failure 400 {object} map[string]interface{}
-// @Router /api/v1/inventory/movements [get]
-func (ctrl *MovementController) ListMovements(c *gin.Context) {
+// ListMovementsInput is ListMovements's request.
+type ListMovementsInput struct {
+	Query api.Query[models.ListMovementsQuery]
+}
+
+// ListMovements is GET /movements: List inventory movements.
+func (ctrl *MovementController) ListMovements(ctx context.Context, in *ListMovementsInput) (*api.Out[*models.ListMovementsResponse], error) {
+	c := api.Gin(ctx)
 	tenantIDRaw, exists := c.Get("tenant_id")
 	if !exists || tenantIDRaw == nil {
-		c.JSON(http.StatusUnauthorized, coreErrors.BuildErrorSingle(c, "auth.invalid-tenant"))
-		return
+		return nil, api.Fail(http.StatusUnauthorized, coreErrors.BuildErrorSingle(c, "auth.invalid-tenant"))
 	}
 	tenantID, err := uuid.Parse(tenantIDRaw.(string))
 	if err != nil {
-		c.JSON(http.StatusUnauthorized, coreErrors.BuildErrorSingle(c, "auth.invalid-tenant"))
-		return
+		return nil, api.Fail(http.StatusUnauthorized, coreErrors.BuildErrorSingle(c, "auth.invalid-tenant"))
 	}
 
 	var query models.ListMovementsQuery
 
-	if err := c.ShouldBindQuery(&query); err != nil {
-		c.JSON(http.StatusBadRequest, coreErrors.BuildErrorDetail(c, "validation.invalid", err.Error()))
-		return
+	if err := in.Query.Into(ctx, &query); err != nil {
+		return nil, api.Fail(http.StatusBadRequest, coreErrors.BuildErrorDetail(c, "validation.invalid", err.Error()))
 	}
 
 	result, err := ctrl.movementService.ListMovements(c.Request.Context(), tenantID, query)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, coreErrors.BuildError(c, err))
-		return
+		return nil, api.Fail(http.StatusInternalServerError, coreErrors.BuildError(c, err))
 	}
 
-	c.JSON(http.StatusOK, result)
+	return api.OK(result)
 }
 
-// GetProductStock godoc
-// @Summary Get current product stock
-// @Description Retrieve current stock level for a product
-// @Tags inventory
-// @Produce json
-// @Param product_id path string true "Product ID"
-// @Success 200 {object} models.ProductStock
-// @Failure 404 {object} map[string]interface{}
-// @Router /api/v1/inventory/stock/:product_id [get]
-func (ctrl *MovementController) GetProductStock(c *gin.Context) {
+// GetProductStockInput is GetProductStock's request.
+type GetProductStockInput struct {
+	ProductID string `path:"product_id"`
+}
+
+// GetProductStock is GET /stock/{product_id}: Get current product stock.
+func (ctrl *MovementController) GetProductStock(ctx context.Context, in *GetProductStockInput) (*api.Out[*models.ProductStock], error) {
+	c := api.Gin(ctx)
 	tenantIDRaw, exists := c.Get("tenant_id")
 	if !exists || tenantIDRaw == nil {
-		c.JSON(http.StatusUnauthorized, coreErrors.BuildErrorSingle(c, "auth.invalid-tenant"))
-		return
+		return nil, api.Fail(http.StatusUnauthorized, coreErrors.BuildErrorSingle(c, "auth.invalid-tenant"))
 	}
 	tenantID, err := uuid.Parse(tenantIDRaw.(string))
 	if err != nil {
-		c.JSON(http.StatusUnauthorized, coreErrors.BuildErrorSingle(c, "auth.invalid-tenant"))
-		return
+		return nil, api.Fail(http.StatusUnauthorized, coreErrors.BuildErrorSingle(c, "auth.invalid-tenant"))
 	}
 
-	productID := c.Param("product_id")
+	productID := in.ProductID
 
 	stock, err := ctrl.movementService.GetProductStock(c.Request.Context(), tenantID, productID)
 	if err != nil {
@@ -216,13 +178,11 @@ func (ctrl *MovementController) GetProductStock(c *gin.Context) {
 		if errors.As(err, &pgErr) {
 			switch pgErr.Message {
 			case inventoryErrors.ProductNotFound:
-				c.JSON(http.StatusNotFound, coreErrors.BuildErrorSingle(c, inventoryErrors.ProductNotFound))
-				return
+				return nil, api.Fail(http.StatusNotFound, coreErrors.BuildErrorSingle(c, inventoryErrors.ProductNotFound))
 			}
 		}
-		c.JSON(http.StatusInternalServerError, coreErrors.BuildError(c, err))
-		return
+		return nil, api.Fail(http.StatusInternalServerError, coreErrors.BuildError(c, err))
 	}
 
-	c.JSON(http.StatusOK, stock)
+	return api.OK(stock)
 }

@@ -227,10 +227,12 @@ docker compose --env-file .env.docker down
 
 ### 5. Como probar la aplicacion
 
-Abrir swagger en el navegador `http://localhost:8080/swagger/index.html` o el puerto y host que se tenga configurado.
+Abrir la documentación del contrato en el navegador: `http://localhost:8080/docs` (el JSON en
+`/openapi.json`, el mismo que `docs/openapi.json`), o el puerto y host que se tenga configurado. La imagen
+de producción no la sirve.
 
 ```
-http://<HOST>:<PORT>/swagger/index.html
+http://<HOST>:<PORT>/docs
 ```
 
 ---

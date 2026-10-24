@@ -5,6 +5,7 @@ import (
 	"josex/web/modules/auth/controllers"
 	"josex/web/modules/auth/middleware"
 	"josex/web/modules/auth/services"
+	"josex/web/modules/core/api"
 	coreServices "josex/web/modules/core/services"
 
 	"github.com/gin-gonic/gin"
@@ -24,39 +25,41 @@ func RegisterAuthRoutes(
 		// ========================================
 
 		// Login & Registration
-		authRoutes.POST("/login", authController.Login)
-		authRoutes.POST("/login/facebook", authController.LoginFacebook)
-		authRoutes.POST("/register", authController.Register)
-		authRoutes.POST("/refresh_token", authController.RefreshToken)
+		api.Post(authRoutes, "/login", authController.Login, api.Doc{Summary: "Allow login based on email authentication, email can be confirmed after login", Description: "Allow login based on email authentication, email can be confirmed after login", Errors: []int{400}})
+		api.Post(authRoutes, "/login/facebook", authController.LoginFacebook, api.Doc{Summary: "Allow login based on Facebook authentication", Description: "Allow login based on Facebook authentication", Errors: []int{400}})
+		api.Post(authRoutes, "/register", authController.Register, api.Doc{Summary: "Register", Description: "Register", Errors: []int{400}})
+		api.Post(authRoutes, "/refresh_token", authController.RefreshToken, api.Doc{Summary: "Refresh access token", Description: "Refresh access token using refresh token and validate active session", Errors: []int{400, 401}})
 
 		// Email verification (public - requires token in body)
-		authRoutes.PUT("/email/verification", authController.ConfirmEmailAddress)
+		api.Put(authRoutes, "/email/verification", authController.ConfirmEmailAddress, api.Doc{Summary: "Confirm email address", Description: "Confirm email address with verification token", Errors: []int{400}})
 
 		// Password reset (public - requires token in body/query)
-		authRoutes.POST("/password/reset", authController.GeneratePasswordResetToken)
-		authRoutes.GET("/password/reset", authController.ValidateResetToken)
-		authRoutes.PUT("/password/reset", authController.ResetPasswordWithToken)
+		api.Post(authRoutes, "/password/reset", authController.GeneratePasswordResetToken, api.Doc{Summary: "Request password reset", Description: "Generate and send password reset token The answer is `true` whether or not the email has an account, and never carries the token: the link in the email is the only way to it.", Errors: []int{400}})
+		api.Get(authRoutes, "/password/reset", authController.ValidateResetToken, api.Doc{Summary: "Validate password reset token", Description: "Check whether a password reset token is still valid (not used, not expired)", Errors: []int{400, 410}})
+		api.Put(authRoutes, "/password/reset", authController.ResetPasswordWithToken, api.Doc{Summary: "Reset password with token", Description: "Reset password using reset token", Errors: []int{400}})
 
 		// ========================================
 		// Protected Routes (require authentication)
 		// ========================================
-		protectedRoutes := authRoutes.Use(middleware.AuthMiddleware(jwtService))
+		// Use adds to authRoutes itself: every route registered on it from here carries it.
+		authRoutes.Use(middleware.AuthMiddleware(jwtService))
+		protectedRoutes := authRoutes
 		{
 			// Profile management
-			protectedRoutes.GET("/profile", authController.GetProfile)
-			protectedRoutes.PATCH("/profile", authController.UpdateProfile)
+			api.Get(protectedRoutes, "/profile", authController.GetProfile, api.Doc{Summary: "Get user profile", Description: "Get authenticated user profile information", Errors: []int{400}})
+			api.Patch(protectedRoutes, "/profile", authController.UpdateProfile, api.Doc{Summary: "Update user profile", Description: "Update authenticated user profile information (partial updates allowed)", Errors: []int{400}})
 
 			// Password management
-			protectedRoutes.PUT("/password", authController.ChangePassword)
+			api.Put(protectedRoutes, "/password", authController.ChangePassword, api.Doc{Summary: "Change user password", Description: "Change password for authenticated user", Errors: []int{400}})
 
 			// Email verification request (authenticated user)
-			protectedRoutes.POST("/email/verification", authController.GenerateEmailVerificationToken)
+			api.Post(protectedRoutes, "/email/verification", authController.GenerateEmailVerificationToken, api.Doc{Summary: "Request email verification", Description: "Generate and send email verification token", Errors: []int{400, 503}})
 
 			// Session management
-			protectedRoutes.GET("/sessions", sessionController.GetActiveSessions)
-			protectedRoutes.DELETE("/sessions/:id", sessionController.LogoutSession)
-			protectedRoutes.DELETE("/sessions", sessionController.LogoutAllSessions)
-			protectedRoutes.POST("/logout", authController.Logout)
+			api.Get(protectedRoutes, "/sessions", sessionController.GetActiveSessions, api.Doc{Summary: "Get active sessions", Description: "Get all sessions (active and inactive) for authenticated user", Errors: []int{400, 401}})
+			api.Delete(protectedRoutes, "/sessions/{id}", sessionController.LogoutSession, api.Doc{Summary: "Logout specific session", Description: "Logout a specific session by ID (must belong to authenticated user)", Errors: []int{400, 401, 404}})
+			api.Delete(protectedRoutes, "/sessions", sessionController.LogoutAllSessions, api.Doc{Summary: "Logout all sessions", Description: "Logout all sessions for authenticated user except current one", Errors: []int{400, 401}})
+			api.Post(protectedRoutes, "/logout", authController.Logout, api.Doc{Summary: "Logout", Description: "Logout", Errors: []int{400}})
 		}
 	}
 }
@@ -65,8 +68,8 @@ func RegisterAuthRoutes(
 // account's, whatever tenants the account belongs to.
 func RegisterPushDeviceRoutes(apiV1Group *gin.RouterGroup, controller *controllers.PushDeviceController, jwtService services.JWTService) {
 	devices := apiV1Group.Group("/mobile/devices", middleware.AuthMiddleware(jwtService))
-	devices.POST("", controller.RegisterDevice)
-	devices.DELETE("/:device_id", controller.ForgetDevice)
+	api.Post(devices, "", controller.RegisterDevice, api.Doc{Summary: "Register or refresh this phone's push token", Description: "Upsert on (account, device_id): send it on every app start, the token rotates. A token registered under another account moves to this one", Status: 204, Errors: []int{400, 401, 500}})
+	api.Delete(devices, "/{device_id}", controller.ForgetDevice, api.Doc{Summary: "Stop pushing to this phone", Description: "Call on logout. An unknown device_id is not an error", Status: 204, Errors: []int{401, 500}})
 }
 
 // RegisterOtpRoutes registers all OTP-related routes

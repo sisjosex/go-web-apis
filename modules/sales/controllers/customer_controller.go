@@ -1,11 +1,12 @@
 package controllers
 
 import (
+	"context"
 	"net/http"
 
-	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 
+	"josex/web/modules/core/api"
 	coreErrors "josex/web/modules/core/errors"
 	"josex/web/modules/sales/interfaces"
 	"josex/web/modules/sales/models"
@@ -24,156 +25,147 @@ func NewCustomerController(service interfaces.CustomerService) *CustomerControll
 	}
 }
 
-// CreateCustomer godoc
-// @Summary Create a new customer
-// @Tags Sales - Customers
-// @Accept json
-// @Produce json
-// @Param request body models.CreateCustomerRequestDto true "Customer data"
-// @Success 201 {object} models.Customer
-// @Failure 400 {object} coreErrors.ErrorResponse
-// @Router /sales/customers [post]
-func (ctrl *CustomerController) CreateCustomer(c *gin.Context) {
+// CreateCustomerInput is CreateCustomer's request.
+type CreateCustomerInput struct {
+	JSON api.Body[models.CreateCustomerRequestDto]
+}
+
+// CreateCustomerResponse is CreateCustomer's answer.
+type CreateCustomerResponse struct {
+	Data *models.Customer `json:"data"`
+}
+
+// CreateCustomer is POST : Create a new customer.
+func (ctrl *CustomerController) CreateCustomer(ctx context.Context, in *CreateCustomerInput) (*api.Out[CreateCustomerResponse], error) {
+	c := api.Gin(ctx)
 	tenantIDRaw, exists := c.Get("tenant_id")
 	if !exists || tenantIDRaw == nil {
-		c.JSON(http.StatusUnauthorized, coreErrors.BuildErrorSingle(c, "auth.invalid-tenant"))
-		return
+		return nil, api.Fail(http.StatusUnauthorized, coreErrors.BuildErrorSingle(c, "auth.invalid-tenant"))
 	}
 	tenantID, err := uuid.Parse(tenantIDRaw.(string))
 	if err != nil {
-		c.JSON(http.StatusUnauthorized, coreErrors.BuildErrorSingle(c, "auth.invalid-tenant"))
-		return
+		return nil, api.Fail(http.StatusUnauthorized, coreErrors.BuildErrorSingle(c, "auth.invalid-tenant"))
 	}
 
 	var dto models.CreateCustomerRequestDto
-	if err := c.ShouldBindJSON(&dto); err != nil {
-		c.JSON(http.StatusBadRequest, coreErrors.BuildErrorDetail(c, "validation.failed", err.Error()))
-		return
+	if err := in.JSON.Into(ctx, &dto); err != nil {
+		return nil, api.Fail(http.StatusBadRequest, coreErrors.BuildErrorDetail(c, "validation.failed", err.Error()))
 	}
 
 	customer, err := ctrl.service.CreateCustomer(c.Request.Context(), tenantID, &dto)
 	if err != nil {
 		status := utils.GetHTTPStatusFromError(err)
-		c.JSON(status, coreErrors.BuildError(c, err))
-		return
+		return nil, api.Fail(status, coreErrors.BuildError(c, err))
 	}
 
-	c.JSON(http.StatusCreated, gin.H{"data": customer})
+	return api.OK(CreateCustomerResponse{Data: customer})
 }
 
-// GetCustomer godoc
-// @Summary Get a customer by ID
-// @Tags Sales - Customers
-// @Produce json
-// @Param id path string true "Customer ID"
-// @Success 200 {object} models.Customer
-// @Failure 404 {object} coreErrors.ErrorResponse
-// @Router /sales/customers/{id} [get]
-func (ctrl *CustomerController) GetCustomer(c *gin.Context) {
+// GetCustomerInput is GetCustomer's request.
+type GetCustomerInput struct {
+	ID string `path:"id"`
+}
+
+// GetCustomerResponse is GetCustomer's answer.
+type GetCustomerResponse struct {
+	Data *models.Customer `json:"data"`
+}
+
+// GetCustomer is GET /{id}: Get a customer by ID.
+func (ctrl *CustomerController) GetCustomer(ctx context.Context, in *GetCustomerInput) (*api.Out[GetCustomerResponse], error) {
+	c := api.Gin(ctx)
 	tenantIDRaw, exists := c.Get("tenant_id")
 	if !exists || tenantIDRaw == nil {
-		c.JSON(http.StatusUnauthorized, coreErrors.BuildErrorSingle(c, "auth.invalid-tenant"))
-		return
+		return nil, api.Fail(http.StatusUnauthorized, coreErrors.BuildErrorSingle(c, "auth.invalid-tenant"))
 	}
 	tenantID, err := uuid.Parse(tenantIDRaw.(string))
 	if err != nil {
-		c.JSON(http.StatusUnauthorized, coreErrors.BuildErrorSingle(c, "auth.invalid-tenant"))
-		return
+		return nil, api.Fail(http.StatusUnauthorized, coreErrors.BuildErrorSingle(c, "auth.invalid-tenant"))
 	}
 
-	id, err := uuid.Parse(c.Param("id"))
+	id, err := uuid.Parse(in.ID)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, coreErrors.BuildErrorSingle(c, "validation.invalid-uuid"))
-		return
+		return nil, api.Fail(http.StatusBadRequest, coreErrors.BuildErrorSingle(c, "validation.invalid-uuid"))
 	}
 
 	customer, err := ctrl.service.GetCustomerByID(c.Request.Context(), tenantID, id)
 	if err != nil {
 		status := utils.GetHTTPStatusFromError(err)
-		c.JSON(status, coreErrors.BuildError(c, err))
-		return
+		return nil, api.Fail(status, coreErrors.BuildError(c, err))
 	}
 
-	c.JSON(http.StatusOK, gin.H{"data": customer})
+	return api.OK(GetCustomerResponse{Data: customer})
 }
 
-// UpdateCustomer godoc
-// @Summary Update a customer
-// @Tags Sales - Customers
-// @Accept json
-// @Produce json
-// @Param id path string true "Customer ID"
-// @Param request body models.UpdateCustomerRequestDto true "Updated customer data"
-// @Success 200 {object} models.Customer
-// @Failure 400 {object} coreErrors.ErrorResponse
-// @Failure 404 {object} coreErrors.ErrorResponse
-// @Router /sales/customers/{id} [patch]
-func (ctrl *CustomerController) UpdateCustomer(c *gin.Context) {
+// UpdateCustomerInput is UpdateCustomer's request.
+type UpdateCustomerInput struct {
+	ID   string `path:"id"`
+	JSON api.Body[models.UpdateCustomerRequestDto]
+}
+
+// UpdateCustomerResponse is UpdateCustomer's answer.
+type UpdateCustomerResponse struct {
+	Data *models.Customer `json:"data"`
+}
+
+// UpdateCustomer is PATCH /{id}: Update a customer.
+func (ctrl *CustomerController) UpdateCustomer(ctx context.Context, in *UpdateCustomerInput) (*api.Out[UpdateCustomerResponse], error) {
+	c := api.Gin(ctx)
 	tenantIDRaw, exists := c.Get("tenant_id")
 	if !exists || tenantIDRaw == nil {
-		c.JSON(http.StatusUnauthorized, coreErrors.BuildErrorSingle(c, "auth.invalid-tenant"))
-		return
+		return nil, api.Fail(http.StatusUnauthorized, coreErrors.BuildErrorSingle(c, "auth.invalid-tenant"))
 	}
 	tenantID, err := uuid.Parse(tenantIDRaw.(string))
 	if err != nil {
-		c.JSON(http.StatusUnauthorized, coreErrors.BuildErrorSingle(c, "auth.invalid-tenant"))
-		return
+		return nil, api.Fail(http.StatusUnauthorized, coreErrors.BuildErrorSingle(c, "auth.invalid-tenant"))
 	}
 
-	id, err := uuid.Parse(c.Param("id"))
+	id, err := uuid.Parse(in.ID)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, coreErrors.BuildErrorSingle(c, "validation.invalid-uuid"))
-		return
+		return nil, api.Fail(http.StatusBadRequest, coreErrors.BuildErrorSingle(c, "validation.invalid-uuid"))
 	}
 
 	var dto models.UpdateCustomerRequestDto
-	if err := c.ShouldBindJSON(&dto); err != nil {
-		c.JSON(http.StatusBadRequest, coreErrors.BuildErrorDetail(c, "validation.failed", err.Error()))
-		return
+	if err := in.JSON.Into(ctx, &dto); err != nil {
+		return nil, api.Fail(http.StatusBadRequest, coreErrors.BuildErrorDetail(c, "validation.failed", err.Error()))
 	}
 
 	customer, err := ctrl.service.UpdateCustomer(c.Request.Context(), tenantID, id, &dto)
 	if err != nil {
 		status := utils.GetHTTPStatusFromError(err)
-		c.JSON(status, coreErrors.BuildError(c, err))
-		return
+		return nil, api.Fail(status, coreErrors.BuildError(c, err))
 	}
 
-	c.JSON(http.StatusOK, gin.H{"data": customer})
+	return api.OK(UpdateCustomerResponse{Data: customer})
 }
 
-// DeleteCustomer godoc
-// @Summary Delete a customer
-// @Tags Sales - Customers
-// @Produce json
-// @Param id path string true "Customer ID"
-// @Success 204
-// @Failure 404 {object} coreErrors.ErrorResponse
-// @Router /sales/customers/{id} [delete]
-func (ctrl *CustomerController) DeleteCustomer(c *gin.Context) {
+// DeleteCustomerInput is DeleteCustomer's request.
+type DeleteCustomerInput struct {
+	ID string `path:"id"`
+}
+
+// DeleteCustomer is DELETE /{id}: Delete a customer.
+func (ctrl *CustomerController) DeleteCustomer(ctx context.Context, in *DeleteCustomerInput) (*api.Empty, error) {
+	c := api.Gin(ctx)
 	tenantIDRaw, exists := c.Get("tenant_id")
 	if !exists || tenantIDRaw == nil {
-		c.JSON(http.StatusUnauthorized, coreErrors.BuildErrorSingle(c, "auth.invalid-tenant"))
-		return
+		return nil, api.Fail(http.StatusUnauthorized, coreErrors.BuildErrorSingle(c, "auth.invalid-tenant"))
 	}
 	tenantID, err := uuid.Parse(tenantIDRaw.(string))
 	if err != nil {
-		c.JSON(http.StatusUnauthorized, coreErrors.BuildErrorSingle(c, "auth.invalid-tenant"))
-		return
+		return nil, api.Fail(http.StatusUnauthorized, coreErrors.BuildErrorSingle(c, "auth.invalid-tenant"))
 	}
 
-	id, err := uuid.Parse(c.Param("id"))
+	id, err := uuid.Parse(in.ID)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, coreErrors.BuildErrorSingle(c, "validation.invalid-uuid"))
-		return
+		return nil, api.Fail(http.StatusBadRequest, coreErrors.BuildErrorSingle(c, "validation.invalid-uuid"))
 	}
 
 	err = ctrl.service.DeleteCustomer(c.Request.Context(), tenantID, id)
 	if err != nil {
 		status := utils.GetHTTPStatusFromError(err)
-		c.JSON(status, coreErrors.BuildError(c, err))
-		return
+		return nil, api.Fail(status, coreErrors.BuildError(c, err))
 	}
 
-	c.Status(http.StatusNoContent)
+	return api.Done()
 }

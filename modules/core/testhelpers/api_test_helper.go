@@ -18,6 +18,7 @@ import (
 	"testing"
 
 	"josex/web/config"
+	coreAPI "josex/web/modules/core/api"
 	coreServices "josex/web/modules/core/services"
 	"josex/web/modules/tracking/realtime"
 	"josex/web/routes"
@@ -120,7 +121,12 @@ func writeRoutes(file *os.File, engine *gin.Engine) {
 		return
 	}
 	for _, r := range engine.Routes() {
-		_, _ = fmt.Fprintf(file, "route %s %s %s\n", r.Method, r.Path, r.Handler)
+		handler := r.Handler
+		// A huma operation's Gin handler is the adapter; the contract names the Go handler behind it.
+		if h := coreAPI.HandlerOf(r.Method, r.Path); h != "" {
+			handler = h
+		}
+		_, _ = fmt.Fprintf(file, "route %s %s %s\n", r.Method, r.Path, handler)
 	}
 }
 
@@ -224,6 +230,9 @@ func SetupApiTest(t *testing.T) *ApiTestHelper {
 }
 
 // Valkey returns the shared test Valkey (REDIS_URL in .env.test), nil when it is unset.
+// Routes lists the engine's routes, for the contract check (INFRA-021).
+func (h *ApiTestHelper) Routes() gin.RoutesInfo { return h.engine.Routes() }
+
 func (h *ApiTestHelper) Valkey() coreServices.ValkeyService {
 	return sharedValkey
 }

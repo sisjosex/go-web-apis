@@ -1,12 +1,12 @@
 package controllers
 
 import (
+	"context"
 	"net/http"
-	"strconv"
 
-	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 
+	"josex/web/modules/core/api"
 	coreErrors "josex/web/modules/core/errors"
 	usersErrors "josex/web/modules/users/errors"
 	userInterfaces "josex/web/modules/users/interfaces"
@@ -17,31 +17,23 @@ type UserAuditController struct {
 	userAuditService userInterfaces.UserAuditService
 }
 
+// ListAuditInput is GET /users/audit's query. A page below 1 is 1; a limit outside 1-100 is 20.
+type ListAuditInput struct {
+	Page   int    `query:"page" default:"1" doc:"Page number"`
+	Limit  int    `query:"limit" default:"20" doc:"Items per page, at most 100"`
+	Search string `query:"search" doc:"Search by target or performer email"`
+	Action string `query:"action" doc:"Filter by action (e.g. user.created)"`
+	From   string `query:"from" doc:"From date (RFC3339 or YYYY-MM-DD)"`
+	To     string `query:"to" doc:"To date (RFC3339 or YYYY-MM-DD)"`
+}
+
 func NewUserAuditController(userAuditService userInterfaces.UserAuditService) *UserAuditController {
 	return &UserAuditController{userAuditService: userAuditService}
 }
 
-// ListAudit godoc
-// @Summary      List user audit log entries
-// @Description  Returns paginated audit log entries for user management actions scoped to the current tenant
-// @Tags         Users
-// @Accept       json
-// @Produce      json
-// @Param        Authorization  header  string  true   "Bearer Token"
-// @Param        page           query   int     false  "Page number (default: 1)"
-// @Param        limit          query   int     false  "Items per page (default: 20, max: 100)"
-// @Param        search         query   string  false  "Search by target or performer email"
-// @Param        action         query   string  false  "Filter by action (e.g. user.created)"
-// @Param        from           query   string  false  "Filter from date (RFC3339 or YYYY-MM-DD)"
-// @Param        to             query   string  false  "Filter to date (RFC3339 or YYYY-MM-DD)"
-// @Success      200  {object}  userModels.UserAuditListResponse
-// @Failure      401  {object}  coreErrors.ErrorResponse
-// @Failure      500  {object}  coreErrors.ErrorResponse
-// @Router       /users/audit [get]
-// @Security     ApiKeyAuth
-func (ctrl *UserAuditController) ListAudit(c *gin.Context) {
-	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
-	limit, _ := strconv.Atoi(c.DefaultQuery("limit", "20"))
+func (ctrl *UserAuditController) ListAudit(ctx context.Context, in *ListAuditInput) (*api.Out[*userModels.UserAuditListResponse], error) {
+	c := api.Gin(ctx)
+	page, limit := in.Page, in.Limit
 
 	if page < 1 {
 		page = 1
@@ -53,15 +45,15 @@ func (ctrl *UserAuditController) ListAudit(c *gin.Context) {
 	query := userModels.UserAuditListQuery{
 		Page:   page,
 		Limit:  limit,
-		Search: c.Query("search"),
-		Action: c.Query("action"),
+		Search: in.Search,
+		Action: in.Action,
 	}
 
-	if from := c.Query("from"); from != "" {
-		query.From = &from
+	if in.From != "" {
+		query.From = &in.From
 	}
-	if to := c.Query("to"); to != "" {
-		query.To = &to
+	if in.To != "" {
+		query.To = &in.To
 	}
 
 	if tenantIDStr, ok := c.Get("tenant_id"); ok {
@@ -72,9 +64,8 @@ func (ctrl *UserAuditController) ListAudit(c *gin.Context) {
 
 	response, err := ctrl.userAuditService.List(query)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, coreErrors.BuildErrorSingle(c, usersErrors.UserAuditListFailed))
-		return
+		return nil, api.Fail(http.StatusInternalServerError, coreErrors.BuildErrorSingle(c, usersErrors.UserAuditListFailed))
 	}
 
-	c.JSON(http.StatusOK, response)
+	return api.OK(response)
 }

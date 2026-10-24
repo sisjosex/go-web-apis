@@ -1,6 +1,7 @@
 package controllers
 
 import (
+	"context"
 	"errors"
 	"net/http"
 	"strings"
@@ -11,6 +12,7 @@ import (
 	"github.com/leebenson/conform"
 
 	"josex/web/config"
+	"josex/web/modules/core/api"
 	coreErrors "josex/web/modules/core/errors"
 	"josex/web/modules/core/limits"
 	"josex/web/modules/core/utils"
@@ -73,17 +75,15 @@ func (ctrl *TrackingController) getTenantID(c *gin.Context) (*uuid.UUID, error) 
 }
 
 // requireTenantID extracts tenant_id and returns 403 if not present
-func (ctrl *TrackingController) requireTenantID(c *gin.Context) (uuid.UUID, bool) {
+func (ctrl *TrackingController) requireTenantID(c *gin.Context) (uuid.UUID, error) {
 	tenantID, err := ctrl.getTenantID(c)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, coreErrors.BuildError(c, err))
-		return uuid.Nil, false
+		return uuid.Nil, api.Fail(http.StatusInternalServerError, coreErrors.BuildError(c, err))
 	}
 	if tenantID == nil {
-		c.JSON(http.StatusForbidden, coreErrors.BuildErrorSingle(c, trackingErrors.TenantRequired))
-		return uuid.Nil, false
+		return uuid.Nil, api.Fail(http.StatusForbidden, coreErrors.BuildErrorSingle(c, trackingErrors.TenantRequired))
 	}
-	return *tenantID, true
+	return *tenantID, nil
 }
 
 // scopeUserID is the user a scoped read is narrowed by (TRACK-015 D1). Only an `organization`
@@ -144,34 +144,26 @@ func actingUser(c *gin.Context) *uuid.UUID {
 // scopeRefused answers 403 when the caller's access level is organization but they belong to no
 // organization in this tenant — a misconfigured account, not an empty result. It reports whether it
 // has already written the response.
-func scopeRefused(c *gin.Context, err error) bool {
+func scopeRefused(c *gin.Context, err error) error {
 	var trackingErr *trackingErrors.TrackingError
 	if errors.As(err, &trackingErr) && trackingErr.Code == trackingErrors.OrganizationScopeDenied {
-		c.JSON(http.StatusForbidden, coreErrors.BuildErrorSingle(c, trackingErr.Code))
-		return true
+		return api.Fail(http.StatusForbidden, coreErrors.BuildErrorSingle(c, trackingErr.Code))
 	}
-	return false
+	return nil
 }
 
-// GetVehicleCurrentLocation godoc
-// @Summary Get vehicle current location
-// @Description Retrieve the most recent GPS location for a vehicle
-// @Tags Tracking - Locations
-// @Accept json
-// @Produce json
-// @Security BearerAuth
-// @Param id path string true "Vehicle ID (UUID)"
-// @Success 200 {object} models.CurrentLocationResponse
-// @Failure 400 {object} coreErrors.ErrorResponse
-// @Failure 404 {object} coreErrors.ErrorResponse
-// @Failure 500 {object} coreErrors.ErrorResponse
-// @Router /tracking/vehicles/{id}/location [get]
-func (ctrl *TrackingController) GetVehicleCurrentLocation(c *gin.Context) {
-	vehicleIDStr := c.Param("vehicle_id")
+// GetVehicleCurrentLocationInput is GetVehicleCurrentLocation's request.
+type GetVehicleCurrentLocationInput struct {
+	VehicleID string `path:"vehicle_id"`
+}
+
+// GetVehicleCurrentLocation is GET /vehicles/{vehicle_id}/location: Get vehicle current location.
+func (ctrl *TrackingController) GetVehicleCurrentLocation(ctx context.Context, in *GetVehicleCurrentLocationInput) (*api.Out[*models.CurrentLocationResponse], error) {
+	c := api.Gin(ctx)
+	vehicleIDStr := in.VehicleID
 	vehicleID, err := uuid.Parse(vehicleIDStr)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, coreErrors.BuildErrorSingle(c, coreErrors.InvalidUUID))
-		return
+		return nil, api.Fail(http.StatusBadRequest, coreErrors.BuildErrorSingle(c, coreErrors.InvalidUUID))
 	}
 
 	response, err := ctrl.trackingService.GetVehicleCurrentLocation(c.Request.Context(), vehicleID)
@@ -179,169 +171,137 @@ func (ctrl *TrackingController) GetVehicleCurrentLocation(c *gin.Context) {
 		if trackingErr, ok := err.(*trackingErrors.TrackingError); ok {
 			switch trackingErr.Code {
 			case trackingErrors.VehicleNotFound, trackingErrors.LocationNotFound:
-				c.JSON(http.StatusNotFound, coreErrors.BuildErrorSingle(c, trackingErr.Code))
+				return nil, api.Fail(http.StatusNotFound, coreErrors.BuildErrorSingle(c, trackingErr.Code))
 			default:
-				c.JSON(http.StatusInternalServerError, coreErrors.BuildError(c, err))
+				return nil, api.Fail(http.StatusInternalServerError, coreErrors.BuildError(c, err))
 			}
-			return
+
 		}
-		c.JSON(http.StatusInternalServerError, coreErrors.BuildError(c, err))
-		return
+		return nil, api.Fail(http.StatusInternalServerError, coreErrors.BuildError(c, err))
 	}
 
-	c.JSON(http.StatusOK, response)
+	return api.OK(response)
 }
 
-// GetRouteRealtimeStatus godoc
-// @Summary Get route real-time status
-// @Description Get comprehensive route status: vehicle location, rider counts, alerts
-// @Tags Tracking - Status
-// @Accept json
-// @Produce json
-// @Security BearerAuth
-// @Param route_id path string true "Route ID (UUID)"
-// @Success 200 {object} models.RouteRealtimeStatusResponse
-// @Failure 400 {object} coreErrors.ErrorResponse
-// @Failure 401 {object} coreErrors.ErrorResponse
-// @Failure 404 {object} coreErrors.ErrorResponse
-// @Failure 500 {object} coreErrors.ErrorResponse
-// @Router /tracking/routes/{route_id}/status [get]
-func (ctrl *TrackingController) GetRouteRealtimeStatus(c *gin.Context) {
-	tenantID, ok := ctrl.requireTenantID(c)
-	if !ok {
-		return
+// GetRouteRealtimeStatusInput is GetRouteRealtimeStatus's request.
+type GetRouteRealtimeStatusInput struct {
+	RouteID string `path:"route_id"`
+}
+
+// GetRouteRealtimeStatus is GET /routes/{route_id}/status: Get route real-time status.
+func (ctrl *TrackingController) GetRouteRealtimeStatus(ctx context.Context, in *GetRouteRealtimeStatusInput) (*api.Out[*models.RouteRealtimeStatusResponse], error) {
+	c := api.Gin(ctx)
+	tenantID, err := ctrl.requireTenantID(c)
+	if err != nil {
+		return nil, err
 	}
 
-	routeIDStr := c.Param("route_id")
+	routeIDStr := in.RouteID
 	routeID, err := uuid.Parse(routeIDStr)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, coreErrors.BuildErrorSingle(c, coreErrors.InvalidUUID))
-		return
+		return nil, api.Fail(http.StatusBadRequest, coreErrors.BuildErrorSingle(c, coreErrors.InvalidUUID))
 	}
 
 	response, err := ctrl.trackingService.GetRouteRealtimeStatus(c.Request.Context(), tenantID, routeID, ctrl.scopeUserID(c))
 	if err != nil {
-		if scopeRefused(c, err) {
-			return
+		if err := scopeRefused(c, err); err != nil {
+			return nil, err
 		}
 		if trackingErr, ok := err.(*trackingErrors.TrackingError); ok {
 			switch trackingErr.Code {
 			case trackingErrors.RouteNotFound:
-				c.JSON(http.StatusNotFound, coreErrors.BuildErrorSingle(c, trackingErr.Code))
+				return nil, api.Fail(http.StatusNotFound, coreErrors.BuildErrorSingle(c, trackingErr.Code))
 			default:
-				c.JSON(http.StatusInternalServerError, coreErrors.BuildError(c, err))
+				return nil, api.Fail(http.StatusInternalServerError, coreErrors.BuildError(c, err))
 			}
-			return
+
 		}
-		c.JSON(http.StatusInternalServerError, coreErrors.BuildError(c, err))
-		return
+		return nil, api.Fail(http.StatusInternalServerError, coreErrors.BuildError(c, err))
 	}
 
-	c.JSON(http.StatusOK, response)
+	return api.OK(response)
 }
 
-// GetRiderStatus godoc
-// @Summary Get rider status (for guardians)
-// @Description Get rider status including bus location, last event, and alerts (parent view)
-// @Tags Tracking - Status
-// @Accept json
-// @Produce json
-// @Security BearerAuth
-// @Param rider_id path string true "Rider ID (UUID)"
-// @Success 200 {object} models.RiderStatusResponse
-// @Failure 400 {object} coreErrors.ErrorResponse
-// @Failure 401 {object} coreErrors.ErrorResponse
-// @Failure 404 {object} coreErrors.ErrorResponse
-// @Failure 500 {object} coreErrors.ErrorResponse
-// @Router /tracking/riders/{rider_id}/status [get]
-func (ctrl *TrackingController) GetRiderStatus(c *gin.Context) {
-	tenantID, ok := ctrl.requireTenantID(c)
-	if !ok {
-		return
+// GetRiderStatusInput is GetRiderStatus's request.
+type GetRiderStatusInput struct {
+	RiderID string `path:"rider_id"`
+}
+
+// GetRiderStatus is GET /riders/{rider_id}/status: Get rider status (for guardians).
+func (ctrl *TrackingController) GetRiderStatus(ctx context.Context, in *GetRiderStatusInput) (*api.Out[*models.RiderStatusResponse], error) {
+	c := api.Gin(ctx)
+	tenantID, err := ctrl.requireTenantID(c)
+	if err != nil {
+		return nil, err
 	}
 
-	riderIDStr := c.Param("rider_id")
+	riderIDStr := in.RiderID
 	riderID, err := uuid.Parse(riderIDStr)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, coreErrors.BuildErrorSingle(c, coreErrors.InvalidUUID))
-		return
+		return nil, api.Fail(http.StatusBadRequest, coreErrors.BuildErrorSingle(c, coreErrors.InvalidUUID))
 	}
 
 	response, err := ctrl.trackingService.GetRiderStatus(c.Request.Context(), tenantID, riderID, ctrl.scopeUserID(c), ctrl.guardianUserID(c))
 	if err != nil {
-		if scopeRefused(c, err) {
-			return
+		if err := scopeRefused(c, err); err != nil {
+			return nil, err
 		}
 		if trackingErr, ok := err.(*trackingErrors.TrackingError); ok {
 			switch trackingErr.Code {
 			case trackingErrors.RiderNotFound:
-				c.JSON(http.StatusNotFound, coreErrors.BuildErrorSingle(c, trackingErr.Code))
+				return nil, api.Fail(http.StatusNotFound, coreErrors.BuildErrorSingle(c, trackingErr.Code))
 			default:
-				c.JSON(http.StatusInternalServerError, coreErrors.BuildError(c, err))
+				return nil, api.Fail(http.StatusInternalServerError, coreErrors.BuildError(c, err))
 			}
-			return
+
 		}
-		c.JSON(http.StatusInternalServerError, coreErrors.BuildError(c, err))
-		return
+		return nil, api.Fail(http.StatusInternalServerError, coreErrors.BuildError(c, err))
 	}
 
-	c.JSON(http.StatusOK, response)
+	return api.OK(response)
 }
 
-// ListGuardianRiderStatus godoc
-// @Summary Today's status of each of the guardian's riders
-// @Description The guardian home (MOBILE-026 D1): every rider the signed-in guardian is linked to, each
-// @Description with the status GET /tracking/riders/{rider_id}/status answers — one call for all of them.
-// @Tags Tracking - Status
-// @Produce json
-// @Security BearerAuth
-// @Success 200 {object} map[string][]models.RiderStatusResponse
-// @Failure 403 {object} coreErrors.ErrorResponse
-// @Router /tracking/riders/today [get]
-func (ctrl *TrackingController) ListGuardianRiderStatus(c *gin.Context) {
-	tenantID, ok := ctrl.requireTenantID(c)
-	if !ok {
-		return
+// ListGuardianRiderStatusResponse is ListGuardianRiderStatus's answer.
+type ListGuardianRiderStatusResponse struct {
+	Riders []models.RiderStatusResponse `json:"riders"`
+}
+
+// ListGuardianRiderStatus is GET /riders/today: Today's status of each of the guardian's riders.
+func (ctrl *TrackingController) ListGuardianRiderStatus(ctx context.Context, _ *api.None) (*api.Out[ListGuardianRiderStatusResponse], error) {
+	c := api.Gin(ctx)
+	tenantID, err := ctrl.requireTenantID(c)
+	if err != nil {
+		return nil, err
 	}
 	// A guardian's read only: for anyone else "my riders" is the whole tenant, which no home lists.
 	guardian := ctrl.guardianUserID(c)
 	if guardian == nil {
-		c.JSON(http.StatusForbidden, coreErrors.BuildErrorSingle(c, tenancyErrors.PermissionDenied))
-		return
+		return nil, api.Fail(http.StatusForbidden, coreErrors.BuildErrorSingle(c, tenancyErrors.PermissionDenied))
 	}
 	riders, err := ctrl.trackingService.ListGuardianRiderStatus(c.Request.Context(), tenantID, *guardian)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, coreErrors.BuildError(c, err))
-		return
+		return nil, api.Fail(http.StatusInternalServerError, coreErrors.BuildError(c, err))
 	}
-	c.JSON(http.StatusOK, gin.H{"riders": riders})
+	return api.OK(ListGuardianRiderStatusResponse{Riders: riders})
 }
 
-// CreateRouteAlert godoc
-// @Summary Create route alert
-// @Description Create a delay, breakdown, or cancellation alert for a route
-// @Tags Tracking - Alerts
-// @Accept json
-// @Produce json
-// @Security BearerAuth
-// @Param alert body models.CreateAlertDto true "Alert data"
-// @Success 201 {object} models.AlertCreatedResponse
-// @Failure 400 {object} coreErrors.ErrorResponse
-// @Failure 401 {object} coreErrors.ErrorResponse
-// @Failure 404 {object} coreErrors.ErrorResponse
-// @Failure 500 {object} coreErrors.ErrorResponse
-// @Router /tracking/alerts [post]
-func (ctrl *TrackingController) CreateRouteAlert(c *gin.Context) {
-	tenantID, ok := ctrl.requireTenantID(c)
-	if !ok {
-		return
+// CreateRouteAlertInput is CreateRouteAlert's request.
+type CreateRouteAlertInput struct {
+	JSON api.Body[models.CreateAlertDto]
+}
+
+// CreateRouteAlert is POST /alerts: Create route alert.
+func (ctrl *TrackingController) CreateRouteAlert(ctx context.Context, in *CreateRouteAlertInput) (*api.Out[*models.AlertCreatedResponse], error) {
+	c := api.Gin(ctx)
+	tenantID, err := ctrl.requireTenantID(c)
+	if err != nil {
+		return nil, err
 	}
 
 	var dto models.CreateAlertDto
 
-	if err := c.ShouldBindJSON(&dto); err != nil {
-		c.JSON(http.StatusBadRequest, coreErrors.BuildErrorDetail(c, trackingErrors.AlertCreateFailed, utils.ExtractValidationError(c, err)))
-		return
+	if err := in.JSON.Into(ctx, &dto); err != nil {
+		return nil, api.Fail(http.StatusBadRequest, coreErrors.BuildErrorDetail(c, trackingErrors.AlertCreateFailed, utils.ExtractValidationError(c, err)))
 	}
 
 	conform.Strings(&dto)
@@ -351,187 +311,148 @@ func (ctrl *TrackingController) CreateRouteAlert(c *gin.Context) {
 		if trackingErr, ok := err.(*trackingErrors.TrackingError); ok {
 			switch trackingErr.Code {
 			case trackingErrors.RouteNotFound:
-				c.JSON(http.StatusNotFound, coreErrors.BuildErrorSingle(c, trackingErr.Code))
+				return nil, api.Fail(http.StatusNotFound, coreErrors.BuildErrorSingle(c, trackingErr.Code))
 			default:
-				c.JSON(http.StatusInternalServerError, coreErrors.BuildError(c, err))
+				return nil, api.Fail(http.StatusInternalServerError, coreErrors.BuildError(c, err))
 			}
-			return
+
 		}
-		c.JSON(http.StatusInternalServerError, coreErrors.BuildError(c, err))
-		return
+		return nil, api.Fail(http.StatusInternalServerError, coreErrors.BuildError(c, err))
 	}
 
-	c.JSON(http.StatusCreated, response)
+	return api.OK(response)
 }
 
 // ==================== COMPANIES CRUD ====================
 
-// CreateCompany godoc
-// @Summary Create transport company
-// @Description Create a new transport company (school, corporate, transport provider)
-// @Tags Tracking - Companies
-// @Accept json
-// @Produce json
-// @Security BearerAuth
-// @Param company body models.CreateCompanyDto true "Company data"
-// @Success 201 {object} models.TransportCompany
-// @Failure 400 {object} coreErrors.ErrorResponse
-// @Failure 500 {object} coreErrors.ErrorResponse
-// @Router /tracking/companies [post]
-func (ctrl *TrackingController) CreateCompany(c *gin.Context) {
-	tenantID, ok := ctrl.requireTenantID(c)
-	if !ok {
-		return
+// CreateCompanyInput is CreateCompany's request.
+type CreateCompanyInput struct {
+	JSON api.Body[models.CreateCompanyDto]
+}
+
+// CreateCompany is POST /companies: Create transport company.
+func (ctrl *TrackingController) CreateCompany(ctx context.Context, in *CreateCompanyInput) (*api.Out[*models.TransportCompany], error) {
+	c := api.Gin(ctx)
+	tenantID, err := ctrl.requireTenantID(c)
+	if err != nil {
+		return nil, err
 	}
 
 	var dto models.CreateCompanyDto
-	if err := c.ShouldBindJSON(&dto); err != nil {
-		c.JSON(http.StatusBadRequest, coreErrors.BuildErrorDetail(c, trackingErrors.CompanyCreateFailed, utils.ExtractValidationError(c, err)))
-		return
+	if err := in.JSON.Into(ctx, &dto); err != nil {
+		return nil, api.Fail(http.StatusBadRequest, coreErrors.BuildErrorDetail(c, trackingErrors.CompanyCreateFailed, utils.ExtractValidationError(c, err)))
 	}
 	conform.Strings(&dto)
 
 	company, err := ctrl.trackingService.CreateCompany(c.Request.Context(), tenantID, &dto)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, coreErrors.BuildError(c, err))
-		return
+		return nil, api.Fail(http.StatusInternalServerError, coreErrors.BuildError(c, err))
 	}
-	c.JSON(http.StatusCreated, company)
+	return api.OK(company)
 }
 
-// UpdateCompany godoc
-// @Summary Update transport company
-// @Description Update existing transport company details
-// @Tags Tracking - Companies
-// @Accept json
-// @Produce json
-// @Security BearerAuth
-// @Param id path string true "Company ID (UUID)"
-// @Param company body models.UpdateCompanyDto true "Updated company data"
-// @Success 200 {object} models.TransportCompany
-// @Failure 400 {object} coreErrors.ErrorResponse
-// @Failure 404 {object} coreErrors.ErrorResponse
-// @Failure 500 {object} coreErrors.ErrorResponse
-// @Router /tracking/companies/{id} [patch]
-func (ctrl *TrackingController) UpdateCompany(c *gin.Context) {
-	tenantID, ok := ctrl.requireTenantID(c)
-	if !ok {
-		return
+// UpdateCompanyInput is UpdateCompany's request.
+type UpdateCompanyInput struct {
+	CompanyID string `path:"company_id"`
+	JSON      api.Body[models.UpdateCompanyDto]
+}
+
+// UpdateCompany is PATCH /companies/{company_id}: Update transport company.
+func (ctrl *TrackingController) UpdateCompany(ctx context.Context, in *UpdateCompanyInput) (*api.Out[*models.TransportCompany], error) {
+	c := api.Gin(ctx)
+	tenantID, err := ctrl.requireTenantID(c)
+	if err != nil {
+		return nil, err
 	}
 
-	companyID, err := uuid.Parse(c.Param("company_id"))
+	companyID, err := uuid.Parse(in.CompanyID)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, coreErrors.BuildErrorSingle(c, coreErrors.InvalidUUID))
-		return
+		return nil, api.Fail(http.StatusBadRequest, coreErrors.BuildErrorSingle(c, coreErrors.InvalidUUID))
 	}
 	var dto models.UpdateCompanyDto
-	if err := c.ShouldBindJSON(&dto); err != nil {
-		c.JSON(http.StatusBadRequest, coreErrors.BuildErrorDetail(c, trackingErrors.CompanyUpdateFailed, utils.ExtractValidationError(c, err)))
-		return
+	if err := in.JSON.Into(ctx, &dto); err != nil {
+		return nil, api.Fail(http.StatusBadRequest, coreErrors.BuildErrorDetail(c, trackingErrors.CompanyUpdateFailed, utils.ExtractValidationError(c, err)))
 	}
 	conform.Strings(&dto)
 
 	company, err := ctrl.trackingService.UpdateCompany(c.Request.Context(), tenantID, companyID, &dto)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, coreErrors.BuildError(c, err))
-		return
+		return nil, api.Fail(http.StatusInternalServerError, coreErrors.BuildError(c, err))
 	}
-	c.JSON(http.StatusOK, company)
+	return api.OK(company)
 }
 
-// ListCompanies godoc
-// @Summary List transport companies
-// @Description One page of the current tenant's companies, newest first
-// @Tags Tracking - Companies
-// @Produce json
-// @Security BearerAuth
-// @Param search query string false "Match against name or registration number"
-// @Param status query string false "Lifecycle state" Enums(active, inactive, suspended)
-// @Param page query int false "Page number, 1-based" default(1)
-// @Param page_size query int false "Rows per page, max 100" default(20)
-// @Success 200 {object} models.ListCompaniesResponse
-// @Failure 400 {object} coreErrors.ErrorResponse
-// @Failure 500 {object} coreErrors.ErrorResponse
-// @Router /tracking/companies [get]
-func (ctrl *TrackingController) ListCompanies(c *gin.Context) {
-	tenantID, ok := ctrl.requireTenantID(c)
-	if !ok {
-		return
+// ListCompaniesInput is ListCompanies's request.
+type ListCompaniesInput struct {
+	Query api.Query[models.ListCompaniesQuery]
+}
+
+// ListCompanies is GET /companies: List transport companies.
+func (ctrl *TrackingController) ListCompanies(ctx context.Context, in *ListCompaniesInput) (*api.Out[*models.ListCompaniesResponse], error) {
+	c := api.Gin(ctx)
+	tenantID, err := ctrl.requireTenantID(c)
+	if err != nil {
+		return nil, err
 	}
 
 	var query models.ListCompaniesQuery
-	if err := c.ShouldBindQuery(&query); err != nil {
-		c.JSON(http.StatusBadRequest, coreErrors.BuildErrorDetail(c, "validation.invalid", err.Error()))
-		return
+	if err := in.Query.Into(ctx, &query); err != nil {
+		return nil, api.Fail(http.StatusBadRequest, coreErrors.BuildErrorDetail(c, "validation.invalid", err.Error()))
 	}
 	query.Search = strings.TrimSpace(query.Search)
 
 	result, err := ctrl.trackingService.ListCompanies(c.Request.Context(), tenantID, query)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, coreErrors.BuildError(c, err))
-		return
+		return nil, api.Fail(http.StatusInternalServerError, coreErrors.BuildError(c, err))
 	}
-	c.JSON(http.StatusOK, result)
+	return api.OK(result)
 }
 
-// GetCompany godoc
-// @Summary Get company by ID
-// @Description Get a single transport company by ID
-// @Tags Tracking - Companies
-// @Produce json
-// @Security BearerAuth
-// @Param id path string true "Company ID (UUID)"
-// @Success 200 {object} models.TransportCompany
-// @Failure 400 {object} coreErrors.ErrorResponse
-// @Failure 404 {object} coreErrors.ErrorResponse
-// @Failure 500 {object} coreErrors.ErrorResponse
-// @Router /tracking/companies/{id} [get]
-func (ctrl *TrackingController) GetCompany(c *gin.Context) {
-	tenantID, ok := ctrl.requireTenantID(c)
-	if !ok {
-		return
+// GetCompanyInput is GetCompany's request.
+type GetCompanyInput struct {
+	CompanyID string `path:"company_id"`
+}
+
+// GetCompany is GET /companies/{company_id}: Get company by ID.
+func (ctrl *TrackingController) GetCompany(ctx context.Context, in *GetCompanyInput) (*api.Out[*models.TransportCompany], error) {
+	c := api.Gin(ctx)
+	tenantID, err := ctrl.requireTenantID(c)
+	if err != nil {
+		return nil, err
 	}
 
-	companyID, err := uuid.Parse(c.Param("company_id"))
+	companyID, err := uuid.Parse(in.CompanyID)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, coreErrors.BuildErrorSingle(c, coreErrors.InvalidUUID))
-		return
+		return nil, api.Fail(http.StatusBadRequest, coreErrors.BuildErrorSingle(c, coreErrors.InvalidUUID))
 	}
 
 	company, err := ctrl.trackingService.GetCompany(c.Request.Context(), tenantID, companyID)
 	if err != nil {
 		var trackingErr *trackingErrors.TrackingError
 		if errors.As(err, &trackingErr) && trackingErr.Code == trackingErrors.CompanyNotFound {
-			c.JSON(http.StatusNotFound, coreErrors.BuildError(c, err))
-			return
+			return nil, api.Fail(http.StatusNotFound, coreErrors.BuildError(c, err))
 		}
-		c.JSON(http.StatusInternalServerError, coreErrors.BuildError(c, err))
-		return
+		return nil, api.Fail(http.StatusInternalServerError, coreErrors.BuildError(c, err))
 	}
-	c.JSON(http.StatusOK, company)
+	return api.OK(company)
 }
 
-// DeleteCompany godoc
-// @Summary Delete transport company
-// @Description Delete a transport company (owner only)
-// @Tags Tracking - Companies
-// @Security BearerAuth
-// @Param id path string true "Company ID (UUID)"
-// @Success 204 "No Content"
-// @Failure 400 {object} coreErrors.ErrorResponse
-// @Failure 404 {object} coreErrors.ErrorResponse
-// @Failure 500 {object} coreErrors.ErrorResponse
-// @Router /tracking/companies/{id} [delete]
-func (ctrl *TrackingController) DeleteCompany(c *gin.Context) {
-	tenantID, ok := ctrl.requireTenantID(c)
-	if !ok {
-		return
+// DeleteCompanyInput is DeleteCompany's request.
+type DeleteCompanyInput struct {
+	CompanyID string `path:"company_id"`
+}
+
+// DeleteCompany is DELETE /companies/{company_id}: Delete transport company.
+func (ctrl *TrackingController) DeleteCompany(ctx context.Context, in *DeleteCompanyInput) (*api.Empty, error) {
+	c := api.Gin(ctx)
+	tenantID, err := ctrl.requireTenantID(c)
+	if err != nil {
+		return nil, err
 	}
 
-	companyID, err := uuid.Parse(c.Param("company_id"))
+	companyID, err := uuid.Parse(in.CompanyID)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, coreErrors.BuildErrorSingle(c, coreErrors.InvalidUUID))
-		return
+		return nil, api.Fail(http.StatusBadRequest, coreErrors.BuildErrorSingle(c, coreErrors.InvalidUUID))
 	}
 
 	err = ctrl.trackingService.DeleteCompany(c.Request.Context(), tenantID, companyID)
@@ -540,1278 +461,1009 @@ func (ctrl *TrackingController) DeleteCompany(c *gin.Context) {
 		if errors.As(err, &trackingErr) {
 			switch trackingErr.Code {
 			case trackingErrors.CompanyNotFound:
-				c.JSON(http.StatusNotFound, coreErrors.BuildErrorSingle(c, trackingErr.Code))
-				return
+				return nil, api.Fail(http.StatusNotFound, coreErrors.BuildErrorSingle(c, trackingErr.Code))
 			case trackingErrors.CompanyHasVehicles:
-				c.JSON(http.StatusConflict, coreErrors.BuildErrorSingle(c, trackingErr.Code))
-				return
+				return nil, api.Fail(http.StatusConflict, coreErrors.BuildErrorSingle(c, trackingErr.Code))
 			}
 		}
-		c.JSON(http.StatusInternalServerError, coreErrors.BuildError(c, err))
-		return
+		return nil, api.Fail(http.StatusInternalServerError, coreErrors.BuildError(c, err))
 	}
-	c.Status(http.StatusNoContent)
+	return api.Done()
 }
 
 // ==================== VEHICLES CRUD ====================
 
-// CreateVehicle godoc
-// @Summary Create vehicle
-// @Description Create a new vehicle for a transport company
-// @Tags Tracking - Vehicles
-// @Accept json
-// @Produce json
-// @Security BearerAuth
-// @Param vehicle body models.CreateVehicleDto true "Vehicle data"
-// @Success 201 {object} models.Vehicle
-// @Failure 400 {object} coreErrors.ErrorResponse
-// @Failure 500 {object} coreErrors.ErrorResponse
-// @Router /tracking/vehicles [post]
-func (ctrl *TrackingController) CreateVehicle(c *gin.Context) {
-	tenantID, ok := ctrl.requireTenantID(c)
-	if !ok {
-		return
+// CreateVehicleInput is CreateVehicle's request.
+type CreateVehicleInput struct {
+	JSON api.Body[models.CreateVehicleDto]
+}
+
+// CreateVehicle is POST /vehicles: Create vehicle.
+func (ctrl *TrackingController) CreateVehicle(ctx context.Context, in *CreateVehicleInput) (*api.Out[*models.Vehicle], error) {
+	c := api.Gin(ctx)
+	tenantID, err := ctrl.requireTenantID(c)
+	if err != nil {
+		return nil, err
 	}
 
 	var dto models.CreateVehicleDto
-	if err := c.ShouldBindJSON(&dto); err != nil {
-		c.JSON(http.StatusBadRequest, coreErrors.BuildErrorDetail(c, trackingErrors.VehicleCreateFailed, utils.ExtractValidationError(c, err)))
-		return
+	if err := in.JSON.Into(ctx, &dto); err != nil {
+		return nil, api.Fail(http.StatusBadRequest, coreErrors.BuildErrorDetail(c, trackingErrors.VehicleCreateFailed, utils.ExtractValidationError(c, err)))
 	}
 	conform.Strings(&dto)
 	vehicle, err := ctrl.trackingService.CreateVehicle(c.Request.Context(), tenantID, &dto)
 	if err != nil {
-		if limits.Respond(c, err) {
-			return
+		if err := limits.Refuse(c, err); err != nil {
+			return nil, err
 		}
-		c.JSON(http.StatusInternalServerError, coreErrors.BuildError(c, err))
-		return
+		return nil, api.Fail(http.StatusInternalServerError, coreErrors.BuildError(c, err))
 	}
-	c.JSON(http.StatusCreated, vehicle)
+	return api.OK(vehicle)
 }
 
-// UpdateVehicle godoc
-// @Summary Update vehicle
-// @Description Update existing vehicle details
-// @Tags Tracking - Vehicles
-// @Accept json
-// @Produce json
-// @Security BearerAuth
-// @Param id path string true "Vehicle ID (UUID)"
-// @Param vehicle body models.UpdateVehicleDto true "Updated vehicle data"
-// @Success 200 {object} models.Vehicle
-// @Failure 400 {object} coreErrors.ErrorResponse
-// @Failure 404 {object} coreErrors.ErrorResponse
-// @Failure 500 {object} coreErrors.ErrorResponse
-// @Router /tracking/vehicles/{id} [patch]
-func (ctrl *TrackingController) UpdateVehicle(c *gin.Context) {
-	tenantID, ok := ctrl.requireTenantID(c)
-	if !ok {
-		return
+// UpdateVehicleInput is UpdateVehicle's request.
+type UpdateVehicleInput struct {
+	VehicleID string `path:"vehicle_id"`
+	JSON      api.Body[models.UpdateVehicleDto]
+}
+
+// UpdateVehicle is PATCH /vehicles/{vehicle_id}: Update vehicle.
+func (ctrl *TrackingController) UpdateVehicle(ctx context.Context, in *UpdateVehicleInput) (*api.Out[*models.Vehicle], error) {
+	c := api.Gin(ctx)
+	tenantID, err := ctrl.requireTenantID(c)
+	if err != nil {
+		return nil, err
 	}
 
-	vehicleID, err := uuid.Parse(c.Param("vehicle_id"))
+	vehicleID, err := uuid.Parse(in.VehicleID)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, coreErrors.BuildErrorSingle(c, coreErrors.InvalidUUID))
-		return
+		return nil, api.Fail(http.StatusBadRequest, coreErrors.BuildErrorSingle(c, coreErrors.InvalidUUID))
 	}
 	var dto models.UpdateVehicleDto
-	if err := c.ShouldBindJSON(&dto); err != nil {
-		c.JSON(http.StatusBadRequest, coreErrors.BuildErrorDetail(c, trackingErrors.VehicleUpdateFailed, utils.ExtractValidationError(c, err)))
-		return
+	if err := in.JSON.Into(ctx, &dto); err != nil {
+		return nil, api.Fail(http.StatusBadRequest, coreErrors.BuildErrorDetail(c, trackingErrors.VehicleUpdateFailed, utils.ExtractValidationError(c, err)))
 	}
 	conform.Strings(&dto)
 	vehicle, err := ctrl.trackingService.UpdateVehicle(c.Request.Context(), tenantID, vehicleID, &dto)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, coreErrors.BuildError(c, err))
-		return
+		return nil, api.Fail(http.StatusInternalServerError, coreErrors.BuildError(c, err))
 	}
-	c.JSON(http.StatusOK, vehicle)
+	return api.OK(vehicle)
 }
 
-// ListVehicles godoc
-// @Summary List vehicles
-// @Description One page of the current tenant's vehicles, newest first. Without company_id the
-// @Description whole fleet is listed; every row carries its company name.
-// @Tags Tracking - Vehicles
-// @Produce json
-// @Security BearerAuth
-// @Param company_id query string false "Narrow to one company (UUID)"
-// @Param vehicle_type query string false "Vehicle type" Enums(bus, van, car)
-// @Param status query string false "Lifecycle state" Enums(active, inactive, maintenance)
-// @Param search query string false "Match against the plate number"
-// @Param page query int false "Page number, 1-based" default(1)
-// @Param page_size query int false "Rows per page, max 100" default(20)
-// @Success 200 {object} models.ListVehiclesResponse
-// @Failure 400 {object} coreErrors.ErrorResponse
-// @Failure 500 {object} coreErrors.ErrorResponse
-// @Router /tracking/vehicles [get]
-func (ctrl *TrackingController) ListVehicles(c *gin.Context) {
-	tenantID, ok := ctrl.requireTenantID(c)
-	if !ok {
-		return
+// ListVehiclesInput is ListVehicles's request.
+type ListVehiclesInput struct {
+	Query api.Query[models.ListVehiclesQuery]
+}
+
+// ListVehicles is GET /vehicles: List vehicles.
+func (ctrl *TrackingController) ListVehicles(ctx context.Context, in *ListVehiclesInput) (*api.Out[*models.ListVehiclesResponse], error) {
+	c := api.Gin(ctx)
+	tenantID, err := ctrl.requireTenantID(c)
+	if err != nil {
+		return nil, err
 	}
 
 	var query models.ListVehiclesQuery
-	if err := c.ShouldBindQuery(&query); err != nil {
-		c.JSON(http.StatusBadRequest, coreErrors.BuildErrorDetail(c, "validation.invalid", err.Error()))
-		return
+	if err := in.Query.Into(ctx, &query); err != nil {
+		return nil, api.Fail(http.StatusBadRequest, coreErrors.BuildErrorDetail(c, "validation.invalid", err.Error()))
 	}
 	query.Search = strings.TrimSpace(query.Search)
 
 	result, err := ctrl.trackingService.ListVehicles(c.Request.Context(), tenantID, query)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, coreErrors.BuildError(c, err))
-		return
+		return nil, api.Fail(http.StatusInternalServerError, coreErrors.BuildError(c, err))
 	}
-	c.JSON(http.StatusOK, result)
+	return api.OK(result)
 }
 
-// GetVehicle godoc
-// @Summary Get vehicle by ID
-// @Description Get a single vehicle by ID
-// @Tags Tracking - Vehicles
-// @Produce json
-// @Security BearerAuth
-// @Param id path string true "Vehicle ID (UUID)"
-// @Success 200 {object} models.Vehicle
-// @Failure 400 {object} coreErrors.ErrorResponse
-// @Failure 404 {object} coreErrors.ErrorResponse
-// @Failure 500 {object} coreErrors.ErrorResponse
-// @Router /tracking/vehicles/{id} [get]
-func (ctrl *TrackingController) GetVehicle(c *gin.Context) {
-	tenantID, ok := ctrl.requireTenantID(c)
-	if !ok {
-		return
+// GetVehicleInput is GetVehicle's request.
+type GetVehicleInput struct {
+	VehicleID string `path:"vehicle_id"`
+}
+
+// GetVehicle is GET /vehicles/{vehicle_id}: Get vehicle by ID.
+func (ctrl *TrackingController) GetVehicle(ctx context.Context, in *GetVehicleInput) (*api.Out[*models.Vehicle], error) {
+	c := api.Gin(ctx)
+	tenantID, err := ctrl.requireTenantID(c)
+	if err != nil {
+		return nil, err
 	}
 
-	vehicleID, err := uuid.Parse(c.Param("vehicle_id"))
+	vehicleID, err := uuid.Parse(in.VehicleID)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, coreErrors.BuildErrorSingle(c, coreErrors.InvalidUUID))
-		return
+		return nil, api.Fail(http.StatusBadRequest, coreErrors.BuildErrorSingle(c, coreErrors.InvalidUUID))
 	}
 	vehicle, err := ctrl.trackingService.GetVehicle(c.Request.Context(), tenantID, vehicleID)
 	if err != nil {
 		var trackingErr *trackingErrors.TrackingError
 		if errors.As(err, &trackingErr) && trackingErr.Code == trackingErrors.VehicleNotFound {
-			c.JSON(http.StatusNotFound, coreErrors.BuildError(c, err))
-			return
+			return nil, api.Fail(http.StatusNotFound, coreErrors.BuildError(c, err))
 		}
-		c.JSON(http.StatusInternalServerError, coreErrors.BuildError(c, err))
-		return
+		return nil, api.Fail(http.StatusInternalServerError, coreErrors.BuildError(c, err))
 	}
-	c.JSON(http.StatusOK, vehicle)
+	return api.OK(vehicle)
 }
 
-// DeleteVehicle godoc
-// @Summary Delete vehicle
-// @Description Delete a vehicle (owner only)
-// @Tags Tracking - Vehicles
-// @Security BearerAuth
-// @Param id path string true "Vehicle ID (UUID)"
-// @Success 204 "No Content"
-// @Failure 400 {object} coreErrors.ErrorResponse
-// @Failure 404 {object} coreErrors.ErrorResponse
-// @Failure 500 {object} coreErrors.ErrorResponse
-// @Router /tracking/vehicles/{id} [delete]
-func (ctrl *TrackingController) DeleteVehicle(c *gin.Context) {
-	tenantID, ok := ctrl.requireTenantID(c)
-	if !ok {
-		return
+// DeleteVehicleInput is DeleteVehicle's request.
+type DeleteVehicleInput struct {
+	VehicleID string `path:"vehicle_id"`
+}
+
+// DeleteVehicle is DELETE /vehicles/{vehicle_id}: Delete vehicle.
+func (ctrl *TrackingController) DeleteVehicle(ctx context.Context, in *DeleteVehicleInput) (*api.Empty, error) {
+	c := api.Gin(ctx)
+	tenantID, err := ctrl.requireTenantID(c)
+	if err != nil {
+		return nil, err
 	}
 
-	vehicleID, err := uuid.Parse(c.Param("vehicle_id"))
+	vehicleID, err := uuid.Parse(in.VehicleID)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, coreErrors.BuildErrorSingle(c, coreErrors.InvalidUUID))
-		return
+		return nil, api.Fail(http.StatusBadRequest, coreErrors.BuildErrorSingle(c, coreErrors.InvalidUUID))
 	}
 	err = ctrl.trackingService.DeleteVehicle(c.Request.Context(), tenantID, vehicleID)
 	if err != nil {
 		var trackingErr *trackingErrors.TrackingError
 		if errors.As(err, &trackingErr) && trackingErr.Code == trackingErrors.VehicleNotFound {
-			c.JSON(http.StatusNotFound, coreErrors.BuildError(c, err))
-			return
+			return nil, api.Fail(http.StatusNotFound, coreErrors.BuildError(c, err))
 		}
-		c.JSON(http.StatusInternalServerError, coreErrors.BuildError(c, err))
-		return
+		return nil, api.Fail(http.StatusInternalServerError, coreErrors.BuildError(c, err))
 	}
-	c.Status(http.StatusNoContent)
+	return api.Done()
 }
 
 // ==================== ROUTES CRUD ====================
 
-// CreateRoute godoc
-// @Summary Create route
-// @Description Create a new transportation route
-// @Tags Tracking - Routes
-// @Accept json
-// @Produce json
-// @Security BearerAuth
-// @Param route body models.CreateRouteDto true "Route data"
-// @Success 201 {object} models.Route
-// @Failure 400 {object} coreErrors.ErrorResponse
-// @Failure 500 {object} coreErrors.ErrorResponse
-// @Router /tracking/routes [post]
-func (ctrl *TrackingController) CreateRoute(c *gin.Context) {
-	tenantID, ok := ctrl.requireTenantID(c)
-	if !ok {
-		return
+// CreateRouteInput is CreateRoute's request.
+type CreateRouteInput struct {
+	JSON api.Body[models.CreateRouteDto]
+}
+
+// CreateRoute is POST /routes: Create route.
+func (ctrl *TrackingController) CreateRoute(ctx context.Context, in *CreateRouteInput) (*api.Out[*models.CreatedRoute], error) {
+	c := api.Gin(ctx)
+	tenantID, err := ctrl.requireTenantID(c)
+	if err != nil {
+		return nil, err
 	}
 
 	var dto models.CreateRouteDto
-	if err := c.ShouldBindJSON(&dto); err != nil {
-		c.JSON(http.StatusBadRequest, coreErrors.BuildErrorDetail(c, trackingErrors.RouteCreateFailed, utils.ExtractValidationError(c, err)))
-		return
+	if err := in.JSON.Into(ctx, &dto); err != nil {
+		return nil, api.Fail(http.StatusBadRequest, coreErrors.BuildErrorDetail(c, trackingErrors.RouteCreateFailed, utils.ExtractValidationError(c, err)))
 	}
 	conform.Strings(&dto)
 	route, err := ctrl.trackingService.CreateRoute(c.Request.Context(), tenantID, &dto, ctrl.actingUserID(c))
 	if err != nil {
-		if routeErrorResponse(c, err) {
-			return
+		if err := routeErrorResponse(c, err); err != nil {
+			return nil, err
 		}
-		c.JSON(http.StatusInternalServerError, coreErrors.BuildError(c, err))
-		return
+		return nil, api.Fail(http.StatusInternalServerError, coreErrors.BuildError(c, err))
 	}
-	c.JSON(http.StatusCreated, route)
+	return api.OK(route)
 }
 
-// CreateRouteReturn godoc
-// @Summary Create the return of a route
-// @Description Gives an outbound without a pair its return: stops reversed, same vehicle and weekdays, its riders copied (TRACK-070 D2)
-// @Tags Tracking - Routes
-// @Accept json
-// @Produce json
-// @Security BearerAuth
-// @Param id path string true "Route ID (UUID)"
-// @Param body body models.CreateRouteReturnDto true "Return departure"
-// @Success 201 {object} models.Route
-// @Failure 400 {object} coreErrors.ErrorResponse
-// @Failure 404 {object} coreErrors.ErrorResponse
-// @Failure 409 {object} coreErrors.ErrorResponse
-// @Router /tracking/routes/{id}/return [post]
-func (ctrl *TrackingController) CreateRouteReturn(c *gin.Context) {
-	tenantID, ok := ctrl.requireTenantID(c)
-	if !ok {
-		return
+// CreateRouteReturnInput is CreateRouteReturn's request.
+type CreateRouteReturnInput struct {
+	RouteID string `path:"route_id"`
+	JSON    api.Body[models.CreateRouteReturnDto]
+}
+
+// CreateRouteReturn is POST /routes/{route_id}/return: Create the return of a route.
+func (ctrl *TrackingController) CreateRouteReturn(ctx context.Context, in *CreateRouteReturnInput) (*api.Out[*models.Route], error) {
+	c := api.Gin(ctx)
+	tenantID, err := ctrl.requireTenantID(c)
+	if err != nil {
+		return nil, err
 	}
 
-	routeID, err := uuid.Parse(c.Param("route_id"))
+	routeID, err := uuid.Parse(in.RouteID)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, coreErrors.BuildErrorSingle(c, coreErrors.InvalidUUID))
-		return
+		return nil, api.Fail(http.StatusBadRequest, coreErrors.BuildErrorSingle(c, coreErrors.InvalidUUID))
 	}
 	var dto models.CreateRouteReturnDto
-	if err := c.ShouldBindJSON(&dto); err != nil {
-		c.JSON(http.StatusBadRequest, coreErrors.BuildErrorDetail(c, trackingErrors.RouteDepartureRequired, utils.ExtractValidationError(c, err)))
-		return
+	if err := in.JSON.Into(ctx, &dto); err != nil {
+		return nil, api.Fail(http.StatusBadRequest, coreErrors.BuildErrorDetail(c, trackingErrors.RouteDepartureRequired, utils.ExtractValidationError(c, err)))
 	}
 	route, err := ctrl.trackingService.CreateRouteReturn(c.Request.Context(), tenantID, routeID, &dto, ctrl.actingUserID(c))
 	if err != nil {
-		if routeErrorResponse(c, err) {
-			return
+		if err := routeErrorResponse(c, err); err != nil {
+			return nil, err
 		}
-		c.JSON(http.StatusInternalServerError, coreErrors.BuildError(c, err))
-		return
+		return nil, api.Fail(http.StatusInternalServerError, coreErrors.BuildError(c, err))
 	}
-	c.JSON(http.StatusCreated, route)
+	return api.OK(route)
 }
 
-// UpdateRoute godoc
-// @Summary Update route
-// @Description Update existing route details
-// @Tags Tracking - Routes
-// @Accept json
-// @Produce json
-// @Security BearerAuth
-// @Param id path string true "Route ID (UUID)"
-// @Param route body models.UpdateRouteDto true "Updated route data"
-// @Success 200 {object} models.Route
-// @Failure 400 {object} coreErrors.ErrorResponse
-// @Failure 404 {object} coreErrors.ErrorResponse
-// @Failure 500 {object} coreErrors.ErrorResponse
-// @Router /tracking/routes/{id} [patch]
-func (ctrl *TrackingController) UpdateRoute(c *gin.Context) {
-	tenantID, ok := ctrl.requireTenantID(c)
-	if !ok {
-		return
+// UpdateRouteInput is UpdateRoute's request.
+type UpdateRouteInput struct {
+	RouteID string `path:"route_id"`
+	JSON    api.Body[models.UpdateRouteDto]
+}
+
+// UpdateRoute is PATCH /routes/{route_id}: Update route.
+func (ctrl *TrackingController) UpdateRoute(ctx context.Context, in *UpdateRouteInput) (*api.Out[*models.Route], error) {
+	c := api.Gin(ctx)
+	tenantID, err := ctrl.requireTenantID(c)
+	if err != nil {
+		return nil, err
 	}
 
-	routeID, err := uuid.Parse(c.Param("route_id"))
+	routeID, err := uuid.Parse(in.RouteID)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, coreErrors.BuildErrorSingle(c, coreErrors.InvalidUUID))
-		return
+		return nil, api.Fail(http.StatusBadRequest, coreErrors.BuildErrorSingle(c, coreErrors.InvalidUUID))
 	}
 	var dto models.UpdateRouteDto
-	if err := c.ShouldBindJSON(&dto); err != nil {
-		c.JSON(http.StatusBadRequest, coreErrors.BuildErrorDetail(c, trackingErrors.RouteUpdateFailed, utils.ExtractValidationError(c, err)))
-		return
+	if err := in.JSON.Into(ctx, &dto); err != nil {
+		return nil, api.Fail(http.StatusBadRequest, coreErrors.BuildErrorDetail(c, trackingErrors.RouteUpdateFailed, utils.ExtractValidationError(c, err)))
 	}
 	conform.Strings(&dto)
 	route, err := ctrl.trackingService.UpdateRoute(c.Request.Context(), tenantID, routeID, &dto)
 	if err != nil {
-		if routeErrorResponse(c, err) {
-			return
+		if err := routeErrorResponse(c, err); err != nil {
+			return nil, err
 		}
-		c.JSON(http.StatusInternalServerError, coreErrors.BuildError(c, err))
-		return
+		return nil, api.Fail(http.StatusInternalServerError, coreErrors.BuildError(c, err))
 	}
-	c.JSON(http.StatusOK, route)
+	return api.OK(route)
 }
 
-// ListRoutes godoc
-// @Summary List routes
-// @Description One page of the tenant's routes by name, with company name, plate and driver name (TRACK-002 D2)
-// @Tags Tracking - Routes
-// @Produce json
-// @Security BearerAuth
-// @Param search query string false "Name or code contains"
-// @Param company_id query string false "Company ID (UUID)"
-// @Param direction query string false "outbound or inbound"
-// @Param is_active query bool false "Active flag"
-// @Param vehicle_id query string false "Vehicle ID (UUID), or none for the routes without one"
-// @Param group_pairs query bool false "A pair as one row, the return in return_route"
-// @Param page query int false "Page (default 1)"
-// @Param page_size query int false "Page size (default 20, max 100)"
-// @Success 200 {object} models.ListRoutesResponse
-// @Failure 400 {object} coreErrors.ErrorResponse
-// @Failure 500 {object} coreErrors.ErrorResponse
-// @Router /tracking/routes [get]
-func (ctrl *TrackingController) ListRoutes(c *gin.Context) {
-	tenantID, ok := ctrl.requireTenantID(c)
-	if !ok {
-		return
+// ListRoutesInput is ListRoutes's request.
+type ListRoutesInput struct {
+	Query api.Query[models.ListRoutesQuery]
+}
+
+// ListRoutes is GET /routes: List routes.
+func (ctrl *TrackingController) ListRoutes(ctx context.Context, in *ListRoutesInput) (*api.Out[*models.ListRoutesResponse], error) {
+	c := api.Gin(ctx)
+	tenantID, err := ctrl.requireTenantID(c)
+	if err != nil {
+		return nil, err
 	}
 
 	var query models.ListRoutesQuery
-	if err := c.ShouldBindQuery(&query); err != nil {
-		c.JSON(http.StatusBadRequest, coreErrors.BuildErrorDetail(c, "validation.invalid", err.Error()))
-		return
+	if err := in.Query.Into(ctx, &query); err != nil {
+		return nil, api.Fail(http.StatusBadRequest, coreErrors.BuildErrorDetail(c, "validation.invalid", err.Error()))
 	}
 	query.Search = strings.TrimSpace(query.Search)
 
 	result, err := ctrl.trackingService.ListRoutes(c.Request.Context(), tenantID, query, ctrl.scopeUserID(c))
 	if err != nil {
-		if scopeRefused(c, err) {
-			return
+		if err := scopeRefused(c, err); err != nil {
+			return nil, err
 		}
-		c.JSON(http.StatusInternalServerError, coreErrors.BuildError(c, err))
-		return
+		return nil, api.Fail(http.StatusInternalServerError, coreErrors.BuildError(c, err))
 	}
-	c.JSON(http.StatusOK, result)
+	return api.OK(result)
 }
 
-// GetRoute godoc
-// @Summary Get route by ID
-// @Description Get a single route by ID
-// @Tags Tracking - Routes
-// @Produce json
-// @Security BearerAuth
-// @Param id path string true "Route ID (UUID)"
-// @Success 200 {object} models.Route
-// @Failure 400 {object} coreErrors.ErrorResponse
-// @Failure 404 {object} coreErrors.ErrorResponse
-// @Failure 500 {object} coreErrors.ErrorResponse
-// @Router /tracking/routes/{id} [get]
-func (ctrl *TrackingController) GetRoute(c *gin.Context) {
-	tenantID, ok := ctrl.requireTenantID(c)
-	if !ok {
-		return
+// GetRouteInput is GetRoute's request.
+type GetRouteInput struct {
+	RouteID string `path:"route_id"`
+}
+
+// GetRoute is GET /routes/{route_id}: Get route by ID.
+func (ctrl *TrackingController) GetRoute(ctx context.Context, in *GetRouteInput) (*api.Out[*models.Route], error) {
+	c := api.Gin(ctx)
+	tenantID, err := ctrl.requireTenantID(c)
+	if err != nil {
+		return nil, err
 	}
 
-	routeID, err := uuid.Parse(c.Param("route_id"))
+	routeID, err := uuid.Parse(in.RouteID)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, coreErrors.BuildErrorSingle(c, coreErrors.InvalidUUID))
-		return
+		return nil, api.Fail(http.StatusBadRequest, coreErrors.BuildErrorSingle(c, coreErrors.InvalidUUID))
 	}
 	route, err := ctrl.trackingService.GetRoute(c.Request.Context(), tenantID, routeID, ctrl.scopeUserID(c))
 	if err != nil {
-		if scopeRefused(c, err) {
-			return
+		if err := scopeRefused(c, err); err != nil {
+			return nil, err
 		}
 		var trackingErr *trackingErrors.TrackingError
 		if errors.As(err, &trackingErr) && trackingErr.Code == trackingErrors.RouteNotFound {
-			c.JSON(http.StatusNotFound, coreErrors.BuildError(c, err))
-			return
+			return nil, api.Fail(http.StatusNotFound, coreErrors.BuildError(c, err))
 		}
-		c.JSON(http.StatusInternalServerError, coreErrors.BuildError(c, err))
-		return
+		return nil, api.Fail(http.StatusInternalServerError, coreErrors.BuildError(c, err))
 	}
-	c.JSON(http.StatusOK, route)
+	return api.OK(route)
 }
 
-// DeleteRoute godoc
-// @Summary Delete route
-// @Description Delete a route (owner only)
-// @Tags Tracking - Routes
-// @Security BearerAuth
-// @Param id path string true "Route ID (UUID)"
-// @Success 204 "No Content"
-// @Failure 400 {object} coreErrors.ErrorResponse
-// @Failure 404 {object} coreErrors.ErrorResponse
-// @Failure 500 {object} coreErrors.ErrorResponse
-// @Router /tracking/routes/{id} [delete]
-func (ctrl *TrackingController) DeleteRoute(c *gin.Context) {
-	tenantID, ok := ctrl.requireTenantID(c)
-	if !ok {
-		return
+// DeleteRouteInput is DeleteRoute's request.
+type DeleteRouteInput struct {
+	RouteID string `path:"route_id"`
+}
+
+// DeleteRoute is DELETE /routes/{route_id}: Delete route.
+func (ctrl *TrackingController) DeleteRoute(ctx context.Context, in *DeleteRouteInput) (*api.Empty, error) {
+	c := api.Gin(ctx)
+	tenantID, err := ctrl.requireTenantID(c)
+	if err != nil {
+		return nil, err
 	}
 
-	routeID, err := uuid.Parse(c.Param("route_id"))
+	routeID, err := uuid.Parse(in.RouteID)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, coreErrors.BuildErrorSingle(c, coreErrors.InvalidUUID))
-		return
+		return nil, api.Fail(http.StatusBadRequest, coreErrors.BuildErrorSingle(c, coreErrors.InvalidUUID))
 	}
 	err = ctrl.trackingService.DeleteRoute(c.Request.Context(), tenantID, routeID)
 	if err != nil {
 		var trackingErr *trackingErrors.TrackingError
 		if errors.As(err, &trackingErr) && trackingErr.Code == trackingErrors.RouteNotFound {
-			c.JSON(http.StatusNotFound, coreErrors.BuildError(c, err))
-			return
+			return nil, api.Fail(http.StatusNotFound, coreErrors.BuildError(c, err))
 		}
-		c.JSON(http.StatusInternalServerError, coreErrors.BuildError(c, err))
-		return
+		return nil, api.Fail(http.StatusInternalServerError, coreErrors.BuildError(c, err))
 	}
-	c.Status(http.StatusNoContent)
+	return api.Done()
 }
 
 // ==================== ROUTE VERSIONS ====================
 
 // routeVersionErrorResponse maps the route-version codes to statuses and reports whether it has
 // already written the response.
-func routeVersionErrorResponse(c *gin.Context, err error) bool {
+func routeVersionErrorResponse(c *gin.Context, err error) error {
 	var trackingErr *trackingErrors.TrackingError
 	if !errors.As(err, &trackingErr) {
-		return false
+		return nil
 	}
 	switch trackingErr.Code {
 	case trackingErrors.RouteNotFound, trackingErrors.RouteVersionNotFound, trackingErrors.StopPlaceNotFound:
-		c.JSON(http.StatusNotFound, coreErrors.BuildErrorSingle(c, trackingErr.Code))
-		return true
+		return api.Fail(http.StatusNotFound, coreErrors.BuildErrorSingle(c, trackingErr.Code))
 	case trackingErrors.RouteVersionOverlap, trackingErrors.RouteVersionClosed:
-		c.JSON(http.StatusConflict, coreErrors.BuildErrorSingle(c, trackingErr.Code))
-		return true
+		return api.Fail(http.StatusConflict, coreErrors.BuildErrorSingle(c, trackingErr.Code))
 	case trackingErrors.StopPlaceInvalid:
-		c.JSON(http.StatusUnprocessableEntity, coreErrors.BuildErrorSingle(c, trackingErr.Code))
-		return true
+		return api.Fail(http.StatusUnprocessableEntity, coreErrors.BuildErrorSingle(c, trackingErr.Code))
 	}
-	return false
+	return nil
 }
 
-// ListRouteVersions godoc
-// @Summary List a route's stop lists over time
-// @Description Every version of the route's stop list, newest first, each with how many stops it holds
-// @Tags Tracking - Route Versions
-// @Produce json
-// @Security BearerAuth
-// @Param route_id path string true "Route ID (UUID)"
-// @Success 200 {array} models.RouteVersion
-// @Failure 400 {object} coreErrors.ErrorResponse
-// @Failure 404 {object} coreErrors.ErrorResponse
-// @Failure 500 {object} coreErrors.ErrorResponse
-// @Router /tracking/routes/{route_id}/versions [get]
-func (ctrl *TrackingController) ListRouteVersions(c *gin.Context) {
-	tenantID, ok := ctrl.requireTenantID(c)
-	if !ok {
-		return
+// ListRouteVersionsInput is ListRouteVersions's request.
+type ListRouteVersionsInput struct {
+	RouteID string `path:"route_id"`
+}
+
+// ListRouteVersions is GET /routes/{route_id}/versions: List a route's stop lists over time.
+func (ctrl *TrackingController) ListRouteVersions(ctx context.Context, in *ListRouteVersionsInput) (*api.Out[[]*models.RouteVersion], error) {
+	c := api.Gin(ctx)
+	tenantID, err := ctrl.requireTenantID(c)
+	if err != nil {
+		return nil, err
 	}
 
-	routeID, err := uuid.Parse(c.Param("route_id"))
+	routeID, err := uuid.Parse(in.RouteID)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, coreErrors.BuildErrorSingle(c, coreErrors.InvalidUUID))
-		return
+		return nil, api.Fail(http.StatusBadRequest, coreErrors.BuildErrorSingle(c, coreErrors.InvalidUUID))
 	}
 
 	versions, err := ctrl.trackingService.ListRouteVersions(c.Request.Context(), tenantID, routeID)
 	if err != nil {
-		if routeVersionErrorResponse(c, err) {
-			return
+		if err := routeVersionErrorResponse(c, err); err != nil {
+			return nil, err
 		}
-		c.JSON(http.StatusInternalServerError, coreErrors.BuildError(c, err))
-		return
+		return nil, api.Fail(http.StatusInternalServerError, coreErrors.BuildError(c, err))
 	}
-	c.JSON(http.StatusOK, versions)
+	return api.OK(versions)
 }
 
-// CreateRouteVersion godoc
-// @Summary Publish a route's next stop list
-// @Description Publishes a new version from `effective_from`, closing the one in force the day before
-// @Tags Tracking - Route Versions
-// @Accept json
-// @Produce json
-// @Security BearerAuth
-// @Param route_id path string true "Route ID (UUID)"
-// @Param version body models.CreateRouteVersionDto true "The date the list takes effect and the stops on it"
-// @Success 201 {object} models.RouteVersion
-// @Failure 400 {object} coreErrors.ErrorResponse
-// @Failure 404 {object} coreErrors.ErrorResponse
-// @Failure 409 {object} coreErrors.ErrorResponse
-// @Failure 500 {object} coreErrors.ErrorResponse
-// @Router /tracking/routes/{route_id}/versions [post]
-func (ctrl *TrackingController) CreateRouteVersion(c *gin.Context) {
-	tenantID, ok := ctrl.requireTenantID(c)
-	if !ok {
-		return
+// CreateRouteVersionInput is CreateRouteVersion's request.
+type CreateRouteVersionInput struct {
+	RouteID string `path:"route_id"`
+	JSON    api.Body[models.CreateRouteVersionDto]
+}
+
+// CreateRouteVersion is POST /routes/{route_id}/versions: Publish a route's next stop list.
+func (ctrl *TrackingController) CreateRouteVersion(ctx context.Context, in *CreateRouteVersionInput) (*api.Out[*models.RouteVersion], error) {
+	c := api.Gin(ctx)
+	tenantID, err := ctrl.requireTenantID(c)
+	if err != nil {
+		return nil, err
 	}
 
-	routeID, err := uuid.Parse(c.Param("route_id"))
+	routeID, err := uuid.Parse(in.RouteID)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, coreErrors.BuildErrorSingle(c, coreErrors.InvalidUUID))
-		return
+		return nil, api.Fail(http.StatusBadRequest, coreErrors.BuildErrorSingle(c, coreErrors.InvalidUUID))
 	}
 	var dto models.CreateRouteVersionDto
-	if err := c.ShouldBindJSON(&dto); err != nil {
-		c.JSON(http.StatusBadRequest, coreErrors.BuildErrorDetail(c, trackingErrors.RouteVersionCreateFailed, utils.ExtractValidationError(c, err)))
-		return
+	if err := in.JSON.Into(ctx, &dto); err != nil {
+		return nil, api.Fail(http.StatusBadRequest, coreErrors.BuildErrorDetail(c, trackingErrors.RouteVersionCreateFailed, utils.ExtractValidationError(c, err)))
 	}
 
 	version, err := ctrl.trackingService.CreateRouteVersion(c.Request.Context(), tenantID, routeID, &dto, ctrl.actingUserID(c))
 	if err != nil {
-		if routeVersionErrorResponse(c, err) {
-			return
+		if err := routeVersionErrorResponse(c, err); err != nil {
+			return nil, err
 		}
-		c.JSON(http.StatusInternalServerError, coreErrors.BuildError(c, err))
-		return
+		return nil, api.Fail(http.StatusInternalServerError, coreErrors.BuildError(c, err))
 	}
-	c.JSON(http.StatusCreated, version)
+	return api.OK(version)
 }
 
-// ReplaceRouteVersionStops godoc
-// @Summary Replace a route version's whole stop list
-// @Description One request replaces the list, so a reorder never renumbers rows one at a time; refused once the version's first day has passed
-// @Tags Tracking - Route Versions
-// @Accept json
-// @Produce json
-// @Security BearerAuth
-// @Param route_id path string true "Route ID (UUID)"
-// @Param version_id path string true "Route version ID (UUID)"
-// @Param stops body models.ReplaceRouteVersionStopsDto true "The whole list, in the order it runs"
-// @Success 200 {array} models.RouteStop
-// @Failure 400 {object} coreErrors.ErrorResponse
-// @Failure 404 {object} coreErrors.ErrorResponse
-// @Failure 409 {object} coreErrors.ErrorResponse
-// @Failure 500 {object} coreErrors.ErrorResponse
-// @Router /tracking/routes/{route_id}/versions/{version_id}/stops [put]
-func (ctrl *TrackingController) ReplaceRouteVersionStops(c *gin.Context) {
-	tenantID, ok := ctrl.requireTenantID(c)
-	if !ok {
-		return
+// ReplaceRouteVersionStopsInput is ReplaceRouteVersionStops's request.
+type ReplaceRouteVersionStopsInput struct {
+	RouteID   string `path:"route_id"`
+	VersionID string `path:"version_id"`
+	JSON      api.Body[models.ReplaceRouteVersionStopsDto]
+}
+
+// ReplaceRouteVersionStops is PUT /routes/{route_id}/versions/{version_id}/stops: Replace a route version's whole stop list.
+func (ctrl *TrackingController) ReplaceRouteVersionStops(ctx context.Context, in *ReplaceRouteVersionStopsInput) (*api.Out[[]*models.RouteStop], error) {
+	c := api.Gin(ctx)
+	tenantID, err := ctrl.requireTenantID(c)
+	if err != nil {
+		return nil, err
 	}
 
-	versionID, err := uuid.Parse(c.Param("version_id"))
+	versionID, err := uuid.Parse(in.VersionID)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, coreErrors.BuildErrorSingle(c, coreErrors.InvalidUUID))
-		return
+		return nil, api.Fail(http.StatusBadRequest, coreErrors.BuildErrorSingle(c, coreErrors.InvalidUUID))
 	}
 	var dto models.ReplaceRouteVersionStopsDto
-	if err := c.ShouldBindJSON(&dto); err != nil {
-		c.JSON(http.StatusBadRequest, coreErrors.BuildErrorDetail(c, trackingErrors.RouteVersionSaveStops, utils.ExtractValidationError(c, err)))
-		return
+	if err := in.JSON.Into(ctx, &dto); err != nil {
+		return nil, api.Fail(http.StatusBadRequest, coreErrors.BuildErrorDetail(c, trackingErrors.RouteVersionSaveStops, utils.ExtractValidationError(c, err)))
 	}
 
 	stops, err := ctrl.trackingService.ReplaceRouteVersionStops(c.Request.Context(), tenantID, versionID, &dto)
 	if err != nil {
-		if routeVersionErrorResponse(c, err) {
-			return
+		if err := routeVersionErrorResponse(c, err); err != nil {
+			return nil, err
 		}
-		c.JSON(http.StatusInternalServerError, coreErrors.BuildError(c, err))
-		return
+		return nil, api.Fail(http.StatusInternalServerError, coreErrors.BuildError(c, err))
 	}
-	c.JSON(http.StatusOK, stops)
+	return api.OK(stops)
 }
 
 // ==================== STOP PLACES ====================
 
 // stopPlaceErrorResponse maps the stop-place codes to statuses and reports whether it has already
 // written the response.
-func stopPlaceErrorResponse(c *gin.Context, err error) bool {
+func stopPlaceErrorResponse(c *gin.Context, err error) error {
 	var trackingErr *trackingErrors.TrackingError
 	if !errors.As(err, &trackingErr) {
-		return false
+		return nil
 	}
 	switch trackingErr.Code {
 	case trackingErrors.StopPlaceNotFound, trackingErrors.OrganizationNotFound:
-		c.JSON(http.StatusNotFound, coreErrors.BuildErrorSingle(c, trackingErr.Code))
-		return true
+		return api.Fail(http.StatusNotFound, coreErrors.BuildErrorSingle(c, trackingErr.Code))
 	case trackingErrors.StopPlaceInUse:
-		c.JSON(http.StatusConflict, coreErrors.BuildErrorSingle(c, trackingErr.Code))
-		return true
+		return api.Fail(http.StatusConflict, coreErrors.BuildErrorSingle(c, trackingErr.Code))
 	}
-	return false
+	return nil
 }
 
-// CreateStopPlace godoc
-// @Summary Create stop place
-// @Description Create a place routes can call at; one row shared by every route that stops there (TRACK-007 D1)
-// @Tags Tracking - Stop Places
-// @Accept json
-// @Produce json
-// @Security BearerAuth
-// @Param stop_place body models.CreateStopPlaceDto true "Stop place data"
-// @Success 201 {object} models.StopPlace
-// @Failure 400 {object} coreErrors.ErrorResponse
-// @Failure 404 {object} coreErrors.ErrorResponse
-// @Failure 500 {object} coreErrors.ErrorResponse
-// @Router /tracking/stop-places [post]
-func (ctrl *TrackingController) CreateStopPlace(c *gin.Context) {
-	tenantID, ok := ctrl.requireTenantID(c)
-	if !ok {
-		return
+// CreateStopPlaceInput is CreateStopPlace's request.
+type CreateStopPlaceInput struct {
+	JSON api.Body[models.CreateStopPlaceDto]
+}
+
+// CreateStopPlace is POST /stop-places: Create stop place.
+func (ctrl *TrackingController) CreateStopPlace(ctx context.Context, in *CreateStopPlaceInput) (*api.Out[*models.StopPlace], error) {
+	c := api.Gin(ctx)
+	tenantID, err := ctrl.requireTenantID(c)
+	if err != nil {
+		return nil, err
 	}
 
 	var dto models.CreateStopPlaceDto
-	if err := c.ShouldBindJSON(&dto); err != nil {
-		c.JSON(http.StatusBadRequest, coreErrors.BuildErrorDetail(c, trackingErrors.StopPlaceCreateFailed, utils.ExtractValidationError(c, err)))
-		return
+	if err := in.JSON.Into(ctx, &dto); err != nil {
+		return nil, api.Fail(http.StatusBadRequest, coreErrors.BuildErrorDetail(c, trackingErrors.StopPlaceCreateFailed, utils.ExtractValidationError(c, err)))
 	}
 	_ = conform.Strings(&dto)
 
 	place, err := ctrl.trackingService.CreateStopPlace(c.Request.Context(), tenantID, &dto)
 	if err != nil {
-		if stopPlaceErrorResponse(c, err) {
-			return
+		if err := stopPlaceErrorResponse(c, err); err != nil {
+			return nil, err
 		}
-		c.JSON(http.StatusInternalServerError, coreErrors.BuildError(c, err))
-		return
+		return nil, api.Fail(http.StatusInternalServerError, coreErrors.BuildError(c, err))
 	}
-	c.JSON(http.StatusCreated, place)
+	return api.OK(place)
 }
 
-// UpdateStopPlace godoc
-// @Summary Update stop place
-// @Description Edit a stop place; every field is optional and the coordinate moves only when both halves are sent
-// @Tags Tracking - Stop Places
-// @Accept json
-// @Produce json
-// @Security BearerAuth
-// @Param stop_place_id path string true "Stop place ID (UUID)"
-// @Param stop_place body models.UpdateStopPlaceDto true "Updated stop place data"
-// @Success 200 {object} models.StopPlace
-// @Failure 400 {object} coreErrors.ErrorResponse
-// @Failure 404 {object} coreErrors.ErrorResponse
-// @Failure 500 {object} coreErrors.ErrorResponse
-// @Router /tracking/stop-places/{stop_place_id} [patch]
-func (ctrl *TrackingController) UpdateStopPlace(c *gin.Context) {
-	tenantID, ok := ctrl.requireTenantID(c)
-	if !ok {
-		return
+// UpdateStopPlaceInput is UpdateStopPlace's request.
+type UpdateStopPlaceInput struct {
+	StopPlaceID string `path:"stop_place_id"`
+	JSON        api.Body[models.UpdateStopPlaceDto]
+}
+
+// UpdateStopPlace is PATCH /stop-places/{stop_place_id}: Update stop place.
+func (ctrl *TrackingController) UpdateStopPlace(ctx context.Context, in *UpdateStopPlaceInput) (*api.Out[*models.StopPlace], error) {
+	c := api.Gin(ctx)
+	tenantID, err := ctrl.requireTenantID(c)
+	if err != nil {
+		return nil, err
 	}
 
-	stopPlaceID, err := uuid.Parse(c.Param("stop_place_id"))
+	stopPlaceID, err := uuid.Parse(in.StopPlaceID)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, coreErrors.BuildErrorSingle(c, coreErrors.InvalidUUID))
-		return
+		return nil, api.Fail(http.StatusBadRequest, coreErrors.BuildErrorSingle(c, coreErrors.InvalidUUID))
 	}
 	var dto models.UpdateStopPlaceDto
-	if err := c.ShouldBindJSON(&dto); err != nil {
-		c.JSON(http.StatusBadRequest, coreErrors.BuildErrorDetail(c, trackingErrors.StopPlaceUpdateFailed, utils.ExtractValidationError(c, err)))
-		return
+	if err := in.JSON.Into(ctx, &dto); err != nil {
+		return nil, api.Fail(http.StatusBadRequest, coreErrors.BuildErrorDetail(c, trackingErrors.StopPlaceUpdateFailed, utils.ExtractValidationError(c, err)))
 	}
 	_ = conform.Strings(&dto)
 
 	place, err := ctrl.trackingService.UpdateStopPlace(c.Request.Context(), tenantID, stopPlaceID, &dto)
 	if err != nil {
-		if stopPlaceErrorResponse(c, err) {
-			return
+		if err := stopPlaceErrorResponse(c, err); err != nil {
+			return nil, err
 		}
-		c.JSON(http.StatusInternalServerError, coreErrors.BuildError(c, err))
-		return
+		return nil, api.Fail(http.StatusInternalServerError, coreErrors.BuildError(c, err))
 	}
-	c.JSON(http.StatusOK, place)
+	return api.OK(place)
 }
 
-// ListStopPlaces godoc
-// @Summary List stop places
-// @Description One page of the tenant's stop places by name, or — with `near` — the ones within `radius_m` of a point, nearest first and each carrying `distance_m`
-// @Tags Tracking - Stop Places
-// @Produce json
-// @Security BearerAuth
-// @Param search query string false "Match against the name"
-// @Param near query string false "A point as `latitude,longitude`; turns the list into a proximity search"
-// @Param radius_m query int false "How far from `near` to look, in metres" default(1000)
-// @Param page query int false "Page number, 1-based" default(1)
-// @Param page_size query int false "Rows per page, max 100" default(20)
-// @Success 200 {object} models.ListStopPlacesResponse
-// @Failure 400 {object} coreErrors.ErrorResponse
-// @Failure 500 {object} coreErrors.ErrorResponse
-// @Router /tracking/stop-places [get]
-func (ctrl *TrackingController) ListStopPlaces(c *gin.Context) {
-	tenantID, ok := ctrl.requireTenantID(c)
-	if !ok {
-		return
+// ListStopPlacesInput is ListStopPlaces's request.
+type ListStopPlacesInput struct {
+	Query api.Query[models.ListStopPlacesQuery]
+}
+
+// ListStopPlaces is GET /stop-places: List stop places.
+func (ctrl *TrackingController) ListStopPlaces(ctx context.Context, in *ListStopPlacesInput) (*api.Out[*models.ListStopPlacesResponse], error) {
+	c := api.Gin(ctx)
+	tenantID, err := ctrl.requireTenantID(c)
+	if err != nil {
+		return nil, err
 	}
 
 	var query models.ListStopPlacesQuery
-	if err := c.ShouldBindQuery(&query); err != nil {
-		c.JSON(http.StatusBadRequest, coreErrors.BuildErrorDetail(c, "validation.invalid", err.Error()))
-		return
+	if err := in.Query.Into(ctx, &query); err != nil {
+		return nil, api.Fail(http.StatusBadRequest, coreErrors.BuildErrorDetail(c, "validation.invalid", err.Error()))
 	}
 	query.Search = strings.TrimSpace(query.Search)
 	latitude, longitude, err := query.NearPoint()
 	if err != nil {
-		c.JSON(http.StatusBadRequest, coreErrors.BuildErrorDetail(c, "validation.invalid", err.Error()))
-		return
+		return nil, api.Fail(http.StatusBadRequest, coreErrors.BuildErrorDetail(c, "validation.invalid", err.Error()))
 	}
 
 	result, err := ctrl.trackingService.ListStopPlaces(c.Request.Context(), tenantID, query, latitude, longitude)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, coreErrors.BuildError(c, err))
-		return
+		return nil, api.Fail(http.StatusInternalServerError, coreErrors.BuildError(c, err))
 	}
-	c.JSON(http.StatusOK, result)
+	return api.OK(result)
 }
 
-// GetStopPlace godoc
-// @Summary Get stop place by ID
-// @Description Get a single stop place by ID
-// @Tags Tracking - Stop Places
-// @Produce json
-// @Security BearerAuth
-// @Param stop_place_id path string true "Stop place ID (UUID)"
-// @Success 200 {object} models.StopPlace
-// @Failure 400 {object} coreErrors.ErrorResponse
-// @Failure 404 {object} coreErrors.ErrorResponse
-// @Failure 500 {object} coreErrors.ErrorResponse
-// @Router /tracking/stop-places/{stop_place_id} [get]
-func (ctrl *TrackingController) GetStopPlace(c *gin.Context) {
-	tenantID, ok := ctrl.requireTenantID(c)
-	if !ok {
-		return
+// GetStopPlaceInput is GetStopPlace's request.
+type GetStopPlaceInput struct {
+	StopPlaceID string `path:"stop_place_id"`
+}
+
+// GetStopPlace is GET /stop-places/{stop_place_id}: Get stop place by ID.
+func (ctrl *TrackingController) GetStopPlace(ctx context.Context, in *GetStopPlaceInput) (*api.Out[*models.StopPlace], error) {
+	c := api.Gin(ctx)
+	tenantID, err := ctrl.requireTenantID(c)
+	if err != nil {
+		return nil, err
 	}
 
-	stopPlaceID, err := uuid.Parse(c.Param("stop_place_id"))
+	stopPlaceID, err := uuid.Parse(in.StopPlaceID)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, coreErrors.BuildErrorSingle(c, coreErrors.InvalidUUID))
-		return
+		return nil, api.Fail(http.StatusBadRequest, coreErrors.BuildErrorSingle(c, coreErrors.InvalidUUID))
 	}
 
 	place, err := ctrl.trackingService.GetStopPlace(c.Request.Context(), tenantID, stopPlaceID)
 	if err != nil {
-		if stopPlaceErrorResponse(c, err) {
-			return
+		if err := stopPlaceErrorResponse(c, err); err != nil {
+			return nil, err
 		}
-		c.JSON(http.StatusInternalServerError, coreErrors.BuildError(c, err))
-		return
+		return nil, api.Fail(http.StatusInternalServerError, coreErrors.BuildError(c, err))
 	}
-	c.JSON(http.StatusOK, place)
+	return api.OK(place)
 }
 
-// DeleteStopPlace godoc
-// @Summary Delete stop place
-// @Description Delete a stop place; refused while any route version still names it
-// @Tags Tracking - Stop Places
-// @Security BearerAuth
-// @Param stop_place_id path string true "Stop place ID (UUID)"
-// @Success 204 "No Content"
-// @Failure 400 {object} coreErrors.ErrorResponse
-// @Failure 404 {object} coreErrors.ErrorResponse
-// @Failure 409 {object} coreErrors.ErrorResponse
-// @Failure 500 {object} coreErrors.ErrorResponse
-// @Router /tracking/stop-places/{stop_place_id} [delete]
-func (ctrl *TrackingController) DeleteStopPlace(c *gin.Context) {
-	tenantID, ok := ctrl.requireTenantID(c)
-	if !ok {
-		return
+// DeleteStopPlaceInput is DeleteStopPlace's request.
+type DeleteStopPlaceInput struct {
+	StopPlaceID string `path:"stop_place_id"`
+}
+
+// DeleteStopPlace is DELETE /stop-places/{stop_place_id}: Delete stop place.
+func (ctrl *TrackingController) DeleteStopPlace(ctx context.Context, in *DeleteStopPlaceInput) (*api.Empty, error) {
+	c := api.Gin(ctx)
+	tenantID, err := ctrl.requireTenantID(c)
+	if err != nil {
+		return nil, err
 	}
 
-	stopPlaceID, err := uuid.Parse(c.Param("stop_place_id"))
+	stopPlaceID, err := uuid.Parse(in.StopPlaceID)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, coreErrors.BuildErrorSingle(c, coreErrors.InvalidUUID))
-		return
+		return nil, api.Fail(http.StatusBadRequest, coreErrors.BuildErrorSingle(c, coreErrors.InvalidUUID))
 	}
 
 	if err := ctrl.trackingService.DeleteStopPlace(c.Request.Context(), tenantID, stopPlaceID); err != nil {
-		if stopPlaceErrorResponse(c, err) {
-			return
+		if err := stopPlaceErrorResponse(c, err); err != nil {
+			return nil, err
 		}
-		c.JSON(http.StatusInternalServerError, coreErrors.BuildError(c, err))
-		return
+		return nil, api.Fail(http.StatusInternalServerError, coreErrors.BuildError(c, err))
 	}
-	c.Status(http.StatusNoContent)
+	return api.Done()
 }
 
 // ==================== ROUTE STOPS ====================
 
-// ListRouteStops godoc
-// @Summary List the stops a route runs on a date
-// @Description The ordered stops of the route version in force on `date` — today when it is unset (TRACK-007 D1)
-// @Tags Tracking - Route Stops
-// @Produce json
-// @Security BearerAuth
-// @Param route_id path string true "Route ID (UUID)"
-// @Param date query string false "The day whose list is wanted (YYYY-MM-DD); defaults to today"
-// @Success 200 {array} models.RouteStop
-// @Failure 400 {object} coreErrors.ErrorResponse
-// @Failure 403 {object} coreErrors.ErrorResponse
-// @Failure 404 {object} coreErrors.ErrorResponse
-// @Failure 500 {object} coreErrors.ErrorResponse
-// @Router /tracking/routes/{route_id}/stops [get]
-func (ctrl *TrackingController) ListRouteStops(c *gin.Context) {
-	tenantID, ok := ctrl.requireTenantID(c)
-	if !ok {
-		return
+// ListRouteStopsInput is ListRouteStops's request.
+type ListRouteStopsInput struct {
+	RouteID string `path:"route_id"`
+	Query   api.Query[models.ListRouteStopsQuery]
+}
+
+// ListRouteStops is GET /routes/{route_id}/stops: List the stops a route runs on a date.
+func (ctrl *TrackingController) ListRouteStops(ctx context.Context, in *ListRouteStopsInput) (*api.Out[[]*models.RouteStop], error) {
+	c := api.Gin(ctx)
+	tenantID, err := ctrl.requireTenantID(c)
+	if err != nil {
+		return nil, err
 	}
 
-	routeID, err := uuid.Parse(c.Param("route_id"))
+	routeID, err := uuid.Parse(in.RouteID)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, coreErrors.BuildErrorSingle(c, coreErrors.InvalidUUID))
-		return
+		return nil, api.Fail(http.StatusBadRequest, coreErrors.BuildErrorSingle(c, coreErrors.InvalidUUID))
 	}
 	var query models.ListRouteStopsQuery
-	if err := c.ShouldBindQuery(&query); err != nil {
-		c.JSON(http.StatusBadRequest, coreErrors.BuildErrorDetail(c, "validation.invalid", err.Error()))
-		return
+	if err := in.Query.Into(ctx, &query); err != nil {
+		return nil, api.Fail(http.StatusBadRequest, coreErrors.BuildErrorDetail(c, "validation.invalid", err.Error()))
 	}
 
 	stops, err := ctrl.trackingService.ListRouteStops(c.Request.Context(), tenantID, routeID, query.Date, ctrl.scopeUserID(c))
 	if err != nil {
-		if scopeRefused(c, err) {
-			return
+		if err := scopeRefused(c, err); err != nil {
+			return nil, err
 		}
 		var trackingErr *trackingErrors.TrackingError
 		if errors.As(err, &trackingErr) && trackingErr.Code == trackingErrors.RouteNotFound {
-			c.JSON(http.StatusNotFound, coreErrors.BuildError(c, err))
-			return
+			return nil, api.Fail(http.StatusNotFound, coreErrors.BuildError(c, err))
 		}
-		c.JSON(http.StatusInternalServerError, coreErrors.BuildError(c, err))
-		return
+		return nil, api.Fail(http.StatusInternalServerError, coreErrors.BuildError(c, err))
 	}
-	c.JSON(http.StatusOK, stops)
+	return api.OK(stops)
 }
 
-// GetRoutePath godoc
-// @Summary The planned line of a route on a date
-// @Description The line by streets through the stops of the route version in force on `date` — the route's local today when unset (TRACK-028). `path` is null while no line is stored. ETag is the version and when its line was stored; sending it back as If-None-Match answers 304
-// @Tags Tracking - Route Stops
-// @Produce json
-// @Security BearerAuth
-// @Param route_id path string true "Route ID (UUID)"
-// @Param date query string false "The day whose version is wanted (YYYY-MM-DD); defaults to the route's today"
-// @Param If-None-Match header string false "ETag of the line the client holds"
-// @Success 200 {object} models.RoutePathResponse
-// @Success 304
-// @Failure 400 {object} coreErrors.ErrorResponse
-// @Failure 403 {object} coreErrors.ErrorResponse
-// @Failure 404 {object} coreErrors.ErrorResponse
-// @Failure 500 {object} coreErrors.ErrorResponse
-// @Router /tracking/routes/{route_id}/path [get]
-func (ctrl *TrackingController) GetRoutePath(c *gin.Context) {
-	tenantID, ok := ctrl.requireTenantID(c)
-	if !ok {
-		return
+// GetRoutePathInput is GetRoutePath's request.
+type GetRoutePathInput struct {
+	RouteID     string `path:"route_id"`
+	IfNoneMatch string `header:"If-None-Match" doc:"ETag of the line the client holds"`
+	Query       api.Query[models.RoutePathQuery]
+}
+
+// GetRoutePath is the line by streets through the stops of the route version in force on `date` —
+// the route's local today when unset (TRACK-028). `path` is null while no line is stored. ETag is the
+// version and when its line was stored; sending it back as If-None-Match answers 304.
+func (ctrl *TrackingController) GetRoutePath(ctx context.Context, in *GetRoutePathInput) (*api.Cached[models.RoutePathResponse], error) {
+	c := api.Gin(ctx)
+	tenantID, err := ctrl.requireTenantID(c)
+	if err != nil {
+		return nil, err
 	}
 
-	routeID, err := uuid.Parse(c.Param("route_id"))
+	routeID, err := uuid.Parse(in.RouteID)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, coreErrors.BuildErrorSingle(c, coreErrors.InvalidUUID))
-		return
+		return nil, api.Fail(http.StatusBadRequest, coreErrors.BuildErrorSingle(c, coreErrors.InvalidUUID))
 	}
 	var query models.RoutePathQuery
-	if err := c.ShouldBindQuery(&query); err != nil {
-		c.JSON(http.StatusBadRequest, coreErrors.BuildErrorDetail(c, "validation.invalid", err.Error()))
-		return
+	if err := in.Query.Into(ctx, &query); err != nil {
+		return nil, api.Fail(http.StatusBadRequest, coreErrors.BuildErrorDetail(c, "validation.invalid", err.Error()))
 	}
 
 	version, err := ctrl.trackingService.GetRoutePath(c.Request.Context(), tenantID, routeID, query.Date, ctrl.scopeUserID(c))
 	if err != nil {
-		if scopeRefused(c, err) {
-			return
+		if err := scopeRefused(c, err); err != nil {
+			return nil, err
 		}
 		var trackingErr *trackingErrors.TrackingError
 		if errors.As(err, &trackingErr) && trackingErr.Code == trackingErrors.RouteNotFound {
-			c.JSON(http.StatusNotFound, coreErrors.BuildError(c, err))
-			return
+			return nil, api.Fail(http.StatusNotFound, coreErrors.BuildError(c, err))
 		}
-		c.JSON(http.StatusInternalServerError, coreErrors.BuildError(c, err))
-		return
+		return nil, api.Fail(http.StatusInternalServerError, coreErrors.BuildError(c, err))
 	}
 	etag := version.ETag()
-	c.Header("ETag", etag)
-	c.Header("Cache-Control", "private, max-age=0, must-revalidate")
-	if c.GetHeader("If-None-Match") == etag {
-		c.Status(http.StatusNotModified)
-		return
-	}
 	response := models.RoutePathResponse{}
 	if version != nil {
 		response.Path = version.Path
 	}
-	c.JSON(http.StatusOK, response)
+	return api.Revalidate(in.IfNoneMatch, etag, "private, max-age=0, must-revalidate", response)
 }
 
 // ==================== RIDERS CRUD ====================
 
 // CreateRider is POST /tracking/riders in the single-database shape, which has no tenant and so no
 // guardian accounts; the tenant routes serve it from AccessController.CreateRider (TRACK-037).
-func (ctrl *TrackingController) CreateRider(c *gin.Context) {
-	tenantID, ok := ctrl.requireTenantID(c)
-	if !ok {
-		return
+// CreateRiderInput is CreateRider's request.
+type CreateRiderInput struct {
+	JSON api.Body[models.CreateRiderDto]
+}
+
+func (ctrl *TrackingController) CreateRider(ctx context.Context, in *CreateRiderInput) (*api.Out[*models.Rider], error) {
+	c := api.Gin(ctx)
+	tenantID, err := ctrl.requireTenantID(c)
+	if err != nil {
+		return nil, err
 	}
 
 	var dto models.CreateRiderDto
-	if err := c.ShouldBindJSON(&dto); err != nil {
-		c.JSON(http.StatusBadRequest, coreErrors.BuildErrorDetail(c, trackingErrors.RiderCreateFailed, utils.ExtractValidationError(c, err)))
-		return
+	if err := in.JSON.Into(ctx, &dto); err != nil {
+		return nil, api.Fail(http.StatusBadRequest, coreErrors.BuildErrorDetail(c, trackingErrors.RiderCreateFailed, utils.ExtractValidationError(c, err)))
 	}
 	conform.Strings(&dto)
 	rider, err := ctrl.trackingService.CreateRider(c.Request.Context(), tenantID, &dto, ctrl.scopeUserID(c))
 	if err != nil {
-		if scopeRefused(c, err) || limits.Respond(c, err) {
-			return
+		if err := scopeRefused(c, err); err != nil {
+			return nil, err
+		}
+		if err := limits.Refuse(c, err); err != nil {
+			return nil, err
 		}
 		var trackingErr *trackingErrors.TrackingError
 		if errors.As(err, &trackingErr) && trackingErr.Code == trackingErrors.OrganizationNotFound {
-			c.JSON(http.StatusNotFound, coreErrors.BuildError(c, err))
-			return
+			return nil, api.Fail(http.StatusNotFound, coreErrors.BuildError(c, err))
 		}
-		c.JSON(http.StatusInternalServerError, coreErrors.BuildError(c, err))
-		return
+		return nil, api.Fail(http.StatusInternalServerError, coreErrors.BuildError(c, err))
 	}
-	c.JSON(http.StatusCreated, rider)
+	return api.OK(rider)
 }
 
-// UpdateRider godoc
-// @Summary Update rider
-// @Description Update existing rider details
-// @Tags Tracking - Riders
-// @Accept json
-// @Produce json
-// @Security BearerAuth
-// @Param id path string true "Rider ID (UUID)"
-// @Param rider body models.UpdateRiderDto true "Updated rider data"
-// @Success 200 {object} models.Rider
-// @Failure 400 {object} coreErrors.ErrorResponse
-// @Failure 404 {object} coreErrors.ErrorResponse
-// @Failure 500 {object} coreErrors.ErrorResponse
-// @Router /tracking/riders/{id} [patch]
-func (ctrl *TrackingController) UpdateRider(c *gin.Context) {
-	tenantID, ok := ctrl.requireTenantID(c)
-	if !ok {
-		return
+// UpdateRiderInput is UpdateRider's request.
+type UpdateRiderInput struct {
+	RiderID string `path:"rider_id"`
+	JSON    api.Body[models.UpdateRiderDto]
+}
+
+// UpdateRider is PATCH /riders/{rider_id}: Update rider.
+func (ctrl *TrackingController) UpdateRider(ctx context.Context, in *UpdateRiderInput) (*api.Out[*models.Rider], error) {
+	c := api.Gin(ctx)
+	tenantID, err := ctrl.requireTenantID(c)
+	if err != nil {
+		return nil, err
 	}
 
-	riderID, err := uuid.Parse(c.Param("rider_id"))
+	riderID, err := uuid.Parse(in.RiderID)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, coreErrors.BuildErrorSingle(c, coreErrors.InvalidUUID))
-		return
+		return nil, api.Fail(http.StatusBadRequest, coreErrors.BuildErrorSingle(c, coreErrors.InvalidUUID))
 	}
 	var dto models.UpdateRiderDto
-	if err := c.ShouldBindJSON(&dto); err != nil {
-		c.JSON(http.StatusBadRequest, coreErrors.BuildErrorDetail(c, trackingErrors.RiderUpdateFailed, utils.ExtractValidationError(c, err)))
-		return
+	if err := in.JSON.Into(ctx, &dto); err != nil {
+		return nil, api.Fail(http.StatusBadRequest, coreErrors.BuildErrorDetail(c, trackingErrors.RiderUpdateFailed, utils.ExtractValidationError(c, err)))
 	}
 	conform.Strings(&dto)
 	rider, err := ctrl.trackingService.UpdateRider(c.Request.Context(), tenantID, riderID, &dto, ctrl.scopeUserID(c))
 	if err != nil {
-		if scopeRefused(c, err) {
-			return
+		if err := scopeRefused(c, err); err != nil {
+			return nil, err
 		}
 		var trackingErr *trackingErrors.TrackingError
 		if errors.As(err, &trackingErr) && trackingErr.Code == trackingErrors.RiderNotFound {
-			c.JSON(http.StatusNotFound, coreErrors.BuildError(c, err))
-			return
+			return nil, api.Fail(http.StatusNotFound, coreErrors.BuildError(c, err))
 		}
-		c.JSON(http.StatusInternalServerError, coreErrors.BuildError(c, err))
-		return
+		return nil, api.Fail(http.StatusInternalServerError, coreErrors.BuildError(c, err))
 	}
-	c.JSON(http.StatusOK, rider)
+	return api.OK(rider)
 }
 
-// ListRiders godoc
-// @Summary List riders
-// @Description One page of the current tenant's riders, alphabetically
-// @Tags Tracking - Riders
-// @Produce json
-// @Security BearerAuth
-// @Param organization_id query string false "Organization ID (UUID); unset lists the whole tenant"
-// @Param rider_type query string false "Rider type" Enums(student, employee)
-// @Param is_active query bool false "Lifecycle state"
-// @Param search query string false "Match against first name, last name or identification number"
-// @Param page query int false "Page number, 1-based" default(1)
-// @Param page_size query int false "Rows per page, max 100" default(20)
-// @Success 200 {object} models.ListRidersResponse
-// @Failure 400 {object} coreErrors.ErrorResponse
-// @Failure 500 {object} coreErrors.ErrorResponse
-// @Router /tracking/riders [get]
-func (ctrl *TrackingController) ListRiders(c *gin.Context) {
-	tenantID, ok := ctrl.requireTenantID(c)
-	if !ok {
-		return
+// ListRidersInput is ListRiders's request.
+type ListRidersInput struct {
+	Query api.Query[models.ListRidersQuery]
+}
+
+// ListRiders is GET /riders: List riders.
+func (ctrl *TrackingController) ListRiders(ctx context.Context, in *ListRidersInput) (*api.Out[*models.ListRidersResponse], error) {
+	c := api.Gin(ctx)
+	tenantID, err := ctrl.requireTenantID(c)
+	if err != nil {
+		return nil, err
 	}
 
 	var query models.ListRidersQuery
-	if err := c.ShouldBindQuery(&query); err != nil {
-		c.JSON(http.StatusBadRequest, coreErrors.BuildErrorDetail(c, "validation.invalid", err.Error()))
-		return
+	if err := in.Query.Into(ctx, &query); err != nil {
+		return nil, api.Fail(http.StatusBadRequest, coreErrors.BuildErrorDetail(c, "validation.invalid", err.Error()))
 	}
 	query.Search = strings.TrimSpace(query.Search)
 
 	result, err := ctrl.trackingService.ListRiders(c.Request.Context(), tenantID, query, ctrl.scopeUserID(c), ctrl.guardianUserID(c))
 	if err != nil {
-		if scopeRefused(c, err) {
-			return
+		if err := scopeRefused(c, err); err != nil {
+			return nil, err
 		}
-		c.JSON(http.StatusInternalServerError, coreErrors.BuildError(c, err))
-		return
+		return nil, api.Fail(http.StatusInternalServerError, coreErrors.BuildError(c, err))
 	}
-	c.JSON(http.StatusOK, result)
+	return api.OK(result)
 }
 
-// GetRider godoc
-// @Summary Get rider by ID
-// @Description Get a single rider by ID
-// @Tags Tracking - Riders
-// @Produce json
-// @Security BearerAuth
-// @Param id path string true "Rider ID (UUID)"
-// @Success 200 {object} models.Rider
-// @Failure 400 {object} coreErrors.ErrorResponse
-// @Failure 404 {object} coreErrors.ErrorResponse
-// @Failure 500 {object} coreErrors.ErrorResponse
-// @Router /tracking/riders/{id} [get]
-func (ctrl *TrackingController) GetRider(c *gin.Context) {
-	tenantID, ok := ctrl.requireTenantID(c)
-	if !ok {
-		return
+// GetRiderInput is GetRider's request.
+type GetRiderInput struct {
+	RiderID string `path:"rider_id"`
+}
+
+// GetRider is GET /riders/{rider_id}: Get rider by ID.
+func (ctrl *TrackingController) GetRider(ctx context.Context, in *GetRiderInput) (*api.Out[*models.Rider], error) {
+	c := api.Gin(ctx)
+	tenantID, err := ctrl.requireTenantID(c)
+	if err != nil {
+		return nil, err
 	}
 
-	riderID, err := uuid.Parse(c.Param("rider_id"))
+	riderID, err := uuid.Parse(in.RiderID)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, coreErrors.BuildErrorSingle(c, coreErrors.InvalidUUID))
-		return
+		return nil, api.Fail(http.StatusBadRequest, coreErrors.BuildErrorSingle(c, coreErrors.InvalidUUID))
 	}
 	rider, err := ctrl.trackingService.GetRider(c.Request.Context(), tenantID, riderID, nil, ctrl.scopeUserID(c))
 	if err != nil {
-		if scopeRefused(c, err) {
-			return
+		if err := scopeRefused(c, err); err != nil {
+			return nil, err
 		}
 		var trackingErr *trackingErrors.TrackingError
 		if errors.As(err, &trackingErr) && trackingErr.Code == trackingErrors.RiderNotFound {
-			c.JSON(http.StatusNotFound, coreErrors.BuildError(c, err))
-			return
+			return nil, api.Fail(http.StatusNotFound, coreErrors.BuildError(c, err))
 		}
-		c.JSON(http.StatusInternalServerError, coreErrors.BuildError(c, err))
-		return
+		return nil, api.Fail(http.StatusInternalServerError, coreErrors.BuildError(c, err))
 	}
-	c.JSON(http.StatusOK, rider)
+	return api.OK(rider)
 }
 
-// DeleteRider godoc
-// @Summary Delete rider
-// @Description Delete a rider (owner only)
-// @Tags Tracking - Riders
-// @Security BearerAuth
-// @Param id path string true "Rider ID (UUID)"
-// @Success 204 "No Content"
-// @Failure 400 {object} coreErrors.ErrorResponse
-// @Failure 404 {object} coreErrors.ErrorResponse
-// @Failure 500 {object} coreErrors.ErrorResponse
-// @Router /tracking/riders/{id} [delete]
-func (ctrl *TrackingController) DeleteRider(c *gin.Context) {
-	tenantID, ok := ctrl.requireTenantID(c)
-	if !ok {
-		return
+// DeleteRiderInput is DeleteRider's request.
+type DeleteRiderInput struct {
+	RiderID string `path:"rider_id"`
+}
+
+// DeleteRider is DELETE /riders/{rider_id}: Delete rider.
+func (ctrl *TrackingController) DeleteRider(ctx context.Context, in *DeleteRiderInput) (*api.Empty, error) {
+	c := api.Gin(ctx)
+	tenantID, err := ctrl.requireTenantID(c)
+	if err != nil {
+		return nil, err
 	}
 
-	riderID, err := uuid.Parse(c.Param("rider_id"))
+	riderID, err := uuid.Parse(in.RiderID)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, coreErrors.BuildErrorSingle(c, coreErrors.InvalidUUID))
-		return
+		return nil, api.Fail(http.StatusBadRequest, coreErrors.BuildErrorSingle(c, coreErrors.InvalidUUID))
 	}
 	err = ctrl.trackingService.DeleteRider(c.Request.Context(), tenantID, riderID, ctrl.scopeUserID(c))
 	if err != nil {
-		if scopeRefused(c, err) {
-			return
+		if err := scopeRefused(c, err); err != nil {
+			return nil, err
 		}
 		var trackingErr *trackingErrors.TrackingError
 		if errors.As(err, &trackingErr) && trackingErr.Code == trackingErrors.RiderNotFound {
-			c.JSON(http.StatusNotFound, coreErrors.BuildError(c, err))
-			return
+			return nil, api.Fail(http.StatusNotFound, coreErrors.BuildError(c, err))
 		}
-		c.JSON(http.StatusInternalServerError, coreErrors.BuildError(c, err))
-		return
+		return nil, api.Fail(http.StatusInternalServerError, coreErrors.BuildError(c, err))
 	}
-	c.Status(http.StatusNoContent)
+	return api.Done()
 }
 
 // ==================== ORGANIZATIONS CRUD ====================
 
-// CreateOrganization godoc
-// @Summary Create organization
-// @Description Create a school or employer whose people ride
-// @Tags Tracking - Organizations
-// @Accept json
-// @Produce json
-// @Security BearerAuth
-// @Param organization body models.CreateOrganizationDto true "Organization data"
-// @Success 201 {object} models.Organization
-// @Failure 400 {object} coreErrors.ErrorResponse
-// @Failure 500 {object} coreErrors.ErrorResponse
-// @Router /tracking/organizations [post]
-func (ctrl *TrackingController) CreateOrganization(c *gin.Context) {
-	tenantID, ok := ctrl.requireTenantID(c)
-	if !ok {
-		return
+// CreateOrganizationInput is CreateOrganization's request.
+type CreateOrganizationInput struct {
+	JSON api.Body[models.CreateOrganizationDto]
+}
+
+// CreateOrganization is POST /organizations: Create organization.
+func (ctrl *TrackingController) CreateOrganization(ctx context.Context, in *CreateOrganizationInput) (*api.Out[*models.Organization], error) {
+	c := api.Gin(ctx)
+	tenantID, err := ctrl.requireTenantID(c)
+	if err != nil {
+		return nil, err
 	}
 
 	var dto models.CreateOrganizationDto
-	if err := c.ShouldBindJSON(&dto); err != nil {
-		c.JSON(http.StatusBadRequest, coreErrors.BuildErrorDetail(c, trackingErrors.OrganizationCreateFailed, utils.ExtractValidationError(c, err)))
-		return
+	if err := in.JSON.Into(ctx, &dto); err != nil {
+		return nil, api.Fail(http.StatusBadRequest, coreErrors.BuildErrorDetail(c, trackingErrors.OrganizationCreateFailed, utils.ExtractValidationError(c, err)))
 	}
 	_ = conform.Strings(&dto)
 
 	organization, err := ctrl.trackingService.CreateOrganization(c.Request.Context(), tenantID, &dto)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, coreErrors.BuildError(c, err))
-		return
+		return nil, api.Fail(http.StatusInternalServerError, coreErrors.BuildError(c, err))
 	}
-	c.JSON(http.StatusCreated, organization)
+	return api.OK(organization)
 }
 
-// UpdateOrganization godoc
-// @Summary Update organization
-// @Description Update an organization; every field is optional
-// @Tags Tracking - Organizations
-// @Accept json
-// @Produce json
-// @Security BearerAuth
-// @Param organization_id path string true "Organization ID (UUID)"
-// @Param organization body models.UpdateOrganizationDto true "Updated organization data"
-// @Success 200 {object} models.Organization
-// @Failure 400 {object} coreErrors.ErrorResponse
-// @Failure 404 {object} coreErrors.ErrorResponse
-// @Failure 500 {object} coreErrors.ErrorResponse
-// @Router /tracking/organizations/{organization_id} [patch]
-func (ctrl *TrackingController) UpdateOrganization(c *gin.Context) {
-	tenantID, ok := ctrl.requireTenantID(c)
-	if !ok {
-		return
+// UpdateOrganizationInput is UpdateOrganization's request.
+type UpdateOrganizationInput struct {
+	OrganizationID string `path:"organization_id"`
+	JSON           api.Body[models.UpdateOrganizationDto]
+}
+
+// UpdateOrganization is PATCH /organizations/{organization_id}: Update organization.
+func (ctrl *TrackingController) UpdateOrganization(ctx context.Context, in *UpdateOrganizationInput) (*api.Out[*models.Organization], error) {
+	c := api.Gin(ctx)
+	tenantID, err := ctrl.requireTenantID(c)
+	if err != nil {
+		return nil, err
 	}
 
-	organizationID, err := uuid.Parse(c.Param("organization_id"))
+	organizationID, err := uuid.Parse(in.OrganizationID)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, coreErrors.BuildErrorSingle(c, coreErrors.InvalidUUID))
-		return
+		return nil, api.Fail(http.StatusBadRequest, coreErrors.BuildErrorSingle(c, coreErrors.InvalidUUID))
 	}
 	var dto models.UpdateOrganizationDto
-	if err := c.ShouldBindJSON(&dto); err != nil {
-		c.JSON(http.StatusBadRequest, coreErrors.BuildErrorDetail(c, trackingErrors.OrganizationUpdateFailed, utils.ExtractValidationError(c, err)))
-		return
+	if err := in.JSON.Into(ctx, &dto); err != nil {
+		return nil, api.Fail(http.StatusBadRequest, coreErrors.BuildErrorDetail(c, trackingErrors.OrganizationUpdateFailed, utils.ExtractValidationError(c, err)))
 	}
 	_ = conform.Strings(&dto)
 
 	organization, err := ctrl.trackingService.UpdateOrganization(c.Request.Context(), tenantID, organizationID, &dto, ctrl.scopeUserID(c))
 	if err != nil {
-		if scopeRefused(c, err) {
-			return
+		if err := scopeRefused(c, err); err != nil {
+			return nil, err
 		}
 		var trackingErr *trackingErrors.TrackingError
 		if errors.As(err, &trackingErr) && trackingErr.Code == trackingErrors.OrganizationNotFound {
-			c.JSON(http.StatusNotFound, coreErrors.BuildErrorSingle(c, trackingErr.Code))
-			return
+			return nil, api.Fail(http.StatusNotFound, coreErrors.BuildErrorSingle(c, trackingErr.Code))
 		}
-		c.JSON(http.StatusInternalServerError, coreErrors.BuildError(c, err))
-		return
+		return nil, api.Fail(http.StatusInternalServerError, coreErrors.BuildError(c, err))
 	}
-	c.JSON(http.StatusOK, organization)
+	return api.OK(organization)
 }
 
-// ListOrganizations godoc
-// @Summary List organizations
-// @Description One page of the current tenant's organizations, alphabetically
-// @Tags Tracking - Organizations
-// @Produce json
-// @Security BearerAuth
-// @Param search query string false "Match against the name"
-// @Param kind query string false "Organization kind" Enums(school, company, other)
-// @Param is_active query bool false "Lifecycle state"
-// @Param page query int false "Page number, 1-based" default(1)
-// @Param page_size query int false "Rows per page, max 100" default(20)
-// @Success 200 {object} models.ListOrganizationsResponse
-// @Failure 400 {object} coreErrors.ErrorResponse
-// @Failure 500 {object} coreErrors.ErrorResponse
-// @Router /tracking/organizations [get]
-func (ctrl *TrackingController) ListOrganizations(c *gin.Context) {
-	tenantID, ok := ctrl.requireTenantID(c)
-	if !ok {
-		return
+// ListOrganizationsInput is ListOrganizations's request.
+type ListOrganizationsInput struct {
+	Query api.Query[models.ListOrganizationsQuery]
+}
+
+// ListOrganizations is GET /organizations: List organizations.
+func (ctrl *TrackingController) ListOrganizations(ctx context.Context, in *ListOrganizationsInput) (*api.Out[*models.ListOrganizationsResponse], error) {
+	c := api.Gin(ctx)
+	tenantID, err := ctrl.requireTenantID(c)
+	if err != nil {
+		return nil, err
 	}
 
 	var query models.ListOrganizationsQuery
-	if err := c.ShouldBindQuery(&query); err != nil {
-		c.JSON(http.StatusBadRequest, coreErrors.BuildErrorDetail(c, "validation.invalid", err.Error()))
-		return
+	if err := in.Query.Into(ctx, &query); err != nil {
+		return nil, api.Fail(http.StatusBadRequest, coreErrors.BuildErrorDetail(c, "validation.invalid", err.Error()))
 	}
 	query.Search = strings.TrimSpace(query.Search)
 
 	result, err := ctrl.trackingService.ListOrganizations(c.Request.Context(), tenantID, query, ctrl.scopeUserID(c))
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, coreErrors.BuildError(c, err))
-		return
+		return nil, api.Fail(http.StatusInternalServerError, coreErrors.BuildError(c, err))
 	}
-	c.JSON(http.StatusOK, result)
+	return api.OK(result)
 }
 
-// GetOrganization godoc
-// @Summary Get organization by ID
-// @Description Get a single organization by ID
-// @Tags Tracking - Organizations
-// @Produce json
-// @Security BearerAuth
-// @Param organization_id path string true "Organization ID (UUID)"
-// @Success 200 {object} models.Organization
-// @Failure 400 {object} coreErrors.ErrorResponse
-// @Failure 404 {object} coreErrors.ErrorResponse
-// @Failure 500 {object} coreErrors.ErrorResponse
-// @Router /tracking/organizations/{organization_id} [get]
-func (ctrl *TrackingController) GetOrganization(c *gin.Context) {
-	tenantID, ok := ctrl.requireTenantID(c)
-	if !ok {
-		return
+// GetOrganizationInput is GetOrganization's request.
+type GetOrganizationInput struct {
+	OrganizationID string `path:"organization_id"`
+}
+
+// GetOrganization is GET /organizations/{organization_id}: Get organization by ID.
+func (ctrl *TrackingController) GetOrganization(ctx context.Context, in *GetOrganizationInput) (*api.Out[*models.Organization], error) {
+	c := api.Gin(ctx)
+	tenantID, err := ctrl.requireTenantID(c)
+	if err != nil {
+		return nil, err
 	}
 
-	organizationID, err := uuid.Parse(c.Param("organization_id"))
+	organizationID, err := uuid.Parse(in.OrganizationID)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, coreErrors.BuildErrorSingle(c, coreErrors.InvalidUUID))
-		return
+		return nil, api.Fail(http.StatusBadRequest, coreErrors.BuildErrorSingle(c, coreErrors.InvalidUUID))
 	}
 
 	organization, err := ctrl.trackingService.GetOrganization(c.Request.Context(), tenantID, organizationID, ctrl.scopeUserID(c))
 	if err != nil {
 		var trackingErr *trackingErrors.TrackingError
 		if errors.As(err, &trackingErr) && trackingErr.Code == trackingErrors.OrganizationNotFound {
-			c.JSON(http.StatusNotFound, coreErrors.BuildErrorSingle(c, trackingErr.Code))
-			return
+			return nil, api.Fail(http.StatusNotFound, coreErrors.BuildErrorSingle(c, trackingErr.Code))
 		}
-		c.JSON(http.StatusInternalServerError, coreErrors.BuildError(c, err))
-		return
+		return nil, api.Fail(http.StatusInternalServerError, coreErrors.BuildError(c, err))
 	}
-	c.JSON(http.StatusOK, organization)
+	return api.OK(organization)
 }
 
-// DeleteOrganization godoc
-// @Summary Delete organization
-// @Description Delete an organization; refused while it still has riders
-// @Tags Tracking - Organizations
-// @Security BearerAuth
-// @Param organization_id path string true "Organization ID (UUID)"
-// @Success 204 "No Content"
-// @Failure 400 {object} coreErrors.ErrorResponse
-// @Failure 404 {object} coreErrors.ErrorResponse
-// @Failure 409 {object} coreErrors.ErrorResponse
-// @Failure 500 {object} coreErrors.ErrorResponse
-// @Router /tracking/organizations/{organization_id} [delete]
-func (ctrl *TrackingController) DeleteOrganization(c *gin.Context) {
-	tenantID, ok := ctrl.requireTenantID(c)
-	if !ok {
-		return
+// DeleteOrganizationInput is DeleteOrganization's request.
+type DeleteOrganizationInput struct {
+	OrganizationID string `path:"organization_id"`
+}
+
+// DeleteOrganization is DELETE /organizations/{organization_id}: Delete organization.
+func (ctrl *TrackingController) DeleteOrganization(ctx context.Context, in *DeleteOrganizationInput) (*api.Empty, error) {
+	c := api.Gin(ctx)
+	tenantID, err := ctrl.requireTenantID(c)
+	if err != nil {
+		return nil, err
 	}
 
-	organizationID, err := uuid.Parse(c.Param("organization_id"))
+	organizationID, err := uuid.Parse(in.OrganizationID)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, coreErrors.BuildErrorSingle(c, coreErrors.InvalidUUID))
-		return
+		return nil, api.Fail(http.StatusBadRequest, coreErrors.BuildErrorSingle(c, coreErrors.InvalidUUID))
 	}
 
 	err = ctrl.trackingService.DeleteOrganization(c.Request.Context(), tenantID, organizationID)
@@ -1820,206 +1472,160 @@ func (ctrl *TrackingController) DeleteOrganization(c *gin.Context) {
 		if errors.As(err, &trackingErr) {
 			switch trackingErr.Code {
 			case trackingErrors.OrganizationNotFound:
-				c.JSON(http.StatusNotFound, coreErrors.BuildErrorSingle(c, trackingErr.Code))
-				return
+				return nil, api.Fail(http.StatusNotFound, coreErrors.BuildErrorSingle(c, trackingErr.Code))
 			case trackingErrors.OrganizationHasRiders:
-				c.JSON(http.StatusConflict, coreErrors.BuildErrorSingle(c, trackingErr.Code))
-				return
+				return nil, api.Fail(http.StatusConflict, coreErrors.BuildErrorSingle(c, trackingErr.Code))
 			}
 		}
-		c.JSON(http.StatusInternalServerError, coreErrors.BuildError(c, err))
-		return
+		return nil, api.Fail(http.StatusInternalServerError, coreErrors.BuildError(c, err))
 	}
-	c.Status(http.StatusNoContent)
+	return api.Done()
 }
 
 // ==================== DRIVERS CRUD ====================
 
-// CreateDriver godoc
-// @Summary Create driver
-// @Description Create a driver for one of the tenant's carriers
-// @Tags Tracking - Drivers
-// @Accept json
-// @Produce json
-// @Security BearerAuth
-// @Param driver body models.CreateDriverDto true "Driver data"
-// @Success 201 {object} models.Driver
-// @Failure 400 {object} coreErrors.ErrorResponse
-// @Failure 404 {object} coreErrors.ErrorResponse
-// @Failure 409 {object} coreErrors.ErrorResponse
-// @Failure 500 {object} coreErrors.ErrorResponse
-// @Router /tracking/drivers [post]
-func (ctrl *TrackingController) CreateDriver(c *gin.Context) {
-	tenantID, ok := ctrl.requireTenantID(c)
-	if !ok {
-		return
+// TrackingControllerCreateDriverInput is CreateDriver's request.
+type TrackingControllerCreateDriverInput struct {
+	JSON api.Body[models.CreateDriverDto]
+}
+
+// CreateDriver is POST /drivers: Create driver.
+func (ctrl *TrackingController) CreateDriver(ctx context.Context, in *TrackingControllerCreateDriverInput) (*api.Out[*models.Driver], error) {
+	c := api.Gin(ctx)
+	tenantID, err := ctrl.requireTenantID(c)
+	if err != nil {
+		return nil, err
 	}
 
 	var dto models.CreateDriverDto
-	if err := c.ShouldBindJSON(&dto); err != nil {
-		c.JSON(http.StatusBadRequest, coreErrors.BuildErrorDetail(c, trackingErrors.DriverCreateFailed, utils.ExtractValidationError(c, err)))
-		return
+	if err := in.JSON.Into(ctx, &dto); err != nil {
+		return nil, api.Fail(http.StatusBadRequest, coreErrors.BuildErrorDetail(c, trackingErrors.DriverCreateFailed, utils.ExtractValidationError(c, err)))
 	}
 	_ = conform.Strings(&dto)
 
 	driver, err := ctrl.trackingService.CreateDriver(c.Request.Context(), tenantID, &dto)
 	if err != nil {
-		if driverErrorResponse(c, err) {
-			return
+		if err := driverErrorResponse(c, err); err != nil {
+			return nil, err
 		}
-		c.JSON(http.StatusInternalServerError, coreErrors.BuildError(c, err))
-		return
+		return nil, api.Fail(http.StatusInternalServerError, coreErrors.BuildError(c, err))
 	}
-	c.JSON(http.StatusCreated, driver)
+	return api.OK(driver)
 }
 
-// UpdateDriver godoc
-// @Summary Update driver
-// @Description Update a driver; every field is optional and the carrier is immutable
-// @Tags Tracking - Drivers
-// @Accept json
-// @Produce json
-// @Security BearerAuth
-// @Param driver_id path string true "Driver ID (UUID)"
-// @Param driver body models.UpdateDriverDto true "Updated driver data"
-// @Success 200 {object} models.Driver
-// @Failure 400 {object} coreErrors.ErrorResponse
-// @Failure 404 {object} coreErrors.ErrorResponse
-// @Failure 409 {object} coreErrors.ErrorResponse
-// @Failure 500 {object} coreErrors.ErrorResponse
-// @Router /tracking/drivers/{driver_id} [patch]
-func (ctrl *TrackingController) UpdateDriver(c *gin.Context) {
-	tenantID, ok := ctrl.requireTenantID(c)
-	if !ok {
-		return
+// UpdateDriverInput is UpdateDriver's request.
+type UpdateDriverInput struct {
+	DriverID string `path:"driver_id"`
+	JSON     api.Body[models.UpdateDriverDto]
+}
+
+// UpdateDriver is PATCH /drivers/{driver_id}: Update driver.
+func (ctrl *TrackingController) UpdateDriver(ctx context.Context, in *UpdateDriverInput) (*api.Out[*models.Driver], error) {
+	c := api.Gin(ctx)
+	tenantID, err := ctrl.requireTenantID(c)
+	if err != nil {
+		return nil, err
 	}
 
-	driverID, err := uuid.Parse(c.Param("driver_id"))
+	driverID, err := uuid.Parse(in.DriverID)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, coreErrors.BuildErrorSingle(c, coreErrors.InvalidUUID))
-		return
+		return nil, api.Fail(http.StatusBadRequest, coreErrors.BuildErrorSingle(c, coreErrors.InvalidUUID))
 	}
 	var dto models.UpdateDriverDto
-	if err := c.ShouldBindJSON(&dto); err != nil {
-		c.JSON(http.StatusBadRequest, coreErrors.BuildErrorDetail(c, trackingErrors.DriverUpdateFailed, utils.ExtractValidationError(c, err)))
-		return
+	if err := in.JSON.Into(ctx, &dto); err != nil {
+		return nil, api.Fail(http.StatusBadRequest, coreErrors.BuildErrorDetail(c, trackingErrors.DriverUpdateFailed, utils.ExtractValidationError(c, err)))
 	}
 	_ = conform.Strings(&dto)
 
 	driver, err := ctrl.trackingService.UpdateDriver(c.Request.Context(), tenantID, driverID, &dto)
 	if err != nil {
-		if driverErrorResponse(c, err) {
-			return
+		if err := driverErrorResponse(c, err); err != nil {
+			return nil, err
 		}
-		c.JSON(http.StatusInternalServerError, coreErrors.BuildError(c, err))
-		return
+		return nil, api.Fail(http.StatusInternalServerError, coreErrors.BuildError(c, err))
 	}
-	c.JSON(http.StatusOK, driver)
+	return api.OK(driver)
 }
 
-// ListDrivers godoc
-// @Summary List drivers
-// @Description One page of the current tenant's drivers, by surname
-// @Tags Tracking - Drivers
-// @Produce json
-// @Security BearerAuth
-// @Param search query string false "Match against a name or the licence number"
-// @Param company_id query string false "Carrier ID (UUID); unset lists every carrier"
-// @Param status query string false "Lifecycle state" Enums(active, inactive, suspended)
-// @Param page query int false "Page number, 1-based" default(1)
-// @Param page_size query int false "Rows per page, max 100" default(20)
-// @Success 200 {object} models.ListDriversResponse
-// @Failure 400 {object} coreErrors.ErrorResponse
-// @Failure 500 {object} coreErrors.ErrorResponse
-// @Router /tracking/drivers [get]
-func (ctrl *TrackingController) ListDrivers(c *gin.Context) {
-	tenantID, ok := ctrl.requireTenantID(c)
-	if !ok {
-		return
+// ListDriversInput is ListDrivers's request.
+type ListDriversInput struct {
+	Query api.Query[models.ListDriversQuery]
+}
+
+// ListDrivers is GET /drivers: List drivers.
+func (ctrl *TrackingController) ListDrivers(ctx context.Context, in *ListDriversInput) (*api.Out[*models.ListDriversResponse], error) {
+	c := api.Gin(ctx)
+	tenantID, err := ctrl.requireTenantID(c)
+	if err != nil {
+		return nil, err
 	}
 
 	var query models.ListDriversQuery
-	if err := c.ShouldBindQuery(&query); err != nil {
-		c.JSON(http.StatusBadRequest, coreErrors.BuildErrorDetail(c, "validation.invalid", err.Error()))
-		return
+	if err := in.Query.Into(ctx, &query); err != nil {
+		return nil, api.Fail(http.StatusBadRequest, coreErrors.BuildErrorDetail(c, "validation.invalid", err.Error()))
 	}
 	query.Search = strings.TrimSpace(query.Search)
 
 	result, err := ctrl.trackingService.ListDrivers(c.Request.Context(), tenantID, query)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, coreErrors.BuildError(c, err))
-		return
+		return nil, api.Fail(http.StatusInternalServerError, coreErrors.BuildError(c, err))
 	}
-	c.JSON(http.StatusOK, result)
+	return api.OK(result)
 }
 
-// GetDriver godoc
-// @Summary Get driver by ID
-// @Description Get a single driver by ID
-// @Tags Tracking - Drivers
-// @Produce json
-// @Security BearerAuth
-// @Param driver_id path string true "Driver ID (UUID)"
-// @Success 200 {object} models.Driver
-// @Failure 400 {object} coreErrors.ErrorResponse
-// @Failure 404 {object} coreErrors.ErrorResponse
-// @Failure 500 {object} coreErrors.ErrorResponse
-// @Router /tracking/drivers/{driver_id} [get]
-func (ctrl *TrackingController) GetDriver(c *gin.Context) {
-	tenantID, ok := ctrl.requireTenantID(c)
-	if !ok {
-		return
+// GetDriverInput is GetDriver's request.
+type GetDriverInput struct {
+	DriverID string `path:"driver_id"`
+}
+
+// GetDriver is GET /drivers/{driver_id}: Get driver by ID.
+func (ctrl *TrackingController) GetDriver(ctx context.Context, in *GetDriverInput) (*api.Out[*models.Driver], error) {
+	c := api.Gin(ctx)
+	tenantID, err := ctrl.requireTenantID(c)
+	if err != nil {
+		return nil, err
 	}
 
-	driverID, err := uuid.Parse(c.Param("driver_id"))
+	driverID, err := uuid.Parse(in.DriverID)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, coreErrors.BuildErrorSingle(c, coreErrors.InvalidUUID))
-		return
+		return nil, api.Fail(http.StatusBadRequest, coreErrors.BuildErrorSingle(c, coreErrors.InvalidUUID))
 	}
 
 	driver, err := ctrl.trackingService.GetDriver(c.Request.Context(), tenantID, driverID)
 	if err != nil {
-		if driverErrorResponse(c, err) {
-			return
+		if err := driverErrorResponse(c, err); err != nil {
+			return nil, err
 		}
-		c.JSON(http.StatusInternalServerError, coreErrors.BuildError(c, err))
-		return
+		return nil, api.Fail(http.StatusInternalServerError, coreErrors.BuildError(c, err))
 	}
-	c.JSON(http.StatusOK, driver)
+	return api.OK(driver)
 }
 
-// DeleteDriver godoc
-// @Summary Delete driver
-// @Description Delete a driver; refused while a route still names them as its default driver
-// @Tags Tracking - Drivers
-// @Security BearerAuth
-// @Param driver_id path string true "Driver ID (UUID)"
-// @Success 204 "No Content"
-// @Failure 400 {object} coreErrors.ErrorResponse
-// @Failure 404 {object} coreErrors.ErrorResponse
-// @Failure 409 {object} coreErrors.ErrorResponse
-// @Failure 500 {object} coreErrors.ErrorResponse
-// @Router /tracking/drivers/{driver_id} [delete]
-func (ctrl *TrackingController) DeleteDriver(c *gin.Context) {
-	tenantID, ok := ctrl.requireTenantID(c)
-	if !ok {
-		return
+// DeleteDriverInput is DeleteDriver's request.
+type DeleteDriverInput struct {
+	DriverID string `path:"driver_id"`
+}
+
+// DeleteDriver is DELETE /drivers/{driver_id}: Delete driver.
+func (ctrl *TrackingController) DeleteDriver(ctx context.Context, in *DeleteDriverInput) (*api.Empty, error) {
+	c := api.Gin(ctx)
+	tenantID, err := ctrl.requireTenantID(c)
+	if err != nil {
+		return nil, err
 	}
 
-	driverID, err := uuid.Parse(c.Param("driver_id"))
+	driverID, err := uuid.Parse(in.DriverID)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, coreErrors.BuildErrorSingle(c, coreErrors.InvalidUUID))
-		return
+		return nil, api.Fail(http.StatusBadRequest, coreErrors.BuildErrorSingle(c, coreErrors.InvalidUUID))
 	}
 
 	if err := ctrl.trackingService.DeleteDriver(c.Request.Context(), tenantID, driverID); err != nil {
-		if driverErrorResponse(c, err) {
-			return
+		if err := driverErrorResponse(c, err); err != nil {
+			return nil, err
 		}
-		c.JSON(http.StatusInternalServerError, coreErrors.BuildError(c, err))
-		return
+		return nil, api.Fail(http.StatusInternalServerError, coreErrors.BuildError(c, err))
 	}
-	c.Status(http.StatusNoContent)
+	return api.Done()
 }
 
 // driverErrorResponse answers the driver codes that carry a status of their own and reports whether
@@ -2028,413 +1634,329 @@ func (ctrl *TrackingController) DeleteDriver(c *gin.Context) {
 // routeErrorResponse answers the route SPs' own refusals. company-mismatch carries the offending
 // field (vehicle_id or default_driver_id) as its detail, so the form can put it on that field;
 // service.blocked does the same (TRACK-064).
-func routeErrorResponse(c *gin.Context, err error) bool {
+func routeErrorResponse(c *gin.Context, err error) error {
 	var trackingErr *trackingErrors.TrackingError
 	if !errors.As(err, &trackingErr) {
-		return false
+		return nil
 	}
 	switch trackingErr.Code {
 	case trackingErrors.RouteNotFound, trackingErrors.CompanyNotFound, trackingErrors.OrganizationNotFound,
 		trackingErrors.StopPlaceNotFound:
-		c.JSON(http.StatusNotFound, coreErrors.BuildErrorSingle(c, trackingErr.Code))
-		return true
+		return api.Fail(http.StatusNotFound, coreErrors.BuildErrorSingle(c, trackingErr.Code))
 	case trackingErrors.RouteDestinationRequired, trackingErrors.RouteDepartureRequired, trackingErrors.StopPlaceInvalid:
-		c.JSON(http.StatusBadRequest, coreErrors.BuildErrorSingle(c, trackingErr.Code))
-		return true
+		return api.Fail(http.StatusBadRequest, coreErrors.BuildErrorSingle(c, trackingErr.Code))
 	case trackingErrors.RouteCompanyMismatch:
 		var pgErr *pgconn.PgError
 		detail := ""
 		if errors.As(err, &pgErr) {
 			detail = pgErr.Detail
 		}
-		c.JSON(http.StatusBadRequest, coreErrors.BuildErrorDetail(c, trackingErr.Code, detail))
-		return true
+		return api.Fail(http.StatusBadRequest, coreErrors.BuildErrorDetail(c, trackingErr.Code, detail))
 	case trackingErrors.RouteTimezone:
-		c.JSON(http.StatusBadRequest, coreErrors.BuildErrorSingle(c, trackingErr.Code))
-		return true
+		return api.Fail(http.StatusBadRequest, coreErrors.BuildErrorSingle(c, trackingErr.Code))
 	case trackingErrors.RouteCodeAlreadyExists, trackingErrors.RouteHasReturn, trackingErrors.RouteNotOutbound:
-		c.JSON(http.StatusConflict, coreErrors.BuildErrorSingle(c, trackingErr.Code))
-		return true
+		return api.Fail(http.StatusConflict, coreErrors.BuildErrorSingle(c, trackingErr.Code))
 	case trackingErrors.ServiceBlocked:
-		c.JSON(http.StatusConflict, coreErrors.BuildErrorDetail(c, trackingErr.Code, trackingErr.Detail))
-		return true
+		return api.Fail(http.StatusConflict, coreErrors.BuildErrorDetail(c, trackingErr.Code, trackingErr.Detail))
 	}
-	return false
+	return nil
 }
 
-func driverErrorResponse(c *gin.Context, err error) bool {
+func driverErrorResponse(c *gin.Context, err error) error {
 	var trackingErr *trackingErrors.TrackingError
 	if !errors.As(err, &trackingErr) {
-		return false
+		return nil
 	}
 	switch trackingErr.Code {
 	case trackingErrors.DriverNotFound, trackingErrors.CompanyNotFound:
-		c.JSON(http.StatusNotFound, coreErrors.BuildErrorSingle(c, trackingErr.Code))
-		return true
+		return api.Fail(http.StatusNotFound, coreErrors.BuildErrorSingle(c, trackingErr.Code))
 	case trackingErrors.DriverLicenseAlreadyExists, trackingErrors.DriverUserAlreadyLinked, trackingErrors.DriverHasRoutes:
-		c.JSON(http.StatusConflict, coreErrors.BuildErrorSingle(c, trackingErr.Code))
-		return true
+		return api.Fail(http.StatusConflict, coreErrors.BuildErrorSingle(c, trackingErr.Code))
 	}
-	return false
+	return nil
 }
 
 // ==================== DOCUMENT TYPES (TRACK-016) ====================
 
-// CreateDocumentType godoc
-// @Summary Create document type
-// @Description Add a line to the tenant's compliance policy
-// @Tags Tracking - Documents
-// @Accept json
-// @Produce json
-// @Security BearerAuth
-// @Param document_type body models.CreateDocumentTypeDto true "Document type"
-// @Success 201 {object} models.DocumentType
-// @Failure 400 {object} coreErrors.ErrorResponse
-// @Failure 409 {object} coreErrors.ErrorResponse
-// @Failure 500 {object} coreErrors.ErrorResponse
-// @Router /tracking/document-types [post]
-func (ctrl *TrackingController) CreateDocumentType(c *gin.Context) {
-	tenantID, ok := ctrl.requireTenantID(c)
-	if !ok {
-		return
+// CreateDocumentTypeInput is CreateDocumentType's request.
+type CreateDocumentTypeInput struct {
+	JSON api.Body[models.CreateDocumentTypeDto]
+}
+
+// CreateDocumentType is POST /document-types: Create document type.
+func (ctrl *TrackingController) CreateDocumentType(ctx context.Context, in *CreateDocumentTypeInput) (*api.Out[*models.DocumentType], error) {
+	c := api.Gin(ctx)
+	tenantID, err := ctrl.requireTenantID(c)
+	if err != nil {
+		return nil, err
 	}
 
 	var dto models.CreateDocumentTypeDto
-	if err := c.ShouldBindJSON(&dto); err != nil {
-		c.JSON(http.StatusBadRequest, coreErrors.BuildErrorDetail(c, trackingErrors.DocumentTypeCreateFailed, utils.ExtractValidationError(c, err)))
-		return
+	if err := in.JSON.Into(ctx, &dto); err != nil {
+		return nil, api.Fail(http.StatusBadRequest, coreErrors.BuildErrorDetail(c, trackingErrors.DocumentTypeCreateFailed, utils.ExtractValidationError(c, err)))
 	}
 	_ = conform.Strings(&dto)
 
 	docType, err := ctrl.trackingService.CreateDocumentType(c.Request.Context(), tenantID, &dto)
 	if err != nil {
-		if documentErrorResponse(c, err) {
-			return
+		if err := documentErrorResponse(c, err); err != nil {
+			return nil, err
 		}
-		c.JSON(http.StatusInternalServerError, coreErrors.BuildError(c, err))
-		return
+		return nil, api.Fail(http.StatusInternalServerError, coreErrors.BuildError(c, err))
 	}
-	c.JSON(http.StatusCreated, docType)
+	return api.OK(docType)
 }
 
-// UpdateDocumentType godoc
-// @Summary Update document type
-// @Description Edit a policy line; every field is optional
-// @Tags Tracking - Documents
-// @Accept json
-// @Produce json
-// @Security BearerAuth
-// @Param document_type_id path string true "Document type ID (UUID)"
-// @Param document_type body models.UpdateDocumentTypeDto true "Updated document type"
-// @Success 200 {object} models.DocumentType
-// @Failure 400 {object} coreErrors.ErrorResponse
-// @Failure 404 {object} coreErrors.ErrorResponse
-// @Failure 409 {object} coreErrors.ErrorResponse
-// @Failure 500 {object} coreErrors.ErrorResponse
-// @Router /tracking/document-types/{document_type_id} [patch]
-func (ctrl *TrackingController) UpdateDocumentType(c *gin.Context) {
-	tenantID, ok := ctrl.requireTenantID(c)
-	if !ok {
-		return
+// UpdateDocumentTypeInput is UpdateDocumentType's request.
+type UpdateDocumentTypeInput struct {
+	DocumentTypeID string `path:"document_type_id"`
+	JSON           api.Body[models.UpdateDocumentTypeDto]
+}
+
+// UpdateDocumentType is PATCH /document-types/{document_type_id}: Update document type.
+func (ctrl *TrackingController) UpdateDocumentType(ctx context.Context, in *UpdateDocumentTypeInput) (*api.Out[*models.DocumentType], error) {
+	c := api.Gin(ctx)
+	tenantID, err := ctrl.requireTenantID(c)
+	if err != nil {
+		return nil, err
 	}
 
-	typeID, err := uuid.Parse(c.Param("document_type_id"))
+	typeID, err := uuid.Parse(in.DocumentTypeID)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, coreErrors.BuildErrorSingle(c, coreErrors.InvalidUUID))
-		return
+		return nil, api.Fail(http.StatusBadRequest, coreErrors.BuildErrorSingle(c, coreErrors.InvalidUUID))
 	}
 	var dto models.UpdateDocumentTypeDto
-	if err := c.ShouldBindJSON(&dto); err != nil {
-		c.JSON(http.StatusBadRequest, coreErrors.BuildErrorDetail(c, trackingErrors.DocumentTypeUpdateFailed, utils.ExtractValidationError(c, err)))
-		return
+	if err := in.JSON.Into(ctx, &dto); err != nil {
+		return nil, api.Fail(http.StatusBadRequest, coreErrors.BuildErrorDetail(c, trackingErrors.DocumentTypeUpdateFailed, utils.ExtractValidationError(c, err)))
 	}
 	_ = conform.Strings(&dto)
 
 	docType, err := ctrl.trackingService.UpdateDocumentType(c.Request.Context(), tenantID, typeID, &dto)
 	if err != nil {
-		if documentErrorResponse(c, err) {
-			return
+		if err := documentErrorResponse(c, err); err != nil {
+			return nil, err
 		}
-		c.JSON(http.StatusInternalServerError, coreErrors.BuildError(c, err))
-		return
+		return nil, api.Fail(http.StatusInternalServerError, coreErrors.BuildError(c, err))
 	}
-	c.JSON(http.StatusOK, docType)
+	return api.OK(docType)
 }
 
-// ListDocumentTypes godoc
-// @Summary List document types
-// @Description The tenant's whole compliance policy, alphabetically
-// @Tags Tracking - Documents
-// @Produce json
-// @Security BearerAuth
-// @Param applies_to query string false "Narrow to the types one subject kind may carry" Enums(vehicle, driver, both)
-// @Param is_active query bool false "Lifecycle state"
-// @Success 200 {array} models.DocumentType
-// @Failure 400 {object} coreErrors.ErrorResponse
-// @Failure 500 {object} coreErrors.ErrorResponse
-// @Router /tracking/document-types [get]
-func (ctrl *TrackingController) ListDocumentTypes(c *gin.Context) {
-	tenantID, ok := ctrl.requireTenantID(c)
-	if !ok {
-		return
+// ListDocumentTypesInput is ListDocumentTypes's request.
+type ListDocumentTypesInput struct {
+	Query api.Query[models.ListDocumentTypesQuery]
+}
+
+// ListDocumentTypes is GET /document-types: List document types.
+func (ctrl *TrackingController) ListDocumentTypes(ctx context.Context, in *ListDocumentTypesInput) (*api.Out[[]*models.DocumentType], error) {
+	c := api.Gin(ctx)
+	tenantID, err := ctrl.requireTenantID(c)
+	if err != nil {
+		return nil, err
 	}
 
 	var query models.ListDocumentTypesQuery
-	if err := c.ShouldBindQuery(&query); err != nil {
-		c.JSON(http.StatusBadRequest, coreErrors.BuildErrorDetail(c, "validation.invalid", err.Error()))
-		return
+	if err := in.Query.Into(ctx, &query); err != nil {
+		return nil, api.Fail(http.StatusBadRequest, coreErrors.BuildErrorDetail(c, "validation.invalid", err.Error()))
 	}
 
 	types, err := ctrl.trackingService.ListDocumentTypes(c.Request.Context(), tenantID, query)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, coreErrors.BuildError(c, err))
-		return
+		return nil, api.Fail(http.StatusInternalServerError, coreErrors.BuildError(c, err))
 	}
-	c.JSON(http.StatusOK, types)
+	return api.OK(types)
 }
 
 // ==================== COMPLIANCE DOCUMENTS (TRACK-016) ====================
 
-// CreateDocument godoc
-// @Summary Create document
-// @Description File a compliance document against one vehicle or driver
-// @Tags Tracking - Documents
-// @Accept json
-// @Produce json
-// @Security BearerAuth
-// @Param document body models.CreateDocumentDto true "Document"
-// @Success 201 {object} models.ComplianceDocument
-// @Failure 400 {object} coreErrors.ErrorResponse
-// @Failure 404 {object} coreErrors.ErrorResponse
-// @Failure 409 {object} coreErrors.ErrorResponse
-// @Failure 500 {object} coreErrors.ErrorResponse
-// @Router /tracking/documents [post]
-func (ctrl *TrackingController) CreateDocument(c *gin.Context) {
-	tenantID, ok := ctrl.requireTenantID(c)
-	if !ok {
-		return
+// CreateDocumentInput is CreateDocument's request.
+type CreateDocumentInput struct {
+	JSON api.Body[models.CreateDocumentDto]
+}
+
+// CreateDocument is POST /documents: Create document.
+func (ctrl *TrackingController) CreateDocument(ctx context.Context, in *CreateDocumentInput) (*api.Out[*models.ComplianceDocument], error) {
+	c := api.Gin(ctx)
+	tenantID, err := ctrl.requireTenantID(c)
+	if err != nil {
+		return nil, err
 	}
 
 	var dto models.CreateDocumentDto
-	if err := c.ShouldBindJSON(&dto); err != nil {
-		c.JSON(http.StatusBadRequest, coreErrors.BuildErrorDetail(c, trackingErrors.DocumentCreateFailed, utils.ExtractValidationError(c, err)))
-		return
+	if err := in.JSON.Into(ctx, &dto); err != nil {
+		return nil, api.Fail(http.StatusBadRequest, coreErrors.BuildErrorDetail(c, trackingErrors.DocumentCreateFailed, utils.ExtractValidationError(c, err)))
 	}
 	_ = conform.Strings(&dto)
 
 	document, err := ctrl.trackingService.CreateDocument(c.Request.Context(), tenantID, &dto)
 	if err != nil {
-		if documentErrorResponse(c, err) {
-			return
+		if err := documentErrorResponse(c, err); err != nil {
+			return nil, err
 		}
-		c.JSON(http.StatusInternalServerError, coreErrors.BuildError(c, err))
-		return
+		return nil, api.Fail(http.StatusInternalServerError, coreErrors.BuildError(c, err))
 	}
-	c.JSON(http.StatusCreated, document)
+	return api.OK(document)
 }
 
-// UpdateDocument godoc
-// @Summary Update document
-// @Description Edit a document; the subject and the type are set once
-// @Tags Tracking - Documents
-// @Accept json
-// @Produce json
-// @Security BearerAuth
-// @Param document_id path string true "Document ID (UUID)"
-// @Param document body models.UpdateDocumentDto true "Updated document"
-// @Success 200 {object} models.ComplianceDocument
-// @Failure 400 {object} coreErrors.ErrorResponse
-// @Failure 404 {object} coreErrors.ErrorResponse
-// @Failure 500 {object} coreErrors.ErrorResponse
-// @Router /tracking/documents/{document_id} [patch]
-func (ctrl *TrackingController) UpdateDocument(c *gin.Context) {
-	tenantID, ok := ctrl.requireTenantID(c)
-	if !ok {
-		return
+// UpdateDocumentInput is UpdateDocument's request.
+type UpdateDocumentInput struct {
+	DocumentID string `path:"document_id"`
+	JSON       api.Body[models.UpdateDocumentDto]
+}
+
+// UpdateDocument is PATCH /documents/{document_id}: Update document.
+func (ctrl *TrackingController) UpdateDocument(ctx context.Context, in *UpdateDocumentInput) (*api.Out[*models.ComplianceDocument], error) {
+	c := api.Gin(ctx)
+	tenantID, err := ctrl.requireTenantID(c)
+	if err != nil {
+		return nil, err
 	}
 
-	documentID, err := uuid.Parse(c.Param("document_id"))
+	documentID, err := uuid.Parse(in.DocumentID)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, coreErrors.BuildErrorSingle(c, coreErrors.InvalidUUID))
-		return
+		return nil, api.Fail(http.StatusBadRequest, coreErrors.BuildErrorSingle(c, coreErrors.InvalidUUID))
 	}
 	var dto models.UpdateDocumentDto
-	if err := c.ShouldBindJSON(&dto); err != nil {
-		c.JSON(http.StatusBadRequest, coreErrors.BuildErrorDetail(c, trackingErrors.DocumentUpdateFailed, utils.ExtractValidationError(c, err)))
-		return
+	if err := in.JSON.Into(ctx, &dto); err != nil {
+		return nil, api.Fail(http.StatusBadRequest, coreErrors.BuildErrorDetail(c, trackingErrors.DocumentUpdateFailed, utils.ExtractValidationError(c, err)))
 	}
 	_ = conform.Strings(&dto)
 
 	document, err := ctrl.trackingService.UpdateDocument(c.Request.Context(), tenantID, documentID, &dto)
 	if err != nil {
-		if documentErrorResponse(c, err) {
-			return
+		if err := documentErrorResponse(c, err); err != nil {
+			return nil, err
 		}
-		c.JSON(http.StatusInternalServerError, coreErrors.BuildError(c, err))
-		return
+		return nil, api.Fail(http.StatusInternalServerError, coreErrors.BuildError(c, err))
 	}
-	c.JSON(http.StatusOK, document)
+	return api.OK(document)
 }
 
-// ListDocuments godoc
-// @Summary List documents
-// @Description One page of the tenant's compliance documents, soonest expiry first
-// @Tags Tracking - Documents
-// @Produce json
-// @Security BearerAuth
-// @Param subject_type query string false "Narrow to vehicles or drivers" Enums(vehicle, driver)
-// @Param subject_id query string false "Narrow to one vehicle or driver (UUID)"
-// @Param expiring_within_days query int false "Only what expires within N days"
-// @Param page query int false "Page number, 1-based" default(1)
-// @Param page_size query int false "Rows per page, max 100" default(20)
-// @Success 200 {object} models.ListDocumentsResponse
-// @Failure 400 {object} coreErrors.ErrorResponse
-// @Failure 500 {object} coreErrors.ErrorResponse
-// @Router /tracking/documents [get]
-func (ctrl *TrackingController) ListDocuments(c *gin.Context) {
-	tenantID, ok := ctrl.requireTenantID(c)
-	if !ok {
-		return
+// ListDocumentsInput is ListDocuments's request.
+type ListDocumentsInput struct {
+	Query api.Query[models.ListDocumentsQuery]
+}
+
+// ListDocuments is GET /documents: List documents.
+func (ctrl *TrackingController) ListDocuments(ctx context.Context, in *ListDocumentsInput) (*api.Out[*models.ListDocumentsResponse], error) {
+	c := api.Gin(ctx)
+	tenantID, err := ctrl.requireTenantID(c)
+	if err != nil {
+		return nil, err
 	}
 
 	var query models.ListDocumentsQuery
-	if err := c.ShouldBindQuery(&query); err != nil {
-		c.JSON(http.StatusBadRequest, coreErrors.BuildErrorDetail(c, "validation.invalid", err.Error()))
-		return
+	if err := in.Query.Into(ctx, &query); err != nil {
+		return nil, api.Fail(http.StatusBadRequest, coreErrors.BuildErrorDetail(c, "validation.invalid", err.Error()))
 	}
 
 	result, err := ctrl.trackingService.ListDocuments(c.Request.Context(), tenantID, query)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, coreErrors.BuildError(c, err))
-		return
+		return nil, api.Fail(http.StatusInternalServerError, coreErrors.BuildError(c, err))
 	}
-	c.JSON(http.StatusOK, result)
+	return api.OK(result)
 }
 
-// GetDocument godoc
-// @Summary Get document by ID
-// @Description Get a single compliance document by ID
-// @Tags Tracking - Documents
-// @Produce json
-// @Security BearerAuth
-// @Param document_id path string true "Document ID (UUID)"
-// @Success 200 {object} models.ComplianceDocument
-// @Failure 400 {object} coreErrors.ErrorResponse
-// @Failure 404 {object} coreErrors.ErrorResponse
-// @Failure 500 {object} coreErrors.ErrorResponse
-// @Router /tracking/documents/{document_id} [get]
-func (ctrl *TrackingController) GetDocument(c *gin.Context) {
-	tenantID, ok := ctrl.requireTenantID(c)
-	if !ok {
-		return
+// GetDocumentInput is GetDocument's request.
+type GetDocumentInput struct {
+	DocumentID string `path:"document_id"`
+}
+
+// GetDocument is GET /documents/{document_id}: Get document by ID.
+func (ctrl *TrackingController) GetDocument(ctx context.Context, in *GetDocumentInput) (*api.Out[*models.ComplianceDocument], error) {
+	c := api.Gin(ctx)
+	tenantID, err := ctrl.requireTenantID(c)
+	if err != nil {
+		return nil, err
 	}
 
-	documentID, err := uuid.Parse(c.Param("document_id"))
+	documentID, err := uuid.Parse(in.DocumentID)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, coreErrors.BuildErrorSingle(c, coreErrors.InvalidUUID))
-		return
+		return nil, api.Fail(http.StatusBadRequest, coreErrors.BuildErrorSingle(c, coreErrors.InvalidUUID))
 	}
 
 	document, err := ctrl.trackingService.GetDocument(c.Request.Context(), tenantID, documentID)
 	if err != nil {
-		if documentErrorResponse(c, err) {
-			return
+		if err := documentErrorResponse(c, err); err != nil {
+			return nil, err
 		}
-		c.JSON(http.StatusInternalServerError, coreErrors.BuildError(c, err))
-		return
+		return nil, api.Fail(http.StatusInternalServerError, coreErrors.BuildError(c, err))
 	}
-	c.JSON(http.StatusOK, document)
+	return api.OK(document)
 }
 
-// DeleteDocument godoc
-// @Summary Delete document
-// @Description Withdraw a compliance document; its stored file goes with it
-// @Tags Tracking - Documents
-// @Security BearerAuth
-// @Param document_id path string true "Document ID (UUID)"
-// @Success 204 "No Content"
-// @Failure 400 {object} coreErrors.ErrorResponse
-// @Failure 404 {object} coreErrors.ErrorResponse
-// @Failure 500 {object} coreErrors.ErrorResponse
-// @Router /tracking/documents/{document_id} [delete]
-func (ctrl *TrackingController) DeleteDocument(c *gin.Context) {
-	tenantID, ok := ctrl.requireTenantID(c)
-	if !ok {
-		return
+// DeleteDocumentInput is DeleteDocument's request.
+type DeleteDocumentInput struct {
+	DocumentID string `path:"document_id"`
+}
+
+// DeleteDocument is DELETE /documents/{document_id}: Delete document.
+func (ctrl *TrackingController) DeleteDocument(ctx context.Context, in *DeleteDocumentInput) (*api.Empty, error) {
+	c := api.Gin(ctx)
+	tenantID, err := ctrl.requireTenantID(c)
+	if err != nil {
+		return nil, err
 	}
 
-	documentID, err := uuid.Parse(c.Param("document_id"))
+	documentID, err := uuid.Parse(in.DocumentID)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, coreErrors.BuildErrorSingle(c, coreErrors.InvalidUUID))
-		return
+		return nil, api.Fail(http.StatusBadRequest, coreErrors.BuildErrorSingle(c, coreErrors.InvalidUUID))
 	}
 
 	fileExt, err := ctrl.trackingService.DeleteDocument(c.Request.Context(), tenantID, documentID)
 	if err != nil {
-		if documentErrorResponse(c, err) {
-			return
+		if err := documentErrorResponse(c, err); err != nil {
+			return nil, err
 		}
-		c.JSON(http.StatusInternalServerError, coreErrors.BuildError(c, err))
-		return
+		return nil, api.Fail(http.StatusInternalServerError, coreErrors.BuildError(c, err))
 	}
 	// The row is gone either way; a file that cannot be removed is a leak to clean up, never a
 	// reason to tell the caller the delete failed.
 	ctrl.documentFiles.Remove(c.Request.Context(), tenantID, documentID, fileExt)
 
-	c.Status(http.StatusNoContent)
+	return api.Done()
 }
 
-// UploadDocumentFile godoc
-// @Summary Attach a document's file
-// @Description Claim a scan uploaded on a ticket from POST /storage/uploads; PDF, JPG or PNG within the size limit
-// @Tags Tracking - Documents
-// @Accept json
-// @Produce json
-// @Security BearerAuth
-// @Param document_id path string true "Document ID (UUID)"
-// @Param file body models.ClaimDocumentFileDto true "The uploaded key and the file's own name"
-// @Success 200 {object} models.ComplianceDocument
-// @Failure 400 {object} coreErrors.ErrorResponse
-// @Failure 404 {object} coreErrors.ErrorResponse
-// @Failure 422 {object} coreErrors.ErrorResponse
-// @Failure 500 {object} coreErrors.ErrorResponse
-// @Router /tracking/documents/{document_id}/file [put]
-func (ctrl *TrackingController) UploadDocumentFile(c *gin.Context) {
-	tenantID, ok := ctrl.requireTenantID(c)
-	if !ok {
-		return
+// UploadDocumentFileInput is UploadDocumentFile's request.
+type UploadDocumentFileInput struct {
+	DocumentID string `path:"document_id"`
+	JSON       api.Body[models.ClaimDocumentFileDto]
+}
+
+// UploadDocumentFile claims a scan uploaded on a ticket from POST /storage/uploads; PDF, JPG or PNG
+// within the size limit.
+func (ctrl *TrackingController) UploadDocumentFile(ctx context.Context, in *UploadDocumentFileInput) (*api.Out[*models.ComplianceDocument], error) {
+	c := api.Gin(ctx)
+	tenantID, err := ctrl.requireTenantID(c)
+	if err != nil {
+		return nil, err
 	}
 
-	documentID, err := uuid.Parse(c.Param("document_id"))
+	documentID, err := uuid.Parse(in.DocumentID)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, coreErrors.BuildErrorSingle(c, coreErrors.InvalidUUID))
-		return
+		return nil, api.Fail(http.StatusBadRequest, coreErrors.BuildErrorSingle(c, coreErrors.InvalidUUID))
 	}
 
 	var dto models.ClaimDocumentFileDto
-	if err := c.ShouldBindJSON(&dto); err != nil {
-		c.JSON(http.StatusBadRequest, coreErrors.BuildErrorDetail(c, trackingErrors.DocumentFileInvalid, utils.ExtractValidationError(c, err)))
-		return
+	if err := in.JSON.Into(ctx, &dto); err != nil {
+		return nil, api.Fail(http.StatusBadRequest, coreErrors.BuildErrorDetail(c, trackingErrors.DocumentFileInvalid, utils.ExtractValidationError(c, err)))
 	}
 
 	// The document is read first: a claim against one that is not this tenant's must be a 404
 	// before a single object is touched. Its current extension says what the claim replaces.
 	previous, err := ctrl.trackingService.GetDocument(c.Request.Context(), tenantID, documentID)
 	if err != nil {
-		if documentErrorResponse(c, err) {
-			return
+		if err := documentErrorResponse(c, err); err != nil {
+			return nil, err
 		}
-		c.JSON(http.StatusInternalServerError, coreErrors.BuildError(c, err))
-		return
+		return nil, api.Fail(http.StatusInternalServerError, coreErrors.BuildError(c, err))
 	}
 
 	ext, size, err := ctrl.documentFiles.Claim(c.Request.Context(), tenantID, documentID, dto.Key)
 	if err != nil {
-		if documentErrorResponse(c, err) {
-			return
+		if err := documentErrorResponse(c, err); err != nil {
+			return nil, err
 		}
-		c.JSON(http.StatusInternalServerError, coreErrors.BuildError(c, err))
-		return
+		return nil, api.Fail(http.StatusInternalServerError, coreErrors.BuildError(c, err))
 	}
 
 	document, err := ctrl.trackingService.SetDocumentFile(c.Request.Context(), tenantID, documentID,
@@ -2442,58 +1964,49 @@ func (ctrl *TrackingController) UploadDocumentFile(c *gin.Context) {
 	if err != nil {
 		// The row never learnt about the copy, so the copy is litter — take it back out.
 		ctrl.documentFiles.Discard(c.Request.Context(), tenantID, documentID, dto.Key, previous.FileExt, ext)
-		if documentErrorResponse(c, err) {
-			return
+		if err := documentErrorResponse(c, err); err != nil {
+			return nil, err
 		}
-		c.JSON(http.StatusInternalServerError, coreErrors.BuildError(c, err))
-		return
+		return nil, api.Fail(http.StatusInternalServerError, coreErrors.BuildError(c, err))
 	}
-	c.JSON(http.StatusOK, document)
 	ctrl.documentFiles.AfterClaim(c.Request.Context(), tenantID, documentID, dto.Key, previous.FileExt, ext)
+	return api.OK(document)
 }
 
-// DownloadDocumentFile godoc
-// @Summary Download a document's file
-// @Description A 60-second signed link to the stored scan, issued behind auth; the scan is never public
-// @Tags Tracking - Documents
-// @Produce json
-// @Security BearerAuth
-// @Param document_id path string true "Document ID (UUID)"
-// @Success 200 {object} models.DocumentFileLink
-// @Failure 400 {object} coreErrors.ErrorResponse
-// @Failure 404 {object} coreErrors.ErrorResponse
-// @Failure 500 {object} coreErrors.ErrorResponse
-// @Router /tracking/documents/{document_id}/file [get]
-func (ctrl *TrackingController) DownloadDocumentFile(c *gin.Context) {
-	tenantID, ok := ctrl.requireTenantID(c)
-	if !ok {
-		return
+// DownloadDocumentFileInput is DownloadDocumentFile's request.
+type DownloadDocumentFileInput struct {
+	DocumentID string `path:"document_id"`
+}
+
+// DownloadDocumentFile is GET /documents/{document_id}/file: Download a document's file.
+func (ctrl *TrackingController) DownloadDocumentFile(ctx context.Context, in *DownloadDocumentFileInput) (*api.Out[models.DocumentFileLink], error) {
+	c := api.Gin(ctx)
+	tenantID, err := ctrl.requireTenantID(c)
+	if err != nil {
+		return nil, err
 	}
 
-	documentID, err := uuid.Parse(c.Param("document_id"))
+	documentID, err := uuid.Parse(in.DocumentID)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, coreErrors.BuildErrorSingle(c, coreErrors.InvalidUUID))
-		return
+		return nil, api.Fail(http.StatusBadRequest, coreErrors.BuildErrorSingle(c, coreErrors.InvalidUUID))
 	}
 
 	document, err := ctrl.trackingService.GetDocument(c.Request.Context(), tenantID, documentID)
 	if err != nil {
-		if documentErrorResponse(c, err) {
-			return
+		if err := documentErrorResponse(c, err); err != nil {
+			return nil, err
 		}
-		c.JSON(http.StatusInternalServerError, coreErrors.BuildError(c, err))
-		return
+		return nil, api.Fail(http.StatusInternalServerError, coreErrors.BuildError(c, err))
 	}
 
 	url, expiresAt, err := ctrl.documentFiles.DownloadURL(c.Request.Context(), tenantID, documentID, document.FileExt, downloadFilename(document))
 	if err != nil {
-		if documentErrorResponse(c, err) {
-			return
+		if err := documentErrorResponse(c, err); err != nil {
+			return nil, err
 		}
-		c.JSON(http.StatusInternalServerError, coreErrors.BuildError(c, err))
-		return
+		return nil, api.Fail(http.StatusInternalServerError, coreErrors.BuildError(c, err))
 	}
-	c.JSON(http.StatusOK, models.DocumentFileLink{URL: url, ExpiresAt: expiresAt})
+	return api.OK(models.DocumentFileLink{URL: url, ExpiresAt: expiresAt})
 }
 
 // downloadFilename names the file after what it is — "Insurance-POL-1.pdf" — rather than after what
@@ -2530,94 +2043,76 @@ func safeFilenamePart(value string) string {
 
 // documentErrorResponse answers the document codes that carry a status of their own and reports
 // whether it did; anything else is the caller's 500.
-func documentErrorResponse(c *gin.Context, err error) bool {
+func documentErrorResponse(c *gin.Context, err error) error {
 	var trackingErr *trackingErrors.TrackingError
 	if !errors.As(err, &trackingErr) {
-		return false
+		return nil
 	}
 	switch trackingErr.Code {
 	case trackingErrors.DocumentNotFound, trackingErrors.DocumentTypeNotFound,
 		trackingErrors.DocumentSubjectNotFound, trackingErrors.DocumentFileNotFound:
-		c.JSON(http.StatusNotFound, coreErrors.BuildErrorSingle(c, trackingErr.Code))
-		return true
+		return api.Fail(http.StatusNotFound, coreErrors.BuildErrorSingle(c, trackingErr.Code))
 	case trackingErrors.DocumentTypeCodeAlreadyExists, trackingErrors.DocumentTypeNotApplicable:
-		c.JSON(http.StatusConflict, coreErrors.BuildErrorSingle(c, trackingErr.Code))
-		return true
+		return api.Fail(http.StatusConflict, coreErrors.BuildErrorSingle(c, trackingErr.Code))
 	case trackingErrors.DocumentFileInvalid:
-		c.JSON(http.StatusUnprocessableEntity, coreErrors.BuildErrorSingle(c, trackingErr.Code))
-		return true
+		return api.Fail(http.StatusUnprocessableEntity, coreErrors.BuildErrorSingle(c, trackingErr.Code))
 	}
-	return false
+	return nil
 }
 
 // ==================== ORGANIZATION MEMBERS ====================
 
-// ListOrganizationMembers godoc
-// @Summary List organization members
-// @Description The tenant users on an organization, with their identity and role
-// @Tags Tracking - Organizations
-// @Produce json
-// @Security BearerAuth
-// @Param organization_id path string true "Organization ID (UUID)"
-// @Success 200 {array} models.OrganizationMember
-// @Failure 400 {object} coreErrors.ErrorResponse
-// @Failure 404 {object} coreErrors.ErrorResponse
-// @Failure 500 {object} coreErrors.ErrorResponse
-// @Router /tracking/organizations/{organization_id}/members [get]
-func (ctrl *TrackingController) ListOrganizationMembers(c *gin.Context) {
-	tenantID, ok := ctrl.requireTenantID(c)
-	if !ok {
-		return
+// ListOrganizationMembersInput is ListOrganizationMembers's request.
+type ListOrganizationMembersInput struct {
+	OrganizationID string `path:"organization_id"`
+}
+
+// ListOrganizationMembers is GET /organizations/{organization_id}/members: List organization members.
+func (ctrl *TrackingController) ListOrganizationMembers(ctx context.Context, in *ListOrganizationMembersInput) (*api.Out[[]*models.OrganizationMember], error) {
+	c := api.Gin(ctx)
+	tenantID, err := ctrl.requireTenantID(c)
+	if err != nil {
+		return nil, err
 	}
 
-	organizationID, err := uuid.Parse(c.Param("organization_id"))
+	organizationID, err := uuid.Parse(in.OrganizationID)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, coreErrors.BuildErrorSingle(c, coreErrors.InvalidUUID))
-		return
+		return nil, api.Fail(http.StatusBadRequest, coreErrors.BuildErrorSingle(c, coreErrors.InvalidUUID))
 	}
 
 	members, err := ctrl.trackingService.ListOrganizationMembers(c.Request.Context(), tenantID, organizationID, ctrl.scopeUserID(c))
 	if err != nil {
 		var trackingErr *trackingErrors.TrackingError
 		if errors.As(err, &trackingErr) && trackingErr.Code == trackingErrors.OrganizationNotFound {
-			c.JSON(http.StatusNotFound, coreErrors.BuildErrorSingle(c, trackingErr.Code))
-			return
+			return nil, api.Fail(http.StatusNotFound, coreErrors.BuildErrorSingle(c, trackingErr.Code))
 		}
-		c.JSON(http.StatusInternalServerError, coreErrors.BuildError(c, err))
-		return
+		return nil, api.Fail(http.StatusInternalServerError, coreErrors.BuildError(c, err))
 	}
-	c.JSON(http.StatusOK, members)
+	return api.OK(members)
 }
 
-// UpsertOrganizationMember godoc
-// @Summary Add an organization member or change their role
-// @Description Idempotent: the same call adds a member and re-roles one already there
-// @Tags Tracking - Organizations
-// @Accept json
-// @Produce json
-// @Security BearerAuth
-// @Param organization_id path string true "Organization ID (UUID)"
-// @Param user_id path string true "User ID (UUID)"
-// @Param member body models.UpsertOrganizationMemberDto true "Member role"
-// @Success 200 {object} models.OrganizationMember
-// @Failure 400 {object} coreErrors.ErrorResponse
-// @Failure 404 {object} coreErrors.ErrorResponse
-// @Failure 500 {object} coreErrors.ErrorResponse
-// @Router /tracking/organizations/{organization_id}/members/{user_id} [put]
-func (ctrl *TrackingController) UpsertOrganizationMember(c *gin.Context) {
-	tenantID, ok := ctrl.requireTenantID(c)
-	if !ok {
-		return
+// TrackingControllerUpsertOrganizationMemberInput is UpsertOrganizationMember's request.
+type TrackingControllerUpsertOrganizationMemberInput struct {
+	OrganizationID string `path:"organization_id"`
+	UserID         string `path:"user_id"`
+	JSON           api.Body[models.UpsertOrganizationMemberDto]
+}
+
+// UpsertOrganizationMember is PUT /organizations/{organization_id}/members/{user_id}: Add an organization member or change their role.
+func (ctrl *TrackingController) UpsertOrganizationMember(ctx context.Context, in *TrackingControllerUpsertOrganizationMemberInput) (*api.Out[*models.OrganizationMember], error) {
+	c := api.Gin(ctx)
+	tenantID, err := ctrl.requireTenantID(c)
+	if err != nil {
+		return nil, err
 	}
 
-	organizationID, userID, ok := ctrl.memberPathIDs(c)
-	if !ok {
-		return
+	organizationID, userID, err := ctrl.memberPathIDs(c)
+	if err != nil {
+		return nil, err
 	}
 	var dto models.UpsertOrganizationMemberDto
-	if err := c.ShouldBindJSON(&dto); err != nil {
-		c.JSON(http.StatusBadRequest, coreErrors.BuildErrorDetail(c, trackingErrors.OrganizationMemberSaveFailed, utils.ExtractValidationError(c, err)))
-		return
+	if err := in.JSON.Into(ctx, &dto); err != nil {
+		return nil, api.Fail(http.StatusBadRequest, coreErrors.BuildErrorDetail(c, trackingErrors.OrganizationMemberSaveFailed, utils.ExtractValidationError(c, err)))
 	}
 	_ = conform.Strings(&dto)
 
@@ -2626,63 +2121,53 @@ func (ctrl *TrackingController) UpsertOrganizationMember(c *gin.Context) {
 		var trackingErr *trackingErrors.TrackingError
 		if errors.As(err, &trackingErr) &&
 			(trackingErr.Code == trackingErrors.OrganizationNotFound || trackingErr.Code == trackingErrors.OrganizationMemberUserNotFound) {
-			c.JSON(http.StatusNotFound, coreErrors.BuildErrorSingle(c, trackingErr.Code))
-			return
+			return nil, api.Fail(http.StatusNotFound, coreErrors.BuildErrorSingle(c, trackingErr.Code))
 		}
-		c.JSON(http.StatusInternalServerError, coreErrors.BuildError(c, err))
-		return
+		return nil, api.Fail(http.StatusInternalServerError, coreErrors.BuildError(c, err))
 	}
-	c.JSON(http.StatusOK, member)
+	return api.OK(member)
 }
 
-// DeleteOrganizationMember godoc
-// @Summary Remove an organization member
-// @Description Take a user off an organization; the user account itself is untouched
-// @Tags Tracking - Organizations
-// @Security BearerAuth
-// @Param organization_id path string true "Organization ID (UUID)"
-// @Param user_id path string true "User ID (UUID)"
-// @Success 204 "No Content"
-// @Failure 400 {object} coreErrors.ErrorResponse
-// @Failure 404 {object} coreErrors.ErrorResponse
-// @Failure 500 {object} coreErrors.ErrorResponse
-// @Router /tracking/organizations/{organization_id}/members/{user_id} [delete]
-func (ctrl *TrackingController) DeleteOrganizationMember(c *gin.Context) {
-	tenantID, ok := ctrl.requireTenantID(c)
-	if !ok {
-		return
+// DeleteOrganizationMemberInput is DeleteOrganizationMember's request.
+type DeleteOrganizationMemberInput struct {
+	OrganizationID string `path:"organization_id"`
+	UserID         string `path:"user_id"`
+}
+
+// DeleteOrganizationMember is DELETE /organizations/{organization_id}/members/{user_id}: Remove an organization member.
+func (ctrl *TrackingController) DeleteOrganizationMember(ctx context.Context, _ *DeleteOrganizationMemberInput) (*api.Empty, error) {
+	c := api.Gin(ctx)
+	tenantID, err := ctrl.requireTenantID(c)
+	if err != nil {
+		return nil, err
 	}
 
-	organizationID, userID, ok := ctrl.memberPathIDs(c)
-	if !ok {
-		return
+	organizationID, userID, err := ctrl.memberPathIDs(c)
+	if err != nil {
+		return nil, err
 	}
 
-	err := ctrl.trackingService.DeleteOrganizationMember(c.Request.Context(), tenantID, organizationID, userID)
+	err = ctrl.trackingService.DeleteOrganizationMember(c.Request.Context(), tenantID, organizationID, userID)
 	if err != nil {
 		var trackingErr *trackingErrors.TrackingError
 		if errors.As(err, &trackingErr) &&
 			(trackingErr.Code == trackingErrors.OrganizationNotFound || trackingErr.Code == trackingErrors.OrganizationMemberNotFound) {
-			c.JSON(http.StatusNotFound, coreErrors.BuildErrorSingle(c, trackingErr.Code))
-			return
+			return nil, api.Fail(http.StatusNotFound, coreErrors.BuildErrorSingle(c, trackingErr.Code))
 		}
-		c.JSON(http.StatusInternalServerError, coreErrors.BuildError(c, err))
-		return
+		return nil, api.Fail(http.StatusInternalServerError, coreErrors.BuildError(c, err))
 	}
-	c.Status(http.StatusNoContent)
+	return api.Done()
 }
 
 // memberPathIDs parses the two ids every membership route carries, answering 400 on either.
-func (ctrl *TrackingController) memberPathIDs(c *gin.Context) (uuid.UUID, uuid.UUID, bool) {
+func (ctrl *TrackingController) memberPathIDs(c *gin.Context) (uuid.UUID, uuid.UUID, error) {
 	organizationID, err := uuid.Parse(c.Param("organization_id"))
 	if err != nil {
-		c.JSON(http.StatusBadRequest, coreErrors.BuildErrorSingle(c, coreErrors.InvalidUUID))
-		return uuid.Nil, uuid.Nil, false
+		return uuid.Nil, uuid.Nil, api.Fail(http.StatusBadRequest, coreErrors.BuildErrorSingle(c, coreErrors.InvalidUUID))
 	}
 	userID, err := uuid.Parse(c.Param("user_id"))
 	if err != nil {
-		c.JSON(http.StatusBadRequest, coreErrors.BuildErrorSingle(c, coreErrors.InvalidUUID))
-		return uuid.Nil, uuid.Nil, false
+		return uuid.Nil, uuid.Nil, api.Fail(http.StatusBadRequest, coreErrors.BuildErrorSingle(c, coreErrors.InvalidUUID))
 	}
-	return organizationID, userID, true
+	return organizationID, userID, nil
 }

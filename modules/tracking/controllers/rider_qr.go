@@ -1,9 +1,11 @@
 package controllers
 
 import (
+	"context"
 	"errors"
 	"net/http"
 
+	"josex/web/modules/core/api"
 	coreErrors "josex/web/modules/core/errors"
 	trackingErrors "josex/web/modules/tracking/errors"
 	"josex/web/modules/tracking/models"
@@ -13,81 +15,67 @@ import (
 
 // The rider card of TRACK-027, as the web reads it: the code a driver scans.
 
-func riderQRErrorResponse(c *gin.Context, err error) {
-	if scopeRefused(c, err) {
-		return
+func riderQRErrorResponse(c *gin.Context, err error) error {
+	if err := scopeRefused(c, err); err != nil {
+		return err
 	}
 	var trackingErr *trackingErrors.TrackingError
 	if errors.As(err, &trackingErr) && trackingErr.Code == trackingErrors.RiderNotFound {
-		c.JSON(http.StatusNotFound, coreErrors.BuildErrorSingle(c, trackingErr.Code))
-		return
+		return api.Fail(http.StatusNotFound, coreErrors.BuildErrorSingle(c, trackingErr.Code))
 	}
-	c.JSON(http.StatusInternalServerError, coreErrors.BuildError(c, err))
+	return api.Fail(http.StatusInternalServerError, coreErrors.BuildError(c, err))
 }
 
-// RiderQRToken godoc
-// @Summary Read or rotate a rider's card code
-// @Description The code printed on the rider's card, which a driver scans. POST replaces it, so the old card resolves nothing (riders:write). An organization user reaches only their organizations' riders
-// @Tags Tracking - Riders
-// @Produce json
-// @Security BearerAuth
-// @Param rider_id path string true "Rider ID (UUID)"
-// @Success 200 {object} models.RiderQRToken
-// @Failure 400 {object} coreErrors.ErrorResponse
-// @Failure 404 {object} coreErrors.ErrorResponse
-// @Router /tracking/riders/{rider_id}/qr-token [get]
-// @Router /tracking/riders/{rider_id}/qr-token [post]
-func (ctrl *TrackingController) RiderQRToken(c *gin.Context) {
-	tenantID, ok := ctrl.requireTenantID(c)
-	if !ok {
-		return
+// RiderQRTokenInput is RiderQRToken's request.
+type RiderQRTokenInput struct {
+	RiderID string `path:"rider_id"`
+}
+
+// RiderQRToken is GET /riders/{rider_id}/qr-token: Read or rotate a rider's card code.
+func (ctrl *TrackingController) RiderQRToken(ctx context.Context, _ *RiderQRTokenInput) (*api.Out[models.RiderQRToken], error) {
+	c := api.Gin(ctx)
+	tenantID, err := ctrl.requireTenantID(c)
+	if err != nil {
+		return nil, err
 	}
-	riderID, ok := pathUUID(c, "rider_id")
-	if !ok {
-		return
+	riderID, err := pathUUID(c, "rider_id")
+	if err != nil {
+		return nil, err
 	}
 
 	rotate := c.Request.Method == http.MethodPost
 	token, err := ctrl.trackingService.RiderQRToken(c.Request.Context(), tenantID, riderID, rotate, ctrl.scopeUserID(c))
 	if err != nil {
-		riderQRErrorResponse(c, err)
-		return
+		return nil, riderQRErrorResponse(c, err)
 	}
-	c.JSON(http.StatusOK, models.RiderQRToken{QRToken: token})
+	return api.OK(models.RiderQRToken{QRToken: token})
 }
 
-// ListRiderCards godoc
-// @Summary Printable rider cards
-// @Description The cards of one route's riders (its pair's too, in boarding order), of one client, or of one rider: name, client, the outbound route and pickup stop, and the code a driver scans. Exactly one filter. An organization user reaches only their organizations' riders
-// @Tags Tracking - Riders
-// @Produce json
-// @Security BearerAuth
-// @Param route_id query string false "Route ID (UUID)"
-// @Param organization_id query string false "Organization ID (UUID)"
-// @Param rider_id query string false "Rider ID (UUID)"
-// @Success 200 {object} models.RiderCards
-// @Failure 400 {object} coreErrors.ErrorResponse
-// @Router /tracking/riders/cards [get]
-func (ctrl *TrackingController) ListRiderCards(c *gin.Context) {
-	tenantID, ok := ctrl.requireTenantID(c)
-	if !ok {
-		return
+// ListRiderCardsInput is ListRiderCards's request.
+type ListRiderCardsInput struct {
+	Query api.Query[models.RiderCardsQuery]
+}
+
+// ListRiderCards is GET /riders/cards: Printable rider cards.
+func (ctrl *TrackingController) ListRiderCards(ctx context.Context, in *ListRiderCardsInput) (*api.Out[models.RiderCards], error) {
+	c := api.Gin(ctx)
+	tenantID, err := ctrl.requireTenantID(c)
+	if err != nil {
+		return nil, err
 	}
 	var query models.RiderCardsQuery
-	if err := c.ShouldBindQuery(&query); err != nil || countSet(query.RouteID, query.OrganizationID, query.RiderID) != 1 {
-		c.JSON(http.StatusBadRequest, coreErrors.BuildErrorSingle(c, trackingErrors.RiderCardsInvalid))
-		return
+	if err := in.Query.Into(ctx, &query); err != nil || countSet(query.RouteID, query.OrganizationID, query.RiderID) != 1 {
+		return nil, api.Fail(http.StatusBadRequest, coreErrors.BuildErrorSingle(c, trackingErrors.RiderCardsInvalid))
 	}
 
 	cards, err := ctrl.trackingService.ListRiderCards(c.Request.Context(), tenantID, query, ctrl.scopeUserID(c))
 	if err != nil {
-		if scopeRefused(c, err) {
-			return
+		if err := scopeRefused(c, err); err != nil {
+			return nil, err
 		}
-		c.JSON(http.StatusInternalServerError, coreErrors.BuildError(c, err))
-		return
+		return nil, api.Fail(http.StatusInternalServerError, coreErrors.BuildError(c, err))
 	}
-	c.JSON(http.StatusOK, models.RiderCards{Cards: cards})
+	return api.OK(models.RiderCards{Cards: cards})
 }
 
 // countSet is how many of the optional filters were sent.
