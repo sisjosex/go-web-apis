@@ -27,7 +27,7 @@ func RegisterAuthRoutes(
 		// Login & Registration
 		api.Post(authRoutes, "/login", authController.Login, api.Doc{Summary: "Allow login based on email authentication, email can be confirmed after login", Description: "Allow login based on email authentication, email can be confirmed after login", Errors: []int{400}})
 		api.Post(authRoutes, "/login/facebook", authController.LoginFacebook, api.Doc{Summary: "Allow login based on Facebook authentication", Description: "Allow login based on Facebook authentication", Errors: []int{400}})
-		api.Post(authRoutes, "/login/google", authController.LoginGoogle, api.Doc{Summary: "Sign in with Google", Description: "Exchanges the code from the Google popup (GIS code flow, ux_mode popup), checks the ID token names this app and a verified address, then signs in the account with that email or creates it (APP-016 D4). 503 when the server has no Google client.", Errors: []int{400, 401, 503}})
+		api.Post(authRoutes, "/login/google", authController.LoginGoogle, api.Doc{Summary: "Sign in with Google", Description: "Exchanges the code from the Google popup (GIS code flow, ux_mode popup) or, with X-Client-Type mobile, the Android server auth code (MOBILE-035), checks the ID token names this app and a verified address, then signs in the account with that email or creates it (APP-016 D4). 503 when the server has no Google client.", Errors: []int{400, 401, 503}})
 		api.Post(authRoutes, "/register", authController.Register, api.Doc{Summary: "Register", Description: "Register", Errors: []int{400}})
 		api.Post(authRoutes, "/refresh_token", authController.RefreshToken, api.Doc{Summary: "Refresh access token", Description: "Refresh access token using refresh token and validate active session", Errors: []int{400, 401}})
 

@@ -22,9 +22,9 @@ type GoogleIdentity struct {
 	LastName  string
 }
 
-// GoogleSignIn turns the code from the web popup into the account behind it.
+// GoogleSignIn turns the code from the web popup, or from the phone (MOBILE-035), into the account behind it.
 type GoogleSignIn interface {
-	Exchange(ctx context.Context, code string) (*GoogleIdentity, error)
+	Exchange(ctx context.Context, code string, fromPhone bool) (*GoogleIdentity, error)
 }
 
 type googleClaims struct {
@@ -61,11 +61,16 @@ func NewGoogleSignIn(clientID, clientSecret, tokenURL string) GoogleSignIn {
 	}}
 }
 
-func (g *googleSignIn) Exchange(ctx context.Context, code string) (*GoogleIdentity, error) {
+func (g *googleSignIn) Exchange(ctx context.Context, code string, fromPhone bool) (*GoogleIdentity, error) {
 	ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
 	defer cancel()
 
-	token, err := g.oauth.Exchange(ctx, code)
+	var opts []oauth2.AuthCodeOption
+	if fromPhone {
+		// Android's server auth code was issued with no redirect: Google expects an empty redirect_uri.
+		opts = append(opts, oauth2.SetAuthURLParam("redirect_uri", ""))
+	}
+	token, err := g.oauth.Exchange(ctx, code, opts...)
 	if err != nil {
 		return nil, fmt.Errorf("%w: %v", ErrGoogleSignIn, err)
 	}

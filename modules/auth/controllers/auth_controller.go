@@ -170,7 +170,11 @@ func (uc *AuthController) LoginGoogle(ctx context.Context, in *LoginGoogleInput)
 		return nil, api.Fail(http.StatusBadRequest, coreErrors.BuildErrorDetail(c, authErrors.UserLoginValidationFailed, utils.ExtractValidationError(c, err)))
 	}
 
-	identity, err := uc.google.Exchange(c.Request.Context(), request.Code)
+	declaredClient, err := clientType(c)
+	if err != nil {
+		return nil, err
+	}
+	identity, err := uc.google.Exchange(c.Request.Context(), request.Code, declaredClient == ClientTypeMobile)
 	if err != nil {
 		return nil, api.Fail(http.StatusUnauthorized, coreErrors.BuildErrorSingle(c, authErrors.UserLoginGoogleInvalid))
 	}

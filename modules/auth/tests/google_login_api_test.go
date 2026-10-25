@@ -41,7 +41,12 @@ func TestMain(m *testing.M) {
 func fakeGoogleToken(w http.ResponseWriter, r *http.Request) {
 	_ = r.ParseForm()
 	kind, email, ok := strings.Cut(r.PostForm.Get("code"), ":")
-	if !ok || r.PostForm.Get("client_secret") != "test-secret" || r.PostForm.Get("redirect_uri") != "postmessage" {
+	// A phone's code (MOBILE-035) is exchanged with an empty redirect_uri, the web popup's with "postmessage".
+	redirect := "postmessage"
+	if kind == "phone" {
+		redirect = ""
+	}
+	if !ok || r.PostForm.Get("client_secret") != "test-secret" || r.PostForm.Get("redirect_uri") != redirect || !r.PostForm.Has("redirect_uri") {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusBadRequest)
 		_, _ = w.Write([]byte(`{"error":"invalid_grant"}`))
@@ -130,6 +135,21 @@ func TestLoginGoogleRefused(t *testing.T) {
 		assert.Equal(t, http.StatusUnauthorized, w.Code, code)
 		assert.Contains(t, w.Body.String(), "user.login.google-invalid", code)
 	}
+}
+
+// TestLoginGooglePhoneCode - a phone's server auth code is exchanged with an empty redirect_uri (MOBILE-035):
+// it signs in as X-Client-Type mobile, and is refused when sent as the web's.
+func TestLoginGooglePhoneCode(t *testing.T) {
+	helper := testhelpers.SetupApiTest(t)
+	defer helper.Close()
+
+	code := "phone:google-phone-" + uuid.New().String() + "@test.com"
+	body := map[string]any{"code": code, "device_id": testDeviceID()}
+	w := helper.DoRequest("POST", "/auth/login/google", body, map[string]string{"X-Client-Type": "mobile"})
+	assert.Equal(t, http.StatusOK, w.Code, w.Body.String())
+
+	w = helper.DoRequest("POST", "/auth/login/google", body, map[string]string{})
+	assert.Equal(t, http.StatusUnauthorized, w.Code, w.Body.String())
 }
 
 // TestLoginGoogleMissingDevice - the session needs a device id; without one the body is refused.
