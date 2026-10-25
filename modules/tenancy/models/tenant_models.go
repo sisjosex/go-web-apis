@@ -99,6 +99,8 @@ type UserTenantResponse struct {
 	JoinedAt    time.Time `json:"joined_at"`
 	// Permissions are what the web may show (TRACK-041 D1): the roles' codes, or "*" for owner and admin.
 	Permissions []string `json:"permissions"`
+	// Settings are the workspace's stored settings, the general.* keys with their defaults filled (TENANCY-007).
+	Settings map[string]any `json:"settings"`
 }
 
 // TenantAccessInfo - stored in context by middleware

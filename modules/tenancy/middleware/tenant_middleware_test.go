@@ -31,6 +31,12 @@ func (m *mockTenantService) GetTenantBySlug(_ context.Context, _ string) (*model
 func (m *mockTenantService) GetTenantBySlugCached(_ context.Context, _ string) (*models.Tenant, error) {
 	return m.tenantBySlug, m.slugErr
 }
+func (m *mockTenantService) TenantSettings(_ context.Context, _ string) (map[string]any, error) {
+	return nil, nil
+}
+func (m *mockTenantService) MergeSettings(_ context.Context, _ uuid.UUID, _ string, _ map[string]any) (map[string]any, error) {
+	return nil, nil
+}
 func (m *mockTenantService) VerifyUserTenantAccess(_ context.Context, _ uuid.UUID, _ string) (*models.TenantAccessInfo, error) {
 	return m.accessInfo, m.err
 }

@@ -3,11 +3,13 @@ package services
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"fmt"
 	"log"
 
 	"josex/web/config"
 	coreConfig "josex/web/modules/core/config"
+	"josex/web/modules/core/registry"
 	coreServices "josex/web/modules/core/services"
 	"josex/web/modules/tenancy/interfaces"
 	"josex/web/modules/tenancy/models"
@@ -133,8 +135,23 @@ func (s *tenantService) runTenantMigrations(databaseURL string) error {
 }
 
 // GetUserTenants gets user's accessible tenants
+// Each row's settings carry the defaults of the keys every workspace has (general.*), so a client
+// reads the country or language without a second request; module keys stay as stored (TENANCY-007).
 func (s *tenantService) GetUserTenants(ctx context.Context, userID uuid.UUID) ([]*models.UserTenantResponse, error) {
-	return s.tenantRepository.GetUserTenants(ctx, userID)
+	tenants, err := s.tenantRepository.GetUserTenants(ctx, userID)
+	if err != nil {
+		return nil, err
+	}
+	common := registry.SettingsFor(nil)
+	for _, tenant := range tenants {
+		if tenant.Settings == nil {
+			tenant.Settings = map[string]any{}
+		}
+		for _, spec := range common {
+			tenant.Settings[spec.Key] = spec.Value(tenant.Settings)
+		}
+	}
+	return tenants, nil
 }
 
 // UpdateTenant updates tenant information
@@ -189,6 +206,30 @@ func (s *tenantService) GetTenantBySlugCached(ctx context.Context, slug string) 
 	}
 	storeTenant(ctx, slug, tenant)
 	return tenant, nil
+}
+
+// TenantSettings answers a workspace's stored settings through the shared cache: 0 queries while warm.
+func (s *tenantService) TenantSettings(ctx context.Context, slug string) (map[string]any, error) {
+	tenant, err := s.GetTenantBySlugCached(ctx, slug)
+	if err != nil {
+		return nil, err
+	}
+	return registry.ParseSettings(tenant.Settings), nil
+}
+
+// MergeSettings writes the keys of patch, keeping the rest, and forgets the cached row so every
+// replica reads the change on its next request (TENANCY-007 D1). The caller validated patch.
+func (s *tenantService) MergeSettings(ctx context.Context, tenantID uuid.UUID, slug string, patch map[string]any) (map[string]any, error) {
+	raw, err := json.Marshal(patch)
+	if err != nil {
+		return nil, err
+	}
+	merged, err := s.tenantRepository.MergeSettings(ctx, tenantID, raw)
+	if err != nil {
+		return nil, err
+	}
+	forgetTenant(ctx, slug)
+	return registry.ParseSettings(merged), nil
 }
 
 // VerifyUserTenantAccess verifies user has access to tenant (used by middleware)

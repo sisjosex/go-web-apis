@@ -15,6 +15,7 @@ import (
 	coreErrors "josex/web/modules/core/errors"
 	"josex/web/modules/core/limits"
 	coreModels "josex/web/modules/core/models"
+	"josex/web/modules/core/registry"
 	coreServices "josex/web/modules/core/services"
 	"josex/web/modules/core/utils"
 	tenancyModels "josex/web/modules/tenancy/models"
@@ -113,6 +114,7 @@ func (uc *UserController) Create(ctx context.Context, in *CreateUserInput) (*api
 		if err := limits.Refuse(c, uc.userService.EnsureTenantSeat(c.Request.Context(), tenantID)); err != nil {
 			return nil, err
 		}
+		newUser.Locale, _ = registry.TenantSetting(c.Request.Context(), c.GetString("tenant_slug"), tenancyModels.SettingLocale).(string)
 	}
 
 	user, err := uc.userService.InsertUser(newUser)

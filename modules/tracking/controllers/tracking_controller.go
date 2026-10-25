@@ -15,6 +15,7 @@ import (
 	"josex/web/modules/core/api"
 	coreErrors "josex/web/modules/core/errors"
 	"josex/web/modules/core/limits"
+	"josex/web/modules/core/registry"
 	"josex/web/modules/core/utils"
 	tenancyErrors "josex/web/modules/tenancy/errors"
 	tenancyModels "josex/web/modules/tenancy/models"
@@ -1347,6 +1348,10 @@ func (ctrl *TrackingController) CreateOrganization(ctx context.Context, in *Crea
 		return nil, api.Fail(http.StatusBadRequest, coreErrors.BuildErrorDetail(c, trackingErrors.OrganizationCreateFailed, utils.ExtractValidationError(c, err)))
 	}
 	_ = conform.Strings(&dto)
+	// A client without a zone of its own takes the workspace's (TENANCY-007), read through the cache.
+	if dto.Timezone == "" {
+		dto.Timezone, _ = registry.TenantSetting(c.Request.Context(), c.GetString("tenant_slug"), tenancyModels.SettingTimezone).(string)
+	}
 
 	organization, err := ctrl.trackingService.CreateOrganization(c.Request.Context(), tenantID, &dto)
 	if err != nil {

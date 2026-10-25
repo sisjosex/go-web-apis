@@ -70,10 +70,12 @@ import (
 	"log"
 	"time"
 
+	"josex/web/modules/core/registry"
 	coreValidators "josex/web/modules/core/validators"
 	_ "josex/web/modules/inventory"
 	_ "josex/web/modules/purchasing"
 	_ "josex/web/modules/sales"
+	_ "josex/web/modules/tenancy"
 	_ "josex/web/modules/tracking"
 	_ "josex/web/modules/users"
 
@@ -313,7 +315,7 @@ func registerTenancy(d routeDeps, billingService billingInterfaces.BillingServic
 	moduleController := tenancyControllers.NewModuleController(chains.modules)
 
 	// Register tenant, permission, role and module routes
-	tenancyRoutes.RegisterTenantRoutes(d.apiV1, tenantController, tenantService, d.jwt)
+	tenancyRoutes.RegisterTenantRoutes(d.apiV1, tenantController, tenancyControllers.NewSettingsController(tenantService, chains.modules), tenantService, d.jwt)
 	tenancyRoutes.RegisterPermissionRoutes(d.apiV1, permissionController, d.jwt)
 	tenancyRoutes.RegisterRoleRoutes(d.apiV1, roleController, tenantService, d.jwt)
 	tenancyRoutes.RegisterModuleRoutes(d.apiV1, moduleController, tenantService, chains.modules, d.jwt)
@@ -351,6 +353,8 @@ func tenancyChains(d routeDeps) tenantChains {
 	}
 	chains.modules = tenancyServices.NewModuleService(tenancyRepos.NewModuleRepository(d.db))
 	chains.tenants = tenantService
+	// A request reads a workspace setting through the same cache (TENANCY-007 D1).
+	registry.UseSettingsReader(tenantService.TenantSettings)
 	chains.tenant = tenancyMW.TenantMiddlewareFromHeader(tenantService)
 	chains.portal = tenancyMW.TenantMiddlewareFromHeader(tenantService, tenancyModels.RolePortal)
 	chains.driver = tenancyMW.TenantMiddlewareFromHeader(tenantService, tenancyModels.RoleDriver)

@@ -1,5 +1,5 @@
 CREATE OR REPLACE FUNCTION tenancy.sp_get_user_tenants(p_user_id uuid)
- RETURNS TABLE(tenant_id uuid, slug character varying, name character varying, is_active boolean, is_suspended boolean, user_role character varying, joined_at timestamp with time zone, permissions text[])
+ RETURNS TABLE(tenant_id uuid, slug character varying, name character varying, is_active boolean, is_suspended boolean, user_role character varying, joined_at timestamp with time zone, permissions text[], settings jsonb)
  LANGUAGE plpgsql
 AS $function$
 BEGIN
@@ -24,7 +24,9 @@ BEGIN
             FROM tenancy.user_roles ur
             INNER JOIN tenancy.role_permissions rp ON rp.role_id = ur.role_id
             WHERE ur.user_id = p_user_id AND ur.tenant_id = t.id
-        ), ARRAY[]::TEXT[]) END
+        ), ARRAY[]::TEXT[]) END,
+        -- TENANCY-007: the workspace's stored settings, unset keys left to their defaults.
+        COALESCE(t.settings, '{}'::jsonb)
     FROM tenancy.tenants t
     INNER JOIN tenancy.tenant_users tu ON tu.tenant_id = t.id
     WHERE tu.user_id = p_user_id
@@ -40,4 +42,4 @@ BEGIN
 END;
 $function$;
 
-COMMENT ON FUNCTION tenancy.sp_get_user_tenants(uuid) IS 'The tenants a user belongs to with their role and their permissions — ''*'' for owner and admin (TRACK-041 D1)';
+COMMENT ON FUNCTION tenancy.sp_get_user_tenants(uuid) IS 'The tenants a user belongs to with their role and their permissions — ''*'' for owner and admin (TRACK-041 D1) — and the tenant''s stored settings (TENANCY-007)';

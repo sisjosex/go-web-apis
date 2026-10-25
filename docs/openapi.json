@@ -5851,6 +5851,52 @@
         ],
         "type": "object"
       },
+      "tenancy.TenantSettingSpec": {
+        "additionalProperties": false,
+        "properties": {
+          "key": {
+            "type": "string"
+          },
+          "module": {
+            "type": "string"
+          },
+          "options": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "type": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "key",
+          "module",
+          "type"
+        ],
+        "type": "object"
+      },
+      "tenancy.TenantSettingsResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "settings": {
+            "additionalProperties": {},
+            "type": "object"
+          },
+          "specs": {
+            "items": {
+              "$ref": "#/components/schemas/tenancy.TenantSettingSpec"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "settings",
+          "specs"
+        ],
+        "type": "object"
+      },
       "tenancy.TenantUsage": {
         "additionalProperties": false,
         "properties": {
@@ -6083,6 +6129,10 @@
             },
             "type": "array"
           },
+          "settings": {
+            "additionalProperties": {},
+            "type": "object"
+          },
           "slug": {
             "type": "string"
           },
@@ -6102,7 +6152,8 @@
           "is_suspended",
           "user_role",
           "joined_at",
-          "permissions"
+          "permissions",
+          "settings"
         ],
         "type": "object"
       },
@@ -22944,6 +22995,121 @@
           "tenancy"
         ],
         "x-handler": "josex/web/modules/tenancy/controllers.(*RoleController).ListRoleUsers"
+      }
+    },
+    "/api/v1/tenants/{tenant_slug}/settings": {
+      "get": {
+        "description": "Every setting its enabled modules declare, with the default where it never set one, and each key's type and options (TENANCY-007)",
+        "operationId": "tenancy.GetSettings",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "tenant_slug",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/tenancy.TenantSettingsResponse"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/core.ErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          }
+        },
+        "summary": "Get the workspace's settings",
+        "tags": [
+          "tenancy"
+        ],
+        "x-handler": "josex/web/modules/tenancy/controllers.(*SettingsController).GetSettings"
+      },
+      "patch": {
+        "description": "Merges the keys sent, keeping the rest; an undeclared key or a value its type refuses answers 422",
+        "operationId": "tenancy.UpdateSettings",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "tenant_slug",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": {},
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/tenancy.TenantSettingsResponse"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/core.ErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/core.ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/core.ErrorResponse"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          }
+        },
+        "summary": "Change the workspace's settings (owner/admin only)",
+        "tags": [
+          "tenancy"
+        ],
+        "x-handler": "josex/web/modules/tenancy/controllers.(*SettingsController).UpdateSettings"
       }
     },
     "/api/v1/tenants/{tenant_slug}/users": {

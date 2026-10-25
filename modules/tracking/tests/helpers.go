@@ -1935,3 +1935,15 @@ func ClearedContacts(t *testing.T, helper *testhelpers.ApiTestHelper, riderID st
 	return countRows(t, helper, `SELECT count(*) FROM tracking.rider_contacts
 		WHERE rider_id = $1 AND user_id IS NULL AND name IS NULL AND phone IS NULL AND email IS NULL`, riderID)
 }
+
+// LinkRiderGuardians makes the accounts of emails guardians of rider, so a notice of its trips reaches
+// them; the links and the notices they got go when the test ends.
+func LinkRiderGuardians(t *testing.T, helper *testhelpers.ApiTestHelper, riderID string, emails ...string) {
+	t.Helper()
+	execSQL(t, helper, `INSERT INTO tracking.rider_contacts (rider_id, relation, name, email, user_id, is_primary)
+		SELECT $1, 'guardian', u.email, u.email, u.id, FALSE FROM auth.users u WHERE u.email = ANY($2)`, riderID, emails)
+	t.Cleanup(func() {
+		execSQL(t, helper, `DELETE FROM tracking.rider_contacts WHERE rider_id = $1`, riderID)
+		execSQL(t, helper, `DELETE FROM tracking.notifications WHERE rider_id = $1`, riderID)
+	})
+}

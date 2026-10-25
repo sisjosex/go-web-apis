@@ -38,5 +38,7 @@
   "tenant.module.locked": "Este módulo está siempre activo.",
   "tenant.usage.range-too-wide": "El rango no puede superar 366 días",
   "tenant.usage.range-invalid": "La fecha final debe ser igual o posterior a la inicial",
-  "tenant.usage.list-failed": "Error al obtener el uso de los negocios"
+  "tenant.usage.list-failed": "Error al obtener el uso de los negocios",
+  "tenant.settings.unknown-key": "Ese ajuste no existe en tu organización",
+  "tenant.settings.invalid": "Ese valor no es válido para el ajuste"
 }

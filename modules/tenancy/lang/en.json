@@ -38,5 +38,7 @@
   "tenant.module.locked": "This module is always on.",
   "tenant.usage.range-too-wide": "The range cannot exceed 366 days",
   "tenant.usage.range-invalid": "The end date must be on or after the start date",
-  "tenant.usage.list-failed": "Failed to retrieve the businesses' usage"
+  "tenant.usage.list-failed": "Failed to retrieve the businesses' usage",
+  "tenant.settings.unknown-key": "That setting does not exist in your workspace",
+  "tenant.settings.invalid": "That value is not valid for the setting"
 }

@@ -677,6 +677,7 @@
         "tracking.vehicles"
       ],
       "writes": [
+        "auth.users",
         "inventory.inventory_movements",
         "inventory.product_batches",
         "inventory.product_categories",
@@ -2629,6 +2630,39 @@
         "tenancy.user_roles"
       ],
       "writes": []
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/tenants/{tenant_slug}/settings",
+      "operation_id": "tenancy.GetSettings",
+      "module": "tenancy",
+      "handler": "josex/web/modules/tenancy/controllers.(*SettingsController).GetSettings",
+      "sps": [
+        "tenancy.sp_get_tenant_by_slug",
+        "tenancy.sp_get_tenant_modules"
+      ],
+      "reads": [
+        "tenancy.tenant_modules",
+        "tenancy.tenants"
+      ],
+      "writes": []
+    },
+    {
+      "method": "PATCH",
+      "path": "/api/v1/tenants/{tenant_slug}/settings",
+      "operation_id": "tenancy.UpdateSettings",
+      "module": "tenancy",
+      "handler": "josex/web/modules/tenancy/controllers.(*SettingsController).UpdateSettings",
+      "sps": [
+        "tenancy.sp_get_tenant_modules",
+        "tenancy.sp_merge_tenant_settings"
+      ],
+      "reads": [
+        "tenancy.tenant_modules"
+      ],
+      "writes": [
+        "tenancy.tenants"
+      ]
     },
     {
       "method": "POST",
@@ -5805,6 +5839,7 @@
         "tenancy.tenants"
       ],
       "writes": [
+        "auth.users",
         "tenancy.tenant_users",
         "users.user_audit_log"
       ]
@@ -7577,6 +7612,13 @@
       ],
       "writes": [
         "tenancy.app_invites"
+      ],
+      "calls": []
+    },
+    "tenancy.sp_merge_tenant_settings": {
+      "reads": [],
+      "writes": [
+        "tenancy.tenants"
       ],
       "calls": []
     },
@@ -10446,10 +10488,11 @@
     },
     "users.sp_create_user": {
       "reads": [
-        "auth.user_profile",
+        "auth.user_profile"
+      ],
+      "writes": [
         "auth.users"
       ],
-      "writes": [],
       "calls": []
     },
     "users.sp_create_user_external": {

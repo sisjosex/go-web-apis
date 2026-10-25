@@ -18,6 +18,7 @@ import (
 func RegisterTenantRoutes(
 	router *gin.RouterGroup,
 	tenantController *controllers.TenantController,
+	settingsController *controllers.SettingsController,
 	tenantService interfaces.TenantService,
 	jwtService services.JWTService,
 ) {
@@ -52,6 +53,7 @@ func RegisterTenantRoutes(
 		{
 			// Tenant information (all members)
 			// tenantScopedRoutes.GET("", tenantController.GetTenantInfo)
+			api.Get(tenantScopedRoutes, "/settings", settingsController.GetSettings, api.Doc{Summary: "Get the workspace's settings", Description: "Every setting its enabled modules declare, with the default where it never set one, and each key's type and options (TENANCY-007)", Errors: []int{401}})
 
 			// Update tenant (owner/admin only)
 			// Use adds to tenantScopedRoutes itself: every route registered on it from here carries it.
@@ -59,6 +61,7 @@ func RegisterTenantRoutes(
 			adminRoutes := tenantScopedRoutes
 			{
 				api.Patch(adminRoutes, "", tenantController.UpdateTenant, api.Doc{Summary: "Update tenant information (owner/admin only)", Description: "Update tenant name, database URL, schema, or settings", Errors: []int{400}})
+				api.Patch(adminRoutes, "/settings", settingsController.UpdateSettings, api.Doc{Summary: "Change the workspace's settings (owner/admin only)", Description: "Merges the keys sent, keeping the rest; an undeclared key or a value its type refuses answers 422", Errors: []int{401, 403, 422}})
 				api.Post(adminRoutes, "/users", tenantController.AddUserToTenant, api.Doc{Summary: "Add a user to tenant (owner/admin only)", Description: "Add a user to the tenant with specified role", Errors: []int{400}})
 				api.Delete(adminRoutes, "/users/{user_id}", tenantController.RemoveUserFromTenant, api.Doc{Summary: "Remove a user from tenant (owner/admin only)", Description: "Remove a user from the tenant", Errors: []int{400}})
 				api.Patch(adminRoutes, "/users/{user_id}/role", tenantController.UpdateUserRole, api.Doc{Summary: "Update a user's role in the tenant (owner/admin only)", Description: "Change the role of a tenant member. Only owner can assign the owner role.", Status: 204, Errors: []int{400, 403}})

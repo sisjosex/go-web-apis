@@ -22,6 +22,9 @@ type TenantRepository interface {
 	// Get user's accessible tenants
 	GetUserTenants(ctx context.Context, userID uuid.UUID) ([]*models.UserTenantResponse, error)
 
+	// MergeSettings merges patch (a JSON object) into the tenant's settings and answers them (TENANCY-007 D1).
+	MergeSettings(ctx context.Context, tenantID uuid.UUID, patch []byte) (*string, error)
+
 	// Update tenant
 	UpdateTenant(ctx context.Context, tenantID uuid.UUID, dto *models.UpdateTenantDto) (*models.Tenant, error)
 

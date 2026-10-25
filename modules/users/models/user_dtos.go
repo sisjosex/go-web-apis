@@ -21,6 +21,8 @@ type CreateUserDto struct {
 	// Owner is a promotion with its own confirmation, and the app levels (portal, driver, organization)
 	// are granted from Tracking, where they are linked (TRACK-032) — so only the two web levels are accepted.
 	TenantRole string `json:"tenant_role" binding:"omitempty,oneof=admin member"`
+	// Locale is the workspace's language for an account invited into it (TENANCY-007); never from the body.
+	Locale string `json:"-"`
 }
 
 // UpdateUserDto for updating a user (admin operation)

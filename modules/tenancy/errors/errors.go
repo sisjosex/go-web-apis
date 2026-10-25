@@ -94,3 +94,9 @@ const (
 	UsageRangeInvalid = "tenant.usage.range-invalid"
 	UsageListFailed   = "tenant.usage.list-failed"
 )
+
+// Settings errors (TENANCY-007 D1): a key no enabled module declares, or a value its type refuses.
+const (
+	TenantSettingsUnknownKey = "tenant.settings.unknown-key"
+	TenantSettingsInvalid    = "tenant.settings.invalid"
+)

@@ -4,10 +4,12 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"log/slog"
 	"strconv"
 	"strings"
 
 	coreJobs "josex/web/modules/core/jobs"
+	"josex/web/modules/core/registry"
 	coreServices "josex/web/modules/core/services"
 	trackingConfig "josex/web/modules/tracking/config"
 	"josex/web/modules/tracking/models"
@@ -57,6 +59,12 @@ func (n *Notifier) Notify(ctx context.Context, tenant coreJobs.Tenant, topic str
 		return err
 	}
 	for _, notice := range notices {
+		// A notice the workspace switched off is never pushed (TENANCY-007 D2); its feed row and the
+		// trip's event stay. The settings are the directory's, so this reads nothing.
+		if key := models.NoticeSetting(notice.Type); key != "" && !registry.SettingOn(tenant.Settings, key) {
+			slog.Debug("notice switched off", "tenant", tenant.ID, "type", notice.Type, "notification", notice.ID)
+			continue
+		}
 		if err := n.enqueue(ctx, tenant.Slug, notice); err != nil {
 			return err
 		}

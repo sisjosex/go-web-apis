@@ -109,6 +109,7 @@ func (r *tenantRepository) GetTenantBySlug(ctx context.Context, slug string) (*m
 		&tenant.IsActive,
 		&tenant.IsSuspended,
 		&tenant.CreatedAt,
+		&tenant.Settings,
 	)
 
 	if err != nil {
@@ -195,6 +196,7 @@ func (r *tenantRepository) GetUserTenants(ctx context.Context, userID uuid.UUID)
 			&tenant.UserRole,
 			&tenant.JoinedAt,
 			&tenant.Permissions,
+			&tenant.Settings,
 		)
 		if err != nil {
 			return nil, err
@@ -203,6 +205,13 @@ func (r *tenantRepository) GetUserTenants(ctx context.Context, userID uuid.UUID)
 	}
 
 	return tenants, nil
+}
+
+// MergeSettings merges patch into the tenant's settings in one statement and answers the result.
+func (r *tenantRepository) MergeSettings(ctx context.Context, tenantID uuid.UUID, patch []byte) (*string, error) {
+	var settings *string
+	err := r.dbService.QueryRow(ctx, `SELECT tenancy.sp_merge_tenant_settings(p_tenant_id := $1, p_patch := $2)`, tenantID, string(patch)).Scan(&settings)
+	return settings, err
 }
 
 // UpdateTenant updates tenant information

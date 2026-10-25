@@ -110,3 +110,13 @@ func storeTenant(ctx context.Context, slug string, tenant *models.Tenant) {
 		log.Printf("⚠️  tenant cache: %v", err)
 	}
 }
+
+// forgetTenant drops a workspace's cached row, so its next read on any replica sees a write (TENANCY-007 D1).
+func forgetTenant(ctx context.Context, slug string) {
+	if accessValkey == nil {
+		return
+	}
+	if err := accessValkey.Client().Del(ctx, tenantKey(slug)).Err(); err != nil {
+		log.Printf("⚠️  tenant cache: forget %s: %v", slug, err)
+	}
+}

@@ -31,6 +31,11 @@ type TenantService interface {
 	// check (TRACK-060's public share read).
 	GetTenantBySlugCached(ctx context.Context, slug string) (*models.Tenant, error)
 
+	// TenantSettings answers a workspace's stored settings through the shared cache (TENANCY-007 D1).
+	TenantSettings(ctx context.Context, slug string) (map[string]any, error)
+	// MergeSettings writes the keys of a validated patch, keeping the rest, and answers the result.
+	MergeSettings(ctx context.Context, tenantID uuid.UUID, slug string, patch map[string]any) (map[string]any, error)
+
 	// Verify user has access to tenant (used by middleware)
 	VerifyUserTenantAccess(ctx context.Context, userID uuid.UUID, slug string) (*models.TenantAccessInfo, error)
 

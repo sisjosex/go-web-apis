@@ -32,7 +32,8 @@ p_email := $5,
 p_password := $6,
 p_profile_picture_url := $7,
 p_bio := $8,
-p_website_url := $9
+p_website_url := $9,
+p_locale := $10
 )
     `
 
@@ -46,6 +47,7 @@ p_website_url := $9
 		userDTO.ProfilePictureUrl,
 		userDTO.Bio,
 		userDTO.WebsiteUrl,
+		userDTO.Locale,
 	}
 
 	row := r.dbService.QueryRow(context.Background(), query, params...)
