@@ -101,6 +101,9 @@ type UserTenantResponse struct {
 	Permissions []string `json:"permissions"`
 	// Settings are the workspace's stored settings, the general.* keys with their defaults filled (TENANCY-007).
 	Settings map[string]any `json:"settings"`
+	// Verticals are the business types it picked and PrimaryModule the module it opens on (TENANCY-006).
+	Verticals     []string `json:"verticals"`
+	PrimaryModule *string  `json:"primary_module"`
 }
 
 // TenantAccessInfo - stored in context by middleware

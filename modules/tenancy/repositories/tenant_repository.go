@@ -197,6 +197,8 @@ func (r *tenantRepository) GetUserTenants(ctx context.Context, userID uuid.UUID)
 			&tenant.JoinedAt,
 			&tenant.Permissions,
 			&tenant.Settings,
+			&tenant.Verticals,
+			&tenant.PrimaryModule,
 		)
 		if err != nil {
 			return nil, err

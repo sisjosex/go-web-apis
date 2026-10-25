@@ -66,7 +66,7 @@ func TestModules_ListHasRequirementsAndVerticals(t *testing.T) {
 	for _, row := range body["verticals"].([]interface{}) {
 		codes = append(codes, row.(map[string]interface{})["code"].(string))
 	}
-	assert.Contains(t, codes, "transport")
+	assert.Contains(t, codes, "staff_transport")
 }
 
 // TestModules_EnableTakesRequirementsAndDisableRefusesWhileNeeded - enabling sales turns inventory on

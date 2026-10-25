@@ -1274,6 +1274,26 @@
         ],
         "type": "object"
       },
+      "core.Capability": {
+        "additionalProperties": false,
+        "properties": {
+          "code": {
+            "type": "string"
+          },
+          "module": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "code",
+          "module",
+          "name"
+        ],
+        "type": "object"
+      },
       "core.ClaimUploadRequest": {
         "additionalProperties": false,
         "properties": {
@@ -1357,12 +1377,6 @@
           },
           "route": {
             "type": "string"
-          },
-          "verticals": {
-            "items": {
-              "type": "string"
-            },
-            "type": "array"
           }
         },
         "required": [
@@ -1377,7 +1391,6 @@
           "admin_only",
           "requires",
           "complements",
-          "verticals",
           "locked"
         ],
         "type": "object"
@@ -1527,29 +1540,6 @@
           "is_active",
           "created_at",
           "expiration_date"
-        ],
-        "type": "object"
-      },
-      "core.Vertical": {
-        "additionalProperties": false,
-        "properties": {
-          "code": {
-            "type": "string"
-          },
-          "modules": {
-            "items": {
-              "type": "string"
-            },
-            "type": "array"
-          },
-          "name": {
-            "type": "string"
-          }
-        },
-        "required": [
-          "code",
-          "name",
-          "modules"
         ],
         "type": "object"
       },
@@ -5564,6 +5554,12 @@
       "tenancy.ListAvailableModulesResponse": {
         "additionalProperties": false,
         "properties": {
+          "capabilities": {
+            "items": {
+              "$ref": "#/components/schemas/core.Capability"
+            },
+            "type": "array"
+          },
           "modules": {
             "items": {
               "$ref": "#/components/schemas/core.ModuleDescriptor"
@@ -5572,14 +5568,15 @@
           },
           "verticals": {
             "items": {
-              "$ref": "#/components/schemas/core.Vertical"
+              "$ref": "#/components/schemas/tenancy.VerticalOption"
             },
             "type": "array"
           }
         },
         "required": [
           "modules",
-          "verticals"
+          "verticals",
+          "capabilities"
         ],
         "type": "object"
       },
@@ -5805,6 +5802,59 @@
         ],
         "type": "object"
       },
+      "tenancy.SetVerticalsDto": {
+        "additionalProperties": false,
+        "properties": {
+          "codes": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "extra_modules": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "primary_module": {
+            "type": "string"
+          },
+          "starter": {
+            "type": "boolean"
+          }
+        },
+        "type": "object"
+      },
+      "tenancy.SetupStepStatus": {
+        "additionalProperties": false,
+        "properties": {
+          "code": {
+            "type": "string"
+          },
+          "done": {
+            "type": "boolean"
+          },
+          "minutes": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "module": {
+            "type": "string"
+          },
+          "route": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "code",
+          "module",
+          "done",
+          "minutes",
+          "route"
+        ],
+        "type": "object"
+      },
       "tenancy.TenantDetailResponse": {
         "additionalProperties": false,
         "properties": {
@@ -5894,6 +5944,36 @@
         "required": [
           "settings",
           "specs"
+        ],
+        "type": "object"
+      },
+      "tenancy.TenantSetupResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "done": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "minutes_left": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "steps": {
+            "items": {
+              "$ref": "#/components/schemas/tenancy.SetupStepStatus"
+            },
+            "type": "array"
+          },
+          "total": {
+            "format": "int64",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "steps",
+          "done",
+          "total",
+          "minutes_left"
         ],
         "type": "object"
       },
@@ -6129,6 +6209,10 @@
             },
             "type": "array"
           },
+          "primary_module": {
+            "nullable": true,
+            "type": "string"
+          },
           "settings": {
             "additionalProperties": {},
             "type": "object"
@@ -6142,6 +6226,12 @@
           },
           "user_role": {
             "type": "string"
+          },
+          "verticals": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
           }
         },
         "required": [
@@ -6153,7 +6243,97 @@
           "user_role",
           "joined_at",
           "permissions",
-          "settings"
+          "settings",
+          "verticals",
+          "primary_module"
+        ],
+        "type": "object"
+      },
+      "tenancy.VerticalOption": {
+        "additionalProperties": false,
+        "properties": {
+          "capabilities": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "code": {
+            "type": "string"
+          },
+          "group": {
+            "type": "string"
+          },
+          "group_name": {
+            "type": "string"
+          },
+          "icon": {
+            "type": "string"
+          },
+          "modules": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "name": {
+            "type": "string"
+          },
+          "suggested": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "group_name",
+          "code",
+          "group",
+          "name",
+          "icon",
+          "modules",
+          "suggested",
+          "capabilities"
+        ],
+        "type": "object"
+      },
+      "tenancy.VerticalsResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "capabilities": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "enabled": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "primary_module": {
+            "nullable": true,
+            "type": "string"
+          },
+          "seeded_categories": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "verticals": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "verticals",
+          "primary_module",
+          "enabled",
+          "capabilities",
+          "seeded_categories"
         ],
         "type": "object"
       },
@@ -23112,6 +23292,59 @@
         "x-handler": "josex/web/modules/tenancy/controllers.(*SettingsController).UpdateSettings"
       }
     },
+    "/api/v1/tenants/{tenant_slug}/setup": {
+      "get": {
+        "description": "The business's data, the enabled modules' setup steps in the business types' order and the team, each with whether it is done, and the minutes left",
+        "operationId": "tenancy.TenantSetup",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "tenant_slug",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/tenancy.TenantSetupResponse"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/core.ErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/core.ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          }
+        },
+        "summary": "The first-run checklist (owner/admin only)",
+        "tags": [
+          "tenancy"
+        ],
+        "x-handler": "josex/web/modules/tenancy/controllers.(*ModuleController).TenantSetup"
+      }
+    },
     "/api/v1/tenants/{tenant_slug}/users": {
       "post": {
         "description": "Add a user to the tenant with specified role",
@@ -23494,6 +23727,79 @@
           "tenancy"
         ],
         "x-handler": "josex/web/modules/tenancy/controllers.(*RoleController).AssignUserRole"
+      }
+    },
+    "/api/v1/tenants/{tenant_slug}/vertical": {
+      "put": {
+        "description": "Turns on the union of the types' modules and the suggested ones sent, stores the types, the main module and their capabilities, and with starter seeds their categories; never turns a module off",
+        "operationId": "tenancy.SetVerticals",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "tenant_slug",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/tenancy.SetVerticalsDto"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/tenancy.VerticalsResponse"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/core.ErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/core.ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/core.ErrorResponse"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          }
+        },
+        "summary": "Pick the business types (owner/admin only)",
+        "tags": [
+          "tenancy"
+        ],
+        "x-handler": "josex/web/modules/tenancy/controllers.(*ModuleController).SetVerticals"
       }
     },
     "/api/v1/tracking/alerts": {

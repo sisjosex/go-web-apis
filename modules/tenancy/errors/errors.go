@@ -100,3 +100,18 @@ const (
 	TenantSettingsUnknownKey = "tenant.settings.unknown-key"
 	TenantSettingsInvalid    = "tenant.settings.invalid"
 )
+
+// Business type errors (TENANCY-006); the API answers 422.
+const (
+	VerticalRequired          = "tenant.vertical.required"
+	VerticalUnknown           = "tenant.vertical.unknown"
+	VerticalNotSuggested      = "tenant.vertical.not-suggested"
+	VerticalPrimaryNotEnabled = "tenant.vertical.primary-not-enabled"
+)
+
+// VerticalError refuses a business type preset with one of the Vertical* codes.
+type VerticalError struct {
+	Code string
+}
+
+func (e *VerticalError) Error() string { return e.Code }

@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 
+	"josex/web/modules/core/registry"
 	coreServices "josex/web/modules/core/services"
 	"josex/web/modules/tenancy/interfaces"
 	"josex/web/modules/tenancy/models"
@@ -109,4 +110,53 @@ func (r *moduleRepository) DisableTenantModule(ctx context.Context, tenantID uui
 		return err
 	}
 	return nil
+}
+
+// ApplyVerticals runs on the primary pool, which holds tenancy.*: modules first, then the types, main
+// module and capabilities, all or nothing (TENANCY-006 step 2).
+func (r *moduleRepository) ApplyVerticals(ctx context.Context, tenantID uuid.UUID, w models.VerticalsWrite, enabledBy uuid.UUID) ([]string, *string, *string, error) {
+	tx, err := r.dbService.GetPrimaryPool().Begin(ctx)
+	if err != nil {
+		return nil, nil, nil, err
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+
+	for _, code := range w.Missing {
+		if _, err := upsert(ctx, tx, tenantID, code, models.UpsertTenantModuleDto{IsEnabled: true}, enabledBy); err != nil {
+			return nil, nil, nil, err
+		}
+	}
+	var (
+		verticals []string
+		primary   *string
+		settings  *string
+	)
+	err = tx.QueryRow(ctx, `SELECT * FROM tenancy.sp_set_tenant_verticals($1, $2, $3, $4, $5, $6)`,
+		tenantID, w.Verticals, w.PrimaryModule, w.Fallback, w.Capabilities, w.Restrict).Scan(&verticals, &primary, &settings)
+	if err != nil {
+		return nil, nil, nil, err
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return nil, nil, nil, err
+	}
+	return verticals, primary, settings, nil
+}
+
+// SeedCategories resolves the request's database — the tenant's own when it has one — as every
+// inventory write does.
+func (r *moduleRepository) SeedCategories(ctx context.Context, tenantID uuid.UUID, names []string) (int, error) {
+	var created int
+	err := r.dbService.QueryRow(ctx, `SELECT inventory.sp_seed_categories($1, $2)`, tenantID, names).Scan(&created)
+	return created, err
+}
+
+// TenantSetup reads tenancy.* on the primary pool, which holds it even for a dedicated-database tenant.
+func (r *moduleRepository) TenantSetup(ctx context.Context, tenantID uuid.UUID) (business, team bool, verticals []string, err error) {
+	err = r.dbService.GetPrimaryPool().QueryRow(ctx, `SELECT * FROM tenancy.sp_tenant_setup($1)`, tenantID).Scan(&business, &team, &verticals)
+	return business, team, verticals, err
+}
+
+// CheckSetup hands the checker the service that resolves the request's database, as every module write does.
+func (r *moduleRepository) CheckSetup(ctx context.Context, check registry.SetupChecker, tenantID uuid.UUID) (map[string]bool, error) {
+	return check(ctx, r.dbService, tenantID)
 }

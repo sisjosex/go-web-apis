@@ -16,9 +16,8 @@ func init() {
 			"Customers",
 		},
 		IsDefault: false,
-		// TENANCY-003 D1: what it needs, what is worth offering beside it, which businesses it serves.
+		// TENANCY-003 D1: what it needs and what is worth offering beside it.
 		Requires:    []string{"inventory"},
 		Complements: []string{"sales"},
-		Verticals:   []string{"retail"},
 	})
 }

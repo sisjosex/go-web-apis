@@ -33,13 +33,20 @@ func NewModuleController(moduleService interfaces.ModuleService) *ModuleControll
 
 // ListAvailableModulesResponse is ListAvailableModules's answer.
 type ListAvailableModulesResponse struct {
-	Modules   []registry.ModuleDescriptor `json:"modules"`
-	Verticals []registry.Vertical         `json:"verticals"`
+	Modules      []registry.ModuleDescriptor `json:"modules"`
+	Verticals    []VerticalOption            `json:"verticals"`
+	Capabilities []registry.Capability       `json:"capabilities"`
+}
+
+// VerticalOption is a business type as the onboarding shows it, its group's name beside its code.
+type VerticalOption struct {
+	registry.Vertical
+	GroupName string `json:"group_name"`
 }
 
 // ListAvailableModules returns the modules this deployment runs (ENABLED_MODULES), each with what it
-// requires and complements, and the business types the onboarding offers (TENANCY-003 D1) — a type
-// keeps only the modules this deployment runs, and one left with users alone is not offered.
+// requires and complements, the business types it can serve (TENANCY-006 D1) and the capabilities its
+// modules register (D3), names in the request's language. Registry and map lookups only, 0 queries.
 func (mc *ModuleController) ListAvailableModules(ctx context.Context, _ *api.None) (*api.Out[ListAvailableModulesResponse], error) {
 	c := api.Gin(ctx)
 	coreConf := config.ModularAppConfig.Core
@@ -53,22 +60,22 @@ func (mc *ModuleController) ListAvailableModules(ctx context.Context, _ *api.Non
 		}
 	}
 
-	verticals := make([]registry.Vertical, 0, len(registry.Verticals()))
-	for _, v := range registry.Verticals() {
-		codes := make([]string, 0, len(v.Modules))
-		business := false
-		for _, code := range v.Modules {
-			if coreConf.IsModuleEnabled(code) {
-				codes = append(codes, code)
-				business = business || code != "users"
-			}
-		}
-		if business {
-			verticals = append(verticals, registry.Vertical{Code: v.Code, Name: v.Name, Modules: codes})
+	offered := registry.OfferedVerticals(coreConf.IsModuleEnabled)
+	verticals := make([]VerticalOption, 0, len(offered))
+	for _, v := range offered {
+		v.Name = translateOr(lang, "vertical."+v.Code+".name", v.Name)
+		verticals = append(verticals, VerticalOption{Vertical: v, GroupName: translateOr(lang, "vertical.group."+v.Group, v.Group)})
+	}
+
+	capabilities := make([]registry.Capability, 0)
+	for _, capability := range registry.Capabilities() {
+		if coreConf.IsModuleEnabled(capability.Module) {
+			capability.Name = translateOr(lang, "capability."+capability.Code+".name", capability.Name)
+			capabilities = append(capabilities, capability)
 		}
 	}
 
-	return api.OK(ListAvailableModulesResponse{Modules: available, Verticals: verticals})
+	return api.OK(ListAvailableModulesResponse{Modules: available, Verticals: verticals, Capabilities: capabilities})
 }
 
 // localized answers the descriptor's description and features in lang (TENANCY-004 D2), from the owning
@@ -250,4 +257,53 @@ func (mc *ModuleController) DisableTenantModule(ctx context.Context, in *Disable
 	}
 
 	return api.OK(DisableTenantModuleResponse{Success: true})
+}
+
+// SetVerticalsInput is SetVerticals's request.
+type SetVerticalsInput struct {
+	JSON api.Body[models.SetVerticalsDto]
+}
+
+// SetVerticals is PUT /tenants/:slug/vertical (TENANCY-006): one request turns on what the business types
+// need, stores them with the main module and their capabilities and, on sign-up, seeds the starter
+// categories. A refused preset answers 422 with its tenant.vertical.* code.
+func (mc *ModuleController) SetVerticals(ctx context.Context, in *SetVerticalsInput) (*api.Out[models.VerticalsResponse], error) {
+	c := api.Gin(ctx)
+	tenantID, err := uuid.Parse(c.GetString("tenant_id"))
+	if err != nil {
+		return nil, api.Fail(http.StatusUnauthorized, coreErrors.BuildErrorSingle(c, tenancyErrors.TenantUserUnauthorized))
+	}
+	userID, err := uuid.Parse(c.GetString("user_id"))
+	if err != nil {
+		return nil, api.Fail(http.StatusUnauthorized, coreErrors.BuildErrorSingle(c, tenancyErrors.TenantUserUnauthorized))
+	}
+	var dto models.SetVerticalsDto
+	if err := in.JSON.Into(ctx, &dto); err != nil {
+		return nil, api.Fail(http.StatusBadRequest, coreErrors.BuildError(c, err))
+	}
+
+	out, err := mc.moduleService.SetVerticals(c.Request.Context(), tenantID, c.GetString("tenant_slug"), dto, c.GetString("lang"), userID)
+	if err != nil {
+		var refused *tenancyErrors.VerticalError
+		if errors.As(err, &refused) {
+			return nil, api.Fail(http.StatusUnprocessableEntity, coreErrors.BuildErrorSingle(c, refused.Code))
+		}
+		return nil, api.Fail(http.StatusInternalServerError, coreErrors.BuildError(c, err))
+	}
+	return api.OK(*out)
+}
+
+// TenantSetup is GET /tenants/:slug/setup (TENANCY-008): the first-run checklist — the business's data,
+// the enabled modules' steps in the business types' order, the team — with what is done.
+func (mc *ModuleController) TenantSetup(ctx context.Context, _ *api.None) (*api.Out[models.TenantSetupResponse], error) {
+	c := api.Gin(ctx)
+	tenantID, err := uuid.Parse(c.GetString("tenant_id"))
+	if err != nil {
+		return nil, api.Fail(http.StatusUnauthorized, coreErrors.BuildErrorSingle(c, tenancyErrors.TenantUserUnauthorized))
+	}
+	out, err := mc.moduleService.TenantSetup(c.Request.Context(), tenantID)
+	if err != nil {
+		return nil, api.Fail(http.StatusInternalServerError, coreErrors.BuildError(c, err))
+	}
+	return api.OK(*out)
 }

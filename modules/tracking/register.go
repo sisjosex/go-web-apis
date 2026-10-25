@@ -18,7 +18,14 @@ func init() {
 			"Client portal access",
 		},
 		IsDefault: false,
-		// TENANCY-003 D1: what it needs, what is worth offering beside it, which businesses it serves.
-		Verticals: []string{"transport"},
+		// TENANCY-003 D1: what it needs and what is worth offering beside it.
+		// TENANCY-008: each piece needs the one before it (TRACK-050 D1); setup.go says which are done.
+		Setup: []registry.SetupStep{
+			{Code: "companies", Minutes: 2, Route: "/tracking/companies?new=1"},
+			{Code: "drivers", Minutes: 3, Route: "/tracking/drivers?new=1"},
+			{Code: "vehicles", Minutes: 2, Route: "/tracking/vehicles?new=1"},
+			{Code: "routes", Minutes: 5, Route: "/tracking/routes?new=1"},
+			{Code: "riders", Minutes: 5, Route: "/tracking/riders?new=1"},
+		},
 	})
 }

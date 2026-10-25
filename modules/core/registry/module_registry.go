@@ -23,24 +23,10 @@ type ModuleDescriptor struct {
 	Requires []string `json:"requires"`
 	// Complements are the modules worth offering beside it, in settings.
 	Complements []string `json:"complements"`
-	// Verticals are the business types it belongs to; a module offered to every business has none.
-	Verticals []string `json:"verticals"`
 	// Locked modules are always on: the API refuses to disable them (TENANCY-004), settings shows them on.
 	Locked bool `json:"locked"`
-}
-
-// Vertical is a business type the onboarding offers (TENANCY-003 D1): picking it enables Modules.
-type Vertical struct {
-	Code    string   `json:"code"`
-	Name    string   `json:"name"`
-	Modules []string `json:"modules"`
-}
-
-// verticals are declared here, in code: 0 tables, 0 queries. A module joins one by naming it in its
-// descriptor's Verticals; the list's Modules are what the onboarding turns on.
-var verticals = []Vertical{
-	{Code: "transport", Name: "Transporte de personal o escolar", Modules: []string{"tracking", "users"}},
-	{Code: "retail", Name: "Tienda o comercio", Modules: []string{"inventory", "sales", "users"}},
+	// Setup are its first-run checklist steps, in order (TENANCY-008); its SetupChecker says which are done.
+	Setup []SetupStep `json:"-"`
 }
 
 var (
@@ -64,21 +50,6 @@ func GetAll() []ModuleDescriptor {
 		result = append(result, m)
 	}
 	return result
-}
-
-// Verticals returns the business types, each with the modules it enables.
-func Verticals() []Vertical {
-	return verticals
-}
-
-// GetVertical returns one business type by code.
-func GetVertical(code string) (Vertical, bool) {
-	for _, v := range verticals {
-		if v.Code == code {
-			return v, true
-		}
-	}
-	return Vertical{}, false
 }
 
 // WithRequirements answers code and every module it needs, transitively, requirements first.

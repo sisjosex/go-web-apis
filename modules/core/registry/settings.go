@@ -14,6 +14,8 @@ const (
 	SettingBool   SettingType = "bool"
 	SettingString SettingType = "string"
 	SettingEnum   SettingType = "enum"
+	// SettingSet is a list of distinct options, as a JSON array of strings (TENANCY-006 D3).
+	SettingSet SettingType = "set"
 )
 
 // SettingSpec declares one key of tenancy.tenants.settings (TENANCY-007 D1): the module that owns it,
@@ -71,13 +73,42 @@ func (s SettingSpec) Accepts(v any) bool {
 	case SettingEnum:
 		str, ok := v.(string)
 		return ok && slices.Contains(s.Options, str)
+	case SettingSet:
+		return s.set(v) != nil
 	}
 	return false
+}
+
+// set answers v as the distinct options it lists, or nil when it is not such a list.
+func (s SettingSpec) set(v any) []string {
+	items, ok := v.([]any)
+	if !ok {
+		if strs, isStrings := v.([]string); isStrings {
+			items = make([]any, len(strs))
+			for i, str := range strs {
+				items[i] = str
+			}
+		} else {
+			return nil
+		}
+	}
+	out := make([]string, 0, len(items))
+	for _, item := range items {
+		str, isString := item.(string)
+		if !isString || !slices.Contains(s.Options, str) || slices.Contains(out, str) {
+			return nil
+		}
+		out = append(out, str)
+	}
+	return out
 }
 
 // Value is the stored value when it is a valid one, else the default.
 func (s SettingSpec) Value(stored map[string]any) any {
 	if v, ok := stored[s.Key]; ok && s.Accepts(v) {
+		if s.Type == SettingSet {
+			return s.set(v)
+		}
 		return v
 	}
 	return s.Default

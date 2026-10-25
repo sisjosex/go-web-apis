@@ -140,7 +140,9 @@ CREATE TABLE tenancy.tenants (
     suspended_reason text,
     settings jsonb DEFAULT '{}'::jsonb,
     created_at timestamp with time zone DEFAULT CURRENT_TIMESTAMP,
-    updated_at timestamp with time zone DEFAULT CURRENT_TIMESTAMP
+    updated_at timestamp with time zone DEFAULT CURRENT_TIMESTAMP,
+    verticals character varying(32)[] DEFAULT '{}'::character varying[] NOT NULL,
+    primary_module character varying(32)
 );
 
 

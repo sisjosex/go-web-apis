@@ -2665,6 +2665,23 @@
       ]
     },
     {
+      "method": "GET",
+      "path": "/api/v1/tenants/{tenant_slug}/setup",
+      "operation_id": "tenancy.TenantSetup",
+      "module": "tenancy",
+      "handler": "josex/web/modules/tenancy/controllers.(*ModuleController).TenantSetup",
+      "sps": [
+        "tenancy.sp_get_tenant_modules",
+        "tenancy.sp_tenant_setup"
+      ],
+      "reads": [
+        "tenancy.tenant_modules",
+        "tenancy.tenant_users",
+        "tenancy.tenants"
+      ],
+      "writes": []
+    },
+    {
       "method": "POST",
       "path": "/api/v1/tenants/{tenant_slug}/users",
       "operation_id": "tenancy.AddUserToTenant",
@@ -2760,6 +2777,28 @@
       ],
       "writes": [
         "tenancy.user_roles"
+      ]
+    },
+    {
+      "method": "PUT",
+      "path": "/api/v1/tenants/{tenant_slug}/vertical",
+      "operation_id": "tenancy.SetVerticals",
+      "module": "tenancy",
+      "handler": "josex/web/modules/tenancy/controllers.(*ModuleController).SetVerticals",
+      "sps": [
+        "inventory.sp_seed_categories",
+        "tenancy.sp_get_tenant_modules",
+        "tenancy.sp_set_tenant_verticals",
+        "tenancy.sp_upsert_tenant_module"
+      ],
+      "reads": [
+        "inventory.product_categories",
+        "tenancy.tenant_modules"
+      ],
+      "writes": [
+        "inventory.product_categories",
+        "tenancy.tenant_modules",
+        "tenancy.tenants"
       ]
     },
     {
@@ -6716,6 +6755,14 @@
       "writes": [],
       "calls": []
     },
+    "inventory.sp_inventory_setup": {
+      "reads": [
+        "inventory.product_categories",
+        "inventory.products"
+      ],
+      "writes": [],
+      "calls": []
+    },
     "inventory.sp_list_batches_by_product": {
       "reads": [
         "inventory.product_batches",
@@ -6845,6 +6892,15 @@
       ],
       "writes": [],
       "calls": []
+    },
+    "inventory.sp_seed_categories": {
+      "reads": [],
+      "writes": [
+        "inventory.product_categories"
+      ],
+      "calls": [
+        "inventory.sp_import_free_category_slug"
+      ]
     },
     "inventory.sp_update_batch": {
       "reads": [
@@ -7656,6 +7712,21 @@
       "writes": [
         "tenancy.role_permissions"
       ],
+      "calls": []
+    },
+    "tenancy.sp_set_tenant_verticals": {
+      "reads": [],
+      "writes": [
+        "tenancy.tenants"
+      ],
+      "calls": []
+    },
+    "tenancy.sp_tenant_setup": {
+      "reads": [
+        "tenancy.tenant_users",
+        "tenancy.tenants"
+      ],
+      "writes": [],
       "calls": []
     },
     "tenancy.sp_update_role": {
