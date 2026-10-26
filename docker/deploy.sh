@@ -7,8 +7,8 @@
 # 1. Refuse unless ghcr.io/sisjosex/api:<sha> exists; nothing has changed yet.
 # 2. Check the clone out at <sha>: the compose file, Caddyfile and scripts match the image.
 # 3. Pin API_TAG in .env, pull, `up -d --wait` (migrate runs before the servers).
-# 4. Restart caddy only when docker/caddy changed (its files are bind-mounted one by one,
-#    so a checkout leaves it reading the old inode).
+# 4. Restart caddy, prometheus, alertmanager, vroom only when their docker/<svc> changed
+#    (their files are bind-mounted one by one, so a checkout leaves them reading the old inode).
 #
 # Rollback is the same command with the sha it prints as "was".
 set -eu
@@ -29,6 +29,8 @@ git checkout -q --detach "$SHA"
 sed -i "s/^API_TAG=.*/API_TAG=$SHA/" .env
 $COMPOSE pull -q --ignore-buildable
 $COMPOSE up -d --wait --wait-timeout 300
-git diff --quiet "$OLD" "$SHA" -- docker/caddy || $COMPOSE restart caddy
+for svc in caddy prometheus alertmanager vroom; do
+	git diff --quiet "$OLD" "$SHA" -- "docker/$svc" || $COMPOSE restart "$svc"
+done
 $COMPOSE ps --format '{{.Service}}\t{{.Status}}'
 echo "✅ $SHA — rollback: docker/deploy.sh ${WAS:-<previous sha>}"

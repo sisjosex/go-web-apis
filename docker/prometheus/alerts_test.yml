@@ -71,3 +71,22 @@ tests:
             exp_annotations:
               summary: "No nightly backup has succeeded in 26 hours"
               runbook: "docker/README.md → Alerts → BackupStale"
+
+  # 3 writes/s at 3 ms each stay quiet; the same writes at 1 s each fire after 10 minutes.
+  - interval: 1m
+    input_series:
+      - series: 'node_disk_writes_completed_total{job="node", device="sda"}'
+        values: "0+180x30"
+      - series: 'node_disk_write_time_seconds_total{job="node", device="sda"}'
+        values: "0+0.54x5 2.7+180x25"
+    alert_rule_test:
+      - eval_time: 5m
+        alertname: DiskSlow
+        exp_alerts: []
+      - eval_time: 25m
+        alertname: DiskSlow
+        exp_alerts:
+          - exp_labels: { severity: critical, device: sda }
+            exp_annotations:
+              summary: "Disk sda takes 1s per write"
+              runbook: "docker/README.md → Alerts → DiskSlow"

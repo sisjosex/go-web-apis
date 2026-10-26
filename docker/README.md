@@ -144,6 +144,7 @@ as `dc`.
 | PostgresDown | critical | postgres-exporter cannot reach PostgreSQL for 1 min | `dc ps postgres`, `dc logs --tail=100 postgres`, `df -h` |
 | PostgresConnections | warning | over 80 % of `max_connections` (200) in use for 5 min | `dc exec postgres psql -U postgres -c "SELECT usename, datname, state, count(*) FROM pg_stat_activity GROUP BY 1,2,3 ORDER BY 4 DESC"` |
 | DiskFilling | warning | under 20 % of the root disk free for 10 min | `df -h`, `docker system df`, `du -sh /var/lib/docker/volumes/*` |
+| DiskSlow | critical | a disk write takes over 500 ms on average for 10 min, at whatever load: the provider's storage is failing, and the box hung within an hour of it on 2026-10-25 | `cat /proc/pressure/io`, `docker stats --no-stream`; our own load is normal → open a ticket with the provider, and if it lasts move the box (Host prep, with the copy of `.env*`/`secrets/` taken off it) |
 | HostMemoryLow | warning | under 10 % of the host's memory available for 10 min | `docker stats --no-stream`; a process near its limit is the one to look at |
 | BackupStale | warning | no nightly dump succeeded in 26 h, or none ever has | `dc logs --tail=50 backup`, then `dc run --rm backup /backup.sh` |
 | WalArchiveFailing | critical | pgBackRest's `archive-push` failed in the last 15 min: point-in-time recovery has a hole | `dc exec -u postgres postgres pgbackrest --stanza=main check`, `docker/restore.sh info` |

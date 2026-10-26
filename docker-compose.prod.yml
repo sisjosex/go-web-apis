@@ -131,10 +131,21 @@ services:
   # but AOF everysec keeps queued jobs across a restart, losing at most a second.
   # maxmemory noeviction: a queue or a GPS stream is never silently dropped — a full
   # Valkey refuses writes, the ingest stores inline and /readyz says degraded.
+  # A hard power-off can leave the AOF unreadable and Valkey restarting forever
+  # (2026-10-25): an AOF that fails the check is cut back to its last valid command
+  # before the server starts. That loses only the tail the power-off had broken.
   valkey:
     image: valkey/valkey:8-alpine
     restart: unless-stopped
-    command: ["valkey-server", "--appendonly", "yes", "--appendfsync", "everysec", "--maxmemory", "512mb", "--maxmemory-policy", "noeviction", "--requirepass", "${VALKEY_PASSWORD}"]
+    command:
+      - sh
+      - -c
+      - |
+        m=/data/appendonlydir/appendonly.aof.manifest
+        if [ -f "$$m" ] && ! valkey-check-aof "$$m" >/dev/null 2>&1; then
+          echo "AOF failed its check, repairing"; yes | valkey-check-aof --fix "$$m"
+        fi
+        exec docker-entrypoint.sh valkey-server --appendonly yes --appendfsync everysec --maxmemory 512mb --maxmemory-policy noeviction --requirepass "$$VALKEY_PASSWORD"
     mem_limit: 640m
     cpu_shares: 512
     logging: *logging

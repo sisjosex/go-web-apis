@@ -72,6 +72,18 @@ groups:
           summary: "{{ $value | humanizePercentage }} of the root disk is free"
           runbook: "docker/README.md → Alerts → DiskFilling"
 
+      # The provider's storage, not our load: on 2026-10-25 writes took 1–7 s at ~3 IOPS and
+      # the box hung within the hour. Normal is a few ms; a quiet minute can spike to ~150 ms.
+      - alert: DiskSlow
+        expr: |
+          max by (device) (rate(node_disk_write_time_seconds_total[5m])
+            / rate(node_disk_writes_completed_total[5m])) > 0.5
+        for: 10m
+        labels: { severity: critical }
+        annotations:
+          summary: "Disk {{ $labels.device }} takes {{ $value | humanizeDuration }} per write"
+          runbook: "docker/README.md → Alerts → DiskSlow"
+
       - alert: HostMemoryLow
         expr: node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes < 0.1
         for: 10m
