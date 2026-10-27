@@ -1449,8 +1449,8 @@ func TestCreateBatch_Success(t *testing.T) {
 	json.Unmarshal(w.Body.Bytes(), &createdProduct)
 
 	// Create batch
-	nextTwoWeeks := time.Now().AddDate(0, 0, 14) // Far future to be "active"
-	yesterday := time.Now().AddDate(0, 0, -1)
+	nextTwoWeeks := time.Now().UTC().AddDate(0, 0, 14) // Far future to be "active"
+	yesterday := time.Now().UTC().AddDate(0, 0, -1)
 
 	batchBody := map[string]interface{}{
 		"product_id":       createdProduct.ProductID,
@@ -1492,7 +1492,7 @@ func TestCreateBatch_InvalidExpiryDate(t *testing.T) {
 	json.Unmarshal(w.Body.Bytes(), &createdProduct)
 
 	// Try to create batch with past expiry date
-	yesterday := time.Now().AddDate(0, 0, -1)
+	yesterday := time.Now().UTC().AddDate(0, 0, -1)
 
 	batchBody := map[string]interface{}{
 		"product_id":       createdProduct.ProductID,
@@ -1522,8 +1522,8 @@ func TestGetBatch_Success(t *testing.T) {
 	json.Unmarshal(w.Body.Bytes(), &createdProduct)
 
 	// Create batch
-	tomorrow := time.Now().AddDate(0, 0, 1)
-	yesterday := time.Now().AddDate(0, 0, -1)
+	tomorrow := time.Now().UTC().AddDate(0, 0, 1)
+	yesterday := time.Now().UTC().AddDate(0, 0, -1)
 	lotNumber := fmt.Sprintf("LOT_%d", time.Now().UnixNano())
 
 	batchBody := map[string]interface{}{
@@ -1566,10 +1566,10 @@ func TestListBatchesByProduct_Success(t *testing.T) {
 	json.Unmarshal(w.Body.Bytes(), &createdProduct)
 
 	// Create 3 batches
-	tomorrow := time.Now().AddDate(0, 0, 1)
-	nextWeek := time.Now().AddDate(0, 0, 7)
-	nextMonth := time.Now().AddDate(0, 1, 0)
-	yesterday := time.Now().AddDate(0, 0, -1)
+	tomorrow := time.Now().UTC().AddDate(0, 0, 1)
+	nextWeek := time.Now().UTC().AddDate(0, 0, 7)
+	nextMonth := time.Now().UTC().AddDate(0, 1, 0)
+	yesterday := time.Now().UTC().AddDate(0, 0, -1)
 
 	batches := []map[string]interface{}{
 		{
@@ -1639,10 +1639,10 @@ func TestGetOldestBatchForSale_FIFO(t *testing.T) {
 	json.Unmarshal(w.Body.Bytes(), &createdProduct)
 
 	// Create 3 batches in random order
-	tomorrow := time.Now().AddDate(0, 0, 1)
-	nextWeek := time.Now().AddDate(0, 0, 7)
-	nextMonth := time.Now().AddDate(0, 1, 0)
-	yesterday := time.Now().AddDate(0, 0, -1)
+	tomorrow := time.Now().UTC().AddDate(0, 0, 1)
+	nextWeek := time.Now().UTC().AddDate(0, 0, 7)
+	nextMonth := time.Now().UTC().AddDate(0, 1, 0)
+	yesterday := time.Now().UTC().AddDate(0, 0, -1)
 
 	batches := []map[string]interface{}{
 		{
@@ -1703,10 +1703,10 @@ func TestBatchExpiryStatusCalculation(t *testing.T) {
 	var createdProduct models.CreateProductResponse
 	json.Unmarshal(w.Body.Bytes(), &createdProduct)
 
-	yesterday := time.Now().AddDate(0, 0, -1)
+	yesterday := time.Now().UTC().AddDate(0, 0, -1)
 
 	// Active batch (far future)
-	nextMonth := time.Now().AddDate(0, 1, 0)
+	nextMonth := time.Now().UTC().AddDate(0, 1, 0)
 	activeBatchBody := map[string]interface{}{
 		"product_id":       createdProduct.ProductID,
 		"lot_number":       fmt.Sprintf("LOT_ACTIVE_%d", time.Now().UnixNano()),
@@ -1722,7 +1722,7 @@ func TestBatchExpiryStatusCalculation(t *testing.T) {
 	assert.Equal(t, "active", activeBatch.Status)
 
 	// Expiring soon batch (within 7 days)
-	inFourDays := time.Now().AddDate(0, 0, 4)
+	inFourDays := time.Now().UTC().AddDate(0, 0, 4)
 	expiringBatchBody := map[string]interface{}{
 		"product_id":       createdProduct.ProductID,
 		"lot_number":       fmt.Sprintf("LOT_EXPIRING_%d", time.Now().UnixNano()),
@@ -1755,8 +1755,8 @@ func TestGetExpiringBatches_IncludesProductName(t *testing.T) {
 	batchBody := map[string]interface{}{
 		"product_id":       createdProduct.ProductID,
 		"lot_number":       fmt.Sprintf("LOT_EXPNAME_%d", time.Now().UnixNano()),
-		"purchase_date":    time.Now().AddDate(0, 0, -1).Format("2006-01-02"),
-		"expiry_date":      time.Now().AddDate(0, 0, 5).Format("2006-01-02"),
+		"purchase_date":    time.Now().UTC().AddDate(0, 0, -1).Format("2006-01-02"),
+		"expiry_date":      time.Now().UTC().AddDate(0, 0, 5).Format("2006-01-02"),
 		"unit_cost":        50.00,
 		"initial_quantity": 100.0,
 	}
@@ -2554,8 +2554,8 @@ func TestProductSKU_StockMovementAndBatchHangOffTheDefaultSKU(t *testing.T) {
 	wb := helper.DoRequest("POST", "/inventory/batches", map[string]interface{}{
 		"product_id":       productID,
 		"lot_number":       fmt.Sprintf("SKUHANG_%d", time.Now().UnixNano()),
-		"purchase_date":    time.Now().AddDate(0, 0, -1).Format("2006-01-02"),
-		"expiry_date":      time.Now().AddDate(0, 0, 30).Format("2006-01-02"),
+		"purchase_date":    time.Now().UTC().AddDate(0, 0, -1).Format("2006-01-02"),
+		"expiry_date":      time.Now().UTC().AddDate(0, 0, 30).Format("2006-01-02"),
 		"unit_cost":        4.00,
 		"initial_quantity": 20.0,
 	}, map[string]string{})
@@ -4268,8 +4268,8 @@ func createBatchOn(
 	body := map[string]interface{}{
 		"product_id":       productID,
 		"lot_number":       lotNumber,
-		"purchase_date":    time.Now().Format("2006-01-02"),
-		"expiry_date":      time.Now().AddDate(0, 0, expiresInDays).Format("2006-01-02"),
+		"purchase_date":    time.Now().UTC().Format("2006-01-02"),
+		"expiry_date":      time.Now().UTC().AddDate(0, 0, expiresInDays).Format("2006-01-02"),
 		"unit_cost":        50.00,
 		"initial_quantity": quantity,
 	}
@@ -4472,7 +4472,7 @@ func TestUpdateBatch_CorrectsLotNumberAndExpiry(t *testing.T) {
 	json.Unmarshal(w.Body.Bytes(), &created)
 
 	corrected := fmt.Sprintf("LOT_FIXED_%d", time.Now().UnixNano())
-	newExpiry := time.Now().AddDate(0, 0, 120).Format("2006-01-02")
+	newExpiry := time.Now().UTC().AddDate(0, 0, 120).Format("2006-01-02")
 	wp := helper.DoRequest("PATCH", fmt.Sprintf("/inventory/batches/%s", created.ID),
 		map[string]interface{}{"lot_number": corrected, "expiry_date": newExpiry},
 		map[string]string{})
@@ -4836,19 +4836,45 @@ func importInventoryCSV(
 }
 
 // importRow returns one row of an import or validate response, by its position
-// in the file.
+// in the file. The engine answers only the rows with an error or a warning
+// (IMPORT-002 D2): a row it does not list came through clean — valid on a dry
+// run, created on the real one.
 func importRow(t *testing.T, response map[string]interface{}, index int) map[string]interface{} {
 	t.Helper()
 
-	rows, ok := response["rows"].([]interface{})
-	if !ok || len(rows) <= index {
-		t.Fatalf("expected at least %d rows in %v", index+1, response)
+	line := float64(index + 2)
+	for _, entry := range importRows(response) {
+		if row, ok := entry.(map[string]interface{}); ok && row["line"] == line {
+			return row
+		}
 	}
-	row, ok := rows[index].(map[string]interface{})
-	if !ok {
-		t.Fatalf("expected a row object, got %v", rows[index])
+	if _, dryRun := response["issues"]; dryRun {
+		return map[string]interface{}{"line": line, "status": "valid"}
 	}
-	return row
+	if _, ok := response["run"]; !ok {
+		t.Fatalf("expected an import or validate response, got %v", response)
+	}
+	return map[string]interface{}{"line": line, "status": "created"}
+}
+
+// readyRows is how many rows a dry run would import: the clean ones and the ones
+// that import with a warning.
+func readyRows(dryRun map[string]interface{}) float64 {
+	valid, _ := dryRun["valid"].(float64)
+	warned, _ := dryRun["warnings"].(float64)
+	return valid + warned
+}
+
+// importRows is every row a response lists: the dry run's issues, the run's
+// failed and skipped rows and its rows written with a warning.
+func importRows(response map[string]interface{}) []interface{} {
+	var rows []interface{}
+	for _, key := range []string{"issues", "failed_rows", "warned_rows"} {
+		if listed, ok := response[key].([]interface{}); ok {
+			rows = append(rows, listed...)
+		}
+	}
+	return rows
 }
 
 // rowCodes flattens the errors or the warnings of one row into plain strings.
@@ -4976,7 +5002,7 @@ func TestImportProducts_OneFileCreatesTheWholeCatalogue(t *testing.T) {
 		prefix, prefix, prefix, prefix, prefix, prefix, prefix, prefix)
 
 	dryRun := importInventoryCSV(t, helper, "/import/validate", "products", csv, "", nil)
-	assert.Equal(t, float64(5), dryRun["valid"], "every row should validate: %v", dryRun)
+	assert.Equal(t, float64(5), readyRows(dryRun), "every row should validate: %v", dryRun)
 
 	response := importInventoryCSV(t, helper, "/import", "products", csv, "", nil)
 	for index := 0; index < 5; index++ {
@@ -5599,9 +5625,8 @@ func TestImportCategories_DryRunSeesWhatTheRowsAboveCreate(t *testing.T) {
 
 // categoryCreatedCount is how many times one run says it created a category.
 func categoryCreatedCount(response map[string]interface{}) int {
-	rows, _ := response["rows"].([]interface{})
 	count := 0
-	for _, entry := range rows {
+	for _, entry := range importRows(response) {
 		row, _ := entry.(map[string]interface{})
 		for _, code := range rowCodes(row, "warnings") {
 			if containsCode([]string{code}, inventoryErrors.ImportCategoryCreated) {
@@ -5640,7 +5665,7 @@ func TestImportProducts_DryRunAnnouncesTheCategoriesTheRealRunCreates(t *testing
 	dryRun := importInventoryCSV(t, helper, "/import/validate", "products", csv, "", nil)
 	response := importInventoryCSV(t, helper, "/import", "products", csv, "", nil)
 
-	assert.Equal(t, float64(len(rows)), dryRun["valid"], "every row should validate: %v", dryRun)
+	assert.Equal(t, float64(len(rows)), readyRows(dryRun), "every row should validate: %v", dryRun)
 	assert.Equal(t, 8, categoryCreatedCount(dryRun), "the dry run announces each category once: %v", dryRun)
 	assert.Equal(t, categoryCreatedCount(dryRun), categoryCreatedCount(response),
 		"the dry run and the real run agree: %v", response)
@@ -5741,7 +5766,7 @@ func TestImportStock_LandsOnTheCombinationItsAxesName(t *testing.T) {
 		prefix, prefix)
 
 	dryRun := importInventoryCSV(t, helper, "/import/validate", "product_stock", stock, "", nil)
-	assert.Equal(t, float64(2), dryRun["valid"], "both rows should resolve: %v", dryRun)
+	assert.Equal(t, float64(2), readyRows(dryRun), "both rows should resolve: %v", dryRun)
 
 	response := importInventoryCSV(t, helper, "/import", "product_stock", stock, "", nil)
 	assert.Equal(t, "created", importRow(t, response, 0)["status"], "%v", response)
@@ -5837,8 +5862,8 @@ func TestImportBatches_LotsLandOnTheirCombinations(t *testing.T) {
 	shirtID := productBySku(t, helper, prefix+"-R").ID
 	yerbaID := productBySku(t, helper, prefix+"-Y").ID
 
-	purchase := time.Now().AddDate(0, 0, -1).Format("2006-01-02")
-	expiry := time.Now().AddDate(0, 2, 0).Format("2006-01-02")
+	purchase := time.Now().UTC().AddDate(0, 0, -1).Format("2006-01-02")
+	expiry := time.Now().UTC().AddDate(0, 2, 0).Format("2006-01-02")
 	lots := fmt.Sprintf(
 		"sku,variant[talle],variant[color],lot_number,purchase_date,expiry_date,unit_cost,initial_quantity\n"+
 			"%s-R,M,Negro,LOTE-%s-M,%s,%s,1200,20\n"+
@@ -5879,8 +5904,8 @@ func TestImportBatches_UnknownCombinationFailsTheRow(t *testing.T) {
 	products := fmt.Sprintf("sku,name,price,variant[talle]\n%s,Remera,7500,M\n", prefix)
 	importInventoryCSV(t, helper, "/import", "products", products, "", nil)
 
-	purchase := time.Now().AddDate(0, 0, -1).Format("2006-01-02")
-	expiry := time.Now().AddDate(0, 2, 0).Format("2006-01-02")
+	purchase := time.Now().UTC().AddDate(0, 0, -1).Format("2006-01-02")
+	expiry := time.Now().UTC().AddDate(0, 2, 0).Format("2006-01-02")
 	lots := fmt.Sprintf(
 		"sku,variant[talle],lot_number,purchase_date,expiry_date,unit_cost,initial_quantity\n"+
 			"%s,XXL,L1,%s,%s,1200,20\n",

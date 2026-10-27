@@ -74,12 +74,19 @@ func hasAll(headers []string, keys ...string) bool {
 
 func columnsOf(specs ...importModels.ColumnSpec) []importModels.ColumnSpec { return specs }
 
-func textColumn(key string, required bool) importModels.ColumnSpec {
-	return importModels.ColumnSpec{Key: key, Type: importModels.ColumnTypeText, Required: required}
+// textColumn and numberColumn take the other headings a tenant's own sheet gives the column
+// (IMPORT-002); the labels live in lang under import.<resource>.<key> and match too.
+func textColumn(key string, required bool, aliases ...string) importModels.ColumnSpec {
+	return importModels.ColumnSpec{Key: key, Type: importModels.ColumnTypeText, Required: required, Aliases: aliases}
 }
 
-func numberColumn(key string, required bool) importModels.ColumnSpec {
-	return importModels.ColumnSpec{Key: key, Type: importModels.ColumnTypeNumber, Required: required}
+func numberColumn(key string, required bool, aliases ...string) importModels.ColumnSpec {
+	return importModels.ColumnSpec{Key: key, Type: importModels.ColumnTypeNumber, Required: required, Aliases: aliases}
+}
+
+// updated is a row the Updater wrote over an existing record (IMPORT-002 D4).
+func updated(line int, row map[string]string) importModels.RowResult {
+	return importModels.RowResult{Line: line, Data: row, Status: importModels.RowStatusUpdated}
 }
 
 // scratchSet is a per-run set of keys the rows above have claimed, so a file repeating itself is
@@ -218,8 +225,30 @@ func NewVehiclesImportDescriptor(svc trackingInterfaces.TrackingService) importI
 func (d *vehiclesImport) Resource() string { return "tracking_vehicles" }
 
 func (d *vehiclesImport) Columns() []importModels.ColumnSpec {
-	return columnsOf(textColumn("plate", true), numberColumn("seats", true), textColumn("type", false),
-		textColumn("company", false), textColumn("brand", false), textColumn("model", false), numberColumn("year", false))
+	return columnsOf(textColumn("plate", true, "patente", "matricula", "placa del bus", "license plate"),
+		numberColumn("seats", true, "capacidad", "plazas", "pasajeros", "capacity"),
+		textColumn("type", false, "tipo de vehiculo", "vehicle type"), textColumn("company", false, "transportista"),
+		textColumn("brand", false), textColumn("model", false), numberColumn("year", false, "modelo año"))
+}
+
+func (d *vehiclesImport) KeyColumns() []string { return []string{"plate"} }
+
+// UpdateRow writes a known plate's seats, brand, model and year over the vehicle (D4); its company
+// and type stay as they are, a move between carriers being its own decision.
+func (d *vehiclesImport) UpdateRow(ctx importModels.ImportContext, line int, row map[string]string) importModels.RowResult {
+	dto, errs := d.dto(ctx, row)
+	if len(errs) > 0 {
+		return rowResult(line, row, errs, true)
+	}
+	id := d.findVehicle(ctx.Context(), ctx, dto.PlateNumber)
+	if id == nil {
+		return importModels.RowResult{Line: line, Data: row, Status: importModels.RowStatusSkipped}
+	}
+	update := &models.UpdateVehicleDto{Capacity: &dto.Capacity, Brand: dto.Brand, Model: dto.Model, Year: dto.Year}
+	if _, err := d.svc.UpdateVehicle(ctx.Context(), ctx.TenantID, *id, update); err != nil {
+		return rowResult(line, row, []string{importCreateFailed}, true)
+	}
+	return updated(line, row)
 }
 
 func (d *vehiclesImport) Matches(headers []string) bool { return hasAll(headers, "plate", "seats") }
@@ -240,7 +269,7 @@ func (d *vehiclesImport) run(ctx importModels.ImportContext, line int, row map[s
 		return rowResult(line, row, errs, process)
 	}
 	seen := scratchSet(ctx, "tracking.plates")
-	if seen[dto.PlateNumber] || d.plateTaken(ctx.Context(), ctx, dto.PlateNumber) {
+	if seen[dto.PlateNumber] || d.findVehicle(ctx.Context(), ctx, dto.PlateNumber) != nil {
 		return duplicate(line, row, importPlateDuplicate+errorParam+dto.PlateNumber, process)
 	}
 	seen[dto.PlateNumber] = true
@@ -291,17 +320,19 @@ func (d *vehiclesImport) dto(ctx importModels.ImportContext, row map[string]stri
 	return dto, nil
 }
 
-func (d *vehiclesImport) plateTaken(c context.Context, ctx importModels.ImportContext, plate string) bool {
+// findVehicle is the tenant's vehicle with this plate, or nil.
+func (d *vehiclesImport) findVehicle(c context.Context, ctx importModels.ImportContext, plate string) *uuid.UUID {
 	res, err := d.svc.ListVehicles(c, ctx.TenantID, models.ListVehiclesQuery{Search: plate, Page: 1, PageSize: 20})
 	if err != nil {
-		return false
+		return nil
 	}
 	for _, v := range res.Vehicles {
 		if strings.EqualFold(v.PlateNumber, plate) {
-			return true
+			id := v.ID
+			return &id
 		}
 	}
-	return false
+	return nil
 }
 
 // ── stop places ──────────────────────────────────────────────────────────
@@ -318,7 +349,43 @@ func NewStopPlacesImportDescriptor(svc trackingInterfaces.TrackingService) impor
 func (d *stopPlacesImport) Resource() string { return "tracking_stop_places" }
 
 func (d *stopPlacesImport) Columns() []importModels.ColumnSpec {
-	return columnsOf(textColumn("stop", true), numberColumn("latitude", true), numberColumn("longitude", true), textColumn("address", false))
+	return columnsOf(textColumn("stop", true, "nombre", "nombre de la parada", "stop name", "name"),
+		numberColumn("latitude", true, "lat"), numberColumn("longitude", true, "lng", "lon", "long"),
+		textColumn("address", false, "domicilio", "referencia"))
+}
+
+func (d *stopPlacesImport) KeyColumns() []string { return []string{"stop"} }
+
+// UpdateRow moves a known stop to the row's point and address (D4).
+func (d *stopPlacesImport) UpdateRow(ctx importModels.ImportContext, line int, row map[string]string) importModels.RowResult {
+	name, lat, lng, errs := d.read(row)
+	if len(errs) > 0 {
+		return rowResult(line, row, errs, true)
+	}
+	id := d.findPlace(ctx, name)
+	if id == nil {
+		return importModels.RowResult{Line: line, Data: row, Status: importModels.RowStatusSkipped}
+	}
+	dto := &models.UpdateStopPlaceDto{Address: optionalCell(row, "address"), Latitude: lat, Longitude: lng}
+	if _, err := d.svc.UpdateStopPlace(ctx.Context(), ctx.TenantID, *id, dto); err != nil {
+		return rowResult(line, row, []string{importCreateFailed}, true)
+	}
+	return updated(line, row)
+}
+
+// read is the row's name and point, or the errors that refuse it.
+func (d *stopPlacesImport) read(row map[string]string) (string, *float64, *float64, []string) {
+	name := cell(row, "stop")
+	var errs []string
+	if len(name) < 2 {
+		errs = append(errs, importRequired+errorParam+"stop")
+	}
+	lat, okLat := parseNumber(cell(row, "latitude"), 64)
+	lng, okLng := parseNumber(cell(row, "longitude"), 64)
+	if !okLat || !okLng || lat == nil || lng == nil || *lat < -90 || *lat > 90 || *lng < -180 || *lng > 180 {
+		errs = append(errs, importCoordinatesInvalid)
+	}
+	return name, lat, lng, errs
 }
 
 func (d *stopPlacesImport) Matches(headers []string) bool {
@@ -336,22 +403,13 @@ func (d *stopPlacesImport) ProcessRow(ctx importModels.ImportContext, line int, 
 func (d *stopPlacesImport) RecordRun(importModels.ImportContext, importModels.RunMeta) {}
 
 func (d *stopPlacesImport) run(ctx importModels.ImportContext, line int, row map[string]string, process bool) importModels.RowResult {
-	name := cell(row, "stop")
-	var errs []string
-	if len(name) < 2 {
-		errs = append(errs, importRequired+errorParam+"stop")
-	}
-	lat, okLat := parseNumber(cell(row, "latitude"), 64)
-	lng, okLng := parseNumber(cell(row, "longitude"), 64)
-	if !okLat || !okLng || lat == nil || lng == nil || *lat < -90 || *lat > 90 || *lng < -180 || *lng > 180 {
-		errs = append(errs, importCoordinatesInvalid)
-	}
+	name, lat, lng, errs := d.read(row)
 	if len(errs) > 0 {
 		return rowResult(line, row, errs, process)
 	}
 	key := strings.ToLower(name)
 	seen := scratchSet(ctx, "tracking.places")
-	if seen[key] || d.nameTaken(ctx, name) {
+	if seen[key] || d.findPlace(ctx, name) != nil {
 		return duplicate(line, row, importPlaceDuplicate+errorParam+name, process)
 	}
 	seen[key] = true
@@ -364,17 +422,19 @@ func (d *stopPlacesImport) run(ctx importModels.ImportContext, line int, row map
 	return rowResult(line, row, nil, process)
 }
 
-func (d *stopPlacesImport) nameTaken(ctx importModels.ImportContext, name string) bool {
+// findPlace is the tenant's stop place with this name, or nil.
+func (d *stopPlacesImport) findPlace(ctx importModels.ImportContext, name string) *uuid.UUID {
 	res, err := d.svc.ListStopPlaces(ctx.Context(), ctx.TenantID, models.ListStopPlacesQuery{Search: name, Page: 1, PageSize: 20}, nil, nil)
 	if err != nil {
-		return false
+		return nil
 	}
 	for _, p := range res.StopPlaces {
 		if strings.EqualFold(p.Name, name) {
-			return true
+			id := p.ID
+			return &id
 		}
 	}
-	return false
+	return nil
 }
 
 // ── riders ───────────────────────────────────────────────────────────────
@@ -401,11 +461,17 @@ func NewRidersImportDescriptor(svc trackingInterfaces.TrackingService, places Pl
 func (d *ridersImport) Resource() string { return "tracking_riders" }
 
 func (d *ridersImport) Columns() []importModels.ColumnSpec {
-	return columnsOf(textColumn("first_name", true), textColumn("last_name", true), textColumn("organization", false),
-		textColumn("phone", false), textColumn("address", false), numberColumn("home_latitude", false),
-		numberColumn("home_longitude", false), textColumn("guardian_name", false), textColumn("guardian_phone", false),
-		textColumn("guardian_email", false), textColumn("service", false), textColumn("group", false),
-		textColumn("stop", false))
+	return columnsOf(textColumn("first_name", true, "nombres", "nombre del pasajero", "first name"),
+		textColumn("last_name", true, "apellidos", "last name", "surname"),
+		textColumn("organization", false, "colegio", "escuela", "client", "school"),
+		textColumn("phone", false, "celular", "telefono del pasajero", "mobile"),
+		textColumn("address", false, "domicilio", "direccion de casa", "home address"),
+		numberColumn("home_latitude", false, "latitud", "lat"), numberColumn("home_longitude", false, "longitud", "lng", "lon"),
+		textColumn("guardian_name", false, "apoderado", "tutor", "padre o madre", "guardian"),
+		textColumn("guardian_phone", false, "celular del apoderado", "telefono apoderado"),
+		textColumn("guardian_email", false, "correo apoderado", "email del apoderado"),
+		textColumn("service", false, "tramo", "legs"), textColumn("group", false, "curso", "grado", "area"),
+		textColumn("stop", false, "parada de recojo", "pickup stop"))
 }
 
 // Matches by the rider's own columns: the users file has first and last names but no organization
@@ -588,8 +654,9 @@ func NewDocumentTypesImportDescriptor(svc trackingInterfaces.TrackingService) im
 func (d *documentTypesImport) Resource() string { return "tracking_document_types" }
 
 func (d *documentTypesImport) Columns() []importModels.ColumnSpec {
-	return columnsOf(textColumn("code", true), textColumn("document", true), textColumn("applies_to", true),
-		numberColumn("warn_days_before", false), textColumn("blocks_service", false))
+	return columnsOf(textColumn("code", true, "codigo", "sigla"), textColumn("document", true, "nombre", "name"),
+		textColumn("applies_to", true, "aplica", "para"), numberColumn("warn_days_before", false, "dias de aviso", "aviso"),
+		textColumn("blocks_service", false, "bloquea", "obligatorio", "blocks"))
 }
 
 func (d *documentTypesImport) Matches(headers []string) bool {

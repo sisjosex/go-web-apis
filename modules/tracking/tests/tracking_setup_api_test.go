@@ -20,10 +20,14 @@ func TestTrackingSetup_FreshTenantThenCompany(t *testing.T) {
 	defer helper.Close()
 	tenantID := uuid.NewString()
 
-	assert.Equal(t, [5]bool{false, false, false, false, false}, TrackingSetupFlags(t, helper, tenantID), "a fresh tenant has nothing")
+	assert.Equal(t, [6]bool{false, false, false, false, false, false}, TrackingSetupFlags(t, helper, tenantID), "a fresh tenant has nothing")
 
 	SeedTenantCompany(t, helper, tenantID)
-	assert.Equal(t, [5]bool{true, false, false, false, false}, TrackingSetupFlags(t, helper, tenantID), "the first company closes the company step")
+	assert.Equal(t, [6]bool{true, false, false, false, false, false}, TrackingSetupFlags(t, helper, tenantID), "the first company closes the company step")
+
+	// TRACK-073: the clients' step, second in the guide.
+	SeedTenantOrganization(t, helper, tenantID)
+	assert.Equal(t, [6]bool{true, true, false, false, false, false}, TrackingSetupFlags(t, helper, tenantID), "the first client closes the clients' step")
 }
 
 // TestTrackingSetup_Endpoint - the seeded test tenant has every piece, read over GET /tracking/setup.
@@ -34,7 +38,7 @@ func TestTrackingSetup_Endpoint(t *testing.T) {
 	w := helper.DoRequest("GET", "/tracking/setup", nil, map[string]string{})
 	expectStatus(t, w, http.StatusOK)
 	body := ParseResponse(t, w.Body.Bytes())
-	for _, key := range []string{"companies", "vehicles", "routes", "riders"} {
+	for _, key := range []string{"companies", "organizations", "vehicles", "routes", "riders"} {
 		assert.Equal(t, true, body[key], key)
 	}
 	_, hasDrivers := body["drivers"]

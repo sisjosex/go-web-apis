@@ -18,8 +18,23 @@ const (
 // Row status values for the process phase.
 const (
 	RowStatusCreated = "created"
+	RowStatusUpdated = "updated"
 	RowStatusFailed  = "failed"
 	RowStatusSkipped = "skipped"
+)
+
+// What to do with a row whose record already exists (IMPORT-002 D4): skip it, as every resource
+// always has, or update it — only for a descriptor that implements Updater.
+const (
+	OnExistingSkip   = "skip"
+	OnExistingUpdate = "update"
+)
+
+// Where a heading's field came from, as the column step shows it (IMPORT-002).
+const (
+	HeaderSourceSaved    = "saved"
+	HeaderSourceDetected = "detected"
+	HeaderSourceChosen   = "chosen"
 )
 
 // ColumnType is the editing/validation type a client applies to one import
@@ -41,19 +56,49 @@ const (
 // the client uses for it, whether the engine rejects a row without it, and an
 // optional resource-supplied pattern for customized validation (D8). Format is
 // a human hint (e.g. "YYYY-MM-DD") the client may show as a placeholder.
+//
+// Label is filled by the engine from `import.<resource>.<key>` in the request
+// language (the key when untranslated). Aliases are the other headings a file
+// may give the column — "Cód. Art." for sku — compared folded (lower case, no
+// accents or punctuation); they stay on the server, which does the matching.
 type ColumnSpec struct {
 	Key      string     `json:"key"`
+	Label    string     `json:"label"`
 	Type     ColumnType `json:"type"`
 	Required bool       `json:"required"`
 	Pattern  string     `json:"pattern,omitempty"`
 	Format   string     `json:"format,omitempty"`
+	Aliases  []string   `json:"-"`
+}
+
+// OptionType is how the page draws a descriptor's extra switch.
+type OptionType string
+
+const (
+	OptionTypeBool   OptionType = "bool"
+	OptionTypeSelect OptionType = "select"
+	OptionTypeUUID   OptionType = "uuid"
+)
+
+// OptionSpec is one run-wide switch a descriptor reads from ImportContext.Options
+// ("Enviar invitación", "Crear las categorías que falten"). Label is filled by the
+// engine from `import.<resource>.option.<key>`.
+type OptionSpec struct {
+	Key     string     `json:"key"`
+	Label   string     `json:"label"`
+	Type    OptionType `json:"type"`
+	Default any        `json:"default"`
 }
 
 // SchemaResponse is the typed column list of one resource, consumed by the
-// wizard to render and validate its editable cells.
+// page to render and validate its editable cells, with the run's switches and
+// whether an existing record can be updated, recognized by KeyLabel.
 type SchemaResponse struct {
-	Resource string       `json:"resource"`
-	Columns  []ColumnSpec `json:"columns"`
+	Resource  string       `json:"resource"`
+	Columns   []ColumnSpec `json:"columns"`
+	Options   []OptionSpec `json:"options"`
+	Updatable bool         `json:"updatable"`
+	KeyLabel  string       `json:"key_label,omitempty"`
 }
 
 // ImportOptions carries caller-supplied, resource-specific switches parsed from
@@ -79,11 +124,52 @@ type ImportTarget struct {
 	Scope    []string
 }
 
+// ImportRequest is everything one validate or import upload carries beyond the
+// file (IMPORT-002): the headings the operator mapped by hand, what to do with
+// existing records, whether to remember the mapping, and the cells fixed or the
+// rows dropped on the review step.
+type ImportRequest struct {
+	Target   ImportTarget
+	Data     []byte
+	FileName string
+	// Mapping is {heading as written: field key}, a null key ignoring the column.
+	Mapping    map[string]*string
+	OnExisting string
+	Remember   bool
+	// Edits is {line: {field key: value}}, a null entry dropping the row.
+	Edits map[int]map[string]string
+}
+
 // ImportResourceInfo is one resource a scope reaches and the module that owns
-// it, as GET /import/resources lists them (D2).
+// it, as GET /import/resources lists them (D2), named in the request language,
+// with when the tenant last imported it.
 type ImportResourceInfo struct {
-	Resource string `json:"resource"`
-	Module   string `json:"module"`
+	Resource    string     `json:"resource"`
+	Module      string     `json:"module"`
+	Label       string     `json:"label"`
+	Description string     `json:"description"`
+	LastRunAt   *time.Time `json:"last_run_at"`
+}
+
+// MappingResponse is the remembered mapping of a file shape, or null.
+type MappingResponse struct {
+	Mapping map[string]string `json:"mapping"`
+}
+
+// HeaderMatch is one heading of the file and the field it fills: Key null is a
+// column the run ignores. Example is its first non-empty cell.
+type HeaderMatch struct {
+	Header  string  `json:"header"`
+	Key     *string `json:"key"`
+	Source  string  `json:"source,omitempty"`
+	Example string  `json:"example"`
+}
+
+// HeaderSuggestion is an unmatched heading that looks like a field no heading
+// filled — "U. medida" for unit — offered as "Usar «U. medida»".
+type HeaderSuggestion struct {
+	Key    string `json:"key"`
+	Header string `json:"header"`
 }
 
 // DetectResponse is the resource a file's header line resolves to and the
@@ -128,6 +214,8 @@ type ImportContext struct {
 	Lang        string
 	Options     ImportOptions
 	Images      ImportImages
+	// OnExisting is OnExistingSkip or OnExistingUpdate (D4), set by the engine.
+	OnExisting string
 	// Headers are the file's normalized headers in column order, as parseCSV
 	// read them. A row reaches a descriptor as a map, which has no order, so a
 	// descriptor whose columns are not fixed in advance — the products file and
@@ -166,9 +254,12 @@ type RowResult struct {
 // RunMeta is the persisted summary of a single import run (D1): resource,
 // counts, warning total, actor, and timestamp.
 type RunMeta struct {
+	ID          *uuid.UUID `json:"id"`
 	Resource    string     `json:"resource"`
+	FileName    string     `json:"file_name,omitempty"`
 	Total       int        `json:"total"`
 	Created     int        `json:"created"`
+	Updated     int        `json:"updated"`
 	Failed      int        `json:"failed"`
 	Skipped     int        `json:"skipped"`
 	Warnings    int        `json:"warnings"`
@@ -176,24 +267,64 @@ type RunMeta struct {
 	Timestamp   time.Time  `json:"timestamp"`
 }
 
-// ValidateResponse is the dry-run result: per-row feedback plus aggregate counts.
-// Headers is the file's column order — a row's data is a map, so it is the only
-// way a client can write the file back in the order the operator wrote it.
+// PreviewRowCount is how many rows the file step shows (D2).
+const PreviewRowCount = 5
+
+// ValidateResponse is the dry-run result (D2): counts, how each heading maps,
+// the first rows as written for the file step, and only the rows the review
+// step must show, those with an error or a warning — not every row of a
+// 5 000-row file.
+//
+// Preview cells follow Headers; an issue's Data is keyed by field, the cells
+// the review step edits.
 type ValidateResponse struct {
-	Resource  string      `json:"resource"`
-	Headers   []string    `json:"headers"`
-	Total     int         `json:"total"`
-	Valid     int         `json:"valid"`
-	Invalid   int         `json:"invalid"`
-	Duplicate int         `json:"duplicate"`
-	Rows      []RowResult `json:"rows"`
-	Warnings  int         `json:"warnings"`
+	Resource    string             `json:"resource"`
+	Sheet       string             `json:"sheet,omitempty"`
+	Total       int                `json:"total"`
+	Valid       int                `json:"valid"`
+	Warnings    int                `json:"warnings"`
+	Invalid     int                `json:"invalid"`
+	Existing    int                `json:"existing"`
+	Headers     []HeaderMatch      `json:"headers"`
+	Suggestions []HeaderSuggestion `json:"suggestions"`
+	Preview     [][]string         `json:"preview"`
+	Issues      []RowResult        `json:"issues"`
 }
 
-// ImportResponse is the process result: per-row outcome plus the persisted run summary.
+// ImportResponse is the process result: the recorded run, the rows that were
+// not written — failed or skipped — for "Descargar filas omitidas", and the
+// written ones that carry a warning (D2: rows with an error or a warning, never
+// every row).
 type ImportResponse struct {
-	Resource string      `json:"resource"`
-	Headers  []string    `json:"headers"`
-	Run      RunMeta     `json:"run"`
-	Rows     []RowResult `json:"rows"`
+	Resource   string      `json:"resource"`
+	Run        RunMeta     `json:"run"`
+	FailedRows []RowResult `json:"failed_rows"`
+	WarnedRows []RowResult `json:"warned_rows"`
+}
+
+// RunRow is one past import, as the history lists it.
+type RunRow struct {
+	ID              uuid.UUID `json:"id"`
+	Resource        string    `json:"resource"`
+	FileName        *string   `json:"file_name"`
+	Total           int       `json:"total"`
+	Created         int       `json:"created"`
+	Updated         int       `json:"updated"`
+	Skipped         int       `json:"skipped"`
+	Failed          int       `json:"failed"`
+	PerformedByName *string   `json:"performed_by_name"`
+	CreatedAt       time.Time `json:"created_at"`
+}
+
+// RunsQuery pages a tenant's history, one resource when set.
+type RunsQuery struct {
+	Resource string `query:"resource"`
+	Page     int    `query:"page" default:"1" minimum:"1"`
+	PageSize int    `query:"page_size" default:"20" minimum:"1" maximum:"100"`
+}
+
+// RunsResponse is one page of the history.
+type RunsResponse struct {
+	Runs       []RunRow `json:"runs"`
+	TotalCount int64    `json:"total_count"`
 }

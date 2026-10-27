@@ -19,6 +19,7 @@ import (
 	importErrors "josex/web/modules/import/errors"
 	importInterfaces "josex/web/modules/import/interfaces"
 	importModels "josex/web/modules/import/models"
+	importServices "josex/web/modules/import/services"
 )
 
 type ImportController struct {
@@ -42,7 +43,7 @@ func (ctrl *ImportController) Validate(ctx context.Context, _ *UploadInput) (*ap
 		return nil, err
 	}
 
-	result, err := ctrl.importService.Validate(ctrl.buildContext(c, parsed), parsed.target, parsed.data)
+	result, err := ctrl.importService.Validate(ctrl.buildContext(c, parsed), parsed.request)
 	if err != nil {
 		return nil, ctrl.mapError(c, err)
 	}
@@ -58,7 +59,7 @@ func (ctrl *ImportController) Import(ctx context.Context, _ *UploadInput) (*api.
 		return nil, err
 	}
 
-	result, err := ctrl.importService.Import(ctrl.buildContext(c, parsed), parsed.target, parsed.data)
+	result, err := ctrl.importService.Import(ctrl.buildContext(c, parsed), parsed.request)
 	if err != nil {
 		return nil, ctrl.mapError(c, err)
 	}
@@ -74,7 +75,7 @@ func (ctrl *ImportController) Detect(ctx context.Context, _ *UploadInput) (*api.
 		return nil, err
 	}
 
-	result, err := ctrl.importService.Detect(parsed.target, parsed.data)
+	result, err := ctrl.importService.Detect(parsed.request.Target, parsed.request.Data, parsed.request.FileName)
 	if err != nil {
 		return nil, ctrl.mapError(c, err)
 	}
@@ -89,11 +90,15 @@ func (ctrl *ImportController) Meta(ctx context.Context, _ *api.None) (*api.Out[i
 
 // UploadForm is the multipart form Validate, Import and Detect read.
 type UploadForm struct {
-	File     string `json:"file" format:"binary" doc:"The CSV"`
-	Resource string `json:"resource,omitempty" doc:"Resource key; detected from the header when empty"`
-	Scope    string `json:"scope,omitempty" doc:"Comma-separated resource or module keys detection may pick from"`
-	Options  string `json:"options,omitempty" doc:"JSON-encoded importModels.ImportOptions"`
-	Images   string `json:"images,omitempty" format:"binary" doc:"Optional zip of the rows' images"`
+	File       string `json:"file" format:"binary" doc:"The file: Excel (.xlsx) or CSV"`
+	Resource   string `json:"resource,omitempty" doc:"Resource key; detected from the header when empty"`
+	Scope      string `json:"scope,omitempty" doc:"Comma-separated resource or module keys detection may pick from"`
+	Options    string `json:"options,omitempty" doc:"JSON-encoded importModels.ImportOptions"`
+	Images     string `json:"images,omitempty" format:"binary" doc:"Optional zip of the rows' images"`
+	Mapping    string `json:"mapping,omitempty" doc:"JSON {heading as written: field key or null}; null ignores the column"`
+	OnExisting string `json:"on_existing,omitempty" enum:"skip,update" doc:"What to do with a row whose record exists; update only for an updatable resource"`
+	Remember   string `json:"remember,omitempty" enum:"true,false" doc:"Remember this file shape's mapping (import only)"`
+	Edits      string `json:"edits,omitempty" doc:"JSON {line: {field key: value} or null}: cells fixed on the review step, null drops the row"`
 }
 
 // UploadInput is the request of the routes that take an uploaded CSV.
@@ -108,7 +113,49 @@ type ResourcesInput struct {
 
 // Resources is GET /resources: Resources a scope reaches.
 func (ctrl *ImportController) Resources(ctx context.Context, in *ResourcesInput) (*api.Out[[]importModels.ImportResourceInfo], error) {
-	return api.OK(ctrl.importService.Resources(parseScope(in.Scope)))
+	c := api.Gin(ctx)
+	return api.OK(ctrl.importService.Resources(c.Request.Context(), tenantOf(c), c.GetString("lang"), parseScope(in.Scope)))
+}
+
+// MappingInput is Mapping's request.
+type MappingInput struct {
+	Resource string `query:"resource"`
+	Headers  string `query:"headers" doc:"JSON array of the file's headings, as written"`
+}
+
+// Mapping is GET /mapping: the mapping remembered for a file shape.
+func (ctrl *ImportController) Mapping(ctx context.Context, in *MappingInput) (*api.Out[*importModels.MappingResponse], error) {
+	c := api.Gin(ctx)
+	var headers []string
+	if err := json.Unmarshal([]byte(in.Headers), &headers); err != nil {
+		return nil, api.Fail(http.StatusBadRequest, coreErrors.BuildErrorSingle(c, importErrors.ImportMappingInvalid))
+	}
+	result, err := ctrl.importService.Mapping(c.Request.Context(), tenantOf(c), in.Resource, headers)
+	if err != nil {
+		return nil, ctrl.mapError(c, err)
+	}
+	return api.OK(result)
+}
+
+// RunsInput is Runs's request.
+type RunsInput struct {
+	Resource string `query:"resource"`
+	Page     int    `query:"page" minimum:"1" default:"1"`
+	PageSize int    `query:"page_size" minimum:"1" maximum:"100" default:"20"`
+}
+
+// Runs is GET /runs: the tenant's import history, newest first.
+func (ctrl *ImportController) Runs(ctx context.Context, in *RunsInput) (*api.Out[*importModels.RunsResponse], error) {
+	c := api.Gin(ctx)
+	query := importModels.RunsQuery{Resource: in.Resource, Page: max(in.Page, 1), PageSize: in.PageSize}
+	if query.PageSize < 1 {
+		query.PageSize = 20
+	}
+	result, err := ctrl.importService.Runs(c.Request.Context(), tenantOf(c), query)
+	if err != nil {
+		return nil, ctrl.mapError(c, err)
+	}
+	return api.OK(result)
 }
 
 // parseScope splits the comma-separated scope field into its keys, dropping
@@ -127,20 +174,27 @@ func parseScope(raw string) []string {
 // TemplateInput is Template's request.
 type TemplateInput struct {
 	Resource string `query:"resource"`
+	Format   string `query:"format" enum:"csv,xlsx" doc:"csv (default) or xlsx"`
 }
 
 // Template answers a CSV with just the header row for a resource, built from its descriptor's columns.
 func (ctrl *ImportController) Template(ctx context.Context, in *TemplateInput) (*api.File, error) {
 	c := api.Gin(ctx)
-	data, err := ctrl.importService.Template(in.Resource)
+	data, err := ctrl.importService.Template(in.Resource, in.Format)
 	if err != nil {
 		return nil, ctrl.mapError(c, err)
 	}
 
-	filename := fmt.Sprintf("import-template-%s.csv", in.Resource)
+	if in.Format == importServices.TemplateXLSX {
+		return &api.File{
+			ContentType:        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+			ContentDisposition: "attachment; filename=" + fmt.Sprintf("import-template-%s.xlsx", in.Resource),
+			Body:               data,
+		}, nil
+	}
 	return &api.File{
 		ContentType:        "text/csv; charset=utf-8",
-		ContentDisposition: "attachment; filename=" + filename,
+		ContentDisposition: "attachment; filename=" + fmt.Sprintf("import-template-%s.csv", in.Resource),
 		Body:               data,
 	}, nil
 }
@@ -153,7 +207,7 @@ type SchemaInput struct {
 // Schema is GET /schema: Column schema for a resource.
 func (ctrl *ImportController) Schema(ctx context.Context, in *SchemaInput) (*api.Out[*importModels.SchemaResponse], error) {
 	c := api.Gin(ctx)
-	result, err := ctrl.importService.Schema(in.Resource)
+	result, err := ctrl.importService.Schema(in.Resource, c.GetString("lang"))
 	if err != nil {
 		return nil, ctrl.mapError(c, err)
 	}
@@ -161,12 +215,11 @@ func (ctrl *ImportController) Schema(ctx context.Context, in *SchemaInput) (*api
 	return api.OK(result)
 }
 
-// upload is one parsed multipart request: the CSV bytes, the resource and scope
-// it targets, the parsed options, and the images inflated from the optional
+// upload is one parsed multipart request: the file and everything the engine
+// reads with it, the parsed options, and the images inflated from the optional
 // archive.
 type upload struct {
-	data    []byte
-	target  importModels.ImportTarget
+	request importModels.ImportRequest
 	options importModels.ImportOptions
 	images  importModels.ImportImages
 }
@@ -202,11 +255,27 @@ func (ctrl *ImportController) readUpload(c *gin.Context) (upload, error) {
 		return upload{}, err
 	}
 
-	target := importModels.ImportTarget{
-		Resource: strings.TrimSpace(c.PostForm("resource")),
-		Scope:    parseScope(c.PostForm("scope")),
+	request := importModels.ImportRequest{
+		Target: importModels.ImportTarget{
+			Resource: strings.TrimSpace(c.PostForm("resource")),
+			Scope:    parseScope(c.PostForm("scope")),
+		},
+		Data:       data,
+		FileName:   fileHeader.Filename,
+		OnExisting: c.PostForm("on_existing"),
+		Remember:   c.PostForm("remember") == "true",
 	}
-	return upload{data: data, target: target, options: options, images: images}, nil
+	if raw := c.PostForm("mapping"); raw != "" {
+		if err := json.Unmarshal([]byte(raw), &request.Mapping); err != nil {
+			return upload{}, api.Fail(http.StatusBadRequest, coreErrors.BuildErrorSingle(c, importErrors.ImportMappingInvalid))
+		}
+	}
+	if raw := c.PostForm("edits"); raw != "" {
+		if err := json.Unmarshal([]byte(raw), &request.Edits); err != nil {
+			return upload{}, api.Fail(http.StatusBadRequest, coreErrors.BuildErrorSingle(c, importErrors.ImportEditsInvalid))
+		}
+	}
+	return upload{request: request, options: options, images: images}, nil
 }
 
 // readImages inflates the optional `images` archive. Absent is not an error —
@@ -264,17 +333,25 @@ func (ctrl *ImportController) buildContext(c *gin.Context, parsed upload) import
 		Options: parsed.options,
 		Images:  parsed.images,
 	}
-	if tenantIDStr, ok := c.Get("tenant_id"); ok {
-		if tid, err := uuid.Parse(tenantIDStr.(string)); err == nil {
-			importCtx.TenantID = tid
-		}
-	}
+	importCtx.TenantID = tenantOf(c)
 	if userIDStr, ok := c.Get("user_id"); ok {
 		if uid, err := uuid.Parse(userIDStr.(string)); err == nil {
 			importCtx.PerformedBy = &uid
 		}
 	}
 	return importCtx
+}
+
+// tenantOf is the request's tenant, or Nil outside one.
+func tenantOf(c *gin.Context) uuid.UUID {
+	if raw, ok := c.Get("tenant_id"); ok {
+		if text, ok := raw.(string); ok {
+			if id, err := uuid.Parse(text); err == nil {
+				return id
+			}
+		}
+	}
+	return uuid.Nil
 }
 
 // mapError translates a service sentinel error to the matching HTTP status and code.

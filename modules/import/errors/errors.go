@@ -22,6 +22,8 @@ const (
 
 	// Options parsing and generic validation.
 	ImportOptionsInvalid   = "import.options.invalid"
+	ImportMappingInvalid   = "import.mapping.invalid"
+	ImportEditsInvalid     = "import.edits.invalid"
 	ImportValidationFailed = "import.validation-failed"
 
 	// Companion image archive.

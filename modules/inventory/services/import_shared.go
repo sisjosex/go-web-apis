@@ -77,6 +77,14 @@ const (
 // single '-' a category slug is made of.
 var slugSeparatorPattern = regexp.MustCompile(`[^a-z0-9]+`)
 
+// The other headings a shop's or a supplier's own sheet gives the columns every
+// product file shares (IMPORT-002), compared folded by the engine; the labels in
+// lang under import.<resource>.<key> match too.
+var (
+	skuAliases     = []string{"codigo", "cod", "cod art", "codigo articulo", "codigo de articulo", "cod producto", "referencia", "ref", "item code", "code"}
+	reorderAliases = []string{"stock minimo", "minimo", "punto de pedido", "min stock", "reorder point"}
+)
+
 // skuCandidate is the combination a row resolved to: the product it belongs to
 // and the SKU an opening count, a lot or a picture then hangs off.
 type skuCandidate struct {

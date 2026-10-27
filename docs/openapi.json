@@ -1734,6 +1734,9 @@
           "key": {
             "type": "string"
           },
+          "label": {
+            "type": "string"
+          },
           "pattern": {
             "type": "string"
           },
@@ -1746,6 +1749,7 @@
         },
         "required": [
           "key",
+          "label",
           "type",
           "required"
         ],
@@ -1764,6 +1768,46 @@
         "required": [
           "resource",
           "module"
+        ],
+        "type": "object"
+      },
+      "import.HeaderMatch": {
+        "additionalProperties": false,
+        "properties": {
+          "example": {
+            "type": "string"
+          },
+          "header": {
+            "type": "string"
+          },
+          "key": {
+            "nullable": true,
+            "type": "string"
+          },
+          "source": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "header",
+          "key",
+          "example"
+        ],
+        "type": "object"
+      },
+      "import.HeaderSuggestion": {
+        "additionalProperties": false,
+        "properties": {
+          "header": {
+            "type": "string"
+          },
+          "key": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "key",
+          "header"
         ],
         "type": "object"
       },
@@ -1788,6 +1832,17 @@
       "import.ImportResourceInfo": {
         "additionalProperties": false,
         "properties": {
+          "description": {
+            "type": "string"
+          },
+          "label": {
+            "type": "string"
+          },
+          "last_run_at": {
+            "format": "date-time",
+            "nullable": true,
+            "type": "string"
+          },
           "module": {
             "type": "string"
           },
@@ -1797,37 +1852,77 @@
         },
         "required": [
           "resource",
-          "module"
+          "module",
+          "label",
+          "description",
+          "last_run_at"
         ],
         "type": "object"
       },
       "import.ImportResponse": {
         "additionalProperties": false,
         "properties": {
-          "headers": {
+          "failed_rows": {
             "items": {
-              "type": "string"
+              "$ref": "#/components/schemas/import.RowResult"
             },
             "type": "array"
           },
           "resource": {
             "type": "string"
           },
-          "rows": {
+          "run": {
+            "$ref": "#/components/schemas/import.RunMeta"
+          },
+          "warned_rows": {
             "items": {
               "$ref": "#/components/schemas/import.RowResult"
             },
             "type": "array"
-          },
-          "run": {
-            "$ref": "#/components/schemas/import.RunMeta"
           }
         },
         "required": [
           "resource",
-          "headers",
           "run",
-          "rows"
+          "failed_rows",
+          "warned_rows"
+        ],
+        "type": "object"
+      },
+      "import.MappingResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "mapping": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object"
+          }
+        },
+        "required": [
+          "mapping"
+        ],
+        "type": "object"
+      },
+      "import.OptionSpec": {
+        "additionalProperties": false,
+        "properties": {
+          "default": {},
+          "key": {
+            "type": "string"
+          },
+          "label": {
+            "type": "string"
+          },
+          "type": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "key",
+          "label",
+          "type",
+          "default"
         ],
         "type": "object"
       },
@@ -1878,6 +1973,14 @@
             "format": "int64",
             "type": "integer"
           },
+          "file_name": {
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "nullable": true,
+            "type": "string"
+          },
           "performed_by": {
             "format": "uuid",
             "type": "string"
@@ -1897,19 +2000,102 @@
             "format": "int64",
             "type": "integer"
           },
+          "updated": {
+            "format": "int64",
+            "type": "integer"
+          },
           "warnings": {
             "format": "int64",
             "type": "integer"
           }
         },
         "required": [
+          "id",
           "resource",
           "total",
           "created",
+          "updated",
           "failed",
           "skipped",
           "warnings",
           "timestamp"
+        ],
+        "type": "object"
+      },
+      "import.RunRow": {
+        "additionalProperties": false,
+        "properties": {
+          "created": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "created_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "failed": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "file_name": {
+            "nullable": true,
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "performed_by_name": {
+            "nullable": true,
+            "type": "string"
+          },
+          "resource": {
+            "type": "string"
+          },
+          "skipped": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "total": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "updated": {
+            "format": "int64",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id",
+          "resource",
+          "file_name",
+          "total",
+          "created",
+          "updated",
+          "skipped",
+          "failed",
+          "performed_by_name",
+          "created_at"
+        ],
+        "type": "object"
+      },
+      "import.RunsResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "runs": {
+            "items": {
+              "$ref": "#/components/schemas/import.RunRow"
+            },
+            "type": "array"
+          },
+          "total_count": {
+            "format": "int64",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "runs",
+          "total_count"
         ],
         "type": "object"
       },
@@ -1922,21 +2108,39 @@
             },
             "type": "array"
           },
+          "key_label": {
+            "type": "string"
+          },
+          "options": {
+            "items": {
+              "$ref": "#/components/schemas/import.OptionSpec"
+            },
+            "type": "array"
+          },
           "resource": {
             "type": "string"
+          },
+          "updatable": {
+            "type": "boolean"
           }
         },
         "required": [
           "resource",
-          "columns"
+          "columns",
+          "options",
+          "updatable"
         ],
         "type": "object"
       },
       "import.UploadForm": {
         "additionalProperties": false,
         "properties": {
+          "edits": {
+            "description": "JSON {line: {field key: value} or null}: cells fixed on the review step, null drops the row",
+            "type": "string"
+          },
           "file": {
-            "description": "The CSV",
+            "description": "The file: Excel (.xlsx) or CSV",
             "format": "binary",
             "type": "string",
             "x-contentMediaType": "application/octet-stream"
@@ -1947,8 +2151,28 @@
             "type": "string",
             "x-contentMediaType": "application/octet-stream"
           },
+          "mapping": {
+            "description": "JSON {heading as written: field key or null}; null ignores the column",
+            "type": "string"
+          },
+          "on_existing": {
+            "description": "What to do with a row whose record exists; update only for an updatable resource",
+            "enum": [
+              "skip",
+              "update"
+            ],
+            "type": "string"
+          },
           "options": {
             "description": "JSON-encoded importModels.ImportOptions",
+            "type": "string"
+          },
+          "remember": {
+            "description": "Remember this file shape's mapping (import only)",
+            "enum": [
+              "true",
+              "false"
+            ],
             "type": "string"
           },
           "resource": {
@@ -1968,13 +2192,13 @@
       "import.ValidateResponse": {
         "additionalProperties": false,
         "properties": {
-          "duplicate": {
+          "existing": {
             "format": "int64",
             "type": "integer"
           },
           "headers": {
             "items": {
-              "type": "string"
+              "$ref": "#/components/schemas/import.HeaderMatch"
             },
             "type": "array"
           },
@@ -1982,12 +2206,30 @@
             "format": "int64",
             "type": "integer"
           },
+          "issues": {
+            "items": {
+              "$ref": "#/components/schemas/import.RowResult"
+            },
+            "type": "array"
+          },
+          "preview": {
+            "items": {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            "type": "array"
+          },
           "resource": {
             "type": "string"
           },
-          "rows": {
+          "sheet": {
+            "type": "string"
+          },
+          "suggestions": {
             "items": {
-              "$ref": "#/components/schemas/import.RowResult"
+              "$ref": "#/components/schemas/import.HeaderSuggestion"
             },
             "type": "array"
           },
@@ -2006,13 +2248,15 @@
         },
         "required": [
           "resource",
-          "headers",
           "total",
           "valid",
+          "warnings",
           "invalid",
-          "duplicate",
-          "rows",
-          "warnings"
+          "existing",
+          "headers",
+          "suggestions",
+          "preview",
+          "issues"
         ],
         "type": "object"
       },
@@ -8366,6 +8610,9 @@
             "format": "uuid",
             "type": "string"
           },
+          "organization_kind": {
+            "type": "string"
+          },
           "organization_name": {
             "nullable": true,
             "type": "string"
@@ -9825,6 +10072,9 @@
       "tracking.ListRoutesResponse": {
         "additionalProperties": false,
         "properties": {
+          "counts": {
+            "$ref": "#/components/schemas/tracking.RouteCounts"
+          },
           "page": {
             "format": "int64",
             "type": "integer"
@@ -9846,6 +10096,7 @@
         },
         "required": [
           "routes",
+          "counts",
           "total_count",
           "page",
           "page_size"
@@ -9900,6 +10151,9 @@
       "tracking.ListTripsResponse": {
         "additionalProperties": false,
         "properties": {
+          "counts": {
+            "$ref": "#/components/schemas/tracking.TripCounts"
+          },
           "page": {
             "format": "int64",
             "type": "integer"
@@ -9921,6 +10175,7 @@
         },
         "required": [
           "trips",
+          "counts",
           "total_count",
           "page",
           "page_size"
@@ -9930,6 +10185,9 @@
       "tracking.ListVehiclesResponse": {
         "additionalProperties": false,
         "properties": {
+          "counts": {
+            "$ref": "#/components/schemas/tracking.VehicleCounts"
+          },
           "page": {
             "format": "int64",
             "type": "integer"
@@ -9951,6 +10209,7 @@
         },
         "required": [
           "vehicles",
+          "counts",
           "total_count",
           "page",
           "page_size"
@@ -10020,6 +10279,24 @@
       "tracking.LiveVehicle": {
         "additionalProperties": false,
         "properties": {
+          "arrived_at": {
+            "format": "date-time",
+            "nullable": true,
+            "type": "string"
+          },
+          "delay_seconds": {
+            "format": "int32",
+            "nullable": true,
+            "type": "integer"
+          },
+          "driver_name": {
+            "nullable": true,
+            "type": "string"
+          },
+          "driver_phone": {
+            "nullable": true,
+            "type": "string"
+          },
           "heading": {
             "format": "float",
             "nullable": true,
@@ -10040,9 +10317,23 @@
             "nullable": true,
             "type": "string"
           },
+          "organization_name": {
+            "nullable": true,
+            "type": "string"
+          },
           "recorded_at": {
             "format": "date-time",
             "type": "string"
+          },
+          "riders_boarded": {
+            "format": "int32",
+            "nullable": true,
+            "type": "integer"
+          },
+          "riders_total": {
+            "format": "int32",
+            "nullable": true,
+            "type": "integer"
           },
           "route_id": {
             "format": "uuid",
@@ -10079,7 +10370,14 @@
           "speed",
           "heading",
           "recorded_at",
-          "organization_kind"
+          "organization_kind",
+          "driver_name",
+          "driver_phone",
+          "organization_name",
+          "riders_total",
+          "riders_boarded",
+          "delay_seconds",
+          "arrived_at"
         ],
         "type": "object"
       },
@@ -12274,6 +12572,9 @@
             "nullable": true,
             "type": "string"
           },
+          "organization_kind": {
+            "type": "string"
+          },
           "organization_name": {
             "nullable": true,
             "type": "string"
@@ -12466,6 +12767,39 @@
           "resolved_at",
           "resolved_by",
           "resolved_by_name"
+        ],
+        "type": "object"
+      },
+      "tracking.RouteCounts": {
+        "additionalProperties": false,
+        "properties": {
+          "all": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "free_seats": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "inbound": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "outbound": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "without_driver": {
+            "format": "int64",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "all",
+          "outbound",
+          "inbound",
+          "without_driver",
+          "free_seats"
         ],
         "type": "object"
       },
@@ -13311,6 +13645,9 @@
             "format": "uuid",
             "type": "string"
           },
+          "is_destination": {
+            "type": "boolean"
+          },
           "latitude": {
             "format": "double",
             "nullable": true,
@@ -13328,6 +13665,17 @@
             "format": "uuid",
             "nullable": true,
             "type": "string"
+          },
+          "riders_count": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "route_name": {
+            "type": "string"
+          },
+          "routes_count": {
+            "format": "int32",
+            "type": "integer"
           },
           "tenant_id": {
             "format": "uuid",
@@ -13377,6 +13725,10 @@
             "format": "int32",
             "type": "integer"
           },
+          "drivers_without_account": {
+            "format": "int32",
+            "type": "integer"
+          },
           "has_routes": {
             "type": "boolean"
           },
@@ -13401,7 +13753,8 @@
           "arrivals_done",
           "absences_today",
           "trips_delayed",
-          "has_routes"
+          "has_routes",
+          "drivers_without_account"
         ],
         "type": "object"
       },
@@ -13412,6 +13765,9 @@
             "type": "boolean"
           },
           "drivers": {
+            "type": "boolean"
+          },
+          "organizations": {
             "type": "boolean"
           },
           "riders": {
@@ -13426,6 +13782,7 @@
         },
         "required": [
           "companies",
+          "organizations",
           "drivers",
           "vehicles",
           "routes",
@@ -13499,6 +13856,39 @@
         ],
         "type": "object"
       },
+      "tracking.TripCounts": {
+        "additionalProperties": false,
+        "properties": {
+          "all": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "cancelled": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "completed": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "in_progress": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "planned": {
+            "format": "int64",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "all",
+          "planned",
+          "in_progress",
+          "completed",
+          "cancelled"
+        ],
+        "type": "object"
+      },
       "tracking.TripDetail": {
         "additionalProperties": false,
         "properties": {
@@ -13536,6 +13926,15 @@
             "type": "boolean"
           },
           "license_plate": {
+            "nullable": true,
+            "type": "string"
+          },
+          "organization_kind": {
+            "nullable": true,
+            "type": "string"
+          },
+          "planned_end": {
+            "format": "date-time",
             "nullable": true,
             "type": "string"
           },
@@ -13635,7 +14034,9 @@
           "tasks_done",
           "created_at",
           "updated_at",
-          "service_block"
+          "service_block",
+          "organization_kind",
+          "planned_end"
         ],
         "type": "object"
       },
@@ -13708,9 +14109,26 @@
             "nullable": true,
             "type": "string"
           },
+          "organization_kind": {
+            "nullable": true,
+            "type": "string"
+          },
+          "planned_end": {
+            "format": "date-time",
+            "nullable": true,
+            "type": "string"
+          },
           "planned_start": {
             "format": "date-time",
             "type": "string"
+          },
+          "riders_boarded": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "riders_total": {
+            "format": "int32",
+            "type": "integer"
           },
           "route_id": {
             "format": "uuid",
@@ -13766,6 +14184,8 @@
         },
         "required": [
           "delay_seconds",
+          "riders_total",
+          "riders_boarded",
           "id",
           "route_id",
           "route_name",
@@ -13787,7 +14207,9 @@
           "tasks_done",
           "created_at",
           "updated_at",
-          "service_block"
+          "service_block",
+          "organization_kind",
+          "planned_end"
         ],
         "type": "object"
       },
@@ -13841,6 +14263,11 @@
             "type": "string"
           },
           "organization_kind": {
+            "nullable": true,
+            "type": "string"
+          },
+          "planned_end": {
+            "format": "date-time",
             "nullable": true,
             "type": "string"
           },
@@ -13955,9 +14382,10 @@
           "created_at",
           "updated_at",
           "service_block",
+          "organization_kind",
+          "planned_end",
           "planned_path",
           "vehicle_type",
-          "organization_kind",
           "destination"
         ],
         "type": "object"
@@ -14966,9 +15394,16 @@
             "format": "uuid",
             "type": "string"
           },
+          "last_seen_at": {
+            "format": "date-time",
+            "type": "string"
+          },
           "model": {
             "nullable": true,
             "type": "string"
+          },
+          "next_document": {
+            "$ref": "#/components/schemas/tracking.VehicleDocumentDue"
           },
           "plate_number": {
             "type": "string"
@@ -14977,6 +15412,9 @@
             "type": "boolean"
           },
           "status": {
+            "type": "string"
+          },
+          "today_route_name": {
             "type": "string"
           },
           "updated_at": {
@@ -15027,6 +15465,54 @@
         "required": [
           "conflicts",
           "seats_short"
+        ],
+        "type": "object"
+      },
+      "tracking.VehicleCounts": {
+        "additionalProperties": false,
+        "properties": {
+          "all": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "docs_due": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "no_gps": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "on_route": {
+            "format": "int64",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "all",
+          "on_route",
+          "no_gps",
+          "docs_due"
+        ],
+        "type": "object"
+      },
+      "tracking.VehicleDocumentDue": {
+        "additionalProperties": false,
+        "properties": {
+          "expires_on": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string"
+          },
+          "type_name": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "type_name",
+          "expires_on",
+          "status"
         ],
         "type": "object"
       },
@@ -17305,6 +17791,69 @@
         "x-handler": "josex/web/modules/import/controllers.(*ImportController).Detect"
       }
     },
+    "/api/v1/import/mapping": {
+      "get": {
+        "description": "The {folded heading: field} remembered for a file with these headings in this business, or null (IMPORT-002 D3).",
+        "operationId": "import.Mapping",
+        "parameters": [
+          {
+            "explode": false,
+            "in": "query",
+            "name": "resource",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "JSON array of the file's headings, as written",
+            "explode": false,
+            "in": "query",
+            "name": "headers",
+            "schema": {
+              "description": "JSON array of the file's headings, as written",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/import.MappingResponse"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/core.ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/core.ErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          }
+        },
+        "summary": "Remembered column mapping",
+        "tags": [
+          "import"
+        ],
+        "x-handler": "josex/web/modules/import/controllers.(*ImportController).Mapping"
+      }
+    },
     "/api/v1/import/meta": {
       "get": {
         "description": "Returns the configured upload constraints (max file size, max rows) so the UI hint stays in sync with the server.",
@@ -17384,6 +17933,72 @@
         "x-handler": "josex/web/modules/import/controllers.(*ImportController).Resources"
       }
     },
+    "/api/v1/import/runs": {
+      "get": {
+        "description": "The business's confirmed imports, newest first, with their counts and who ran each; one resource when set.",
+        "operationId": "import.Runs",
+        "parameters": [
+          {
+            "explode": false,
+            "in": "query",
+            "name": "resource",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "explode": false,
+            "in": "query",
+            "name": "page",
+            "schema": {
+              "default": 1,
+              "format": "int64",
+              "minimum": 1,
+              "type": "integer"
+            }
+          },
+          {
+            "explode": false,
+            "in": "query",
+            "name": "page_size",
+            "schema": {
+              "default": 20,
+              "format": "int64",
+              "maximum": 100,
+              "minimum": 1,
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/import.RunsResponse"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/core.ErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          }
+        },
+        "summary": "Import history",
+        "tags": [
+          "import"
+        ],
+        "x-handler": "josex/web/modules/import/controllers.(*ImportController).Runs"
+      }
+    },
     "/api/v1/import/schema": {
       "get": {
         "description": "Returns the resource's columns with their type, required flag and optional validation pattern, so a client can render and check an editor per column without knowing the resource.",
@@ -17447,6 +18062,20 @@
             "in": "query",
             "name": "resource",
             "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "csv (default) or xlsx",
+            "explode": false,
+            "in": "query",
+            "name": "format",
+            "schema": {
+              "description": "csv (default) or xlsx",
+              "enum": [
+                "csv",
+                "xlsx"
+              ],
               "type": "string"
             }
           }
@@ -30201,6 +30830,13 @@
           },
           {
             "in": "query",
+            "name": "without_driver",
+            "schema": {
+              "type": "boolean"
+            }
+          },
+          {
+            "in": "query",
             "name": "sort",
             "schema": {
               "enum": [
@@ -32563,6 +33199,14 @@
               "minimum": 1,
               "type": "integer"
             }
+          },
+          {
+            "in": "query",
+            "name": "search",
+            "schema": {
+              "maxLength": 100,
+              "type": "string"
+            }
           }
         ],
         "responses": {
@@ -33171,6 +33815,19 @@
             "in": "query",
             "name": "search",
             "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "view",
+            "schema": {
+              "enum": [
+                "all",
+                "on_route",
+                "no_gps",
+                "docs_due"
+              ],
               "type": "string"
             }
           },

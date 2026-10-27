@@ -619,17 +619,22 @@
       "handler": "josex/web/modules/import/controllers.(*ImportController).Import",
       "sps": [
         "geo.sp_search_places",
+        "import.sp_get_column_mapping",
+        "import.sp_record_run",
+        "import.sp_upsert_column_mapping",
         "inventory.sp_add_product_media",
         "inventory.sp_assign_product_to_category",
         "inventory.sp_create_batch",
         "inventory.sp_create_category",
         "inventory.sp_create_product_sku_combination",
         "inventory.sp_create_product_with_variants",
+        "inventory.sp_get_product_with_variants",
         "inventory.sp_import_find_category",
         "inventory.sp_import_find_variant_option",
         "inventory.sp_import_free_category_slug",
         "inventory.sp_import_resolve_sku_by_axes",
         "inventory.sp_record_movement",
+        "inventory.sp_update_product_with_variants",
         "inventory.sp_update_reorder_level",
         "public.fn_within_limit",
         "tenancy.sp_add_user_to_tenant",
@@ -637,14 +642,23 @@
         "tracking.fn_rider_guardians_link",
         "tracking.sp_create_document_type",
         "tracking.sp_create_rider",
+        "tracking.sp_create_route",
+        "tracking.sp_create_route_pair",
+        "tracking.sp_create_route_return",
         "tracking.sp_create_stop_place",
         "tracking.sp_create_vehicle",
+        "tracking.sp_get_route",
         "tracking.sp_list_companies",
         "tracking.sp_list_document_types",
+        "tracking.sp_list_drivers",
         "tracking.sp_list_organizations",
         "tracking.sp_list_riders",
+        "tracking.sp_list_routes",
         "tracking.sp_list_stop_places",
         "tracking.sp_list_vehicles",
+        "tracking.sp_update_route",
+        "tracking.sp_update_stop_place",
+        "tracking.sp_update_vehicle",
         "users.sp_create_user",
         "users.sp_record_user_audit"
       ],
@@ -652,16 +666,21 @@
         "auth.user_profile",
         "auth.users",
         "geo.places",
+        "import.column_mappings",
+        "inventory.inventory_movements",
         "inventory.product_categories",
         "inventory.product_category_mapping",
+        "inventory.product_media",
         "inventory.product_sku_options",
         "inventory.product_skus",
+        "inventory.product_stock",
         "inventory.product_variant_groups",
         "inventory.product_variant_options",
         "inventory.products",
         "tenancy.roles",
         "tenancy.tenant_users",
         "tenancy.tenants",
+        "tracking.calendars",
         "tracking.compliance_documents",
         "tracking.document_types",
         "tracking.drivers",
@@ -671,13 +690,19 @@
         "tracking.rider_route_assignments",
         "tracking.riders",
         "tracking.route_schedules",
+        "tracking.route_version_stops",
+        "tracking.route_versions",
         "tracking.routes",
         "tracking.stop_places",
         "tracking.transport_companies",
+        "tracking.trips",
+        "tracking.vehicle_last_position",
         "tracking.vehicles"
       ],
       "writes": [
         "auth.users",
+        "import.column_mappings",
+        "import.runs",
         "inventory.inventory_movements",
         "inventory.product_batches",
         "inventory.product_categories",
@@ -692,9 +717,15 @@
         "tenancy.tenant_users",
         "tenancy.user_roles",
         "tracking.document_types",
+        "tracking.outbox",
         "tracking.rider_contacts",
         "tracking.rider_places",
+        "tracking.rider_route_assignments",
         "tracking.riders",
+        "tracking.route_schedules",
+        "tracking.route_version_stops",
+        "tracking.route_versions",
+        "tracking.routes",
         "tracking.stop_places",
         "tracking.vehicles",
         "users.user_audit_log"
@@ -708,6 +739,20 @@
       "handler": "josex/web/modules/import/controllers.(*ImportController).Detect",
       "sps": [],
       "reads": [],
+      "writes": []
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/import/mapping",
+      "operation_id": "import.Mapping",
+      "module": "import",
+      "handler": "josex/web/modules/import/controllers.(*ImportController).Mapping",
+      "sps": [
+        "import.sp_get_column_mapping"
+      ],
+      "reads": [
+        "import.column_mappings"
+      ],
       "writes": []
     },
     {
@@ -726,8 +771,27 @@
       "operation_id": "import.Resources",
       "module": "import",
       "handler": "josex/web/modules/import/controllers.(*ImportController).Resources",
-      "sps": [],
-      "reads": [],
+      "sps": [
+        "import.sp_last_runs"
+      ],
+      "reads": [
+        "import.runs"
+      ],
+      "writes": []
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/import/runs",
+      "operation_id": "import.Runs",
+      "module": "import",
+      "handler": "josex/web/modules/import/controllers.(*ImportController).Runs",
+      "sps": [
+        "import.sp_list_runs"
+      ],
+      "reads": [
+        "auth.users",
+        "import.runs"
+      ],
       "writes": []
     },
     {
@@ -758,6 +822,7 @@
       "handler": "josex/web/modules/import/controllers.(*ImportController).Validate",
       "sps": [
         "geo.sp_search_places",
+        "import.sp_get_column_mapping",
         "inventory.sp_create_category",
         "inventory.sp_import_find_category",
         "inventory.sp_import_free_category_slug",
@@ -767,17 +832,26 @@
         "tracking.fn_rider_guardians_link",
         "tracking.sp_create_document_type",
         "tracking.sp_create_rider",
+        "tracking.sp_create_route",
+        "tracking.sp_create_route_pair",
+        "tracking.sp_create_route_return",
         "tracking.sp_create_stop_place",
         "tracking.sp_create_vehicle",
+        "tracking.sp_get_route",
         "tracking.sp_list_companies",
         "tracking.sp_list_document_types",
+        "tracking.sp_list_drivers",
         "tracking.sp_list_organizations",
         "tracking.sp_list_riders",
+        "tracking.sp_list_routes",
         "tracking.sp_list_stop_places",
-        "tracking.sp_list_vehicles"
+        "tracking.sp_list_vehicles",
+        "tracking.sp_update_route"
       ],
       "reads": [
+        "auth.users",
         "geo.places",
+        "import.column_mappings",
         "inventory.product_categories",
         "inventory.product_category_mapping",
         "inventory.product_sku_options",
@@ -785,6 +859,7 @@
         "inventory.product_variant_groups",
         "inventory.product_variant_options",
         "inventory.products",
+        "tracking.calendars",
         "tracking.compliance_documents",
         "tracking.document_types",
         "tracking.drivers",
@@ -794,17 +869,27 @@
         "tracking.rider_route_assignments",
         "tracking.riders",
         "tracking.route_schedules",
+        "tracking.route_version_stops",
+        "tracking.route_versions",
         "tracking.routes",
         "tracking.stop_places",
         "tracking.transport_companies",
+        "tracking.trips",
+        "tracking.vehicle_last_position",
         "tracking.vehicles"
       ],
       "writes": [
         "inventory.product_categories",
         "tracking.document_types",
+        "tracking.outbox",
         "tracking.rider_contacts",
         "tracking.rider_places",
+        "tracking.rider_route_assignments",
         "tracking.riders",
+        "tracking.route_schedules",
+        "tracking.route_version_stops",
+        "tracking.route_versions",
+        "tracking.routes",
         "tracking.stop_places",
         "tracking.vehicles"
       ]
@@ -1507,6 +1592,7 @@
         "tracking.compliance_documents",
         "tracking.document_types",
         "tracking.drivers",
+        "tracking.organizations",
         "tracking.riders",
         "tracking.routes",
         "tracking.stop_places",
@@ -1537,6 +1623,7 @@
         "tracking.compliance_documents",
         "tracking.document_types",
         "tracking.drivers",
+        "tracking.organizations",
         "tracking.riders",
         "tracking.route_versions",
         "tracking.routes",
@@ -1561,6 +1648,7 @@
         "tracking.compliance_documents",
         "tracking.document_types",
         "tracking.drivers",
+        "tracking.organizations",
         "tracking.riders",
         "tracking.routes",
         "tracking.stop_places",
@@ -3517,6 +3605,7 @@
         "tracking.compliance_documents",
         "tracking.document_types",
         "tracking.drivers",
+        "tracking.organizations",
         "tracking.riders",
         "tracking.routes",
         "tracking.stop_places",
@@ -3619,6 +3708,7 @@
         "tracking.sp_live_fleet"
       ],
       "reads": [
+        "tracking.drivers",
         "tracking.organization_members",
         "tracking.organizations",
         "tracking.riders",
@@ -5324,6 +5414,11 @@
         "tracking.sp_list_stop_places"
       ],
       "reads": [
+        "tracking.organizations",
+        "tracking.rider_route_assignments",
+        "tracking.route_version_stops",
+        "tracking.route_versions",
+        "tracking.routes",
         "tracking.stop_places"
       ],
       "writes": []
@@ -5426,6 +5521,7 @@
         "tracking.compliance_documents",
         "tracking.document_types",
         "tracking.drivers",
+        "tracking.organizations",
         "tracking.riders",
         "tracking.routes",
         "tracking.stop_places",
@@ -5453,6 +5549,7 @@
         "tracking.compliance_documents",
         "tracking.document_types",
         "tracking.drivers",
+        "tracking.organizations",
         "tracking.riders",
         "tracking.routes",
         "tracking.stop_places",
@@ -5505,6 +5602,7 @@
         "tracking.compliance_documents",
         "tracking.document_types",
         "tracking.drivers",
+        "tracking.organizations",
         "tracking.riders",
         "tracking.routes",
         "tracking.stop_places",
@@ -5528,6 +5626,7 @@
         "tracking.compliance_documents",
         "tracking.document_types",
         "tracking.drivers",
+        "tracking.organizations",
         "tracking.riders",
         "tracking.routes",
         "tracking.stop_places",
@@ -5667,6 +5766,7 @@
         "tracking.compliance_documents",
         "tracking.document_types",
         "tracking.drivers",
+        "tracking.organizations",
         "tracking.riders",
         "tracking.routes",
         "tracking.stop_places",
@@ -5695,7 +5795,10 @@
         "tracking.compliance_documents",
         "tracking.document_types",
         "tracking.drivers",
+        "tracking.routes",
         "tracking.transport_companies",
+        "tracking.trips",
+        "tracking.vehicle_last_position",
         "tracking.vehicles"
       ],
       "writes": []
@@ -6441,6 +6544,42 @@
       "calls": [
         "geo.fn_fold"
       ]
+    },
+    "import.sp_get_column_mapping": {
+      "reads": [
+        "import.column_mappings"
+      ],
+      "writes": [],
+      "calls": []
+    },
+    "import.sp_last_runs": {
+      "reads": [
+        "import.runs"
+      ],
+      "writes": [],
+      "calls": []
+    },
+    "import.sp_list_runs": {
+      "reads": [
+        "auth.users",
+        "import.runs"
+      ],
+      "writes": [],
+      "calls": []
+    },
+    "import.sp_record_run": {
+      "reads": [],
+      "writes": [
+        "import.runs"
+      ],
+      "calls": []
+    },
+    "import.sp_upsert_column_mapping": {
+      "reads": [],
+      "writes": [
+        "import.column_mappings"
+      ],
+      "calls": []
     },
     "inventory.fn_check_sku_combination_key": {
       "reads": [
@@ -8301,6 +8440,7 @@
     "tracking.fn_trip_rows": {
       "reads": [
         "tracking.drivers",
+        "tracking.organizations",
         "tracking.routes",
         "tracking.trip_stop_tasks",
         "tracking.trip_stops",
@@ -9512,6 +9652,11 @@
     },
     "tracking.sp_list_stop_places": {
       "reads": [
+        "tracking.organizations",
+        "tracking.rider_route_assignments",
+        "tracking.route_version_stops",
+        "tracking.route_versions",
+        "tracking.routes",
         "tracking.stop_places"
       ],
       "writes": [],
@@ -9541,8 +9686,13 @@
     },
     "tracking.sp_list_vehicles": {
       "reads": [
+        "tracking.compliance_documents",
+        "tracking.document_types",
         "tracking.drivers",
+        "tracking.routes",
         "tracking.transport_companies",
+        "tracking.trips",
+        "tracking.vehicle_last_position",
         "tracking.vehicles"
       ],
       "writes": [],
@@ -9552,6 +9702,7 @@
     },
     "tracking.sp_live_fleet": {
       "reads": [
+        "tracking.drivers",
         "tracking.organizations",
         "tracking.riders",
         "tracking.routes",
@@ -10145,6 +10296,7 @@
     },
     "tracking.sp_tracking_overview": {
       "reads": [
+        "tracking.drivers",
         "tracking.organizations",
         "tracking.rider_absences",
         "tracking.riders",
@@ -10206,8 +10358,6 @@
     },
     "tracking.sp_trip_live": {
       "reads": [
-        "tracking.organizations",
-        "tracking.routes",
         "tracking.stop_places",
         "tracking.trip_stops",
         "tracking.trips",

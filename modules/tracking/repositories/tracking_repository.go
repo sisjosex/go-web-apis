@@ -392,29 +392,50 @@ func (r *TrackingRepository) UpdateVehicle(ctx context.Context, tenantID uuid.UU
 	return &v, nil
 }
 
-// ListVehicles returns one page of the tenant's vehicles plus the total the same filters match.
-// query.CompanyID nil lists the whole fleet (TRACK-001 D2); every row carries its company name.
-func (r *TrackingRepository) ListVehicles(ctx context.Context, tenantID uuid.UUID, query models.ListVehiclesQuery) ([]*models.Vehicle, int64, error) {
+// ListVehicles returns one page of the tenant's vehicles, the view counts and the total the same
+// filters match. query.CompanyID nil lists the whole fleet (TRACK-001 D2); every row carries its
+// company name, today's route, its last fix and its soonest document due (TRACK-075).
+func (r *TrackingRepository) ListVehicles(ctx context.Context, tenantID uuid.UUID, query models.ListVehiclesQuery) ([]*models.Vehicle, models.VehicleCounts, int64, error) {
+	var counts models.VehicleCounts
 	rows, err := r.dbService.Query(ctx,
-		`SELECT * FROM tracking.sp_list_vehicles($1::UUID, $2::UUID, $3::VARCHAR, $4::VARCHAR, $5::VARCHAR, $6::INT, $7::INT)`,
-		tenantID, query.CompanyID, query.VehicleType, query.Status, query.Search, query.Page, query.PageSize)
+		`SELECT * FROM tracking.sp_list_vehicles($1::UUID, $2::UUID, $3::VARCHAR, $4::VARCHAR, $5::VARCHAR, $6::INT, $7::INT, $8::VARCHAR)`,
+		tenantID, query.CompanyID, query.VehicleType, query.Status, query.Search, query.Page, query.PageSize, query.View)
 	if err != nil {
-		return nil, 0, &trackingErrors.TrackingError{Code: trackingErrors.VehicleListFailed, Err: err}
+		return nil, counts, 0, &trackingErrors.TrackingError{Code: trackingErrors.VehicleListFailed, Err: err}
 	}
 	defer rows.Close()
 	vehicles := []*models.Vehicle{}
 	var totalCount int64
 	for rows.Next() {
+		empty, err := scanEmptyPage(rows, 19, &counts)
+		if err != nil {
+			return nil, counts, 0, err
+		}
+		if empty {
+			continue
+		}
 		var v models.Vehicle
-		if err := rows.Scan(&v.ID, &v.CompanyID, &v.CompanyName, &v.PlateNumber, &v.VehicleType, &v.Brand, &v.Model, &v.Year, &v.Capacity, &v.GPSDeviceID, &v.Status, &v.ServiceBlocked, &v.CreatedAt, &v.UpdatedAt, &v.DefaultDriverID, &v.DriverName, &totalCount); err != nil {
-			return nil, 0, err
+		if err := rows.Scan(&v.ID, &v.CompanyID, &v.CompanyName, &v.PlateNumber, &v.VehicleType, &v.Brand, &v.Model, &v.Year, &v.Capacity, &v.GPSDeviceID, &v.Status, &v.ServiceBlocked, &v.CreatedAt, &v.UpdatedAt, &v.DefaultDriverID, &v.DriverName,
+			&v.TodayRouteName, &v.LastSeenAt, &v.NextDocument, &counts, &totalCount); err != nil {
+			return nil, counts, 0, err
 		}
 		vehicles = append(vehicles, &v)
 	}
 	if err := rows.Err(); err != nil {
-		return nil, 0, err
+		return nil, counts, 0, err
 	}
-	return vehicles, totalCount, nil
+	return vehicles, counts, totalCount, nil
+}
+
+// scanEmptyPage reads the one row a list SP answers for an empty page — id NULL, carrying only the
+// counts at column countsAt — and reports false, reading nothing, for a real row.
+func scanEmptyPage(rows pgx.Rows, countsAt int, counts any) (bool, error) {
+	if rows.RawValues()[0] != nil {
+		return false, nil
+	}
+	dest := make([]any, len(rows.FieldDescriptions()))
+	dest[countsAt] = counts
+	return true, rows.Scan(dest...)
 }
 
 func (r *TrackingRepository) GetVehicle(ctx context.Context, tenantID uuid.UUID, vehicleID uuid.UUID) (*models.Vehicle, error) {
@@ -655,34 +676,43 @@ func (r *TrackingRepository) UpdateRoute(ctx context.Context, tenantID uuid.UUID
 }
 
 // ListRoutes returns one page of the tenant's routes plus the total the same filters match
-// (TRACK-002 D2); an organization user's page holds only the routes their riders ride.
-func (r *TrackingRepository) ListRoutes(ctx context.Context, tenantID uuid.UUID, query models.ListRoutesQuery, scopeUserID *uuid.UUID) ([]*models.Route, int64, error) {
+// (TRACK-002 D2) and the chip counts (TRACK-075); an organization user's page holds only the routes
+// their riders ride.
+func (r *TrackingRepository) ListRoutes(ctx context.Context, tenantID uuid.UUID, query models.ListRoutesQuery, scopeUserID *uuid.UUID) ([]*models.Route, models.RouteCounts, int64, error) {
+	var counts models.RouteCounts
 	vehicleID, withoutVehicle := query.VehicleID, false
 	if vehicleID != nil && *vehicleID == "none" {
 		vehicleID, withoutVehicle = nil, true
 	}
 	rows, err := r.dbService.Query(ctx,
-		`SELECT * FROM tracking.sp_list_routes($1::UUID, $2::VARCHAR, $3::UUID, $4::VARCHAR, $5::BOOLEAN, $6::INT, $7::INT, $8::UUID, $9::UUID, $10::UUID, $11::BOOLEAN, $12::VARCHAR, $13::BOOLEAN, $14::BOOLEAN)`,
-		tenantID, query.Search, query.CompanyID, query.Direction, query.IsActive, query.Page, query.PageSize, scopeUserID, vehicleID, query.OrganizationID, query.HasFreeSeats, query.Sort, query.GroupPairs, withoutVehicle)
+		`SELECT * FROM tracking.sp_list_routes($1::UUID, $2::VARCHAR, $3::UUID, $4::VARCHAR, $5::BOOLEAN, $6::INT, $7::INT, $8::UUID, $9::UUID, $10::UUID, $11::BOOLEAN, $12::VARCHAR, $13::BOOLEAN, $14::BOOLEAN, $15::BOOLEAN)`,
+		tenantID, query.Search, query.CompanyID, query.Direction, query.IsActive, query.Page, query.PageSize, scopeUserID, vehicleID, query.OrganizationID, query.HasFreeSeats, query.Sort, query.GroupPairs, withoutVehicle, query.WithoutDriver)
 	if err != nil {
-		return nil, 0, scopedErr(err, trackingErrors.RouteListFailed)
+		return nil, counts, 0, scopedErr(err, trackingErrors.RouteListFailed)
 	}
 	defer rows.Close()
 	routes := []*models.Route{}
 	var totalCount int64
 	for rows.Next() {
+		empty, err := scanEmptyPage(rows, 32, &counts)
+		if err != nil {
+			return nil, counts, 0, err
+		}
+		if empty {
+			continue
+		}
 		var rt models.Route
-		if err := rows.Scan(append(scanRoute(&rt), &rt.StartTime, &rt.ArrivalTime, &rt.ReturnRoute, &totalCount)...); err != nil {
-			return nil, 0, err
+		if err := rows.Scan(append(scanRoute(&rt), &rt.StartTime, &rt.ArrivalTime, &rt.OrganizationKind, &rt.ReturnRoute, &counts, &totalCount)...); err != nil {
+			return nil, counts, 0, err
 		}
 		routes = append(routes, &rt)
 	}
 	// pgx surfaces an SP exception here, not on Query: without this the refusal would read as an
 	// empty list and answer 200.
 	if err := rows.Err(); err != nil {
-		return nil, 0, scopedErr(err, trackingErrors.RouteListFailed)
+		return nil, counts, 0, scopedErr(err, trackingErrors.RouteListFailed)
 	}
-	return routes, totalCount, nil
+	return routes, counts, totalCount, nil
 }
 
 func (r *TrackingRepository) GetRoute(ctx context.Context, tenantID uuid.UUID, routeID uuid.UUID, scopeUserID *uuid.UUID) (*models.Route, error) {
@@ -795,7 +825,8 @@ func (r *TrackingRepository) ListStopPlaces(ctx context.Context, tenantID uuid.U
 	for rows.Next() {
 		var place models.StopPlace
 		if err := rows.Scan(&place.ID, &place.TenantID, &place.OrganizationID, &place.Name, &place.Address,
-			&place.Latitude, &place.Longitude, &place.DistanceM, &place.CreatedAt, &place.UpdatedAt, &totalCount); err != nil {
+			&place.Latitude, &place.Longitude, &place.DistanceM, &place.CreatedAt, &place.UpdatedAt,
+			&place.RidersCount, &place.RoutesCount, &place.RouteName, &place.IsDestination, &totalCount); err != nil {
 			return nil, 0, err
 		}
 		places = append(places, &place)

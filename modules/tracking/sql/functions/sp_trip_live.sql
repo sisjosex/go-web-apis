@@ -1,5 +1,5 @@
 CREATE OR REPLACE FUNCTION tracking.sp_trip_live(p_tenant_id uuid, p_trip_id uuid, p_trail_since timestamp with time zone DEFAULT NULL::timestamp with time zone)
- RETURNS TABLE(id uuid, route_id uuid, route_name character varying, direction character varying, route_schedule_id uuid, service_date date, timezone character varying, planned_start timestamp with time zone, vehicle_id uuid, license_plate character varying, driver_id uuid, driver_name character varying, status character varying, started_at timestamp with time zone, ended_at timestamp with time zone, is_overridden boolean, stops_count integer, tasks_total integer, tasks_done integer, created_at timestamp with time zone, updated_at timestamp with time zone, service_block jsonb, stops jsonb, polyline text, distance_km numeric, trace_source character varying, vehicle_position jsonb, pending_stops jsonb, planned_path jsonb, vehicle_type character varying, organization_kind character varying, destination jsonb, trail jsonb)
+ RETURNS TABLE(id uuid, route_id uuid, route_name character varying, direction character varying, route_schedule_id uuid, service_date date, timezone character varying, planned_start timestamp with time zone, vehicle_id uuid, license_plate character varying, driver_id uuid, driver_name character varying, status character varying, started_at timestamp with time zone, ended_at timestamp with time zone, is_overridden boolean, stops_count integer, tasks_total integer, tasks_done integer, created_at timestamp with time zone, updated_at timestamp with time zone, service_block jsonb, organization_kind character varying, planned_end timestamp with time zone, stops jsonb, polyline text, distance_km numeric, trace_source character varying, vehicle_position jsonb, pending_stops jsonb, planned_path jsonb, vehicle_type character varying, destination jsonb, trail jsonb)
  LANGUAGE plpgsql
  STABLE
 AS $function$
@@ -9,7 +9,7 @@ BEGIN
         g.id, g.route_id, g.route_name, g.direction, g.route_schedule_id, g.service_date, g.timezone,
         g.planned_start, g.vehicle_id, g.license_plate, g.driver_id, g.driver_name, g.status,
         g.started_at, g.ended_at, g.is_overridden, g.stops_count, g.tasks_total, g.tasks_done,
-        g.created_at, g.updated_at, g.service_block,
+        g.created_at, g.updated_at, g.service_block, g.organization_kind, g.planned_end,
         -- Each stop as the detail draws it, plus where it is.
         COALESCE((
             SELECT jsonb_agg(s.stop || jsonb_build_object(
@@ -44,7 +44,6 @@ BEGIN
         ), '[]'::jsonb),
         tracking.fn_trip_planned_path(t.route_version_id),
         CAST(v.vehicle_type AS VARCHAR),
-        CAST(o.kind AS VARCHAR),
         tracking.fn_trip_destination(p_tenant_id, g.id),
         -- TRACK-052 D1/D4: the fixes since the caller's cursor (the start when none), the imprecise
         -- ones left out, oldest first, read through the trip's position index. Only while it runs.
@@ -62,8 +61,6 @@ BEGIN
         ) END
     FROM tracking.sp_get_trip_traced(p_tenant_id, p_trip_id) g
     INNER JOIN tracking.trips t ON t.id = g.id
-    LEFT JOIN tracking.routes r ON r.id = g.route_id
-    LEFT JOIN tracking.organizations o ON o.id = r.organization_id
     LEFT JOIN tracking.vehicles v ON v.id = g.vehicle_id
     LEFT JOIN tracking.vehicle_last_position lp ON lp.vehicle_id = g.vehicle_id;
 END;

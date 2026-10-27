@@ -1,10 +1,11 @@
 CREATE OR REPLACE FUNCTION tracking.sp_tracking_setup(p_tenant_id uuid)
- RETURNS TABLE(companies boolean, drivers boolean, vehicles boolean, routes boolean, riders boolean)
+ RETURNS TABLE(companies boolean, organizations boolean, drivers boolean, vehicles boolean, routes boolean, riders boolean)
  LANGUAGE sql
  STABLE
 AS $function$
     SELECT
         EXISTS (SELECT 1 FROM tracking.transport_companies tc WHERE tc.tenant_id = p_tenant_id),
+        EXISTS (SELECT 1 FROM tracking.organizations o WHERE o.tenant_id = p_tenant_id),
         EXISTS (SELECT 1 FROM tracking.drivers d WHERE d.tenant_id = p_tenant_id),
         EXISTS (
             SELECT 1 FROM tracking.vehicles v
@@ -23,4 +24,4 @@ AS $function$
         );
 $function$;
 
-COMMENT ON FUNCTION tracking.sp_tracking_setup(uuid) IS 'The setup assistant of the tracking home (TRACK-050 D2): whether the tenant has any company, driver, vehicle, route and rider yet';
+COMMENT ON FUNCTION tracking.sp_tracking_setup(uuid) IS 'The setup assistant of the tracking home (TRACK-050 D2): whether the tenant has any company, client organization (TRACK-073), driver, vehicle, route and rider yet';

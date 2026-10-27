@@ -88,7 +88,7 @@ func TestSetup_UnionOfTypesAndDisabledModules(t *testing.T) {
 	code, body := putVertical(helper, slug, map[string]interface{}{"codes": []string{"school_transport", "hardware"}})
 	assert.Equal(t, http.StatusOK, code, body)
 	steps, _ = readSetup(t, helper, slug)
-	assert.Equal(t, []string{"business", "companies", "drivers", "vehicles", "routes", "riders", "products", "categories", "team"}, codesOf(steps))
+	assert.Equal(t, []string{"business", "companies", "organizations", "drivers", "vehicles", "routes", "riders", "products", "categories", "team"}, codesOf(steps))
 
 	for _, module := range []string{"sales", "inventory"} {
 		w := helper.DoRequest("DELETE", "/tenants/"+slug+"/modules/"+module, nil, map[string]string{})

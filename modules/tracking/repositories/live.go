@@ -28,7 +28,8 @@ func (r *TrackingRepository) LiveFleet(ctx context.Context, tenantID uuid.UUID, 
 	vehicles, err := pgx.CollectRows(rows, func(row pgx.CollectableRow) (models.LiveVehicle, error) {
 		var v models.LiveVehicle
 		err := row.Scan(&v.VehicleID, &v.LicensePlate, &v.TripID, &v.RouteID, &v.RouteName, &v.Lat, &v.Lng, &v.Speed, &v.Heading, &v.RecordedAt,
-			&v.OrganizationKind)
+			&v.OrganizationKind, &v.DriverName, &v.DriverPhone, &v.OrganizationName, &v.RidersTotal, &v.RidersBoarded, &v.DelaySeconds,
+			&v.ArrivedAt)
 		return v, err
 	})
 	if err != nil {
@@ -45,10 +46,12 @@ func (r *TrackingRepository) TripLive(ctx context.Context, tenantID, tripID uuid
 	err := r.dbService.QueryRow(ctx,
 		`SELECT * FROM tracking.sp_trip_live(p_tenant_id := $1, p_trip_id := $2, p_trail_since := $3)`, tenantID, tripID, trailSince).
 		Scan(append(scanTrip(&live.Trip), &stops, &live.Polyline, &live.DistanceKm, &live.TraceSource, &position, &pending,
-			&path, &live.VehicleType, &live.OrganizationKind, &destination, &trail)...)
+			&path, &live.VehicleType, &destination, &trail)...)
 	if err != nil {
 		return nil, nil, mapTripError(err, trackingErrors.TripNotFound)
 	}
+	// The client's kind is the trip row's own (TRACK-073), answered once, where LiveStory reads it.
+	live.OrganizationKind = live.Trip.OrganizationKind
 	if err := scanStory(&live.LiveStory, path, destination); err != nil {
 		return nil, nil, err
 	}

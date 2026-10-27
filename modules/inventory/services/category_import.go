@@ -37,10 +37,10 @@ func (d *categoriesImportDescriptor) Resource() string {
 
 func (d *categoriesImportDescriptor) Columns() []importModels.ColumnSpec {
 	return []importModels.ColumnSpec{
-		{Key: "name", Type: importModels.ColumnTypeText, Required: true},
-		{Key: "parent", Type: importModels.ColumnTypeText},
+		{Key: "name", Type: importModels.ColumnTypeText, Required: true, Aliases: []string{"categoria", "rubro", "familia", "category"}},
+		{Key: "parent", Type: importModels.ColumnTypeText, Aliases: []string{"padre", "dentro de", "categoria padre"}},
 		{Key: "description", Type: importModels.ColumnTypeText},
-		{Key: "display_order", Type: importModels.ColumnTypeNumber},
+		{Key: "display_order", Type: importModels.ColumnTypeNumber, Aliases: []string{"posicion", "order"}},
 	}
 }
 

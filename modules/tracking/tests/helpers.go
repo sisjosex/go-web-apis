@@ -779,7 +779,8 @@ func CreateTestDocument(t *testing.T, helper *testhelpers.ApiTestHelper, subject
 		"subject_id":       subjectID,
 		"document_type_id": typeID,
 		"number":           "N-" + uuid.New().String()[:6],
-		"expires_on":       time.Now().AddDate(0, 0, expiresInDays).Format("2006-01-02"),
+		// The day the SPs' CURRENT_DATE reads: the database runs on UTC (TRACK-081 A1).
+		"expires_on": time.Now().UTC().AddDate(0, 0, expiresInDays).Format("2006-01-02"),
 	}
 	w := helper.DoRequest("POST", "/tracking/documents", body, map[string]string{})
 	if w.Code != 201 {
@@ -1434,12 +1435,12 @@ func TripRouteVersion(t *testing.T, helper *testhelpers.ApiTestHelper, tripID st
 }
 
 // TrackingSetupFlags reads tracking.sp_tracking_setup for a tenant the API helper cannot sign in to
-// (TRACK-050): companies, drivers, vehicles, routes, riders.
-func TrackingSetupFlags(t *testing.T, helper *testhelpers.ApiTestHelper, tenantID string) [5]bool {
+// (TRACK-050): companies, organizations (TRACK-073), drivers, vehicles, routes, riders.
+func TrackingSetupFlags(t *testing.T, helper *testhelpers.ApiTestHelper, tenantID string) [6]bool {
 	t.Helper()
-	var f [5]bool
+	var f [6]bool
 	if err := helper.DB().QueryRow(context.Background(), `SELECT * FROM tracking.sp_tracking_setup($1)`, tenantID).
-		Scan(&f[0], &f[1], &f[2], &f[3], &f[4]); err != nil {
+		Scan(&f[0], &f[1], &f[2], &f[3], &f[4], &f[5]); err != nil {
 		t.Fatalf("sp_tracking_setup: %v", err)
 	}
 	return f
@@ -1452,6 +1453,15 @@ func SeedTenantCompany(t *testing.T, helper *testhelpers.ApiTestHelper, tenantID
 	if _, err := helper.DB().Execute(context.Background(), `INSERT INTO tracking.transport_companies (id, tenant_id, name, registration_number, status)
 		VALUES ($1, $2, 'Setup Transit', $3, 'active')`, companyID, tenantID, "REG-"+companyID[:8]); err != nil {
 		t.Fatalf("seed the tenant's company: %v", err)
+	}
+}
+
+// SeedTenantOrganization gives a bare tenant its first client, nothing else (TRACK-073).
+func SeedTenantOrganization(t *testing.T, helper *testhelpers.ApiTestHelper, tenantID string) {
+	t.Helper()
+	if _, err := helper.DB().Execute(context.Background(), `INSERT INTO tracking.organizations (tenant_id, kind, name)
+		VALUES ($1, 'school', 'Setup School')`, tenantID); err != nil {
+		t.Fatalf("seed the tenant's client: %v", err)
 	}
 }
 
@@ -1764,6 +1774,16 @@ func StartTripMinutesAgo(t *testing.T, helper *testhelpers.ApiTestHelper, tripID
 	if _, err := helper.DB().Execute(context.Background(),
 		`UPDATE tracking.trips SET started_at = now() - make_interval(mins => $2) WHERE id = $1`, tripID, minutes); err != nil {
 		t.Fatalf("start trip minutes ago: %v", err)
+	}
+}
+
+// RunTripOnVehicle puts a planned trip in progress on another vehicle than its route's: the vehicles
+// list's "en ruta" read (TRACK-075) without a driver and a start for the route's own bus.
+func RunTripOnVehicle(t *testing.T, helper *testhelpers.ApiTestHelper, tripID, vehicleID string) {
+	t.Helper()
+	if _, err := helper.DB().Execute(context.Background(),
+		`UPDATE tracking.trips SET vehicle_id = $2, status = 'in_progress', started_at = now() WHERE id = $1`, tripID, vehicleID); err != nil {
+		t.Fatalf("run trip on vehicle: %v", err)
 	}
 }
 

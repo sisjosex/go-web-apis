@@ -36,5 +36,17 @@
   "users.import.image-invalid": "The picture could not be stored; the user was created without a picture",
   "users.import.create-failed": "Failed to create user",
   "users.import.role-unknown": "This tenant has no role named {value}",
-  "users.import.role-assign-failed": "The user was created but the role could not be granted"
+  "users.import.role-assign-failed": "The user was created but the role could not be granted",
+  "import.resource.users": "Users",
+  "import.resource.users.description": "Your team, with their role and access",
+  "import.users.first_name": "First name",
+  "import.users.last_name": "Last name",
+  "import.users.email": "Email",
+  "import.users.phone": "Phone",
+  "import.users.birthday": "Birthday",
+  "import.users.bio": "Bio",
+  "import.users.website_url": "Website",
+  "import.users.profile_picture": "Profile picture",
+  "import.users.roles": "Roles",
+  "import.users.option.send_invitation": "Email the invitation to each new person"
 }

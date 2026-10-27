@@ -49,6 +49,18 @@ type Vehicle struct {
 	// this one. It and DriverName ride on the get and list rows, not on create/update responses.
 	DefaultDriverID *uuid.UUID `json:"default_driver_id,omitempty"`
 	DriverName      *string    `json:"driver_name,omitempty"`
+	// The list alone (TRACK-075): the route of its trip in progress, else of its next one today; its
+	// last fix, nil when it never reported; its soonest document expired or within warning.
+	TodayRouteName *string             `json:"today_route_name,omitempty"`
+	LastSeenAt     *time.Time          `json:"last_seen_at,omitempty"`
+	NextDocument   *VehicleDocumentDue `json:"next_document,omitempty"`
+}
+
+// VehicleDocumentDue is a vehicle's soonest document to act on; Status is expiring or expired.
+type VehicleDocumentDue struct {
+	TypeName  string `json:"type_name"`
+	ExpiresOn string `json:"expires_on"`
+	Status    string `json:"status"`
 }
 
 // VehicleScheduleConflict is a run that would overlap another on the same vehicle or driver
@@ -102,6 +114,8 @@ type Route struct {
 	StartTime   *string         `json:"start_time,omitempty"`
 	ArrivalTime *string         `json:"arrival_time,omitempty"`
 	ReturnRoute json.RawMessage `json:"return_route,omitempty"`
+	// OrganizationKind is the client's school/company/other, for the list's badge (TRACK-075).
+	OrganizationKind *string `json:"organization_kind,omitempty"`
 }
 
 // TrackingOverview is the tracking home (TRACK-041 D2): the day's trips by state, the riders absent,
@@ -113,6 +127,8 @@ type TrackingOverview struct {
 	AbsencesToday   int32         `json:"absences_today"`
 	TripsDelayed    []DelayedTrip `json:"trips_delayed"`
 	HasRoutes       bool          `json:"has_routes"`
+	// DriversWithoutAccount raises the home's "Invita a tus conductores" (TRACK-073).
+	DriversWithoutAccount int32 `json:"drivers_without_account"`
 }
 
 // NavCounts is the taypi go rail's badges (TRACK-081): what an organization user may not see is nil.
@@ -126,10 +142,12 @@ type NavCounts struct {
 // (TRACK-050 D2).
 type TrackingSetup struct {
 	Companies bool `json:"companies"`
-	Drivers   bool `json:"drivers"`
-	Vehicles  bool `json:"vehicles"`
-	Routes    bool `json:"routes"`
-	Riders    bool `json:"riders"`
+	// Organizations is the clients' step, second in the guide (TRACK-073).
+	Organizations bool `json:"organizations"`
+	Drivers       bool `json:"drivers"`
+	Vehicles      bool `json:"vehicles"`
+	Routes        bool `json:"routes"`
+	Riders        bool `json:"riders"`
 }
 
 // DelayedTrip is one late trip of the home, by minutes.
@@ -162,6 +180,12 @@ type StopPlace struct {
 	DistanceM      *float64   `json:"distance_m,omitempty"`
 	CreatedAt      time.Time  `json:"created_at"`
 	UpdatedAt      time.Time  `json:"updated_at"`
+	// The list alone (TRACK-075): riders boarding or leaving here today, the routes whose stop list
+	// has it and the first by name, and whether it is a client's stop or a route's last.
+	RidersCount   *int32  `json:"riders_count,omitempty"`
+	RoutesCount   *int32  `json:"routes_count,omitempty"`
+	RouteName     *string `json:"route_name,omitempty"`
+	IsDestination *bool   `json:"is_destination,omitempty"`
 }
 
 // RouteVersion is one route's stop list over a range of dates (TRACK-007). EffectiveTo NULL is the

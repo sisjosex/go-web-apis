@@ -39,15 +39,15 @@ func (d *productBatchesImportDescriptor) Resource() string {
 
 func (d *productBatchesImportDescriptor) Columns() []importModels.ColumnSpec {
 	columns := []importModels.ColumnSpec{
-		{Key: "sku", Type: importModels.ColumnTypeText, Required: true},
+		{Key: "sku", Type: importModels.ColumnTypeText, Required: true, Aliases: skuAliases},
 	}
 	columns = append(columns, axisSampleColumns()...)
 	return append(columns,
-		importModels.ColumnSpec{Key: "lot_number", Type: importModels.ColumnTypeText, Required: true},
-		importModels.ColumnSpec{Key: "purchase_date", Type: importModels.ColumnTypeDate, Required: true, Format: dateFormat},
-		importModels.ColumnSpec{Key: "expiry_date", Type: importModels.ColumnTypeDate, Required: true, Format: dateFormat},
-		importModels.ColumnSpec{Key: "unit_cost", Type: importModels.ColumnTypeNumber, Required: true},
-		importModels.ColumnSpec{Key: "initial_quantity", Type: importModels.ColumnTypeNumber, Required: true},
+		importModels.ColumnSpec{Key: "lot_number", Type: importModels.ColumnTypeText, Required: true, Aliases: []string{"lote", "nro lote", "n de lote", "numero de lote", "lot"}},
+		importModels.ColumnSpec{Key: "purchase_date", Type: importModels.ColumnTypeDate, Required: true, Format: dateFormat, Aliases: []string{"fecha compra", "fecha de ingreso", "ingreso"}},
+		importModels.ColumnSpec{Key: "expiry_date", Type: importModels.ColumnTypeDate, Required: true, Format: dateFormat, Aliases: []string{"vencimiento", "fecha vencimiento", "vence", "caducidad", "expiry"}},
+		importModels.ColumnSpec{Key: "unit_cost", Type: importModels.ColumnTypeNumber, Required: true, Aliases: []string{"costo", "costo unit", "precio de compra", "p compra", "cost"}},
+		importModels.ColumnSpec{Key: "initial_quantity", Type: importModels.ColumnTypeNumber, Required: true, Aliases: []string{"cantidad", "unidades", "qty"}},
 	)
 }
 

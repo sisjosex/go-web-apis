@@ -29,6 +29,16 @@ type LiveVehicle struct {
 	// OrganizationKind is the route client's kind (school | company | other), which picks the marker:
 	// nil without a trip or when the route names no client (TRACK-051).
 	OrganizationKind *string `json:"organization_kind"`
+	// The live list's row and bus card (TRACK-073): the trip's driver and client, riders picked up over
+	// pickups expected, how late its next stop runs — nil without a trip in progress — and, with none,
+	// when the vehicle's last trip of its local today was completed.
+	DriverName       *string    `json:"driver_name"`
+	DriverPhone      *string    `json:"driver_phone"`
+	OrganizationName *string    `json:"organization_name"`
+	RidersTotal      *int32     `json:"riders_total"`
+	RidersBoarded    *int32     `json:"riders_boarded"`
+	DelaySeconds     *int32     `json:"delay_seconds"`
+	ArrivedAt        *time.Time `json:"arrived_at"`
 }
 
 type LiveFleetResponse struct {

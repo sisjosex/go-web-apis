@@ -100,17 +100,26 @@ func (d *usersImportDescriptor) Resource() string {
 // needs to edit each cell. The email pattern is the API's own so the wizard
 // rejects exactly what checkFormat would.
 func (d *usersImportDescriptor) Columns() []importModels.ColumnSpec {
+	// Aliases are the headings a team list exported from elsewhere gives the
+	// columns (IMPORT-002); the labels in lang match too.
 	return []importModels.ColumnSpec{
-		{Key: "first_name", Type: importModels.ColumnTypeText, Required: true},
-		{Key: "last_name", Type: importModels.ColumnTypeText, Required: true},
-		{Key: "email", Type: importModels.ColumnTypeEmail, Required: true, Pattern: emailPattern.String()},
-		{Key: "phone", Type: importModels.ColumnTypePhone},
-		{Key: "birthday", Type: importModels.ColumnTypeDate, Format: birthdayFormat},
-		{Key: "bio", Type: importModels.ColumnTypeText},
-		{Key: "website_url", Type: importModels.ColumnTypeURL, Pattern: websitePattern.String()},
-		{Key: "profile_picture", Type: importModels.ColumnTypeImage, Format: imageNameFormat},
-		{Key: "roles", Type: importModels.ColumnTypeText, Format: rolesFormat},
+		{Key: "first_name", Type: importModels.ColumnTypeText, Required: true, Aliases: []string{"nombres", "first name", "given name"}},
+		{Key: "last_name", Type: importModels.ColumnTypeText, Required: true, Aliases: []string{"apellidos", "last name", "surname"}},
+		{Key: "email", Type: importModels.ColumnTypeEmail, Required: true, Pattern: emailPattern.String(),
+			Aliases: []string{"correo", "correo electronico", "e mail", "mail"}},
+		{Key: "phone", Type: importModels.ColumnTypePhone, Aliases: []string{"celular", "movil", "mobile"}},
+		{Key: "birthday", Type: importModels.ColumnTypeDate, Format: birthdayFormat, Aliases: []string{"fecha de nacimiento", "nacimiento", "date of birth"}},
+		{Key: "bio", Type: importModels.ColumnTypeText, Aliases: []string{"biografia", "acerca de"}},
+		{Key: "website_url", Type: importModels.ColumnTypeURL, Pattern: websitePattern.String(), Aliases: []string{"web", "sitio", "website"}},
+		{Key: "profile_picture", Type: importModels.ColumnTypeImage, Format: imageNameFormat, Aliases: []string{"foto", "avatar", "picture"}},
+		{Key: "roles", Type: importModels.ColumnTypeText, Format: rolesFormat, Aliases: []string{"rol", "role", "cargo"}},
 	}
+}
+
+// Options are the run's switch the page draws (IMPORT-002): whether every new
+// member gets the invitation email.
+func (d *usersImportDescriptor) Options() []importModels.OptionSpec {
+	return []importModels.OptionSpec{{Key: "send_invitation", Type: importModels.OptionTypeBool, Default: true}}
 }
 
 // Matches recognizes a Users CSV by its header signature: first_name, last_name,

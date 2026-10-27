@@ -1,5 +1,5 @@
 CREATE OR REPLACE FUNCTION tracking.sp_tracking_overview(p_tenant_id uuid, p_date date DEFAULT NULL::date, p_scope_user_id uuid DEFAULT NULL::uuid)
- RETURNS TABLE(trips_in_progress integer, trips_planned integer, arrivals_done integer, absences_today integer, trips_delayed jsonb, has_routes boolean)
+ RETURNS TABLE(trips_in_progress integer, trips_planned integer, arrivals_done integer, absences_today integer, trips_delayed jsonb, has_routes boolean, drivers_without_account integer)
  LANGUAGE plpgsql
  STABLE
 AS $function$
@@ -69,8 +69,10 @@ BEGIN
             SELECT 1 FROM tracking.routes r
             INNER JOIN tracking.transport_companies tc ON tc.id = r.company_id
             WHERE tc.tenant_id = p_tenant_id
-        );
+        ),
+        -- TRACK-073: the home's "Invita a tus conductores" card.
+        CAST((SELECT COUNT(*) FROM tracking.drivers d WHERE d.tenant_id = p_tenant_id AND d.user_id IS NULL) AS INT);
 END;
 $function$;
 
-COMMENT ON FUNCTION tracking.sp_tracking_overview(uuid,date,uuid) IS 'The tracking home in one read (TRACK-041 D2): the day''s trips in progress, planned and completed, the riders absent that day, the ten most late trips {trip_id, route_name, organization_name, delay_minutes} and whether the tenant has any route yet; narrowed to p_scope_user_id''s organizations when set';
+COMMENT ON FUNCTION tracking.sp_tracking_overview(uuid,date,uuid) IS 'The tracking home in one read (TRACK-041 D2): the day''s trips in progress, planned and completed, the riders absent that day, the ten most late trips {trip_id, route_name, organization_name, delay_minutes} whether the tenant has any route yet, and how many of the tenant''s drivers have no account yet (TRACK-073); narrowed to p_scope_user_id''s organizations when set';

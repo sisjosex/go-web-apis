@@ -161,15 +161,26 @@ type ListVehiclesQuery struct {
 	VehicleType string  `form:"vehicle_type" binding:"omitempty,oneof=bus van car"`
 	Status      string  `form:"status" binding:"omitempty,oneof=active inactive maintenance"`
 	Search      string  `form:"search"`
-	Page        int     `form:"page,default=1" binding:"min=1"`
-	PageSize    int     `form:"page_size,default=20" binding:"min=1,max=100"`
+	// View is the chip the list is narrowed to (TRACK-075): on_route, no_gps or docs_due.
+	View     string `form:"view" binding:"omitempty,oneof=all on_route no_gps docs_due"`
+	Page     int    `form:"page,default=1" binding:"min=1"`
+	PageSize int    `form:"page_size,default=20" binding:"min=1,max=100"`
+}
+
+// VehicleCounts is each view's size over the list's other filters (TRACK-075).
+type VehicleCounts struct {
+	All     int64 `json:"all"`
+	OnRoute int64 `json:"on_route"`
+	NoGPS   int64 `json:"no_gps"`
+	DocsDue int64 `json:"docs_due"`
 }
 
 type ListVehiclesResponse struct {
-	Vehicles   []*Vehicle `json:"vehicles"`
-	TotalCount int64      `json:"total_count"`
-	Page       int        `json:"page"`
-	PageSize   int        `json:"page_size"`
+	Vehicles   []*Vehicle    `json:"vehicles"`
+	Counts     VehicleCounts `json:"counts"`
+	TotalCount int64         `json:"total_count"`
+	Page       int           `json:"page"`
+	PageSize   int           `json:"page_size"`
 }
 
 // CreateVehicleDto represents request to create vehicle
@@ -350,6 +361,8 @@ type ListRoutesQuery struct {
 	IsActive       *bool   `form:"is_active"`
 	// HasFreeSeats keeps the routes carrying fewer riders today than their seats (TRACK-046).
 	HasFreeSeats *bool `form:"has_free_seats"`
+	// WithoutDriver keeps the routes with no driver of their own nor their vehicle's (TRACK-075).
+	WithoutDriver bool `form:"without_driver"`
 	// Sort is name (the default) or free_seats, most free first.
 	Sort string `form:"sort" binding:"omitempty,oneof=name free_seats"`
 	// GroupPairs lists a pair as its outbound, the return in return_route (TRACK-070 D1).
@@ -358,11 +371,22 @@ type ListRoutesQuery struct {
 	PageSize   int  `form:"page_size,default=20" binding:"min=1,max=100"`
 }
 
+// RouteCounts is each chip's size over every list filter but direction, driver and free seats
+// (TRACK-075); All counts a grouped pair once.
+type RouteCounts struct {
+	All           int64 `json:"all"`
+	Outbound      int64 `json:"outbound"`
+	Inbound       int64 `json:"inbound"`
+	WithoutDriver int64 `json:"without_driver"`
+	FreeSeats     int64 `json:"free_seats"`
+}
+
 type ListRoutesResponse struct {
-	Routes     []*Route `json:"routes"`
-	TotalCount int64    `json:"total_count"`
-	Page       int      `json:"page"`
-	PageSize   int      `json:"page_size"`
+	Routes     []*Route    `json:"routes"`
+	Counts     RouteCounts `json:"counts"`
+	TotalCount int64       `json:"total_count"`
+	Page       int         `json:"page"`
+	PageSize   int         `json:"page_size"`
 }
 
 // CreateRouteDto represents request to create route. Recurrence is the route's schedules

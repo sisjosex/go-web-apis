@@ -161,24 +161,26 @@ func (d *productsImportDescriptor) Resource() string {
 // the docs, and product_stock and product_batches carry the same two (AC-14).
 func (d *productsImportDescriptor) Columns() []importModels.ColumnSpec {
 	columns := []importModels.ColumnSpec{
-		{Key: "sku", Type: importModels.ColumnTypeText, Required: true},
+		{Key: "sku", Type: importModels.ColumnTypeText, Required: true, Aliases: skuAliases},
 		// name and price are required on a product's first row only, never on a
 		// repeat row (D9), and Required is a flag the client enforces per cell —
 		// so marking them here would block the wizard on the normal file. The
 		// engine ignores the flag; readRow does the real check on IsFirst.
-		{Key: "name", Type: importModels.ColumnTypeText},
-		{Key: "description", Type: importModels.ColumnTypeText},
-		{Key: "price", Type: importModels.ColumnTypeNumber},
-		{Key: "category", Type: importModels.ColumnTypeText},
-		{Key: "subcategory", Type: importModels.ColumnTypeText},
+		// A supplier's "Descripción" is the article's name (IMPORT-002): name
+		// claims it first, description only beside a "Nombre" heading.
+		{Key: "name", Type: importModels.ColumnTypeText, Aliases: []string{"producto", "articulo", "descripcion", "detalle", "item", "product"}},
+		{Key: "description", Type: importModels.ColumnTypeText, Aliases: []string{"descripcion larga", "observaciones"}},
+		{Key: "price", Type: importModels.ColumnTypeNumber, Aliases: []string{"precio venta", "p venta", "pvp", "precio unitario", "precio unit", "sale price", "unit price"}},
+		{Key: "category", Type: importModels.ColumnTypeText, Aliases: []string{"rubro", "familia", "linea"}},
+		{Key: "subcategory", Type: importModels.ColumnTypeText, Aliases: []string{"subrubro", "subfamilia", "sublinea"}},
 	}
 	columns = append(columns, axisSampleColumns()...)
 	return append(columns,
-		importModels.ColumnSpec{Key: "variant_sku", Type: importModels.ColumnTypeText},
-		importModels.ColumnSpec{Key: "stock", Type: importModels.ColumnTypeNumber},
-		importModels.ColumnSpec{Key: "reorder_level", Type: importModels.ColumnTypeNumber},
-		importModels.ColumnSpec{Key: "image", Type: importModels.ColumnTypeImage, Format: imageNameFormat},
-		importModels.ColumnSpec{Key: "image_alt", Type: importModels.ColumnTypeText},
+		importModels.ColumnSpec{Key: "variant_sku", Type: importModels.ColumnTypeText, Aliases: []string{"sku variante", "codigo variante"}},
+		importModels.ColumnSpec{Key: "stock", Type: importModels.ColumnTypeNumber, Aliases: []string{"existencia", "existencias", "cantidad", "qty"}},
+		importModels.ColumnSpec{Key: "reorder_level", Type: importModels.ColumnTypeNumber, Aliases: reorderAliases},
+		importModels.ColumnSpec{Key: "image", Type: importModels.ColumnTypeImage, Format: imageNameFormat, Aliases: []string{"foto", "imagen del producto", "picture"}},
+		importModels.ColumnSpec{Key: "image_alt", Type: importModels.ColumnTypeText, Aliases: []string{"texto de la imagen", "alt"}},
 		importModels.ColumnSpec{
 			Key:    imageColumnPrefix + sampleSecondAxis + axisColumnSuffix,
 			Type:   importModels.ColumnTypeImage,
@@ -305,6 +307,80 @@ func (d *productsImportDescriptor) ProcessRow(ctx importModels.ImportContext, li
 // ignores the outcome.
 func (d *productsImportDescriptor) RecordRun(ctx importModels.ImportContext, meta importModels.RunMeta) {
 	logImportRun(meta)
+}
+
+// Options are the run's switch the page draws (IMPORT-002): whether a category
+// the file names and the shop lacks is created on the way in.
+func (d *productsImportDescriptor) Options() []importModels.OptionSpec {
+	return []importModels.OptionSpec{{Key: "create_categories", Type: importModels.OptionTypeBool, Default: true}}
+}
+
+// KeyColumns is how an existing product is recognized: its code (D4).
+func (d *productsImportDescriptor) KeyColumns() []string { return []string{"sku"} }
+
+// updatedSkusKey is where a run keeps the codes it already updated: only a
+// product's first row speaks for it, since a repeat row's price is its
+// combination's (D9).
+const updatedSkusKey = "inventory.updatedSkus"
+
+// UpdateRow writes a known code's name, description and price over the product
+// when the operator chose "Actualizar" (D4), through the SP the product form
+// saves with; its variant tree, categories and stock stay as they are. A cell
+// left empty keeps what the product has, and a row that changes nothing is
+// skipped.
+func (d *productsImportDescriptor) UpdateRow(ctx importModels.ImportContext, line int, row map[string]string) importModels.RowResult {
+	skipped := importModels.RowResult{Line: line, Data: row, Status: importModels.RowStatusSkipped}
+	sku := strings.TrimSpace(row["sku"])
+	if sku == "" || firstUpdate(ctx, sku) {
+		return skipped
+	}
+	product, err := d.productService.GetProductBySkU(ctx.Context(), ctx.TenantID, sku)
+	if err != nil || product == nil {
+		return skipped
+	}
+	dto, changed := productUpdate(product, row)
+	if !changed {
+		return skipped
+	}
+	if _, err := d.productService.UpdateProductWithVariants(ctx.Context(), ctx.TenantID, product.ID, dto); err != nil {
+		return importModels.RowResult{Line: line, Data: row, Status: importModels.RowStatusFailed, Errors: []string{inventoryErrors.ImportCreateFailed}}
+	}
+	return importModels.RowResult{Line: line, Data: row, Status: importModels.RowStatusUpdated}
+}
+
+// firstUpdate reports whether the run already updated this code — only a
+// product's first row speaks for it — and marks it updated.
+func firstUpdate(ctx importModels.ImportContext, sku string) bool {
+	done, _ := ctx.Scratch[updatedSkusKey].(map[string]bool)
+	if done == nil {
+		done = map[string]bool{}
+		if ctx.Scratch != nil {
+			ctx.Scratch[updatedSkusKey] = done
+		}
+	}
+	key := strings.ToLower(sku)
+	seen := done[key]
+	done[key] = true
+	return seen
+}
+
+// productUpdate is the product with the row's filled cells written over it, and
+// whether that changes anything.
+func productUpdate(product *inventoryModels.ProductDetail, row map[string]string) (inventoryModels.UpdateProductDto, bool) {
+	dto := inventoryModels.UpdateProductDto{Name: product.Name, Description: product.Description, BasePrice: product.BasePrice}
+	if name := strings.TrimSpace(row["name"]); name != "" {
+		dto.Name = name
+	}
+	if description := strings.TrimSpace(row["description"]); description != "" {
+		dto.Description = &description
+	}
+	if price, err := strconv.ParseFloat(strings.TrimSpace(row["price"]), 64); err == nil && price > 0 {
+		dto.BasePrice = price
+	}
+	sameDescription := (dto.Description == nil) == (product.Description == nil) &&
+		(dto.Description == nil || *dto.Description == *product.Description)
+	changed := dto.Name != product.Name || !sameDescription || math.Abs(dto.BasePrice-product.BasePrice) >= priceEpsilon
+	return dto, changed
 }
 
 // readRow is the whole per-row contract in one pass, shared by the dry run and

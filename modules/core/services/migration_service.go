@@ -81,7 +81,7 @@ func NewMigrationService(db *sql.DB, config *coreConfig.CoreConfig) *MigrationSe
 
 	// Add other enabled modules in order specified in config
 	for _, moduleName := range config.EnabledModules {
-		if moduleName == "core" {
+		if moduleName == "core" || moduleName == "import" {
 			continue // Already added
 		}
 		// Skip modules that are excluded from migration (e.g., tracking in Main DB)
@@ -98,6 +98,13 @@ func NewMigrationService(db *sql.DB, config *coreConfig.CoreConfig) *MigrationSe
 		} else {
 			log.Printf("⚠️  Warning: Module '%s' is enabled in config but not found in filesystem", moduleName)
 		}
+	}
+
+	// Import is the engine every module's file upload goes through and its routes are always mounted,
+	// so it migrates whatever ENABLED_MODULES lists — last, its history naming who ran each import
+	// from auth.users (IMPORT-002).
+	if path, exists := allModules["import"]; exists && config.IsModuleEnabled("core") {
+		modules = append(modules, Module{Name: "import", Path: path, Enabled: true})
 	}
 
 	return &MigrationService{

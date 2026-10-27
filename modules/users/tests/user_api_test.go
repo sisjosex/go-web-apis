@@ -510,19 +510,23 @@ func importCSV(t *testing.T, helper *testhelpers.ApiTestHelper, path, csv string
 	return decoded
 }
 
-// firstRow returns the single row of an import/validate response.
+// firstRow returns the single row of an import response. The engine lists only
+// the rows with an error or a warning (IMPORT-002 D2); a run that lists none
+// created its row clean.
 func firstRow(t *testing.T, response map[string]interface{}) map[string]interface{} {
 	t.Helper()
 
-	rows, ok := response["rows"].([]interface{})
-	if !ok || len(rows) == 0 {
+	for _, key := range []string{"failed_rows", "warned_rows"} {
+		if rows, ok := response[key].([]interface{}); ok && len(rows) > 0 {
+			if row, ok := rows[0].(map[string]interface{}); ok {
+				return row
+			}
+		}
+	}
+	if run, ok := response["run"].(map[string]interface{}); !ok || run["created"] != float64(1) {
 		t.Fatalf("expected one row in %v", response)
 	}
-	row, ok := rows[0].(map[string]interface{})
-	if !ok {
-		t.Fatalf("expected a row object, got %v", rows[0])
-	}
-	return row
+	return map[string]interface{}{"status": "created"}
 }
 
 // TestImportUsers_RolesColumnGrantsTheRole - a row naming an existing role lands

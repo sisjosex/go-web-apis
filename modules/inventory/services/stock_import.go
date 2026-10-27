@@ -43,12 +43,12 @@ func (d *productStockImportDescriptor) Resource() string {
 
 func (d *productStockImportDescriptor) Columns() []importModels.ColumnSpec {
 	columns := []importModels.ColumnSpec{
-		{Key: "sku", Type: importModels.ColumnTypeText, Required: true},
+		{Key: "sku", Type: importModels.ColumnTypeText, Required: true, Aliases: skuAliases},
 	}
 	columns = append(columns, axisSampleColumns()...)
 	return append(columns,
-		importModels.ColumnSpec{Key: "quantity", Type: importModels.ColumnTypeNumber, Required: true},
-		importModels.ColumnSpec{Key: "reorder_level", Type: importModels.ColumnTypeNumber},
+		importModels.ColumnSpec{Key: "quantity", Type: importModels.ColumnTypeNumber, Required: true, Aliases: []string{"existencia", "stock", "unidades", "qty"}},
+		importModels.ColumnSpec{Key: "reorder_level", Type: importModels.ColumnTypeNumber, Aliases: reorderAliases},
 	)
 }
 

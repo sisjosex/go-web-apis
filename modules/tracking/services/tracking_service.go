@@ -104,12 +104,13 @@ func (s *TrackingService) UpdateVehicle(ctx context.Context, tenantID uuid.UUID,
 }
 
 func (s *TrackingService) ListVehicles(ctx context.Context, tenantID uuid.UUID, query models.ListVehiclesQuery) (*models.ListVehiclesResponse, error) {
-	vehicles, totalCount, err := s.trackingRepo.ListVehicles(ctx, tenantID, query)
+	vehicles, counts, totalCount, err := s.trackingRepo.ListVehicles(ctx, tenantID, query)
 	if err != nil {
 		return nil, err
 	}
 	return &models.ListVehiclesResponse{
 		Vehicles:   vehicles,
+		Counts:     counts,
 		TotalCount: totalCount,
 		Page:       query.Page,
 		PageSize:   query.PageSize,
@@ -205,12 +206,13 @@ func (s *TrackingService) UpdateRoute(ctx context.Context, tenantID uuid.UUID, r
 }
 
 func (s *TrackingService) ListRoutes(ctx context.Context, tenantID uuid.UUID, query models.ListRoutesQuery, scopeUserID *uuid.UUID) (*models.ListRoutesResponse, error) {
-	routes, totalCount, err := s.trackingRepo.ListRoutes(ctx, tenantID, query, scopeUserID)
+	routes, counts, totalCount, err := s.trackingRepo.ListRoutes(ctx, tenantID, query, scopeUserID)
 	if err != nil {
 		return nil, err
 	}
 	return &models.ListRoutesResponse{
 		Routes:     routes,
+		Counts:     counts,
 		TotalCount: totalCount,
 		Page:       query.Page,
 		PageSize:   query.PageSize,
@@ -386,16 +388,7 @@ func (s *TrackingService) ListAssignments(ctx context.Context, tenantID uuid.UUI
 // ==================== TRIPS (TRACK-020) ====================
 
 func (s *TrackingService) ListTrips(ctx context.Context, tenantID uuid.UUID, query models.ListTripsQuery) (*models.ListTripsResponse, error) {
-	trips, totalCount, err := s.trackingRepo.ListTrips(ctx, tenantID, query)
-	if err != nil {
-		return nil, err
-	}
-	return &models.ListTripsResponse{
-		Trips:      trips,
-		TotalCount: totalCount,
-		Page:       query.Page,
-		PageSize:   query.PageSize,
-	}, nil
+	return s.trackingRepo.ListTrips(ctx, tenantID, query)
 }
 
 func (s *TrackingService) GetTrip(ctx context.Context, tenantID, tripID uuid.UUID) (*models.TripDetail, error) {

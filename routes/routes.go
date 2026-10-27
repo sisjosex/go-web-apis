@@ -36,6 +36,7 @@ import (
 	geoServices "josex/web/modules/geo/services"
 	geoRouting "josex/web/modules/geo/services/routing"
 	importControllers "josex/web/modules/import/controllers"
+	importRepos "josex/web/modules/import/repositories"
 	importRoutes "josex/web/modules/import/routes"
 	importServices "josex/web/modules/import/services"
 	inventoryRoutes "josex/web/modules/inventory/routes"
@@ -673,6 +674,7 @@ func registerImport(d routeDeps, chains tenantChains, inventorySvcs inventoryRou
 		importRegistry.Register("tracking", trackingServices.NewDocumentTypesImportDescriptor(tracking))
 		importRegistry.Register("tracking", trackingServices.NewStopPlacesImportDescriptor(tracking))
 		importRegistry.Register("tracking", trackingServices.NewVehiclesImportDescriptor(tracking))
+		importRegistry.Register("tracking", trackingServices.NewRoutesImportDescriptor(tracking))
 		// A home given only as an address is placed by the geo module's search (TRACK-072 D3).
 		var places trackingServices.PlaceSearcher
 		if coreConf.IsModuleEnabled("geo") {
@@ -680,7 +682,7 @@ func registerImport(d routeDeps, chains tenantChains, inventorySvcs inventoryRou
 		}
 		importRegistry.Register("tracking", trackingServices.NewRidersImportDescriptor(tracking, places))
 	}
-	importController := importControllers.NewImportController(importServices.NewImportService(importRegistry))
+	importController := importControllers.NewImportController(importServices.NewImportService(importRegistry, importRepos.NewImportRepository(d.db)))
 	importRoutes.RegisterImportRoutes(d.apiV1, importController, d.jwt, chains.tenant)
 	log.Println("✅ Import module routes registered")
 }

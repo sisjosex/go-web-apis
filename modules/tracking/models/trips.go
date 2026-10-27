@@ -37,6 +37,10 @@ type Trip struct {
 	// ServiceBlock is the first of the vehicle and driver carrying an expired blocking document,
 	// read on every row, so renewing the document clears it (TRACK-064 D2).
 	ServiceBlock *ServiceBlock `json:"service_block"`
+	// OrganizationKind is the route client's school | company | other, nil when it names none, and
+	// PlannedEnd the last stop's planned time — the board's badge and "llega 07:45" (TRACK-073).
+	OrganizationKind *string    `json:"organization_kind"`
+	PlannedEnd       *time.Time `json:"planned_end"`
 }
 
 // ServiceBlock names who keeps a trip in — "vehicle" or "driver" — and the document type expired.
@@ -50,6 +54,9 @@ type ServiceBlock struct {
 type TripListRow struct {
 	Trip
 	DelaySeconds *int32 `json:"delay_seconds"`
+	// RidersTotal and RidersBoarded are its pickups not cancelled and done — "A bordo 3 de 4" (TRACK-073).
+	RidersTotal   int32 `json:"riders_total"`
+	RidersBoarded int32 `json:"riders_boarded"`
 }
 
 // TripDetail is GET /tracking/trips/:id and what every trip write answers: the row plus its stops
@@ -135,16 +142,29 @@ type ListTripsQuery struct {
 	DateTo *string `form:"date_to" binding:"omitempty,datetime=2006-01-02"`
 	// LateMin keeps the trips whose next stop is at least that many minutes overdue (TRACK-069 D5).
 	LateMin *int32 `form:"late_min" binding:"omitempty,min=1,max=120"`
+	// Search matches the route name, the plate or the driver's name (TRACK-073).
+	Search *string `form:"search" binding:"omitempty,max=100"`
 	// ScopeUserID narrows the board to an organization user's trips (MOBILE-020); set by the
 	// controller from the access level, never bound from the query.
 	ScopeUserID *uuid.UUID `form:"-"`
 }
 
 type ListTripsResponse struct {
-	Trips      []*TripListRow `json:"trips"`
-	TotalCount int64          `json:"total_count"`
-	Page       int            `json:"page"`
-	PageSize   int            `json:"page_size"`
+	Trips []*TripListRow `json:"trips"`
+	// Counts is every filter but status, so the board's chips show each status of the same day.
+	Counts     TripCounts `json:"counts"`
+	TotalCount int64      `json:"total_count"`
+	Page       int        `json:"page"`
+	PageSize   int        `json:"page_size"`
+}
+
+// TripCounts is the board's chips (TRACK-073).
+type TripCounts struct {
+	All        int64 `json:"all"`
+	Planned    int64 `json:"planned"`
+	InProgress int64 `json:"in_progress"`
+	Completed  int64 `json:"completed"`
+	Cancelled  int64 `json:"cancelled"`
 }
 
 // UpdateTripDto is PATCH /tracking/trips/:id, the operator's override: a field left out keeps its

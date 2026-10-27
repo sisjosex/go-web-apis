@@ -41,5 +41,17 @@
   "module.users.feature.0": "Gestión de usuarios",
   "module.users.feature.1": "Asignación de roles",
   "module.users.feature.2": "Permisos de acceso",
-  "module.users.feature.3": "Registro de auditoría"
+  "module.users.feature.3": "Registro de auditoría",
+  "import.resource.users": "Usuarios",
+  "import.resource.users.description": "Tu equipo, con su rol y acceso",
+  "import.users.first_name": "Nombre",
+  "import.users.last_name": "Apellido",
+  "import.users.email": "Correo",
+  "import.users.phone": "Teléfono",
+  "import.users.birthday": "Cumpleaños",
+  "import.users.bio": "Bio",
+  "import.users.website_url": "Sitio web",
+  "import.users.profile_picture": "Foto de perfil",
+  "import.users.roles": "Roles",
+  "import.users.option.send_invitation": "Enviar la invitación por correo a cada persona nueva"
 }

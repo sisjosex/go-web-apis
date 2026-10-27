@@ -36,7 +36,7 @@ type TrackingRepository interface {
 	// Vehicles CRUD
 	CreateVehicle(ctx context.Context, tenantID uuid.UUID, dto *models.CreateVehicleDto) (*models.Vehicle, error)
 	UpdateVehicle(ctx context.Context, tenantID uuid.UUID, vehicleID uuid.UUID, dto *models.UpdateVehicleDto) (*models.Vehicle, error)
-	ListVehicles(ctx context.Context, tenantID uuid.UUID, query models.ListVehiclesQuery) ([]*models.Vehicle, int64, error)
+	ListVehicles(ctx context.Context, tenantID uuid.UUID, query models.ListVehiclesQuery) ([]*models.Vehicle, models.VehicleCounts, int64, error)
 	GetVehicle(ctx context.Context, tenantID uuid.UUID, vehicleID uuid.UUID) (*models.Vehicle, error)
 	SetVehicleDriver(ctx context.Context, tenantID, vehicleID uuid.UUID, driverID *uuid.UUID) error
 	MoveVehicleCompany(ctx context.Context, tenantID, vehicleID uuid.UUID, dto *models.MoveVehicleCompanyDto) (*models.MovedVehicle, error)
@@ -49,7 +49,7 @@ type TrackingRepository interface {
 	CreateRouteReturn(ctx context.Context, tenantID, routeID uuid.UUID, dto *models.CreateRouteReturnDto, createdBy *uuid.UUID) (uuid.UUID, error)
 	VehicleSeatsShort(ctx context.Context, tenantID, vehicleID uuid.UUID, routeID *uuid.UUID) ([]*models.VehicleSeatsShort, error)
 	UpdateRoute(ctx context.Context, tenantID uuid.UUID, routeID uuid.UUID, dto *models.UpdateRouteDto) (*models.Route, error)
-	ListRoutes(ctx context.Context, tenantID uuid.UUID, query models.ListRoutesQuery, scopeUserID *uuid.UUID) ([]*models.Route, int64, error)
+	ListRoutes(ctx context.Context, tenantID uuid.UUID, query models.ListRoutesQuery, scopeUserID *uuid.UUID) ([]*models.Route, models.RouteCounts, int64, error)
 	GetRoute(ctx context.Context, tenantID uuid.UUID, routeID uuid.UUID, scopeUserID *uuid.UUID) (*models.Route, error)
 	DeleteRoute(ctx context.Context, tenantID uuid.UUID, routeID uuid.UUID) error
 
@@ -146,7 +146,7 @@ type TrackingRepository interface {
 
 	// Trips (TRACK-008, TRACK-020)
 	MaterialiseTrips(ctx context.Context, tenantID uuid.UUID, routeID *uuid.UUID, from, to *time.Time) (int, error)
-	ListTrips(ctx context.Context, tenantID uuid.UUID, query models.ListTripsQuery) ([]*models.TripListRow, int64, error)
+	ListTrips(ctx context.Context, tenantID uuid.UUID, query models.ListTripsQuery) (*models.ListTripsResponse, error)
 	GetTrip(ctx context.Context, tenantID, tripID uuid.UUID) (*models.TripDetail, error)
 	GetTripStatus(ctx context.Context, tenantID, tripID uuid.UUID) (*models.TripStatus, error)
 	ListTripEvents(ctx context.Context, tenantID, tripID uuid.UUID) ([]*models.TripEvent, error)

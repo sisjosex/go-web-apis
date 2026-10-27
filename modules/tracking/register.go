@@ -22,6 +22,8 @@ func init() {
 		// TENANCY-008: each piece needs the one before it (TRACK-050 D1); setup.go says which are done.
 		Setup: []registry.SetupStep{
 			{Code: "companies", Minutes: 2, Route: "/tracking/companies?new=1"},
+			// TRACK-073: the client a route carries riders to, before its drivers and routes.
+			{Code: "organizations", Minutes: 2, Route: "/tracking/organizations?new=1"},
 			{Code: "drivers", Minutes: 3, Route: "/tracking/drivers?new=1"},
 			{Code: "vehicles", Minutes: 2, Route: "/tracking/vehicles?new=1"},
 			{Code: "routes", Minutes: 5, Route: "/tracking/routes?new=1"},

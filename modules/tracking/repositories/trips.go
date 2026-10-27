@@ -66,7 +66,7 @@ func scanTrip(t *models.Trip) []any {
 		&t.ID, &t.RouteID, &t.RouteName, &t.Direction, &t.RouteScheduleID, &t.ServiceDate, &t.Timezone,
 		&t.PlannedStart, &t.VehicleID, &t.LicensePlate, &t.DriverID, &t.DriverName, &t.Status,
 		&t.StartedAt, &t.EndedAt, &t.IsOverridden, &t.StopsCount, &t.TasksTotal, &t.TasksDone,
-		&t.CreatedAt, &t.UpdatedAt, &t.ServiceBlock,
+		&t.CreatedAt, &t.UpdatedAt, &t.ServiceBlock, &t.OrganizationKind, &t.PlannedEnd,
 	}
 }
 
@@ -116,8 +116,8 @@ func (r *TrackingRepository) queryTripDetail(ctx context.Context, fallbackCode, 
 	return &detail, nil
 }
 
-// ListTrips returns one page of a day's trips plus the total the same filters match.
-func (r *TrackingRepository) ListTrips(ctx context.Context, tenantID uuid.UUID, query models.ListTripsQuery) ([]*models.TripListRow, int64, error) {
+// ListTrips returns one page of a day's trips, the status counts and the total the same filters match.
+func (r *TrackingRepository) ListTrips(ctx context.Context, tenantID uuid.UUID, query models.ListTripsQuery) (*models.ListTripsResponse, error) {
 	rows, err := r.dbService.Query(ctx, `
 		SELECT * FROM tracking.sp_list_trips(
 			p_tenant_id       := $1,
@@ -130,27 +130,35 @@ func (r *TrackingRepository) ListTrips(ctx context.Context, tenantID uuid.UUID, 
 			p_scope_user_id   := $8,
 			p_include_empty   := COALESCE($9::BOOLEAN, TRUE),
 			p_date_to         := $10::DATE,
-			p_late_min        := $11
+			p_late_min        := $11,
+			p_search          := $12
 		)
 	`, tenantID, query.Date, query.RouteID, query.Status, query.OrganizationID, query.Page, query.PageSize, query.ScopeUserID,
-		query.IncludeEmpty, query.DateTo, query.LateMin)
+		query.IncludeEmpty, query.DateTo, query.LateMin, query.Search)
 	if err != nil {
-		return nil, 0, mapTripError(err, trackingErrors.TripListFailed)
+		return nil, mapTripError(err, trackingErrors.TripListFailed)
 	}
 	defer rows.Close()
-	trips := []*models.TripListRow{}
-	var totalCount int64
+	out := &models.ListTripsResponse{Trips: []*models.TripListRow{}, Page: query.Page, PageSize: query.PageSize}
 	for rows.Next() {
-		var t models.TripListRow
-		if err := rows.Scan(append(scanTrip(&t.Trip), &t.DelaySeconds, &totalCount)...); err != nil {
-			return nil, 0, err
+		// The trip's 24 columns, delay_seconds and the two rider counts come before the counts.
+		empty, err := scanEmptyPage(rows, 27, &out.Counts)
+		if err != nil {
+			return nil, err
 		}
-		trips = append(trips, &t)
+		if empty {
+			continue
+		}
+		var t models.TripListRow
+		if err := rows.Scan(append(scanTrip(&t.Trip), &t.DelaySeconds, &t.RidersTotal, &t.RidersBoarded, &out.Counts, &out.TotalCount)...); err != nil {
+			return nil, err
+		}
+		out.Trips = append(out.Trips, &t)
 	}
 	if err := rows.Err(); err != nil {
-		return nil, 0, mapTripError(err, trackingErrors.TripListFailed)
+		return nil, mapTripError(err, trackingErrors.TripListFailed)
 	}
-	return trips, totalCount, nil
+	return out, nil
 }
 
 // GetTrip is the detail plus the driven path stored at trip close.
@@ -253,7 +261,7 @@ func (r *TrackingRepository) TrackingOverview(ctx context.Context, tenantID uuid
 	var o models.TrackingOverview
 	var delayed []byte
 	err := r.dbService.QueryRow(ctx, `SELECT * FROM tracking.sp_tracking_overview($1, $2::DATE, $3)`, tenantID, date, scopeUserID).
-		Scan(&o.TripsInProgress, &o.TripsPlanned, &o.ArrivalsDone, &o.AbsencesToday, &delayed, &o.HasRoutes)
+		Scan(&o.TripsInProgress, &o.TripsPlanned, &o.ArrivalsDone, &o.AbsencesToday, &delayed, &o.HasRoutes, &o.DriversWithoutAccount)
 	if err != nil {
 		return nil, scopedErr(err, trackingErrors.TripListFailed)
 	}
@@ -279,7 +287,7 @@ func (r *TrackingRepository) NavCounts(ctx context.Context, tenantID uuid.UUID, 
 func (r *TrackingRepository) TrackingSetup(ctx context.Context, tenantID uuid.UUID) (*models.TrackingSetup, error) {
 	var s models.TrackingSetup
 	err := r.dbService.QueryRow(ctx, `SELECT * FROM tracking.sp_tracking_setup($1)`, tenantID).
-		Scan(&s.Companies, &s.Drivers, &s.Vehicles, &s.Routes, &s.Riders)
+		Scan(&s.Companies, &s.Organizations, &s.Drivers, &s.Vehicles, &s.Routes, &s.Riders)
 	if err != nil {
 		return nil, &trackingErrors.TrackingError{Code: trackingErrors.TripListFailed, Err: err}
 	}

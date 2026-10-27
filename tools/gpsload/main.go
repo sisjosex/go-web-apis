@@ -122,7 +122,7 @@ func setup(ctx context.Context, db coreServices.DatabaseService, slug string, co
 
 	existing := map[string]uuid.UUID{}
 	for page := 1; ; page++ {
-		rows, total, err := repo.ListVehicles(tenantCtx, tenant.ID, models.ListVehiclesQuery{Search: "LOAD-", Page: page, PageSize: 100})
+		rows, _, total, err := repo.ListVehicles(tenantCtx, tenant.ID, models.ListVehiclesQuery{Search: "LOAD-", Page: page, PageSize: 100})
 		if err != nil {
 			log.Fatalf("list vehicles: %v", err)
 		}

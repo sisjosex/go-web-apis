@@ -12,7 +12,7 @@ const (
 	sectionImages  = "images"
 )
 
-// ImportConfig holds limits for the generic CSV import framework.
+// ImportConfig holds limits for the import engine (IMPORT-002 D2: 5 000 rows).
 type ImportConfig struct {
 	MaxFileSizeMB int
 	MaxRows       int
@@ -22,7 +22,7 @@ type ImportConfig struct {
 func LoadImportConfig() *ImportConfig {
 	return &ImportConfig{
 		MaxFileSizeMB: utils.GetEnvAsInt("IMPORT_MAX_FILE_SIZE_MB", 5),
-		MaxRows:       utils.GetEnvAsInt("IMPORT_MAX_ROWS", 500),
+		MaxRows:       utils.GetEnvAsInt("IMPORT_MAX_ROWS", 5000),
 	}
 }
 
