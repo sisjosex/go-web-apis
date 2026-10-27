@@ -4,5 +4,3 @@
 #
 # The gate's contract stage reads it against HEAD's docs/openapi.json. Empty the file once the
 # change is committed: an entry left here would let the next break through unreviewed.
-POST /api/v1/import            # IMPORT-002 D2: the answer lists only the rows with an error or a warning; web only, the new page reads it
-POST /api/v1/import/validate   # IMPORT-002 D2: same, and each heading carries its field match; web only, the new page reads it
