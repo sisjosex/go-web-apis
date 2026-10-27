@@ -678,6 +678,26 @@ func CreateTestDriver(t *testing.T, helper *testhelpers.ApiTestHelper) string {
 	return ParseResponse(t, w.Body.Bytes())["id"].(string)
 }
 
+// RenameRider gives a rider a surname no other test uses, so a search finds it alone: the API sets
+// both names once, at creation (TRACK-074).
+func RenameRider(t *testing.T, helper *testhelpers.ApiTestHelper, riderID, lastName string) {
+	t.Helper()
+	if _, err := helper.DB().Execute(context.Background(), `UPDATE tracking.riders SET last_name = $2 WHERE id = $1`, riderID, lastName); err != nil {
+		t.Fatalf("rename rider: %v", err)
+	}
+}
+
+// RecordDriverOp stands for the driver's phone having synced an op now — what makes its app active
+// (TRACK-074 D1) without driving a session through the mobile sync.
+func RecordDriverOp(t *testing.T, helper *testhelpers.ApiTestHelper, driverID string) {
+	t.Helper()
+	if _, err := helper.DB().Execute(context.Background(), `
+		INSERT INTO tracking.driver_ops (client_op_id, tenant_id, driver_id, op, client_recorded_at, status)
+		VALUES (gen_random_uuid(), $1, $2, 'arrive', now(), 'applied')`, TestTenantID, driverID); err != nil {
+		t.Fatalf("record driver op: %v", err)
+	}
+}
+
 // LinkDriverAccount links the seeded driver account (driver@test.local) to driverID, and frees it
 // again at cleanup: the API has no endpoint that links an account to a driver.
 func LinkDriverAccount(t *testing.T, helper *testhelpers.ApiTestHelper, driverID string) {

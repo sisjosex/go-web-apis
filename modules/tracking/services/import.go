@@ -2,9 +2,12 @@ package services
 
 import (
 	"context"
+	"net/mail"
 	"strconv"
 	"strings"
+	"time"
 
+	coreModels "josex/web/modules/core/models"
 	geoModels "josex/web/modules/geo/models"
 	importInterfaces "josex/web/modules/import/interfaces"
 	importModels "josex/web/modules/import/models"
@@ -30,6 +33,9 @@ const (
 	importOrgUnknown         = "tracking.import.organization-unknown"
 	importOrgRequired        = "tracking.import.organization-required"
 	importPlateDuplicate     = "tracking.import.plate-duplicate"
+	importLicenseDuplicate   = "tracking.import.license-duplicate"
+	importDateInvalid        = "tracking.import.date-invalid"
+	importEmailInvalid       = "tracking.import.email-invalid"
 	importPlaceDuplicate     = "tracking.import.place-duplicate"
 	importRiderDuplicate     = "tracking.import.rider-duplicate"
 	importCodeDuplicate      = "tracking.import.code-duplicate"
@@ -431,6 +437,162 @@ func (d *stopPlacesImport) findPlace(ctx importModels.ImportContext, name string
 	for _, p := range res.StopPlaces {
 		if strings.EqualFold(p.Name, name) {
 			id := p.ID
+			return &id
+		}
+	}
+	return nil
+}
+
+// ── drivers ──────────────────────────────────────────────────────────────
+
+// DriverCreator writes a driver and, when the row asks, the app account it is invited with — the
+// access slice's CreateDriver, the same call the driver form makes (TRACK-047 D3).
+type DriverCreator interface {
+	CreateDriver(ctx context.Context, tenantID uuid.UUID, dto *models.CreateDriverDto, lang string) (*models.CreatedDriver, error)
+}
+
+type driversImport struct {
+	svc     trackingInterfaces.TrackingService
+	creator DriverCreator
+}
+
+// NewDriversImportDescriptor imports the people who drive (TRACK-074): their name, phone, licence and
+// carrier; a row with an email is invited to the app when the run's send_invitation is on. A driver is
+// recognised by its licence number, so a re-run updates instead of repeating it.
+func NewDriversImportDescriptor(svc trackingInterfaces.TrackingService, creator DriverCreator) importInterfaces.ImportDescriptor {
+	return &driversImport{svc: svc, creator: creator}
+}
+
+func (d *driversImport) Resource() string { return "tracking_drivers" }
+
+func (d *driversImport) Columns() []importModels.ColumnSpec {
+	return columnsOf(textColumn("first_name", true, "nombre", "nombres", "first name"),
+		textColumn("last_name", true, "apellido", "apellidos", "last name", "surname"),
+		textColumn("license", true, "licencia", "nro de licencia", "numero de licencia", "license number"),
+		textColumn("phone", false, "telefono", "celular", "movil", "mobile"),
+		textColumn("email", false, "correo", "correo electronico", "e mail", "mail"),
+		textColumn("license_class", false, "categoria", "categoria de licencia", "class"),
+		importModels.ColumnSpec{Key: "license_expires_on", Type: importModels.ColumnTypeDate,
+			Aliases: []string{"vence licencia", "vencimiento de licencia", "vencimiento", "license expiry"}},
+		textColumn("company", false, "empresa", "transportista"))
+}
+
+// Options is the run's switch (IMPORT-002): whether a row with an email gets the app invitation.
+func (d *driversImport) Options() []importModels.OptionSpec {
+	return []importModels.OptionSpec{{Key: "send_invitation", Type: importModels.OptionTypeBool, Default: true}}
+}
+
+func (d *driversImport) KeyColumns() []string { return []string{"license"} }
+
+func (d *driversImport) Matches(headers []string) bool {
+	return hasAll(headers, "first_name", "last_name", "license")
+}
+
+func (d *driversImport) ValidateRow(ctx importModels.ImportContext, line int, row map[string]string) importModels.RowResult {
+	return d.run(ctx, line, row, false)
+}
+
+func (d *driversImport) ProcessRow(ctx importModels.ImportContext, line int, row map[string]string) importModels.RowResult {
+	return d.run(ctx, line, row, true)
+}
+
+func (d *driversImport) RecordRun(importModels.ImportContext, importModels.RunMeta) {}
+
+// UpdateRow writes a known licence's name, phone, class and expiry over the driver (IMPORT-002 D4);
+// its carrier and account stay as they are.
+func (d *driversImport) UpdateRow(ctx importModels.ImportContext, line int, row map[string]string) importModels.RowResult {
+	dto, errs := d.dto(ctx, row)
+	if len(errs) > 0 {
+		return rowResult(line, row, errs, true)
+	}
+	id := d.findDriver(ctx, *dto.LicenseNumber)
+	if id == nil {
+		return importModels.RowResult{Line: line, Data: row, Status: importModels.RowStatusSkipped}
+	}
+	update := &models.UpdateDriverDto{FirstName: &dto.FirstName, LastName: &dto.LastName, Phone: dto.Phone,
+		LicenseClass: dto.LicenseClass, LicenseExpiresOn: dto.LicenseExpiresOn}
+	if _, err := d.svc.UpdateDriver(ctx.Context(), ctx.TenantID, *id, update); err != nil {
+		return rowResult(line, row, []string{importCreateFailed}, true)
+	}
+	return updated(line, row)
+}
+
+func (d *driversImport) run(ctx importModels.ImportContext, line int, row map[string]string, process bool) importModels.RowResult {
+	dto, errs := d.dto(ctx, row)
+	if len(errs) > 0 {
+		return rowResult(line, row, errs, process)
+	}
+	license := *dto.LicenseNumber
+	key := strings.ToLower(license)
+	seen := scratchSet(ctx, "tracking.licenses")
+	if seen[key] || d.findDriver(ctx, license) != nil {
+		return duplicate(line, row, importLicenseDuplicate+errorParam+license, process)
+	}
+	seen[key] = true
+	if process {
+		if !ctx.Options.BoolOr("send_invitation", true) {
+			dto.Account = nil
+		}
+		if _, err := d.creator.CreateDriver(ctx.Context(), ctx.TenantID, dto, ctx.Lang); err != nil {
+			return rowResult(line, row, []string{importCreateFailed}, true)
+		}
+	}
+	return rowResult(line, row, nil, process)
+}
+
+func (d *driversImport) dto(ctx importModels.ImportContext, row map[string]string) (*models.CreateDriverDto, []string) {
+	var errs []string
+	first, last, license := cell(row, "first_name"), cell(row, "last_name"), cell(row, "license")
+	if len(first) < 2 {
+		errs = append(errs, importRequired+errorParam+"first_name")
+	}
+	if len(last) < 2 {
+		errs = append(errs, importRequired+errorParam+"last_name")
+	}
+	if len(license) < 2 {
+		errs = append(errs, importRequired+errorParam+"license")
+	}
+	var expires *coreModels.DateOnly
+	if value := cell(row, "license_expires_on"); value != "" {
+		parsed, err := time.Parse("2006-01-02", value)
+		if err != nil {
+			errs = append(errs, importDateInvalid+errorParam+"license_expires_on")
+		} else {
+			date := coreModels.DateOnly(parsed)
+			expires = &date
+		}
+	}
+	var account *models.DriverAccountDto
+	if email := strings.ToLower(cell(row, "email")); email != "" {
+		if _, err := mail.ParseAddress(email); err != nil {
+			errs = append(errs, importEmailInvalid+errorParam+email)
+		} else {
+			account = &models.DriverAccountDto{Email: email}
+		}
+	}
+	companyID, companyErr := companiesOf(ctx, d.svc).resolve(cell(row, "company"), importCompanyUnknown, importCompanyRequired)
+	if companyErr != "" {
+		errs = append(errs, companyErr)
+	}
+	if len(errs) > 0 {
+		return nil, errs
+	}
+	return &models.CreateDriverDto{
+		CompanyID: companyID, FirstName: first, LastName: last, Phone: optionalCell(row, "phone"),
+		LicenseNumber: &license, LicenseClass: optionalCell(row, "license_class"), LicenseExpiresOn: expires,
+		Status: "active", Account: account,
+	}, nil
+}
+
+// findDriver is the tenant's driver with this licence number, or nil.
+func (d *driversImport) findDriver(ctx importModels.ImportContext, license string) *uuid.UUID {
+	res, err := d.svc.ListDrivers(ctx.Context(), ctx.TenantID, models.ListDriversQuery{Search: license, Page: 1, PageSize: 20})
+	if err != nil {
+		return nil
+	}
+	for _, driver := range res.Drivers {
+		if driver.LicenseNumber != nil && strings.EqualFold(*driver.LicenseNumber, license) {
+			id := driver.ID
 			return &id
 		}
 	}

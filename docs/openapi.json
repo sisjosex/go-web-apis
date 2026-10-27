@@ -8304,6 +8304,9 @@
           "account": {
             "$ref": "#/components/schemas/tracking.AccessGranted"
           },
+          "app_status": {
+            "type": "string"
+          },
           "company_id": {
             "format": "uuid",
             "type": "string"
@@ -8349,6 +8352,9 @@
           },
           "tenant_id": {
             "format": "uuid",
+            "type": "string"
+          },
+          "today_route_name": {
             "type": "string"
           },
           "updated_at": {
@@ -8416,6 +8422,9 @@
           "group_label": {
             "nullable": true,
             "type": "string"
+          },
+          "guardian_app": {
+            "type": "boolean"
           },
           "guardian_email": {
             "nullable": true,
@@ -8497,6 +8506,9 @@
           },
           "stop_place_name": {
             "nullable": true,
+            "type": "string"
+          },
+          "today_status": {
             "type": "string"
           },
           "updated_at": {
@@ -8849,6 +8861,9 @@
       "tracking.Driver": {
         "additionalProperties": false,
         "properties": {
+          "app_status": {
+            "type": "string"
+          },
           "company_id": {
             "format": "uuid",
             "type": "string"
@@ -8895,6 +8910,9 @@
           },
           "tenant_id": {
             "format": "uuid",
+            "type": "string"
+          },
+          "today_route_name": {
             "type": "string"
           },
           "updated_at": {
@@ -9219,6 +9237,34 @@
           "trip_stop_id",
           "kind",
           "status"
+        ],
+        "type": "object"
+      },
+      "tracking.DriverSummary": {
+        "additionalProperties": false,
+        "properties": {
+          "app_active": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "docs_due": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "total": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "without_route_today": {
+            "format": "int64",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "total",
+          "app_active",
+          "docs_due",
+          "without_route_today"
         ],
         "type": "object"
       },
@@ -9856,6 +9902,9 @@
             "format": "int64",
             "type": "integer"
           },
+          "summary": {
+            "$ref": "#/components/schemas/tracking.DriverSummary"
+          },
           "total_count": {
             "format": "int64",
             "type": "integer"
@@ -9863,6 +9912,7 @@
         },
         "required": [
           "drivers",
+          "summary",
           "total_count",
           "page",
           "page_size"
@@ -9952,6 +10002,9 @@
       "tracking.ListOrganizationsResponse": {
         "additionalProperties": false,
         "properties": {
+          "counts": {
+            "$ref": "#/components/schemas/tracking.OrganizationCounts"
+          },
           "organizations": {
             "items": {
               "$ref": "#/components/schemas/tracking.Organization"
@@ -9973,6 +10026,7 @@
         },
         "required": [
           "organizations",
+          "counts",
           "total_count",
           "page",
           "page_size"
@@ -10042,6 +10096,9 @@
       "tracking.ListRidersResponse": {
         "additionalProperties": false,
         "properties": {
+          "counts": {
+            "$ref": "#/components/schemas/tracking.RiderCounts"
+          },
           "page": {
             "format": "int64",
             "type": "integer"
@@ -10063,6 +10120,7 @@
         },
         "required": [
           "riders",
+          "counts",
           "total_count",
           "page",
           "page_size"
@@ -10670,6 +10728,10 @@
             "format": "int32",
             "type": "integer"
           },
+          "absent_today": {
+            "format": "int64",
+            "type": "integer"
+          },
           "address": {
             "nullable": true,
             "type": "string"
@@ -10719,6 +10781,18 @@
           "name": {
             "type": "string"
           },
+          "riders_count": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "routes_count": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "shifts_count": {
+            "format": "int64",
+            "type": "integer"
+          },
           "stop_place_id": {
             "format": "uuid",
             "nullable": true,
@@ -10754,6 +10828,34 @@
           "delay_notice_min",
           "my_role",
           "my_groups"
+        ],
+        "type": "object"
+      },
+      "tracking.OrganizationCounts": {
+        "additionalProperties": false,
+        "properties": {
+          "all": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "company": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "other": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "school": {
+            "format": "int64",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "all",
+          "school",
+          "company",
+          "other"
         ],
         "type": "object"
       },
@@ -11355,6 +11457,9 @@
             "nullable": true,
             "type": "string"
           },
+          "guardian_app": {
+            "type": "boolean"
+          },
           "guardian_email": {
             "nullable": true,
             "type": "string"
@@ -11431,6 +11536,9 @@
           },
           "stop_place_name": {
             "nullable": true,
+            "type": "string"
+          },
+          "today_status": {
             "type": "string"
           },
           "updated_at": {
@@ -11670,6 +11778,34 @@
         "required": [
           "name",
           "phone"
+        ],
+        "type": "object"
+      },
+      "tracking.RiderCounts": {
+        "additionalProperties": false,
+        "properties": {
+          "all": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "employee": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "student": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "unassigned": {
+            "format": "int64",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "all",
+          "student",
+          "employee",
+          "unassigned"
         ],
         "type": "object"
       },
@@ -13793,6 +13929,10 @@
       "tracking.TransportCompany": {
         "additionalProperties": false,
         "properties": {
+          "active_routes_count": {
+            "format": "int64",
+            "type": "integer"
+          },
           "address": {
             "nullable": true,
             "type": "string"
@@ -13808,6 +13948,14 @@
           "created_at": {
             "format": "date-time",
             "type": "string"
+          },
+          "documents_due": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "drivers_count": {
+            "format": "int64",
+            "type": "integer"
           },
           "email": {
             "nullable": true,
@@ -13838,6 +13986,10 @@
           "updated_at": {
             "format": "date-time",
             "type": "string"
+          },
+          "vehicles_count": {
+            "format": "int64",
+            "type": "integer"
           }
         },
         "required": [

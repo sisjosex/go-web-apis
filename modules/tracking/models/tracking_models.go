@@ -23,6 +23,12 @@ type TransportCompany struct {
 	Status             *string   `json:"status"`
 	CreatedAt          time.Time `json:"created_at"`
 	UpdatedAt          time.Time `json:"updated_at"`
+	// The list alone (TRACK-074): its fleet, its routes running and its documents expired or within
+	// their warning, over its vehicles and drivers.
+	VehiclesCount     *int64 `json:"vehicles_count,omitempty"`
+	DriversCount      *int64 `json:"drivers_count,omitempty"`
+	ActiveRoutesCount *int64 `json:"active_routes_count,omitempty"`
+	DocumentsDue      *int64 `json:"documents_due,omitempty"`
 }
 
 // Vehicle represents a bus or van with GPS tracking
@@ -322,6 +328,12 @@ type Organization struct {
 	// for a supervisor, the groups it is limited to (TRACK-067).
 	MyRole   *string  `json:"my_role"`
 	MyGroups []string `json:"my_groups"`
+	// The list alone (TRACK-074): its active routes and riders, the riders an absence covers on its
+	// local today, and the distinct departure times of its routes' schedules in force.
+	RoutesCount *int64 `json:"routes_count,omitempty"`
+	RidersCount *int64 `json:"riders_count,omitempty"`
+	AbsentToday *int64 `json:"absent_today,omitempty"`
+	ShiftsCount *int64 `json:"shifts_count,omitempty"`
 }
 
 // OrganizationMember is a tenant user on an organization, with the identity joined from auth.users.
@@ -360,6 +372,10 @@ type Driver struct {
 	ServiceBlocked *bool     `json:"service_blocked,omitempty"`
 	CreatedAt      time.Time `json:"created_at"`
 	UpdatedAt      time.Time `json:"updated_at"`
+	// The list alone (TRACK-074): the route of its trip in progress, else of its next one today; and
+	// whether it uses the app — active (synced or drove in 7 days), invited (an account, no use), none.
+	TodayRouteName *string `json:"today_route_name,omitempty"`
+	AppStatus      *string `json:"app_status,omitempty"`
 }
 
 // Rider represents a student or employee using transport
@@ -396,8 +412,8 @@ type Rider struct {
 	Notes         *string  `json:"notes"`
 	// GroupLabel is the rider's course or shift, "5to B" (TRACK-039 D2).
 	GroupLabel *string `json:"group_label"`
-	// AssignedRouteName rides only on a list read for a route: the route the rider already rides in
-	// its direction, which the bulk add shows instead of a checkbox (TRACK-039 D1).
+	// AssignedRouteName rides on the list only: the route the rider rides now (TRACK-074) or, on a read
+	// for a route, the one it already rides in its direction, shown instead of a checkbox (TRACK-039 D1).
 	AssignedRouteName *string `json:"assigned_route_name,omitempty"`
 	// ServiceLegs is what the family contracted — both, outbound or return — and StopPlaceID a shared
 	// stop the school agreed instead of the home (TRACK-043 D1, D3).
@@ -407,6 +423,10 @@ type Rider struct {
 	// HomeGeocoded is a home the import placed by its address, until a person moves the pin; only the
 	// list reads it (TRACK-072 D3).
 	HomeGeocoded bool `json:"home_geocoded"`
+	// The list alone (TRACK-074): today's pickup — boarded, absent, pending, no_show; nil without one —
+	// and whether the primary guardian opened the rider's tracking in 30 days (D1).
+	TodayStatus *string `json:"today_status,omitempty"`
+	GuardianApp *bool   `json:"guardian_app,omitempty"`
 }
 
 // RiderRouteAssignment is which route a rider rides, on which weekdays and between which dates

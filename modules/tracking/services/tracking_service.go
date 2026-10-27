@@ -293,12 +293,13 @@ func (s *TrackingService) UpdateRider(ctx context.Context, tenantID uuid.UUID, r
 }
 
 func (s *TrackingService) ListRiders(ctx context.Context, tenantID uuid.UUID, query models.ListRidersQuery, scopeUserID *uuid.UUID, guardianUserID *uuid.UUID) (*models.ListRidersResponse, error) {
-	riders, totalCount, err := s.trackingRepo.ListRiders(ctx, tenantID, query, scopeUserID, guardianUserID)
+	riders, counts, totalCount, err := s.trackingRepo.ListRiders(ctx, tenantID, query, scopeUserID, guardianUserID)
 	if err != nil {
 		return nil, err
 	}
 	return &models.ListRidersResponse{
 		Riders:     riders,
+		Counts:     counts,
 		TotalCount: totalCount,
 		Page:       query.Page,
 		PageSize:   query.PageSize,
@@ -492,12 +493,13 @@ func (s *TrackingService) UpdateOrganization(ctx context.Context, tenantID uuid.
 }
 
 func (s *TrackingService) ListOrganizations(ctx context.Context, tenantID uuid.UUID, query models.ListOrganizationsQuery, scopeUserID *uuid.UUID) (*models.ListOrganizationsResponse, error) {
-	organizations, totalCount, err := s.trackingRepo.ListOrganizations(ctx, tenantID, query, scopeUserID)
+	organizations, counts, totalCount, err := s.trackingRepo.ListOrganizations(ctx, tenantID, query, scopeUserID)
 	if err != nil {
 		return nil, err
 	}
 	return &models.ListOrganizationsResponse{
 		Organizations: organizations,
+		Counts:        counts,
 		TotalCount:    totalCount,
 		Page:          query.Page,
 		PageSize:      query.PageSize,
@@ -537,12 +539,13 @@ func (s *TrackingService) UpdateDriver(ctx context.Context, tenantID uuid.UUID, 
 }
 
 func (s *TrackingService) ListDrivers(ctx context.Context, tenantID uuid.UUID, query models.ListDriversQuery) (*models.ListDriversResponse, error) {
-	drivers, totalCount, err := s.trackingRepo.ListDrivers(ctx, tenantID, query)
+	drivers, summary, totalCount, err := s.trackingRepo.ListDrivers(ctx, tenantID, query)
 	if err != nil {
 		return nil, err
 	}
 	return &models.ListDriversResponse{
 		Drivers:    drivers,
+		Summary:    summary,
 		TotalCount: totalCount,
 		Page:       query.Page,
 		PageSize:   query.PageSize,

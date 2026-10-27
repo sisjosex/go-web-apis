@@ -271,11 +271,21 @@ type BulkAssignRidersResponse struct {
 	Warnings      []AssignmentWarning `json:"warnings"`
 }
 
+// RiderCounts is each chip's size over the list's other filters (TRACK-074): unassigned is the
+// riders without a route in force.
+type RiderCounts struct {
+	All        int64 `json:"all"`
+	Student    int64 `json:"student"`
+	Employee   int64 `json:"employee"`
+	Unassigned int64 `json:"unassigned"`
+}
+
 type ListRidersResponse struct {
-	Riders     []*Rider `json:"riders"`
-	TotalCount int64    `json:"total_count"`
-	Page       int      `json:"page"`
-	PageSize   int      `json:"page_size"`
+	Riders     []*Rider    `json:"riders"`
+	Counts     RiderCounts `json:"counts"`
+	TotalCount int64       `json:"total_count"`
+	Page       int         `json:"page"`
+	PageSize   int         `json:"page_size"`
 }
 
 // CreateRiderDto represents request to create rider
@@ -829,11 +839,20 @@ type ListOrganizationsQuery struct {
 	PageSize int    `form:"page_size,default=20" binding:"min=1,max=100"`
 }
 
+// OrganizationCounts is each kind's size over the list's other filters (TRACK-074).
+type OrganizationCounts struct {
+	All     int64 `json:"all"`
+	School  int64 `json:"school"`
+	Company int64 `json:"company"`
+	Other   int64 `json:"other"`
+}
+
 type ListOrganizationsResponse struct {
-	Organizations []*Organization `json:"organizations"`
-	TotalCount    int64           `json:"total_count"`
-	Page          int             `json:"page"`
-	PageSize      int             `json:"page_size"`
+	Organizations []*Organization    `json:"organizations"`
+	Counts        OrganizationCounts `json:"counts"`
+	TotalCount    int64              `json:"total_count"`
+	Page          int                `json:"page"`
+	PageSize      int                `json:"page_size"`
 }
 
 // UpsertOrganizationMemberDto is the body of PUT /tracking/organizations/:id/members/:user_id — the
@@ -900,11 +919,21 @@ type ListDriversQuery struct {
 	PageSize  int     `form:"page_size,default=20" binding:"min=1,max=100"`
 }
 
+// DriverSummary is the stat cards over every driver the filters match (TRACK-074): those using the
+// app, those whose licence or a document is expired or due within its warning, those without a trip today.
+type DriverSummary struct {
+	Total             int64 `json:"total"`
+	AppActive         int64 `json:"app_active"`
+	DocsDue           int64 `json:"docs_due"`
+	WithoutRouteToday int64 `json:"without_route_today"`
+}
+
 type ListDriversResponse struct {
-	Drivers    []*Driver `json:"drivers"`
-	TotalCount int64     `json:"total_count"`
-	Page       int       `json:"page"`
-	PageSize   int       `json:"page_size"`
+	Drivers    []*Driver     `json:"drivers"`
+	Summary    DriverSummary `json:"summary"`
+	TotalCount int64         `json:"total_count"`
+	Page       int           `json:"page"`
+	PageSize   int           `json:"page_size"`
 }
 
 // === DTOs for Compliance Documents (TRACK-016) ===

@@ -639,8 +639,11 @@
         "public.fn_within_limit",
         "tenancy.sp_add_user_to_tenant",
         "tenancy.sp_assign_user_role",
+        "tenancy.sp_grant_app_access",
+        "tenancy.sp_revoke_app_access",
         "tracking.fn_rider_guardians_link",
         "tracking.sp_create_document_type",
+        "tracking.sp_create_driver",
         "tracking.sp_create_rider",
         "tracking.sp_create_route",
         "tracking.sp_create_route_pair",
@@ -656,6 +659,7 @@
         "tracking.sp_list_routes",
         "tracking.sp_list_stop_places",
         "tracking.sp_list_vehicles",
+        "tracking.sp_update_driver",
         "tracking.sp_update_route",
         "tracking.sp_update_stop_place",
         "tracking.sp_update_vehicle",
@@ -683,9 +687,12 @@
         "tracking.calendars",
         "tracking.compliance_documents",
         "tracking.document_types",
+        "tracking.driver_ops",
         "tracking.drivers",
         "tracking.organization_members",
         "tracking.organizations",
+        "tracking.rider_absences",
+        "tracking.rider_access_log",
         "tracking.rider_contacts",
         "tracking.rider_route_assignments",
         "tracking.riders",
@@ -695,6 +702,8 @@
         "tracking.routes",
         "tracking.stop_places",
         "tracking.transport_companies",
+        "tracking.trip_stop_tasks",
+        "tracking.trip_stops",
         "tracking.trips",
         "tracking.vehicle_last_position",
         "tracking.vehicles"
@@ -714,9 +723,11 @@
         "inventory.product_variant_groups",
         "inventory.product_variant_options",
         "inventory.products",
+        "tenancy.app_invites",
         "tenancy.tenant_users",
         "tenancy.user_roles",
         "tracking.document_types",
+        "tracking.drivers",
         "tracking.outbox",
         "tracking.rider_contacts",
         "tracking.rider_places",
@@ -829,8 +840,11 @@
         "inventory.sp_import_resolve_sku_by_axes",
         "inventory.sp_import_sku_exists",
         "public.fn_within_limit",
+        "tenancy.sp_grant_app_access",
+        "tenancy.sp_revoke_app_access",
         "tracking.fn_rider_guardians_link",
         "tracking.sp_create_document_type",
+        "tracking.sp_create_driver",
         "tracking.sp_create_rider",
         "tracking.sp_create_route",
         "tracking.sp_create_route_pair",
@@ -859,12 +873,16 @@
         "inventory.product_variant_groups",
         "inventory.product_variant_options",
         "inventory.products",
+        "tenancy.tenants",
         "tracking.calendars",
         "tracking.compliance_documents",
         "tracking.document_types",
+        "tracking.driver_ops",
         "tracking.drivers",
         "tracking.organization_members",
         "tracking.organizations",
+        "tracking.rider_absences",
+        "tracking.rider_access_log",
         "tracking.rider_contacts",
         "tracking.rider_route_assignments",
         "tracking.riders",
@@ -874,13 +892,19 @@
         "tracking.routes",
         "tracking.stop_places",
         "tracking.transport_companies",
+        "tracking.trip_stop_tasks",
+        "tracking.trip_stops",
         "tracking.trips",
         "tracking.vehicle_last_position",
         "tracking.vehicles"
       ],
       "writes": [
+        "auth.users",
         "inventory.product_categories",
+        "tenancy.app_invites",
+        "tenancy.tenant_users",
         "tracking.document_types",
+        "tracking.drivers",
         "tracking.outbox",
         "tracking.rider_contacts",
         "tracking.rider_places",
@@ -3216,7 +3240,12 @@
         "tracking.sp_list_companies"
       ],
       "reads": [
-        "tracking.transport_companies"
+        "tracking.compliance_documents",
+        "tracking.document_types",
+        "tracking.drivers",
+        "tracking.routes",
+        "tracking.transport_companies",
+        "tracking.vehicles"
       ],
       "writes": []
     },
@@ -3463,8 +3492,11 @@
         "auth.users",
         "tracking.compliance_documents",
         "tracking.document_types",
+        "tracking.driver_ops",
         "tracking.drivers",
-        "tracking.transport_companies"
+        "tracking.routes",
+        "tracking.transport_companies",
+        "tracking.trips"
       ],
       "writes": []
     },
@@ -3810,7 +3842,11 @@
       ],
       "reads": [
         "tracking.organization_members",
-        "tracking.organizations"
+        "tracking.organizations",
+        "tracking.rider_absences",
+        "tracking.riders",
+        "tracking.route_schedules",
+        "tracking.routes"
       ],
       "writes": []
     },
@@ -4243,12 +4279,17 @@
       "reads": [
         "tracking.organization_members",
         "tracking.organizations",
+        "tracking.rider_absences",
+        "tracking.rider_access_log",
         "tracking.rider_contacts",
         "tracking.rider_route_assignments",
         "tracking.riders",
         "tracking.route_schedules",
         "tracking.routes",
-        "tracking.stop_places"
+        "tracking.stop_places",
+        "tracking.trip_stop_tasks",
+        "tracking.trip_stops",
+        "tracking.trips"
       ],
       "writes": []
     },
@@ -9391,7 +9432,12 @@
     },
     "tracking.sp_list_companies": {
       "reads": [
-        "tracking.transport_companies"
+        "tracking.compliance_documents",
+        "tracking.document_types",
+        "tracking.drivers",
+        "tracking.routes",
+        "tracking.transport_companies",
+        "tracking.vehicles"
       ],
       "writes": [],
       "calls": []
@@ -9416,8 +9462,13 @@
     "tracking.sp_list_drivers": {
       "reads": [
         "auth.users",
+        "tracking.compliance_documents",
+        "tracking.document_types",
+        "tracking.driver_ops",
         "tracking.drivers",
-        "tracking.transport_companies"
+        "tracking.routes",
+        "tracking.transport_companies",
+        "tracking.trips"
       ],
       "writes": [],
       "calls": [
@@ -9482,7 +9533,11 @@
     "tracking.sp_list_organizations": {
       "reads": [
         "tracking.organization_members",
-        "tracking.organizations"
+        "tracking.organizations",
+        "tracking.rider_absences",
+        "tracking.riders",
+        "tracking.route_schedules",
+        "tracking.routes"
       ],
       "writes": [],
       "calls": [
@@ -9565,12 +9620,17 @@
     "tracking.sp_list_riders": {
       "reads": [
         "tracking.organizations",
+        "tracking.rider_absences",
+        "tracking.rider_access_log",
         "tracking.rider_contacts",
         "tracking.rider_route_assignments",
         "tracking.riders",
         "tracking.route_schedules",
         "tracking.routes",
-        "tracking.stop_places"
+        "tracking.stop_places",
+        "tracking.trip_stop_tasks",
+        "tracking.trip_stops",
+        "tracking.trips"
       ],
       "writes": [],
       "calls": [

@@ -306,8 +306,8 @@ func (r *TrackingRepository) UpdateCompany(ctx context.Context, tenantID uuid.UU
 	return &company, nil
 }
 
-// ListCompanies returns one page of the tenant's companies plus the total the same filters
-// match. total_count comes back on every row and stays 0 when the page is empty.
+// ListCompanies returns one page of the tenant's companies, each with its fleet figures (TRACK-074),
+// plus the total the same filters match. total_count comes back on every row and stays 0 when the page is empty.
 func (r *TrackingRepository) ListCompanies(ctx context.Context, tenantID uuid.UUID, query models.ListCompaniesQuery) ([]*models.TransportCompany, int64, error) {
 	rows, err := r.dbService.Query(ctx,
 		`SELECT * FROM tracking.sp_list_companies($1::UUID, $2::VARCHAR, $3::VARCHAR, $4::INT, $5::INT)`,
@@ -320,7 +320,8 @@ func (r *TrackingRepository) ListCompanies(ctx context.Context, tenantID uuid.UU
 	var totalCount int64
 	for rows.Next() {
 		var c models.TransportCompany
-		if err := rows.Scan(&c.ID, &c.TenantID, &c.Name, &c.Email, &c.Phone, &c.Address, &c.City, &c.Country, &c.RegistrationNumber, &c.Status, &c.CreatedAt, &c.UpdatedAt, &totalCount); err != nil {
+		if err := rows.Scan(&c.ID, &c.TenantID, &c.Name, &c.Email, &c.Phone, &c.Address, &c.City, &c.Country, &c.RegistrationNumber, &c.Status, &c.CreatedAt, &c.UpdatedAt,
+			&c.VehiclesCount, &c.DriversCount, &c.ActiveRoutesCount, &c.DocumentsDue, &totalCount); err != nil {
 			return nil, 0, err
 		}
 		companies = append(companies, &c)
@@ -1075,35 +1076,44 @@ func (r *TrackingRepository) UpdateRider(ctx context.Context, tenantID uuid.UUID
 	return &rider, nil
 }
 
-// ListRiders returns one page of the tenant's riders plus the total the same filters match.
-// total_count comes back on every row and stays 0 when the page is empty.
-func (r *TrackingRepository) ListRiders(ctx context.Context, tenantID uuid.UUID, query models.ListRidersQuery, scopeUserID *uuid.UUID, guardianUserID *uuid.UUID) ([]*models.Rider, int64, error) {
+// ListRiders returns one page of the tenant's riders, the chip counts and the total the same filters
+// match; an empty page carries only the counts (TRACK-074).
+func (r *TrackingRepository) ListRiders(ctx context.Context, tenantID uuid.UUID, query models.ListRidersQuery, scopeUserID *uuid.UUID, guardianUserID *uuid.UUID) ([]*models.Rider, models.RiderCounts, int64, error) {
+	var counts models.RiderCounts
 	rows, err := r.dbService.Query(ctx,
 		`SELECT * FROM tracking.sp_list_riders($1::UUID, $2::UUID, $3::VARCHAR, $4::VARCHAR, $5::BOOLEAN, $6::INT, $7::INT, $8::UUID, $9::UUID, $10::UUID, $11::BOOLEAN, $12::VARCHAR, $13::BOOLEAN, $14::BOOLEAN)`,
 		tenantID, query.OrganizationID, query.Search, query.RiderType, query.IsActive, query.Page, query.PageSize, scopeUserID, guardianUserID,
 		query.RouteID, query.Unassigned, query.Group, query.MissingLocation, query.Geocoded)
 	if err != nil {
-		return nil, 0, scopedErr(err, trackingErrors.RiderListFailed)
+		return nil, counts, 0, scopedErr(err, trackingErrors.RiderListFailed)
 	}
 	defer rows.Close()
 	riders := []*models.Rider{}
 	var totalCount int64
 	for rows.Next() {
+		empty, err := scanEmptyPage(rows, 31, &counts)
+		if err != nil {
+			return nil, counts, 0, err
+		}
+		if empty {
+			continue
+		}
 		var rider models.Rider
 		if err := rows.Scan(&rider.ID, &rider.OrganizationID, &rider.OrganizationName, &rider.OrganizationKind, &rider.RiderType, &rider.FirstName, &rider.LastName,
 			&rider.IdentificationNumber, &rider.Phone, &rider.Email, &rider.EmergencyContactName,
 			&rider.EmergencyContactPhone, &rider.GuardianUserID, &rider.GuardianName, &rider.GuardianPhone,
 			&rider.GuardianEmail, &rider.Address, &rider.IsActive, &rider.CreatedAt, &rider.UpdatedAt,
 			&rider.HomeLatitude, &rider.HomeLongitude, &rider.Notes, &rider.GroupLabel, &rider.AssignedRouteName,
-			&rider.ServiceLegs, &rider.StopPlaceID, &rider.StopPlaceName, &rider.HomeGeocoded, &totalCount); err != nil {
-			return nil, 0, err
+			&rider.ServiceLegs, &rider.StopPlaceID, &rider.StopPlaceName, &rider.HomeGeocoded,
+			&rider.TodayStatus, &rider.GuardianApp, &counts, &totalCount); err != nil {
+			return nil, counts, 0, err
 		}
 		riders = append(riders, &rider)
 	}
 	if err := rows.Err(); err != nil {
-		return nil, 0, scopedErr(err, trackingErrors.RiderListFailed)
+		return nil, counts, 0, scopedErr(err, trackingErrors.RiderListFailed)
 	}
-	return riders, totalCount, nil
+	return riders, counts, totalCount, nil
 }
 
 func (r *TrackingRepository) GetRider(ctx context.Context, tenantID uuid.UUID, riderID uuid.UUID, guardianUserID *uuid.UUID, scopeUserID *uuid.UUID) (*models.Rider, error) {
@@ -1204,29 +1214,38 @@ func (r *TrackingRepository) UpdateOrganization(ctx context.Context, tenantID uu
 	return &org, nil
 }
 
-// ListOrganizations returns one page of the tenant's organizations plus the total the same filters
-// match. total_count comes back on every row and stays 0 when the page is empty.
-func (r *TrackingRepository) ListOrganizations(ctx context.Context, tenantID uuid.UUID, query models.ListOrganizationsQuery, scopeUserID *uuid.UUID) ([]*models.Organization, int64, error) {
+// ListOrganizations returns one page of the tenant's organizations with their card figures, the kind
+// counts and the total the same filters match; an empty page carries only the counts (TRACK-074).
+func (r *TrackingRepository) ListOrganizations(ctx context.Context, tenantID uuid.UUID, query models.ListOrganizationsQuery, scopeUserID *uuid.UUID) ([]*models.Organization, models.OrganizationCounts, int64, error) {
+	var counts models.OrganizationCounts
 	rows, err := r.dbService.Query(ctx,
 		`SELECT * FROM tracking.sp_list_organizations($1::UUID, $2::VARCHAR, $3::VARCHAR, $4::BOOLEAN, $5::INT, $6::INT, $7::UUID)`,
 		tenantID, query.Search, query.Kind, query.IsActive, query.Page, query.PageSize, scopeUserID)
 	if err != nil {
-		return nil, 0, &trackingErrors.TrackingError{Code: trackingErrors.OrganizationListFailed, Err: err}
+		return nil, counts, 0, &trackingErrors.TrackingError{Code: trackingErrors.OrganizationListFailed, Err: err}
 	}
 	defer rows.Close()
 	organizations := []*models.Organization{}
 	var totalCount int64
 	for rows.Next() {
+		empty, err := scanEmptyPage(rows, 21, &counts)
+		if err != nil {
+			return nil, counts, 0, err
+		}
+		if empty {
+			continue
+		}
 		var org models.Organization
-		if err := rows.Scan(append(scanOrganization(&org), &org.MyRole, &org.MyGroups, &totalCount)...); err != nil {
-			return nil, 0, err
+		if err := rows.Scan(append(scanOrganization(&org), &org.MyRole, &org.MyGroups,
+			&org.RoutesCount, &org.RidersCount, &org.AbsentToday, &org.ShiftsCount, &counts, &totalCount)...); err != nil {
+			return nil, counts, 0, err
 		}
 		organizations = append(organizations, &org)
 	}
 	if err := rows.Err(); err != nil {
-		return nil, 0, err
+		return nil, counts, 0, err
 	}
-	return organizations, totalCount, nil
+	return organizations, counts, totalCount, nil
 }
 
 func (r *TrackingRepository) GetOrganization(ctx context.Context, tenantID uuid.UUID, organizationID uuid.UUID, scopeUserID *uuid.UUID) (*models.Organization, error) {
@@ -1315,13 +1334,15 @@ func scanDriver(d *models.Driver) []any {
 	}
 }
 
-// scanDriverRow is scanDriver plus the two columns only the list SP resolves: whether an expired
-// blocking document stands against the driver (TRACK-016 D2) and the page's total.
-func scanDriverRow(d *models.Driver, total *int64) []any {
+// scanDriverRow is scanDriver plus the columns only the list SP resolves: whether an expired blocking
+// document stands against the driver (TRACK-016 D2), today's route, the app status, the summary
+// (TRACK-074) and the page's total.
+func scanDriverRow(d *models.Driver, summary *models.DriverSummary, total *int64) []any {
 	return []any{
 		&d.ID, &d.TenantID, &d.CompanyID, &d.CompanyName, &d.UserID, &d.UserEmail,
 		&d.FirstName, &d.LastName, &d.Phone, &d.LicenseNumber, &d.LicenseClass,
-		&d.LicenseExpiresOn, &d.Status, &d.ServiceBlocked, &d.CreatedAt, &d.UpdatedAt, total,
+		&d.LicenseExpiresOn, &d.Status, &d.ServiceBlocked, &d.CreatedAt, &d.UpdatedAt,
+		&d.TodayRouteName, &d.AppStatus, summary, total,
 	}
 }
 
@@ -1374,29 +1395,37 @@ func (r *TrackingRepository) UpdateDriver(ctx context.Context, tenantID uuid.UUI
 	return &driver, nil
 }
 
-// ListDrivers returns one page of the tenant's drivers plus the total the same filters match.
-// total_count comes back on every row and stays 0 when the page is empty.
-func (r *TrackingRepository) ListDrivers(ctx context.Context, tenantID uuid.UUID, query models.ListDriversQuery) ([]*models.Driver, int64, error) {
+// ListDrivers returns one page of the tenant's drivers, the summary over every driver the filters
+// match and their total; an empty page carries only the summary (TRACK-074).
+func (r *TrackingRepository) ListDrivers(ctx context.Context, tenantID uuid.UUID, query models.ListDriversQuery) ([]*models.Driver, models.DriverSummary, int64, error) {
+	var summary models.DriverSummary
 	rows, err := r.dbService.Query(ctx,
 		`SELECT * FROM tracking.sp_list_drivers($1::UUID, $2::VARCHAR, $3::UUID, $4::VARCHAR, $5::INT, $6::INT)`,
 		tenantID, query.Search, query.CompanyID, query.Status, query.Page, query.PageSize)
 	if err != nil {
-		return nil, 0, &trackingErrors.TrackingError{Code: trackingErrors.DriverListFailed, Err: err}
+		return nil, summary, 0, &trackingErrors.TrackingError{Code: trackingErrors.DriverListFailed, Err: err}
 	}
 	defer rows.Close()
 	drivers := []*models.Driver{}
 	var totalCount int64
 	for rows.Next() {
+		empty, err := scanEmptyPage(rows, 18, &summary)
+		if err != nil {
+			return nil, summary, 0, err
+		}
+		if empty {
+			continue
+		}
 		var driver models.Driver
-		if err := rows.Scan(scanDriverRow(&driver, &totalCount)...); err != nil {
-			return nil, 0, err
+		if err := rows.Scan(scanDriverRow(&driver, &summary, &totalCount)...); err != nil {
+			return nil, summary, 0, err
 		}
 		drivers = append(drivers, &driver)
 	}
 	if err := rows.Err(); err != nil {
-		return nil, 0, err
+		return nil, summary, 0, err
 	}
-	return drivers, totalCount, nil
+	return drivers, summary, totalCount, nil
 }
 
 func (r *TrackingRepository) GetDriver(ctx context.Context, tenantID uuid.UUID, driverID uuid.UUID) (*models.Driver, error) {

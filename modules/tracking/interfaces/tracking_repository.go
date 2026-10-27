@@ -93,7 +93,7 @@ type TrackingRepository interface {
 	// Riders CRUD
 	CreateRider(ctx context.Context, tenantID uuid.UUID, dto *models.CreateRiderDto, scopeUserID *uuid.UUID) (*models.Rider, error)
 	UpdateRider(ctx context.Context, tenantID uuid.UUID, riderID uuid.UUID, dto *models.UpdateRiderDto, scopeUserID *uuid.UUID) (*models.Rider, error)
-	ListRiders(ctx context.Context, tenantID uuid.UUID, query models.ListRidersQuery, scopeUserID *uuid.UUID, guardianUserID *uuid.UUID) ([]*models.Rider, int64, error)
+	ListRiders(ctx context.Context, tenantID uuid.UUID, query models.ListRidersQuery, scopeUserID *uuid.UUID, guardianUserID *uuid.UUID) ([]*models.Rider, models.RiderCounts, int64, error)
 	GetRider(ctx context.Context, tenantID uuid.UUID, riderID uuid.UUID, guardianUserID *uuid.UUID, scopeUserID *uuid.UUID) (*models.Rider, error)
 	DeleteRider(ctx context.Context, tenantID uuid.UUID, riderID uuid.UUID, scopeUserID *uuid.UUID) error
 
@@ -121,14 +121,14 @@ type TrackingRepository interface {
 	// Organizations CRUD
 	CreateOrganization(ctx context.Context, tenantID uuid.UUID, dto *models.CreateOrganizationDto) (*models.Organization, error)
 	UpdateOrganization(ctx context.Context, tenantID uuid.UUID, organizationID uuid.UUID, dto *models.UpdateOrganizationDto, scopeUserID *uuid.UUID) (*models.Organization, error)
-	ListOrganizations(ctx context.Context, tenantID uuid.UUID, query models.ListOrganizationsQuery, scopeUserID *uuid.UUID) ([]*models.Organization, int64, error)
+	ListOrganizations(ctx context.Context, tenantID uuid.UUID, query models.ListOrganizationsQuery, scopeUserID *uuid.UUID) ([]*models.Organization, models.OrganizationCounts, int64, error)
 	GetOrganization(ctx context.Context, tenantID uuid.UUID, organizationID uuid.UUID, scopeUserID *uuid.UUID) (*models.Organization, error)
 	DeleteOrganization(ctx context.Context, tenantID uuid.UUID, organizationID uuid.UUID) error
 
 	// Drivers CRUD (TRACK-006)
 	CreateDriver(ctx context.Context, tenantID uuid.UUID, dto *models.CreateDriverDto) (*models.Driver, error)
 	UpdateDriver(ctx context.Context, tenantID uuid.UUID, driverID uuid.UUID, dto *models.UpdateDriverDto) (*models.Driver, error)
-	ListDrivers(ctx context.Context, tenantID uuid.UUID, query models.ListDriversQuery) ([]*models.Driver, int64, error)
+	ListDrivers(ctx context.Context, tenantID uuid.UUID, query models.ListDriversQuery) ([]*models.Driver, models.DriverSummary, int64, error)
 	GetDriver(ctx context.Context, tenantID uuid.UUID, driverID uuid.UUID) (*models.Driver, error)
 	DeleteDriver(ctx context.Context, tenantID uuid.UUID, driverID uuid.UUID) error
 

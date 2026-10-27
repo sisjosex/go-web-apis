@@ -674,6 +674,9 @@ func registerImport(d routeDeps, chains tenantChains, inventorySvcs inventoryRou
 		importRegistry.Register("tracking", trackingServices.NewDocumentTypesImportDescriptor(tracking))
 		importRegistry.Register("tracking", trackingServices.NewStopPlacesImportDescriptor(tracking))
 		importRegistry.Register("tracking", trackingServices.NewVehiclesImportDescriptor(tracking))
+		// A driver with an email is invited the way the driver form does it (TRACK-074).
+		importRegistry.Register("tracking", trackingServices.NewDriversImportDescriptor(tracking,
+			trackingServices.NewAccessService(trackingRepos.NewTrackingRepository(d.db), d.email)))
 		importRegistry.Register("tracking", trackingServices.NewRoutesImportDescriptor(tracking))
 		// A home given only as an address is placed by the geo module's search (TRACK-072 D3).
 		var places trackingServices.PlaceSearcher
