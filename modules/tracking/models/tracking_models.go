@@ -255,6 +255,22 @@ type Calendar struct {
 	DatesCount     int32      `json:"dates_count"`
 	CreatedAt      time.Time  `json:"created_at"`
 	UpdatedAt      time.Time  `json:"updated_at"`
+	// Scope is how the calendar reaches routes: schedule (the schedules pointing at it), tenant
+	// (every route) or organization (every route of OrganizationID) — TRACK-076 D1.
+	Scope string `json:"scope"`
+}
+
+// ScopeCalendarDate is one date of the tenant calendar or a client calendar, as the month page
+// lists it (TRACK-076 D1).
+type ScopeCalendarDate struct {
+	Date             coreModels.DateOnly `json:"date"`
+	Kind             string              `json:"kind"`
+	Label            *string             `json:"label"`
+	CalendarID       uuid.UUID           `json:"calendar_id"`
+	CalendarName     string              `json:"calendar_name"`
+	Scope            string              `json:"scope"`
+	OrganizationID   *uuid.UUID          `json:"organization_id"`
+	OrganizationName *string             `json:"organization_name"`
 }
 
 // CalendarDate is one date of one calendar: no_service suppresses the run, special_service adds one

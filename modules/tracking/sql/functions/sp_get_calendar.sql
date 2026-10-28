@@ -1,5 +1,5 @@
 CREATE OR REPLACE FUNCTION tracking.sp_get_calendar(p_tenant_id uuid, p_calendar_id uuid)
- RETURNS TABLE(id uuid, tenant_id uuid, organization_id uuid, name character varying, dates_count integer, created_at timestamp without time zone, updated_at timestamp without time zone)
+ RETURNS TABLE(id uuid, tenant_id uuid, organization_id uuid, name character varying, dates_count integer, created_at timestamp without time zone, updated_at timestamp without time zone, scope character varying)
  LANGUAGE plpgsql
  STABLE
 AS $function$
@@ -12,7 +12,8 @@ BEGIN
         CAST(c.name AS VARCHAR),
         CAST((SELECT COUNT(*) FROM tracking.calendar_dates cd WHERE cd.calendar_id = c.id) AS INT),
         c.created_at,
-        c.updated_at
+        c.updated_at,
+        CAST(c.scope AS VARCHAR)
     FROM tracking.calendars c
     WHERE c.id = p_calendar_id AND c.tenant_id = p_tenant_id;
 
@@ -22,4 +23,4 @@ BEGIN
 END;
 $function$;
 
-COMMENT ON FUNCTION tracking.sp_get_calendar(uuid,uuid) IS 'One calendar of a tenant with how many dates it holds; raises tracking.calendar.not-found (TRACK-029)';
+COMMENT ON FUNCTION tracking.sp_get_calendar(uuid,uuid) IS 'One calendar of a tenant with how many dates it holds and the scope it reaches routes by (TRACK-076 D1); raises tracking.calendar.not-found (TRACK-029)';

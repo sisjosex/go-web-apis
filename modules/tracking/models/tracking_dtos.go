@@ -628,6 +628,31 @@ type ListCalendarDatesQuery struct {
 	To   *string `form:"to"`
 }
 
+// ListScopeCalendarDatesQuery binds GET /tracking/calendar-dates: one window, both bounds required.
+type ListScopeCalendarDatesQuery struct {
+	From string `form:"from" binding:"required,datetime=2006-01-02"`
+	To   string `form:"to" binding:"required,datetime=2006-01-02"`
+}
+
+type ListScopeCalendarDatesResponse struct {
+	Dates []*ScopeCalendarDate `json:"dates"`
+}
+
+// AddScopeCalendarDatesDto marks every day From..To on the tenant calendar, or on a client's when
+// OrganizationID is set (TRACK-076 D1).
+type AddScopeCalendarDatesDto struct {
+	From           coreModels.DateOnly `json:"from" binding:"required" time_format:"2006-01-02"`
+	To             coreModels.DateOnly `json:"to" binding:"required" time_format:"2006-01-02"`
+	Kind           string              `json:"kind" binding:"required,oneof=no_service special_service"`
+	Label          *string             `json:"label" binding:"omitempty,max=255" conform:"trim"`
+	OrganizationID *uuid.UUID          `json:"organization_id"`
+}
+
+type AddScopeCalendarDatesResponse struct {
+	CalendarID uuid.UUID `json:"calendar_id"`
+	Added      int32     `json:"added"`
+}
+
 // === DTOs for Exceptions and Preview (TRACK-018) ===
 
 // CreateRouteExceptionDto records what happens differently over a range of dates. DateFrom equals
@@ -1005,12 +1030,23 @@ type ListDocumentsQuery struct {
 	SubjectType        string  `form:"subject_type" binding:"omitempty,oneof=vehicle driver"`
 	SubjectID          *string `form:"subject_id" binding:"omitempty,uuid"`
 	ExpiringWithinDays *int32  `form:"expiring_within_days" binding:"omitempty,min=0,max=365"`
+	Search             string  `form:"search" binding:"omitempty,max=100" conform:"trim"`
+	Status             string  `form:"status" binding:"omitempty,oneof=valid expiring expired"`
 	Page               int     `form:"page,default=1" binding:"min=1"`
 	PageSize           int     `form:"page_size,default=20" binding:"min=1,max=100"`
 }
 
+// DocumentSummary counts the documents of each status over every filter but status, which is what
+// the board's three cards and chips show (TRACK-076).
+type DocumentSummary struct {
+	Expired  int64 `json:"expired"`
+	Expiring int64 `json:"expiring"`
+	Valid    int64 `json:"valid"`
+}
+
 type ListDocumentsResponse struct {
 	Documents  []*ComplianceDocument `json:"documents"`
+	Summary    DocumentSummary       `json:"summary"`
 	TotalCount int64                 `json:"total_count"`
 	Page       int                   `json:"page"`
 	PageSize   int                   `json:"page_size"`

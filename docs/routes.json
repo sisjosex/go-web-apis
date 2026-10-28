@@ -3001,6 +3001,7 @@
       "reads": [
         "dy.service_date",
         "tracking.calendar_dates",
+        "tracking.calendars",
         "tracking.organizations",
         "tracking.rider_route_assignments",
         "tracking.riders",
@@ -3035,6 +3036,7 @@
       "reads": [
         "dy.service_date",
         "tracking.calendar_dates",
+        "tracking.calendars",
         "tracking.organizations",
         "tracking.rider_route_assignments",
         "tracking.riders",
@@ -3096,6 +3098,7 @@
       "reads": [
         "dy.service_date",
         "tracking.calendar_dates",
+        "tracking.calendars",
         "tracking.organizations",
         "tracking.rider_route_assignments",
         "tracking.riders",
@@ -3116,6 +3119,64 @@
         "tracking.route_versions",
         "tracking.routes",
         "tracking.stop_places"
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/tracking/calendar-dates",
+      "operation_id": "tracking.ListScopeCalendarDates",
+      "module": "tracking",
+      "handler": "josex/web/modules/tracking/controllers.(*TrackingController).ListScopeCalendarDates",
+      "sps": [
+        "tracking.sp_list_scope_calendar_dates"
+      ],
+      "reads": [
+        "tracking.calendar_dates",
+        "tracking.calendars",
+        "tracking.organizations"
+      ],
+      "writes": []
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/tracking/calendar-dates",
+      "operation_id": "tracking.AddScopeCalendarDates",
+      "module": "tracking",
+      "handler": "josex/web/modules/tracking/controllers.(*TrackingController).AddScopeCalendarDates",
+      "sps": [
+        "tracking.sp_add_scope_calendar_dates"
+      ],
+      "reads": [
+        "tracking.calendars",
+        "tracking.organizations",
+        "tracking.route_schedules",
+        "tracking.routes",
+        "tracking.transport_companies"
+      ],
+      "writes": [
+        "tracking.calendar_dates",
+        "tracking.calendars",
+        "tracking.outbox"
+      ]
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/v1/tracking/calendar-dates/{calendar_id}/{date}",
+      "operation_id": "tracking.DeleteScopeCalendarDate",
+      "module": "tracking",
+      "handler": "josex/web/modules/tracking/controllers.(*TrackingController).DeleteScopeCalendarDate",
+      "sps": [
+        "tracking.sp_delete_scope_calendar_date"
+      ],
+      "reads": [
+        "tracking.calendars",
+        "tracking.route_schedules",
+        "tracking.routes",
+        "tracking.transport_companies"
+      ],
+      "writes": [
+        "tracking.calendar_dates",
+        "tracking.outbox"
       ]
     },
     {
@@ -3159,10 +3220,15 @@
         "tracking.sp_delete_calendar"
       ],
       "reads": [
-        "tracking.route_schedules"
+        "tracking.calendar_dates",
+        "tracking.calendars",
+        "tracking.route_schedules",
+        "tracking.routes",
+        "tracking.transport_companies"
       ],
       "writes": [
-        "tracking.calendars"
+        "tracking.calendars",
+        "tracking.outbox"
       ]
     },
     {
@@ -3223,7 +3289,9 @@
       ],
       "reads": [
         "tracking.calendars",
-        "tracking.route_schedules"
+        "tracking.route_schedules",
+        "tracking.routes",
+        "tracking.transport_companies"
       ],
       "writes": [
         "tracking.calendar_dates",
@@ -5044,6 +5112,7 @@
       "reads": [
         "dy.service_date",
         "tracking.calendar_dates",
+        "tracking.calendars",
         "tracking.drivers",
         "tracking.organization_members",
         "tracking.organizations",
@@ -5157,6 +5226,7 @@
       "reads": [
         "dy.service_date",
         "tracking.calendar_dates",
+        "tracking.calendars",
         "tracking.route_exceptions",
         "tracking.route_schedules",
         "tracking.route_version_stops",
@@ -8035,6 +8105,16 @@
         "tracking.sp_preview_route"
       ]
     },
+    "tracking.fn_calendar_routes": {
+      "reads": [
+        "tracking.calendars",
+        "tracking.route_schedules",
+        "tracking.routes",
+        "tracking.transport_companies"
+      ],
+      "writes": [],
+      "calls": []
+    },
     "tracking.fn_current_trip": {
       "reads": [
         "tracking.routes",
@@ -8549,6 +8629,19 @@
       "writes": [],
       "calls": []
     },
+    "tracking.sp_add_scope_calendar_dates": {
+      "reads": [
+        "tracking.organizations"
+      ],
+      "writes": [
+        "tracking.calendar_dates",
+        "tracking.calendars"
+      ],
+      "calls": [
+        "tracking.fn_calendar_routes",
+        "tracking.fn_route_changed"
+      ]
+    },
     "tracking.sp_anonymise_rider_contacts": {
       "reads": [
         "tracking.organizations"
@@ -8890,12 +8983,16 @@
     },
     "tracking.sp_delete_calendar": {
       "reads": [
+        "tracking.calendar_dates",
         "tracking.route_schedules"
       ],
       "writes": [
         "tracking.calendars"
       ],
-      "calls": []
+      "calls": [
+        "tracking.fn_calendar_routes",
+        "tracking.fn_route_changed"
+      ]
     },
     "tracking.sp_delete_company": {
       "reads": [
@@ -9027,6 +9124,18 @@
         "tracking.route_stops"
       ],
       "calls": []
+    },
+    "tracking.sp_delete_scope_calendar_date": {
+      "reads": [
+        "tracking.calendars"
+      ],
+      "writes": [
+        "tracking.calendar_dates"
+      ],
+      "calls": [
+        "tracking.fn_calendar_routes",
+        "tracking.fn_route_changed"
+      ]
     },
     "tracking.sp_delete_stop_place": {
       "reads": [
@@ -9710,6 +9819,15 @@
         "tracking.fn_supervised_riders"
       ]
     },
+    "tracking.sp_list_scope_calendar_dates": {
+      "reads": [
+        "tracking.calendar_dates",
+        "tracking.calendars",
+        "tracking.organizations"
+      ],
+      "writes": [],
+      "calls": []
+    },
     "tracking.sp_list_stop_places": {
       "reads": [
         "tracking.organizations",
@@ -9934,6 +10052,7 @@
       "reads": [
         "dy.service_date",
         "tracking.calendar_dates",
+        "tracking.calendars",
         "tracking.route_exceptions",
         "tracking.route_schedules",
         "tracking.route_version_stops",
@@ -9980,14 +10099,15 @@
     },
     "tracking.sp_replace_calendar_dates": {
       "reads": [
-        "tracking.calendars",
-        "tracking.route_schedules"
+        "tracking.calendars"
       ],
       "writes": [
-        "tracking.calendar_dates",
-        "tracking.outbox"
+        "tracking.calendar_dates"
       ],
-      "calls": []
+      "calls": [
+        "tracking.fn_calendar_routes",
+        "tracking.fn_route_changed"
+      ]
     },
     "tracking.sp_replace_route_version_stops": {
       "reads": [

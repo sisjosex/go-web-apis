@@ -1141,6 +1141,28 @@ func SetTripRouteClient(t *testing.T, helper *testhelpers.ApiTestHelper, tripID,
 	}
 }
 
+// SetRouteClient makes organizationID the client of a route: a route takes one only when it is created
+// as a destination pair (TRACK-038), which a client-calendar test does not need (TRACK-076).
+func SetRouteClient(t *testing.T, helper *testhelpers.ApiTestHelper, routeID, organizationID string) {
+	t.Helper()
+	if _, err := helper.DB().Execute(context.Background(),
+		`UPDATE tracking.routes SET organization_id = $2 WHERE id = $1`, routeID, organizationID); err != nil {
+		t.Fatalf("set route client: %v", err)
+	}
+}
+
+// TripStatusOn is the status of a route's one trip on a date: no endpoint reads a cancelled trip by
+// route (TRACK-076).
+func TripStatusOn(t *testing.T, helper *testhelpers.ApiTestHelper, routeID, date string) string {
+	t.Helper()
+	var status string
+	if err := helper.DB().QueryRow(context.Background(),
+		`SELECT status FROM tracking.trips WHERE route_id = $1 AND service_date = $2`, routeID, date).Scan(&status); err != nil {
+		t.Fatalf("trip status on %s: %v", date, err)
+	}
+	return status
+}
+
 // ArriveStopByGPS marks a stop arrived the way sp_ingest_positions does from the positions, with no
 // driver op behind it, and answers the arrived_at it stored (MOBILE-015 A1).
 func ArriveStopByGPS(t *testing.T, helper *testhelpers.ApiTestHelper, stopID uuid.UUID) time.Time {

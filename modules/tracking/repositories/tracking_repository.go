@@ -1597,28 +1597,37 @@ func (r *TrackingRepository) UpdateDocument(ctx context.Context, tenantID uuid.U
 	return &doc, nil
 }
 
-// ListDocuments returns one page of the tenant's documents plus the total the same filters match.
-func (r *TrackingRepository) ListDocuments(ctx context.Context, tenantID uuid.UUID, query models.ListDocumentsQuery) ([]*models.ComplianceDocument, int64, error) {
+// ListDocuments returns one page of the tenant's documents, the status summary and the total the same
+// filters match; an empty page carries only the summary (TRACK-076).
+func (r *TrackingRepository) ListDocuments(ctx context.Context, tenantID uuid.UUID, query models.ListDocumentsQuery) ([]*models.ComplianceDocument, models.DocumentSummary, int64, error) {
+	var summary models.DocumentSummary
 	rows, err := r.dbService.Query(ctx,
-		`SELECT * FROM tracking.sp_list_documents($1::UUID, $2::VARCHAR, $3::UUID, $4::INT, $5::INT, $6::INT)`,
-		tenantID, query.SubjectType, query.SubjectID, query.ExpiringWithinDays, query.Page, query.PageSize)
+		`SELECT * FROM tracking.sp_list_documents($1::UUID, $2::VARCHAR, $3::UUID, $4::INT, $5::INT, $6::INT, $7::VARCHAR, $8::VARCHAR)`,
+		tenantID, query.SubjectType, query.SubjectID, query.ExpiringWithinDays, query.Page, query.PageSize, query.Search, query.Status)
 	if err != nil {
-		return nil, 0, &trackingErrors.TrackingError{Code: trackingErrors.DocumentListFailed, Err: err}
+		return nil, summary, 0, &trackingErrors.TrackingError{Code: trackingErrors.DocumentListFailed, Err: err}
 	}
 	defer rows.Close()
 	documents := []*models.ComplianceDocument{}
 	var totalCount int64
 	for rows.Next() {
+		empty, err := scanEmptyPage(rows, 18, &summary)
+		if err != nil {
+			return nil, summary, 0, err
+		}
+		if empty {
+			continue
+		}
 		var doc models.ComplianceDocument
-		if err := rows.Scan(append(scanDocument(&doc), &totalCount)...); err != nil {
-			return nil, 0, err
+		if err := rows.Scan(append(scanDocument(&doc), &summary, &totalCount)...); err != nil {
+			return nil, summary, 0, err
 		}
 		documents = append(documents, &doc)
 	}
 	if err := rows.Err(); err != nil {
-		return nil, 0, err
+		return nil, summary, 0, err
 	}
-	return documents, totalCount, nil
+	return documents, summary, totalCount, nil
 }
 
 func (r *TrackingRepository) GetDocument(ctx context.Context, tenantID uuid.UUID, documentID uuid.UUID) (*models.ComplianceDocument, error) {

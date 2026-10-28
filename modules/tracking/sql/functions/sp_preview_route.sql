@@ -3,12 +3,14 @@ CREATE OR REPLACE FUNCTION tracking.sp_preview_route(p_tenant_id uuid, p_route_i
  LANGUAGE plpgsql
  STABLE
 AS $function$
+DECLARE
+    v_organization_id UUID;
 BEGIN
-    IF NOT EXISTS (
-        SELECT 1 FROM tracking.routes r
-        INNER JOIN tracking.transport_companies tc ON tc.id = r.company_id
-        WHERE r.id = p_route_id AND tc.tenant_id = p_tenant_id
-    ) THEN
+    SELECT r.organization_id INTO v_organization_id
+    FROM tracking.routes r
+    INNER JOIN tracking.transport_companies tc ON tc.id = r.company_id
+    WHERE r.id = p_route_id AND tc.tenant_id = p_tenant_id;
+    IF NOT FOUND THEN
         RAISE EXCEPTION 'route.not-found' USING ERRCODE = 'P0001';
     END IF;
 
@@ -21,9 +23,24 @@ BEGIN
         SELECT CAST(d AS DATE) AS service_date
         FROM generate_series(p_from, p_to, INTERVAL '1 day') d
     ),
+    -- TRACK-076 D1: the days the tenant calendar and the route's client calendar mark, whichever
+    -- schedule runs them. Two indexed probes per window, not per departure.
+    scoped AS (
+        SELECT cd.date,
+               bool_or(cd.kind = 'no_service')      AS no_service,
+               bool_or(cd.kind = 'special_service') AS special_service
+        FROM tracking.calendars c
+        INNER JOIN tracking.calendar_dates cd
+                ON cd.calendar_id = c.id AND cd.date BETWEEN p_from AND p_to
+        WHERE c.tenant_id = p_tenant_id
+          AND (c.scope = 'tenant'
+               OR (c.scope = 'organization' AND c.organization_id = v_organization_id))
+        GROUP BY cd.date
+    ),
     -- One row per departure the recurrence produces. The weekday test is the bitmask of D1 —
     -- ISODOW is 1 for Monday, so bit (ISODOW - 1) — and a special_service date adds a departure the
-    -- mask would not have produced, while a no_service date removes every one of them.
+    -- mask would not have produced, while a no_service date in any calendar the route reads
+    -- removes every one of them.
     runs AS (
         SELECT dy.service_date, s.id AS schedule_id, s.start_time
         FROM days dy
@@ -33,11 +50,14 @@ BEGIN
                AND (s.valid_until IS NULL OR dy.service_date <= s.valid_until)
         LEFT JOIN tracking.calendar_dates cd
                ON cd.calendar_id = s.calendar_id AND cd.date = dy.service_date
+        LEFT JOIN scoped sc ON sc.date = dy.service_date
         WHERE (
                 ((s.days_of_week >> (CAST(EXTRACT(ISODOW FROM dy.service_date) AS INT) - 1)) & 1) = 1
                 OR cd.kind = 'special_service'
+                OR sc.special_service
               )
           AND cd.kind IS DISTINCT FROM 'no_service'
+          AND NOT COALESCE(sc.no_service, FALSE)
     ),
     -- Exceptions belong to the route-day, not to one departure: a day off is a day off whichever
     -- schedule produced the run. One pass over the route's exceptions, not one per day.
@@ -86,4 +106,4 @@ BEGIN
 END;
 $function$;
 
-COMMENT ON FUNCTION tracking.sp_preview_route(uuid,uuid,date,date) IS 'The plan a route runs over a window of at most 92 days: schedules, calendar, version and exceptions resolved, the driver falling back to the running vehicle''s (TRACK-034 D1), stops_count from the day''s stop plan (TRACK-065); writes nothing; raises tracking.route.preview-range for a wider window';
+COMMENT ON FUNCTION tracking.sp_preview_route(uuid,uuid,date,date) IS 'The plan a route runs over a window of at most 92 days: schedules, calendars (the schedule''s, the tenant''s and the route client''s — TRACK-076 D1), version and exceptions resolved, the driver falling back to the running vehicle''s (TRACK-034 D1), stops_count from the day''s stop plan (TRACK-065); writes nothing; raises tracking.route.preview-range for a wider window';

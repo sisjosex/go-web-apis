@@ -191,7 +191,7 @@ func (r *TrackingRepository) SplitRouteSchedule(ctx context.Context, tenantID uu
 // scanCalendar is the one scan order every calendar read shares.
 func scanCalendar(c *models.Calendar) []any {
 	return []any{
-		&c.ID, &c.TenantID, &c.OrganizationID, &c.Name, &c.DatesCount, &c.CreatedAt, &c.UpdatedAt,
+		&c.ID, &c.TenantID, &c.OrganizationID, &c.Name, &c.DatesCount, &c.CreatedAt, &c.UpdatedAt, &c.Scope,
 	}
 }
 
@@ -206,6 +206,8 @@ func mapCalendarError(err error, fallbackCode string) error {
 			return &trackingErrors.TrackingError{Code: trackingErrors.CalendarInUse, Err: pgErr}
 		case "calendar.duplicate-date":
 			return &trackingErrors.TrackingError{Code: trackingErrors.CalendarDuplicateDate, Err: pgErr}
+		case "calendar.range-too-wide":
+			return &trackingErrors.TrackingError{Code: trackingErrors.CalendarRangeTooWide, Err: pgErr}
 		case "organization.not-found":
 			return &trackingErrors.TrackingError{Code: trackingErrors.OrganizationNotFound, Err: pgErr}
 		}
@@ -354,4 +356,66 @@ func (r *TrackingRepository) ReplaceCalendarDates(ctx context.Context, tenantID 
 		return nil, mapCalendarError(err, trackingErrors.CalendarDatesFailed)
 	}
 	return stored, nil
+}
+
+// ListScopeCalendarDates is every date of the tenant calendar and the client calendars in a window.
+func (r *TrackingRepository) ListScopeCalendarDates(ctx context.Context, tenantID uuid.UUID, from, to string) ([]*models.ScopeCalendarDate, error) {
+	rows, err := r.dbService.Query(ctx, `
+		SELECT * FROM tracking.sp_list_scope_calendar_dates(
+			p_tenant_id := $1,
+			p_from      := $2,
+			p_to        := $3
+		)
+	`, tenantID, from, to)
+	if err != nil {
+		return nil, mapCalendarError(err, trackingErrors.CalendarListFailed)
+	}
+	defer rows.Close()
+	dates := []*models.ScopeCalendarDate{}
+	for rows.Next() {
+		var d models.ScopeCalendarDate
+		if err := rows.Scan(&d.Date, &d.Kind, &d.Label, &d.CalendarID, &d.CalendarName, &d.Scope,
+			&d.OrganizationID, &d.OrganizationName); err != nil {
+			return nil, mapCalendarError(err, trackingErrors.CalendarListFailed)
+		}
+		dates = append(dates, &d)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, mapCalendarError(err, trackingErrors.CalendarListFailed)
+	}
+	return dates, nil
+}
+
+// AddScopeCalendarDates marks a window on the scope's calendar, creating it on its first date.
+func (r *TrackingRepository) AddScopeCalendarDates(ctx context.Context, tenantID uuid.UUID, dto *models.AddScopeCalendarDatesDto) (*models.AddScopeCalendarDatesResponse, error) {
+	var result models.AddScopeCalendarDatesResponse
+	err := r.dbService.QueryRow(ctx, `
+		SELECT * FROM tracking.sp_add_scope_calendar_dates(
+			p_tenant_id       := $1,
+			p_organization_id := $2,
+			p_from            := $3,
+			p_to              := $4,
+			p_kind            := $5,
+			p_label           := $6
+		)
+	`, tenantID, dto.OrganizationID, time.Time(dto.From), time.Time(dto.To), dto.Kind, dto.Label).
+		Scan(&result.CalendarID, &result.Added)
+	if err != nil {
+		return nil, mapCalendarError(err, trackingErrors.CalendarDatesFailed)
+	}
+	return &result, nil
+}
+
+// DeleteScopeCalendarDate gives one day of a tenant or client calendar back to its routes.
+func (r *TrackingRepository) DeleteScopeCalendarDate(ctx context.Context, tenantID uuid.UUID, calendarID uuid.UUID, date time.Time) error {
+	var deleted bool
+	err := r.dbService.QueryRow(ctx, `SELECT tracking.sp_delete_scope_calendar_date($1, $2, $3)`, tenantID, calendarID, date).
+		Scan(&deleted)
+	if err != nil {
+		return mapCalendarError(err, trackingErrors.CalendarDatesFailed)
+	}
+	if !deleted {
+		return &trackingErrors.TrackingError{Code: trackingErrors.CalendarNotFound}
+	}
+	return nil
 }

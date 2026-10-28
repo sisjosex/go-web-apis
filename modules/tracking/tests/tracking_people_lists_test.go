@@ -38,7 +38,13 @@ func TestRiders_TodayStatusAndCounts(t *testing.T) {
 	RenameRider(t, helper, absentID, tag)
 	RenameRider(t, helper, pendingID, tag)
 	today := dayOffset(t, "UTC", 0)
-	postAbsence(t, helper, absentID, map[string]interface{}{"date_from": today, "date_to": today}, http.StatusCreated)
+	// The route runs on UTC and the client on Lima: in the evening those are two days, and the trip's
+	// day and the client's day must both be covered for the rider to read absent at any hour.
+	from, to := today, dayOffset(t, "America/Lima", 0)
+	if to < from {
+		from, to = to, from
+	}
+	postAbsence(t, helper, absentID, map[string]interface{}{"date_from": from, "date_to": to}, http.StatusCreated)
 	// What the route.changed worker does next: the planned trip is rebuilt without the absent rider.
 	materialiseRoute(t, helper, absentRoute, today, today)
 	employeeID := createRider(t, helper, map[string]interface{}{"rider_type": "employee"})

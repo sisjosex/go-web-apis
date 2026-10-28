@@ -198,6 +198,9 @@ const (
 	// CalendarDuplicateDate refuses a replace whose list names one date twice — which of the two the
 	// calendar would keep is not the caller's to leave unsaid.
 	CalendarDuplicateDate = "tracking.calendar.duplicate-date"
+	// CalendarRangeTooWide refuses a month-page add over more than 92 days: a window that wide is a
+	// school year, which belongs in a named calendar (TRACK-076).
+	CalendarRangeTooWide = "tracking.calendar.range-too-wide"
 
 	// Route exception errors (TR0301-TR0320)
 	ExceptionNotFound     = "tracking.exception.not-found"

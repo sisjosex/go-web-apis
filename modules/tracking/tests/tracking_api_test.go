@@ -1964,6 +1964,61 @@ func TestListDocumentsBySubject(t *testing.T) {
 	assert.True(t, found, "the document just filed must be on its own subject's list")
 }
 
+// documentBoard reads GET /tracking/documents with query and answers the ids, the summary and the total.
+func documentBoard(t *testing.T, helper *testhelpers.ApiTestHelper, query string) (map[string]bool, map[string]int64, int64) {
+	t.Helper()
+	w := helper.DoRequest("GET", "/tracking/documents?"+query, nil, map[string]string{})
+	expectStatus(t, w, http.StatusOK)
+	var page struct {
+		Documents []struct {
+			ID string `json:"id"`
+		} `json:"documents"`
+		Summary    map[string]int64 `json:"summary"`
+		TotalCount int64            `json:"total_count"`
+	}
+	decodeBody(t, w, &page)
+	ids := map[string]bool{}
+	for _, d := range page.Documents {
+		ids[d.ID] = true
+	}
+	return ids, page.Summary, page.TotalCount
+}
+
+// TestListDocumentsBoardSearchStatusSummary - TRACK-076: a search by plate finds that vehicle's
+// document; status=expiring keeps the summary's valid count; an empty page still carries the summary.
+func TestListDocumentsBoardSearchStatusSummary(t *testing.T) {
+	helper := SetupTrackingTest(t)
+	defer helper.Close()
+
+	vehicleID := createTestVehicle(t, helper)
+	w := helper.DoRequest("GET", "/tracking/vehicles/"+vehicleID, nil, map[string]string{})
+	expectStatus(t, w, http.StatusOK)
+	plate := ParseResponse(t, w.Body.Bytes())["plate_number"].(string)
+	typeID := CreateTestDocumentType(t, helper, "vehicle", false)
+	soat := CreateTestDocument(t, helper, "vehicle", vehicleID, typeID, 12)
+	valid := CreateTestDocument(t, helper, "vehicle", vehicleID, typeID, 200)
+	expired := CreateTestDocument(t, helper, "vehicle", vehicleID, typeID, -3)
+
+	ids, summary, total := documentBoard(t, helper, "search="+url.QueryEscape(plate))
+	assert.True(t, ids[soat["id"].(string)], "a search by plate finds that vehicle's SOAT")
+	assert.Equal(t, int64(3), total)
+	assert.Equal(t, map[string]int64{"expired": 1, "expiring": 1, "valid": 1}, summary)
+
+	ids, summary, total = documentBoard(t, helper, "status=expiring&search="+url.QueryEscape(plate))
+	assert.Equal(t, map[string]bool{soat["id"].(string): true}, ids)
+	assert.Equal(t, int64(1), total)
+	assert.Equal(t, int64(1), summary["valid"], "the status filter keeps the other statuses' counts")
+	assert.False(t, ids[valid["id"].(string)] || ids[expired["id"].(string)])
+
+	ids, summary, total = documentBoard(t, helper, "status=expired&search="+url.QueryEscape(plate)+"&page=2")
+	assert.Empty(t, ids)
+	assert.Equal(t, int64(0), total)
+	assert.Equal(t, map[string]int64{"expired": 1, "expiring": 1, "valid": 1}, summary, "an empty page keeps the summary")
+
+	ids, _, _ = documentBoard(t, helper, "search="+url.QueryEscape(soat["number"].(string)))
+	assert.True(t, ids[soat["id"].(string)], "a search by number finds it")
+}
+
 // TestUpdateDocumentType - a policy line is edited in place; an unknown id is a 404, a bad value a 400,
 // and another line's code is a conflict (INFRA-014).
 func TestUpdateDocumentType(t *testing.T) {

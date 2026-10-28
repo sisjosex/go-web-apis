@@ -49,19 +49,11 @@ BEGIN
     INSERT INTO tracking.calendar_dates (calendar_id, date, kind, label)
     SELECT p_calendar_id, i.date, i.kind, i.label FROM tmp_incoming_dates i;
 
-    -- Every route whose schedule reads this calendar now plans different days, over the span the
-    -- change touched. One row per route, in this transaction (INFRA-001 D3).
+    -- Every route that reads this calendar now plans different days, over the span the change
+    -- touched. One row per route, in this transaction (INFRA-001 D3).
     IF v_from IS NOT NULL THEN
-        INSERT INTO tracking.outbox (topic, payload)
-        SELECT DISTINCT
-            'route.changed',
-            jsonb_build_object(
-                'route_id',  s.route_id,
-                'date_from', v_from,
-                'date_to',   v_to
-            )
-        FROM tracking.route_schedules s
-        WHERE s.calendar_id = p_calendar_id;
+        PERFORM tracking.fn_route_changed(cr.route_id, v_from, v_to)
+        FROM tracking.fn_calendar_routes(p_tenant_id, p_calendar_id) cr;
     END IF;
 
     DROP TABLE tmp_incoming_dates;
@@ -74,4 +66,4 @@ BEGIN
 END;
 $function$;
 
-COMMENT ON FUNCTION tracking.sp_replace_calendar_dates(uuid,uuid,jsonb) IS 'Replaces a calendar''s whole date list in one statement and returns it; writes one route.changed row per affected route over the span of the dates that actually changed, and raises tracking.calendar.duplicate-date when the list names a date twice';
+COMMENT ON FUNCTION tracking.sp_replace_calendar_dates(uuid,uuid,jsonb) IS 'Replaces a calendar''s whole date list in one statement and returns it; writes one route.changed row per route the calendar reaches (fn_calendar_routes) over the span of the dates that actually changed, and raises tracking.calendar.duplicate-date when the list names a date twice';

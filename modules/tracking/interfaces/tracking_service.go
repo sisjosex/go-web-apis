@@ -2,6 +2,7 @@ package interfaces
 
 import (
 	"context"
+	"time"
 
 	"josex/web/modules/tracking/models"
 
@@ -75,6 +76,9 @@ type TrackingService interface {
 	ListCalendarDates(ctx context.Context, tenantID uuid.UUID, calendarID uuid.UUID, from, to *string) ([]*models.CalendarDate, error)
 	ReplaceCalendarDates(ctx context.Context, tenantID uuid.UUID, calendarID uuid.UUID, dates []models.CalendarDateDto) ([]*models.CalendarDate, error)
 	ListCalendars(ctx context.Context, tenantID uuid.UUID, query models.ListCalendarsQuery) (*models.ListCalendarsResponse, error)
+	ListScopeCalendarDates(ctx context.Context, tenantID uuid.UUID, from, to string) (*models.ListScopeCalendarDatesResponse, error)
+	AddScopeCalendarDates(ctx context.Context, tenantID uuid.UUID, dto *models.AddScopeCalendarDatesDto) (*models.AddScopeCalendarDatesResponse, error)
+	DeleteScopeCalendarDate(ctx context.Context, tenantID uuid.UUID, calendarID uuid.UUID, date time.Time) error
 
 	// Route exceptions and the preview (TRACK-018)
 	ListRouteExceptions(ctx context.Context, tenantID uuid.UUID, routeID uuid.UUID, dateFrom, dateTo *string) ([]*models.RouteException, error)

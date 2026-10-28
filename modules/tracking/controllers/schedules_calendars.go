@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"net/http"
+	"time"
 
 	"josex/web/modules/core/api"
 	coreErrors "josex/web/modules/core/errors"
@@ -211,6 +212,8 @@ func calendarErrorResponse(c *gin.Context, err error) error {
 		return api.Fail(http.StatusNotFound, coreErrors.BuildErrorSingle(c, trackingErr.Code))
 	case trackingErrors.CalendarInUse, trackingErrors.CalendarDuplicateDate:
 		return api.Fail(http.StatusConflict, coreErrors.BuildErrorSingle(c, trackingErr.Code))
+	case trackingErrors.CalendarRangeTooWide:
+		return api.Fail(http.StatusBadRequest, coreErrors.BuildErrorSingle(c, trackingErr.Code))
 	}
 	return nil
 }
@@ -413,4 +416,88 @@ func (ctrl *TrackingController) ReplaceCalendarDates(ctx context.Context, in *Re
 		return nil, api.Fail(http.StatusInternalServerError, coreErrors.BuildError(c, err))
 	}
 	return api.OK(stored)
+}
+
+// ==================== MONTH PAGE (TRACK-076 D1) ====================
+
+// ListScopeCalendarDatesInput is ListScopeCalendarDates's request.
+type ListScopeCalendarDatesInput struct {
+	Query api.Query[models.ListScopeCalendarDatesQuery]
+}
+
+// ListScopeCalendarDates is GET /calendar-dates: The tenant's and its clients' days off in a window.
+func (ctrl *TrackingController) ListScopeCalendarDates(ctx context.Context, in *ListScopeCalendarDatesInput) (*api.Out[*models.ListScopeCalendarDatesResponse], error) {
+	c := api.Gin(ctx)
+	tenantID, err := ctrl.requireTenantID(c)
+	if err != nil {
+		return nil, err
+	}
+	var query models.ListScopeCalendarDatesQuery
+	if err := in.Query.Into(ctx, &query); err != nil {
+		return nil, api.Fail(http.StatusBadRequest, coreErrors.BuildErrorDetail(c, trackingErrors.CalendarListFailed, utils.ExtractValidationError(c, err)))
+	}
+
+	result, err := ctrl.trackingService.ListScopeCalendarDates(c.Request.Context(), tenantID, query.From, query.To)
+	if err != nil {
+		return nil, api.Fail(http.StatusInternalServerError, coreErrors.BuildError(c, err))
+	}
+	return api.OK(result)
+}
+
+// AddScopeCalendarDatesInput is AddScopeCalendarDates's request.
+type AddScopeCalendarDatesInput struct {
+	JSON api.Body[models.AddScopeCalendarDatesDto]
+}
+
+// AddScopeCalendarDates is POST /calendar-dates: Mark days off for every route or one client's.
+func (ctrl *TrackingController) AddScopeCalendarDates(ctx context.Context, in *AddScopeCalendarDatesInput) (*api.Out[*models.AddScopeCalendarDatesResponse], error) {
+	c := api.Gin(ctx)
+	tenantID, err := ctrl.requireTenantID(c)
+	if err != nil {
+		return nil, err
+	}
+	var dto models.AddScopeCalendarDatesDto
+	if err := in.JSON.Into(ctx, &dto); err != nil {
+		return nil, api.Fail(http.StatusBadRequest, coreErrors.BuildErrorDetail(c, trackingErrors.CalendarDatesFailed, utils.ExtractValidationError(c, err)))
+	}
+
+	result, err := ctrl.trackingService.AddScopeCalendarDates(c.Request.Context(), tenantID, &dto)
+	if err != nil {
+		if err := calendarErrorResponse(c, err); err != nil {
+			return nil, err
+		}
+		return nil, api.Fail(http.StatusInternalServerError, coreErrors.BuildError(c, err))
+	}
+	return api.OK(result)
+}
+
+// DeleteScopeCalendarDateInput is DeleteScopeCalendarDate's request.
+type DeleteScopeCalendarDateInput struct {
+	CalendarID string `path:"calendar_id"`
+	Date       string `path:"date"`
+}
+
+// DeleteScopeCalendarDate is DELETE /calendar-dates/{calendar_id}/{date}: Give a day back to the routes.
+func (ctrl *TrackingController) DeleteScopeCalendarDate(ctx context.Context, in *DeleteScopeCalendarDateInput) (*api.Empty, error) {
+	c := api.Gin(ctx)
+	tenantID, err := ctrl.requireTenantID(c)
+	if err != nil {
+		return nil, err
+	}
+	calendarID, err := uuid.Parse(in.CalendarID)
+	if err != nil {
+		return nil, api.Fail(http.StatusBadRequest, coreErrors.BuildErrorSingle(c, coreErrors.InvalidUUID))
+	}
+	date, err := time.Parse("2006-01-02", in.Date)
+	if err != nil {
+		return nil, api.Fail(http.StatusBadRequest, coreErrors.BuildErrorSingle(c, trackingErrors.CalendarDatesFailed))
+	}
+
+	if err := ctrl.trackingService.DeleteScopeCalendarDate(c.Request.Context(), tenantID, calendarID, date); err != nil {
+		if err := calendarErrorResponse(c, err); err != nil {
+			return nil, err
+		}
+		return nil, api.Fail(http.StatusInternalServerError, coreErrors.BuildError(c, err))
+	}
+	return api.Done()
 }

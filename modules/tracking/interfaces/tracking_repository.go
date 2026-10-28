@@ -78,6 +78,9 @@ type TrackingRepository interface {
 	ListCalendarDates(ctx context.Context, tenantID uuid.UUID, calendarID uuid.UUID, from, to *string) ([]*models.CalendarDate, error)
 	ReplaceCalendarDates(ctx context.Context, tenantID uuid.UUID, calendarID uuid.UUID, dates []models.CalendarDateDto) ([]*models.CalendarDate, error)
 	ListCalendars(ctx context.Context, tenantID uuid.UUID, query models.ListCalendarsQuery) ([]*models.Calendar, int64, error)
+	ListScopeCalendarDates(ctx context.Context, tenantID uuid.UUID, from, to string) ([]*models.ScopeCalendarDate, error)
+	AddScopeCalendarDates(ctx context.Context, tenantID uuid.UUID, dto *models.AddScopeCalendarDatesDto) (*models.AddScopeCalendarDatesResponse, error)
+	DeleteScopeCalendarDate(ctx context.Context, tenantID uuid.UUID, calendarID uuid.UUID, date time.Time) error
 
 	// Route exceptions and the preview (TRACK-018)
 	ListRouteExceptions(ctx context.Context, tenantID uuid.UUID, routeID uuid.UUID, dateFrom, dateTo *string) ([]*models.RouteException, error)
@@ -138,7 +141,7 @@ type TrackingRepository interface {
 	ListDocumentTypes(ctx context.Context, tenantID uuid.UUID, query models.ListDocumentTypesQuery) ([]*models.DocumentType, error)
 	CreateDocument(ctx context.Context, tenantID uuid.UUID, dto *models.CreateDocumentDto) (*models.ComplianceDocument, error)
 	UpdateDocument(ctx context.Context, tenantID uuid.UUID, documentID uuid.UUID, dto *models.UpdateDocumentDto) (*models.ComplianceDocument, error)
-	ListDocuments(ctx context.Context, tenantID uuid.UUID, query models.ListDocumentsQuery) ([]*models.ComplianceDocument, int64, error)
+	ListDocuments(ctx context.Context, tenantID uuid.UUID, query models.ListDocumentsQuery) ([]*models.ComplianceDocument, models.DocumentSummary, int64, error)
 	GetDocument(ctx context.Context, tenantID uuid.UUID, documentID uuid.UUID) (*models.ComplianceDocument, error)
 	DeleteDocument(ctx context.Context, tenantID uuid.UUID, documentID uuid.UUID) (*string, error)
 	SetDocumentFile(ctx context.Context, tenantID uuid.UUID, documentID uuid.UUID, name string, size int64, ext string) (*models.ComplianceDocument, error)

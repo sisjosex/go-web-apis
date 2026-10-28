@@ -2,6 +2,7 @@ package services
 
 import (
 	"context"
+	"time"
 
 	"josex/web/config"
 	"josex/web/modules/tracking/interfaces"
@@ -585,12 +586,13 @@ func (s *TrackingService) UpdateDocument(ctx context.Context, tenantID uuid.UUID
 }
 
 func (s *TrackingService) ListDocuments(ctx context.Context, tenantID uuid.UUID, query models.ListDocumentsQuery) (*models.ListDocumentsResponse, error) {
-	documents, totalCount, err := s.trackingRepo.ListDocuments(ctx, tenantID, query)
+	documents, summary, totalCount, err := s.trackingRepo.ListDocuments(ctx, tenantID, query)
 	if err != nil {
 		return nil, err
 	}
 	return &models.ListDocumentsResponse{
 		Documents:  documents,
+		Summary:    summary,
 		TotalCount: totalCount,
 		Page:       query.Page,
 		PageSize:   query.PageSize,
@@ -670,6 +672,22 @@ func (s *TrackingService) ListCalendarDates(ctx context.Context, tenantID uuid.U
 
 func (s *TrackingService) ReplaceCalendarDates(ctx context.Context, tenantID uuid.UUID, calendarID uuid.UUID, dates []models.CalendarDateDto) ([]*models.CalendarDate, error) {
 	return s.trackingRepo.ReplaceCalendarDates(ctx, tenantID, calendarID, dates)
+}
+
+func (s *TrackingService) ListScopeCalendarDates(ctx context.Context, tenantID uuid.UUID, from, to string) (*models.ListScopeCalendarDatesResponse, error) {
+	dates, err := s.trackingRepo.ListScopeCalendarDates(ctx, tenantID, from, to)
+	if err != nil {
+		return nil, err
+	}
+	return &models.ListScopeCalendarDatesResponse{Dates: dates}, nil
+}
+
+func (s *TrackingService) AddScopeCalendarDates(ctx context.Context, tenantID uuid.UUID, dto *models.AddScopeCalendarDatesDto) (*models.AddScopeCalendarDatesResponse, error) {
+	return s.trackingRepo.AddScopeCalendarDates(ctx, tenantID, dto)
+}
+
+func (s *TrackingService) DeleteScopeCalendarDate(ctx context.Context, tenantID uuid.UUID, calendarID uuid.UUID, date time.Time) error {
+	return s.trackingRepo.DeleteScopeCalendarDate(ctx, tenantID, calendarID, date)
 }
 
 // ==================== EXCEPTIONS AND PREVIEW (TRACK-018) ====================

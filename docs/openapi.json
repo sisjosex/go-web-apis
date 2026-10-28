@@ -6617,6 +6617,60 @@
         ],
         "type": "object"
       },
+      "tracking.AddScopeCalendarDatesDto": {
+        "additionalProperties": false,
+        "properties": {
+          "from": {
+            "format": "date",
+            "type": "string"
+          },
+          "kind": {
+            "enum": [
+              "no_service",
+              "special_service"
+            ],
+            "type": "string"
+          },
+          "label": {
+            "maxLength": 255,
+            "nullable": true,
+            "type": "string"
+          },
+          "organization_id": {
+            "format": "uuid",
+            "nullable": true,
+            "type": "string"
+          },
+          "to": {
+            "format": "date",
+            "type": "string"
+          }
+        },
+        "required": [
+          "from",
+          "to",
+          "kind"
+        ],
+        "type": "object"
+      },
+      "tracking.AddScopeCalendarDatesResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "added": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "calendar_id": {
+            "format": "uuid",
+            "type": "string"
+          }
+        },
+        "required": [
+          "calendar_id",
+          "added"
+        ],
+        "type": "object"
+      },
       "tracking.AlertCreatedResponse": {
         "additionalProperties": false,
         "properties": {
@@ -7122,6 +7176,9 @@
             "nullable": true,
             "type": "string"
           },
+          "scope": {
+            "type": "string"
+          },
           "tenant_id": {
             "format": "uuid",
             "type": "string"
@@ -7138,7 +7195,8 @@
           "name",
           "dates_count",
           "created_at",
-          "updated_at"
+          "updated_at",
+          "scope"
         ],
         "type": "object"
       },
@@ -8805,6 +8863,29 @@
         ],
         "type": "object"
       },
+      "tracking.DocumentSummary": {
+        "additionalProperties": false,
+        "properties": {
+          "expired": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "expiring": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "valid": {
+            "format": "int64",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "expired",
+          "expiring",
+          "valid"
+        ],
+        "type": "object"
+      },
       "tracking.DocumentType": {
         "additionalProperties": false,
         "properties": {
@@ -9872,6 +9953,9 @@
             "format": "int64",
             "type": "integer"
           },
+          "summary": {
+            "$ref": "#/components/schemas/tracking.DocumentSummary"
+          },
           "total_count": {
             "format": "int64",
             "type": "integer"
@@ -9879,6 +9963,7 @@
         },
         "required": [
           "documents",
+          "summary",
           "total_count",
           "page",
           "page_size"
@@ -10158,6 +10243,21 @@
           "total_count",
           "page",
           "page_size"
+        ],
+        "type": "object"
+      },
+      "tracking.ListScopeCalendarDatesResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "dates": {
+            "items": {
+              "$ref": "#/components/schemas/tracking.ScopeCalendarDate"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "dates"
         ],
         "type": "object"
       },
@@ -13472,6 +13572,52 @@
         },
         "required": [
           "sequence"
+        ],
+        "type": "object"
+      },
+      "tracking.ScopeCalendarDate": {
+        "additionalProperties": false,
+        "properties": {
+          "calendar_id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "calendar_name": {
+            "type": "string"
+          },
+          "date": {
+            "format": "date",
+            "type": "string"
+          },
+          "kind": {
+            "type": "string"
+          },
+          "label": {
+            "nullable": true,
+            "type": "string"
+          },
+          "organization_id": {
+            "format": "uuid",
+            "nullable": true,
+            "type": "string"
+          },
+          "organization_name": {
+            "nullable": true,
+            "type": "string"
+          },
+          "scope": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "date",
+          "kind",
+          "label",
+          "calendar_id",
+          "calendar_name",
+          "scope",
+          "organization_id",
+          "organization_name"
         ],
         "type": "object"
       },
@@ -25207,6 +25353,191 @@
         "x-handler": "josex/web/modules/tracking/controllers.(*TrackingController).UpdateAssignment"
       }
     },
+    "/api/v1/tracking/calendar-dates": {
+      "get": {
+        "description": "Dates of the tenant calendar (every route) and the client calendars (that client's routes), oldest first (TRACK-076)",
+        "operationId": "tracking.ListScopeCalendarDates",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "from",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "to",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/tracking.ListScopeCalendarDatesResponse"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/core.ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/core.ErrorResponse"
+                }
+              }
+            },
+            "description": "Internal Server Error"
+          }
+        },
+        "summary": "The tenant's and its clients' days off in a window",
+        "tags": [
+          "tracking"
+        ],
+        "x-handler": "josex/web/modules/tracking/controllers.(*TrackingController).ListScopeCalendarDates"
+      },
+      "post": {
+        "description": "Creates the scope's calendar on its first date; a window wider than 92 days is refused",
+        "operationId": "tracking.AddScopeCalendarDates",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/tracking.AddScopeCalendarDatesDto"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/tracking.AddScopeCalendarDatesResponse"
+                }
+              }
+            },
+            "description": "Created"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/core.ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/core.ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/core.ErrorResponse"
+                }
+              }
+            },
+            "description": "Internal Server Error"
+          }
+        },
+        "summary": "Mark days off for every route or one client's",
+        "tags": [
+          "tracking"
+        ],
+        "x-handler": "josex/web/modules/tracking/controllers.(*TrackingController).AddScopeCalendarDates"
+      }
+    },
+    "/api/v1/tracking/calendar-dates/{calendar_id}/{date}": {
+      "delete": {
+        "operationId": "tracking.DeleteScopeCalendarDate",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "calendar_id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "date",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "No Content"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/core.ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/core.ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/core.ErrorResponse"
+                }
+              }
+            },
+            "description": "Internal Server Error"
+          }
+        },
+        "summary": "Give a day off back to the routes",
+        "tags": [
+          "tracking"
+        ],
+        "x-handler": "josex/web/modules/tracking/controllers.(*TrackingController).DeleteScopeCalendarDate"
+      }
+    },
     "/api/v1/tracking/calendars": {
       "get": {
         "operationId": "tracking.ListCalendars",
@@ -26270,6 +26601,26 @@
               "maximum": 365,
               "minimum": 0,
               "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "search",
+            "schema": {
+              "maxLength": 100,
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "status",
+            "schema": {
+              "enum": [
+                "valid",
+                "expiring",
+                "expired"
+              ],
+              "type": "string"
             }
           },
           {

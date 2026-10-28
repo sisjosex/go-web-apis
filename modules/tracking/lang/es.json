@@ -188,6 +188,7 @@
   "tracking.calendar.dates.failed": "Error al guardar las fechas del calendario",
   "tracking.calendar.in-use": "No se puede eliminar un calendario que aún usa un horario",
   "tracking.calendar.duplicate-date": "La misma fecha aparece dos veces",
+  "tracking.calendar.range-too-wide": "Se agregan como máximo 92 días a la vez",
   "tracking.exception.not-found": "Excepción no encontrada",
   "tracking.exception.create.failed": "Error al crear la excepción",
   "tracking.exception.delete.failed": "Error al eliminar la excepción",

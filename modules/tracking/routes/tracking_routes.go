@@ -336,6 +336,9 @@ func registerCalendarRoutes(r *gin.RouterGroup, denyOrganization gin.HandlerFunc
 	api.Delete(r, "/calendars/{calendar_id}", trackingController.DeleteCalendar, api.Doc{Summary: "Delete a calendar", Description: "Refused while a schedule still points at it", Status: 204, Errors: []int{400, 404, 409, 500}}, denyOrganization, tenancyMW.RequirePermission(trackingPerms.RoutesDelete))
 	api.Get(r, "/calendars/{calendar_id}/dates", trackingController.ListCalendarDates, api.Doc{Summary: "List a calendar's dates", Errors: []int{400, 404, 500}}, denyOrganization, tenancyMW.RequirePermission(trackingPerms.RoutesRead))
 	api.Put(r, "/calendars/{calendar_id}/dates", trackingController.ReplaceCalendarDates, api.Doc{Summary: "Replace a calendar's whole date list", Description: "One request is the calendar, so a school year is saved once rather than one holiday at a time", Errors: []int{400, 404, 409, 500}}, denyOrganization, tenancyMW.RequirePermission(trackingPerms.RoutesWrite))
+	api.Get(r, "/calendar-dates", trackingController.ListScopeCalendarDates, api.Doc{Summary: "The tenant's and its clients' days off in a window", Description: "Dates of the tenant calendar (every route) and the client calendars (that client's routes), oldest first (TRACK-076)", Errors: []int{400, 500}}, denyOrganization, tenancyMW.RequirePermission(trackingPerms.RoutesRead))
+	api.Post(r, "/calendar-dates", trackingController.AddScopeCalendarDates, api.Doc{Summary: "Mark days off for every route or one client's", Description: "Creates the scope's calendar on its first date; a window wider than 92 days is refused", Status: 201, Errors: []int{400, 404, 500}}, denyOrganization, tenancyMW.RequirePermission(trackingPerms.RoutesWrite))
+	api.Delete(r, "/calendar-dates/{calendar_id}/{date}", trackingController.DeleteScopeCalendarDate, api.Doc{Summary: "Give a day off back to the routes", Status: 204, Errors: []int{400, 404, 500}}, denyOrganization, tenancyMW.RequirePermission(trackingPerms.RoutesWrite))
 }
 
 // registerExceptionRoutes covers the days that do not follow the recurrence, and the read-only
@@ -539,6 +542,9 @@ func registerOpenCalendarRoutes(g *gin.RouterGroup, trackingController *controll
 	api.Delete(g, "/calendars/{calendar_id}", trackingController.DeleteCalendar, api.Doc{Summary: "Delete a calendar", Description: "Refused while a schedule still points at it", Status: 204, Errors: []int{400, 404, 409, 500}})
 	api.Get(g, "/calendars/{calendar_id}/dates", trackingController.ListCalendarDates, api.Doc{Summary: "List a calendar's dates", Errors: []int{400, 404, 500}})
 	api.Put(g, "/calendars/{calendar_id}/dates", trackingController.ReplaceCalendarDates, api.Doc{Summary: "Replace a calendar's whole date list", Description: "One request is the calendar, so a school year is saved once rather than one holiday at a time", Errors: []int{400, 404, 409, 500}})
+	api.Get(g, "/calendar-dates", trackingController.ListScopeCalendarDates, api.Doc{Summary: "The tenant's and its clients' days off in a window", Description: "Dates of the tenant calendar (every route) and the client calendars (that client's routes), oldest first (TRACK-076)", Errors: []int{400, 500}})
+	api.Post(g, "/calendar-dates", trackingController.AddScopeCalendarDates, api.Doc{Summary: "Mark days off for every route or one client's", Description: "Creates the scope's calendar on its first date; a window wider than 92 days is refused", Status: 201, Errors: []int{400, 404, 500}})
+	api.Delete(g, "/calendar-dates/{calendar_id}/{date}", trackingController.DeleteScopeCalendarDate, api.Doc{Summary: "Give a day off back to the routes", Status: 204, Errors: []int{400, 404, 500}})
 }
 
 // registerOpenExceptionRoutes mirrors registerExceptionRoutes without the guards.

@@ -188,6 +188,7 @@
   "tracking.calendar.dates.failed": "Failed to save the calendar dates",
   "tracking.calendar.in-use": "Cannot delete a calendar a schedule still uses",
   "tracking.calendar.duplicate-date": "The same date is listed twice",
+  "tracking.calendar.range-too-wide": "Days off are added at most 92 days at a time",
   "tracking.exception.not-found": "Exception not found",
   "tracking.exception.create.failed": "Failed to create the exception",
   "tracking.exception.delete.failed": "Failed to delete the exception",

@@ -1,5 +1,5 @@
 CREATE OR REPLACE FUNCTION tracking.sp_list_calendars(p_tenant_id uuid, p_search character varying DEFAULT NULL::character varying, p_page integer DEFAULT 1, p_page_size integer DEFAULT 20)
- RETURNS TABLE(id uuid, tenant_id uuid, organization_id uuid, name character varying, dates_count integer, created_at timestamp without time zone, updated_at timestamp without time zone, total_count bigint)
+ RETURNS TABLE(id uuid, tenant_id uuid, organization_id uuid, name character varying, dates_count integer, created_at timestamp without time zone, updated_at timestamp without time zone, scope character varying, total_count bigint)
  LANGUAGE plpgsql
 AS $function$
 BEGIN
@@ -12,6 +12,7 @@ BEGIN
         CAST((SELECT COUNT(*) FROM tracking.calendar_dates cd WHERE cd.calendar_id = c.id) AS INT),
         c.created_at,
         c.updated_at,
+        CAST(c.scope AS VARCHAR),
         CAST(COUNT(*) OVER () AS BIGINT)
     FROM tracking.calendars c
     WHERE c.tenant_id = p_tenant_id
@@ -22,4 +23,4 @@ BEGIN
 END;
 $function$;
 
-COMMENT ON FUNCTION tracking.sp_list_calendars(uuid,character varying,integer,integer) IS 'One page of a tenant''s calendars with how many dates each holds; every row carries the total_count the filters match';
+COMMENT ON FUNCTION tracking.sp_list_calendars(uuid,character varying,integer,integer) IS 'One page of a tenant''s calendars with how many dates each holds and its scope (TRACK-076 D1); every row carries the total_count the filters match';

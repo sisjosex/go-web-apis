@@ -156,7 +156,9 @@ CREATE TABLE tracking.calendars (
     organization_id uuid,
     name character varying(255) NOT NULL,
     created_at timestamp without time zone DEFAULT CURRENT_TIMESTAMP NOT NULL,
-    updated_at timestamp without time zone DEFAULT CURRENT_TIMESTAMP NOT NULL
+    updated_at timestamp without time zone DEFAULT CURRENT_TIMESTAMP NOT NULL,
+    scope character varying(12) DEFAULT 'schedule'::character varying NOT NULL,
+    CONSTRAINT chk_calendar_scope CHECK (((scope)::text = ANY ((ARRAY['schedule'::character varying, 'tenant'::character varying, 'organization'::character varying])::text[])))
 );
 
 
@@ -165,6 +167,13 @@ CREATE TABLE tracking.calendars (
 --
 
 COMMENT ON TABLE tracking.calendars IS 'A named set of dates — a school year, the public holidays — a schedule points at so it produces no service on them (TRACK-018)';
+
+
+--
+-- Name: COLUMN calendars.scope; Type: COMMENT; Schema: tracking; Owner: -
+--
+
+COMMENT ON COLUMN tracking.calendars.scope IS 'schedule: read by the schedules that point at it · tenant: read by every route · organization: read by every route of organization_id (TRACK-076 D1)';
 
 
 --
@@ -2272,6 +2281,20 @@ CREATE INDEX idx_vehicles_default_driver_id ON tracking.vehicles USING btree (de
 --
 
 CREATE INDEX idx_vehicles_plate_trgm ON tracking.vehicles USING gin (plate_number public.gin_trgm_ops);
+
+
+--
+-- Name: uq_calendars_organization_scope; Type: INDEX; Schema: tracking; Owner: -
+--
+
+CREATE UNIQUE INDEX uq_calendars_organization_scope ON tracking.calendars USING btree (organization_id) WHERE ((scope)::text = 'organization'::text);
+
+
+--
+-- Name: uq_calendars_tenant_scope; Type: INDEX; Schema: tracking; Owner: -
+--
+
+CREATE UNIQUE INDEX uq_calendars_tenant_scope ON tracking.calendars USING btree (tenant_id) WHERE ((scope)::text = 'tenant'::text);
 
 
 --

@@ -1,5 +1,5 @@
 CREATE OR REPLACE FUNCTION tracking.sp_create_calendar(p_tenant_id uuid, p_name character varying, p_organization_id uuid)
- RETURNS TABLE(id uuid, tenant_id uuid, organization_id uuid, name character varying, dates_count integer, created_at timestamp without time zone, updated_at timestamp without time zone)
+ RETURNS TABLE(id uuid, tenant_id uuid, organization_id uuid, name character varying, dates_count integer, created_at timestamp without time zone, updated_at timestamp without time zone, scope character varying)
  LANGUAGE plpgsql
 AS $function$
 DECLARE
@@ -18,7 +18,7 @@ BEGIN
 
     RETURN QUERY
     SELECT c.id, c.tenant_id, c.organization_id, CAST(c.name AS VARCHAR), CAST(0 AS INT),
-           c.created_at, c.updated_at
+           c.created_at, c.updated_at, CAST(c.scope AS VARCHAR)
     FROM tracking.calendars c
     WHERE c.id = v_id;
 END;
