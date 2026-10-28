@@ -93,3 +93,52 @@ BEGIN
         ON CONFLICT (organization_id, user_id) DO UPDATE SET role = 'admin';
     END LOOP;
 END $$;
+
+-- web.noreports@test.local / NoReports123*  — role `member` with "Operador sin reportes": runs
+-- the transport (routes, riders, clients, vehicles) without `tracking:reports:read`, so the
+-- Reportes nav item stays hidden (TRACK-078).
+DO $$
+DECLARE
+    v_tenant UUID;
+    v_user   UUID;
+    v_role   UUID;
+BEGIN
+    SELECT id INTO v_tenant FROM tenancy.tenants WHERE slug = 'mi-negocio';
+    IF v_tenant IS NULL THEN
+        RETURN;
+    END IF;
+
+    INSERT INTO tenancy.roles (tenant_id, name, description)
+    VALUES (v_tenant, 'Operador sin reportes', 'Dev: operates taypi go without the reports')
+    ON CONFLICT (tenant_id, name) DO UPDATE SET description = EXCLUDED.description
+    RETURNING id INTO v_role;
+
+    DELETE FROM tenancy.role_permissions WHERE role_id = v_role;
+    INSERT INTO tenancy.role_permissions (role_id, permission_code)
+    SELECT v_role, UNNEST(ARRAY[
+        'tracking:routes:read', 'tracking:riders:read', 'tracking:organizations:read', 'tracking:vehicles:read'
+    ]);
+
+    SELECT id INTO v_user FROM auth.users WHERE LOWER(email) = 'web.noreports@test.local';
+    IF v_user IS NULL THEN
+        INSERT INTO auth.users (first_name, last_name, email, password)
+        VALUES ('Operador', 'Sin Reportes', 'web.noreports@test.local', crypt('NoReports123*', gen_salt('bf')))
+        RETURNING id INTO v_user;
+    ELSE
+        UPDATE auth.users
+        SET password = crypt('NoReports123*', gen_salt('bf')), is_active = TRUE, deleted_at = NULL
+        WHERE id = v_user;
+    END IF;
+
+    INSERT INTO tenancy.tenant_users (tenant_id, user_id, role)
+    VALUES (v_tenant, v_user, 'member')
+    ON CONFLICT (tenant_id, user_id) DO UPDATE SET role = 'member', is_active = TRUE;
+
+    -- Assigned by the tenant's owner, as the roles screen would.
+    INSERT INTO tenancy.user_roles (user_id, role_id, tenant_id, assigned_by)
+    SELECT v_user, v_role, v_tenant, tu.user_id
+    FROM tenancy.tenant_users tu
+    WHERE tu.tenant_id = v_tenant AND tu.role = 'owner'
+    LIMIT 1
+    ON CONFLICT (user_id, role_id) DO NOTHING;
+END $$;
