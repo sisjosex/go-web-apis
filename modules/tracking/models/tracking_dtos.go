@@ -142,6 +142,8 @@ type ListCompaniesQuery struct {
 	Status   string `form:"status" binding:"omitempty,oneof=active inactive suspended"`
 	Page     int    `form:"page,default=1" binding:"min=1"`
 	PageSize int    `form:"page_size,default=20" binding:"min=1,max=100"`
+	// ID narrows the list to one company, so its page reads the list's figures (TRACK-077).
+	ID *string `form:"id" binding:"omitempty,uuid"`
 }
 
 type ListCompaniesResponse struct {
@@ -862,6 +864,8 @@ type ListOrganizationsQuery struct {
 	IsActive *bool  `form:"is_active"`
 	Page     int    `form:"page,default=1" binding:"min=1"`
 	PageSize int    `form:"page_size,default=20" binding:"min=1,max=100"`
+	// ID narrows the list to one organization, so its page reads the list's figures (TRACK-077).
+	ID *string `form:"id" binding:"omitempty,uuid"`
 }
 
 // OrganizationCounts is each kind's size over the list's other filters (TRACK-074).
@@ -942,6 +946,8 @@ type ListDriversQuery struct {
 	Status    string  `form:"status" binding:"omitempty,oneof=active inactive suspended"`
 	Page      int     `form:"page,default=1" binding:"min=1"`
 	PageSize  int     `form:"page_size,default=20" binding:"min=1,max=100"`
+	// ID narrows the list to one driver, so its page reads the list's figures (TRACK-077).
+	ID *string `form:"id" binding:"omitempty,uuid"`
 }
 
 // DriverSummary is the stat cards over every driver the filters match (TRACK-074): those using the

@@ -1,4 +1,4 @@
-CREATE OR REPLACE FUNCTION tracking.sp_list_companies(p_tenant_id uuid, p_search character varying DEFAULT NULL::character varying, p_status character varying DEFAULT NULL::character varying, p_page integer DEFAULT 1, p_page_size integer DEFAULT 20)
+CREATE OR REPLACE FUNCTION tracking.sp_list_companies(p_tenant_id uuid, p_search character varying DEFAULT NULL::character varying, p_status character varying DEFAULT NULL::character varying, p_page integer DEFAULT 1, p_page_size integer DEFAULT 20, p_id uuid DEFAULT NULL::uuid)
  RETURNS TABLE(id uuid, tenant_id uuid, name character varying, email character varying, phone character varying, address text, city character varying, country character varying, registration_number character varying, status character varying, created_at timestamp without time zone, updated_at timestamp without time zone, vehicles_count bigint, drivers_count bigint, active_routes_count bigint, documents_due bigint, total_count bigint)
  LANGUAGE plpgsql
 AS $function$
@@ -8,6 +8,8 @@ BEGIN
         SELECT tc.id, CAST(COUNT(*) OVER () AS BIGINT) AS total_count
         FROM tracking.transport_companies tc
         WHERE tc.tenant_id = p_tenant_id
+          -- TRACK-077: one company's row, so its page reads the same figures as the list.
+          AND (p_id IS NULL OR tc.id = p_id)
           AND (
               p_search IS NULL
               OR p_search = ''
@@ -56,4 +58,4 @@ BEGIN
 END;
 $function$;
 
-COMMENT ON FUNCTION tracking.sp_list_companies(uuid,character varying,character varying,integer,integer) IS 'One page of a tenant''s transport companies by name, optionally narrowed by a name/registration-number search and a status; every row carries its vehicles, drivers, active routes and documents due over its fleet (TRACK-074) and the total_count the filters match';
+COMMENT ON FUNCTION tracking.sp_list_companies(uuid,character varying,character varying,integer,integer,uuid) IS 'One page of a tenant''s transport companies by name, optionally narrowed by a name/registration-number search and a status, or to one company (p_id, TRACK-077); every row carries its vehicles, drivers, active routes and documents due over its fleet (TRACK-074) and the total_count the filters match';

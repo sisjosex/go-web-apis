@@ -145,6 +145,48 @@ func TestOrganizationsAndCompanies_Figures(t *testing.T) {
 	assert.Equal(t, int64(0), *c.DocumentsDue)
 }
 
+// TestLists_OneByID - TRACK-077: `?id=` narrows the drivers, companies and organizations lists to one
+// row, so a record page reads the same figures its list shows.
+func TestLists_OneByID(t *testing.T) {
+	helper := SetupTrackingTest(t)
+	defer helper.Close()
+
+	body := ValidDriverBody()
+	body["account"] = map[string]interface{}{"email": newAccessEmail()}
+	w := helper.DoRequest("POST", "/tracking/drivers", body, map[string]string{})
+	require.Equal(t, http.StatusCreated, w.Code, w.Body.String())
+	driverID := ExtractID(t, ParseResponse(t, w.Body.Bytes()))
+	var drivers models.ListDriversResponse
+	listPeople(t, helper, "/tracking/drivers?id="+driverID, &drivers)
+	if assert.Len(t, drivers.Drivers, 1) {
+		assert.Equal(t, driverID, drivers.Drivers[0].ID.String())
+		require.NotNil(t, drivers.Drivers[0].AppStatus)
+		assert.Equal(t, "invited", *drivers.Drivers[0].AppStatus)
+	}
+
+	companyID := createFleetCompany(t, helper)
+	CreateTestVehicleOf(t, helper, companyID)
+	companies := ListCompanies(t, helper, "?id="+companyID)
+	if assert.Len(t, companies.Companies, 1) {
+		assert.Equal(t, int64(1), *companies.Companies[0].VehiclesCount)
+	}
+
+	organizationID := createOrganization(t, helper)
+	organizations := ListOrganizations(t, helper, "?id="+organizationID)
+	if assert.Len(t, organizations.Organizations, 1) {
+		assert.Equal(t, organizationID, organizations.Organizations[0].ID.String())
+		assert.Equal(t, int64(0), *organizations.Organizations[0].RidersCount)
+	}
+
+	// The rider's own GET names its client, for the record page's chip.
+	riderID := createRider(t, helper, map[string]interface{}{"organization_id": organizationID})
+	var rider models.Rider
+	listPeople(t, helper, "/tracking/riders/"+riderID, &rider)
+	if assert.NotNil(t, rider.OrganizationName) && len(organizations.Organizations) == 1 {
+		assert.Equal(t, organizations.Organizations[0].Name, *rider.OrganizationName)
+	}
+}
+
 // driversWorkbook is a carrier's drivers sheet with its own Spanish headings.
 func driversWorkbook(t *testing.T, rows [][]any) []byte {
 	t.Helper()

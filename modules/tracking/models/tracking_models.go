@@ -400,8 +400,8 @@ type Rider struct {
 	// The organization that sends the rider, not the carrier that drives them (TRACK-005 D1); the
 	// carrier is reached through the route the rider is assigned to.
 	OrganizationID uuid.UUID `json:"organization_id"`
-	// OrganizationName rides on the list rows only (TRACK-003 D2), like Vehicle.CompanyName; the
-	// single-rider SPs do not join the organization, so it is absent from create/update/get.
+	// OrganizationName rides on the list rows (TRACK-003 D2) and the get, for the record page's chip
+	// (TRACK-077); create and update do not join the organization, so it is absent there.
 	OrganizationName *string `json:"organization_name,omitempty"`
 	// OrganizationKind rides beside it (MOBILE-002 D3): school, company or other, as the operator
 	// declared it — which is how the mobile app calls one list "students" and another "staff".

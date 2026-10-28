@@ -310,8 +310,8 @@ func (r *TrackingRepository) UpdateCompany(ctx context.Context, tenantID uuid.UU
 // plus the total the same filters match. total_count comes back on every row and stays 0 when the page is empty.
 func (r *TrackingRepository) ListCompanies(ctx context.Context, tenantID uuid.UUID, query models.ListCompaniesQuery) ([]*models.TransportCompany, int64, error) {
 	rows, err := r.dbService.Query(ctx,
-		`SELECT * FROM tracking.sp_list_companies($1::UUID, $2::VARCHAR, $3::VARCHAR, $4::INT, $5::INT)`,
-		tenantID, query.Search, query.Status, query.Page, query.PageSize)
+		`SELECT * FROM tracking.sp_list_companies($1::UUID, $2::VARCHAR, $3::VARCHAR, $4::INT, $5::INT, $6::UUID)`,
+		tenantID, query.Search, query.Status, query.Page, query.PageSize, query.ID)
 	if err != nil {
 		return nil, 0, &trackingErrors.TrackingError{Code: trackingErrors.CompanyListFailed, Err: err}
 	}
@@ -1124,7 +1124,7 @@ func (r *TrackingRepository) GetRider(ctx context.Context, tenantID uuid.UUID, r
 		&rider.EmergencyContactPhone, &rider.GuardianUserID, &rider.GuardianName, &rider.GuardianPhone,
 		&rider.GuardianEmail, &rider.Address, &rider.IsActive, &rider.CreatedAt, &rider.UpdatedAt,
 		&rider.HomeLatitude, &rider.HomeLongitude, &rider.Notes, &rider.GroupLabel,
-		&rider.ServiceLegs, &rider.StopPlaceID, &rider.StopPlaceName)
+		&rider.ServiceLegs, &rider.StopPlaceID, &rider.StopPlaceName, &rider.OrganizationName)
 	if err != nil {
 		return nil, scopedErr(err, trackingErrors.RiderNotFound)
 	}
@@ -1219,8 +1219,8 @@ func (r *TrackingRepository) UpdateOrganization(ctx context.Context, tenantID uu
 func (r *TrackingRepository) ListOrganizations(ctx context.Context, tenantID uuid.UUID, query models.ListOrganizationsQuery, scopeUserID *uuid.UUID) ([]*models.Organization, models.OrganizationCounts, int64, error) {
 	var counts models.OrganizationCounts
 	rows, err := r.dbService.Query(ctx,
-		`SELECT * FROM tracking.sp_list_organizations($1::UUID, $2::VARCHAR, $3::VARCHAR, $4::BOOLEAN, $5::INT, $6::INT, $7::UUID)`,
-		tenantID, query.Search, query.Kind, query.IsActive, query.Page, query.PageSize, scopeUserID)
+		`SELECT * FROM tracking.sp_list_organizations($1::UUID, $2::VARCHAR, $3::VARCHAR, $4::BOOLEAN, $5::INT, $6::INT, $7::UUID, $8::UUID)`,
+		tenantID, query.Search, query.Kind, query.IsActive, query.Page, query.PageSize, scopeUserID, query.ID)
 	if err != nil {
 		return nil, counts, 0, &trackingErrors.TrackingError{Code: trackingErrors.OrganizationListFailed, Err: err}
 	}
@@ -1400,8 +1400,8 @@ func (r *TrackingRepository) UpdateDriver(ctx context.Context, tenantID uuid.UUI
 func (r *TrackingRepository) ListDrivers(ctx context.Context, tenantID uuid.UUID, query models.ListDriversQuery) ([]*models.Driver, models.DriverSummary, int64, error) {
 	var summary models.DriverSummary
 	rows, err := r.dbService.Query(ctx,
-		`SELECT * FROM tracking.sp_list_drivers($1::UUID, $2::VARCHAR, $3::UUID, $4::VARCHAR, $5::INT, $6::INT)`,
-		tenantID, query.Search, query.CompanyID, query.Status, query.Page, query.PageSize)
+		`SELECT * FROM tracking.sp_list_drivers($1::UUID, $2::VARCHAR, $3::UUID, $4::VARCHAR, $5::INT, $6::INT, $7::UUID)`,
+		tenantID, query.Search, query.CompanyID, query.Status, query.Page, query.PageSize, query.ID)
 	if err != nil {
 		return nil, summary, 0, &trackingErrors.TrackingError{Code: trackingErrors.DriverListFailed, Err: err}
 	}

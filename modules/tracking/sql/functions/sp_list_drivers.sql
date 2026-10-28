@@ -1,4 +1,4 @@
-CREATE OR REPLACE FUNCTION tracking.sp_list_drivers(p_tenant_id uuid, p_search character varying DEFAULT NULL::character varying, p_company_id uuid DEFAULT NULL::uuid, p_status character varying DEFAULT NULL::character varying, p_page integer DEFAULT 1, p_page_size integer DEFAULT 20)
+CREATE OR REPLACE FUNCTION tracking.sp_list_drivers(p_tenant_id uuid, p_search character varying DEFAULT NULL::character varying, p_company_id uuid DEFAULT NULL::uuid, p_status character varying DEFAULT NULL::character varying, p_page integer DEFAULT 1, p_page_size integer DEFAULT 20, p_id uuid DEFAULT NULL::uuid)
  RETURNS TABLE(id uuid, tenant_id uuid, company_id uuid, company_name character varying, user_id uuid, user_email character varying, first_name character varying, last_name character varying, phone character varying, license_number character varying, license_class character varying, license_expires_on date, status character varying, service_blocked boolean, created_at timestamp without time zone, updated_at timestamp without time zone, today_route_name character varying, app_status character varying, summary jsonb, total_count bigint)
  LANGUAGE plpgsql
 AS $function$
@@ -44,6 +44,8 @@ BEGIN
         FROM tracking.drivers d
         INNER JOIN tracking.transport_companies tc ON tc.id = d.company_id
         WHERE d.tenant_id = p_tenant_id
+          -- TRACK-077: one driver's row, so its page reads the same figures as the list.
+          AND (p_id IS NULL OR d.id = p_id)
           AND (p_company_id IS NULL OR d.company_id = p_company_id)
           AND (p_status IS NULL OR p_status = '' OR d.status = p_status)
           AND (p_search IS NULL OR p_search = ''
@@ -108,4 +110,4 @@ BEGIN
 END;
 $function$;
 
-COMMENT ON FUNCTION tracking.sp_list_drivers(uuid,character varying,uuid,character varying,integer,integer) IS 'One page of a tenant''s drivers by surname, optionally narrowed by a name or licence search, carrier and status; every row carries its carrier, its linked account''s email, whether an expired blocking document stands against it (TRACK-016 D2), today''s route and whether it uses the app (TRACK-074 D1), the summary over every driver the filters match and the total_count; an empty page is one row with id NULL that still carries the summary';
+COMMENT ON FUNCTION tracking.sp_list_drivers(uuid,character varying,uuid,character varying,integer,integer,uuid) IS 'One page of a tenant''s drivers by surname, optionally narrowed by a name or licence search, carrier and status, or to one driver (p_id, TRACK-077); every row carries its carrier, its linked account''s email, whether an expired blocking document stands against it (TRACK-016 D2), today''s route and whether it uses the app (TRACK-074 D1), the summary over every driver the filters match and the total_count; an empty page is one row with id NULL that still carries the summary';
