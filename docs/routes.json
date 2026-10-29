@@ -1726,6 +1726,7 @@
         "tracking.route_versions",
         "tracking.routes",
         "tracking.stop_places",
+        "tracking.transport_companies",
         "tracking.trip_stop_tasks",
         "tracking.trip_stops",
         "tracking.trips",
@@ -9468,6 +9469,7 @@
         "tracking.riders",
         "tracking.route_versions",
         "tracking.stop_places",
+        "tracking.transport_companies",
         "tracking.trip_stop_tasks",
         "tracking.trip_stops",
         "tracking.trips"

@@ -219,6 +219,38 @@ func TestDriverToday_PlannedPath(t *testing.T) {
 	}
 }
 
+// TestDriverToday_KindAndCarrier - a trip of a school's route carries organization_kind "school", and
+// the day carries the driver's carrier with its phone: the office the phone calls (MOBILE-036).
+func TestDriverToday_KindAndCarrier(t *testing.T) {
+	helper := SetupTrackingTest(t)
+	defer helper.Close()
+	trip := driverTrip(t, helper, 1, false)
+	SetTripRouteClient(t, helper, trip.ID.String(), MainSchoolID)
+	driver := SetupDriverTest(t)
+	defer driver.Close()
+
+	w := driver.DoRequest("GET", "/mobile/driver/today", nil, map[string]string{})
+	if !assert.Equal(t, http.StatusOK, w.Code, w.Body.String()) {
+		return
+	}
+	var day struct {
+		Company *models.RiderCompany `json:"company"`
+		Trips   []struct {
+			OrganizationKind *string `json:"organization_kind"`
+		} `json:"trips"`
+	}
+	decodeBody(t, w, &day)
+	if assert.NotNil(t, day.Company) {
+		assert.Equal(t, "Main Test Transit", day.Company.Name)
+		if assert.NotNil(t, day.Company.Phone) {
+			assert.Equal(t, "+1234567890", *day.Company.Phone)
+		}
+	}
+	if assert.Len(t, day.Trips, 1) && assert.NotNil(t, day.Trips[0].OrganizationKind) {
+		assert.Equal(t, "school", *day.Trips[0].OrganizationKind)
+	}
+}
+
 // TestDriverToday_NotLinked - an account linked to no driver record → 403 driver.not-linked
 func TestDriverToday_NotLinked(t *testing.T) {
 	helper := SetupTrackingTest(t)

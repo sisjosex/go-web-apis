@@ -9502,6 +9502,9 @@
       "tracking.DriverToday": {
         "additionalProperties": false,
         "properties": {
+          "company": {
+            "$ref": "#/components/schemas/tracking.RiderCompany"
+          },
           "date": {
             "type": "string"
           },
@@ -9517,6 +9520,7 @@
         "required": [
           "date",
           "driver",
+          "company",
           "trips",
           "generated_at"
         ],

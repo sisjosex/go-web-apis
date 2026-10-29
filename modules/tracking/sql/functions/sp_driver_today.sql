@@ -77,9 +77,15 @@ BEGIN
             (SELECT MIN(CAST(e->>'service_date' AS DATE)) FROM jsonb_array_elements(v_trips) e),
             CURRENT_DATE),
         'driver', jsonb_build_object('id', v_driver.id, 'name', v_driver.first_name || ' ' || v_driver.last_name),
+        -- The driver's carrier, as sp_rider_today's company (MOBILE-036): the office the phone calls.
+        'company', (
+            SELECT jsonb_build_object('name', c.name, 'phone', c.phone)
+            FROM tracking.transport_companies c
+            WHERE c.tenant_id = p_tenant_id
+              AND c.id = v_driver.company_id),
         'trips',  v_trips
     );
 END;
 $function$;
 
-COMMENT ON FUNCTION tracking.sp_driver_today(uuid,uuid) IS 'The driver account''s trips of each route''s local today, any status: { date, driver { id, name }, trips [row + stops [{ id, sequence, stop_name, lat, lng, planned_at, arrived_at, status, tasks [{ id, kind, status, done_at, rider { id, name, notes, qr_token } }] }], planned_path { polyline6, distance_m, legs [{ distance_m, duration_s }], source } | null] }; a trip with no task shows only once started (TRACK-053 D2); raises driver.not-linked (TRACK-011, MOBILE-006 D2, MOBILE-015 D2)';
+COMMENT ON FUNCTION tracking.sp_driver_today(uuid,uuid) IS 'The driver account''s trips of each route''s local today, any status: { date, driver { id, name }, company { name, phone } | null, trips [row (organization_kind included) + stops [{ id, sequence, stop_name, lat, lng, planned_at, arrived_at, status, tasks [{ id, kind, status, done_at, rider { id, name, notes, qr_token } }] }], planned_path { polyline6, distance_m, legs [{ distance_m, duration_s }], source } | null] }; a trip with no task shows only once started (TRACK-053 D2); raises driver.not-linked (TRACK-011, MOBILE-006 D2, MOBILE-015 D2)';

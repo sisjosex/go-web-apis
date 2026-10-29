@@ -31,10 +31,12 @@ const (
 )
 
 // DriverToday is GET /mobile/driver/today: the driver's trips of each route's local today, each with
-// its stops → tasks → rider, as sp_driver_today builds it. Trips passes through unparsed.
+// its stops → tasks → rider, as sp_driver_today builds it. Trips passes through unparsed; Company is
+// the driver's carrier, the office the phone calls (MOBILE-036).
 type DriverToday struct {
 	Date        string          `json:"date"`
 	Driver      DriverRef       `json:"driver"`
+	Company     *RiderCompany   `json:"company"`
 	Trips       json.RawMessage `json:"trips" swaggertype:"array,object"`
 	GeneratedAt time.Time       `json:"generated_at"`
 }

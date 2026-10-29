@@ -44,6 +44,38 @@ BEGIN
     END LOOP;
 END $$;
 
+-- mobile.driver@test.local / Driver123*  — role `driver`, the account of driver Ana Quispe (MOBILE-036):
+-- the driver's day on the emulator. Ana was made by hand, like the tenant; without her nothing is linked.
+DO $$
+DECLARE
+    v_tenant UUID;
+    v_user   UUID;
+BEGIN
+    SELECT id INTO v_tenant FROM tenancy.tenants WHERE slug = 'mi-negocio';
+    IF v_tenant IS NULL THEN
+        RETURN;
+    END IF;
+
+    SELECT id INTO v_user FROM auth.users WHERE LOWER(email) = 'mobile.driver@test.local';
+    IF v_user IS NULL THEN
+        INSERT INTO auth.users (first_name, last_name, email, password)
+        VALUES ('Ana', 'Quispe', 'mobile.driver@test.local', crypt('Driver123*', gen_salt('bf')))
+        RETURNING id INTO v_user;
+    ELSE
+        UPDATE auth.users
+        SET password = crypt('Driver123*', gen_salt('bf')), is_active = TRUE, deleted_at = NULL
+        WHERE id = v_user;
+    END IF;
+
+    INSERT INTO tenancy.tenant_users (tenant_id, user_id, role)
+    VALUES (v_tenant, v_user, 'driver')
+    ON CONFLICT (tenant_id, user_id) DO UPDATE SET role = 'driver', is_active = TRUE;
+
+    UPDATE tracking.drivers
+    SET user_id = v_user
+    WHERE tenant_id = v_tenant AND first_name = 'Ana' AND last_name = 'Quispe';
+END $$;
+
 -- mobile.school@test.local   / School123*    — role `organization`, admin of Colegio Santa Rosa.
 -- mobile.employer@test.local / Employer123*  — role `organization`, admin of Minera Andina S.A.
 -- An organization that does not exist is skipped: both were made by hand, like the tenant.
