@@ -230,7 +230,7 @@ func (r *TrackingRepository) CreateRouteAlert(ctx context.Context, tenantID uuid
 	}
 
 	var alertID uuid.UUID
-	var routeID uuid.UUID
+	var routeID *uuid.UUID
 	var vehicleID *uuid.UUID
 	var alertType string
 	var title string

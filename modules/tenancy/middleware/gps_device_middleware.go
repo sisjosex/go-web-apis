@@ -19,13 +19,22 @@ const DeviceTokenHeader = "X-Device-Token"
 // GPSVehicleKey is where GPSDeviceMiddleware leaves the device's vehicle id (a uuid.UUID).
 const GPSVehicleKey = "gps_vehicle_id"
 
+// DeviceToken is the request's device token: the header, or the OsmAnd protocol's id query parameter
+// when there is no header (TRACK-068 D1) — a tracker sends no headers.
+func DeviceToken(c *gin.Context) string {
+	if token := c.GetHeader(DeviceTokenHeader); token != "" {
+		return token
+	}
+	return c.Query("id")
+}
+
 // GPSDeviceMiddleware authenticates a GPS device by its token instead of a user and a slug: the token
 // names its tenant, and its sha256 in that tenant names the vehicle — one platform query. It sets the same context a
 // tenant chain sets — tenant_id, tenant_access, the tenant database — plus the vehicle, with
 // tenant_user_role RoleGPSDevice. A device request never runs any other route.
 func GPSDeviceMiddleware(devices interfaces.GPSDeviceRepository) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		tenantID, hash, ok := repositories.ParseGPSDeviceToken(c.GetHeader(DeviceTokenHeader))
+		tenantID, hash, ok := repositories.ParseGPSDeviceToken(DeviceToken(c))
 		if !ok {
 			c.AbortWithStatusJSON(http.StatusUnauthorized, coreErrors.BuildErrorSingle(c, tenancyErrors.GPSDeviceUnauthorized))
 			return

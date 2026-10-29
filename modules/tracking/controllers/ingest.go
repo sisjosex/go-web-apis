@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"net/http"
+	"strconv"
 	"time"
 
 	"josex/web/modules/core/api"
@@ -51,23 +52,90 @@ func (ctrl *IngestController) IngestPositions(ctx context.Context, in *IngestPos
 		return nil, api.Fail(http.StatusBadRequest, coreErrors.BuildErrorDetail(c, trackingErrors.IngestInvalid, detail))
 	}
 
-	vehicleID, err := ctrl.vehicle(c, tenantID)
+	path, err := ctrl.store(c, tenantID, points)
 	if err != nil {
 		return nil, err
+	}
+	return api.OK(models.IngestResponse{Accepted: len(points), Path: path})
+}
+
+// IngestOsmandInput is IngestOsmand's request.
+type IngestOsmandInput struct {
+	Query api.Query[models.OsmandQuery]
+}
+
+// IngestOsmand is GET|POST /gps/osmand: one point of a hardware tracker or Traccar Client, in the
+// OsmAnd query protocol (TRACK-068 D1). The device chain already resolved the token in id; the point
+// takes the ingest's path and the answer is the empty 200 those clients expect.
+func (ctrl *IngestController) IngestOsmand(ctx context.Context, in *IngestOsmandInput) (*api.Empty, error) {
+	c := api.Gin(ctx)
+	tenantID, err := uuid.Parse(c.GetString("tenant_id"))
+	if err != nil {
+		return nil, api.Fail(http.StatusForbidden, coreErrors.BuildErrorSingle(c, trackingErrors.TenantRequired))
+	}
+	var q models.OsmandQuery
+	if err := in.Query.Into(ctx, &q); err != nil {
+		return nil, api.Fail(http.StatusBadRequest, coreErrors.BuildErrorDetail(c, trackingErrors.IngestInvalid, utils.ExtractValidationError(c, err)))
+	}
+	now := time.Now()
+	point, detail := osmandPoint(q, now)
+	if detail == "" {
+		detail = checkBatch([]models.PositionPoint{point}, now)
+	}
+	if detail != "" {
+		return nil, api.Fail(http.StatusBadRequest, coreErrors.BuildErrorDetail(c, trackingErrors.IngestInvalid, detail))
+	}
+	if _, err := ctrl.store(c, tenantID, []models.PositionPoint{point}); err != nil {
+		return nil, err
+	}
+	return api.Done()
+}
+
+// osmandPoint maps the protocol's fields onto a batch point: lon → lng, knots → m/s, bearing →
+// heading, a missing timestamp → now. It answers the problem with timestamp, or "".
+func osmandPoint(q models.OsmandQuery, now time.Time) (models.PositionPoint, string) {
+	at := now
+	if q.Timestamp != "" {
+		if secs, err := strconv.ParseFloat(q.Timestamp, 64); err == nil {
+			at = time.Unix(0, int64(secs*float64(time.Second)))
+		} else if t, err := time.Parse(time.RFC3339, q.Timestamp); err == nil {
+			at = t
+		} else {
+			return models.PositionPoint{}, "timestamp: unix seconds or RFC3339"
+		}
+	}
+	point := models.PositionPoint{RecordedAt: at, Lat: q.Lat, Lng: q.Lon, Heading: q.Bearing, Accuracy: q.Accuracy}
+	if q.Speed != nil {
+		ms := *q.Speed * models.KnotsToMS
+		point.Speed = &ms
+	}
+	return point, ""
+}
+
+// store hands checked points to the pipeline under their vehicle, stamped with the receiver that
+// sent them: a device token is a tracker, a user session the driver's phone (TRACK-068 D2).
+func (ctrl *IngestController) store(c *gin.Context, tenantID uuid.UUID, points []models.PositionPoint) (string, error) {
+	vehicleID, err := ctrl.vehicle(c, tenantID)
+	if err != nil {
+		return "", err
+	}
+	source := models.PointSourcePhone
+	if _, ok := c.Get(tenancyMW.GPSVehicleKey); ok {
+		source = models.PointSourceDevice
 	}
 
 	stored := make([]models.StoredPoint, len(points))
 	for i, p := range points {
 		stored[i] = models.StoredPoint{
 			VehicleID: vehicleID, RecordedAt: p.RecordedAt.UTC(), Lat: *p.Lat, Lng: *p.Lng,
-			Speed: p.Speed, Heading: p.Heading, Accuracy: p.Accuracy,
+			Speed: p.Speed, Heading: p.Heading, Accuracy: p.Accuracy, Source: source,
 		}
 	}
 	path, err := ctrl.ingest.Ingest(c.Request.Context(), tenantID, stored)
 	if err != nil {
-		return nil, api.Fail(http.StatusInternalServerError, coreErrors.BuildErrorDetail(c, trackingErrors.IngestFailed, err.Error()))
+		return "", api.Fail(http.StatusInternalServerError, coreErrors.BuildErrorDetail(c, trackingErrors.IngestFailed, err.Error()))
 	}
-	return api.OK(models.IngestResponse{Accepted: len(stored), Path: path})
+	return path, nil
 }
 
 // vehicle is whose points these are: the device's own, or the vehicle of the driver's trip in

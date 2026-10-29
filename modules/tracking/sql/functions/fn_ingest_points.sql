@@ -1,5 +1,5 @@
 CREATE OR REPLACE FUNCTION tracking.fn_ingest_points(p_tenant_id uuid, p_points jsonb)
- RETURNS TABLE(vehicle_id uuid, recorded_at timestamp with time zone, location geography, speed real, heading real, accuracy real, trip_id uuid)
+ RETURNS TABLE(vehicle_id uuid, recorded_at timestamp with time zone, location geography, speed real, heading real, accuracy real, trip_id uuid, source character varying)
  LANGUAGE sql
  STABLE
 AS $function$
@@ -10,10 +10,11 @@ AS $function$
             CAST(ST_SetSRID(ST_MakePoint(CAST(p->>'lng' AS FLOAT8), CAST(p->>'lat' AS FLOAT8)), 4326) AS GEOGRAPHY) AS location,
             CAST(p->>'speed' AS REAL) AS speed,
             CAST(p->>'heading' AS REAL) AS heading,
-            CAST(p->>'accuracy' AS REAL) AS accuracy
+            CAST(p->>'accuracy' AS REAL) AS accuracy,
+            CAST(COALESCE(NULLIF(p->>'source', ''), 'phone') AS VARCHAR) AS source
         FROM jsonb_array_elements(p_points) p
     )
-    SELECT pts.vehicle_id, pts.recorded_at, pts.location, pts.speed, pts.heading, pts.accuracy, a.trip_id
+    SELECT pts.vehicle_id, pts.recorded_at, pts.location, pts.speed, pts.heading, pts.accuracy, a.trip_id, pts.source
     FROM pts
     LEFT JOIN LATERAL (
         SELECT t.id AS trip_id
@@ -26,4 +27,4 @@ AS $function$
     ) a ON true;
 $function$;
 
-COMMENT ON FUNCTION tracking.fn_ingest_points(uuid,jsonb) IS 'A batch of GPS points as rows, each with its vehicle''s trip in progress (TRACK-010)';
+COMMENT ON FUNCTION tracking.fn_ingest_points(uuid,jsonb) IS 'A batch of GPS points as rows, each with its vehicle''s trip in progress and its source, phone unless the point says device (TRACK-010, TRACK-068)';

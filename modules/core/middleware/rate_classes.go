@@ -2,6 +2,8 @@ package middleware
 
 import (
 	"bytes"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"io"
 	"net/http"
@@ -35,11 +37,18 @@ var publicRoutes = map[string]bool{
 	"GET /api/v1/public/share/:token": true,
 }
 
+// deviceRoutes are a hardware tracker's (TRACK-068): many share a carrier's IP, so the per-IP limit
+// skips them and each token gets its own minute budget instead.
+var deviceRoutes = map[string]bool{
+	"GET /api/v1/gps/osmand":  true,
+	"POST /api/v1/gps/osmand": true,
+}
+
 // RateClasses adds the stricter classes on top of the per-IP limit (INFRA-011 D3): sign-in at
 // loginPerMin per IP and e-mail, heavy work at heavyPerMin per tenant, the public reads at publicPerMin
-// per IP. One Valkey call, only on those routes; without Valkey, or when it fails, the request passes
-// (INFRA-001 D5) and the general limit still applies.
-func RateClasses(valkey coreServices.ValkeyService, loginPerMin, heavyPerMin, publicPerMin int) gin.HandlerFunc {
+// per IP, a tracker's points at devicePerMin per token. One Valkey call, only on those routes; without
+// Valkey, or when it fails, the request passes (INFRA-001 D5) and the general limit still applies.
+func RateClasses(valkey coreServices.ValkeyService, loginPerMin, heavyPerMin, publicPerMin, devicePerMin int) gin.HandlerFunc {
 	if valkey == nil {
 		return func(c *gin.Context) { c.Next() }
 	}
@@ -47,6 +56,7 @@ func RateClasses(valkey coreServices.ValkeyService, loginPerMin, heavyPerMin, pu
 	login := redis_rate.PerMinute(loginPerMin)
 	heavy := redis_rate.PerMinute(heavyPerMin)
 	public := redis_rate.PerMinute(publicPerMin)
+	device := redis_rate.PerMinute(devicePerMin)
 
 	return func(c *gin.Context) {
 		route := c.Request.Method + " " + c.FullPath()
@@ -59,6 +69,9 @@ func RateClasses(valkey coreServices.ValkeyService, loginPerMin, heavyPerMin, pu
 			key, limit = "heavy:"+c.GetHeader("X-Tenant-Slug"), heavy
 		case publicRoutes[route]:
 			key, limit = "public:"+c.ClientIP(), public
+		case deviceRoutes[route]:
+			sum := sha256.Sum256([]byte(c.Query("id")))
+			key, limit = "device:"+hex.EncodeToString(sum[:]), device
 		default:
 			c.Next()
 			return

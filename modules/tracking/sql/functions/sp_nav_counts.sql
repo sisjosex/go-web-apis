@@ -35,9 +35,7 @@ BEGIN
         CASE WHEN p_scope_user_id IS NULL THEN CAST((
             SELECT COUNT(*)
             FROM tracking.route_alerts a
-            INNER JOIN tracking.routes r ON r.id = a.route_id
-            INNER JOIN tracking.transport_companies tc ON tc.id = r.company_id
-            WHERE tc.tenant_id = p_tenant_id AND a.status = 'active'
+            WHERE a.tenant_id = p_tenant_id AND a.status = 'active'
         ) AS INT) END,
         -- The same window as sp_list_documents' p_expiring_within_days = 30: expired ones included.
         CASE WHEN p_scope_user_id IS NULL THEN CAST((

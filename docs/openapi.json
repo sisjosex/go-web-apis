@@ -6698,6 +6698,7 @@
           },
           "route_id": {
             "format": "uuid",
+            "nullable": true,
             "type": "string"
           },
           "severity": {
@@ -6727,6 +6728,63 @@
           "status",
           "created_by",
           "created_at"
+        ],
+        "type": "object"
+      },
+      "tracking.AlertSettings": {
+        "additionalProperties": false,
+        "properties": {
+          "device_silent_min": {
+            "format": "int32",
+            "maximum": 60,
+            "minimum": 1,
+            "type": "integer"
+          },
+          "off_route_fixes": {
+            "format": "int32",
+            "maximum": 10,
+            "minimum": 2,
+            "type": "integer"
+          },
+          "off_route_m": {
+            "format": "int32",
+            "maximum": 1000,
+            "minimum": 50,
+            "type": "integer"
+          }
+        },
+        "required": [
+          "device_silent_min",
+          "off_route_m",
+          "off_route_fixes"
+        ],
+        "type": "object"
+      },
+      "tracking.AlertsSummary": {
+        "additionalProperties": false,
+        "properties": {
+          "active": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "notified_today": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "resolved_today": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "today": {
+            "format": "int64",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "active",
+          "resolved_today",
+          "notified_today",
+          "today"
         ],
         "type": "object"
       },
@@ -7391,6 +7449,7 @@
           },
           "route_id": {
             "format": "uuid",
+            "nullable": true,
             "type": "string"
           },
           "severity": {
@@ -7414,7 +7473,6 @@
           }
         },
         "required": [
-          "route_id",
           "alert_type",
           "title",
           "message"
@@ -9628,6 +9686,47 @@
         ],
         "type": "object"
       },
+      "tracking.GPSDeviceIssued": {
+        "additionalProperties": false,
+        "properties": {
+          "issued_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "token": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "token",
+          "issued_at"
+        ],
+        "type": "object"
+      },
+      "tracking.GPSDeviceStatus": {
+        "additionalProperties": false,
+        "properties": {
+          "issued_at": {
+            "format": "date-time",
+            "nullable": true,
+            "type": "string"
+          },
+          "last_seen_at": {
+            "format": "date-time",
+            "nullable": true,
+            "type": "string"
+          },
+          "linked": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "linked",
+          "issued_at",
+          "last_seen_at"
+        ],
+        "type": "object"
+      },
       "tracking.IncidentsReport": {
         "additionalProperties": false,
         "properties": {
@@ -9833,6 +9932,9 @@
             "format": "int64",
             "type": "integer"
           },
+          "summary": {
+            "$ref": "#/components/schemas/tracking.AlertsSummary"
+          },
           "total_count": {
             "format": "int64",
             "type": "integer"
@@ -9840,6 +9942,7 @@
         },
         "required": [
           "alerts",
+          "summary",
           "total_count",
           "page",
           "page_size"
@@ -12913,6 +13016,14 @@
             "nullable": true,
             "type": "string"
           },
+          "driver_name": {
+            "nullable": true,
+            "type": "string"
+          },
+          "driver_phone": {
+            "nullable": true,
+            "type": "string"
+          },
           "estimated_delay_minutes": {
             "format": "int32",
             "nullable": true,
@@ -12940,6 +13051,18 @@
             "nullable": true,
             "type": "string"
           },
+          "notified_count": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "organization_kind": {
+            "nullable": true,
+            "type": "string"
+          },
+          "organization_name": {
+            "nullable": true,
+            "type": "string"
+          },
           "resolved_at": {
             "format": "date-time",
             "nullable": true,
@@ -12956,9 +13079,11 @@
           },
           "route_id": {
             "format": "uuid",
+            "nullable": true,
             "type": "string"
           },
           "route_name": {
+            "nullable": true,
             "type": "string"
           },
           "severity": {
@@ -13002,7 +13127,12 @@
           "created_at",
           "resolved_at",
           "resolved_by",
-          "resolved_by_name"
+          "resolved_by_name",
+          "organization_name",
+          "organization_kind",
+          "driver_name",
+          "driver_phone",
+          "notified_count"
         ],
         "type": "object"
       },
@@ -17981,6 +18111,274 @@
           "geo"
         ],
         "x-handler": "josex/web/modules/geo/controllers.(*GeoController).Route"
+      }
+    },
+    "/api/v1/gps/osmand": {
+      "get": {
+        "description": "Traccar Client, OsmAnd and trackers that speak the OsmAnd query protocol: id is the device token issued from the vehicle page, lat, lon, timestamp (unix seconds or RFC3339, now when absent), speed in knots, bearing, accuracy; altitude and batt are ignored. During a trip the point yields to a phone that reported in the last GPS_PHONE_PRIORITY_S; off a trip it only moves the last position. 200 with an empty body",
+        "operationId": "tracking.IngestOsmand",
+        "parameters": [
+          {
+            "description": "The device token issued from the vehicle page",
+            "in": "query",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "lat",
+            "required": true,
+            "schema": {
+              "format": "double",
+              "type": "number"
+            }
+          },
+          {
+            "in": "query",
+            "name": "lon",
+            "required": true,
+            "schema": {
+              "format": "double",
+              "type": "number"
+            }
+          },
+          {
+            "description": "Unix seconds or RFC3339; now when absent",
+            "in": "query",
+            "name": "timestamp",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Knots",
+            "in": "query",
+            "name": "speed",
+            "schema": {
+              "format": "double",
+              "type": "number"
+            }
+          },
+          {
+            "in": "query",
+            "name": "bearing",
+            "schema": {
+              "format": "double",
+              "type": "number"
+            }
+          },
+          {
+            "description": "Metres",
+            "in": "query",
+            "name": "accuracy",
+            "schema": {
+              "format": "double",
+              "type": "number"
+            }
+          },
+          {
+            "in": "query",
+            "name": "altitude",
+            "schema": {
+              "format": "double",
+              "type": "number"
+            }
+          },
+          {
+            "in": "query",
+            "name": "batt",
+            "schema": {
+              "format": "double",
+              "type": "number"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/core.ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/core.ErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/core.ErrorResponse"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/core.ErrorResponse"
+                }
+              }
+            },
+            "description": "Internal Server Error"
+          }
+        },
+        "summary": "One point of a hardware tracker (OsmAnd protocol)",
+        "tags": [
+          "tracking"
+        ],
+        "x-handler": "josex/web/modules/tracking/controllers.(*IngestController).IngestOsmand"
+      },
+      "post": {
+        "description": "Traccar Client, OsmAnd and trackers that speak the OsmAnd query protocol: id is the device token issued from the vehicle page, lat, lon, timestamp (unix seconds or RFC3339, now when absent), speed in knots, bearing, accuracy; altitude and batt are ignored. During a trip the point yields to a phone that reported in the last GPS_PHONE_PRIORITY_S; off a trip it only moves the last position. 200 with an empty body",
+        "operationId": "tracking.IngestOsmand2",
+        "parameters": [
+          {
+            "description": "The device token issued from the vehicle page",
+            "in": "query",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "lat",
+            "required": true,
+            "schema": {
+              "format": "double",
+              "type": "number"
+            }
+          },
+          {
+            "in": "query",
+            "name": "lon",
+            "required": true,
+            "schema": {
+              "format": "double",
+              "type": "number"
+            }
+          },
+          {
+            "description": "Unix seconds or RFC3339; now when absent",
+            "in": "query",
+            "name": "timestamp",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Knots",
+            "in": "query",
+            "name": "speed",
+            "schema": {
+              "format": "double",
+              "type": "number"
+            }
+          },
+          {
+            "in": "query",
+            "name": "bearing",
+            "schema": {
+              "format": "double",
+              "type": "number"
+            }
+          },
+          {
+            "description": "Metres",
+            "in": "query",
+            "name": "accuracy",
+            "schema": {
+              "format": "double",
+              "type": "number"
+            }
+          },
+          {
+            "in": "query",
+            "name": "altitude",
+            "schema": {
+              "format": "double",
+              "type": "number"
+            }
+          },
+          {
+            "in": "query",
+            "name": "batt",
+            "schema": {
+              "format": "double",
+              "type": "number"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/core.ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/core.ErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/core.ErrorResponse"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/core.ErrorResponse"
+                }
+              }
+            },
+            "description": "Internal Server Error"
+          }
+        },
+        "summary": "One point of a hardware tracker (OsmAnd protocol)",
+        "tags": [
+          "tracking"
+        ],
+        "x-handler": "josex/web/modules/tracking/controllers.(*IngestController).IngestOsmand"
       }
     },
     "/api/v1/import": {
@@ -24729,9 +25127,93 @@
         "x-handler": "josex/web/modules/tenancy/controllers.(*ModuleController).SetVerticals"
       }
     },
+    "/api/v1/tracking/alert-settings": {
+      "get": {
+        "description": "When the server raises device_silent (minutes without a position during a trip) and off_route (metres from the planned line, for how many fixes in a row); the defaults 5 / 150 / 3 until the tenant saves its own (TRACK-071 D1)",
+        "operationId": "tracking.AlertSettings",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/tracking.AlertSettings"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/core.ErrorResponse"
+                }
+              }
+            },
+            "description": "Internal Server Error"
+          }
+        },
+        "summary": "The alert thresholds",
+        "tags": [
+          "tracking"
+        ],
+        "x-handler": "josex/web/modules/tracking/controllers.(*TrackingController).AlertSettings"
+      },
+      "put": {
+        "description": "device_silent_min 1–60, off_route_m 50–1000, off_route_fixes 2–10; answers the stored row",
+        "operationId": "tracking.SaveAlertSettings",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/tracking.AlertSettings"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/tracking.AlertSettings"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/core.ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/core.ErrorResponse"
+                }
+              }
+            },
+            "description": "Internal Server Error"
+          }
+        },
+        "summary": "Save the alert thresholds",
+        "tags": [
+          "tracking"
+        ],
+        "x-handler": "josex/web/modules/tracking/controllers.(*TrackingController).SaveAlertSettings"
+      }
+    },
     "/api/v1/tracking/alerts": {
       "get": {
-        "description": "Newest first. status defaults to active; all reads every status. Every row carries the route name, the plate and who raised and resolved it; trip_id and lat/lng are set on a driver's incident",
+        "description": "Newest first. status defaults to active; all reads every status; search matches the route, the plate or the driver. Every row carries the route name (null for an alert to the whole operation), the plate, who raised and resolved it, the route's client, the driver and how many accounts were notified; trip_id and lat/lng are set on a driver's incident and the two server kinds (device_silent, off_route). summary counts active, resolved today and notified today over every filter but status",
         "operationId": "tracking.ListRouteAlerts",
         "parameters": [
           {
@@ -24788,6 +25270,14 @@
               "minimum": 1,
               "type": "integer"
             }
+          },
+          {
+            "in": "query",
+            "name": "search",
+            "schema": {
+              "maxLength": 100,
+              "type": "string"
+            }
           }
         ],
         "responses": {
@@ -24829,7 +25319,7 @@
         "x-handler": "josex/web/modules/tracking/controllers.(*TrackingController).ListRouteAlerts"
       },
       "post": {
-        "description": "Create a delay, breakdown, or cancellation alert for a route",
+        "description": "Create a delay, breakdown, or cancellation alert for a route, or for the whole operation without route_id",
         "operationId": "tracking.CreateRouteAlert",
         "requestBody": {
           "content": {
@@ -34871,6 +35361,154 @@
           "tracking"
         ],
         "x-handler": "josex/web/modules/tracking/controllers.(*TrackingController).SetVehicleDriver"
+      }
+    },
+    "/api/v1/tracking/vehicles/{vehicle_id}/gps-device": {
+      "delete": {
+        "description": "Its token answers 401 from now on; a vehicle without one is a no-op.",
+        "operationId": "tracking.RevokeGPSDevice",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "vehicle_id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "No Content"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/core.ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/core.ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          }
+        },
+        "summary": "Unlink the vehicle's GPS device",
+        "tags": [
+          "tracking"
+        ],
+        "x-handler": "josex/web/modules/tracking/controllers.(*GPSDeviceController).RevokeGPSDevice"
+      },
+      "get": {
+        "description": "Whether a tracker is linked, when its token was issued and when it last posted (null before its first point).",
+        "operationId": "tracking.GPSDeviceStatus",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "vehicle_id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/tracking.GPSDeviceStatus"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/core.ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/core.ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          }
+        },
+        "summary": "The vehicle's GPS device",
+        "tags": [
+          "tracking"
+        ],
+        "x-handler": "josex/web/modules/tracking/controllers.(*GPSDeviceController).GPSDeviceStatus"
+      },
+      "post": {
+        "description": "A new token for the tracker (the OsmAnd id); the previous one answers 401 from now on. The token is answered this once — only its hash is stored.",
+        "operationId": "tracking.IssueGPSDevice",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "vehicle_id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/tracking.GPSDeviceIssued"
+                }
+              }
+            },
+            "description": "Created"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/core.ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/core.ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          }
+        },
+        "summary": "Issue or rotate the vehicle's GPS device token",
+        "tags": [
+          "tracking"
+        ],
+        "x-handler": "josex/web/modules/tracking/controllers.(*GPSDeviceController).IssueGPSDevice"
       }
     },
     "/api/v1/tracking/vehicles/{vehicle_id}/location": {

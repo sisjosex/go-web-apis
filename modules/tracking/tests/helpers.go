@@ -963,8 +963,8 @@ func raiseTripAlert(t *testing.T, helper *testhelpers.ApiTestHelper, routeID, tr
 	t.Helper()
 	var id string
 	if err := helper.DB().QueryRow(t.Context(), `
-		INSERT INTO tracking.route_alerts (route_id, trip_id, alert_type, title) VALUES ($1, $2, $3, $4) RETURNING id`,
-		routeID, tripID, alertType, title).Scan(&id); err != nil {
+		INSERT INTO tracking.route_alerts (tenant_id, route_id, trip_id, alert_type, title) VALUES ($1, $2, $3, $4, $5) RETURNING id`,
+		TestTenantID, routeID, tripID, alertType, title).Scan(&id); err != nil {
 		t.Fatalf("trip alert: %v", err)
 	}
 	return id
@@ -1371,6 +1371,140 @@ func VehiclePositionCount(t *testing.T, helper *testhelpers.ApiTestHelper, vehic
 		t.Fatalf("count positions: %v", err)
 	}
 	return n
+}
+
+// DeleteAlertNotices removes the feed rows one alert wrote: a tenant-wide alert reaches riders other
+// tests count notices of.
+func DeleteAlertNotices(t *testing.T, helper *testhelpers.ApiTestHelper, alertID string) {
+	t.Helper()
+	if _, err := helper.DB().Execute(context.Background(),
+		`DELETE FROM tracking.notifications WHERE type = 'delay' AND dedupe_key = $1`, alertID); err != nil {
+		t.Fatalf("delete alert notices: %v", err)
+	}
+}
+
+// ResetAlertSettings drops the seeded tenant's thresholds, back to the defaults (TRACK-071).
+func ResetAlertSettings(t *testing.T, helper *testhelpers.ApiTestHelper) {
+	t.Helper()
+	if _, err := helper.DB().Execute(context.Background(),
+		`DELETE FROM tracking.alert_settings WHERE tenant_id = $1`, TestTenantID); err != nil {
+		t.Fatalf("reset alert settings: %v", err)
+	}
+}
+
+// VehiclePlate is a vehicle's plate, as the API reads it.
+func VehiclePlate(t *testing.T, helper *testhelpers.ApiTestHelper, vehicleID string) string {
+	t.Helper()
+	w := helper.DoRequest("GET", "/tracking/vehicles/"+vehicleID, nil, map[string]string{})
+	if w.Code != http.StatusOK {
+		t.Fatalf("get vehicle: %d %s", w.Code, w.Body.String())
+	}
+	var vehicle models.Vehicle
+	if err := json.Unmarshal(w.Body.Bytes(), &vehicle); err != nil {
+		t.Fatalf("decode vehicle: %v", err)
+	}
+	return vehicle.PlateNumber
+}
+
+// BackdateTripStart moves a running trip's start back by age, as if it had left that long ago.
+func BackdateTripStart(t *testing.T, helper *testhelpers.ApiTestHelper, tripID string, age time.Duration) {
+	t.Helper()
+	if _, err := helper.DB().Execute(context.Background(),
+		`UPDATE tracking.trips SET started_at = now() - make_interval(secs => $2) WHERE id = $1`, tripID, age.Seconds()); err != nil {
+		t.Fatalf("backdate trip: %v", err)
+	}
+}
+
+// TripAlerts are the statuses of a trip's alerts of one kind, oldest first, and the last one's lat/lng.
+func TripAlerts(t *testing.T, helper *testhelpers.ApiTestHelper, tripID, alertType string) ([]string, *float64, *float64) {
+	t.Helper()
+	rows, err := helper.DB().Query(context.Background(), `
+		SELECT status, ST_Y(CAST(location AS GEOMETRY)), ST_X(CAST(location AS GEOMETRY))
+		FROM tracking.route_alerts WHERE trip_id = $1 AND alert_type = $2 ORDER BY created_at`, tripID, alertType)
+	if err != nil {
+		t.Fatalf("trip alerts: %v", err)
+	}
+	defer rows.Close()
+	var statuses []string
+	var lat, lng *float64
+	for rows.Next() {
+		var status string
+		if err := rows.Scan(&status, &lat, &lng); err != nil {
+			t.Fatalf("trip alerts: %v", err)
+		}
+		statuses = append(statuses, status)
+	}
+	return statuses, lat, lng
+}
+
+// RouteVersionHasLine tells whether the route's versions all carry the planned line's geography.
+func RouteVersionHasLine(t *testing.T, helper *testhelpers.ApiTestHelper, routeID string) bool {
+	t.Helper()
+	var all bool
+	if err := helper.DB().QueryRow(context.Background(),
+		`SELECT bool_and(planned_line IS NOT NULL) FROM tracking.route_versions WHERE route_id = $1`, routeID).Scan(&all); err != nil {
+		t.Fatalf("route version line: %v", err)
+	}
+	return all
+}
+
+// StoredPosition is one stored point of a vehicle as the phone/device tests read it (TRACK-068).
+type StoredPosition struct {
+	TripID  *string
+	Source  string
+	Speed   *float64
+	Heading *float64
+}
+
+// VehiclePositions are a vehicle's stored points, oldest first.
+func VehiclePositions(t *testing.T, helper *testhelpers.ApiTestHelper, vehicleID string) []StoredPosition {
+	t.Helper()
+	rows, err := helper.DB().Query(context.Background(),
+		`SELECT CAST(trip_id AS TEXT), source, speed, heading FROM tracking.vehicle_positions WHERE vehicle_id = $1 ORDER BY recorded_at`, vehicleID)
+	if err != nil {
+		t.Fatalf("read positions: %v", err)
+	}
+	out, err := pgx.CollectRows(rows, func(row pgx.CollectableRow) (StoredPosition, error) {
+		var p StoredPosition
+		var speed, heading *float32
+		err := row.Scan(&p.TripID, &p.Source, &speed, &heading)
+		if speed != nil {
+			s := float64(*speed)
+			p.Speed = &s
+		}
+		if heading != nil {
+			h := float64(*heading)
+			p.Heading = &h
+		}
+		return p, err
+	})
+	if err != nil {
+		t.Fatalf("read positions: %v", err)
+	}
+	return out
+}
+
+// LastPosition is the source and the instant of a vehicle's last position; "" when it has none.
+func LastPosition(t *testing.T, helper *testhelpers.ApiTestHelper, vehicleID string) (string, time.Time) {
+	t.Helper()
+	var source string
+	var at time.Time
+	err := helper.DB().QueryRow(context.Background(),
+		`SELECT source, recorded_at FROM tracking.vehicle_last_position WHERE vehicle_id = $1`, vehicleID).Scan(&source, &at)
+	if err != nil && err != pgx.ErrNoRows {
+		t.Fatalf("last position: %v", err)
+	}
+	return source, at
+}
+
+// AgeLastPosition moves a vehicle's last position back to age ago, as if the phone had gone quiet.
+func AgeLastPosition(t *testing.T, helper *testhelpers.ApiTestHelper, vehicleID string, age time.Duration) {
+	t.Helper()
+	if _, err := helper.DB().Execute(context.Background(),
+		`UPDATE tracking.vehicle_last_position SET recorded_at = now() - make_interval(secs => $2) WHERE vehicle_id = $1`,
+		vehicleID, age.Seconds()); err != nil {
+		t.Fatalf("age last position: %v", err)
+	}
 }
 
 // ============================================================================

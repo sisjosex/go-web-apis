@@ -19,7 +19,7 @@ import (
 )
 
 // INFRA-011 D3: sign-in per IP and address, imports per tenant, on top of the per-IP limit; the public
-// share read per IP (TRACK-060).
+// share read per IP (TRACK-060), a hardware tracker per token (TRACK-068).
 
 func classEngine(t *testing.T) *gin.Engine {
 	t.Helper()
@@ -32,7 +32,7 @@ func classEngine(t *testing.T) *gin.Engine {
 		t.Fatalf("Valkey unreachable: %v", err)
 	}
 	engine := gin.New()
-	engine.Use(coreMiddleware.RateClasses(helper.Valkey(), 5, 3, 60))
+	engine.Use(coreMiddleware.RateClasses(helper.Valkey(), 5, 3, 60, 120))
 	engine.POST("/api/v1/auth/login", func(c *gin.Context) {
 		// The controller still reads the body the limiter looked at.
 		raw, _ := io.ReadAll(c.Request.Body)
@@ -44,6 +44,7 @@ func classEngine(t *testing.T) *gin.Engine {
 	})
 	engine.POST("/api/v1/import", func(c *gin.Context) { c.Status(http.StatusOK) })
 	engine.GET("/api/v1/public/share/:token", func(c *gin.Context) { c.Status(http.StatusOK) })
+	engine.GET("/api/v1/gps/osmand", func(c *gin.Context) { c.Status(http.StatusOK) })
 	return engine
 }
 
@@ -116,5 +117,29 @@ func TestRateClasses_PublicPerIP(t *testing.T) {
 	}
 	if code := get("203.0.113.10:4000", "slug.t0"); code != http.StatusOK {
 		t.Fatalf("another IP: want 200, got %d", code)
+	}
+}
+
+// TestRateClasses_DevicePerToken - the 121st OsmAnd point a minute of one token is 429 with
+// Retry-After; another token behind the same IP still gets through.
+func TestRateClasses_DevicePerToken(t *testing.T) {
+	engine := classEngine(t)
+	get := func(id string) *httptest.ResponseRecorder {
+		req := httptest.NewRequest(http.MethodGet, "/api/v1/gps/osmand?lat=-17.39&lon=-66.15&id="+id, nil)
+		req.RemoteAddr = "203.0.113.9:4000"
+		rec := httptest.NewRecorder()
+		engine.ServeHTTP(rec, req)
+		return rec
+	}
+	for i := range 120 {
+		if rec := get("tenant.busy"); rec.Code != http.StatusOK {
+			t.Fatalf("point %d: want 200, got %d", i+1, rec.Code)
+		}
+	}
+	if rec := get("tenant.busy"); rec.Code != http.StatusTooManyRequests || rec.Header().Get("Retry-After") == "" {
+		t.Fatalf("121st point: want 429 with Retry-After, got %d %q", rec.Code, rec.Header().Get("Retry-After"))
+	}
+	if rec := get("tenant.calm"); rec.Code != http.StatusOK {
+		t.Fatalf("another token: want 200, got %d", rec.Code)
 	}
 }

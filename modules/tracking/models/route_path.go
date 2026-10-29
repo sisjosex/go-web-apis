@@ -67,4 +67,7 @@ type RouteVersionPoints struct {
 	Points     []geoModels.LatLng
 	PointsHash *string
 	Source     *string
+	// Polyline6 is the stored line; HasLine whether its geography for the off-route check is stored (TRACK-071).
+	Polyline6 *string
+	HasLine   bool
 }

@@ -244,8 +244,9 @@ func useGlobalMiddleware(r *gin.Engine, valkey coreServices.ValkeyService) {
 	// todos los tests, así que necesita un límite alto para no rechazarse a sí misma.
 	coreConf := config.ModularAppConfig.Core
 	r.Use(coreMiddleware.RateLimit(valkey, coreConf.RateLimitPerSecond, coreConf.RateLimitBurst))
-	// Sign-in per IP and address, imports per tenant (INFRA-011 D3), the public share reads per IP (TRACK-060).
-	r.Use(coreMiddleware.RateClasses(valkey, coreConf.RateLimitLoginPerMin, coreConf.RateLimitHeavyPerMin, coreConf.RateLimitPublicPerMin))
+	// Sign-in per IP and address, imports per tenant (INFRA-011 D3), the public share reads per IP (TRACK-060),
+	// a hardware tracker per token (TRACK-068).
+	r.Use(coreMiddleware.RateClasses(valkey, coreConf.RateLimitLoginPerMin, coreConf.RateLimitHeavyPerMin, coreConf.RateLimitPublicPerMin, coreConf.RateLimitDevicePerMin))
 
 	// Language middleware - detects lang from ?lang=es or Accept-Language header
 	r.Use(coreMiddleware.LanguageMiddleware())
@@ -557,6 +558,18 @@ func registerTracking(d routeDeps, chains tenantChains, valkey coreServices.Valk
 		}
 	}
 
+	// The hardware tracker (TRACK-068 D1): the device chain alone, its token in the id parameter; the
+	// vehicle page issues that token.
+	var deviceAuth []gin.HandlerFunc
+	var gpsDevices *trackingControllers.GPSDeviceController
+	if chains.device != nil {
+		gpsDevices = trackingControllers.NewGPSDeviceController(trackingService, tenancyRepos.NewGPSDeviceRepository(d.db))
+		deviceAuth = []gin.HandlerFunc{chains.device}
+		if chains.modules != nil {
+			deviceAuth = append(deviceAuth, tenancyMW.LoadTenantModules(chains.modules), tenancyMW.RequireModule("tracking"))
+		}
+	}
+
 	// The driver's phone (TRACK-011): the ingest's driver chain, one middleware per handler.
 	var driverAuth []gin.HandlerFunc
 	if chains.driver != nil {
@@ -605,7 +618,7 @@ func registerTracking(d routeDeps, chains tenantChains, valkey coreServices.Valk
 	// two reads run the same chain with the portal refusal lifted (TRACK-017 D1).
 	trackingRoutes.RegisterTrackingRoutes(d.engine, trackingController, chains.withModule("tracking"),
 		chains.withModule("tracking", tenancyModels.RolePortal), d.jwt,
-		trackingRoutes.Ingest{Controller: ingestController, Auth: ingestAuth}, liveRoutes, driverRoutes, portalRoutes,
+		trackingRoutes.Ingest{Controller: ingestController, Auth: ingestAuth, Device: deviceAuth, Tokens: gpsDevices}, liveRoutes, driverRoutes, portalRoutes,
 		trackingControllers.NewAccessController(trackingServices.NewAccessService(trackingRepos.NewTrackingRepository(d.db), d.email)))
 	log.Println("✅ Tracking module enabled and routes registered")
 }

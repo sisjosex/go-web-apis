@@ -87,7 +87,8 @@ type RiderStatusResponse struct {
 
 // CreateAlertDto represents request to create route alert
 type CreateAlertDto struct {
-	RouteID               uuid.UUID  `json:"route_id" binding:"required,uuidv4"`
+	// RouteID nil is an alert to the whole operation (TRACK-071).
+	RouteID               *uuid.UUID `json:"route_id" binding:"omitempty,uuidv4"`
 	VehicleID             *uuid.UUID `json:"vehicle_id" binding:"omitempty,uuidv4"`
 	AlertType             string     `json:"alert_type" binding:"required,oneof=delay breakdown cancellation emergency other" enums:"delay,breakdown,cancellation,emergency,other"`
 	Title                 string     `json:"title" binding:"required,min=3,max=255" conform:"trim"`
@@ -99,7 +100,7 @@ type CreateAlertDto struct {
 // AlertCreatedResponse represents response after creating alert
 type AlertCreatedResponse struct {
 	AlertID               uuid.UUID  `json:"alert_id"`
-	RouteID               uuid.UUID  `json:"route_id"`
+	RouteID               *uuid.UUID `json:"route_id"`
 	VehicleID             *uuid.UUID `json:"vehicle_id"`
 	AlertType             string     `json:"alert_type"`
 	Title                 string     `json:"title"`

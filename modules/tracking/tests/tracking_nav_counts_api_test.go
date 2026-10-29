@@ -101,7 +101,7 @@ func TestNavCounts_FrameOnAlert(t *testing.T) {
 	defer inspector.Close()
 	registry := coreJobs.NewRegistry()
 	lister := coreJobs.NewTenantDirectory(func(context.Context) ([]coreJobs.Tenant, error) { return []coreJobs.Tenant{testTenant()}, nil })
-	registry.Handle(trackingJobs.TaskAlertChanged, trackingJobs.AlertChangedHandler(helper.DB(), lister, helper.Valkey(), nil))
+	registry.Handle(trackingJobs.TaskAlertChanged, trackingJobs.AlertChangedHandler(helper.DB(), lister, helper.Valkey(), nil, nil, nil))
 	worker, err := coreJobs.StartWorker(helper.Valkey(), registry, 2)
 	if err != nil {
 		t.Fatalf("worker: %v", err)

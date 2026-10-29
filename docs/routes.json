@@ -612,6 +612,80 @@
       "writes": []
     },
     {
+      "method": "GET",
+      "path": "/api/v1/gps/osmand",
+      "operation_id": "tracking.IngestOsmand",
+      "module": "tracking",
+      "handler": "josex/web/modules/tracking/controllers.(*IngestController).IngestOsmand",
+      "sps": [
+        "tracking.sp_driver_active_vehicle",
+        "tracking.sp_ingest_positions"
+      ],
+      "reads": [
+        "tracking.alert_settings",
+        "tracking.compliance_documents",
+        "tracking.document_types",
+        "tracking.drivers",
+        "tracking.organizations",
+        "tracking.riders",
+        "tracking.route_versions",
+        "tracking.routes",
+        "tracking.stop_places",
+        "tracking.trip_stop_tasks",
+        "tracking.trip_stops",
+        "tracking.trips",
+        "tracking.vehicles",
+        "v_fix.trip_id"
+      ],
+      "writes": [
+        "tracking.outbox",
+        "tracking.route_alerts",
+        "tracking.trip_events",
+        "tracking.trip_stop_tasks",
+        "tracking.trip_stops",
+        "tracking.trips",
+        "tracking.vehicle_last_position",
+        "tracking.vehicle_positions"
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/gps/osmand",
+      "operation_id": "tracking.IngestOsmand2",
+      "module": "tracking",
+      "handler": "josex/web/modules/tracking/controllers.(*IngestController).IngestOsmand",
+      "sps": [
+        "tracking.sp_driver_active_vehicle",
+        "tracking.sp_ingest_positions"
+      ],
+      "reads": [
+        "tracking.alert_settings",
+        "tracking.compliance_documents",
+        "tracking.document_types",
+        "tracking.drivers",
+        "tracking.organizations",
+        "tracking.riders",
+        "tracking.route_versions",
+        "tracking.routes",
+        "tracking.stop_places",
+        "tracking.trip_stop_tasks",
+        "tracking.trip_stops",
+        "tracking.trips",
+        "tracking.vehicles",
+        "v_fix.trip_id"
+      ],
+      "writes": [
+        "tracking.outbox",
+        "tracking.route_alerts",
+        "tracking.trip_events",
+        "tracking.trip_stop_tasks",
+        "tracking.trip_stops",
+        "tracking.trips",
+        "tracking.vehicle_last_position",
+        "tracking.vehicle_positions"
+      ]
+    },
+    {
       "method": "POST",
       "path": "/api/v1/import",
       "operation_id": "import.Import",
@@ -2915,6 +2989,36 @@
     },
     {
       "method": "GET",
+      "path": "/api/v1/tracking/alert-settings",
+      "operation_id": "tracking.AlertSettings",
+      "module": "tracking",
+      "handler": "josex/web/modules/tracking/controllers.(*TrackingController).AlertSettings",
+      "sps": [
+        "tracking.sp_alert_settings_get"
+      ],
+      "reads": [
+        "tracking.alert_settings"
+      ],
+      "writes": []
+    },
+    {
+      "method": "PUT",
+      "path": "/api/v1/tracking/alert-settings",
+      "operation_id": "tracking.SaveAlertSettings",
+      "module": "tracking",
+      "handler": "josex/web/modules/tracking/controllers.(*TrackingController).SaveAlertSettings",
+      "sps": [
+        "tracking.sp_alert_settings_put"
+      ],
+      "reads": [
+        "tracking.alert_settings"
+      ],
+      "writes": [
+        "tracking.alert_settings"
+      ]
+    },
+    {
+      "method": "GET",
       "path": "/api/v1/tracking/alerts",
       "operation_id": "tracking.ListRouteAlerts",
       "module": "tracking",
@@ -2924,9 +3028,12 @@
       ],
       "reads": [
         "auth.users",
+        "tracking.drivers",
+        "tracking.notifications",
+        "tracking.organizations",
         "tracking.route_alerts",
         "tracking.routes",
-        "tracking.transport_companies",
+        "tracking.trips",
         "tracking.vehicles"
       ],
       "writes": []
@@ -2960,9 +3067,12 @@
       ],
       "reads": [
         "auth.users",
+        "tracking.drivers",
+        "tracking.notifications",
+        "tracking.organizations",
         "tracking.route_alerts",
         "tracking.routes",
-        "tracking.transport_companies",
+        "tracking.trips",
         "tracking.vehicles"
       ],
       "writes": [
@@ -3702,23 +3812,28 @@
         "tracking.sp_ingest_positions"
       ],
       "reads": [
+        "tracking.alert_settings",
         "tracking.compliance_documents",
         "tracking.document_types",
         "tracking.drivers",
         "tracking.organizations",
         "tracking.riders",
+        "tracking.route_versions",
         "tracking.routes",
         "tracking.stop_places",
         "tracking.trip_stop_tasks",
         "tracking.trip_stops",
         "tracking.trips",
-        "tracking.vehicles"
+        "tracking.vehicles",
+        "v_fix.trip_id"
       ],
       "writes": [
         "tracking.outbox",
+        "tracking.route_alerts",
         "tracking.trip_events",
         "tracking.trip_stop_tasks",
         "tracking.trip_stops",
+        "tracking.trips",
         "tracking.vehicle_last_position",
         "tracking.vehicle_positions"
       ]
@@ -3837,8 +3952,6 @@
         "tracking.organizations",
         "tracking.riders",
         "tracking.route_alerts",
-        "tracking.routes",
-        "tracking.transport_companies",
         "tracking.trip_stop_tasks",
         "tracking.trip_stops",
         "tracking.trips"
@@ -4195,6 +4308,7 @@
       "reads": [
         "auth.users",
         "tracking.drivers",
+        "tracking.notifications",
         "tracking.organization_members",
         "tracking.organizations",
         "tracking.rider_day_attendance",
@@ -4207,6 +4321,7 @@
         "tracking.trip_stop_tasks",
         "tracking.trip_stops",
         "tracking.trip_summaries",
+        "tracking.trips",
         "tracking.vehicles"
       ],
       "writes": []
@@ -4226,6 +4341,7 @@
       "reads": [
         "auth.users",
         "tracking.drivers",
+        "tracking.notifications",
         "tracking.organization_members",
         "tracking.organizations",
         "tracking.rider_day_attendance",
@@ -4238,6 +4354,7 @@
         "tracking.trip_stop_tasks",
         "tracking.trip_stops",
         "tracking.trip_summaries",
+        "tracking.trips",
         "tracking.vehicles"
       ],
       "writes": []
@@ -4257,6 +4374,7 @@
       "reads": [
         "auth.users",
         "tracking.drivers",
+        "tracking.notifications",
         "tracking.organization_members",
         "tracking.organizations",
         "tracking.rider_day_attendance",
@@ -4269,6 +4387,7 @@
         "tracking.trip_stop_tasks",
         "tracking.trip_stops",
         "tracking.trip_summaries",
+        "tracking.trips",
         "tracking.vehicles"
       ],
       "writes": []
@@ -4288,6 +4407,7 @@
       "reads": [
         "auth.users",
         "tracking.drivers",
+        "tracking.notifications",
         "tracking.organization_members",
         "tracking.organizations",
         "tracking.rider_day_attendance",
@@ -4300,6 +4420,7 @@
         "tracking.trip_stop_tasks",
         "tracking.trip_stops",
         "tracking.trip_summaries",
+        "tracking.trips",
         "tracking.vehicles"
       ],
       "writes": []
@@ -4319,6 +4440,7 @@
       "reads": [
         "auth.users",
         "tracking.drivers",
+        "tracking.notifications",
         "tracking.organization_members",
         "tracking.organizations",
         "tracking.rider_day_attendance",
@@ -4331,6 +4453,7 @@
         "tracking.trip_stop_tasks",
         "tracking.trip_stops",
         "tracking.trip_summaries",
+        "tracking.trips",
         "tracking.vehicles"
       ],
       "writes": []
@@ -6041,6 +6164,65 @@
       "writes": [
         "tracking.outbox",
         "tracking.vehicles"
+      ]
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/v1/tracking/vehicles/{vehicle_id}/gps-device",
+      "operation_id": "tracking.RevokeGPSDevice",
+      "module": "tracking",
+      "handler": "josex/web/modules/tracking/controllers.(*GPSDeviceController).RevokeGPSDevice",
+      "sps": [
+        "tenancy.sp_gps_device_revoke",
+        "tracking.sp_get_vehicle"
+      ],
+      "reads": [
+        "tracking.drivers",
+        "tracking.transport_companies",
+        "tracking.vehicles"
+      ],
+      "writes": [
+        "tenancy.gps_devices"
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/tracking/vehicles/{vehicle_id}/gps-device",
+      "operation_id": "tracking.GPSDeviceStatus",
+      "module": "tracking",
+      "handler": "josex/web/modules/tracking/controllers.(*GPSDeviceController).GPSDeviceStatus",
+      "sps": [
+        "tenancy.sp_gps_device_status",
+        "tracking.sp_get_vehicle"
+      ],
+      "reads": [
+        "tenancy.gps_devices",
+        "tracking.drivers",
+        "tracking.transport_companies",
+        "tracking.vehicles"
+      ],
+      "writes": []
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/tracking/vehicles/{vehicle_id}/gps-device",
+      "operation_id": "tracking.IssueGPSDevice",
+      "module": "tracking",
+      "handler": "josex/web/modules/tracking/controllers.(*GPSDeviceController).IssueGPSDevice",
+      "sps": [
+        "tenancy.sp_gps_device_issue",
+        "tenancy.sp_gps_device_status",
+        "tracking.sp_get_vehicle"
+      ],
+      "reads": [
+        "tenancy.gps_devices",
+        "tenancy.tenants",
+        "tracking.drivers",
+        "tracking.transport_companies",
+        "tracking.vehicles"
+      ],
+      "writes": [
+        "tenancy.gps_devices"
       ]
     },
     {
@@ -7837,6 +8019,20 @@
       ],
       "calls": []
     },
+    "tenancy.sp_gps_device_revoke": {
+      "reads": [],
+      "writes": [
+        "tenancy.gps_devices"
+      ],
+      "calls": []
+    },
+    "tenancy.sp_gps_device_status": {
+      "reads": [
+        "tenancy.gps_devices"
+      ],
+      "writes": [],
+      "calls": []
+    },
     "tenancy.sp_grant_app_access": {
       "reads": [
         "tenancy.tenants"
@@ -7975,6 +8171,13 @@
       "reads": [
         "tenancy.tenant_users",
         "tenancy.tenants"
+      ],
+      "writes": [],
+      "calls": []
+    },
+    "tenancy.sp_tenant_staff_users": {
+      "reads": [
+        "tenancy.tenant_users"
       ],
       "writes": [],
       "calls": []
@@ -8329,9 +8532,12 @@
     "tracking.fn_route_alert_rows": {
       "reads": [
         "auth.users",
+        "tracking.drivers",
+        "tracking.notifications",
+        "tracking.organizations",
         "tracking.route_alerts",
         "tracking.routes",
-        "tracking.transport_companies",
+        "tracking.trips",
         "tracking.vehicles"
       ],
       "writes": [],
@@ -8640,6 +8846,22 @@
       "calls": [
         "tracking.fn_calendar_routes",
         "tracking.fn_route_changed"
+      ]
+    },
+    "tracking.sp_alert_settings_get": {
+      "reads": [
+        "tracking.alert_settings"
+      ],
+      "writes": [],
+      "calls": []
+    },
+    "tracking.sp_alert_settings_put": {
+      "reads": [],
+      "writes": [
+        "tracking.alert_settings"
+      ],
+      "calls": [
+        "tracking.sp_alert_settings_get"
       ]
     },
     "tracking.sp_anonymise_rider_contacts": {
@@ -9507,19 +9729,24 @@
     "tracking.sp_ingest_positions": {
       "reads": [
         "tracking.riders",
+        "tracking.route_versions",
         "tracking.stop_places",
         "tracking.trip_stop_tasks",
-        "tracking.trips",
-        "tracking.vehicles"
+        "tracking.vehicles",
+        "v_fix.trip_id"
       ],
       "writes": [
+        "tracking.route_alerts",
         "tracking.trip_stops",
+        "tracking.trips",
         "tracking.vehicle_last_position",
         "tracking.vehicle_positions"
       ],
       "calls": [
+        "tracking.fn_alert_changed",
         "tracking.fn_ingest_points",
         "tracking.fn_trip_changed",
+        "tracking.sp_alert_settings_get",
         "tracking.sp_trip_stop_transition"
       ]
     },
@@ -9960,8 +10187,6 @@
         "tracking.compliance_documents",
         "tracking.riders",
         "tracking.route_alerts",
-        "tracking.routes",
-        "tracking.transport_companies",
         "tracking.trip_stop_tasks",
         "tracking.trip_stops",
         "tracking.trips"
@@ -10073,6 +10298,19 @@
       ],
       "calls": []
     },
+    "tracking.sp_raise_device_silent_alerts": {
+      "reads": [
+        "tracking.trips",
+        "tracking.vehicle_last_position"
+      ],
+      "writes": [
+        "tracking.route_alerts"
+      ],
+      "calls": [
+        "tracking.fn_alert_changed",
+        "tracking.sp_alert_settings_get"
+      ]
+    },
     "tracking.sp_raise_document_alerts": {
       "reads": [
         "tracking.document_types"
@@ -10174,10 +10412,7 @@
       ]
     },
     "tracking.sp_resolve_route_alert": {
-      "reads": [
-        "tracking.routes",
-        "tracking.transport_companies"
-      ],
+      "reads": [],
       "writes": [
         "tracking.route_alerts"
       ],
@@ -10356,6 +10591,16 @@
         "tracking.fn_notice_scope",
         "tracking.sp_get_notification_settings"
       ]
+    },
+    "tracking.sp_set_route_version_line": {
+      "reads": [
+        "tracking.routes",
+        "tracking.transport_companies"
+      ],
+      "writes": [
+        "tracking.route_versions"
+      ],
+      "calls": []
     },
     "tracking.sp_set_route_version_path": {
       "reads": [

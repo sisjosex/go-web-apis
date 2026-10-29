@@ -77,8 +77,8 @@ func (r *TrackingRepository) RouteVersionPathPoints(ctx context.Context, tenantI
 	var out models.RouteVersionPoints
 	var points []byte
 	err := r.dbService.QueryRow(ctx,
-		`SELECT points, path_points_hash, path_source FROM tracking.sp_route_version_path_points(p_tenant_id := $1, p_version_id := $2)`,
-		tenantID, versionID).Scan(&points, &out.PointsHash, &out.Source)
+		`SELECT points, path_points_hash, path_source, planned_polyline, has_line FROM tracking.sp_route_version_path_points(p_tenant_id := $1, p_version_id := $2)`,
+		tenantID, versionID).Scan(&points, &out.PointsHash, &out.Source, &out.Polyline6, &out.HasLine)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, nil
 	}
@@ -92,8 +92,9 @@ func (r *TrackingRepository) RouteVersionPathPoints(ctx context.Context, tenantI
 }
 
 // SetRouteVersionPath stores a version's line; path nil clears it. Either way the version is stamped
-// computed, from pointsHash.
-func (r *TrackingRepository) SetRouteVersionPath(ctx context.Context, tenantID, versionID uuid.UUID, path *models.RoutePath, pointsHash string) error {
+// computed, from pointsHash. lineWKT is the street line as WKT for the off-route check, nil for a
+// fallback line (TRACK-071).
+func (r *TrackingRepository) SetRouteVersionPath(ctx context.Context, tenantID, versionID uuid.UUID, path *models.RoutePath, pointsHash string, lineWKT *string) error {
 	var polyline, source *string
 	var distanceM *int
 	var legs []byte
@@ -106,7 +107,15 @@ func (r *TrackingRepository) SetRouteVersionPath(ctx context.Context, tenantID, 
 	}
 	_, err := r.dbService.Execute(ctx,
 		`SELECT tracking.sp_set_route_version_path(p_tenant_id := $1, p_version_id := $2, p_polyline := $3, p_distance_m := $4,
-			p_legs := $5::JSONB, p_source := $6, p_points_hash := $7)`,
-		tenantID, versionID, polyline, distanceM, legs, source, pointsHash)
+			p_legs := $5::JSONB, p_source := $6, p_points_hash := $7, p_line_wkt := $8)`,
+		tenantID, versionID, polyline, distanceM, legs, source, pointsHash, lineWKT)
+	return err
+}
+
+// SetRouteVersionLine stores only the geography of a version's stored street line (TRACK-071 backfill).
+func (r *TrackingRepository) SetRouteVersionLine(ctx context.Context, tenantID, versionID uuid.UUID, lineWKT string) error {
+	_, err := r.dbService.Execute(ctx,
+		`SELECT tracking.sp_set_route_version_line(p_tenant_id := $1, p_version_id := $2, p_line_wkt := $3)`,
+		tenantID, versionID, lineWKT)
 	return err
 }

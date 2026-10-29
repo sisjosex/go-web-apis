@@ -17,9 +17,10 @@ BEGIN
     END IF;
 
     INSERT INTO tracking.route_alerts (
-        route_id, vehicle_id, trip_id, alert_type, title, message, severity, location, created_by, status
+        tenant_id, route_id, vehicle_id, trip_id, alert_type, title, message, severity, location, created_by, status
     )
     VALUES (
+        p_tenant_id,
         v_trip.route_id,
         v_trip.vehicle_id,
         v_trip.id,

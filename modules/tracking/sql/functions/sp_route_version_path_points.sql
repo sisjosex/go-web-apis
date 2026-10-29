@@ -1,5 +1,5 @@
 CREATE OR REPLACE FUNCTION tracking.sp_route_version_path_points(p_tenant_id uuid, p_version_id uuid)
- RETURNS TABLE(points jsonb, path_points_hash character varying, path_source character varying)
+ RETURNS TABLE(points jsonb, path_points_hash character varying, path_source character varying, planned_polyline text, has_line boolean)
  LANGUAGE sql
  STABLE
 AS $function$
@@ -15,7 +15,9 @@ AS $function$
               AND sp.location IS NOT NULL
         ), '[]'::jsonb),
         CAST(rv.path_points_hash AS VARCHAR),
-        CAST(rv.path_source AS VARCHAR)
+        CAST(rv.path_source AS VARCHAR),
+        rv.planned_polyline,
+        rv.planned_line IS NOT NULL
     FROM tracking.route_versions rv
     INNER JOIN tracking.routes r ON r.id = rv.route_id
     INNER JOIN tracking.transport_companies tc ON tc.id = r.company_id
@@ -23,4 +25,4 @@ AS $function$
       AND tc.tenant_id = p_tenant_id;
 $function$;
 
-COMMENT ON FUNCTION tracking.sp_route_version_path_points(uuid,uuid) IS 'A route version''s located stops in sequence as [{lat, lng}], with the hash and source of its stored line (TRACK-028)';
+COMMENT ON FUNCTION tracking.sp_route_version_path_points(uuid,uuid) IS 'A route version''s located stops in sequence as [{lat, lng}], with the hash and source of its stored line, the line itself and whether its geography for the off-route check is stored (TRACK-028, TRACK-071)';

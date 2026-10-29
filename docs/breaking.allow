@@ -4,3 +4,7 @@
 #
 # The gate's contract stage reads it against HEAD's docs/openapi.json. Empty the file once the
 # change is committed: an entry left here would let the next break through unreviewed.
+GET /api/v1/tracking/alerts   # TRACK-071 an alert to the whole operation has no route: route_id/route_name null; web and mobile read them nullable
+PATCH /api/v1/tracking/alerts/{alert_id}/resolve   # TRACK-071 same row shape as the list
+POST /api/v1/tracking/alerts   # TRACK-071 route_id optional, answered null for the whole operation
+GET /api/v1/tracking/reports/incidents   # TRACK-071 the incidents report lists tenant-wide alerts too, in the alerts' row shape

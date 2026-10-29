@@ -28,11 +28,31 @@ type PositionPoint struct {
 	Seq        *int64    `json:"seq"`
 }
 
+// OsmandQuery is one point of the OsmAnd / Traccar Client protocol (TRACK-068 D1): the device token as
+// id, lon for the longitude, timestamp in unix seconds or RFC3339, speed in knots, bearing in degrees.
+// altitude and batt are read and ignored.
+type OsmandQuery struct {
+	ID        string   `form:"id" binding:"required" doc:"The device token issued from the vehicle page"`
+	Lat       *float64 `form:"lat" binding:"required"`
+	Lon       *float64 `form:"lon" binding:"required"`
+	Timestamp string   `form:"timestamp" doc:"Unix seconds or RFC3339; now when absent"`
+	Speed     *float64 `form:"speed" doc:"Knots"`
+	Bearing   *float64 `form:"bearing"`
+	Accuracy  *float64 `form:"accuracy" doc:"Metres"`
+	Altitude  *float64 `form:"altitude"`
+	Batt      *float64 `form:"batt"`
+}
+
+// KnotsToMS turns an OsmAnd speed into the m/s a stored point carries.
+const KnotsToMS = 0.514444
+
 // IngestRadii are the two distances a stored point is checked against, in metres: within ArrivalM of
 // the trip's next stop marks it arrived (TRACK-010), within ApproachM announces it once (TRACK-012 D4).
+// PhonePriorityS is how long a phone fix keeps a device's points out of a trip (TRACK-068 D2).
 type IngestRadii struct {
-	ArrivalM  int
-	ApproachM int
+	ArrivalM       int
+	ApproachM      int
+	PhonePriorityS int
 }
 
 // StoredPoint is a point as the stream and sp_ingest_positions take it: the vehicle is the server's
@@ -45,7 +65,14 @@ type StoredPoint struct {
 	Speed      *float64  `json:"speed,omitempty"`
 	Heading    *float64  `json:"heading,omitempty"`
 	Accuracy   *float64  `json:"accuracy,omitempty"`
+	Source     string    `json:"source"`
 }
+
+// The two receivers a point comes from (TRACK-068 D2): the driver's phone, or a tracker on the bus.
+const (
+	PointSourcePhone  = "phone"
+	PointSourceDevice = "device"
+)
 
 // Where an accepted batch went: the stream (the worker stores it), or the database directly because
 // Valkey was not there (D2).

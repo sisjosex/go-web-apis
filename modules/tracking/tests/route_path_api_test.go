@@ -56,7 +56,7 @@ func storePath(t *testing.T, helper *testhelpers.ApiTestHelper, versionID, polyl
 	path := &models.RoutePath{Polyline6: polyline, DistanceM: 650, Source: "valhalla",
 		Legs: []models.RoutePathLeg{{DistanceM: 320, DurationS: 60}, {DistanceM: 330, DurationS: 65}}}
 	if err := trackingRepos.NewTrackingRepository(helper.DB()).SetRouteVersionPath(context.Background(),
-		uuid.MustParse(TestTenantID), uuid.MustParse(versionID), path, "hash-"+polyline); err != nil {
+		uuid.MustParse(TestTenantID), uuid.MustParse(versionID), path, "hash-"+polyline, nil); err != nil {
 		t.Fatalf("store path: %v", err)
 	}
 }

@@ -20,6 +20,7 @@ import (
 var alertStatus = map[string]int{
 	trackingErrors.AlertNotFound:        http.StatusNotFound,
 	trackingErrors.AlertAlreadyResolved: http.StatusConflict,
+	trackingErrors.AlertSettingsInvalid: http.StatusBadRequest,
 }
 
 func alertErrorResponse(c *gin.Context, err error) error {
@@ -78,6 +79,43 @@ func (ctrl *TrackingController) ResolveRouteAlert(ctx context.Context, _ *Resolv
 		return nil, alertErrorResponse(c, err)
 	}
 	return api.OK(result)
+}
+
+// AlertSettings is GET /alert-settings: The alert thresholds.
+func (ctrl *TrackingController) AlertSettings(ctx context.Context, _ *api.None) (*api.Out[*models.AlertSettings], error) {
+	c := api.Gin(ctx)
+	tenantID, err := ctrl.requireTenantID(c)
+	if err != nil {
+		return nil, err
+	}
+	settings, err := ctrl.trackingService.AlertSettings(c.Request.Context(), tenantID)
+	if err != nil {
+		return nil, alertErrorResponse(c, err)
+	}
+	return api.OK(settings)
+}
+
+// SaveAlertSettingsInput is SaveAlertSettings's request.
+type SaveAlertSettingsInput struct {
+	JSON api.Body[models.AlertSettings]
+}
+
+// SaveAlertSettings is PUT /alert-settings: Save the alert thresholds.
+func (ctrl *TrackingController) SaveAlertSettings(ctx context.Context, in *SaveAlertSettingsInput) (*api.Out[*models.AlertSettings], error) {
+	c := api.Gin(ctx)
+	tenantID, err := ctrl.requireTenantID(c)
+	if err != nil {
+		return nil, err
+	}
+	var body models.AlertSettings
+	if err := in.JSON.Into(ctx, &body); err != nil {
+		return nil, api.Fail(http.StatusBadRequest, coreErrors.BuildErrorDetail(c, trackingErrors.AlertSettingsInvalid, utils.ExtractValidationError(c, err)))
+	}
+	settings, err := ctrl.trackingService.SaveAlertSettings(c.Request.Context(), tenantID, body)
+	if err != nil {
+		return nil, alertErrorResponse(c, err)
+	}
+	return api.OK(settings)
 }
 
 // ListTripEventsInput is ListTripEvents's request.

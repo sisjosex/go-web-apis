@@ -5,12 +5,13 @@ AS $function$
 BEGIN
     INSERT INTO tracking.outbox (topic, payload)
     VALUES ('alert.changed', jsonb_build_object(
-        'alert_id', p_alert.id,
-        'route_id', p_alert.route_id,
+        'alert_id',  p_alert.id,
+        'tenant_id', p_alert.tenant_id,
+        'route_id',  p_alert.route_id,
         'trip_id',  p_alert.trip_id,
         'type',     p_type
     ));
 END;
 $function$;
 
-COMMENT ON FUNCTION tracking.fn_alert_changed(tracking.route_alerts,character varying) IS 'Writes one alert.changed outbox row { alert_id, route_id, trip_id, type } for a raised or resolved alert (TRACK-004 D1)';
+COMMENT ON FUNCTION tracking.fn_alert_changed(tracking.route_alerts,character varying) IS 'Writes one alert.changed outbox row { alert_id, tenant_id, route_id (NULL for a tenant-wide alert), trip_id, type } for a raised or resolved alert (TRACK-004 D1, TRACK-071)';

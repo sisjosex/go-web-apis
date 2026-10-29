@@ -144,3 +144,10 @@ type TenantAdminEmail struct {
 	// Locale is the language they read (APP-009 D2): a digest is written in it.
 	Locale string `json:"locale"`
 }
+
+// GPSDeviceStatus is a vehicle's GPS device as the vehicle page shows it (TRACK-068): when its token
+// was issued, and when it last posted, nil before its first point.
+type GPSDeviceStatus struct {
+	IssuedAt   time.Time
+	LastSeenAt *time.Time
+}

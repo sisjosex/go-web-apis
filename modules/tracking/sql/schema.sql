@@ -28,7 +28,7 @@ CREATE SCHEMA tracking;
 
 CREATE TABLE tracking.route_alerts (
     id uuid DEFAULT gen_random_uuid() NOT NULL,
-    route_id uuid NOT NULL,
+    route_id uuid,
     vehicle_id uuid,
     alert_type character varying(50) NOT NULL,
     severity character varying(50),
@@ -43,8 +43,16 @@ CREATE TABLE tracking.route_alerts (
     trip_id uuid,
     location public.geography(Point,4326),
     resolved_by uuid,
-    CONSTRAINT chk_alert_type CHECK (((alert_type)::text = ANY ((ARRAY['delay'::character varying, 'breakdown'::character varying, 'cancellation'::character varying, 'emergency'::character varying, 'other'::character varying])::text[])))
+    tenant_id uuid NOT NULL,
+    CONSTRAINT chk_alert_type CHECK (((alert_type)::text = ANY ((ARRAY['delay'::character varying, 'breakdown'::character varying, 'cancellation'::character varying, 'emergency'::character varying, 'other'::character varying, 'device_silent'::character varying, 'off_route'::character varying])::text[])))
 );
+
+
+--
+-- Name: COLUMN route_alerts.route_id; Type: COMMENT; Schema: tracking; Owner: -
+--
+
+COMMENT ON COLUMN tracking.route_alerts.route_id IS 'NULL: an alert to the whole operation (TRACK-071)';
 
 
 --
@@ -100,6 +108,7 @@ CREATE TABLE tracking.trips (
     polyline text,
     distance_km numeric(8,2),
     trace_source character varying(20),
+    off_route_fixes smallint DEFAULT 0 NOT NULL,
     CONSTRAINT chk_trips_status CHECK (((status)::text = ANY ((ARRAY['planned'::character varying, 'in_progress'::character varying, 'completed'::character varying, 'cancelled'::character varying])::text[])))
 );
 
@@ -123,6 +132,36 @@ COMMENT ON COLUMN tracking.trips.polyline IS 'The driven path at trip close, pol
 --
 
 COMMENT ON COLUMN tracking.trips.trace_source IS 'valhalla (map-matched) or fallback (the raw GPS line)';
+
+
+--
+-- Name: COLUMN trips.off_route_fixes; Type: COMMENT; Schema: tracking; Owner: -
+--
+
+COMMENT ON COLUMN tracking.trips.off_route_fixes IS 'Consecutive fixes off the planned line (positive) or back on it (negative): the hysteresis of the off_route alert (TRACK-071)';
+
+
+--
+-- Name: alert_settings; Type: TABLE; Schema: tracking; Owner: -
+--
+
+CREATE TABLE tracking.alert_settings (
+    tenant_id uuid NOT NULL,
+    device_silent_min smallint DEFAULT 5 NOT NULL,
+    off_route_m smallint DEFAULT 150 NOT NULL,
+    off_route_fixes smallint DEFAULT 3 NOT NULL,
+    updated_at timestamp with time zone DEFAULT now() NOT NULL,
+    CONSTRAINT chk_alert_settings_off_route_fixes CHECK (((off_route_fixes >= 2) AND (off_route_fixes <= 10))),
+    CONSTRAINT chk_alert_settings_off_route_m CHECK (((off_route_m >= 50) AND (off_route_m <= 1000))),
+    CONSTRAINT chk_alert_settings_silent CHECK (((device_silent_min >= 1) AND (device_silent_min <= 60)))
+);
+
+
+--
+-- Name: TABLE alert_settings; Type: COMMENT; Schema: tracking; Owner: -
+--
+
+COMMENT ON TABLE tracking.alert_settings IS 'The thresholds of the two alerts the server raises (TRACK-071 D1): no position for device_silent_min during a trip; off_route_fixes fixes in a row farther than off_route_m from the planned line. No row: 5 / 150 / 3';
 
 
 --
@@ -808,6 +847,7 @@ CREATE TABLE tracking.route_versions (
     path_source character varying(20),
     path_points_hash character varying(64),
     path_computed_at timestamp with time zone,
+    planned_line public.geography(LineString,4326),
     CONSTRAINT chk_route_version_range CHECK (((effective_to IS NULL) OR (effective_to >= effective_from))),
     CONSTRAINT chk_route_versions_path_source CHECK (((path_source)::text = ANY ((ARRAY['valhalla'::character varying, 'fallback'::character varying])::text[])))
 );
@@ -846,6 +886,13 @@ COMMENT ON COLUMN tracking.route_versions.path_source IS 'valhalla (by streets) 
 --
 
 COMMENT ON COLUMN tracking.route_versions.path_points_hash IS 'Hash of the ordered coordinates the line was computed from: equal means nothing to recompute';
+
+
+--
+-- Name: COLUMN route_versions.planned_line; Type: COMMENT; Schema: tracking; Owner: -
+--
+
+COMMENT ON COLUMN tracking.route_versions.planned_line IS 'planned_polyline as geography, for the off-route check; NULL for a fallback (straight) line, which has no street to be off (TRACK-071)';
 
 
 --
@@ -1205,7 +1252,9 @@ CREATE TABLE tracking.vehicle_last_position (
     heading real,
     accuracy real,
     trip_id uuid,
-    updated_at timestamp with time zone DEFAULT now() NOT NULL
+    updated_at timestamp with time zone DEFAULT now() NOT NULL,
+    source character varying(10) DEFAULT 'phone'::character varying NOT NULL,
+    CONSTRAINT chk_vehicle_last_position_source CHECK (((source)::text = ANY ((ARRAY['phone'::character varying, 'device'::character varying])::text[])))
 );
 
 
@@ -1214,6 +1263,13 @@ CREATE TABLE tracking.vehicle_last_position (
 --
 
 COMMENT ON TABLE tracking.vehicle_last_position IS 'The newest point of each vehicle — what every live read looks up (TRACK-010)';
+
+
+--
+-- Name: COLUMN vehicle_last_position.source; Type: COMMENT; Schema: tracking; Owner: -
+--
+
+COMMENT ON COLUMN tracking.vehicle_last_position.source IS 'phone: the driver app · device: a hardware tracker (OsmAnd protocol); a device point is dropped during a trip while the phone reported within GPS_PHONE_PRIORITY_S (TRACK-068 D2)';
 
 
 --
@@ -1227,7 +1283,9 @@ CREATE TABLE tracking.vehicle_positions (
     speed real,
     heading real,
     accuracy real,
-    trip_id uuid
+    trip_id uuid,
+    source character varying(10) DEFAULT 'phone'::character varying NOT NULL,
+    CONSTRAINT chk_vehicle_positions_source CHECK (((source)::text = ANY ((ARRAY['phone'::character varying, 'device'::character varying])::text[])))
 )
 PARTITION BY RANGE (recorded_at);
 
@@ -1250,7 +1308,9 @@ CREATE TABLE tracking.vehicle_positions_default (
     speed real,
     heading real,
     accuracy real,
-    trip_id uuid
+    trip_id uuid,
+    source character varying(10) DEFAULT 'phone'::character varying NOT NULL,
+    CONSTRAINT chk_vehicle_positions_source CHECK (((source)::text = ANY ((ARRAY['phone'::character varying, 'device'::character varying])::text[])))
 );
 
 
@@ -1302,6 +1362,14 @@ ALTER TABLE ONLY tracking.outbox ALTER COLUMN id SET DEFAULT nextval('tracking.o
 --
 
 ALTER TABLE ONLY tracking.rider_access_log ALTER COLUMN id SET DEFAULT nextval('tracking.rider_access_log_id_seq'::regclass);
+
+
+--
+-- Name: alert_settings alert_settings_pkey; Type: CONSTRAINT; Schema: tracking; Owner: -
+--
+
+ALTER TABLE ONLY tracking.alert_settings
+    ADD CONSTRAINT alert_settings_pkey PRIMARY KEY (tenant_id);
 
 
 --
@@ -1794,6 +1862,13 @@ CREATE INDEX idx_drivers_company_name ON tracking.drivers USING btree (tenant_id
 
 
 --
+-- Name: idx_notifications_delay_dedupe; Type: INDEX; Schema: tracking; Owner: -
+--
+
+CREATE INDEX idx_notifications_delay_dedupe ON tracking.notifications USING btree (dedupe_key) WHERE ((type)::text = 'delay'::text);
+
+
+--
 -- Name: idx_notifications_unread; Type: INDEX; Schema: tracking; Owner: -
 --
 
@@ -1980,6 +2055,13 @@ CREATE INDEX idx_route_alerts_active ON tracking.route_alerts USING btree (route
 --
 
 CREATE INDEX idx_route_alerts_route_id ON tracking.route_alerts USING btree (route_id);
+
+
+--
+-- Name: idx_route_alerts_tenant_active; Type: INDEX; Schema: tracking; Owner: -
+--
+
+CREATE INDEX idx_route_alerts_tenant_active ON tracking.route_alerts USING btree (tenant_id, created_at) WHERE ((status)::text = 'active'::text);
 
 
 --

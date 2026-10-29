@@ -45,6 +45,8 @@ type TrackingConfig struct {
 	// ApproachMinutes announces a stop once its ETA is this close, before the radius when traffic is
 	// slow (TRACK-070 D3); 0 leaves the radius alone.
 	ApproachMinutes int
+	// A phone fix younger than GPSPhonePriorityS keeps a tracker's points out of the trip (TRACK-068 D2).
+	GPSPhonePriorityS int
 
 	// WebSocket gateway (TRACK-025): a ping every WSPingSeconds, and a connection closed 1013 once
 	// WSQueueMax frames that must all arrive are waiting for it.
@@ -87,6 +89,7 @@ func LoadTrackingConfig() *TrackingConfig {
 		GPSArrivalRadiusM: utils.GetEnvAsInt("GPS_ARRIVAL_RADIUS_M", 50),
 		ApproachRadiusM:   utils.GetEnvAsInt("TRACKING_APPROACH_RADIUS_M", 800),
 		ApproachMinutes:   utils.GetEnvAsInt("TRACKING_APPROACH_MINUTES", 5),
+		GPSPhonePriorityS: utils.GetEnvAsInt("GPS_PHONE_PRIORITY_S", 90),
 
 		// WebSocket gateway
 		WSPingSeconds: utils.GetEnvAsInt("WS_PING_SECONDS", 25),
@@ -100,5 +103,5 @@ func LoadTrackingConfig() *TrackingConfig {
 
 // IngestRadii are the two distances every stored GPS point is checked against.
 func (c *TrackingConfig) IngestRadii() models.IngestRadii {
-	return models.IngestRadii{ArrivalM: c.GPSArrivalRadiusM, ApproachM: c.ApproachRadiusM}
+	return models.IngestRadii{ArrivalM: c.GPSArrivalRadiusM, ApproachM: c.ApproachRadiusM, PhonePriorityS: c.GPSPhonePriorityS}
 }

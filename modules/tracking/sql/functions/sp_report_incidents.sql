@@ -16,7 +16,7 @@ BEGIN
                a.message, a.severity, a.estimated_delay_minutes, a.status, a.lat, a.lng, a.created_by,
                a.created_by_name, a.created_at, a.resolved_at, a.resolved_by, a.resolved_by_name
         FROM tracking.fn_route_alert_rows(p_tenant_id, NULL) a
-        INNER JOIN tracking.routes r ON r.id = a.route_id
+        LEFT JOIN tracking.routes r ON r.id = a.route_id
         WHERE a.created_at >= CAST(p_from AS TIMESTAMPTZ)
           AND a.created_at < CAST(p_to + 1 AS TIMESTAMPTZ)
           AND (p_route_id IS NULL OR a.route_id = p_route_id)

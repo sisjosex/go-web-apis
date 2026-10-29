@@ -47,16 +47,26 @@ func (s *TrackingService) CreateRouteAlert(ctx context.Context, tenantID uuid.UU
 }
 
 func (s *TrackingService) ListRouteAlerts(ctx context.Context, tenantID uuid.UUID, query models.ListAlertsQuery) (*models.ListAlertsResponse, error) {
-	alerts, totalCount, err := s.trackingRepo.ListRouteAlerts(ctx, tenantID, query)
+	alerts, totalCount, summary, err := s.trackingRepo.ListRouteAlerts(ctx, tenantID, query)
 	if err != nil {
 		return nil, err
 	}
 	return &models.ListAlertsResponse{
 		Alerts:     alerts,
+		Summary:    summary,
 		TotalCount: totalCount,
 		Page:       query.Page,
 		PageSize:   query.PageSize,
 	}, nil
+}
+
+// AlertSettings are the tenant's thresholds of the two alerts the server raises (TRACK-071 D1).
+func (s *TrackingService) AlertSettings(ctx context.Context, tenantID uuid.UUID) (*models.AlertSettings, error) {
+	return s.trackingRepo.AlertSettings(ctx, tenantID)
+}
+
+func (s *TrackingService) SaveAlertSettings(ctx context.Context, tenantID uuid.UUID, in models.AlertSettings) (*models.AlertSettings, error) {
+	return s.trackingRepo.SaveAlertSettings(ctx, tenantID, in)
 }
 
 func (s *TrackingService) ResolveRouteAlert(ctx context.Context, tenantID, alertID uuid.UUID, userID *uuid.UUID) (*models.RouteAlert, error) {

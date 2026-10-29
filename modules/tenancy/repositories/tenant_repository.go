@@ -9,6 +9,7 @@ import (
 	"josex/web/modules/tenancy/models"
 
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
 )
 
@@ -423,6 +424,15 @@ func (r *tenantRepository) UpdateUserRole(ctx context.Context, tenantID uuid.UUI
 
 // ListTenantAdminEmails returns the active owners and admins of one tenant — who an operational
 // digest goes to (TRACK-016 D1).
+// StaffUserIDs reads the platform pool: the alert worker calls it with a tenant's context at hand.
+func (r *tenantRepository) StaffUserIDs(ctx context.Context, tenantID uuid.UUID) ([]uuid.UUID, error) {
+	rows, err := r.dbService.GetPrimaryPool().Query(ctx, `SELECT user_id FROM tenancy.sp_tenant_staff_users(p_tenant_id := $1)`, tenantID)
+	if err != nil {
+		return nil, err
+	}
+	return pgx.CollectRows(rows, pgx.RowTo[uuid.UUID])
+}
+
 func (r *tenantRepository) ListTenantAdminEmails(ctx context.Context, tenantID uuid.UUID) ([]*models.TenantAdminEmail, error) {
 	rows, err := r.dbService.Query(ctx, `SELECT * FROM tenancy.sp_list_tenant_admin_emails($1)`, tenantID)
 	if err != nil {

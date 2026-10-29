@@ -44,6 +44,8 @@ type TenantRepository interface {
 	ListTenantDirectory(ctx context.Context) ([]*models.Tenant, error)
 	// ListTenantAdminEmails answers who an operational digest goes to (TRACK-016 D1).
 	ListTenantAdminEmails(ctx context.Context, tenantID uuid.UUID) ([]*models.TenantAdminEmail, error)
+	// StaffUserIDs answers the accounts an operational alert is pushed to (TRACK-071 D3).
+	StaffUserIDs(ctx context.Context, tenantID uuid.UUID) ([]uuid.UUID, error)
 
 	// Update a user's role within a tenant
 	UpdateUserRole(ctx context.Context, tenantID uuid.UUID, requesterUserID uuid.UUID, userID uuid.UUID, role string) error

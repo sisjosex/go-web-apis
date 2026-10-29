@@ -44,6 +44,8 @@ type CoreConfig struct {
 	RateLimitHeavyPerMin int
 	// RateLimitPublicPerMin is the public share page's reads per IP (TRACK-060).
 	RateLimitPublicPerMin int
+	// RateLimitDevicePerMin is one hardware tracker's points per token (TRACK-068): one every 5 s is 12.
+	RateLimitDevicePerMin int
 
 	// Diagnostics (INFRA-011): a request at least this slow, or a 5xx, logs one line; Prometheus reads
 	// /metrics on MetricsAddr and the profiler listens on PprofAddr — empty turns either off.
@@ -87,6 +89,7 @@ func DefaultCoreConfig() *CoreConfig {
 		RateLimitLoginPerMin:  5,
 		RateLimitHeavyPerMin:  3,
 		RateLimitPublicPerMin: 60,
+		RateLimitDevicePerMin: 120,
 		SlowRequest:           300 * time.Millisecond,
 		TrustedProxies:        []string{"127.0.0.1"},
 
@@ -134,6 +137,7 @@ func LoadCoreConfig() *CoreConfig {
 		RateLimitLoginPerMin:  utils.GetEnvAsInt("RATE_LIMIT_LOGIN_PER_MIN", 5),
 		RateLimitHeavyPerMin:  utils.GetEnvAsInt("RATE_LIMIT_HEAVY_PER_MIN", 3),
 		RateLimitPublicPerMin: utils.GetEnvAsInt("RATE_LIMIT_PUBLIC_PER_MIN", 60),
+		RateLimitDevicePerMin: utils.GetEnvAsInt("RATE_LIMIT_DEVICE_PER_MIN", 120),
 		SlowRequest:           time.Duration(utils.GetEnvAsInt("SLOW_REQUEST_MS", 300)) * time.Millisecond,
 		MetricsAddr:           utils.GetEnv("METRICS_ADDR", ""),
 		PprofAddr:             utils.GetEnv("PPROF_ADDR", ""),

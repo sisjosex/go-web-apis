@@ -495,12 +495,12 @@ type VehicleLocation struct {
 // incident (TRACK-027); status is active or resolved.
 type RouteAlert struct {
 	ID                    uuid.UUID  `json:"id"`
-	RouteID               uuid.UUID  `json:"route_id"`
-	RouteName             string     `json:"route_name"`
+	RouteID               *uuid.UUID `json:"route_id"` // nil: the whole operation (TRACK-071)
+	RouteName             *string    `json:"route_name"`
 	VehicleID             *uuid.UUID `json:"vehicle_id"`
 	LicensePlate          *string    `json:"license_plate"`
 	TripID                *uuid.UUID `json:"trip_id"`
-	AlertType             string     `json:"alert_type"` // delay, breakdown, cancellation, emergency, other
+	AlertType             string     `json:"alert_type"` // delay, breakdown, cancellation, emergency, other, device_silent, off_route
 	Title                 string     `json:"title"`
 	Message               *string    `json:"message"`
 	Severity              *string    `json:"severity"` // low, medium, high, critical
@@ -514,6 +514,13 @@ type RouteAlert struct {
 	ResolvedAt            *time.Time `json:"resolved_at"`
 	ResolvedBy            *uuid.UUID `json:"resolved_by"`
 	ResolvedByName        *string    `json:"resolved_by_name"`
+	// The board's columns (TRACK-071): the route's client, the driver (the trip's, else the route's)
+	// and how many accounts the alert's notices reached.
+	OrganizationName *string `json:"organization_name"`
+	OrganizationKind *string `json:"organization_kind"`
+	DriverName       *string `json:"driver_name"`
+	DriverPhone      *string `json:"driver_phone"`
+	NotifiedCount    int32   `json:"notified_count"`
 }
 
 // ListAlertsQuery binds GET /tracking/alerts. status defaults to active; all is every status.
@@ -523,10 +530,28 @@ type ListAlertsQuery struct {
 	Severity *string `form:"severity" binding:"omitempty,oneof=low medium high critical"`
 	Page     int     `form:"page,default=1" binding:"min=1"`
 	PageSize int     `form:"page_size,default=20" binding:"min=1,max=100"`
+	// Search matches the route, the plate or the driver (TRACK-071).
+	Search *string `form:"search" binding:"omitempty,max=100"`
+}
+
+// AlertsSummary is the board's three cards over every filter but status (TRACK-071).
+type AlertsSummary struct {
+	Active        int64 `json:"active"`
+	ResolvedToday int64 `json:"resolved_today"`
+	NotifiedToday int64 `json:"notified_today"`
+	Today         int64 `json:"today"`
+}
+
+// AlertSettings are the thresholds of the two alerts the server raises (TRACK-071 D1).
+type AlertSettings struct {
+	DeviceSilentMin int32 `json:"device_silent_min" binding:"required,min=1,max=60"`
+	OffRouteM       int32 `json:"off_route_m" binding:"required,min=50,max=1000"`
+	OffRouteFixes   int32 `json:"off_route_fixes" binding:"required,min=2,max=10"`
 }
 
 type ListAlertsResponse struct {
 	Alerts     []*RouteAlert `json:"alerts"`
+	Summary    AlertsSummary `json:"summary"`
 	TotalCount int64         `json:"total_count"`
 	Page       int           `json:"page"`
 	PageSize   int           `json:"page_size"`

@@ -23,8 +23,10 @@ type TrackingRepository interface {
 
 	// Alert operations
 	CreateRouteAlert(ctx context.Context, tenantID uuid.UUID, dto *models.CreateAlertDto, createdBy *uuid.UUID) (*models.AlertCreatedResponse, error)
-	ListRouteAlerts(ctx context.Context, tenantID uuid.UUID, query models.ListAlertsQuery) ([]*models.RouteAlert, int64, error)
+	ListRouteAlerts(ctx context.Context, tenantID uuid.UUID, query models.ListAlertsQuery) ([]*models.RouteAlert, int64, models.AlertsSummary, error)
 	ResolveRouteAlert(ctx context.Context, tenantID, alertID uuid.UUID, userID *uuid.UUID) (*models.RouteAlert, error)
+	AlertSettings(ctx context.Context, tenantID uuid.UUID) (*models.AlertSettings, error)
+	SaveAlertSettings(ctx context.Context, tenantID uuid.UUID, in models.AlertSettings) (*models.AlertSettings, error)
 
 	// Companies CRUD
 	CreateCompany(ctx context.Context, tenantID uuid.UUID, dto *models.CreateCompanyDto) (*models.TransportCompany, error)

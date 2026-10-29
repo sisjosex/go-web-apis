@@ -16,6 +16,7 @@ DECLARE
     v_alert_title VARCHAR;
     v_alert_route UUID;
     v_alert_trip  UUID;
+    v_tenant_wide BOOLEAN := FALSE;
     v_delay_s INT;
     v_eta_at  TIMESTAMPTZ;
 BEGIN
@@ -71,17 +72,20 @@ BEGIN
           INTO v_alert_id, v_alert_type, v_alert_title, v_alert_route, v_alert_trip
         FROM tracking.route_alerts a
         WHERE a.id = CAST(p_event->>'alert_id' AS UUID);
-        IF v_alert_id IS NULL THEN
+        -- The two kinds the server raises are operational: staff only, never families (TRACK-071).
+        IF v_alert_id IS NULL OR v_alert_type IN ('device_silent', 'off_route') THEN
             RETURN;
         END IF;
         v_type := 'delay';
         v_dedupe := CAST(v_alert_id AS TEXT);
-        -- A trip's alert touches that trip; a route's, every rider assigned to the route today (D1).
+        -- A trip's alert touches that trip; a route's, every rider assigned to the route today (D1); one
+        -- with neither, every rider assigned today to any route of the tenant (TRACK-071).
         IF v_alert_trip IS NOT NULL THEN
             v_trips := ARRAY[v_alert_trip];
         ELSE
             v_trips := '{}';
             v_route := v_alert_route;
+            v_tenant_wide := v_alert_route IS NULL;
         END IF;
     ELSE
         RETURN;
@@ -130,12 +134,14 @@ BEGIN
         SELECT tr.rider, tr.trip, tr.day, tr.route_name, tr.stop_name, tr.eta_time
         FROM trip_riders tr
         UNION ALL
-        -- A route's alert: every rider assigned to the route today in its timezone, riding today or not.
-        SELECT DISTINCT a.rider_id, CAST(NULL AS UUID), CAST(NULL AS DATE), r.route_name, CAST(NULL AS VARCHAR), CAST(NULL AS TEXT)
+        -- A route's alert: every rider assigned to the route today in its timezone, riding today or not;
+        -- a tenant-wide one the same over every route, without a route name.
+        SELECT DISTINCT ON (a.rider_id) a.rider_id, CAST(NULL AS UUID), CAST(NULL AS DATE),
+               CASE WHEN v_tenant_wide THEN NULL ELSE r.route_name END, CAST(NULL AS VARCHAR), CAST(NULL AS TEXT)
         FROM tracking.rider_route_assignments a
         INNER JOIN tracking.routes r ON r.id = a.route_id
         INNER JOIN tracking.transport_companies tc ON tc.id = r.company_id
-        WHERE a.route_id = v_route
+        WHERE (a.route_id = v_route OR v_tenant_wide)
           AND tc.tenant_id = p_tenant_id
           AND a.valid_from <= CAST(now() AT TIME ZONE r.timezone AS DATE)
           AND (a.valid_until IS NULL OR a.valid_until >= CAST(now() AT TIME ZONE r.timezone AS DATE))
@@ -176,4 +182,4 @@ BEGIN
 END;
 $function$;
 
-COMMENT ON FUNCTION tracking.sp_notify_event(uuid,character varying,jsonb,bigint) IS 'Turns one trip.changed or alert.changed outbox event into feed rows, one per guardian|self account and rider, idempotent on the dedupe key; answers the new rows whose type the account did not mute; a route alert reaches every rider assigned to the route today; a riderless auto-cancel tells nobody, a rider added to a running trip only its own family; a late ETA (delay with delay_s) only the families with a pending task at that stop whose client''s delay_notice_min it reaches (TRACK-012, TRACK-033, TRACK-069, TRACK-066)';
+COMMENT ON FUNCTION tracking.sp_notify_event(uuid,character varying,jsonb,bigint) IS 'Turns one trip.changed or alert.changed outbox event into feed rows, one per guardian|self account and rider, idempotent on the dedupe key; answers the new rows whose type the account did not mute; a route alert reaches every rider assigned to the route today, a tenant-wide one every rider assigned today to any route, device_silent and off_route nobody; a riderless auto-cancel tells nobody, a rider added to a running trip only its own family; a late ETA (delay with delay_s) only the families with a pending task at that stop whose client''s delay_notice_min it reaches (TRACK-012, TRACK-033, TRACK-069, TRACK-066, TRACK-071)';

@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"math"
+	"strings"
 	"time"
 
 	coreJobs "josex/web/modules/core/jobs"
@@ -76,9 +77,18 @@ func (p PathPlanner) applyVersion(ctx context.Context, repo *trackingRepos.Track
 		if same && stored.Source == nil {
 			return "", nil
 		}
-		return "", repo.SetRouteVersionPath(ctx, tenantID, versionID, nil, hash)
+		return "", repo.SetRouteVersionPath(ctx, tenantID, versionID, nil, hash, nil)
 	}
 	if same && stored.Source != nil && (*stored.Source == PathValhalla || p.Router == nil) {
+		// A street line stored before the off-route check: its geography from the stored polyline, no
+		// router call (TRACK-071).
+		if *stored.Source == PathValhalla && !stored.HasLine && stored.Polyline6 != nil {
+			wkt, err := lineWKT(*stored.Polyline6)
+			if err != nil || wkt == nil {
+				return "", err
+			}
+			return PathValhalla, repo.SetRouteVersionLine(ctx, tenantID, versionID, *wkt)
+		}
 		return *stored.Source, nil
 	}
 
@@ -91,7 +101,33 @@ func (p PathPlanner) applyVersion(ctx context.Context, repo *trackingRepos.Track
 		// the maps' ETag does not move for nothing.
 		return PathFallback, nil
 	}
-	return path.Source, repo.SetRouteVersionPath(ctx, tenantID, versionID, path, hash)
+	var wkt *string
+	if path.Source == PathValhalla {
+		if wkt, err = lineWKT(path.Polyline6); err != nil {
+			return "", err
+		}
+	}
+	return path.Source, repo.SetRouteVersionPath(ctx, tenantID, versionID, path, hash, wkt)
+}
+
+// lineWKT is a street polyline as the WKT LINESTRING the off-route check stores (TRACK-071); nil for a
+// line of fewer than two points.
+func lineWKT(polyline6 string) (*string, error) {
+	points, err := routing.DecodePolyline6(polyline6)
+	if err != nil || len(points) < 2 {
+		return nil, err
+	}
+	var b strings.Builder
+	b.WriteString("SRID=4326;LINESTRING(")
+	for i, p := range points {
+		if i > 0 {
+			b.WriteByte(',')
+		}
+		fmt.Fprintf(&b, "%.6f %.6f", p.Lng, p.Lat)
+	}
+	b.WriteByte(')')
+	wkt := b.String()
+	return &wkt, nil
 }
 
 // plan asks the router for the line through points; down or with no route, it answers the straight line.

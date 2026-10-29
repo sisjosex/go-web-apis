@@ -92,6 +92,19 @@ func EncodePolyline6(points []models.LatLng) string {
 	return encodePolyline(encoded)
 }
 
+// DecodePolyline6 is EncodePolyline6's inverse: the points of a polyline at 6 decimals.
+func DecodePolyline6(s string) ([]models.LatLng, error) {
+	encoded, err := decodePolyline(s)
+	if err != nil {
+		return nil, err
+	}
+	points := make([]models.LatLng, len(encoded))
+	for i, p := range encoded {
+		points[i] = models.LatLng{Lat: float64(p[0]) / 1e6, Lng: float64(p[1]) / 1e6}
+	}
+	return points, nil
+}
+
 // LineLengthM is the length of a path in metres, point to point on the sphere.
 func LineLengthM(points []models.LatLng) float64 {
 	total := 0.0

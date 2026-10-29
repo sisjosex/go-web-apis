@@ -114,6 +114,9 @@ const (
 	// AlertAlreadyResolved is a resolve on an alert that is no longer active (TRACK-004).
 	AlertAlreadyResolved = "tracking.alert.already-resolved"
 	AlertListFailed      = "tracking.alert.list.failed"
+	// AlertSettingsInvalid is a threshold outside its range (TRACK-071 D1).
+	AlertSettingsInvalid = "tracking.alert.settings-invalid"
+	AlertSettingsFailed  = "tracking.alert.settings.failed"
 
 	// Company errors (TR0141-TR0160)
 	CompanyNotFound      = "tracking.company.not-found"

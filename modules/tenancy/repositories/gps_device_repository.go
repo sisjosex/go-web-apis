@@ -21,7 +21,8 @@ type gpsDeviceRepository struct {
 	dbService services.DatabaseService
 }
 
-// NewGPSDeviceRepository reads tenancy.gps_devices — the platform database, always the primary pool.
+// NewGPSDeviceRepository reads tenancy.gps_devices — the platform database, always the primary pool:
+// the vehicle page calls it from a tenant request, whose context names the tenant's database.
 func NewGPSDeviceRepository(dbService services.DatabaseService) interfaces.GPSDeviceRepository {
 	return &gpsDeviceRepository{dbService: dbService}
 }
@@ -42,13 +43,33 @@ func (r *gpsDeviceRepository) Resolve(ctx context.Context, tenantID uuid.UUID, t
 }
 
 func (r *gpsDeviceRepository) Issue(ctx context.Context, tenantID, vehicleID uuid.UUID, tokenHash []byte) error {
-	_, err := r.dbService.Execute(ctx,
+	_, err := r.dbService.GetPrimaryPool().Exec(ctx,
 		`SELECT tenancy.sp_gps_device_issue(p_tenant_id := $1, p_vehicle_id := $2, p_token_hash := $3)`,
 		tenantID, vehicleID, tokenHash)
 	var pgErr *pgconn.PgError
 	if errors.As(err, &pgErr) && pgErr.Message == "tenant.not-found" {
 		return errors.New(tenancyErrors.TenantNotFound)
 	}
+	return err
+}
+
+func (r *gpsDeviceRepository) Status(ctx context.Context, tenantID, vehicleID uuid.UUID) (*models.GPSDeviceStatus, error) {
+	var s models.GPSDeviceStatus
+	err := r.dbService.GetPrimaryPool().QueryRow(ctx,
+		`SELECT issued_at, last_seen_at FROM tenancy.sp_gps_device_status(p_tenant_id := $1, p_vehicle_id := $2)`,
+		tenantID, vehicleID).Scan(&s.IssuedAt, &s.LastSeenAt)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	return &s, nil
+}
+
+func (r *gpsDeviceRepository) Revoke(ctx context.Context, tenantID, vehicleID uuid.UUID) error {
+	_, err := r.dbService.GetPrimaryPool().Exec(ctx,
+		`SELECT tenancy.sp_gps_device_revoke(p_tenant_id := $1, p_vehicle_id := $2)`, tenantID, vehicleID)
 	return err
 }
 

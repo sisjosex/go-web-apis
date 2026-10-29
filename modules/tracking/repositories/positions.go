@@ -18,8 +18,8 @@ import (
 func (r *TrackingRepository) IngestPositions(ctx context.Context, tenantID uuid.UUID, points []byte, radii models.IngestRadii) ([]models.IngestedVehicle, error) {
 	rows, err := r.dbService.Query(ctx,
 		`SELECT vehicle_id, trip_id, last, rider_ids, organization_ids, arrived_stop_id
-		 FROM tracking.sp_ingest_positions(p_tenant_id := $1, p_points := $2::JSONB, p_arrival_radius_m := $3, p_approach_radius_m := $4)`,
-		tenantID, points, radii.ArrivalM, radii.ApproachM)
+		 FROM tracking.sp_ingest_positions(p_tenant_id := $1, p_points := $2::JSONB, p_arrival_radius_m := $3, p_approach_radius_m := $4, p_phone_priority_s := $5)`,
+		tenantID, points, radii.ArrivalM, radii.ApproachM, radii.PhonePriorityS)
 	if err != nil {
 		return nil, err
 	}

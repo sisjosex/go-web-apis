@@ -24,6 +24,8 @@ type TrackingService interface {
 	// Alert operations
 	CreateRouteAlert(ctx context.Context, tenantID uuid.UUID, dto *models.CreateAlertDto, createdBy *uuid.UUID) (*models.AlertCreatedResponse, error)
 	ListRouteAlerts(ctx context.Context, tenantID uuid.UUID, query models.ListAlertsQuery) (*models.ListAlertsResponse, error)
+	AlertSettings(ctx context.Context, tenantID uuid.UUID) (*models.AlertSettings, error)
+	SaveAlertSettings(ctx context.Context, tenantID uuid.UUID, in models.AlertSettings) (*models.AlertSettings, error)
 	ResolveRouteAlert(ctx context.Context, tenantID, alertID uuid.UUID, userID *uuid.UUID) (*models.RouteAlert, error)
 
 	// Companies CRUD

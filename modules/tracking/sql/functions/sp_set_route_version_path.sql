@@ -1,4 +1,4 @@
-CREATE OR REPLACE FUNCTION tracking.sp_set_route_version_path(p_tenant_id uuid, p_version_id uuid, p_polyline text, p_distance_m integer, p_legs jsonb, p_source character varying, p_points_hash character varying)
+CREATE OR REPLACE FUNCTION tracking.sp_set_route_version_path(p_tenant_id uuid, p_version_id uuid, p_polyline text, p_distance_m integer, p_legs jsonb, p_source character varying, p_points_hash character varying, p_line_wkt text)
  RETURNS void
  LANGUAGE sql
 AS $function$
@@ -8,6 +8,7 @@ AS $function$
         planned_legs       = p_legs,
         path_source        = p_source,
         path_points_hash   = p_points_hash,
+        planned_line       = CAST(ST_GeogFromText(p_line_wkt) AS GEOGRAPHY(LineString, 4326)),
         path_computed_at   = clock_timestamp()
     FROM tracking.routes r
     INNER JOIN tracking.transport_companies tc ON tc.id = r.company_id
@@ -31,4 +32,4 @@ AS $function$
       AND jsonb_array_length(p_legs) > 0;
 $function$;
 
-COMMENT ON FUNCTION tracking.sp_set_route_version_path(uuid,uuid,text,integer,jsonb,character varying,character varying) IS 'Stores a route version''s planned line, its metres, its legs and where it came from; a NULL polyline clears it (TRACK-028). The open-ended version''s legs plus dwell become the route''s estimated duration (TRACK-034 D4)';
+COMMENT ON FUNCTION tracking.sp_set_route_version_path(uuid,uuid,text,integer,jsonb,character varying,character varying,text) IS 'Stores a route version''s planned line, its metres, its legs and where it came from, and the street line as geography for the off-route check (p_line_wkt NULL for a fallback line, TRACK-071); a NULL polyline clears it (TRACK-028). The open-ended version''s legs plus dwell become the route''s estimated duration (TRACK-034 D4)';

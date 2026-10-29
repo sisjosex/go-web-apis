@@ -16,9 +16,13 @@ import (
 // Ingest is the GPS ingest route (TRACK-010): its controller and the chain that authenticates either a
 // device token or a driver. Auth nil — no tenancy — leaves the route unregistered: a device token
 // names its tenant, which needs the platform database.
+// Device is the hardware tracker's chain alone, for the OsmAnd route (TRACK-068 D1).
 type Ingest struct {
 	Controller *controllers.IngestController
 	Auth       []gin.HandlerFunc
+	Device     []gin.HandlerFunc
+	// Tokens issues a vehicle's device token from its page (TRACK-068); nil without tenancy.
+	Tokens *controllers.GPSDeviceController
 }
 
 // Driver is the driver's phone (TRACK-011): its controller and the ingest's driver chain — auth, the
@@ -78,11 +82,16 @@ func RegisterTrackingRoutes(
 	tenancyConf := config.ModularAppConfig.Tenancy
 
 	if coreConf.IsModuleEnabled("tenancy") && tenancyConf != nil && tenancyConf.Enabled {
-		registerTenantRoutes(trackingGroup, trackingController, tenantMiddleware, portalTenantMiddleware, jwtService, live.Controller, portal.Reads, access)
+		registerTenantRoutes(trackingGroup, trackingController, tenantMiddleware, portalTenantMiddleware, jwtService, live.Controller, portal.Reads, access, ingest.Tokens)
 		// Outside the groups: each carries its own chain — a device token or a driver's session for the
 		// ingest, a browser's subprotocol token and ?tenant_slug= for the socket.
 		if ingest.Auth != nil {
 			api.Post(trackingGroup, "/ingest/positions", ingest.Controller.IngestPositions, api.Doc{Summary: "Post a batch of GPS points", Description: "Up to 500 points, any order, late ones included. Authenticated either by X-Device-Token (a GPS device: its vehicle) or by a driver's Bearer + X-Tenant-Slug (the vehicle of their trip in progress). Replaying a point is a no-op. 202 path=queued (the worker stores it) or stored (Valkey absent: stored inline)", Status: 202, Errors: []int{400, 401, 409, 500}}, ingest.Auth...)
+		}
+		if ingest.Device != nil {
+			osmand := api.Doc{Summary: "One point of a hardware tracker (OsmAnd protocol)", Description: "Traccar Client, OsmAnd and trackers that speak the OsmAnd query protocol: id is the device token issued from the vehicle page, lat, lon, timestamp (unix seconds or RFC3339, now when absent), speed in knots, bearing, accuracy; altitude and batt are ignored. During a trip the point yields to a phone that reported in the last GPS_PHONE_PRIORITY_S; off a trip it only moves the last position. 200 with an empty body", Status: 200, Errors: []int{400, 401, 429, 500}}
+			api.Get(&router.RouterGroup, "/api/v1/gps/osmand", ingest.Controller.IngestOsmand, osmand, ingest.Device...)
+			api.Post(&router.RouterGroup, "/api/v1/gps/osmand", ingest.Controller.IngestOsmand, osmand, ingest.Device...)
 		}
 		if live.Socket != nil {
 			trackingGroup.GET("/ws", live.Socket...)
@@ -115,6 +124,7 @@ func registerTenantRoutes(
 	liveController *controllers.LiveController,
 	riderReads *controllers.RiderReadsController,
 	access *controllers.AccessController,
+	devices *controllers.GPSDeviceController,
 ) {
 	// Multi-tenant mode: auth + tenant middleware + per-route permission checks
 	r := trackingGroup.Group("")
@@ -133,6 +143,9 @@ func registerTenantRoutes(
 	p.Use(portalTenantMiddleware)
 
 	registerFleetRoutes(r, denyOrganization, trackingController)
+	if devices != nil {
+		registerGPSDeviceRoutes(r, denyOrganization, devices)
+	}
 	registerRouteRoutes(r, denyOrganization, trackingController)
 	registerStopPlaceRoutes(r, denyOrganization, trackingController)
 	registerScheduleRoutes(r, denyOrganization, trackingController)
@@ -146,6 +159,14 @@ func registerTenantRoutes(
 	registerAccessRoutes(r, denyOrganization, access)
 	registerPlanningRoutes(r, denyOrganization, trackingController)
 	registerReportRoutes(r, trackingController)
+}
+
+// registerGPSDeviceRoutes is a vehicle's tracker token, from its page (TRACK-068): read by whoever
+// sees the fleet, issued, rotated and revoked with vehicles:write.
+func registerGPSDeviceRoutes(r *gin.RouterGroup, denyOrganization gin.HandlerFunc, devices *controllers.GPSDeviceController) {
+	api.Get(r, "/vehicles/{vehicle_id}/gps-device", devices.GPSDeviceStatus, api.Doc{Summary: "The vehicle's GPS device", Description: "Whether a tracker is linked, when its token was issued and when it last posted (null before its first point).", Errors: []int{400, 404}}, denyOrganization)
+	api.Post(r, "/vehicles/{vehicle_id}/gps-device", devices.IssueGPSDevice, api.Doc{Summary: "Issue or rotate the vehicle's GPS device token", Description: "A new token for the tracker (the OsmAnd id); the previous one answers 401 from now on. The token is answered this once — only its hash is stored.", Status: 201, Errors: []int{400, 404}}, denyOrganization, tenancyMW.RequirePermission(trackingPerms.VehiclesWrite))
+	api.Delete(r, "/vehicles/{vehicle_id}/gps-device", devices.RevokeGPSDevice, api.Doc{Summary: "Unlink the vehicle's GPS device", Description: "Its token answers 401 from now on; a vehicle without one is a no-op.", Status: 204, Errors: []int{400, 404}}, denyOrganization, tenancyMW.RequirePermission(trackingPerms.VehiclesWrite))
 }
 
 // registerReportRoutes is the reports (TRACK-013): their own permission (D4), and an organization user
@@ -259,10 +280,12 @@ func registerFleetRoutes(r *gin.RouterGroup, denyOrganization gin.HandlerFunc, t
 // against them. Boarding and arrival are trip task transitions now (TRACK-008 D3).
 func registerRouteRoutes(r *gin.RouterGroup, denyOrganization gin.HandlerFunc, trackingController *controllers.TrackingController) {
 	// Real-time operations
-	api.Post(r, "/alerts", trackingController.CreateRouteAlert, api.Doc{Summary: "Create route alert", Description: "Create a delay, breakdown, or cancellation alert for a route", Status: 201, Errors: []int{400, 401, 404, 500}}, denyOrganization, tenancyMW.RequirePermission(trackingPerms.AlertsWrite))
+	api.Post(r, "/alerts", trackingController.CreateRouteAlert, api.Doc{Summary: "Create route alert", Description: "Create a delay, breakdown, or cancellation alert for a route, or for the whole operation without route_id", Status: 201, Errors: []int{400, 401, 404, 500}}, denyOrganization, tenancyMW.RequirePermission(trackingPerms.AlertsWrite))
 	// Reading and resolving them is the operator's too (TRACK-004 D3).
-	api.Get(r, "/alerts", trackingController.ListRouteAlerts, api.Doc{Summary: "List alerts", Description: "Newest first. status defaults to active; all reads every status. Every row carries the route name, the plate and who raised and resolved it; trip_id and lat/lng are set on a driver's incident", Errors: []int{400, 500}}, denyOrganization)
+	api.Get(r, "/alerts", trackingController.ListRouteAlerts, api.Doc{Summary: "List alerts", Description: "Newest first. status defaults to active; all reads every status; search matches the route, the plate or the driver. Every row carries the route name (null for an alert to the whole operation), the plate, who raised and resolved it, the route's client, the driver and how many accounts were notified; trip_id and lat/lng are set on a driver's incident and the two server kinds (device_silent, off_route). summary counts active, resolved today and notified today over every filter but status", Errors: []int{400, 500}}, denyOrganization)
 	api.Patch(r, "/alerts/{alert_id}/resolve", trackingController.ResolveRouteAlert, api.Doc{Summary: "Resolve an alert", Description: "An active alert only; the signed-in user is recorded as resolved_by. Answers the row as the list does", Errors: []int{400, 404, 409, 500}}, denyOrganization, tenancyMW.RequirePermission(trackingPerms.AlertsWrite))
+	api.Get(r, "/alert-settings", trackingController.AlertSettings, api.Doc{Summary: "The alert thresholds", Description: "When the server raises device_silent (minutes without a position during a trip) and off_route (metres from the planned line, for how many fixes in a row); the defaults 5 / 150 / 3 until the tenant saves its own (TRACK-071 D1)", Errors: []int{500}}, denyOrganization)
+	api.Put(r, "/alert-settings", trackingController.SaveAlertSettings, api.Doc{Summary: "Save the alert thresholds", Description: "device_silent_min 1–60, off_route_m 50–1000, off_route_fixes 2–10; answers the stored row", Errors: []int{400, 500}}, denyOrganization, tenancyMW.RequirePermission(trackingPerms.AlertsWrite))
 
 	// Routes
 	api.Get(r, "/routes", trackingController.ListRoutes, api.Doc{Summary: "List routes", Description: "One page of the tenant's routes by name, with company name, plate and driver name (TRACK-002 D2)", Errors: []int{400, 500}})
@@ -498,8 +521,8 @@ func registerOpenFleetRoutes(g *gin.RouterGroup, trackingController *controllers
 
 // registerOpenRouteRoutes mirrors registerRouteRoutes without the guards.
 func registerOpenRouteRoutes(g *gin.RouterGroup, trackingController *controllers.TrackingController) {
-	api.Post(g, "/alerts", trackingController.CreateRouteAlert, api.Doc{Summary: "Create route alert", Description: "Create a delay, breakdown, or cancellation alert for a route", Status: 201, Errors: []int{400, 401, 404, 500}})
-	api.Get(g, "/alerts", trackingController.ListRouteAlerts, api.Doc{Summary: "List alerts", Description: "Newest first. status defaults to active; all reads every status. Every row carries the route name, the plate and who raised and resolved it; trip_id and lat/lng are set on a driver's incident", Errors: []int{400, 500}})
+	api.Post(g, "/alerts", trackingController.CreateRouteAlert, api.Doc{Summary: "Create route alert", Description: "Create a delay, breakdown, or cancellation alert for a route, or for the whole operation without route_id", Status: 201, Errors: []int{400, 401, 404, 500}})
+	api.Get(g, "/alerts", trackingController.ListRouteAlerts, api.Doc{Summary: "List alerts", Description: "Newest first. status defaults to active; all reads every status; search matches the route, the plate or the driver. Every row carries the route name (null for an alert to the whole operation), the plate, who raised and resolved it, the route's client, the driver and how many accounts were notified; trip_id and lat/lng are set on a driver's incident and the two server kinds (device_silent, off_route). summary counts active, resolved today and notified today over every filter but status", Errors: []int{400, 500}})
 	api.Patch(g, "/alerts/{alert_id}/resolve", trackingController.ResolveRouteAlert, api.Doc{Summary: "Resolve an alert", Description: "An active alert only; the signed-in user is recorded as resolved_by. Answers the row as the list does", Errors: []int{400, 404, 409, 500}})
 	api.Post(g, "/routes", trackingController.CreateRoute, api.Doc{Summary: "Create route", Description: "Create a new transportation route", Status: 201, Errors: []int{400, 500}})
 	api.Get(g, "/routes", trackingController.ListRoutes, api.Doc{Summary: "List routes", Description: "One page of the tenant's routes by name, with company name, plate and driver name (TRACK-002 D2)", Errors: []int{400, 500}})

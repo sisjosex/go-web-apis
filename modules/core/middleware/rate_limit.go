@@ -25,6 +25,8 @@ const rateLimitWarnEvery = time.Minute
 // replica (GCRA, one round-trip per request); without it the limit is the in-memory tollbooth one
 // and holds per process only.
 //
+// A hardware tracker's route is not limited by IP: RateClasses limits it per token (TRACK-068).
+//
 // A Valkey error lets the request through (INFRA-001 D5): the limit protects the API, and refusing
 // every request because the limiter is down would be the outage it exists to prevent.
 func RateLimit(valkey coreServices.ValkeyService, perSecond, burst int) gin.HandlerFunc {
@@ -41,6 +43,10 @@ func RateLimit(valkey coreServices.ValkeyService, perSecond, burst int) gin.Hand
 	var lastWarn atomic.Int64
 
 	return func(c *gin.Context) {
+		if deviceRoutes[c.Request.Method+" "+c.FullPath()] {
+			c.Next()
+			return
+		}
 		// ClientIP honours X-Forwarded-For only from the trusted proxies, so a client cannot pick a
 		// fresh key per request by forging the header.
 		res, err := limiter.Allow(c.Request.Context(), "ip:"+c.ClientIP(), limit)

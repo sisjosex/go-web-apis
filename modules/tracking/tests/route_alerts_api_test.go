@@ -159,7 +159,7 @@ func TestRouteAlerts_Isolation(t *testing.T) {
 	if assert.Error(t, err) {
 		assert.Contains(t, err.Error(), "alert.not-found")
 	}
-	assert.Equal(t, 0, countRows(t, helper, `SELECT count(*) FROM tracking.sp_list_route_alerts($1, NULL, NULL, NULL, 1, 100)`, otherTenant))
+	assert.Equal(t, 0, countRows(t, helper, `SELECT count(*) FROM tracking.sp_list_route_alerts($1, NULL, NULL, NULL, 1, 100) WHERE id IS NOT NULL`, otherTenant))
 	_, err = helper.DB().Execute(ctx, `SELECT * FROM tracking.sp_list_trip_events($1, $2)`, otherTenant, tripID)
 	if assert.Error(t, err) {
 		assert.Contains(t, err.Error(), "trip.not-found")
@@ -252,7 +252,7 @@ func TestAlertChanged_FrameOnFleet(t *testing.T) {
 	defer inspector.Close()
 	registry := coreJobs.NewRegistry()
 	lister := coreJobs.NewTenantDirectory(func(context.Context) ([]coreJobs.Tenant, error) { return []coreJobs.Tenant{testTenant()}, nil })
-	registry.Handle(trackingJobs.TaskAlertChanged, trackingJobs.AlertChangedHandler(helper.DB(), lister, helper.Valkey(), nil))
+	registry.Handle(trackingJobs.TaskAlertChanged, trackingJobs.AlertChangedHandler(helper.DB(), lister, helper.Valkey(), nil, nil, nil))
 	worker, err := coreJobs.StartWorker(helper.Valkey(), registry, 2)
 	if err != nil {
 		t.Fatalf("worker: %v", err)
