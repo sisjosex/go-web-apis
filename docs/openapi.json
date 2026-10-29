@@ -11256,6 +11256,181 @@
         ],
         "type": "object"
       },
+      "tracking.OrganizationToday": {
+        "additionalProperties": false,
+        "properties": {
+          "date": {
+            "type": "string"
+          },
+          "organization": {
+            "$ref": "#/components/schemas/tracking.OrganizationTodayOrg"
+          },
+          "organizations": {
+            "items": {
+              "$ref": "#/components/schemas/tracking.OrganizationTodayRef"
+            },
+            "type": "array"
+          },
+          "routes": {
+            "items": {
+              "$ref": "#/components/schemas/tracking.OrganizationTodayTrip"
+            },
+            "type": "array"
+          },
+          "shift": {
+            "nullable": true,
+            "type": "string"
+          },
+          "shifts": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "totals": {
+            "$ref": "#/components/schemas/tracking.OrganizationTodayTotals"
+          }
+        },
+        "required": [
+          "organization",
+          "organizations",
+          "date",
+          "shifts",
+          "shift",
+          "totals",
+          "routes"
+        ],
+        "type": "object"
+      },
+      "tracking.OrganizationTodayOrg": {
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "kind": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "kind"
+        ],
+        "type": "object"
+      },
+      "tracking.OrganizationTodayRef": {
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "name"
+        ],
+        "type": "object"
+      },
+      "tracking.OrganizationTodayTotals": {
+        "additionalProperties": false,
+        "properties": {
+          "absent": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "arrived": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "expected": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "late": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "on_the_way": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "on_time": {
+            "format": "int64",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "expected",
+          "arrived",
+          "on_the_way",
+          "absent",
+          "late",
+          "on_time"
+        ],
+        "type": "object"
+      },
+      "tracking.OrganizationTodayTrip": {
+        "additionalProperties": false,
+        "properties": {
+          "arrived_at": {
+            "format": "date-time",
+            "nullable": true,
+            "type": "string"
+          },
+          "delay_min": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "expected_arrival": {
+            "format": "date-time",
+            "nullable": true,
+            "type": "string"
+          },
+          "license_plate": {
+            "nullable": true,
+            "type": "string"
+          },
+          "riders": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "route_id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "route_name": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string"
+          },
+          "trip_id": {
+            "format": "uuid",
+            "type": "string"
+          }
+        },
+        "required": [
+          "trip_id",
+          "route_id",
+          "route_name",
+          "license_plate",
+          "riders",
+          "status",
+          "delay_min",
+          "expected_arrival",
+          "arrived_at"
+        ],
+        "type": "object"
+      },
       "tracking.PlannedPath": {
         "additionalProperties": false,
         "properties": {
@@ -12623,6 +12798,9 @@
             "type": "string"
           },
           "organization_name": {
+            "type": "string"
+          },
+          "qr_token": {
             "type": "string"
           },
           "rider_id": {
@@ -28552,6 +28730,83 @@
           "tracking"
         ],
         "x-handler": "josex/web/modules/tracking/controllers.(*TrackingController).ApplyOptimizationRun"
+      }
+    },
+    "/api/v1/tracking/organization/today": {
+      "get": {
+        "description": "MOBILE-039 D3: the client's riders on the day's trips — expected, arrived, on the way, absent, late to their shift or on time — its routes with expected arrival, and the shifts (the local planned arrival of its trips in, D2), narrowed by shift; an organization user reads its own organizations, staff names one with organization_id. Scoped by the SP, as /trips is: no permission an organization user lacks.",
+        "operationId": "tracking.OrganizationToday",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "date",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "organization_id",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "shift",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/tracking.OrganizationToday"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/core.ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/core.ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/core.ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          }
+        },
+        "summary": "A school's or company's day",
+        "tags": [
+          "tracking"
+        ],
+        "x-handler": "josex/web/modules/tracking/controllers.(*TrackingController).OrganizationToday"
       }
     },
     "/api/v1/tracking/organizations": {

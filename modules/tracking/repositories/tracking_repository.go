@@ -179,16 +179,47 @@ func (r *TrackingRepository) ListGuardianRiderStatus(ctx context.Context, tenant
 		var absenceID, liveTrip, liveStop *uuid.UUID
 		var absenceDirection *string
 		var absenceAt *time.Time
-		status, err := scanRiderStatus(rows, &kind, &riderType, &orgName, &absenceID, &absenceDirection, &absenceAt, &liveTrip, &liveStop)
+		var qrToken *string
+		status, err := scanRiderStatus(rows, &kind, &riderType, &orgName, &absenceID, &absenceDirection, &absenceAt, &liveTrip, &liveStop, &qrToken)
 		if err != nil {
 			return nil, err
 		}
 		status.OrganizationKind, status.RiderType, status.OrganizationName = &kind, &riderType, &orgName
 		status.AbsenceID, status.AbsenceDirection, status.AbsenceCreatedAt = absenceID, absenceDirection, absenceAt
-		status.LiveTripID, status.LiveStopID = liveTrip, liveStop
+		status.LiveTripID, status.LiveStopID, status.QRToken = liveTrip, liveStop, qrToken
 		statuses = append(statuses, *status)
 	}
 	return statuses, rows.Err()
+}
+
+// OrganizationToday answers sp_organization_today: a school's or company's day in one read (MOBILE-039 D3).
+func (r *TrackingRepository) OrganizationToday(ctx context.Context, tenantID uuid.UUID, scopeUserID *uuid.UUID, query models.OrganizationTodayQuery) (*models.OrganizationToday, error) {
+	var raw []byte
+	err := r.dbService.QueryRow(ctx, `
+		SELECT tracking.sp_organization_today(
+			p_tenant_id       := $1,
+			p_scope_user_id   := $2,
+			p_date            := $3::DATE,
+			p_organization_id := $4,
+			p_shift           := $5::TIME
+		)`, tenantID, scopeUserID, query.Date, query.OrganizationID, query.Shift).Scan(&raw)
+	if err != nil {
+		var pgErr *pgconn.PgError
+		if errors.As(err, &pgErr) {
+			switch pgErr.Message {
+			case "organization.required":
+				return nil, &trackingErrors.TrackingError{Code: trackingErrors.OrganizationRequired, Err: pgErr}
+			case "organization.not-found":
+				return nil, &trackingErrors.TrackingError{Code: trackingErrors.OrganizationNotFound, Err: pgErr}
+			}
+		}
+		return nil, scopedErr(err, trackingErrors.OrganizationTodayFailed)
+	}
+	var day models.OrganizationToday
+	if err := json.Unmarshal(raw, &day); err != nil {
+		return nil, &trackingErrors.TrackingError{Code: trackingErrors.OrganizationTodayFailed, Err: err}
+	}
+	return &day, nil
 }
 
 // scanRiderStatus reads one row of sp_get_rider_status's shape, then any columns a caller adds after it.

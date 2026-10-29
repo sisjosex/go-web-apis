@@ -4025,6 +4025,30 @@
     },
     {
       "method": "GET",
+      "path": "/api/v1/tracking/organization/today",
+      "operation_id": "tracking.OrganizationToday",
+      "module": "tracking",
+      "handler": "josex/web/modules/tracking/controllers.(*TrackingController).OrganizationToday",
+      "sps": [
+        "tracking.sp_organization_today"
+      ],
+      "reads": [
+        "tracking.compliance_documents",
+        "tracking.document_types",
+        "tracking.drivers",
+        "tracking.organization_members",
+        "tracking.organizations",
+        "tracking.riders",
+        "tracking.routes",
+        "tracking.trip_stop_tasks",
+        "tracking.trip_stops",
+        "tracking.trips",
+        "tracking.vehicles"
+      ],
+      "writes": []
+    },
+    {
+      "method": "GET",
       "path": "/api/v1/tracking/organizations",
       "operation_id": "tracking.ListOrganizations",
       "module": "tracking",
@@ -9876,6 +9900,7 @@
       "reads": [
         "tracking.organizations",
         "tracking.rider_absences",
+        "tracking.rider_contacts",
         "tracking.riders",
         "tracking.trip_stop_tasks",
         "tracking.trip_stops",
@@ -10281,6 +10306,21 @@
         "tracking.notifications"
       ],
       "calls": []
+    },
+    "tracking.sp_organization_today": {
+      "reads": [
+        "tracking.organizations",
+        "tracking.riders",
+        "tracking.trip_stop_tasks",
+        "tracking.trip_stops",
+        "tracking.trips"
+      ],
+      "writes": [],
+      "calls": [
+        "tracking.fn_organization_scope",
+        "tracking.fn_supervised_riders",
+        "tracking.fn_trip_rows"
+      ]
     },
     "tracking.sp_outbox_claim": {
       "reads": [

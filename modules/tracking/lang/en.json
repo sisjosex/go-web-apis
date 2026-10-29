@@ -61,6 +61,8 @@
   "tracking.rider.list.failed": "Failed to retrieve riders",
   "tracking.assignment.list.failed": "Failed to retrieve rider assignments",
   "tracking.organization.not-found": "Organization not found",
+  "tracking.organization.required": "Choose a school or a company",
+  "tracking.organization.today.failed": "We could not read the client's day",
   "tracking.organization.create.failed": "Failed to create organization",
   "tracking.organization.update.failed": "Failed to update organization",
   "tracking.organization.delete.failed": "Failed to delete organization",

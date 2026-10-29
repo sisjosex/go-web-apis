@@ -1082,6 +1082,22 @@ func LinkPortalGuardian(t *testing.T, helper *testhelpers.ApiTestHelper, riderID
 	})
 }
 
+// LinkPortalSelf makes the seeded portal account riderID's own contact ('self'): an adult passenger reading
+// their own day (MOBILE-039), unlinked when the test ends.
+func LinkPortalSelf(t *testing.T, helper *testhelpers.ApiTestHelper, riderID string) {
+	t.Helper()
+	ctx := context.Background()
+	if _, err := helper.DB().Execute(ctx, `INSERT INTO tracking.rider_contacts (rider_id, relation, name, phone, email, user_id, is_primary)
+		SELECT $1, 'self', 'Portal Self', '+3333333333', u.email, u.id, FALSE FROM auth.users u WHERE u.email = 'portal@test.local'`, riderID); err != nil {
+		t.Fatalf("link self: %v", err)
+	}
+	t.Cleanup(func() {
+		if _, err := helper.DB().Execute(ctx, `DELETE FROM tracking.rider_contacts WHERE rider_id = $1`, riderID); err != nil {
+			t.Errorf("unlink self: %v", err)
+		}
+	})
+}
+
 // MuteNotice mutes noticeType of riderID for userID, as the portal's settings switch does, and unmutes it
 // when the test ends.
 func MuteNotice(t *testing.T, helper *testhelpers.ApiTestHelper, userID, riderID, noticeType string) {

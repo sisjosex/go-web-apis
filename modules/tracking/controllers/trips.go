@@ -326,6 +326,41 @@ func (ctrl *TrackingController) TrackingOverview(ctx context.Context, in *Tracki
 	return api.OK(overview)
 }
 
+// OrganizationTodayInput is OrganizationToday's request.
+type OrganizationTodayInput struct {
+	Query api.Query[models.OrganizationTodayQuery]
+}
+
+// OrganizationToday is GET /organization/today: A school's or company's day.
+func (ctrl *TrackingController) OrganizationToday(ctx context.Context, in *OrganizationTodayInput) (*api.Out[*models.OrganizationToday], error) {
+	c := api.Gin(ctx)
+	tenantID, err := ctrl.requireTenantID(c)
+	if err != nil {
+		return nil, err
+	}
+	var query models.OrganizationTodayQuery
+	if err := in.Query.Into(ctx, &query); err != nil {
+		return nil, api.Fail(http.StatusBadRequest, coreErrors.BuildErrorDetail(c, trackingErrors.OrganizationTodayFailed, utils.ExtractValidationError(c, err)))
+	}
+	day, err := ctrl.trackingService.OrganizationToday(c.Request.Context(), tenantID, ctrl.scopeUserID(c), query)
+	if err != nil {
+		if err := scopeRefused(c, err); err != nil {
+			return nil, err
+		}
+		var trackingErr *trackingErrors.TrackingError
+		if errors.As(err, &trackingErr) {
+			switch trackingErr.Code {
+			case trackingErrors.OrganizationRequired:
+				return nil, api.Fail(http.StatusBadRequest, coreErrors.BuildErrorSingle(c, trackingErr.Code))
+			case trackingErrors.OrganizationNotFound:
+				return nil, api.Fail(http.StatusNotFound, coreErrors.BuildErrorSingle(c, trackingErr.Code))
+			}
+		}
+		return nil, api.Fail(http.StatusInternalServerError, coreErrors.BuildError(c, err))
+	}
+	return api.OK(day)
+}
+
 // NavCounts is GET /nav-counts: The taypi go rail's badges.
 func (ctrl *TrackingController) NavCounts(ctx context.Context, _ *api.None) (*api.Out[*models.NavCounts], error) {
 	c := api.Gin(ctx)

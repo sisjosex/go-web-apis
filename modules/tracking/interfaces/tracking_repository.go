@@ -114,6 +114,7 @@ type TrackingRepository interface {
 	GetOptimizationRun(ctx context.Context, tenantID, runID uuid.UUID) (*models.OptimizationRun, error)
 	ApplyOptimizationRun(ctx context.Context, tenantID, runID uuid.UUID, dto *models.ApplyOptimizationRunDto, userID *uuid.UUID) (*models.ApplyOptimizationRunResponse, error)
 	ListRiderGroups(ctx context.Context, tenantID uuid.UUID, organizationID *string) ([]string, error)
+	OrganizationToday(ctx context.Context, tenantID uuid.UUID, scopeUserID *uuid.UUID, query models.OrganizationTodayQuery) (*models.OrganizationToday, error)
 	TrackingOverview(ctx context.Context, tenantID uuid.UUID, date *string, scopeUserID *uuid.UUID) (*models.TrackingOverview, error)
 	NavCounts(ctx context.Context, tenantID uuid.UUID, scopeUserID *uuid.UUID) (*models.NavCounts, error)
 	TrackingSetup(ctx context.Context, tenantID uuid.UUID) (*models.TrackingSetup, error)

@@ -61,6 +61,8 @@
   "tracking.rider.list.failed": "Error al obtener pasajeros",
   "tracking.assignment.list.failed": "Error al obtener asignaciones de pasajeros",
   "tracking.organization.not-found": "OrganizaciÃ³n no encontrada",
+  "tracking.organization.required": "Elige un colegio o una empresa",
+  "tracking.organization.today.failed": "No pudimos leer el día del cliente",
   "tracking.organization.create.failed": "Error al crear la organizaciÃ³n",
   "tracking.organization.update.failed": "Error al actualizar la organizaciÃ³n",
   "tracking.organization.delete.failed": "Error al eliminar la organizaciÃ³n",

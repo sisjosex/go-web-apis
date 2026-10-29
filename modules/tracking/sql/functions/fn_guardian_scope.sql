@@ -13,11 +13,12 @@ BEGIN
     -- The tenant guard: a guardianship over another tenant's rider is not a scope here.
     INNER JOIN tracking.organizations o ON o.id = r.organization_id
     WHERE rc.user_id = p_user_id
-      AND rc.relation = 'guardian'
+      -- MOBILE-039: an adult passenger is their own contact ('self'), and reads their own day as a guardian does.
+      AND rc.relation IN ('guardian', 'self')
       AND o.tenant_id = p_tenant_id;
 
     RETURN COALESCE(v_scope, ARRAY[]::UUID[]);
 END;
 $function$;
 
-COMMENT ON FUNCTION tracking.fn_guardian_scope(uuid,uuid) IS 'The rider ids a guardian account is a contact of in this tenant; an empty array when the school has linked it to none, never a refusal (TRACK-017 D2)';
+COMMENT ON FUNCTION tracking.fn_guardian_scope(uuid,uuid) IS 'The rider ids a guardian or self account is a contact of in this tenant (MOBILE-039); an empty array when the school has linked it to none, never a refusal (TRACK-017 D2)';

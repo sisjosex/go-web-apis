@@ -136,7 +136,10 @@ const (
 	AssignmentListFailed = "tracking.assignment.list.failed"
 
 	// Organization errors (TR0161-TR0180)
-	OrganizationNotFound     = "tracking.organization.not-found"
+	OrganizationNotFound = "tracking.organization.not-found"
+	// MOBILE-039 D3: staff reading a client's day names the organization; the read itself failed.
+	OrganizationRequired     = "tracking.organization.required"
+	OrganizationTodayFailed  = "tracking.organization.today.failed"
 	OrganizationCreateFailed = "tracking.organization.create.failed"
 	OrganizationUpdateFailed = "tracking.organization.update.failed"
 	OrganizationDeleteFailed = "tracking.organization.delete.failed"

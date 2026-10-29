@@ -91,6 +91,8 @@ type RiderStatusResponse struct {
 	// The running trip and that stop, for the ETA: read, never sent.
 	LiveTripID *uuid.UUID `json:"-"`
 	LiveStopID *uuid.UUID `json:"-"`
+	// The passenger's own card code, to a self contact only (MOBILE-039 D1): the pass shown to the driver.
+	QRToken *string `json:"qr_token,omitempty"`
 }
 
 // === DTOs for Alerts ===
@@ -253,6 +255,62 @@ type RiderCardsQuery struct {
 // TrackingOverviewQuery binds GET /tracking/overview: the day, each route's own today when empty.
 type TrackingOverviewQuery struct {
 	Date *string `form:"date" binding:"omitempty,datetime=2006-01-02"`
+}
+
+// OrganizationTodayQuery binds GET /tracking/organization/today (MOBILE-039 D3). OrganizationID is the
+// caller's first organization when empty, and required of staff; Shift narrows to one shift (D2).
+type OrganizationTodayQuery struct {
+	Date           *string `form:"date" binding:"omitempty,datetime=2006-01-02"`
+	OrganizationID *string `form:"organization_id" binding:"omitempty,uuid"`
+	Shift          *string `form:"shift" binding:"omitempty,datetime=15:04"`
+}
+
+// OrganizationToday is a school's or company's day: totals per rider and its routes, one read.
+type OrganizationToday struct {
+	Organization  OrganizationTodayOrg    `json:"organization"`
+	Organizations []OrganizationTodayRef  `json:"organizations"`
+	Date          string                  `json:"date"`
+	Shifts        []string                `json:"shifts"`
+	Shift         *string                 `json:"shift"`
+	Totals        OrganizationTodayTotals `json:"totals"`
+	Routes        []OrganizationTodayTrip `json:"routes"`
+}
+
+// OrganizationTodayOrg is the organization the day is about.
+type OrganizationTodayOrg struct {
+	ID   uuid.UUID `json:"id"`
+	Name string    `json:"name"`
+	Kind string    `json:"kind"`
+}
+
+// OrganizationTodayRef is one organization the caller may switch to.
+type OrganizationTodayRef struct {
+	ID   uuid.UUID `json:"id"`
+	Name string    `json:"name"`
+}
+
+// OrganizationTodayTotals counts riders: expected on the day's trips, arrived, on the way, absent, and
+// of those who ride, late to their shift or on time.
+type OrganizationTodayTotals struct {
+	Expected int `json:"expected"`
+	Arrived  int `json:"arrived"`
+	OnTheWay int `json:"on_the_way"`
+	Absent   int `json:"absent"`
+	Late     int `json:"late"`
+	OnTime   int `json:"on_time"`
+}
+
+// OrganizationTodayTrip is one of the day's trips carrying the organization's riders.
+type OrganizationTodayTrip struct {
+	TripID          uuid.UUID  `json:"trip_id"`
+	RouteID         uuid.UUID  `json:"route_id"`
+	RouteName       string     `json:"route_name"`
+	LicensePlate    *string    `json:"license_plate"`
+	Riders          int        `json:"riders"`
+	Status          string     `json:"status"`
+	DelayMin        int        `json:"delay_min"`
+	ExpectedArrival *time.Time `json:"expected_arrival"`
+	ArrivedAt       *time.Time `json:"arrived_at"`
 }
 
 // ListRiderGroupsQuery binds GET /tracking/riders/groups.

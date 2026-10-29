@@ -76,6 +76,46 @@ BEGIN
     WHERE tenant_id = v_tenant AND first_name = 'Ana' AND last_name = 'Quispe';
 END $$;
 
+-- mobile.passenger@test.local / Passenger123*  — role `portal`, the `self` contact of employee Rubén Choque
+-- (Minera Andina): the adult passenger's home and pass (MOBILE-039). Rubén was made by hand, like the tenant.
+DO $$
+DECLARE
+    v_tenant UUID;
+    v_user   UUID;
+    v_rider  UUID;
+BEGIN
+    SELECT id INTO v_tenant FROM tenancy.tenants WHERE slug = 'mi-negocio';
+    IF v_tenant IS NULL THEN
+        RETURN;
+    END IF;
+
+    SELECT id INTO v_user FROM auth.users WHERE LOWER(email) = 'mobile.passenger@test.local';
+    IF v_user IS NULL THEN
+        INSERT INTO auth.users (first_name, last_name, email, password)
+        VALUES ('Rubén', 'Choque', 'mobile.passenger@test.local', crypt('Passenger123*', gen_salt('bf')))
+        RETURNING id INTO v_user;
+    ELSE
+        UPDATE auth.users
+        SET password = crypt('Passenger123*', gen_salt('bf')), is_active = TRUE, deleted_at = NULL
+        WHERE id = v_user;
+    END IF;
+
+    INSERT INTO tenancy.tenant_users (tenant_id, user_id, role)
+    VALUES (v_tenant, v_user, 'portal')
+    ON CONFLICT (tenant_id, user_id) DO UPDATE SET role = 'portal', is_active = TRUE;
+
+    SELECT r.id INTO v_rider FROM tracking.riders r
+    INNER JOIN tracking.organizations o ON o.id = r.organization_id
+    WHERE o.tenant_id = v_tenant AND r.first_name = 'Rubén' AND r.last_name = 'Choque'
+    LIMIT 1;
+    IF v_rider IS NOT NULL AND NOT EXISTS (
+        SELECT 1 FROM tracking.rider_contacts c WHERE c.rider_id = v_rider AND c.user_id = v_user
+    ) THEN
+        INSERT INTO tracking.rider_contacts (rider_id, relation, name, email, user_id)
+        VALUES (v_rider, 'self', 'Rubén Choque', 'mobile.passenger@test.local', v_user);
+    END IF;
+END $$;
+
 -- mobile.school@test.local   / School123*    — role `organization`, admin of Colegio Santa Rosa.
 -- mobile.employer@test.local / Employer123*  — role `organization`, admin of Minera Andina S.A.
 -- An organization that does not exist is skipped: both were made by hand, like the tenant.
