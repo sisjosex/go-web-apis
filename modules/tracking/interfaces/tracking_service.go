@@ -141,6 +141,7 @@ type TrackingService interface {
 	// Absences and suggestions (TRACK-022)
 	ListRiderAbsences(ctx context.Context, tenantID, riderID uuid.UUID, query models.ListRiderAbsencesQuery, scopeUserID, guardianUserID *uuid.UUID) ([]*models.RiderAbsence, error)
 	CreateRiderAbsence(ctx context.Context, tenantID, riderID uuid.UUID, dto *models.CreateRiderAbsenceDto, userID, scopeUserID, guardianUserID *uuid.UUID) (*models.CreateRiderAbsenceResponse, error)
+	CreateRiderAbsencesBatch(ctx context.Context, tenantID, riderID uuid.UUID, dto *models.CreateRiderAbsencesBatchDto, userID, scopeUserID, guardianUserID *uuid.UUID) (*models.CreateRiderAbsencesBatchResponse, error)
 	DeleteRiderAbsence(ctx context.Context, tenantID, riderID, absenceID uuid.UUID, scopeUserID, guardianUserID *uuid.UUID) error
 
 	// Who outside the operator read a rider (TRACK-063)

@@ -1773,11 +1773,15 @@
         "auth.sp_get_profile",
         "tenancy.sp_get_tenant_by_slug",
         "tenancy.sp_get_user_tenants",
-        "tracking.sp_list_guardian_rider_status"
+        "tracking.fn_stop_pair_duration",
+        "tracking.sp_list_guardian_rider_status",
+        "tracking.sp_rider_live",
+        "tracking.sp_trip_delay_check"
       ],
       "reads": [
         "auth.user_profile",
         "auth.users",
+        "eta.eta_at",
         "tenancy.role_permissions",
         "tenancy.tenant_modules",
         "tenancy.tenant_users",
@@ -1786,11 +1790,14 @@
         "tracking.drivers",
         "tracking.organization_members",
         "tracking.organizations",
+        "tracking.rider_absences",
         "tracking.rider_contacts",
         "tracking.rider_route_assignments",
         "tracking.riders",
         "tracking.route_alerts",
+        "tracking.route_versions",
         "tracking.routes",
+        "tracking.stop_pair_samples",
         "tracking.stop_places",
         "tracking.trip_stop_tasks",
         "tracking.trip_stops",
@@ -1799,7 +1806,10 @@
         "tracking.vehicles"
       ],
       "writes": [
-        "tracking.rider_access_log"
+        "tracking.outbox",
+        "tracking.rider_access_log",
+        "tracking.trip_events",
+        "tracking.trip_stops"
       ]
     },
     {
@@ -4564,6 +4574,7 @@
         "tracking.drivers",
         "tracking.organization_members",
         "tracking.organizations",
+        "tracking.rider_absences",
         "tracking.rider_contacts",
         "tracking.rider_route_assignments",
         "tracking.riders",
@@ -4688,6 +4699,34 @@
       "handler": "josex/web/modules/tracking/controllers.(*TrackingController).CreateRiderAbsence",
       "sps": [
         "tracking.sp_create_rider_absence"
+      ],
+      "reads": [
+        "auth.users",
+        "tracking.organization_members",
+        "tracking.organizations",
+        "tracking.rider_absences",
+        "tracking.rider_contacts",
+        "tracking.rider_route_assignments",
+        "tracking.riders",
+        "tracking.routes",
+        "tracking.trip_stops",
+        "tracking.trips"
+      ],
+      "writes": [
+        "tracking.outbox",
+        "tracking.rider_absences",
+        "tracking.trip_events",
+        "tracking.trip_stop_tasks"
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/tracking/riders/{rider_id}/absences/batch",
+      "operation_id": "tracking.CreateRiderAbsencesBatch",
+      "module": "tracking",
+      "handler": "josex/web/modules/tracking/controllers.(*TrackingController).CreateRiderAbsencesBatch",
+      "sps": [
+        "tracking.sp_create_rider_absences_batch"
       ],
       "reads": [
         "auth.users",
@@ -9060,6 +9099,13 @@
         "tracking.fn_trip_changed"
       ]
     },
+    "tracking.sp_create_rider_absences_batch": {
+      "reads": [],
+      "writes": [],
+      "calls": [
+        "tracking.sp_create_rider_absence"
+      ]
+    },
     "tracking.sp_create_rider_place": {
       "reads": [
         "tracking.riders"
@@ -9829,7 +9875,11 @@
     "tracking.sp_list_guardian_rider_status": {
       "reads": [
         "tracking.organizations",
-        "tracking.riders"
+        "tracking.rider_absences",
+        "tracking.riders",
+        "tracking.trip_stop_tasks",
+        "tracking.trip_stops",
+        "tracking.trips"
       ],
       "writes": [],
       "calls": [

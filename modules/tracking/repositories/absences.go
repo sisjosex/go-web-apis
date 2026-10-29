@@ -2,6 +2,7 @@ package repositories
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 
 	trackingErrors "josex/web/modules/tracking/errors"
@@ -90,6 +91,45 @@ func (r *TrackingRepository) CreateRiderAbsence(ctx context.Context, tenantID, r
 		return nil, mapAbsenceError(err, trackingErrors.AbsenceCreateFailed)
 	}
 	return &models.CreateRiderAbsenceResponse{Absence: &a, CancelledTasks: cancelled}, nil
+}
+
+// CreateRiderAbsencesBatch records the ranges through sp_create_rider_absences_batch: one round trip, one
+// transaction; a refusal on any range answers its code and creates nothing.
+func (r *TrackingRepository) CreateRiderAbsencesBatch(ctx context.Context, tenantID, riderID uuid.UUID, dto *models.CreateRiderAbsencesBatchDto, userID, scopeUserID, guardianUserID *uuid.UUID) (*models.CreateRiderAbsencesBatchResponse, error) {
+	ranges, err := json.Marshal(dto.Ranges)
+	if err != nil {
+		return nil, err
+	}
+	rows, err := r.dbService.Query(ctx, `
+		SELECT * FROM tracking.sp_create_rider_absences_batch(
+			p_tenant_id        := $1,
+			p_rider_id         := $2,
+			p_ranges           := $3::JSONB,
+			p_direction        := $4,
+			p_reason           := $5,
+			p_user_id          := $6,
+			p_scope_user_id    := $7,
+			p_guardian_user_id := $8
+		)
+	`, tenantID, riderID, string(ranges), dto.Direction, dto.Reason, userID, scopeUserID, guardianUserID)
+	if err != nil {
+		return nil, mapAbsenceError(err, trackingErrors.AbsenceCreateFailed)
+	}
+	defer rows.Close()
+	out := &models.CreateRiderAbsencesBatchResponse{Absences: []*models.RiderAbsence{}}
+	for rows.Next() {
+		var a models.RiderAbsence
+		var cancelled int32
+		if err := rows.Scan(append(scanAbsence(&a), &cancelled)...); err != nil {
+			return nil, mapAbsenceError(err, trackingErrors.AbsenceCreateFailed)
+		}
+		out.Absences = append(out.Absences, &a)
+		out.CancelledTasks += cancelled
+	}
+	if err := rows.Err(); err != nil {
+		return nil, mapAbsenceError(err, trackingErrors.AbsenceCreateFailed)
+	}
+	return out, nil
 }
 
 func (r *TrackingRepository) DeleteRiderAbsence(ctx context.Context, tenantID, riderID, absenceID uuid.UUID, scopeUserID, guardianUserID *uuid.UUID) error {

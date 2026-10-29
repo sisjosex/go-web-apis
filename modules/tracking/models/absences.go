@@ -46,6 +46,26 @@ type CreateRiderAbsenceResponse struct {
 	CancelledTasks int32         `json:"cancelled_tasks"`
 }
 
+// AbsenceRange is one run of days of a batch absence.
+type AbsenceRange struct {
+	DateFrom string `json:"date_from" binding:"required,datetime=2006-01-02"`
+	DateTo   string `json:"date_to" binding:"required,datetime=2006-01-02"`
+}
+
+// CreateRiderAbsencesBatchDto is POST /tracking/riders/:id/absences/batch: several runs of days in one
+// call, all or nothing (MOBILE-038 D2). Direction empty is both.
+type CreateRiderAbsencesBatchDto struct {
+	Ranges    []AbsenceRange `json:"ranges" binding:"required,min=1,max=31,dive"`
+	Direction *string        `json:"direction" binding:"omitempty,oneof=outbound inbound"`
+	Reason    *string        `json:"reason" binding:"omitempty,max=500" conform:"trim"`
+}
+
+// CreateRiderAbsencesBatchResponse answers every absence the batch made and the tasks they cancelled.
+type CreateRiderAbsencesBatchResponse struct {
+	Absences       []*RiderAbsence `json:"absences"`
+	CancelledTasks int32           `json:"cancelled_tasks"`
+}
+
 // SuggestRiderStopsQuery binds GET /tracking/riders/:id/suggestions. Days is the weekday bitmask
 // the rider would ride (bit 0 Monday); MaxWalkM the straight-line walk from home (D3).
 type SuggestRiderStopsQuery struct {

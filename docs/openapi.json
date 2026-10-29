@@ -6581,6 +6581,22 @@
         ],
         "type": "object"
       },
+      "tracking.AbsenceRange": {
+        "additionalProperties": false,
+        "properties": {
+          "date_from": {
+            "type": "string"
+          },
+          "date_to": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "date_from",
+          "date_to"
+        ],
+        "type": "object"
+      },
       "tracking.AccessGranted": {
         "additionalProperties": false,
         "properties": {
@@ -7858,6 +7874,56 @@
         },
         "required": [
           "absence",
+          "cancelled_tasks"
+        ],
+        "type": "object"
+      },
+      "tracking.CreateRiderAbsencesBatchDto": {
+        "additionalProperties": false,
+        "properties": {
+          "direction": {
+            "enum": [
+              "outbound",
+              "inbound"
+            ],
+            "nullable": true,
+            "type": "string"
+          },
+          "ranges": {
+            "items": {
+              "$ref": "#/components/schemas/tracking.AbsenceRange"
+            },
+            "maxItems": 31,
+            "minItems": 1,
+            "type": "array"
+          },
+          "reason": {
+            "maxLength": 500,
+            "nullable": true,
+            "type": "string"
+          }
+        },
+        "required": [
+          "ranges"
+        ],
+        "type": "object"
+      },
+      "tracking.CreateRiderAbsencesBatchResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "absences": {
+            "items": {
+              "$ref": "#/components/schemas/tracking.RiderAbsence"
+            },
+            "type": "array"
+          },
+          "cancelled_tasks": {
+            "format": "int32",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "absences",
           "cancelled_tasks"
         ],
         "type": "object"
@@ -12492,6 +12558,17 @@
       "tracking.RiderStatusResponse": {
         "additionalProperties": false,
         "properties": {
+          "absence_created_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "absence_direction": {
+            "type": "string"
+          },
+          "absence_id": {
+            "format": "uuid",
+            "type": "string"
+          },
           "active_alerts": {
             "format": "int32",
             "type": "integer"
@@ -12503,6 +12580,10 @@
           },
           "driver_name": {
             "nullable": true,
+            "type": "string"
+          },
+          "eta_at": {
+            "format": "date-time",
             "type": "string"
           },
           "last_event_has_photo": {
@@ -12539,6 +12620,9 @@
             "type": "integer"
           },
           "organization_kind": {
+            "type": "string"
+          },
+          "organization_name": {
             "type": "string"
           },
           "rider_id": {
@@ -30714,6 +30798,79 @@
           "tracking"
         ],
         "x-handler": "josex/web/modules/tracking/controllers.(*TrackingController).CreateRiderAbsence"
+      }
+    },
+    "/api/v1/tracking/riders/{rider_id}/absences/batch": {
+      "post": {
+        "description": "1–31 ranges in one transaction, as POST /absences each: all or nothing — a cut-off, overlap or scope refusal on any range creates none and names that range's first day as detail.date (MOBILE-038 D2).",
+        "operationId": "tracking.CreateRiderAbsencesBatch",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "rider_id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/tracking.CreateRiderAbsencesBatchDto"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/tracking.CreateRiderAbsencesBatchResponse"
+                }
+              }
+            },
+            "description": "Created"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/core.ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/core.ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/core.ErrorResponse"
+                }
+              }
+            },
+            "description": "Conflict"
+          }
+        },
+        "summary": "Report a rider's absence on several runs of days",
+        "tags": [
+          "tracking"
+        ],
+        "x-handler": "josex/web/modules/tracking/controllers.(*TrackingController).CreateRiderAbsencesBatch"
       }
     },
     "/api/v1/tracking/riders/{rider_id}/absences/{absence_id}": {

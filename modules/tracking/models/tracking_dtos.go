@@ -81,6 +81,16 @@ type RiderStatusResponse struct {
 	// The client's kind and the rider's type, on the guardian home only (TRACK-061).
 	OrganizationKind *string `json:"organization_kind,omitempty"`
 	RiderType        *string `json:"rider_type,omitempty"`
+	// The guardian home's cards (MOBILE-038 D1): the client's name, today's absence (direction nil is
+	// both legs) and, while a trip carries the rider, when the bus reaches the stop they wait for next.
+	OrganizationName *string    `json:"organization_name,omitempty"`
+	AbsenceID        *uuid.UUID `json:"absence_id,omitempty"`
+	AbsenceDirection *string    `json:"absence_direction,omitempty"`
+	AbsenceCreatedAt *time.Time `json:"absence_created_at,omitempty"`
+	EtaAt            *time.Time `json:"eta_at,omitempty"`
+	// The running trip and that stop, for the ETA: read, never sent.
+	LiveTripID *uuid.UUID `json:"-"`
+	LiveStopID *uuid.UUID `json:"-"`
 }
 
 // === DTOs for Alerts ===

@@ -449,6 +449,11 @@ func (s *TrackingService) ListRiderAbsences(ctx context.Context, tenantID, rider
 	return s.trackingRepo.ListRiderAbsences(ctx, tenantID, riderID, query, scopeUserID, guardianUserID)
 }
 
+// CreateRiderAbsencesBatch records several runs of days in one call, all or nothing (MOBILE-038 D2).
+func (s *TrackingService) CreateRiderAbsencesBatch(ctx context.Context, tenantID, riderID uuid.UUID, dto *models.CreateRiderAbsencesBatchDto, userID, scopeUserID, guardianUserID *uuid.UUID) (*models.CreateRiderAbsencesBatchResponse, error) {
+	return s.trackingRepo.CreateRiderAbsencesBatch(ctx, tenantID, riderID, dto, userID, scopeUserID, guardianUserID)
+}
+
 func (s *TrackingService) CreateRiderAbsence(ctx context.Context, tenantID, riderID uuid.UUID, dto *models.CreateRiderAbsenceDto, userID, scopeUserID, guardianUserID *uuid.UUID) (*models.CreateRiderAbsenceResponse, error) {
 	return s.trackingRepo.CreateRiderAbsence(ctx, tenantID, riderID, dto, userID, scopeUserID, guardianUserID)
 }

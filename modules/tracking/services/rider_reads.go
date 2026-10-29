@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"log"
+	"time"
 
 	"josex/web/modules/tracking/interfaces"
 	"josex/web/modules/tracking/models"
@@ -55,22 +56,9 @@ func etaWindow(trip *models.RiderTodayTrip) bool {
 	return trip.Dropoff == nil || (trip.Dropoff.TaskStatus != "done" && trip.Dropoff.TaskStatus != "no_show")
 }
 
-// fillEta reads the trip's shared eta:{trip} entry, and only when it is cold computes it through the
-// rider's live snapshot, as the guardian's map does.
+// fillEta reads the trip's stop estimates into the rider's pickup and drop-off.
 func (s *RiderReadsService) fillEta(ctx context.Context, tenantID, riderID uuid.UUID, scopeUserID, guardianUserID *uuid.UUID, trip *models.RiderTodayTrip) {
-	eta, ok := s.live.CachedEta(ctx, trip.TripID)
-	stops := eta.Eta
-	if !ok {
-		live, _, err := s.live.Rider(ctx, tenantID, riderID, scopeUserID, guardianUserID)
-		if err != nil {
-			log.Printf("⚠️  rider today eta %s: %v", trip.TripID, err)
-			return
-		}
-		if live.TripID == nil || *live.TripID != trip.TripID {
-			return
-		}
-		stops = live.Eta
-	}
+	stops := s.tripEtas(ctx, tenantID, riderID, scopeUserID, guardianUserID, trip.TripID)
 	for _, e := range stops {
 		for _, stop := range []*models.RiderTodayStop{trip.Pickup, trip.Dropoff} {
 			// A cached estimate may still list a stop the rider has just been picked up at.
@@ -80,6 +68,35 @@ func (s *RiderReadsService) fillEta(ctx context.Context, tenantID, riderID uuid.
 			}
 		}
 	}
+}
+
+// tripEtas reads the trip's shared eta:{trip} entry, and only when it is cold computes it through the
+// rider's live snapshot, as the guardian's map does; nil when neither has the trip.
+func (s *RiderReadsService) tripEtas(ctx context.Context, tenantID, riderID uuid.UUID, scopeUserID, guardianUserID *uuid.UUID, tripID uuid.UUID) []models.StopEta {
+	if eta, ok := s.live.CachedEta(ctx, tripID); ok {
+		return eta.Eta
+	}
+	live, _, err := s.live.Rider(ctx, tenantID, riderID, scopeUserID, guardianUserID)
+	if err != nil {
+		log.Printf("⚠️  rider eta %s: %v", tripID, err)
+		return nil
+	}
+	if live.TripID == nil || *live.TripID != tripID {
+		return nil
+	}
+	return live.Eta
+}
+
+// StopEta is when the bus is expected at one of the rider's stops on a running trip — the guardian home's
+// "8 min" (MOBILE-038 D1); nil without an estimate.
+func (s *RiderReadsService) StopEta(ctx context.Context, tenantID, riderID, guardianUserID, tripID, tripStopID uuid.UUID) *time.Time {
+	for _, e := range s.tripEtas(ctx, tenantID, riderID, nil, &guardianUserID, tripID) {
+		if e.TripStopID == tripStopID {
+			at := e.EtaAt
+			return &at
+		}
+	}
+	return nil
 }
 
 func (s *RiderReadsService) History(ctx context.Context, tenantID, riderID uuid.UUID, query models.RiderDaysQuery, scopeUserID, guardianUserID *uuid.UUID) (*models.RiderHistory, error) {

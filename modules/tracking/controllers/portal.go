@@ -15,6 +15,7 @@ import (
 	trackingErrors "josex/web/modules/tracking/errors"
 	"josex/web/modules/tracking/interfaces"
 	"josex/web/modules/tracking/models"
+	"josex/web/modules/tracking/services"
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
@@ -28,10 +29,12 @@ type PortalController struct {
 	// directory and riders serve /me, which spans tenants (TRACK-061 D1).
 	directory interfaces.PortalDirectory
 	riders    interfaces.TrackingService
+	// reads gives /me the ETA of a rider a running trip carries (MOBILE-038 D1); nil leaves it null.
+	reads *services.RiderReadsService
 }
 
-func NewPortalController(notifications interfaces.NotificationService, directory interfaces.PortalDirectory, riders interfaces.TrackingService) *PortalController {
-	return &PortalController{notifications: notifications, directory: directory, riders: riders}
+func NewPortalController(notifications interfaces.NotificationService, directory interfaces.PortalDirectory, riders interfaces.TrackingService, reads *services.RiderReadsService) *PortalController {
+	return &PortalController{notifications: notifications, directory: directory, riders: riders, reads: reads}
 }
 
 // maxSettingsRiders caps one PUT /notification-settings body.
@@ -168,6 +171,12 @@ func (ctrl *PortalController) Me(ctx context.Context, _ *api.None) (*api.Out[mod
 				log.Printf("⚠️  portal me: tenant %s: %v", m.Slug, err)
 				entry.Error = true
 				return
+			}
+			// MOBILE-038 D1: the ETA only for a rider a running trip carries, from the trip's shared estimate.
+			for j := range riders {
+				if rider := &riders[j]; rider.LiveTripID != nil && rider.LiveStopID != nil && ctrl.reads != nil {
+					rider.EtaAt = ctrl.reads.StopEta(ctx, m.TenantID, rider.RiderID, userID, *rider.LiveTripID, *rider.LiveStopID)
+				}
 			}
 			entry.Riders = riders
 		}(&tenants[i], m)

@@ -12,6 +12,7 @@ import (
 	"josex/web/modules/tracking/models"
 
 	"github.com/gin-gonic/gin"
+	"github.com/jackc/pgx/v5/pgconn"
 )
 
 // The absence and suggestion handlers of TRACK-022: one slice, one file.
@@ -93,6 +94,44 @@ func (ctrl *TrackingController) CreateRiderAbsence(ctx context.Context, in *Crea
 	result, err := ctrl.trackingService.CreateRiderAbsence(c.Request.Context(), tenantID, riderID, &dto,
 		ctrl.actingUserID(c), ctrl.scopeUserID(c), ctrl.guardianUserID(c))
 	if err != nil {
+		return nil, absenceErrorResponse(c, err)
+	}
+	return api.OK(result)
+}
+
+// CreateRiderAbsencesBatchInput is CreateRiderAbsencesBatch's request.
+type CreateRiderAbsencesBatchInput struct {
+	RiderID string `path:"rider_id"`
+	JSON    api.Body[models.CreateRiderAbsencesBatchDto]
+}
+
+// CreateRiderAbsencesBatch is POST /riders/{rider_id}/absences/batch: Report several runs of days at once.
+// A refusal names the first day it hit as detail.date, so the phone can say which (MOBILE-038 D2).
+func (ctrl *TrackingController) CreateRiderAbsencesBatch(ctx context.Context, in *CreateRiderAbsencesBatchInput) (*api.Out[*models.CreateRiderAbsencesBatchResponse], error) {
+	c := api.Gin(ctx)
+	tenantID, err := ctrl.requireTenantID(c)
+	if err != nil {
+		return nil, err
+	}
+	riderID, err := pathUUID(c, "rider_id")
+	if err != nil {
+		return nil, err
+	}
+	var dto models.CreateRiderAbsencesBatchDto
+	if err := in.JSON.Into(ctx, &dto); err != nil {
+		return nil, api.Fail(http.StatusBadRequest, coreErrors.BuildErrorDetail(c, trackingErrors.AbsenceCreateFailed, utils.ExtractValidationError(c, err)))
+	}
+
+	result, err := ctrl.trackingService.CreateRiderAbsencesBatch(c.Request.Context(), tenantID, riderID, &dto,
+		ctrl.actingUserID(c), ctrl.scopeUserID(c), ctrl.guardianUserID(c))
+	if err != nil {
+		var trackingErr *trackingErrors.TrackingError
+		var pgErr *pgconn.PgError
+		if errors.As(err, &trackingErr) && errors.As(err, &pgErr) && pgErr.Detail != "" {
+			if status, ok := absenceStatus[trackingErr.Code]; ok {
+				return nil, api.Fail(status, coreErrors.BuildErrorDetail(c, trackingErr.Code, map[string]string{"date": pgErr.Detail}))
+			}
+		}
 		return nil, absenceErrorResponse(c, err)
 	}
 	return api.OK(result)

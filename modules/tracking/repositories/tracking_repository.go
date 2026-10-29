@@ -175,12 +175,17 @@ func (r *TrackingRepository) ListGuardianRiderStatus(ctx context.Context, tenant
 	defer rows.Close()
 	statuses := []models.RiderStatusResponse{}
 	for rows.Next() {
-		var kind, riderType string
-		status, err := scanRiderStatus(rows, &kind, &riderType)
+		var kind, riderType, orgName string
+		var absenceID, liveTrip, liveStop *uuid.UUID
+		var absenceDirection *string
+		var absenceAt *time.Time
+		status, err := scanRiderStatus(rows, &kind, &riderType, &orgName, &absenceID, &absenceDirection, &absenceAt, &liveTrip, &liveStop)
 		if err != nil {
 			return nil, err
 		}
-		status.OrganizationKind, status.RiderType = &kind, &riderType
+		status.OrganizationKind, status.RiderType, status.OrganizationName = &kind, &riderType, &orgName
+		status.AbsenceID, status.AbsenceDirection, status.AbsenceCreatedAt = absenceID, absenceDirection, absenceAt
+		status.LiveTripID, status.LiveStopID = liveTrip, liveStop
 		statuses = append(statuses, *status)
 	}
 	return statuses, rows.Err()

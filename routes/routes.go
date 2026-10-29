@@ -598,13 +598,13 @@ func registerTracking(d routeDeps, chains tenantChains, valkey coreServices.Valk
 		directory = portalDirectory{auth: authRepos.NewAuthRepository(d.db), tenants: chains.tenants}
 		portalAuthOnly = []gin.HandlerFunc{d.authMiddleware}
 	}
+	reads := trackingServices.NewRiderReadsService(trackingRepos.NewTrackingRepository(d.db), live)
 	portalRoutes := trackingRoutes.Portal{
 		Controller: trackingControllers.NewPortalController(
-			trackingServices.NewNotificationService(trackingRepos.NewTrackingRepository(d.db)), directory, trackingService),
+			trackingServices.NewNotificationService(trackingRepos.NewTrackingRepository(d.db)), directory, trackingService, reads),
 		Auth:     portalAuth,
 		AuthOnly: portalAuthOnly,
-		Reads: trackingControllers.NewRiderReadsController(
-			trackingServices.NewRiderReadsService(trackingRepos.NewTrackingRepository(d.db), live)),
+		Reads:    trackingControllers.NewRiderReadsController(reads),
 	}
 	liveRoutes := trackingRoutes.Live{Controller: trackingControllers.NewLiveController(live)}
 	if chains.tenants != nil {
