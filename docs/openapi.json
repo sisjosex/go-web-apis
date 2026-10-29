@@ -9135,6 +9135,11 @@
             "format": "uuid",
             "type": "string"
           },
+          "estimated_delay_minutes": {
+            "format": "int32",
+            "nullable": true,
+            "type": "integer"
+          },
           "id": {
             "format": "uuid",
             "type": "string"
@@ -9149,6 +9154,9 @@
           },
           "message": {
             "type": "string"
+          },
+          "notify_families": {
+            "type": "boolean"
           },
           "route_id": {
             "format": "uuid",
@@ -9186,7 +9194,9 @@
           "lat",
           "lng",
           "created_by",
-          "created_at"
+          "created_at",
+          "estimated_delay_minutes",
+          "notify_families"
         ],
         "type": "object"
       },
@@ -9196,10 +9206,21 @@
           "alert_type": {
             "enum": [
               "delay",
+              "road_closed",
               "breakdown",
-              "emergency"
+              "passenger",
+              "accident",
+              "emergency",
+              "other"
             ],
             "type": "string"
+          },
+          "delay_min": {
+            "format": "int64",
+            "maximum": 120,
+            "minimum": 5,
+            "nullable": true,
+            "type": "integer"
           },
           "lat": {
             "format": "double",
@@ -9218,6 +9239,10 @@
           "message": {
             "maxLength": 1000,
             "type": "string"
+          },
+          "notify": {
+            "nullable": true,
+            "type": "boolean"
           },
           "trip_id": {
             "format": "uuid",

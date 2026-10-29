@@ -500,7 +500,7 @@ type RouteAlert struct {
 	VehicleID             *uuid.UUID `json:"vehicle_id"`
 	LicensePlate          *string    `json:"license_plate"`
 	TripID                *uuid.UUID `json:"trip_id"`
-	AlertType             string     `json:"alert_type"` // delay, breakdown, cancellation, emergency, other, device_silent, off_route
+	AlertType             string     `json:"alert_type"` // delay, breakdown, cancellation, emergency, other, road_closed, passenger, accident, device_silent, off_route
 	Title                 string     `json:"title"`
 	Message               *string    `json:"message"`
 	Severity              *string    `json:"severity"` // low, medium, high, critical
@@ -521,6 +521,14 @@ type RouteAlert struct {
 	DriverName       *string `json:"driver_name"`
 	DriverPhone      *string `json:"driver_phone"`
 	NotifiedCount    int32   `json:"notified_count"`
+}
+
+// AlertClientUser is one account of the client that hears a driver's incident, with what to tell it.
+type AlertClientUser struct {
+	UserID    uuid.UUID
+	AlertType string
+	DelayMin  *int32
+	RouteName string
 }
 
 // ListAlertsQuery binds GET /tracking/alerts. status defaults to active; all is every status.

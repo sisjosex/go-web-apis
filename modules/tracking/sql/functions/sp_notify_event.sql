@@ -16,6 +16,8 @@ DECLARE
     v_alert_title VARCHAR;
     v_alert_route UUID;
     v_alert_trip  UUID;
+    v_alert_delay  INT;
+    v_alert_notify BOOLEAN;
     v_tenant_wide BOOLEAN := FALSE;
     v_delay_s INT;
     v_eta_at  TIMESTAMPTZ;
@@ -68,13 +70,19 @@ BEGIN
                 RETURN;
         END CASE;
     ELSIF p_topic = 'alert.changed' AND p_event->>'type' = 'raised' THEN
-        SELECT a.id, a.alert_type, COALESCE(a.title, a.alert_type), a.route_id, a.trip_id
-          INTO v_alert_id, v_alert_type, v_alert_title, v_alert_route, v_alert_trip
+        SELECT a.id, a.alert_type, COALESCE(a.title, a.alert_type), a.route_id, a.trip_id,
+               a.estimated_delay_minutes, a.notify_families
+          INTO v_alert_id, v_alert_type, v_alert_title, v_alert_route, v_alert_trip, v_alert_delay, v_alert_notify
         FROM tracking.route_alerts a
         WHERE a.id = CAST(p_event->>'alert_id' AS UUID);
-        -- The two kinds the server raises are operational: staff only, never families (TRACK-071).
-        IF v_alert_id IS NULL OR v_alert_type IN ('device_silent', 'off_route') THEN
+        -- The two kinds the server raises are operational: staff only, never families (TRACK-071); a
+        -- driver who switched "Avisar a padres y colegio" off tells only the office (MOBILE-037 D2).
+        IF v_alert_id IS NULL OR v_alert_type IN ('device_silent', 'off_route') OR NOT v_alert_notify THEN
             RETURN;
+        END IF;
+        -- A driver's incident (its kind as its title) carries its minutes: the phone's text by kind reads them.
+        IF v_alert_title <> v_alert_type THEN
+            v_alert_delay := NULL;
         END IF;
         v_type := 'delay';
         v_dedupe := CAST(v_alert_id AS TEXT);
@@ -156,7 +164,7 @@ BEGIN
                    'alert_id',     v_alert_id,
                    'alert_type',   v_alert_type,
                    'title',        v_alert_title,
-                   'delay_min',    ROUND(v_delay_s / 60.0),
+                   'delay_min',    COALESCE(ROUND(v_delay_s / 60.0), v_alert_delay),
                    'eta_at',       v_eta_at,
                    'eta_time',     rs.eta_time
                )) AS body
@@ -182,4 +190,4 @@ BEGIN
 END;
 $function$;
 
-COMMENT ON FUNCTION tracking.sp_notify_event(uuid,character varying,jsonb,bigint) IS 'Turns one trip.changed or alert.changed outbox event into feed rows, one per guardian|self account and rider, idempotent on the dedupe key; answers the new rows whose type the account did not mute; a route alert reaches every rider assigned to the route today, a tenant-wide one every rider assigned today to any route, device_silent and off_route nobody; a riderless auto-cancel tells nobody, a rider added to a running trip only its own family; a late ETA (delay with delay_s) only the families with a pending task at that stop whose client''s delay_notice_min it reaches (TRACK-012, TRACK-033, TRACK-069, TRACK-066, TRACK-071)';
+COMMENT ON FUNCTION tracking.sp_notify_event(uuid,character varying,jsonb,bigint) IS 'Turns one trip.changed or alert.changed outbox event into feed rows, one per guardian|self account and rider, idempotent on the dedupe key; answers the new rows whose type the account did not mute; a route alert reaches every rider assigned to the route today, a tenant-wide one every rider assigned today to any route, device_silent and off_route nobody; a riderless auto-cancel tells nobody, a rider added to a running trip only its own family; a late ETA (delay with delay_s) only the families with a pending task at that stop whose client''s delay_notice_min it reaches; a driver''s incident with notify_families off nobody, one with minutes carries delay_min (TRACK-012, TRACK-033, TRACK-069, TRACK-066, TRACK-071, MOBILE-037)';

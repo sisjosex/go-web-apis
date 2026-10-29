@@ -153,13 +153,21 @@ type DriverFindRidersResponse struct {
 }
 
 // DriverIncidentDto is POST /mobile/driver/incidents: what happened on one of the driver's trips, and
-// where the phone was.
+// where the phone was. DelayMin is the minutes late, only for delay and road_closed (MOBILE-037); Notify
+// false tells only the office — no notice to the families, no push to the client (D2).
 type DriverIncidentDto struct {
 	TripID    *uuid.UUID `json:"trip_id" binding:"required"`
-	AlertType string     `json:"alert_type" binding:"required,oneof=delay breakdown emergency" enums:"delay,breakdown,emergency"`
+	AlertType string     `json:"alert_type" binding:"required,oneof=delay road_closed breakdown passenger accident emergency other" enums:"delay,road_closed,breakdown,passenger,accident,emergency,other"`
 	Message   string     `json:"message" binding:"max=1000"`
+	DelayMin  *int       `json:"delay_min" binding:"omitempty,min=5,max=120"`
+	Notify    *bool      `json:"notify"`
 	Lat       *float64   `json:"lat" binding:"required,min=-90,max=90"`
 	Lng       *float64   `json:"lng" binding:"required,min=-180,max=180"`
+}
+
+// DelayKind reports whether an incident kind carries the minutes late.
+func DelayKind(alertType string) bool {
+	return alertType == "delay" || alertType == "road_closed"
 }
 
 // DriverIncident is the alert an incident raised: a route alert naming its trip and position.
@@ -177,6 +185,9 @@ type DriverIncident struct {
 	Lng       float64    `json:"lng"`
 	CreatedBy uuid.UUID  `json:"created_by"`
 	CreatedAt time.Time  `json:"created_at"`
+	// EstimatedDelayMinutes is the driver's delay_min; NotifyFamilies whether families and the client hear it.
+	EstimatedDelayMinutes *int32 `json:"estimated_delay_minutes"`
+	NotifyFamilies        bool   `json:"notify_families"`
 }
 
 // DriverIncidentResponse is the incident's 201 body.

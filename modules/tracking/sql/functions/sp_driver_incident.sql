@@ -1,5 +1,5 @@
-CREATE OR REPLACE FUNCTION tracking.sp_driver_incident(p_tenant_id uuid, p_user_id uuid, p_trip_id uuid, p_alert_type character varying, p_message text, p_lat double precision, p_lng double precision)
- RETURNS TABLE(id uuid, route_id uuid, vehicle_id uuid, trip_id uuid, alert_type character varying, title character varying, message text, severity character varying, status character varying, lat double precision, lng double precision, created_by uuid, created_at timestamp without time zone)
+CREATE OR REPLACE FUNCTION tracking.sp_driver_incident(p_tenant_id uuid, p_user_id uuid, p_trip_id uuid, p_alert_type character varying, p_message text, p_lat double precision, p_lng double precision, p_delay_min integer DEFAULT NULL, p_notify boolean DEFAULT true)
+ RETURNS TABLE(id uuid, route_id uuid, vehicle_id uuid, trip_id uuid, alert_type character varying, title character varying, message text, severity character varying, status character varying, lat double precision, lng double precision, created_by uuid, created_at timestamp without time zone, estimated_delay_minutes integer, notify_families boolean)
  LANGUAGE plpgsql
 AS $function$
 DECLARE
@@ -17,7 +17,8 @@ BEGIN
     END IF;
 
     INSERT INTO tracking.route_alerts (
-        tenant_id, route_id, vehicle_id, trip_id, alert_type, title, message, severity, location, created_by, status
+        tenant_id, route_id, vehicle_id, trip_id, alert_type, title, message, severity, location, created_by, status,
+        estimated_delay_minutes, notify_families
     )
     VALUES (
         p_tenant_id,
@@ -27,10 +28,12 @@ BEGIN
         p_alert_type,
         p_alert_type,
         COALESCE(NULLIF(TRIM(p_message), ''), ''),
-        CASE p_alert_type WHEN 'emergency' THEN 'critical' WHEN 'breakdown' THEN 'high' ELSE 'medium' END,
+        CASE WHEN p_alert_type IN ('emergency', 'accident') THEN 'critical' WHEN p_alert_type = 'breakdown' THEN 'high' ELSE 'medium' END,
         CAST(ST_SetSRID(ST_MakePoint(p_lng, p_lat), 4326) AS GEOGRAPHY),
         p_user_id,
-        'active'
+        'active',
+        p_delay_min,
+        COALESCE(p_notify, TRUE)
     )
     RETURNING * INTO v_alert;
 
@@ -55,8 +58,10 @@ BEGIN
         p_lat,
         p_lng,
         v_alert.created_by,
-        v_alert.created_at;
+        v_alert.created_at,
+        v_alert.estimated_delay_minutes,
+        v_alert.notify_families;
 END;
 $function$;
 
-COMMENT ON FUNCTION tracking.sp_driver_incident(uuid,uuid,uuid,character varying,text,double precision,double precision) IS 'The driver account reports an incident on one of their trips: a route_alerts row with trip_id and location, an incident trip_events row, a trip.changed and an alert.changed outbox row; raises trip.not-found, driver.not-linked (TRACK-027 D2, TRACK-004 D1)';
+COMMENT ON FUNCTION tracking.sp_driver_incident(uuid,uuid,uuid,character varying,text,double precision,double precision,integer,boolean) IS 'The driver account reports an incident on one of their trips: a route_alerts row with trip_id and location, the delay minutes and whether families and the client hear it (MOBILE-037; emergency and accident critical, breakdown high), an incident trip_events row, a trip.changed and an alert.changed outbox row; raises trip.not-found, driver.not-linked (TRACK-027 D2, TRACK-004 D1)';

@@ -217,6 +217,10 @@ func (ctrl *DriverController) ReportIncident(ctx context.Context, in *ReportInci
 	if err := in.JSON.Into(ctx, &dto); err != nil {
 		return nil, api.Fail(http.StatusBadRequest, coreErrors.BuildErrorDetail(c, trackingErrors.DriverIncidentInvalid, utils.ExtractValidationError(c, err)))
 	}
+	// Minutes late belong to a delay or a closed road; on another kind they are a phone bug (MOBILE-037).
+	if dto.DelayMin != nil && !models.DelayKind(dto.AlertType) {
+		return nil, api.Fail(http.StatusBadRequest, coreErrors.BuildErrorDetail(c, trackingErrors.DriverIncidentInvalid, "delay_min"))
+	}
 
 	alert, err := ctrl.driverService.ReportIncident(c.Request.Context(), tenantID, userID, &dto)
 	if err != nil {

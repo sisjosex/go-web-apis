@@ -147,11 +147,13 @@ func (r *TrackingRepository) DriverIncident(ctx context.Context, tenantID, userI
 			p_alert_type := $4,
 			p_message    := $5,
 			p_lat        := $6,
-			p_lng        := $7
+			p_lng        := $7,
+			p_delay_min  := $8,
+			p_notify     := $9
 		)
-	`, tenantID, userID, dto.TripID, dto.AlertType, dto.Message, dto.Lat, dto.Lng).Scan(
+	`, tenantID, userID, dto.TripID, dto.AlertType, dto.Message, dto.Lat, dto.Lng, dto.DelayMin, dto.Notify).Scan(
 		&a.ID, &a.RouteID, &a.VehicleID, &a.TripID, &a.AlertType, &a.Title, &a.Message, &a.Severity,
-		&a.Status, &a.Lat, &a.Lng, &a.CreatedBy, &a.CreatedAt)
+		&a.Status, &a.Lat, &a.Lng, &a.CreatedBy, &a.CreatedAt, &a.EstimatedDelayMinutes, &a.NotifyFamilies)
 	if err != nil {
 		return nil, mapTripError(err, trackingErrors.DriverIncidentFailed)
 	}

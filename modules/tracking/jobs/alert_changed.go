@@ -37,8 +37,9 @@ type AlertChanged struct {
 // AlertChangedHandler consumes alert.changed: the row goes out as it is, as an `alert` frame, to the
 // tenant's fleet — where the alerts page listens and refetches — and to the trip when it names one,
 // with the rail's new counts on nav:{tenant} (TRACK-081).
-// A raised alert is also a `delay` notice to the guardians of the riders it touches (TRACK-012), and a
-// serious one a push to the operator's staff (TRACK-071 D3).
+// A raised alert is also a `delay` notice to the guardians of the riders it touches (TRACK-012), a driver's
+// incident a push to the client's accounts of the trip's riders (MOBILE-037 D2), and a serious one a push to
+// the operator's staff (TRACK-071 D3).
 // The tenant comes from the TaskID. valkey nil publishes nothing; notify nil notifies nothing; pusher
 // or staff nil pushes nothing to the staff.
 // Delivery is at least once: a repeated frame only makes a client refetch, a repeated notice writes
@@ -62,12 +63,20 @@ func AlertChangedHandler(db coreServices.DatabaseService, tenants *coreJobs.Tena
 		if err := notify.Notify(ctx, tenant, topicAlertChanged, task.Payload()); err != nil {
 			return err
 		}
-		if payload.Type != "raised" || pusher == nil || staff == nil {
+		if payload.Type != "raised" || pusher == nil {
 			return nil
 		}
 		alertID, err := uuid.Parse(payload.AlertID)
 		if err != nil {
 			return fmt.Errorf("alert.changed alert_id: %v: %w", err, asynq.SkipRetry)
+		}
+		if payload.TripID != nil {
+			if err := PushClientAlert(ctx, db, tenant, alertID, *payload.TripID, pusher); err != nil {
+				return err
+			}
+		}
+		if staff == nil {
+			return nil
 		}
 		return PushStaffAlert(ctx, db, tenant, alertID, pusher, staff)
 	}
@@ -96,8 +105,40 @@ func publishAlert(ctx context.Context, db coreServices.DatabaseService, valkey c
 // cmd/server builds it from the tenancy module, which tracking does not import.
 type StaffDirectory func(ctx context.Context, tenantID uuid.UUID) ([]uuid.UUID, error)
 
-// staffAlertKinds are the alerts serious enough to wake the staff's phones (TRACK-071 D3).
-var staffAlertKinds = map[string]bool{"breakdown": true, "emergency": true, "device_silent": true, "off_route": true}
+// staffAlertKinds are the alerts serious enough to wake the staff's phones (TRACK-071 D3), an accident
+// among them (MOBILE-037 D1).
+var staffAlertKinds = map[string]bool{"breakdown": true, "emergency": true, "accident": true, "device_silent": true, "off_route": true}
+
+// PushClientAlert pushes a driver's incident to the client's accounts of the trip's riders — the school or
+// the company — with the guardian's line for its kind, on the "problems" channel (MOBILE-037 D2). One
+// tenant read; none when the driver switched "Avisar a padres y colegio" off.
+func PushClientAlert(ctx context.Context, db coreServices.DatabaseService, tenant coreJobs.Tenant, alertID uuid.UUID, tripID string, pusher interfaces.Pusher) error {
+	tenantID, err := uuid.Parse(tenant.ID)
+	if err != nil {
+		return err
+	}
+	tenantCtx := context.WithValue(ctx, coreServices.TenantDatabaseURLKey, tenant.DatabaseURL)
+	users, err := trackingRepos.NewTrackingRepository(db).AlertClientUsers(tenantCtx, tenantID, alertID)
+	if err != nil {
+		return err
+	}
+	var outage error
+	for _, u := range users {
+		textType, args := AlertText(u.AlertType, "", u.RouteName, u.DelayMin)
+		msg := interfaces.PushMessage{
+			Type:       textType,
+			Args:       args,
+			Data:       map[string]string{"type": "client_alert", "alert_id": alertID.String(), "trip_id": tripID, "tenant_slug": tenant.Slug},
+			CollapseID: "alert:" + alertID.String(),
+			Channel:    "problems",
+		}
+		// The push tokens live in the platform database: the plain context, not the tenant's.
+		if err := pushToUser(ctx, db, pusher, u.UserID, msg, "client alert "+alertID.String()); err != nil {
+			outage = err
+		}
+	}
+	return outage
+}
 
 // PushStaffAlert pushes a raised alert of a serious kind to every staff account but the one that
 // raised it, on the "problems" channel: `notice.staff_<kind>` with [what, route, plate], and the data

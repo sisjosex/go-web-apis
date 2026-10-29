@@ -85,7 +85,7 @@ func (n *Notifier) enqueue(ctx context.Context, tenantSlug string, notice models
 		data["trip_id"] = trip
 		collapseID = tripCollapseID(trip, notice.RiderID)
 	}
-	textType, args := pushText(notice.Type, body)
+	textType, args := PushText(notice.Type, body)
 	payload, err := json.Marshal(PushSend{
 		NotificationID: notice.ID.String(), UserID: notice.UserID.String(), Type: textType, Args: args, Data: data,
 		CollapseID: collapseID, Channel: noticeChannel(notice.Type),
@@ -125,9 +125,17 @@ func noticeChannel(noticeType string) string {
 	}
 }
 
-// pushText is the strings a notice is written with and their args. A delay from a late ETA (TRACK-066)
-// reads delay_eta, whose args add the minutes and the local arrival time; a raised alert keeps delay.
-func pushText(noticeType string, body map[string]any) (string, []string) {
+// PushText is the strings a notice is written with and their args. A delay from a late ETA (TRACK-066)
+// reads delay_eta, whose args add the minutes and the local arrival time; a driver's incident reads its
+// kind's line, alert_<kind> (MOBILE-037); an office alert keeps delay.
+func PushText(noticeType string, body map[string]any) (string, []string) {
+	alertType, _ := body["alert_type"].(string)
+	title, _ := body["title"].(string)
+	if noticeType == "delay" && alertType != "" && title == alertType {
+		rider, _ := body["rider_name"].(string)
+		route, _ := body["route_name"].(string)
+		return AlertText(alertType, rider, route, body["delay_min"])
+	}
 	args := pushArgs(body)
 	minutes, late := body["delay_min"].(float64)
 	if noticeType != "delay" || !late {
@@ -135,6 +143,27 @@ func pushText(noticeType string, body map[string]any) (string, []string) {
 	}
 	etaTime, _ := body["eta_time"].(string)
 	return "delay_eta", append(args, strconv.Itoa(int(minutes)), etaTime)
+}
+
+// AlertText is a driver's incident's strings, `notice.alert_<kind>`, and their args: the rider, the route
+// and the minutes late — the same for the guardian's notice and the client's push (MOBILE-037 D2). A delay
+// or closed road without its minutes (an older app sent none) reads the general line, alert_other.
+func AlertText(alertType, rider, route string, delayMin any) (string, []string) {
+	minutes := ""
+	switch m := delayMin.(type) {
+	case float64:
+		minutes = strconv.Itoa(int(m))
+	case int32:
+		minutes = strconv.Itoa(int(m))
+	case *int32:
+		if m != nil {
+			minutes = strconv.Itoa(int(*m))
+		}
+	}
+	if minutes == "" && models.DelayKind(alertType) {
+		alertType = "other"
+	}
+	return "alert_" + alertType, []string{rider, route, minutes}
 }
 
 // pushArgs are the body's placeholders, in the order every notice string takes them: the rider, the

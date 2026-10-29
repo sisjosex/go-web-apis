@@ -44,7 +44,8 @@ CREATE TABLE tracking.route_alerts (
     location public.geography(Point,4326),
     resolved_by uuid,
     tenant_id uuid NOT NULL,
-    CONSTRAINT chk_alert_type CHECK (((alert_type)::text = ANY ((ARRAY['delay'::character varying, 'breakdown'::character varying, 'cancellation'::character varying, 'emergency'::character varying, 'other'::character varying, 'device_silent'::character varying, 'off_route'::character varying])::text[])))
+    notify_families boolean DEFAULT true NOT NULL,
+    CONSTRAINT chk_alert_type CHECK (((alert_type)::text = ANY ((ARRAY['delay'::character varying, 'breakdown'::character varying, 'cancellation'::character varying, 'emergency'::character varying, 'other'::character varying, 'device_silent'::character varying, 'off_route'::character varying, 'road_closed'::character varying, 'passenger'::character varying, 'accident'::character varying])::text[])))
 );
 
 
@@ -53,6 +54,13 @@ CREATE TABLE tracking.route_alerts (
 --
 
 COMMENT ON COLUMN tracking.route_alerts.route_id IS 'NULL: an alert to the whole operation (TRACK-071)';
+
+
+--
+-- Name: COLUMN route_alerts.notify_families; Type: COMMENT; Schema: tracking; Owner: -
+--
+
+COMMENT ON COLUMN tracking.route_alerts.notify_families IS 'FALSE: the driver switched "Avisar a padres y colegio" off — the office sees the alert, no notice or client push goes out (MOBILE-037 D2)';
 
 
 --

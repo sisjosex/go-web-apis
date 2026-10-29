@@ -190,6 +190,25 @@ func (r *TrackingRepository) RaiseDeviceSilentAlerts(ctx context.Context, tenant
 }
 
 // RouteAlert answers one alert in the list's row shape, nil when the tenant has none by that id.
+// AlertClientUsers answers who of the client hears a driver's incident, with its kind, minutes and route
+// (MOBILE-037 D2); none when the driver switched notify_families off.
+func (r *TrackingRepository) AlertClientUsers(ctx context.Context, tenantID, alertID uuid.UUID) ([]models.AlertClientUser, error) {
+	rows, err := r.dbService.Query(ctx, `SELECT * FROM tracking.sp_alert_client_users(p_tenant_id := $1, p_alert_id := $2)`, tenantID, alertID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var users []models.AlertClientUser
+	for rows.Next() {
+		var u models.AlertClientUser
+		if err := rows.Scan(&u.UserID, &u.AlertType, &u.DelayMin, &u.RouteName); err != nil {
+			return nil, err
+		}
+		users = append(users, u)
+	}
+	return users, rows.Err()
+}
+
 func (r *TrackingRepository) RouteAlert(ctx context.Context, tenantID, alertID uuid.UUID) (*models.RouteAlert, error) {
 	var scan alertRow
 	err := r.dbService.QueryRow(ctx, `SELECT * FROM tracking.fn_route_alert_rows(p_tenant_id := $1, p_ids := ARRAY[$2::UUID])`,

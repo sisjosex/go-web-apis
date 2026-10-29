@@ -8849,6 +8849,19 @@
         "tracking.fn_route_changed"
       ]
     },
+    "tracking.sp_alert_client_users": {
+      "reads": [
+        "tracking.organization_members",
+        "tracking.organizations",
+        "tracking.riders",
+        "tracking.route_alerts",
+        "tracking.routes",
+        "tracking.trip_stop_tasks",
+        "tracking.trip_stops"
+      ],
+      "writes": [],
+      "calls": []
+    },
     "tracking.sp_alert_settings_get": {
       "reads": [
         "tracking.alert_settings"
