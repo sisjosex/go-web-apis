@@ -1,0 +1,17 @@
+DROP TRIGGER IF EXISTS trg_variant_options_attribute ON inventory.product_variant_options;
+DROP TRIGGER IF EXISTS trg_variant_groups_attribute ON inventory.product_variant_groups;
+DROP FUNCTION IF EXISTS inventory.fn_variant_option_attribute();
+DROP FUNCTION IF EXISTS inventory.fn_variant_group_attribute();
+DROP TRIGGER IF EXISTS trg_sku_codes_search_text ON inventory.sku_codes;
+DROP TRIGGER IF EXISTS trg_skus_search_text ON inventory.product_skus;
+DROP TRIGGER IF EXISTS trg_products_search_text ON inventory.products;
+DROP FUNCTION IF EXISTS inventory.fn_touch_product_search_text();
+DROP FUNCTION IF EXISTS inventory.fn_products_search_text();
+ALTER TABLE inventory.product_variant_groups DROP CONSTRAINT IF EXISTS chk_variant_groups_axis_attribute;
+ALTER TABLE inventory.product_variant_groups DROP COLUMN IF EXISTS attribute_id;
+ALTER TABLE inventory.product_categories DROP COLUMN IF EXISTS pos_tab, DROP COLUMN IF EXISTS color, DROP COLUMN IF EXISTS icon;
+ALTER TABLE inventory.product_skus DROP COLUMN IF EXISTS attributes;
+ALTER TABLE inventory.products DROP COLUMN IF EXISTS search_text, DROP COLUMN IF EXISTS attributes;
+DROP TABLE IF EXISTS inventory.category_attributes;
+DROP TABLE IF EXISTS inventory.attribute_options;
+DROP TABLE IF EXISTS inventory.attributes;

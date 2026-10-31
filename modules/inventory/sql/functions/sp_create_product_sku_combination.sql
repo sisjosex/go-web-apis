@@ -251,6 +251,8 @@ BEGIN
         updated_at       = CURRENT_TIMESTAMP
     WHERE p.id = p_product_id;
 
+    PERFORM inventory.fn_sync_axis_attributes(p_tenant_id, p_product_id, NULL);
+
     RETURN QUERY SELECT
         p_product_id,
         v_sku_id,

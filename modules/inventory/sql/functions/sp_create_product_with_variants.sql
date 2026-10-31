@@ -1,4 +1,4 @@
-CREATE OR REPLACE FUNCTION inventory.sp_create_product_with_variants(p_tenant_id uuid, p_sku character varying, p_name character varying, p_description text, p_base_price numeric, p_variants jsonb DEFAULT NULL::jsonb, p_created_by uuid DEFAULT NULL::uuid, p_max_axes integer DEFAULT 3, p_max_combinations integer DEFAULT 100, p_pos_visible boolean DEFAULT true, p_orders_visible boolean DEFAULT true)
+CREATE OR REPLACE FUNCTION inventory.sp_create_product_with_variants(p_tenant_id uuid, p_sku character varying, p_name character varying, p_description text, p_base_price numeric, p_variants jsonb DEFAULT NULL::jsonb, p_created_by uuid DEFAULT NULL::uuid, p_max_axes integer DEFAULT 3, p_max_combinations integer DEFAULT 100, p_pos_visible boolean DEFAULT true, p_orders_visible boolean DEFAULT true, p_attributes jsonb DEFAULT NULL::jsonb)
  RETURNS TABLE(product_id uuid, sku character varying, name character varying, message text)
  LANGUAGE plpgsql
 AS $function$
@@ -22,6 +22,10 @@ BEGIN
     INSERT INTO inventory.products (tenant_id, sku, name, description, base_price, has_variants, created_by, updated_by, pos_visible, orders_visible)
     VALUES (p_tenant_id, p_sku, p_name, p_description, p_base_price, CASE WHEN p_variants IS NOT NULL THEN TRUE ELSE FALSE END, p_created_by, p_created_by, COALESCE(p_pos_visible, TRUE), COALESCE(p_orders_visible, TRUE))
     RETURNING products.id INTO v_product_id;
+
+    IF p_attributes IS NOT NULL THEN
+        UPDATE inventory.products p SET attributes = inventory.fn_normalize_attributes(p_tenant_id, p_attributes) WHERE p.id = v_product_id;
+    END IF;
 
     -- Every product starts sold and bought by the unit (INV-023).
     INSERT INTO inventory.product_units (tenant_id, product_id, unit_id, factor, is_base, is_sale_default, is_purchase_default)
@@ -59,7 +63,8 @@ BEGIN
                     is_required,
                     max_selections,
                     affects_inventory,
-                    sort_order
+                    sort_order,
+                    attribute_id
                 )
                 VALUES (
                     v_product_id,
@@ -70,7 +75,11 @@ BEGIN
                     -- SP reads it, so a pre-INV-008 client keeps creating menu
                     -- modifiers and nothing else changes for it.
                     COALESCE((v_group->>'affects_inventory')::BOOLEAN, FALSE),
-                    v_group_idx
+                    v_group_idx,
+                    -- INV-024 D2: an axis is a shared attribute, by id or by name.
+                    CASE WHEN COALESCE((v_group->>'affects_inventory')::BOOLEAN, FALSE)
+                         THEN inventory.fn_axis_attribute(p_tenant_id, (v_group->>'attribute_id')::UUID, v_group->>'group_type', v_group->'options')
+                    END
                 )
                 RETURNING product_variant_groups.id INTO v_group_id;
 
@@ -150,6 +159,8 @@ BEGIN
     END IF;
 
     -- Return with explicit casting
+    PERFORM inventory.fn_sync_axis_attributes(p_tenant_id, v_product_id, NULL);
+
     RETURN QUERY SELECT
         v_product_id,
         CAST(p_sku AS VARCHAR),
@@ -158,4 +169,4 @@ BEGIN
 END;
 $function$;
 
-COMMENT ON FUNCTION inventory.sp_create_product_with_variants(uuid,character varying,character varying,text,numeric,jsonb,uuid,integer,integer,boolean,boolean) IS 'Creates a product, its default SKU (products.sku verbatim, combination_key ''''), its stock row at 0 hanging off that SKU, and any variant groups and options supplied. A group carries affects_inventory (absent means FALSE), and a product that declares at least one axis leaves this SP with its combinations already generated, within p_max_axes / p_max_combinations (INV-012 D2). Duplicate group types, duplicate option names and an axis that is not a single required choice come back named, not raw.';
+COMMENT ON FUNCTION inventory.sp_create_product_with_variants(uuid,character varying,character varying,text,numeric,jsonb,uuid,integer,integer,boolean,boolean,jsonb) IS 'Creates a product, its default SKU (products.sku verbatim, combination_key ''''), its stock row at 0 hanging off that SKU, and any variant groups and options supplied. A group carries affects_inventory (absent means FALSE), and a product that declares at least one axis leaves this SP with its combinations already generated, within p_max_axes / p_max_combinations (INV-012 D2). Duplicate group types, duplicate option names and an axis that is not a single required choice come back named, not raw.';

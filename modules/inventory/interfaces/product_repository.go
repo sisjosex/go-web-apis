@@ -22,6 +22,7 @@ type ProductRepository interface {
 		maxAxes, maxCombinations int,
 		actedBy *string,
 		posVisible, ordersVisible *bool,
+		attributesJSON *string,
 	) (*models.CreateProductResponse, error)
 
 	UpdateProductWithVariants(
@@ -34,6 +35,7 @@ type ProductRepository interface {
 		variantsJSON *string,
 		actedBy *string,
 		posVisible, ordersVisible *bool,
+		attributesJSON *string,
 	) (*models.UpdateProductResponse, error)
 
 	GetProduct(ctx context.Context, tenantID uuid.UUID, productID string) (*models.Product, error)

@@ -19,13 +19,14 @@ import (
 // routes.go (INV-015 D1) and every one of them is a wrapper over a service that
 // used to be created inside RegisterInventoryRoutes and unreachable from there.
 type InventoryServices struct {
-	Product  inventoryInterfaces.ProductService
-	Category inventoryInterfaces.CategoryService
-	Movement inventoryInterfaces.MovementService
-	Stock    inventoryInterfaces.StockService
-	Sku      inventoryInterfaces.SkuService
-	Batch    inventoryInterfaces.BatchService
-	Unit     inventoryInterfaces.UnitRepository
+	Product   inventoryInterfaces.ProductService
+	Category  inventoryInterfaces.CategoryService
+	Movement  inventoryInterfaces.MovementService
+	Stock     inventoryInterfaces.StockService
+	Sku       inventoryInterfaces.SkuService
+	Batch     inventoryInterfaces.BatchService
+	Unit      inventoryInterfaces.UnitRepository
+	Attribute inventoryInterfaces.AttributeRepository
 	// ImportLookup is the read-only repository the import descriptors resolve
 	// and preview rows through (INV-017 D1); no route of this module uses it.
 	ImportLookup inventoryInterfaces.ImportLookupRepository
@@ -43,13 +44,14 @@ func NewInventoryServices(dbService coreServices.DatabaseService, media coreServ
 	batchRepo := repositories.NewBatchRepository(dbService)
 
 	return InventoryServices{
-		Product:  inventoryServices.NewProductService(productRepo, appConfig.GetConfig().Inventory, nil, media),
-		Category: inventoryServices.NewCategoryService(categoryRepo, nil),
-		Movement: inventoryServices.NewMovementService(movementRepo, nil),
-		Stock:    inventoryServices.NewStockService(stockRepo),
-		Sku:      inventoryServices.NewSkuService(skuRepo, appConfig.GetConfig().Inventory, nil),
-		Batch:    inventoryServices.NewBatchService(batchRepo),
-		Unit:     repositories.NewUnitRepository(dbService),
+		Product:   inventoryServices.NewProductService(productRepo, appConfig.GetConfig().Inventory, nil, media),
+		Category:  inventoryServices.NewCategoryService(categoryRepo, nil),
+		Movement:  inventoryServices.NewMovementService(movementRepo, nil),
+		Stock:     inventoryServices.NewStockService(stockRepo),
+		Sku:       inventoryServices.NewSkuService(skuRepo, appConfig.GetConfig().Inventory, nil),
+		Batch:     inventoryServices.NewBatchService(batchRepo),
+		Unit:      repositories.NewUnitRepository(dbService),
+		Attribute: repositories.NewAttributeRepository(dbService),
 
 		ImportLookup: repositories.NewImportLookupRepository(dbService),
 	}
@@ -71,6 +73,17 @@ func RegisterInventoryRoutes(
 
 	inventory := router.Group("/inventory", authMiddleware, tenantMiddleware)
 
+	// Attributes, what a category brings, the categories' order and the list's facets (INV-024).
+	attributeController := controllers.NewAttributeController(services.Attribute)
+	api.Get(inventory, "/attributes", attributeController.ListAttributes, api.Doc{Summary: "List the attributes", Description: "Each with its options, how many products use it and which categories bring it"}, tenancyMW.RequirePermission(inventoryPerms.ProductsRead))
+	api.Post(inventory, "/attributes", attributeController.CreateAttribute, api.Doc{Summary: "Create an attribute", Description: "Name, type and options", Status: 201, Errors: []int{400, 409}}, tenancyMW.RequirePermission(inventoryPerms.ProductsWrite))
+	api.Put(inventory, "/attributes/{id}", attributeController.UpdateAttribute, api.Doc{Summary: "Change an attribute", Description: "The whole definition, options diffed by id; an option a product holds stays", Errors: []int{400, 404, 409}}, tenancyMW.RequirePermission(inventoryPerms.ProductsWrite))
+	api.Delete(inventory, "/attributes/{id}", attributeController.DeleteAttribute, api.Doc{Summary: "Delete an attribute", Description: "Refused while a product uses it", Errors: []int{404, 409}}, tenancyMW.RequirePermission(inventoryPerms.ProductsWrite))
+	api.Patch(inventory, "/categories/order", attributeController.ReorderCategories, api.Doc{Summary: "Move categories", Description: "Parent and place of each, in one statement; a cycle is refused", Errors: []int{400, 404}}, tenancyMW.RequirePermission(inventoryPerms.CategoriesManage))
+	api.Get(inventory, "/categories/{id}/attributes", attributeController.GetCategoryAttributes, api.Doc{Summary: "What a category brings", Description: "Its own attributes and those inherited", Errors: []int{404}}, tenancyMW.RequirePermission(inventoryPerms.CategoriesRead))
+	api.Put(inventory, "/categories/{id}/attributes", attributeController.SetCategoryAttributes, api.Doc{Summary: "Set what a category brings", Description: "Its own attributes; subcategories inherit them", Errors: []int{400, 404}}, tenancyMW.RequirePermission(inventoryPerms.CategoriesManage))
+	api.Get(inventory, "/products/facets", attributeController.ProductFacets, api.Doc{Summary: "What the list's filters offer", Description: "Per filterable attribute, its values with counts; attr[code]=a,b narrows them; kept 60 s per tenant and query"}, tenancyMW.RequirePermission(inventoryPerms.ProductsRead))
+
 	// Units, presentations and codes (INV-023).
 	unitController := controllers.NewUnitController(services.Unit, services.Product)
 	api.Get(inventory, "/units", unitController.ListUnits, api.Doc{Summary: "List the units", Description: "The standard list and the business's own"}, tenancyMW.RequirePermission(inventoryPerms.ProductsRead))
@@ -84,7 +97,7 @@ func RegisterInventoryRoutes(
 	api.Get(inventory, "/export/batches", exportController.ExportBatches, api.Doc{Summary: "Download lots as CSV", Description: "One product's lots, or those about to expire", Errors: []int{400, 422}}, tenancyMW.RequirePermission(inventoryPerms.BatchesRead))
 
 	// Products
-	api.Get(inventory, "/products", productController.ListProducts, api.Doc{Summary: "List all products", Description: "One page of products, newest first, each with its categories, stock, axes and price range; counts carry the chips. Narrowed by status (active by default), chip, category and a name/SKU search.", Errors: []int{400}}, tenancyMW.RequirePermission(inventoryPerms.ProductsRead))
+	api.Get(inventory, "/products", productController.ListProducts, api.Doc{Summary: "List all products", Description: "attr[code]=a,b narrows by attribute. One page of products, newest first, each with its categories, stock, axes and price range; counts carry the chips. Narrowed by status (active by default), chip, category and a name/SKU search.", Errors: []int{400}}, tenancyMW.RequirePermission(inventoryPerms.ProductsRead))
 	api.Get(inventory, "/products/{id}", productController.GetProduct, api.Doc{Summary: "Get product by ID", Description: "Retrieve a product with all its details", Errors: []int{404}}, tenancyMW.RequirePermission(inventoryPerms.ProductsRead))
 	api.Get(inventory, "/products/sku/{sku}", productController.GetProductBySkU, api.Doc{Summary: "Get product by SKU", Description: "Retrieve a product by its SKU code", Errors: []int{404}}, tenancyMW.RequirePermission(inventoryPerms.ProductsRead))
 	api.Post(inventory, "/products", productController.CreateProductWithVariants, api.Doc{Summary: "Create a product with variants", Description: "Create a new product with optional variants (groups and options)", Status: 201, Errors: []int{400, 409}}, tenancyMW.RequirePermission(inventoryPerms.ProductsWrite))

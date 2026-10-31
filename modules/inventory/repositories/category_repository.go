@@ -43,12 +43,12 @@ func (r *CategoryRepository) CreateCategory(ctx context.Context, tenantID uuid.U
 	}
 
 	err := r.dbService.QueryRow(ctx,
-		`SELECT * FROM inventory.sp_create_category($1, $2, $3, $4, $5, $6, $7, $8::UUID)`,
-		tenantID, dto.Name, dto.Slug, parentIDVal, dto.Description, dto.IconURL, displayOrder, dto.ActedBy,
+		`SELECT * FROM inventory.sp_create_category($1, $2, $3, $4, $5, $6, $7, $8::UUID, $9, $10, $11)`,
+		tenantID, dto.Name, dto.Slug, parentIDVal, dto.Description, dto.IconURL, displayOrder, dto.ActedBy, dto.Icon, dto.Color, dto.PosTab,
 	).Scan(
 		&category.ID, &category.ParentID, &category.Name, &category.Slug, &category.Description,
 		&category.IconURL, &category.DisplayOrder, &category.IsActive, &category.ProductCount,
-		&category.CreatedAt, &category.UpdatedAt,
+		&category.CreatedAt, &category.UpdatedAt, &category.Icon, &category.Color, &category.PosTab,
 	)
 
 	if err != nil {
@@ -86,12 +86,12 @@ func (r *CategoryRepository) UpdateCategory(ctx context.Context, tenantID uuid.U
 	}
 
 	err = r.dbService.QueryRow(ctx,
-		`SELECT * FROM inventory.sp_update_category($1, $2, $3, $4, $5, $6, $7, $8, $9, $10::UUID)`,
-		tenantID, catID, dto.Name, dto.Slug, parentIDVal, dto.Description, dto.IconURL, dto.DisplayOrder, dto.IsActive, dto.ActedBy,
+		`SELECT * FROM inventory.sp_update_category($1, $2, $3, $4, $5, $6, $7, $8, $9, $10::UUID, $11, $12, $13)`,
+		tenantID, catID, dto.Name, dto.Slug, parentIDVal, dto.Description, dto.IconURL, dto.DisplayOrder, dto.IsActive, dto.ActedBy, dto.Icon, dto.Color, dto.PosTab,
 	).Scan(
 		&category.ID, &category.ParentID, &category.Name, &category.Slug, &category.Description,
 		&category.IconURL, &category.DisplayOrder, &category.IsActive, &category.ProductCount,
-		&category.CreatedAt, &category.UpdatedAt,
+		&category.CreatedAt, &category.UpdatedAt, &category.Icon, &category.Color, &category.PosTab,
 	)
 
 	if err != nil {
@@ -154,14 +154,14 @@ func (r *CategoryRepository) GetCategory(ctx context.Context, tenantID uuid.UUID
 	}
 
 	err = r.dbService.QueryRow(ctx,
-		`SELECT id, parent_id, name, slug, description, icon_url, display_order, is_active, product_count, created_at, updated_at, updated_by_name
+		`SELECT id, parent_id, name, slug, description, icon_url, display_order, is_active, product_count, created_at, updated_at, updated_by_name, icon, color, pos_tab
 		 FROM inventory.sp_get_category($1, $2)`,
 		tenantID,
 		catID,
 	).Scan(
 		&category.ID, &category.ParentID, &category.Name, &category.Slug, &category.Description,
 		&category.IconURL, &category.DisplayOrder, &category.IsActive, &category.ProductCount,
-		&category.CreatedAt, &category.UpdatedAt, &category.UpdatedByName,
+		&category.CreatedAt, &category.UpdatedAt, &category.UpdatedByName, &category.Icon, &category.Color, &category.PosTab,
 	)
 
 	if err != nil {
@@ -192,7 +192,7 @@ func (r *CategoryRepository) ListCategories(ctx context.Context, tenantID uuid.U
 	}
 
 	rows, err := r.dbService.Query(ctx,
-		`SELECT id, parent_id, name, slug, description, icon_url, display_order, is_active, product_count, created_at
+		`SELECT id, parent_id, name, slug, description, icon_url, display_order, is_active, product_count, created_at, icon, color, pos_tab
 		 FROM inventory.sp_list_categories($1, $2, $3, 'display_order', $4, $5)`,
 		tenantID, parentIDVal, isActive, limit, offset,
 	)
@@ -213,6 +213,7 @@ func (r *CategoryRepository) ListCategories(ctx context.Context, tenantID uuid.U
 		if err := rows.Scan(
 			&category.ID, &category.ParentID, &category.Name, &category.Slug, &category.Description,
 			&category.IconURL, &category.DisplayOrder, &category.IsActive, &category.ProductCount, &category.CreatedAt,
+			&category.Icon, &category.Color, &category.PosTab,
 		); err != nil {
 			return nil, err
 		}

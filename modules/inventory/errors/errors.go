@@ -32,6 +32,12 @@ const (
 	SkusRedistributionMismatch = "inventory.skus.redistribution-mismatch"
 	SkusRedistributionReserved = "inventory.skus.redistribution-reserved"
 
+	// Attributes (INV-024)
+	AttributeNotFound  = "inventory.attribute.not-found"
+	AttributeInvalid   = "inventory.attribute.invalid"
+	AttributeInUse     = "inventory.attribute.in-use"
+	AttributeDuplicate = "inventory.attribute.duplicate"
+
 	// Units and codes (INV-023)
 	UnitNotFound     = "inventory.unit.not-found"
 	UnitNoFraction   = "inventory.unit.no-fraction"
@@ -155,6 +161,9 @@ const (
 
 // The statuses a code's name does not tell (INV-023).
 func init() {
+	coreErrors.RegisterStatus(AttributeInvalid, http.StatusUnprocessableEntity)
+	coreErrors.RegisterStatus(AttributeInUse, http.StatusConflict)
+	coreErrors.RegisterStatus(CategoryCircularHierarchy, http.StatusBadRequest)
 	coreErrors.RegisterStatus(UnitNoFraction, http.StatusUnprocessableEntity)
 	coreErrors.RegisterStatus(UnitBaseRequired, http.StatusBadRequest)
 	coreErrors.RegisterStatus(CodeDuplicate, http.StatusConflict)

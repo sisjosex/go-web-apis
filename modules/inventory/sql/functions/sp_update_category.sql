@@ -1,5 +1,5 @@
-CREATE OR REPLACE FUNCTION inventory.sp_update_category(p_tenant_id uuid, p_category_id uuid, p_name character varying DEFAULT NULL::character varying, p_slug character varying DEFAULT NULL::character varying, p_parent_id uuid DEFAULT NULL::uuid, p_description text DEFAULT NULL::text, p_icon_url character varying DEFAULT NULL::character varying, p_display_order integer DEFAULT NULL::integer, p_is_active boolean DEFAULT NULL::boolean, p_updated_by uuid DEFAULT NULL::uuid)
- RETURNS TABLE(id uuid, parent_id uuid, name character varying, slug character varying, description text, icon_url character varying, display_order integer, is_active boolean, product_count bigint, created_at timestamp without time zone, updated_at timestamp without time zone)
+CREATE OR REPLACE FUNCTION inventory.sp_update_category(p_tenant_id uuid, p_category_id uuid, p_name character varying DEFAULT NULL::character varying, p_slug character varying DEFAULT NULL::character varying, p_parent_id uuid DEFAULT NULL::uuid, p_description text DEFAULT NULL::text, p_icon_url character varying DEFAULT NULL::character varying, p_display_order integer DEFAULT NULL::integer, p_is_active boolean DEFAULT NULL::boolean, p_updated_by uuid DEFAULT NULL::uuid, p_icon character varying DEFAULT NULL::character varying, p_color character varying DEFAULT NULL::character varying, p_pos_tab boolean DEFAULT NULL::boolean)
+ RETURNS TABLE(id uuid, parent_id uuid, name character varying, slug character varying, description text, icon_url character varying, display_order integer, is_active boolean, product_count bigint, created_at timestamp without time zone, updated_at timestamp without time zone, icon character varying, color character varying, pos_tab boolean)
  LANGUAGE plpgsql
 AS $function$
 DECLARE
@@ -41,6 +41,9 @@ BEGIN
         icon_url = COALESCE(p_icon_url, pc.icon_url),
         display_order = COALESCE(p_display_order, pc.display_order),
         is_active = COALESCE(p_is_active, pc.is_active),
+        icon = COALESCE(p_icon, pc.icon),
+        color = COALESCE(p_color, pc.color),
+        pos_tab = COALESCE(p_pos_tab, pc.pos_tab),
         updated_by = p_updated_by,
         updated_at = NOW()
     WHERE pc.id = p_category_id AND pc.tenant_id = p_tenant_id;
@@ -58,13 +61,16 @@ BEGIN
         pc.is_active,
         CAST(COUNT(DISTINCT pcm.product_id) AS BIGINT),
         pc.created_at,
-        pc.updated_at
+        pc.updated_at,
+        CAST(pc.icon AS VARCHAR),
+        CAST(pc.color AS VARCHAR),
+        pc.pos_tab
     FROM inventory.product_categories pc
     LEFT JOIN inventory.product_category_mapping pcm ON pc.id = pcm.category_id
     WHERE pc.id = p_category_id
     GROUP BY pc.id, pc.parent_id, pc.name, pc.slug, pc.description, pc.icon_url,
-             pc.display_order, pc.is_active, pc.created_at, pc.updated_at;
+             pc.display_order, pc.is_active, pc.created_at, pc.updated_at, pc.icon, pc.color, pc.pos_tab;
 END;
 $function$;
 
-COMMENT ON FUNCTION inventory.sp_update_category(uuid,uuid,character varying,character varying,uuid,text,character varying,integer,boolean,uuid) IS 'Changes the given fields of a category of the tenant, a NULL leaves one as it is, recording who did it (INV-020 D1), and answers it as sp_get_category does.';
+COMMENT ON FUNCTION inventory.sp_update_category(uuid,uuid,character varying,character varying,uuid,text,character varying,integer,boolean,uuid,character varying,character varying,boolean) IS 'Changes the given fields of a category of the tenant, a NULL leaves one as it is, recording who did it (INV-020 D1), and answers it as sp_get_category does.';

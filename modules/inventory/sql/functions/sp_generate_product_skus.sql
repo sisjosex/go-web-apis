@@ -218,6 +218,18 @@ BEGIN
         updated_at       = CURRENT_TIMESTAMP
     WHERE p.id = p_product_id;
 
+    -- A combination's values are its options: Talla M, Color Rojo (INV-024).
+    UPDATE inventory.product_skus s
+    SET attributes = COALESCE((
+        SELECT jsonb_object_agg(a.code, jsonb_build_array(vo.option_name))
+        FROM inventory.product_sku_options so
+        INNER JOIN inventory.product_variant_options vo ON vo.id = so.option_id
+        INNER JOIN inventory.product_variant_groups vg ON vg.id = so.variant_group_id
+        INNER JOIN inventory.attributes a ON a.id = vg.attribute_id
+        WHERE so.sku_id = s.id
+    ), '{}'::jsonb)
+    WHERE s.product_id = p_product_id AND s.tenant_id = p_tenant_id AND NOT s.is_default;
+
     RETURN QUERY SELECT
         p_product_id,
         CAST(v_axis_count AS INT),

@@ -54,6 +54,11 @@ func (s *ProductService) CreateProductWithVariants(
 		variantsJSON = &jsonStr
 	}
 
+	attributesJSON, err := attributesPayload(dto.Attributes)
+	if err != nil {
+		return nil, err
+	}
+
 	// The create SP generates the combinations of a payload that declares an
 	// axis (INV-012 D2), so the caps have to travel with it — the same two
 	// InventoryConfig values SkuService hands the generator directly.
@@ -70,7 +75,21 @@ func (s *ProductService) CreateProductWithVariants(
 		dto.ActedBy,
 		dto.PosVisible,
 		dto.OrdersVisible,
+		attributesJSON,
 	)
+}
+
+// attributesPayload is the SP's JSONB; nil, left out, keeps what the product has.
+func attributesPayload(attributes map[string]any) (*string, error) {
+	if attributes == nil {
+		return nil, nil
+	}
+	body, err := json.Marshal(attributes)
+	if err != nil {
+		return nil, err
+	}
+	out := string(body)
+	return &out, nil
 }
 
 func (s *ProductService) UpdateProductWithVariants(
@@ -94,6 +113,11 @@ func (s *ProductService) UpdateProductWithVariants(
 		variantsJSON = &jsonStr
 	}
 
+	attributesJSON, err := attributesPayload(dto.Attributes)
+	if err != nil {
+		return nil, err
+	}
+
 	return s.repository.UpdateProductWithVariants(
 		ctx,
 		tenantID,
@@ -105,6 +129,7 @@ func (s *ProductService) UpdateProductWithVariants(
 		dto.ActedBy,
 		dto.PosVisible,
 		dto.OrdersVisible,
+		attributesJSON,
 	)
 }
 

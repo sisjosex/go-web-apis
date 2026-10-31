@@ -1,4 +1,8 @@
 {
+  "inventory.attribute.not-found": "That attribute does not exist",
+  "inventory.attribute.invalid": "That value does not fit the attribute",
+  "inventory.attribute.in-use": "Products use this attribute or value",
+  "inventory.attribute.duplicate": "An attribute with that name already exists",
   "inventory.unit.not-found": "That presentation does not exist",
   "inventory.unit.no-fraction": "This presentation does not accept decimals",
   "inventory.unit.base-required": "The product needs exactly one base unit equal to 1",

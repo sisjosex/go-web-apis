@@ -24,6 +24,9 @@ type Category struct {
 	DeletedAt    sql.NullTime `db:"deleted_at"`
 	// UpdatedByName is read by GetCategory only (INV-020 D1).
 	UpdatedByName *string
+	// How it looks in the POS (INV-024).
+	Icon, Color *string
+	PosTab      bool
 }
 
 // ===== CATEGORY DTOs =====
@@ -36,6 +39,9 @@ type CreateCategoryDto struct {
 	Description  *string `json:"description"`
 	IconURL      *string `json:"icon_url"`
 	DisplayOrder *int    `json:"display_order"`
+	Icon         *string `json:"icon" binding:"omitempty,max=40"`
+	Color        *string `json:"color" binding:"omitempty,max=20"`
+	PosTab       *bool   `json:"pos_tab"`
 	ActedBy      *string `json:"-"` // set server-side (INV-020 D1)
 }
 
@@ -48,6 +54,9 @@ type UpdateCategoryDto struct {
 	IconURL      *string `json:"icon_url"`
 	DisplayOrder *int    `json:"display_order"`
 	IsActive     *bool   `json:"is_active"`
+	Icon         *string `json:"icon" binding:"omitempty,max=40"`
+	Color        *string `json:"color" binding:"omitempty,max=20"`
+	PosTab       *bool   `json:"pos_tab"`
 	ActedBy      *string `json:"-"` // set server-side (INV-020 D1)
 }
 
@@ -64,6 +73,9 @@ type CategoryResponse struct {
 	ProductCount int64   `json:"product_count"`
 	CreatedAt    string  `json:"created_at"`
 	UpdatedAt    string  `json:"updated_at"`
+	Icon         *string `json:"icon"`
+	Color        *string `json:"color"`
+	PosTab       bool    `json:"pos_tab"`
 	// UpdatedByName answers GET /categories/:id only.
 	UpdatedByName *string `json:"updated_by_name,omitempty"`
 }

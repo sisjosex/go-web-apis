@@ -23,6 +23,44 @@ CREATE SCHEMA inventory;
 
 
 --
+-- Name: attribute_options; Type: TABLE; Schema: inventory; Owner: -
+--
+
+CREATE TABLE inventory.attribute_options (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    attribute_id uuid NOT NULL,
+    value character varying(80) NOT NULL,
+    swatch character varying(20),
+    sort_order integer DEFAULT 0 NOT NULL
+);
+
+
+--
+-- Name: attributes; Type: TABLE; Schema: inventory; Owner: -
+--
+
+CREATE TABLE inventory.attributes (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    tenant_id uuid NOT NULL,
+    code character varying(80) NOT NULL,
+    name character varying(80) NOT NULL,
+    type character varying(10) DEFAULT 'list'::character varying NOT NULL,
+    unit character varying(12),
+    filterable boolean DEFAULT true NOT NULL,
+    axis boolean DEFAULT true NOT NULL,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    CONSTRAINT attributes_type_check CHECK (((type)::text = ANY ((ARRAY['list'::character varying, 'color'::character varying, 'measure'::character varying, 'number'::character varying, 'text'::character varying])::text[])))
+);
+
+
+--
+-- Name: TABLE attributes; Type: COMMENT; Schema: inventory; Owner: -
+--
+
+COMMENT ON TABLE inventory.attributes IS 'What describes a product across the catalogue; code is the name without case or accents (INV-024 D1, D2).';
+
+
+--
 -- Name: batch_movements; Type: TABLE; Schema: inventory; Owner: -
 --
 
@@ -36,6 +74,23 @@ CREATE TABLE inventory.batch_movements (
     movement_date timestamp without time zone DEFAULT CURRENT_TIMESTAMP NOT NULL,
     created_at timestamp without time zone DEFAULT CURRENT_TIMESTAMP NOT NULL
 );
+
+
+--
+-- Name: category_attributes; Type: TABLE; Schema: inventory; Owner: -
+--
+
+CREATE TABLE inventory.category_attributes (
+    category_id uuid NOT NULL,
+    attribute_id uuid NOT NULL
+);
+
+
+--
+-- Name: TABLE category_attributes; Type: COMMENT; Schema: inventory; Owner: -
+--
+
+COMMENT ON TABLE inventory.category_attributes IS 'The attributes a category brings to its products, inherited by its subcategories (INV-024 D3).';
 
 
 --
@@ -117,7 +172,10 @@ CREATE TABLE inventory.product_categories (
     created_at timestamp without time zone DEFAULT now() NOT NULL,
     updated_at timestamp without time zone DEFAULT now() NOT NULL,
     created_by uuid,
-    updated_by uuid
+    updated_by uuid,
+    icon character varying(40),
+    color character varying(20),
+    pos_tab boolean DEFAULT true NOT NULL
 );
 
 
@@ -187,6 +245,7 @@ CREATE TABLE inventory.product_skus (
     status character varying(20) DEFAULT 'active'::character varying NOT NULL,
     created_at timestamp without time zone DEFAULT CURRENT_TIMESTAMP NOT NULL,
     updated_at timestamp without time zone DEFAULT CURRENT_TIMESTAMP NOT NULL,
+    attributes jsonb DEFAULT '{}'::jsonb NOT NULL,
     CONSTRAINT product_skus_status_check CHECK (((status)::text = ANY ((ARRAY['active'::character varying, 'discontinued'::character varying])::text[])))
 );
 
@@ -288,6 +347,8 @@ CREATE TABLE inventory.product_variant_groups (
     sort_order integer DEFAULT 0,
     created_at timestamp without time zone DEFAULT CURRENT_TIMESTAMP,
     affects_inventory boolean DEFAULT false NOT NULL,
+    attribute_id uuid,
+    CONSTRAINT chk_variant_groups_axis_attribute CHECK (((NOT affects_inventory) OR (attribute_id IS NOT NULL))),
     CONSTRAINT chk_variant_groups_axis_single_choice CHECK (((affects_inventory = false) OR ((max_selections = 1) AND (is_required = true))))
 );
 
@@ -342,6 +403,8 @@ CREATE TABLE inventory.products (
     updated_by uuid,
     pos_visible boolean DEFAULT true NOT NULL,
     orders_visible boolean DEFAULT true NOT NULL,
+    attributes jsonb DEFAULT '{}'::jsonb NOT NULL,
+    search_text text DEFAULT ''::text NOT NULL,
     CONSTRAINT products_status_check CHECK (((status)::text = ANY ((ARRAY['active'::character varying, 'discontinued'::character varying])::text[])))
 );
 
@@ -422,11 +485,51 @@ COMMENT ON VIEW inventory.v_product_stock_totals IS 'Per-product sums over the p
 
 
 --
+-- Name: attribute_options attribute_options_pkey; Type: CONSTRAINT; Schema: inventory; Owner: -
+--
+
+ALTER TABLE ONLY inventory.attribute_options
+    ADD CONSTRAINT attribute_options_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: attribute_options attribute_options_value_key; Type: CONSTRAINT; Schema: inventory; Owner: -
+--
+
+ALTER TABLE ONLY inventory.attribute_options
+    ADD CONSTRAINT attribute_options_value_key UNIQUE (attribute_id, value);
+
+
+--
+-- Name: attributes attributes_pkey; Type: CONSTRAINT; Schema: inventory; Owner: -
+--
+
+ALTER TABLE ONLY inventory.attributes
+    ADD CONSTRAINT attributes_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: attributes attributes_tenant_code_key; Type: CONSTRAINT; Schema: inventory; Owner: -
+--
+
+ALTER TABLE ONLY inventory.attributes
+    ADD CONSTRAINT attributes_tenant_code_key UNIQUE (tenant_id, code);
+
+
+--
 -- Name: batch_movements batch_movements_pkey; Type: CONSTRAINT; Schema: inventory; Owner: -
 --
 
 ALTER TABLE ONLY inventory.batch_movements
     ADD CONSTRAINT batch_movements_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: category_attributes category_attributes_pkey; Type: CONSTRAINT; Schema: inventory; Owner: -
+--
+
+ALTER TABLE ONLY inventory.category_attributes
+    ADD CONSTRAINT category_attributes_pkey PRIMARY KEY (category_id, attribute_id);
 
 
 --
@@ -600,6 +703,13 @@ CREATE INDEX idx_batch_movements_movement_id ON inventory.batch_movements USING 
 --
 
 CREATE INDEX idx_batch_movements_tenant_id ON inventory.batch_movements USING btree (tenant_id);
+
+
+--
+-- Name: idx_category_attributes_attribute; Type: INDEX; Schema: inventory; Owner: -
+--
+
+CREATE INDEX idx_category_attributes_attribute ON inventory.category_attributes USING btree (attribute_id);
 
 
 --
@@ -876,10 +986,24 @@ CREATE INDEX idx_product_units_product ON inventory.product_units USING btree (p
 
 
 --
+-- Name: idx_products_attributes; Type: INDEX; Schema: inventory; Owner: -
+--
+
+CREATE INDEX idx_products_attributes ON inventory.products USING gin (attributes jsonb_path_ops);
+
+
+--
 -- Name: idx_products_name_trgm; Type: INDEX; Schema: inventory; Owner: -
 --
 
 CREATE INDEX idx_products_name_trgm ON inventory.products USING gin (name public.gin_trgm_ops);
+
+
+--
+-- Name: idx_products_search_text; Type: INDEX; Schema: inventory; Owner: -
+--
+
+CREATE INDEX idx_products_search_text ON inventory.products USING gin (search_text public.gin_trgm_ops);
 
 
 --
@@ -932,6 +1056,13 @@ CREATE UNIQUE INDEX idx_units_tenant_code ON inventory.units USING btree (tenant
 
 
 --
+-- Name: idx_variant_groups_attribute; Type: INDEX; Schema: inventory; Owner: -
+--
+
+CREATE INDEX idx_variant_groups_attribute ON inventory.product_variant_groups USING btree (attribute_id);
+
+
+--
 -- Name: idx_variant_groups_id_product_id; Type: INDEX; Schema: inventory; Owner: -
 --
 
@@ -974,6 +1105,20 @@ CREATE UNIQUE INDEX idx_variant_options_id_group_id ON inventory.product_variant
 
 
 --
+-- Name: products trg_products_search_text; Type: TRIGGER; Schema: inventory; Owner: -
+--
+
+CREATE TRIGGER trg_products_search_text BEFORE INSERT OR UPDATE OF name, sku, attributes ON inventory.products FOR EACH ROW EXECUTE FUNCTION inventory.fn_products_search_text();
+
+
+--
+-- Name: sku_codes trg_sku_codes_search_text; Type: TRIGGER; Schema: inventory; Owner: -
+--
+
+CREATE TRIGGER trg_sku_codes_search_text AFTER INSERT OR DELETE ON inventory.sku_codes FOR EACH ROW EXECUTE FUNCTION inventory.fn_touch_product_search_text();
+
+
+--
 -- Name: product_sku_options trg_sku_options_combination_key; Type: TRIGGER; Schema: inventory; Owner: -
 --
 
@@ -988,10 +1133,39 @@ CREATE TRIGGER trg_sku_options_price_from_options AFTER INSERT ON inventory.prod
 
 
 --
+-- Name: product_skus trg_skus_search_text; Type: TRIGGER; Schema: inventory; Owner: -
+--
+
+CREATE TRIGGER trg_skus_search_text AFTER INSERT OR DELETE OR UPDATE OF sku ON inventory.product_skus FOR EACH ROW EXECUTE FUNCTION inventory.fn_touch_product_search_text();
+
+
+--
+-- Name: product_variant_groups trg_variant_groups_attribute; Type: TRIGGER; Schema: inventory; Owner: -
+--
+
+CREATE TRIGGER trg_variant_groups_attribute BEFORE INSERT OR UPDATE OF affects_inventory, group_type ON inventory.product_variant_groups FOR EACH ROW EXECUTE FUNCTION inventory.fn_variant_group_attribute();
+
+
+--
+-- Name: product_variant_options trg_variant_options_attribute; Type: TRIGGER; Schema: inventory; Owner: -
+--
+
+CREATE TRIGGER trg_variant_options_attribute AFTER INSERT OR UPDATE OF option_name ON inventory.product_variant_options FOR EACH ROW EXECUTE FUNCTION inventory.fn_variant_option_attribute();
+
+
+--
 -- Name: product_variant_options trg_variant_options_price_to_skus; Type: TRIGGER; Schema: inventory; Owner: -
 --
 
 CREATE TRIGGER trg_variant_options_price_to_skus AFTER UPDATE ON inventory.product_variant_options REFERENCING OLD TABLE AS old_rows NEW TABLE AS new_rows FOR EACH STATEMENT EXECUTE FUNCTION inventory.fn_recalc_sku_price_from_options();
+
+
+--
+-- Name: attribute_options attribute_options_attribute_id_fkey; Type: FK CONSTRAINT; Schema: inventory; Owner: -
+--
+
+ALTER TABLE ONLY inventory.attribute_options
+    ADD CONSTRAINT attribute_options_attribute_id_fkey FOREIGN KEY (attribute_id) REFERENCES inventory.attributes(id) ON DELETE CASCADE;
 
 
 --
@@ -1008,6 +1182,22 @@ ALTER TABLE ONLY inventory.batch_movements
 
 ALTER TABLE ONLY inventory.batch_movements
     ADD CONSTRAINT batch_movements_movement_id_fkey FOREIGN KEY (movement_id) REFERENCES inventory.inventory_movements(id) ON DELETE SET NULL;
+
+
+--
+-- Name: category_attributes category_attributes_attribute_id_fkey; Type: FK CONSTRAINT; Schema: inventory; Owner: -
+--
+
+ALTER TABLE ONLY inventory.category_attributes
+    ADD CONSTRAINT category_attributes_attribute_id_fkey FOREIGN KEY (attribute_id) REFERENCES inventory.attributes(id) ON DELETE CASCADE;
+
+
+--
+-- Name: category_attributes category_attributes_category_id_fkey; Type: FK CONSTRAINT; Schema: inventory; Owner: -
+--
+
+ALTER TABLE ONLY inventory.category_attributes
+    ADD CONSTRAINT category_attributes_category_id_fkey FOREIGN KEY (category_id) REFERENCES inventory.product_categories(id) ON DELETE CASCADE;
 
 
 --
@@ -1152,6 +1342,14 @@ ALTER TABLE ONLY inventory.product_units
 
 ALTER TABLE ONLY inventory.product_units
     ADD CONSTRAINT product_units_unit_id_fkey FOREIGN KEY (unit_id) REFERENCES inventory.units(id);
+
+
+--
+-- Name: product_variant_groups product_variant_groups_attribute_id_fkey; Type: FK CONSTRAINT; Schema: inventory; Owner: -
+--
+
+ALTER TABLE ONLY inventory.product_variant_groups
+    ADD CONSTRAINT product_variant_groups_attribute_id_fkey FOREIGN KEY (attribute_id) REFERENCES inventory.attributes(id);
 
 
 --

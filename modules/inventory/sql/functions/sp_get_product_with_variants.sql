@@ -1,5 +1,5 @@
 CREATE OR REPLACE FUNCTION inventory.sp_get_product_with_variants(p_tenant_id uuid, p_product_id uuid)
- RETURNS TABLE(id uuid, sku character varying, name character varying, description text, base_price numeric, has_variants boolean, status character varying, created_at timestamp without time zone, media jsonb, variants jsonb, updated_at timestamp without time zone, updated_by_name character varying, pos_visible boolean, orders_visible boolean, units jsonb)
+ RETURNS TABLE(id uuid, sku character varying, name character varying, description text, base_price numeric, has_variants boolean, status character varying, created_at timestamp without time zone, media jsonb, variants jsonb, updated_at timestamp without time zone, updated_by_name character varying, pos_visible boolean, orders_visible boolean, units jsonb, attributes jsonb)
  LANGUAGE plpgsql
 AS $function$
 BEGIN
@@ -41,6 +41,7 @@ BEGIN
                     jsonb_agg(
                         jsonb_build_object(
                             'id',                vg.id,
+                            'attribute_id',      vg.attribute_id,
                             'group_type',        vg.group_type,
                             'is_required',       vg.is_required,
                             'max_selections',    vg.max_selections,
@@ -96,7 +97,8 @@ BEGIN
         CAST(COALESCE(NULLIF(CONCAT_WS(' ', u.first_name, u.last_name), ''), u.email) AS VARCHAR),
         p.pos_visible,
         p.orders_visible,
-        inventory.fn_product_units(p_tenant_id, p.id)
+        inventory.fn_product_units(p_tenant_id, p.id),
+        p.attributes
 
     FROM inventory.products p
     LEFT JOIN auth.users u ON u.id = p.updated_by

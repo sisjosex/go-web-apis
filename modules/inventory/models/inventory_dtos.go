@@ -15,6 +15,8 @@ type CreateProductDto struct {
 	// PosVisible and OrdersVisible say where it is sold (INV-019 D3); absent means yes.
 	PosVisible    *bool `json:"pos_visible"`
 	OrdersVisible *bool `json:"orders_visible"`
+	// Attributes is {code: value or list of values} (INV-024 D1).
+	Attributes map[string]any `json:"attributes"`
 	// ActedBy is who is writing: set server-side, never read from the body (INV-020 D1).
 	ActedBy *string `json:"-"`
 }
@@ -28,9 +30,11 @@ type UpdateProductDto struct {
 	BasePrice   float64                   `json:"base_price" binding:"required,gt=0"`
 	Variants    *UpdateProductVariantsDto `json:"variants"`
 	// PosVisible and OrdersVisible left out keep what they were (INV-019 D3).
-	PosVisible    *bool   `json:"pos_visible"`
-	OrdersVisible *bool   `json:"orders_visible"`
-	ActedBy       *string `json:"-"`
+	PosVisible    *bool `json:"pos_visible"`
+	OrdersVisible *bool `json:"orders_visible"`
+	// Attributes left out keep what they were; axes are written with the tree (INV-024).
+	Attributes map[string]any `json:"attributes"`
+	ActedBy    *string        `json:"-"`
 }
 
 type UpdateProductVariantsDto struct {
@@ -46,6 +50,7 @@ type UpdateProductVariantsDto struct {
 // sends and what the SP reads.
 type UpdateVariantGroupDto struct {
 	ID               *string                  `json:"id"`
+	AttributeID      *string                  `json:"attribute_id" binding:"omitempty,uuid"`
 	GroupType        string                   `json:"group_type" binding:"required"`
 	IsRequired       bool                     `json:"is_required"`
 	MaxSelections    int                      `json:"max_selections"`
@@ -107,6 +112,8 @@ type ListProductsQuery struct {
 	Filter   string `form:"filter" binding:"omitempty,oneof=with_variants low out_of_stock pos_hidden"`
 	Page     int    `form:"page,default=1" binding:"min=1"`
 	PageSize int    `form:"page_size,default=20" binding:"min=1,max=100"`
+	// Attrs is attr[code]=a,b as {code: [a, b]}, set by the controller from the raw query (INV-024).
+	Attrs *string `form:"-"`
 }
 
 type ListProductsResponse struct {
@@ -201,15 +208,16 @@ type Product struct {
 	CreatedAt   time.Time            `db:"created_at" json:"created_at"`
 	Categories  []ProductCategoryRef `json:"categories"`
 	// What the list shows beside the product (INV-019 step 1).
-	AvailableQuantity float64       `json:"available_quantity"`
-	StockStatus       string        `json:"stock_status"`
-	VariantsCount     int           `json:"variants_count"`
-	Axes              []ProductAxis `json:"axes"`
-	MinPrice          float64       `json:"min_price"`
-	MaxPrice          float64       `json:"max_price"`
-	PrimaryImageURL   *string       `json:"primary_image_url"`
-	PosVisible        bool          `json:"pos_visible"`
-	Units             []ProductUnit `json:"units"`
+	AvailableQuantity float64             `json:"available_quantity"`
+	StockStatus       string              `json:"stock_status"`
+	VariantsCount     int                 `json:"variants_count"`
+	Axes              []ProductAxis       `json:"axes"`
+	MinPrice          float64             `json:"min_price"`
+	MaxPrice          float64             `json:"max_price"`
+	PrimaryImageURL   *string             `json:"primary_image_url"`
+	PosVisible        bool                `json:"pos_visible"`
+	Units             []ProductUnit       `json:"units"`
+	Attributes        map[string][]string `json:"attributes"`
 }
 
 // ProductAxis is one inventory axis of a product with the options it has.
@@ -278,6 +286,7 @@ type VariantOption struct {
 
 type VariantGroup struct {
 	ID               string          `json:"id"`
+	AttributeID      *string         `json:"attribute_id"`
 	GroupType        string          `json:"group_type"`
 	IsRequired       bool            `json:"is_required"`
 	MaxSelections    int             `json:"max_selections"`
@@ -298,11 +307,12 @@ type ProductDetail struct {
 	Media       []ProductMedia `json:"media"`
 	Variants    []VariantGroup `json:"variants"`
 	// UpdatedAt and UpdatedByName say who last changed it (INV-020 D1); no name on a row nobody touched since.
-	UpdatedAt     *time.Time    `json:"updated_at"`
-	UpdatedByName *string       `json:"updated_by_name"`
-	PosVisible    bool          `json:"pos_visible"`
-	OrdersVisible bool          `json:"orders_visible"`
-	Units         []ProductUnit `json:"units"`
+	UpdatedAt     *time.Time          `json:"updated_at"`
+	UpdatedByName *string             `json:"updated_by_name"`
+	PosVisible    bool                `json:"pos_visible"`
+	OrdersVisible bool                `json:"orders_visible"`
+	Units         []ProductUnit       `json:"units"`
+	Attributes    map[string][]string `json:"attributes"`
 }
 
 type AddProductMediaDto struct {

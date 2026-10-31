@@ -755,6 +755,8 @@
         "auth.users",
         "geo.places",
         "import.column_mappings",
+        "inventory.attribute_options",
+        "inventory.attributes",
         "inventory.inventory_movements",
         "inventory.product_categories",
         "inventory.product_category_mapping",
@@ -799,6 +801,8 @@
         "auth.users",
         "import.column_mappings",
         "import.runs",
+        "inventory.attribute_options",
+        "inventory.attributes",
         "inventory.inventory_movements",
         "inventory.product_batches",
         "inventory.product_categories",
@@ -1007,6 +1011,87 @@
       ]
     },
     {
+      "method": "GET",
+      "path": "/api/v1/inventory/attributes",
+      "operation_id": "inventory.ListAttributes",
+      "module": "inventory",
+      "handler": "josex/web/modules/inventory/controllers.(*AttributeController).ListAttributes",
+      "sps": [
+        "inventory.sp_list_attributes"
+      ],
+      "reads": [
+        "inventory.attribute_options",
+        "inventory.attributes",
+        "inventory.category_attributes",
+        "inventory.product_categories",
+        "inventory.products"
+      ],
+      "writes": []
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/inventory/attributes",
+      "operation_id": "inventory.CreateAttribute",
+      "module": "inventory",
+      "handler": "josex/web/modules/inventory/controllers.(*AttributeController).CreateAttribute",
+      "sps": [
+        "inventory.sp_list_attributes",
+        "inventory.sp_upsert_attribute"
+      ],
+      "reads": [
+        "inventory.attribute_options",
+        "inventory.attributes",
+        "inventory.category_attributes",
+        "inventory.product_categories",
+        "inventory.products"
+      ],
+      "writes": [
+        "inventory.attribute_options",
+        "inventory.attributes",
+        "inventory.products"
+      ]
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/v1/inventory/attributes/{id}",
+      "operation_id": "inventory.DeleteAttribute",
+      "module": "inventory",
+      "handler": "josex/web/modules/inventory/controllers.(*AttributeController).DeleteAttribute",
+      "sps": [
+        "inventory.sp_delete_attribute"
+      ],
+      "reads": [
+        "inventory.product_variant_groups",
+        "inventory.products"
+      ],
+      "writes": [
+        "inventory.attributes"
+      ]
+    },
+    {
+      "method": "PUT",
+      "path": "/api/v1/inventory/attributes/{id}",
+      "operation_id": "inventory.UpdateAttribute",
+      "module": "inventory",
+      "handler": "josex/web/modules/inventory/controllers.(*AttributeController).UpdateAttribute",
+      "sps": [
+        "inventory.sp_list_attributes",
+        "inventory.sp_upsert_attribute"
+      ],
+      "reads": [
+        "inventory.attribute_options",
+        "inventory.attributes",
+        "inventory.category_attributes",
+        "inventory.product_categories",
+        "inventory.products"
+      ],
+      "writes": [
+        "inventory.attribute_options",
+        "inventory.attributes",
+        "inventory.products"
+      ]
+    },
+    {
       "method": "POST",
       "path": "/api/v1/inventory/batches",
       "operation_id": "inventory.CreateBatch",
@@ -1156,6 +1241,20 @@
       ]
     },
     {
+      "method": "PATCH",
+      "path": "/api/v1/inventory/categories/order",
+      "operation_id": "inventory.ReorderCategories",
+      "module": "inventory",
+      "handler": "josex/web/modules/inventory/controllers.(*AttributeController).ReorderCategories",
+      "sps": [
+        "inventory.sp_reorder_categories"
+      ],
+      "reads": [],
+      "writes": [
+        "inventory.product_categories"
+      ]
+    },
+    {
       "method": "GET",
       "path": "/api/v1/inventory/categories/search",
       "operation_id": "inventory.SearchCategories",
@@ -1217,6 +1316,43 @@
       ],
       "writes": [
         "inventory.product_categories"
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/inventory/categories/{id}/attributes",
+      "operation_id": "inventory.GetCategoryAttributes",
+      "module": "inventory",
+      "handler": "josex/web/modules/inventory/controllers.(*AttributeController).GetCategoryAttributes",
+      "sps": [
+        "inventory.sp_get_category_attributes"
+      ],
+      "reads": [
+        "inventory.attribute_options",
+        "inventory.attributes",
+        "inventory.category_attributes",
+        "inventory.product_categories"
+      ],
+      "writes": []
+    },
+    {
+      "method": "PUT",
+      "path": "/api/v1/inventory/categories/{id}/attributes",
+      "operation_id": "inventory.SetCategoryAttributes",
+      "module": "inventory",
+      "handler": "josex/web/modules/inventory/controllers.(*AttributeController).SetCategoryAttributes",
+      "sps": [
+        "inventory.sp_get_category_attributes",
+        "inventory.sp_set_category_attributes"
+      ],
+      "reads": [
+        "inventory.attribute_options",
+        "inventory.attributes",
+        "inventory.category_attributes",
+        "inventory.product_categories"
+      ],
+      "writes": [
+        "inventory.category_attributes"
       ]
     },
     {
@@ -1300,6 +1436,8 @@
         "inventory.sp_list_products"
       ],
       "reads": [
+        "inventory.attribute_options",
+        "inventory.attributes",
         "inventory.product_categories",
         "inventory.product_category_mapping",
         "inventory.product_media",
@@ -1376,6 +1514,8 @@
         "inventory.sp_list_products"
       ],
       "reads": [
+        "inventory.attribute_options",
+        "inventory.attributes",
         "inventory.product_categories",
         "inventory.product_category_mapping",
         "inventory.product_media",
@@ -1401,11 +1541,15 @@
         "public.fn_within_limit"
       ],
       "reads": [
+        "inventory.attribute_options",
+        "inventory.attributes",
         "inventory.product_variant_groups",
         "inventory.product_variant_options",
         "inventory.units"
       ],
       "writes": [
+        "inventory.attribute_options",
+        "inventory.attributes",
         "inventory.product_sku_options",
         "inventory.product_skus",
         "inventory.product_stock",
@@ -1431,6 +1575,23 @@
         "inventory.product_category_mapping",
         "inventory.products"
       ]
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/inventory/products/facets",
+      "operation_id": "inventory.ProductFacets",
+      "module": "inventory",
+      "handler": "josex/web/modules/inventory/controllers.(*AttributeController).ProductFacets",
+      "sps": [
+        "inventory.sp_product_facets"
+      ],
+      "reads": [
+        "inventory.attribute_options",
+        "inventory.attributes",
+        "inventory.product_category_mapping",
+        "inventory.products"
+      ],
+      "writes": []
     },
     {
       "method": "GET",
@@ -1484,11 +1645,17 @@
         "inventory.sp_update_product_with_variants"
       ],
       "reads": [
+        "inventory.attribute_options",
+        "inventory.attributes",
         "inventory.inventory_movements",
         "inventory.product_sku_options",
-        "inventory.product_stock"
+        "inventory.product_stock",
+        "inventory.product_variant_groups",
+        "inventory.product_variant_options"
       ],
       "writes": [
+        "inventory.attribute_options",
+        "inventory.attributes",
         "inventory.product_skus",
         "inventory.product_variant_groups",
         "inventory.product_variant_options",
@@ -1640,6 +1807,7 @@
         "inventory.sp_generate_product_skus"
       ],
       "reads": [
+        "inventory.attributes",
         "inventory.product_variant_groups",
         "inventory.product_variant_options"
       ],
@@ -7280,6 +7448,34 @@
       ],
       "calls": []
     },
+    "inventory.fn_attribute_code": {
+      "reads": [],
+      "writes": [],
+      "calls": [
+        "inventory.fn_fold"
+      ]
+    },
+    "inventory.fn_attribute_filter": {
+      "reads": [
+        "inventory.attribute_options",
+        "inventory.attributes"
+      ],
+      "writes": [],
+      "calls": [
+        "inventory.fn_fold"
+      ]
+    },
+    "inventory.fn_axis_attribute": {
+      "reads": [],
+      "writes": [
+        "inventory.attribute_options",
+        "inventory.attributes"
+      ],
+      "calls": [
+        "inventory.fn_attribute_code",
+        "inventory.fn_fold"
+      ]
+    },
     "inventory.fn_batch_status": {
       "reads": [],
       "writes": [],
@@ -7293,10 +7489,35 @@
       "writes": [],
       "calls": []
     },
+    "inventory.fn_fold": {
+      "reads": [],
+      "writes": [],
+      "calls": []
+    },
     "inventory.fn_movement_direction": {
       "reads": [],
       "writes": [],
       "calls": []
+    },
+    "inventory.fn_normalize_attributes": {
+      "reads": [
+        "inventory.attribute_options",
+        "inventory.attributes"
+      ],
+      "writes": [],
+      "calls": [
+        "inventory.fn_fold"
+      ]
+    },
+    "inventory.fn_product_search_text": {
+      "reads": [
+        "inventory.product_skus",
+        "inventory.sku_codes"
+      ],
+      "writes": [],
+      "calls": [
+        "inventory.fn_fold"
+      ]
     },
     "inventory.fn_product_units": {
       "reads": [
@@ -7306,6 +7527,23 @@
       ],
       "writes": [],
       "calls": []
+    },
+    "inventory.fn_products_in_scope": {
+      "reads": [
+        "inventory.product_category_mapping",
+        "inventory.products"
+      ],
+      "writes": [],
+      "calls": [
+        "inventory.fn_fold"
+      ]
+    },
+    "inventory.fn_products_search_text": {
+      "reads": [],
+      "writes": [],
+      "calls": [
+        "inventory.fn_product_search_text"
+      ]
     },
     "inventory.fn_purge_skus_for_options": {
       "reads": [
@@ -7360,6 +7598,28 @@
       "writes": [],
       "calls": []
     },
+    "inventory.fn_sync_axis_attributes": {
+      "reads": [
+        "inventory.attributes",
+        "inventory.product_variant_groups",
+        "inventory.product_variant_options"
+      ],
+      "writes": [
+        "inventory.products"
+      ],
+      "calls": []
+    },
+    "inventory.fn_touch_product_search_text": {
+      "reads": [
+        "inventory.product_skus"
+      ],
+      "writes": [
+        "inventory.products"
+      ],
+      "calls": [
+        "inventory.fn_product_search_text"
+      ]
+    },
     "inventory.fn_unit_line": {
       "reads": [
         "inventory.product_skus",
@@ -7368,6 +7628,26 @@
       ],
       "writes": [],
       "calls": []
+    },
+    "inventory.fn_variant_group_attribute": {
+      "reads": [
+        "inventory.products"
+      ],
+      "writes": [],
+      "calls": [
+        "inventory.fn_axis_attribute"
+      ]
+    },
+    "inventory.fn_variant_option_attribute": {
+      "reads": [
+        "inventory.product_variant_groups"
+      ],
+      "writes": [
+        "inventory.attribute_options"
+      ],
+      "calls": [
+        "inventory.fn_fold"
+      ]
     },
     "inventory.sp_add_product_media": {
       "reads": [
@@ -7444,7 +7724,8 @@
         "inventory.products"
       ],
       "calls": [
-        "inventory.fn_stock_status"
+        "inventory.fn_stock_status",
+        "inventory.fn_sync_axis_attributes"
       ]
     },
     "inventory.sp_create_product_with_variants": {
@@ -7460,9 +7741,22 @@
         "inventory.products"
       ],
       "calls": [
+        "inventory.fn_axis_attribute",
+        "inventory.fn_normalize_attributes",
         "inventory.fn_stock_status",
+        "inventory.fn_sync_axis_attributes",
         "inventory.sp_generate_product_skus"
       ]
+    },
+    "inventory.sp_delete_attribute": {
+      "reads": [
+        "inventory.product_variant_groups",
+        "inventory.products"
+      ],
+      "writes": [
+        "inventory.attributes"
+      ],
+      "calls": []
     },
     "inventory.sp_delete_category": {
       "reads": [
@@ -7486,6 +7780,7 @@
     },
     "inventory.sp_generate_product_skus": {
       "reads": [
+        "inventory.attributes",
         "inventory.product_variant_groups",
         "inventory.product_variant_options"
       ],
@@ -7523,6 +7818,16 @@
         "auth.users",
         "inventory.product_categories",
         "inventory.product_category_mapping"
+      ],
+      "writes": [],
+      "calls": []
+    },
+    "inventory.sp_get_category_attributes": {
+      "reads": [
+        "inventory.attribute_options",
+        "inventory.attributes",
+        "inventory.category_attributes",
+        "inventory.product_categories"
       ],
       "writes": [],
       "calls": []
@@ -7660,6 +7965,17 @@
       "writes": [],
       "calls": []
     },
+    "inventory.sp_list_attributes": {
+      "reads": [
+        "inventory.attribute_options",
+        "inventory.attributes",
+        "inventory.category_attributes",
+        "inventory.product_categories",
+        "inventory.products"
+      ],
+      "writes": [],
+      "calls": []
+    },
     "inventory.sp_list_batches_by_product": {
       "reads": [
         "inventory.product_batches",
@@ -7718,7 +8034,9 @@
       ],
       "writes": [],
       "calls": [
-        "inventory.fn_product_units"
+        "inventory.fn_attribute_filter",
+        "inventory.fn_product_units",
+        "inventory.fn_products_in_scope"
       ]
     },
     "inventory.sp_list_units": {
@@ -7727,6 +8045,17 @@
       ],
       "writes": [],
       "calls": []
+    },
+    "inventory.sp_product_facets": {
+      "reads": [
+        "inventory.attributes",
+        "inventory.products"
+      ],
+      "writes": [],
+      "calls": [
+        "inventory.fn_attribute_filter",
+        "inventory.fn_products_in_scope"
+      ]
     },
     "inventory.sp_record_movement": {
       "reads": [],
@@ -7793,6 +8122,13 @@
       ],
       "calls": []
     },
+    "inventory.sp_reorder_categories": {
+      "reads": [],
+      "writes": [
+        "inventory.product_categories"
+      ],
+      "calls": []
+    },
     "inventory.sp_replace_product_units": {
       "reads": [
         "inventory.product_skus",
@@ -7833,6 +8169,16 @@
         "inventory.sp_import_free_category_slug"
       ]
     },
+    "inventory.sp_set_category_attributes": {
+      "reads": [
+        "inventory.attributes",
+        "inventory.product_categories"
+      ],
+      "writes": [
+        "inventory.category_attributes"
+      ],
+      "calls": []
+    },
     "inventory.sp_set_product_status": {
       "reads": [],
       "writes": [
@@ -7864,14 +8210,19 @@
       ]
     },
     "inventory.sp_update_product_with_variants": {
-      "reads": [],
+      "reads": [
+        "inventory.attributes"
+      ],
       "writes": [
         "inventory.product_variant_groups",
         "inventory.product_variant_options",
         "inventory.products"
       ],
       "calls": [
-        "inventory.fn_purge_skus_for_options"
+        "inventory.fn_axis_attribute",
+        "inventory.fn_normalize_attributes",
+        "inventory.fn_purge_skus_for_options",
+        "inventory.fn_sync_axis_attributes"
       ]
     },
     "inventory.sp_update_reorder_level": {
@@ -7882,6 +8233,17 @@
       "calls": [
         "inventory.fn_resolve_sku",
         "inventory.fn_stock_status"
+      ]
+    },
+    "inventory.sp_upsert_attribute": {
+      "reads": [],
+      "writes": [
+        "inventory.attribute_options",
+        "inventory.attributes",
+        "inventory.products"
+      ],
+      "calls": [
+        "inventory.fn_attribute_code"
       ]
     },
     "inventory.sp_void_batch": {

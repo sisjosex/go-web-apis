@@ -60,6 +60,9 @@ func (ctrl *ProductController) CreateProductWithVariants(ctx context.Context, in
 		if err := limits.Refuse(c, err); err != nil {
 			return nil, err
 		}
+		if refused := refusedAttribute(c, err); refused != nil {
+			return nil, refused
+		}
 		var pgErr *pgconn.PgError
 		if errors.As(err, &pgErr) {
 			switch pgErr.Message {
@@ -117,6 +120,9 @@ func (ctrl *ProductController) UpdateProductWithVariants(ctx context.Context, in
 	dto.ActedBy = actingUser(c)
 	product, err := ctrl.productService.UpdateProductWithVariants(c.Request.Context(), tenantID, productID, dto)
 	if err != nil {
+		if refused := refusedAttribute(c, err); refused != nil {
+			return nil, refused
+		}
 		var pgErr *pgconn.PgError
 		if errors.As(err, &pgErr) {
 			switch pgErr.Message {
@@ -380,6 +386,9 @@ func (ctrl *ProductController) ListProducts(ctx context.Context, in *ListProduct
 		return nil, api.Fail(http.StatusBadRequest, coreErrors.BuildErrorDetail(c, "validation.invalid", err.Error()))
 	}
 	query.Search = strings.TrimSpace(query.Search)
+	if query.Attrs, err = attrFilters(c.Request.URL.Query()); err != nil {
+		return nil, api.Fail(http.StatusBadRequest, coreErrors.BuildErrorDetail(c, "validation.invalid", err.Error()))
+	}
 
 	result, err := ctrl.productService.ListProducts(c.Request.Context(), tenantID, query)
 	if err != nil {

@@ -1,7 +1,9 @@
-CREATE OR REPLACE FUNCTION inventory.sp_list_products(p_tenant_id uuid, p_page integer DEFAULT 1, p_page_size integer DEFAULT 20, p_category_id uuid DEFAULT NULL::uuid, p_search character varying DEFAULT NULL::character varying, p_status character varying DEFAULT 'active'::character varying, p_filter character varying DEFAULT NULL::character varying)
- RETURNS TABLE(id uuid, sku character varying, name character varying, description text, base_price numeric, has_variants boolean, status character varying, created_at timestamp without time zone, categories jsonb, total_count bigint, available_quantity numeric, stock_status character varying, variants_count integer, axes jsonb, min_price numeric, max_price numeric, primary_image_url text, pos_visible boolean, counts jsonb, units jsonb)
+CREATE OR REPLACE FUNCTION inventory.sp_list_products(p_tenant_id uuid, p_page integer DEFAULT 1, p_page_size integer DEFAULT 20, p_category_id uuid DEFAULT NULL::uuid, p_search character varying DEFAULT NULL::character varying, p_status character varying DEFAULT 'active'::character varying, p_filter character varying DEFAULT NULL::character varying, p_attrs jsonb DEFAULT NULL::jsonb)
+ RETURNS TABLE(id uuid, sku character varying, name character varying, description text, base_price numeric, has_variants boolean, status character varying, created_at timestamp without time zone, categories jsonb, total_count bigint, available_quantity numeric, stock_status character varying, variants_count integer, axes jsonb, min_price numeric, max_price numeric, primary_image_url text, pos_visible boolean, counts jsonb, units jsonb, attributes jsonb)
  LANGUAGE plpgsql
 AS $function$
+DECLARE
+    v_filter JSONB := inventory.fn_attribute_filter(p_tenant_id, p_attrs);
 BEGIN
     RETURN QUERY
     WITH scope AS (
@@ -15,27 +17,12 @@ BEGIN
                 SELECT 1 FROM inventory.product_skus s
                 WHERE s.product_id = p.id AND NOT s.is_default
             ) AS with_variants
-        FROM inventory.products p
+        FROM inventory.fn_products_in_scope(p_tenant_id, p_category_id, p_search, v_filter) m
+        INNER JOIN inventory.products p ON p.id = m.id
         -- A filter on the view's grouped column reaches the index on product_stock, row by row.
         LEFT JOIN LATERAL (
             SELECT v.status FROM inventory.v_product_stock_totals v WHERE v.product_id = p.id
         ) st ON TRUE
-        WHERE p.tenant_id = p_tenant_id
-          AND (
-              p_category_id IS NULL
-              OR EXISTS (
-                  SELECT 1
-                  FROM inventory.product_category_mapping fpcm
-                  WHERE fpcm.product_id  = p.id
-                    AND fpcm.category_id = p_category_id
-              )
-          )
-          AND (
-              p_search IS NULL
-              OR p_search = ''
-              OR p.name ILIKE '%' || p_search || '%'
-              OR p.sku  ILIKE '%' || p_search || '%'
-          )
     ),
     chips AS (
         SELECT jsonb_build_object(
@@ -121,7 +108,8 @@ BEGIN
         ),
         p.pos_visible,
         c.counts,
-        CASE WHEN p.id IS NULL THEN '[]'::jsonb ELSE inventory.fn_product_units(p_tenant_id, p.id) END
+        CASE WHEN p.id IS NULL THEN '[]'::jsonb ELSE inventory.fn_product_units(p_tenant_id, p.id) END,
+        p.attributes
     FROM chips c
     LEFT JOIN page pg ON TRUE
     LEFT JOIN inventory.products p
@@ -142,4 +130,4 @@ BEGIN
 END;
 $function$;
 
-COMMENT ON FUNCTION inventory.sp_list_products(uuid,integer,integer,uuid,character varying,character varying,character varying) IS 'One page of a tenant''s products, newest first, by status (active, discontinued, all), chip (with_variants, low, out_of_stock, pos_hidden), category and name/SKU search; each row carries its categories, stock, axes, price range and first image, and every row the active counts behind the chips, in the same statement. An empty page is one row with a NULL id, so the counts still arrive (INV-019 D2).';
+COMMENT ON FUNCTION inventory.sp_list_products(uuid,integer,integer,uuid,character varying,character varying,character varying,jsonb) IS 'One page of a tenant''s products, newest first, by status (active, discontinued, all), chip (with_variants, low, out_of_stock, pos_hidden), category and name/SKU search; each row carries its categories, stock, axes, price range and first image, and every row the active counts behind the chips, in the same statement. An empty page is one row with a NULL id, so the counts still arrive (INV-019 D2).';

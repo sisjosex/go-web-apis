@@ -1,8 +1,9 @@
-CREATE OR REPLACE FUNCTION inventory.sp_update_product_with_variants(p_tenant_id uuid, p_product_id uuid, p_name character varying, p_description text, p_base_price numeric, p_variants jsonb DEFAULT NULL::jsonb, p_updated_by uuid DEFAULT NULL::uuid, p_pos_visible boolean DEFAULT NULL::boolean, p_orders_visible boolean DEFAULT NULL::boolean)
+CREATE OR REPLACE FUNCTION inventory.sp_update_product_with_variants(p_tenant_id uuid, p_product_id uuid, p_name character varying, p_description text, p_base_price numeric, p_variants jsonb DEFAULT NULL::jsonb, p_updated_by uuid DEFAULT NULL::uuid, p_pos_visible boolean DEFAULT NULL::boolean, p_orders_visible boolean DEFAULT NULL::boolean, p_attributes jsonb DEFAULT NULL::jsonb)
  RETURNS TABLE(product_id uuid, sku character varying, name character varying, message text)
  LANGUAGE plpgsql
 AS $function$
 DECLARE
+    l_old_axis_codes TEXT[];
     l_sku                VARCHAR;
     l_groups             JSONB;
     l_group              JSONB;
@@ -18,6 +19,11 @@ DECLARE
     l_group_count        INT;
     l_constraint         TEXT;
 BEGIN
+    SELECT array_agg(a.code) INTO l_old_axis_codes
+    FROM inventory.product_variant_groups vg
+    INNER JOIN inventory.attributes a ON a.id = vg.attribute_id
+    WHERE vg.product_id = p_product_id;
+
     -- The product must exist, belong to the tenant and still be active
     SELECT p.sku INTO l_sku
     FROM inventory.products p
@@ -125,7 +131,10 @@ BEGIN
                     l_group_id := (l_group ->> 'id')::UUID;
 
                     UPDATE inventory.product_variant_groups vg
-                    SET group_type        = l_group ->> 'group_type',
+                    SET attribute_id      = CASE WHEN COALESCE((l_group ->> 'affects_inventory')::BOOLEAN, FALSE)
+                                                 THEN inventory.fn_axis_attribute(p_tenant_id, (l_group ->> 'attribute_id')::UUID, l_group ->> 'group_type', l_group -> 'options')
+                                            END,
+                        group_type        = l_group ->> 'group_type',
                         is_required       = COALESCE(
                             (l_group ->> 'is_required')::BOOLEAN, FALSE
                         ),
@@ -144,7 +153,8 @@ BEGIN
                         is_required,
                         max_selections,
                         affects_inventory,
-                        sort_order
+                        sort_order,
+                        attribute_id
                     )
                     VALUES (
                         p_product_id,
@@ -154,7 +164,10 @@ BEGIN
                         COALESCE(
                             (l_group ->> 'affects_inventory')::BOOLEAN, FALSE
                         ),
-                        l_group_idx
+                        l_group_idx,
+                        CASE WHEN COALESCE((l_group ->> 'affects_inventory')::BOOLEAN, FALSE)
+                             THEN inventory.fn_axis_attribute(p_tenant_id, (l_group ->> 'attribute_id')::UUID, l_group ->> 'group_type', l_group -> 'options')
+                        END
                     )
                     RETURNING product_variant_groups.id INTO l_group_id;
                 END IF;
@@ -287,6 +300,12 @@ BEGIN
         WHERE p.id = p_product_id;
     END IF;
 
+    -- Attributes the client sent, then the axes over them; the codes of axes gone come off first.
+    IF p_attributes IS NOT NULL THEN
+        UPDATE inventory.products p SET attributes = inventory.fn_normalize_attributes(p_tenant_id, p_attributes) WHERE p.id = p_product_id AND p.tenant_id = p_tenant_id;
+    END IF;
+    PERFORM inventory.fn_sync_axis_attributes(p_tenant_id, p_product_id, l_old_axis_codes);
+
     RETURN QUERY SELECT
         p_product_id,
         CAST(l_sku AS VARCHAR),
@@ -301,4 +320,4 @@ BEGIN
 END;
 $function$;
 
-COMMENT ON FUNCTION inventory.sp_update_product_with_variants(uuid,uuid,character varying,text,numeric,jsonb,uuid,boolean,boolean) IS 'Updates a product and diffs its variant tree by id; NULL p_variants leaves the tree untouched. A group carries affects_inventory (absent means FALSE), and dropping or demoting an axis raises rather than cascading away a combination that still holds units or history (INV-008 D3). Never creates or destroys a SKU otherwise — that is sp_generate_product_skus (D2).';
+COMMENT ON FUNCTION inventory.sp_update_product_with_variants(uuid,uuid,character varying,text,numeric,jsonb,uuid,boolean,boolean,jsonb) IS 'Updates a product and diffs its variant tree by id; NULL p_variants leaves the tree untouched. A group carries affects_inventory (absent means FALSE), and dropping or demoting an axis raises rather than cascading away a combination that still holds units or history (INV-008 D3). Never creates or destroys a SKU otherwise — that is sp_generate_product_skus (D2).';
