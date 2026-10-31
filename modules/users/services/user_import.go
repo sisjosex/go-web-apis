@@ -503,6 +503,12 @@ func (d *usersImportDescriptor) sendInvitation(ctx importModels.ImportContext, u
 		firstName = *user.FirstName
 	}
 
+	go SendCodeInvitation(d.emailService, email, firstName)
+}
+
+// SendCodeInvitation emails the invitation to sign in with a one-time code, no password. A failed email
+// fails nothing: the caller runs it in the background.
+func SendCodeInvitation(emailService coreServices.EmailService, email, firstName string) {
 	appConf := config.ModularAppConfig.Core
 	subject := fmt.Sprintf("You're invited to %s", appConf.AppName)
 	data := map[string]string{
@@ -515,12 +521,7 @@ func (d *usersImportDescriptor) sendInvitation(ctx importModels.ImportContext, u
 		"SignOff":       fmt.Sprintf("The %s team", appConf.AppName),
 		"AutomatedNote": "This is an automated message. Please do not reply.",
 	}
-	templatePath := coreServices.GetTemplatePath("users", "user-import-invitation.html")
-
-	emailService := d.emailService
-	go func() {
-		_ = emailService.SendEmail(email, subject, templatePath, data)
-	}()
+	_ = emailService.SendEmail(email, subject, coreServices.GetTemplatePath("users", "user-import-invitation.html"), data)
 }
 
 // normalizeEmail trims and lowercases an email, matching the create SP's handling.

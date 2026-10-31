@@ -1,5 +1,11 @@
 package errors
 
+import (
+	"net/http"
+
+	coreErrors "josex/web/modules/core/errors"
+)
+
 // Users module error codes
 const (
 	// User CRUD errors
@@ -23,6 +29,9 @@ const (
 	UserAlreadyDeleted   = "user.already-deleted"
 	UserDeleteNotAllowed = "user.delete.not-allowed"
 	UserDeleteLastOwner  = "user.delete.last-owner"
+
+	// Invitation resend: the person has already signed in (USERS-015 D4)
+	UserInvitationAlreadyActive = "user.invitation.already-active"
 
 	// Password reset (admin-triggered)
 	UserResetPasswordFailed = "user.reset-password.failed"
@@ -49,3 +58,8 @@ const (
 	// roles it named could not be granted.
 	UserImportRoleAssignFailed = "users.import.role-assign-failed"
 )
+
+// The status the code's name does not tell (USERS-015).
+func init() {
+	coreErrors.RegisterStatus(UserInvitationAlreadyActive, http.StatusConflict)
+}

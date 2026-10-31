@@ -47,6 +47,7 @@
   "import.users.bio": "Bio",
   "import.users.website_url": "Website",
   "import.users.profile_picture": "Profile picture",
+  "user.invitation.already-active": "This person has already signed in",
   "import.users.roles": "Roles",
   "import.users.option.send_invitation": "Email the invitation to each new person"
 }

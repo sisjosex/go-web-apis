@@ -52,6 +52,7 @@
   "import.users.bio": "Bio",
   "import.users.website_url": "Sitio web",
   "import.users.profile_picture": "Foto de perfil",
+  "user.invitation.already-active": "Esta persona ya entró al panel",
   "import.users.roles": "Roles",
   "import.users.option.send_invitation": "Enviar la invitación por correo a cada persona nueva"
 }

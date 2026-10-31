@@ -19,5 +19,5 @@ func RegisterPermissionRoutes(
 	auth := authMiddleware.AuthMiddleware(jwtService)
 
 	// GET /api/v1/permissions?module=inventory — list available permissions (auth required)
-	api.Get(router, "/permissions", permController.ListAvailablePermissions, api.Doc{}, auth)
+	api.Get(router, "/permissions", permController.ListAvailablePermissions, api.Doc{Summary: "List the roles screen's sections", Description: "Each section with its read and write permission codes: \"Ver\" is the read ones, \"Editar\" all of them"}, auth)
 }

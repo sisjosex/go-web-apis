@@ -18,3 +18,13 @@ func accountLocale(t *testing.T, helper *testhelpers.ApiTestHelper, userID strin
 	}
 	return locale
 }
+
+// outsiderLogin signs an existing account in, which opens its first session.
+func outsiderLogin(t *testing.T, email, password string) *testhelpers.ApiTestHelper {
+	t.Helper()
+	helper := testhelpers.SetupApiTest(t)
+	if _, err := helper.Login(email, password); err != nil {
+		t.Fatalf("login: %v", err)
+	}
+	return helper
+}

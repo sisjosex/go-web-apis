@@ -1,6 +1,8 @@
 package models
 
 import (
+	"time"
+
 	coreModels "josex/web/modules/core/models"
 
 	"github.com/google/uuid"
@@ -8,8 +10,10 @@ import (
 
 // CreateUserDto for creating a new user (admin operation)
 type CreateUserDto struct {
-	FirstName         string               `json:"first_name" binding:"required"`
-	LastName          string               `json:"last_name" binding:"required"`
+	// FirstName and LastName are optional for an invitation, which asks only for the email (USERS-015): the
+	// person fills them on first sign-in, and until then the email's name stands in.
+	FirstName         string               `json:"first_name"`
+	LastName          string               `json:"last_name"`
 	Email             string               `json:"email" binding:"required,email-valid" conform:"trim,lowercase"`
 	Password          string               `json:"password"`
 	Phone             string               `json:"phone"`
@@ -21,6 +25,8 @@ type CreateUserDto struct {
 	// Owner is a promotion with its own confirmation, and the app levels (portal, driver, organization)
 	// are granted from Tracking, where they are linked (TRACK-032) — so only the two web levels are accepted.
 	TenantRole string `json:"tenant_role" binding:"omitempty,oneof=admin member"`
+	// RoleIDs are the workspace roles the user starts with (USERS-015 D1).
+	RoleIDs []uuid.UUID `json:"role_ids"`
 	// Locale is the workspace's language for an account invited into it (TENANCY-007); never from the body.
 	Locale string `json:"-"`
 }
@@ -54,18 +60,51 @@ type UserListQuery struct {
 	Order  string `form:"order" json:"order" binding:"omitempty,oneof=asc desc"`
 	// Level narrows to one access level: portal, driver, organization, or web (owner, admin, member,
 	// viewer) — the Tracking access picker lists the accounts at the level it grants (TRACK-032).
-	Level         string     `form:"level" json:"level" binding:"omitempty,oneof=portal driver organization web"`
+	Level string `form:"level" json:"level" binding:"omitempty,oneof=portal driver organization web admin"`
+	// RoleID narrows to the holders of one role; Pending to the people who never signed in (USERS-015).
+	RoleID        *uuid.UUID `json:"-"`
+	Pending       bool       `json:"-"`
 	TenantID      uuid.UUID  `json:"-"` // Set server-side from tenancy middleware; not exposed to clients
 	ExcludeUserID *uuid.UUID `json:"-"` // Set server-side from JWT; not exposed to clients
 }
 
 // UserListResponse represents paginated user list response
 type UserListResponse struct {
-	Users      []coreModels.User `json:"users"`
-	Total      int64             `json:"total"`       // Total count of users
-	Page       int               `json:"page"`        // Current page
-	Limit      int               `json:"limit"`       // Items per page
-	TotalPages int               `json:"total_pages"` // Total pages
+	Users      []UserListItem `json:"users"`
+	Total      int64          `json:"total"`       // Total count of users
+	Page       int            `json:"page"`        // Current page
+	Limit      int            `json:"limit"`       // Items per page
+	TotalPages int            `json:"total_pages"` // Total pages
+}
+
+// UserRoleRef names a role.
+type UserRoleRef struct {
+	ID   uuid.UUID `json:"id"`
+	Name string    `json:"name"`
+}
+
+// UserListItem is a row of the users list: the account plus what the panel shows beside it (USERS-015).
+type UserListItem struct {
+	coreModels.User
+	// Role is the first role the person holds, RoleCount how many; null and 0 for a level with no role.
+	Role      *UserRoleRef `json:"role"`
+	RoleCount int          `json:"role_count"`
+	// Modules are the enabled modules the role reaches: all of them for an administrator (D3).
+	Modules           []string   `json:"modules"`
+	LastSignInAt      *time.Time `json:"last_sign_in_at"`
+	InvitationPending bool       `json:"invitation_pending"`
+}
+
+// UserRoleCount is how many people hold a role: key is admin, organization or a role id.
+type UserRoleCount struct {
+	Key   string `json:"key"`
+	Count int64  `json:"count"`
+}
+
+// InvitationTarget is who a resent invitation goes to.
+type InvitationTarget struct {
+	Email     string
+	FirstName string
 }
 
 // SoftDeleteUserDto represents soft delete request
@@ -80,6 +119,9 @@ type UserStatsResponse struct {
 	Active   int64 `json:"active"`
 	Inactive int64 `json:"inactive"`
 	Expired  int64 `json:"expired"`
+	// ByRole counts the holders of each role; Pending the people who never signed in.
+	ByRole  []UserRoleCount `json:"by_role"`
+	Pending int64           `json:"pending"`
 }
 
 // ResetPasswordResult carries the data needed to send a password reset email

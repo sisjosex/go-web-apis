@@ -34,6 +34,7 @@ func RegisterUserRoutes(
 		api.Get(userRoutes, "/{id}", userController.GetUserById, api.Doc{Summary: "Get a user of the workspace", Errors: []int{400, 401, 404}})
 		api.Put(userRoutes, "/{id}", userController.Update, api.Doc{Summary: "Update a user", Errors: []int{400, 401, 404, 409}})
 		api.Delete(userRoutes, "/{id}", userController.SoftDeleteUser, api.Doc{Summary: "Soft-delete a user and end their sessions", Errors: []int{400, 401, 403, 404}})
+		api.Post(userRoutes, "/{id}/invitation", userController.ResendInvitation, api.Doc{Summary: "Send the invitation again", Description: "To someone of this workspace who never signed in", Status: 202, Errors: []int{400, 401, 404, 409}})
 		api.Post(userRoutes, "/{id}/reset-password", userController.ResetPassword, api.Doc{Summary: "Email the user a password reset link", Description: "Answers 200 when the account has none to send, so it never tells whether an account exists.", Errors: []int{400, 401, 500}})
 	}
 }

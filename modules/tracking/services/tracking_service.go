@@ -546,6 +546,10 @@ func (s *TrackingService) ListOrganizationMembers(ctx context.Context, tenantID 
 	return s.trackingRepo.ListOrganizationMembers(ctx, tenantID, organizationID, scopeUserID)
 }
 
+func (s *TrackingService) ListOrganizationMemberships(ctx context.Context, tenantID uuid.UUID, userIDs []uuid.UUID) ([]models.OrganizationMembership, error) {
+	return s.trackingRepo.ListOrganizationMemberships(ctx, tenantID, userIDs)
+}
+
 func (s *TrackingService) UpsertOrganizationMember(ctx context.Context, tenantID uuid.UUID, organizationID uuid.UUID, userID uuid.UUID, role string, groups []string) (*models.OrganizationMember, error) {
 	return s.trackingRepo.UpsertOrganizationMember(ctx, tenantID, organizationID, userID, role, groups, nil)
 }

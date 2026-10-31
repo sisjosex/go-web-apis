@@ -2,6 +2,7 @@ package repositories
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	coreModels "josex/web/modules/core/models"
 	database "josex/web/modules/core/services"
@@ -206,11 +207,13 @@ func (r *userRepository) ListUsers(query userModels.UserListQuery) (*userModels.
             p_sort            := $6,
             p_order           := $7,
             p_exclude_user_id := $8,
-            p_level           := $9
+            p_level           := $9,
+            p_role_id         := $10,
+            p_pending         := $11
         )
     `
 
-	rows, err := r.dbService.Query(ctx, sqlQuery, query.TenantID, page, limit, searchVal, statusVal, sortVal, orderVal, query.ExcludeUserID, levelVal)
+	rows, err := r.dbService.Query(ctx, sqlQuery, query.TenantID, page, limit, searchVal, statusVal, sortVal, orderVal, query.ExcludeUserID, levelVal, query.RoleID, query.Pending)
 	if err != nil {
 		var pgErr *pgconn.PgError
 		if errors.As(err, &pgErr) {
@@ -220,10 +223,12 @@ func (r *userRepository) ListUsers(query userModels.UserListQuery) (*userModels.
 	}
 	defer rows.Close()
 
-	var users []coreModels.User
+	var users []userModels.UserListItem
 	var totalCount int64
 	for rows.Next() {
-		var user coreModels.User
+		var user userModels.UserListItem
+		var roleID *uuid.UUID
+		var roleName *string
 		err := rows.Scan(
 			&user.ID,
 			&user.FirstName,
@@ -239,9 +244,18 @@ func (r *userRepository) ListUsers(query userModels.UserListQuery) (*userModels.
 			&user.ExpirationDate,
 			&totalCount,
 			&user.TenantRole,
+			&roleID,
+			&roleName,
+			&user.RoleCount,
+			&user.Modules,
+			&user.LastSignInAt,
+			&user.InvitationPending,
 		)
 		if err != nil {
 			return nil, err
+		}
+		if roleID != nil && roleName != nil {
+			user.Role = &userModels.UserRoleRef{ID: *roleID, Name: *roleName}
 		}
 		users = append(users, user)
 	}
@@ -251,7 +265,7 @@ func (r *userRepository) ListUsers(query userModels.UserListQuery) (*userModels.
 	}
 
 	if users == nil {
-		users = []coreModels.User{}
+		users = []userModels.UserListItem{}
 	}
 
 	totalPages := 0
@@ -301,11 +315,14 @@ func (r *userRepository) GetStats(tenantID uuid.UUID, excludeUserID *uuid.UUID) 
 	query := `SELECT * FROM users.sp_get_user_stats(p_tenant_id := $1, p_exclude_user_id := $2)`
 
 	stats := &userModels.UserStatsResponse{}
+	var byRole []byte
 	err := r.dbService.QueryRow(ctx, query, tenantID, excludeUserID).Scan(
 		&stats.Total,
 		&stats.Active,
 		&stats.Inactive,
 		&stats.Expired,
+		&byRole,
+		&stats.Pending,
 	)
 	if err != nil {
 		var pgErr *pgconn.PgError
@@ -314,7 +331,31 @@ func (r *userRepository) GetStats(tenantID uuid.UUID, excludeUserID *uuid.UUID) 
 		}
 		return nil, err
 	}
+	if err := json.Unmarshal(byRole, &stats.ByRole); err != nil {
+		return nil, err
+	}
 	return stats, nil
+}
+
+// InvitationTarget answers who a resent invitation goes to; the SP refuses anyone but a person of this
+// tenant who never signed in.
+func (r *userRepository) InvitationTarget(ctx context.Context, tenantID, userID uuid.UUID) (*userModels.InvitationTarget, error) {
+	var target userModels.InvitationTarget
+	var firstName *string
+	err := r.dbService.QueryRow(ctx, `SELECT email, first_name FROM users.sp_user_invitation_target($1, $2)`, tenantID, userID).Scan(&target.Email, &firstName)
+	if err != nil {
+		return nil, err
+	}
+	if firstName != nil {
+		target.FirstName = *firstName
+	}
+	return &target, nil
+}
+
+// AssignRole gives a workspace member one role; the SP refuses a role of another workspace.
+func (r *userRepository) AssignRole(ctx context.Context, tenantID, requesterID, userID, roleID uuid.UUID) error {
+	var assigned bool
+	return r.dbService.QueryRow(ctx, `SELECT tenancy.sp_assign_user_role($1, $2, $3, $4)`, tenantID, requesterID, userID, roleID).Scan(&assigned)
 }
 
 // EnsureTenantSeat refuses with billing.limit-reached when the workspace already has as many active

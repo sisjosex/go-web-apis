@@ -4,6 +4,7 @@
 package tracking_test
 
 import (
+	"encoding/json"
 	"fmt"
 	"net/http"
 	"testing"
@@ -185,4 +186,31 @@ func TestOrganizationMemberInvite(t *testing.T) {
 	w = helper.DoRequest("POST", fmt.Sprintf("/tracking/organizations/%s/members", organizationID), staff, map[string]string{})
 	assert.Equal(t, http.StatusConflict, w.Code, w.Body.String())
 	assert.Contains(t, w.Body.String(), "tracking.access.web-account")
+}
+
+// TestOrganizationMemberships_ScopeColumn - the seeded organization user belongs to the main school; a
+// malformed id is a 400 and a member of no client answers no row (USERS-015).
+func TestOrganizationMemberships_ScopeColumn(t *testing.T) {
+	helper := SetupTrackingTest(t)
+	defer helper.Close()
+	organization := SetupOrganizationTest(t)
+	defer organization.Close()
+
+	w := helper.DoRequest("GET", "/tracking/organization-memberships?user_ids="+organization.GetUserID()+","+helper.GetUserID(), nil, map[string]string{})
+
+	assert.Equal(t, http.StatusOK, w.Code, w.Body.String())
+	var rows []struct {
+		UserID           string `json:"user_id"`
+		OrganizationID   string `json:"organization_id"`
+		OrganizationName string `json:"organization_name"`
+	}
+	assert.NoError(t, json.Unmarshal(w.Body.Bytes(), &rows))
+	if assert.Len(t, rows, 1, w.Body.String()) {
+		assert.Equal(t, organization.GetUserID(), rows[0].UserID)
+		assert.Equal(t, MainSchoolID, rows[0].OrganizationID)
+		assert.NotEmpty(t, rows[0].OrganizationName)
+	}
+
+	w = helper.DoRequest("GET", "/tracking/organization-memberships?user_ids=nope", nil, map[string]string{})
+	assert.Equal(t, http.StatusBadRequest, w.Code, w.Body.String())
 }

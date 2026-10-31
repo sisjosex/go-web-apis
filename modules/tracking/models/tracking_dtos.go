@@ -973,6 +973,13 @@ type ListOrganizationsResponse struct {
 
 // UpsertOrganizationMemberDto is the body of PUT /tracking/organizations/:id/members/:user_id — the
 // same call adds a member and changes the role of one already there.
+// OrganizationMembership is one client a user belongs to.
+type OrganizationMembership struct {
+	UserID           uuid.UUID `json:"user_id"`
+	OrganizationID   uuid.UUID `json:"organization_id"`
+	OrganizationName string    `json:"organization_name"`
+}
+
 type UpsertOrganizationMemberDto struct {
 	Role string `json:"role" binding:"required,oneof=admin viewer supervisor" conform:"trim,lowercase"`
 	// A supervisor's rider groups (TRACK-067 D2); ignored for any other role.

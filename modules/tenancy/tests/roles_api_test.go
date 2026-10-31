@@ -63,27 +63,52 @@ func createRole(t *testing.T, helper *testhelpers.ApiTestHelper, slug, name stri
 	return id
 }
 
-// TestPermissions_ListCatalogFilteredByModule - the catalog lists translated permissions; ?module keeps one module's.
+// TestPermissions_ListCatalogFilteredByModule - the catalog is sections with their read and write codes,
+// labels translated; ?module keeps one module's.
 func TestPermissions_ListCatalogFilteredByModule(t *testing.T) {
 	helper := testhelpers.SetupApiTest(t)
 	defer helper.Close()
 	freshTenant(t, helper)
 
+	type section struct {
+		Code        string `json:"code"`
+		Module      string `json:"module"`
+		Label       string `json:"label"`
+		Permissions []struct {
+			Code   string `json:"code"`
+			Access string `json:"access"`
+		} `json:"permissions"`
+	}
+	var catalog struct {
+		Sections []section `json:"sections"`
+	}
 	w := helper.DoRequest("GET", "/permissions", nil, nil)
 	require.Equal(t, http.StatusOK, w.Code, w.Body.String())
-	var all []map[string]interface{}
-	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &all))
-	assert.NotEmpty(t, all, "the catalog is not empty")
+	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &catalog))
+	trips := -1
+	for i, s := range catalog.Sections {
+		if s.Code == "trips" {
+			trips = i
+		}
+	}
+	require.GreaterOrEqual(t, trips, 0, "tracking declares the trips section: %s", w.Body.String())
+	assert.NotEmpty(t, catalog.Sections[trips].Label)
+	access := map[string]string{}
+	for _, p := range catalog.Sections[trips].Permissions {
+		access[p.Code] = p.Access
+	}
+	assert.Equal(t, "read", access["tracking:routes:read"], "the read the API gates trips through")
+	assert.Equal(t, "write", access["tracking:events:write"])
+	all := len(catalog.Sections)
 
+	catalog.Sections = nil
 	w = helper.DoRequest("GET", "/permissions?module=inventory", nil, nil)
 	require.Equal(t, http.StatusOK, w.Code, w.Body.String())
-	var inventory []map[string]interface{}
-	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &inventory))
-	assert.NotEmpty(t, inventory)
-	assert.Less(t, len(inventory), len(all), "the filter narrows the catalog")
-	for _, p := range inventory {
-		assert.Equal(t, "inventory", p["module"], "only inventory permissions: %v", p)
-		assert.NotEmpty(t, p["name"], "the name is translated: %v", p)
+	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &catalog))
+	assert.NotEmpty(t, catalog.Sections)
+	assert.Less(t, len(catalog.Sections), all, "the filter narrows the catalog")
+	for _, s := range catalog.Sections {
+		assert.Equal(t, "inventory", s.Module, "only inventory sections: %v", s)
 	}
 
 	helper.ClearToken()
@@ -278,4 +303,28 @@ func TestUpdateUserRole(t *testing.T) {
 
 	w = f.owner.DoRequest("PATCH", f.path("/users/not-a-uuid/role"), map[string]interface{}{"role": "member"}, nil)
 	assert.Equal(t, http.StatusBadRequest, w.Code, w.Body.String())
+}
+
+// TestCreateTenant_SeedsOperatorRole - a new business is born with the editable "Operador" role at
+// "Editar" on taypi go (USERS-015 D1).
+func TestCreateTenant_SeedsOperatorRole(t *testing.T) {
+	helper := testhelpers.SetupApiTest(t)
+	defer helper.Close()
+	slug := freshTenant(t, helper)
+
+	w := helper.DoRequest("GET", "/tenants/"+slug+"/roles", nil, nil)
+
+	require.Equal(t, http.StatusOK, w.Code, w.Body.String())
+	var roles []struct {
+		ID       string `json:"id"`
+		Name     string `json:"name"`
+		IsSystem bool   `json:"is_system"`
+	}
+	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &roles))
+	require.Len(t, roles, 1, w.Body.String())
+	assert.Equal(t, "Operador", roles[0].Name)
+	assert.False(t, roles[0].IsSystem, "editable")
+	w = helper.DoRequest("GET", "/tenants/"+slug+"/roles/"+roles[0].ID, nil, nil)
+	require.Equal(t, http.StatusOK, w.Code, w.Body.String())
+	assert.Contains(t, w.Body.String(), "tracking:documents:write")
 }

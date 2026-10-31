@@ -4,3 +4,4 @@
 #
 # The gate's contract stage reads it against HEAD's docs/openapi.json. Empty the file once the
 # change is committed: an entry left here would let the next break through unreviewed.
+GET /api/v1/permissions  # USERS-015 the catalog becomes sections with read and write codes; only the web's users module reads it, rebuilt in the same change

@@ -189,6 +189,7 @@ type TrackingService interface {
 
 	// Organization members
 	ListOrganizationMembers(ctx context.Context, tenantID uuid.UUID, organizationID uuid.UUID, scopeUserID *uuid.UUID) ([]*models.OrganizationMember, error)
+	ListOrganizationMemberships(ctx context.Context, tenantID uuid.UUID, userIDs []uuid.UUID) ([]models.OrganizationMembership, error)
 	UpsertOrganizationMember(ctx context.Context, tenantID uuid.UUID, organizationID uuid.UUID, userID uuid.UUID, role string, groups []string) (*models.OrganizationMember, error)
 	DeleteOrganizationMember(ctx context.Context, tenantID uuid.UUID, organizationID uuid.UUID, userID uuid.UUID) error
 }

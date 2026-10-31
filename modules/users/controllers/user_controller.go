@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"strings"
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
@@ -22,6 +23,7 @@ import (
 	usersErrors "josex/web/modules/users/errors"
 	userInterfaces "josex/web/modules/users/interfaces"
 	userModels "josex/web/modules/users/models"
+	userServices "josex/web/modules/users/services"
 )
 
 type UserController struct {
@@ -69,13 +71,15 @@ type UpdateUserInput struct {
 // ListUsersInput is GET /users' query. A page or limit below 1 falls back to the default; a limit
 // over the configured maximum is capped.
 type ListUsersInput struct {
-	Page   int    `query:"page" default:"1" doc:"Page number"`
-	Limit  int    `query:"limit" doc:"Items per page; the configured default when absent, capped at the maximum"`
-	Search string `query:"search" doc:"Search in email, first name, last name"`
-	Status string `query:"status" doc:"active, inactive or expired"`
-	Sort   string `query:"sort" doc:"created_at (default), email, first_name or last_name"`
-	Order  string `query:"order" doc:"asc or desc (default)"`
-	Level  string `query:"level" doc:"portal, driver, organization or web; any other value is a 400"`
+	Page    int    `query:"page" default:"1" doc:"Page number"`
+	Limit   int    `query:"limit" doc:"Items per page; the configured default when absent, capped at the maximum"`
+	Search  string `query:"search" doc:"Search in email, first name, last name"`
+	Status  string `query:"status" doc:"active, inactive or expired"`
+	Sort    string `query:"sort" doc:"created_at (default), email, first_name or last_name"`
+	Order   string `query:"order" doc:"asc or desc (default)"`
+	Level   string `query:"level" doc:"portal, driver, organization, web or admin; any other value is a 400. With none, the app-only portal and driver accounts stay out"`
+	RoleID  string `query:"role_id" doc:"Only the holders of this role"`
+	Pending bool   `query:"pending" doc:"Only the people who never signed in"`
 }
 
 // SoftDeleteResult is DELETE /users/{id}'s answer.
@@ -101,11 +105,15 @@ func (uc *UserController) Create(ctx context.Context, in *CreateUserInput) (*api
 		return nil, api.Fail(http.StatusBadRequest, coreErrors.BuildErrorDetail(c, usersErrors.UserValidationFailed, utils.ExtractValidationError(c, err)))
 	}
 
-	// Generate a secure temporary password when the admin left it blank
+	// Invited with only an email (USERS-015): they sign in with a code, so nobody sees this password.
+	invitedByCode := newUser.Password == ""
 	tempPassword := newUser.Password
-	if tempPassword == "" {
+	if invitedByCode {
 		tempPassword = utils.GenerateRandomPassword()
 		newUser.Password = tempPassword
+	}
+	if newUser.FirstName == "" {
+		newUser.FirstName, _, _ = strings.Cut(newUser.Email, "@")
 	}
 
 	// Inside a workspace, a seat must be free before the account exists (BILLING-001 D2).
@@ -128,10 +136,55 @@ func (uc *UserController) Create(ctx context.Context, in *CreateUserInput) (*api
 
 	if inTenant {
 		uc.joinTenant(c, tenantID, user, newUser.TenantRole)
+		if err := uc.assignRoles(c, tenantID, user, newUser.RoleIDs); err != nil {
+			return nil, err
+		}
 	}
-	go uc.sendInvitation(user, tempPassword)
+	if invitedByCode {
+		go userServices.SendCodeInvitation(uc.emailService, newUser.Email, newUser.FirstName)
+	} else {
+		go uc.sendInvitation(user, tempPassword)
+	}
 
 	return api.OK(user)
+}
+
+// assignRoles gives the new member the roles the invitation chose. The user already exists when one is
+// refused, so the answer names the role and the row shows up with what it got.
+func (uc *UserController) assignRoles(c *gin.Context, tenantID uuid.UUID, user *coreModels.User, roleIDs []uuid.UUID) error {
+	requesterID, ok := contextUUID(c, "user_id")
+	newUserID, err := uuid.Parse(user.ID)
+	if !ok || err != nil {
+		return nil
+	}
+	for _, roleID := range roleIDs {
+		if err := uc.userService.AssignRole(c.Request.Context(), tenantID, requesterID, newUserID, roleID); err != nil {
+			if message := pgMessage(err); message != "" {
+				return api.Fail(coreErrors.StatusOf(err), coreErrors.BuildErrorSingle(c, message))
+			}
+			return api.Fail(http.StatusInternalServerError, coreErrors.BuildError(c, err))
+		}
+	}
+	return nil
+}
+
+// ResendInvitation is POST /users/{id}/invitation: mails the sign-in invitation again to someone of this
+// workspace who never signed in (USERS-015 D4).
+func (uc *UserController) ResendInvitation(ctx context.Context, in *api.ByID) (*api.Empty, error) {
+	c := api.Gin(ctx)
+	id, err := uuid.Parse(in.ID)
+	if err != nil {
+		return nil, api.Fail(http.StatusBadRequest, coreErrors.BuildErrorSingle(c, coreErrors.InvalidUUID))
+	}
+	target, err := uc.userService.InvitationTarget(c.Request.Context(), requestTenant(c), id)
+	if err != nil {
+		if message := pgMessage(err); message != "" {
+			return nil, api.Fail(coreErrors.StatusOf(err), coreErrors.BuildErrorSingle(c, message))
+		}
+		return nil, api.Fail(http.StatusInternalServerError, coreErrors.BuildError(c, err))
+	}
+	go userServices.SendCodeInvitation(uc.emailService, target.Email, target.FirstName)
+	return api.Done()
 }
 
 // joinTenant adds the new user to the request's workspace with role (member when empty) and
@@ -237,14 +290,8 @@ func (uc *UserController) GetStats(ctx context.Context, _ *api.None) (*api.Out[*
 		}
 	}
 
-	var excludeUserID *uuid.UUID
-	if userIDStr, ok := c.Get("user_id"); ok {
-		if uid, err := uuid.Parse(userIDStr.(string)); err == nil {
-			excludeUserID = &uid
-		}
-	}
-
-	stats, err := uc.userService.GetStats(tenantID, excludeUserID)
+	// The caller counts: the list shows them too, marked "· tú" (USERS-015).
+	stats, err := uc.userService.GetStats(tenantID, nil)
 	if err != nil {
 		return nil, api.Fail(http.StatusBadRequest, coreErrors.BuildError(c, err))
 	}
@@ -276,16 +323,24 @@ func (uc *UserController) ListUsers(ctx context.Context, in *ListUsersInput) (*a
 	}
 
 	query := userModels.UserListQuery{
-		Page:   page,
-		Limit:  limit,
-		Search: in.Search,
-		Status: in.Status,
-		Sort:   in.Sort,
-		Order:  in.Order,
-		Level:  in.Level,
+		Page:    page,
+		Limit:   limit,
+		Search:  in.Search,
+		Status:  in.Status,
+		Sort:    in.Sort,
+		Order:   in.Order,
+		Level:   in.Level,
+		Pending: in.Pending,
+	}
+	if in.RoleID != "" {
+		roleID, err := uuid.Parse(in.RoleID)
+		if err != nil {
+			return nil, api.Fail(http.StatusBadRequest, coreErrors.BuildErrorSingle(c, coreErrors.InvalidUUID))
+		}
+		query.RoleID = &roleID
 	}
 	switch query.Level {
-	case "", "portal", "driver", "organization", "web":
+	case "", "portal", "driver", "organization", "web", "admin":
 	default:
 		return nil, api.Fail(http.StatusBadRequest, coreErrors.BuildErrorSingle(c, usersErrors.UserValidationFailed))
 	}
@@ -294,13 +349,6 @@ func (uc *UserController) ListUsers(ctx context.Context, in *ListUsersInput) (*a
 	if tenantIDStr, ok := c.Get("tenant_id"); ok {
 		if tid, err := uuid.Parse(tenantIDStr.(string)); err == nil {
 			query.TenantID = tid
-		}
-	}
-
-	// Exclude the calling user from their own results
-	if userIDStr, ok := c.Get("user_id"); ok {
-		if uid, err := uuid.Parse(userIDStr.(string)); err == nil {
-			query.ExcludeUserID = &uid
 		}
 	}
 

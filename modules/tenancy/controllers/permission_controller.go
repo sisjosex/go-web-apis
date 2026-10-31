@@ -4,7 +4,6 @@ import (
 	"context"
 
 	"josex/web/modules/core/api"
-	coreUtils "josex/web/modules/core/utils"
 	"josex/web/modules/tenancy/interfaces"
 	"josex/web/modules/tenancy/models"
 )
@@ -24,23 +23,14 @@ type ListAvailablePermissionsInput struct {
 	Module string `query:"module"`
 }
 
-// ListAvailablePermissions returns all permissions that can be assigned to a
-// role, optionally filtered by ?module=<module_name>. Names and descriptions are
-// translated to the request language.
-func (ctrl *PermissionController) ListAvailablePermissions(ctx context.Context, in *ListAvailablePermissionsInput) (*api.Out[[]models.AvailablePermission], error) {
+// ListAvailablePermissions returns the sections of the roles screen with the codes each one holds,
+// optionally filtered by ?module=<module_name>. Labels are translated to the request language.
+func (ctrl *PermissionController) ListAvailablePermissions(ctx context.Context, in *ListAvailablePermissionsInput) (*api.Out[models.PermissionCatalog], error) {
 	c := api.Gin(ctx)
-	module := in.Module
 	lang := c.GetString("lang")
-	perms := ctrl.service.ListAvailablePermissions(module)
-
-	translated := make([]models.AvailablePermission, len(perms))
-	for i, p := range perms {
-		translated[i] = models.AvailablePermission{
-			Code:        p.Code,
-			Module:      p.Module,
-			Name:        coreUtils.GetTranslation(lang, p.Name),
-			Description: coreUtils.GetTranslation(lang, p.Description),
-		}
+	sections := ctrl.service.ListSections(in.Module)
+	for i := range sections {
+		sections[i].Label = translateOr(lang, "permissions.section."+sections[i].Code, sections[i].Code)
 	}
-	return api.OK(translated)
+	return api.OK(models.PermissionCatalog{Sections: sections})
 }

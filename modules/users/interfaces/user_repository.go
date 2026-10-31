@@ -18,6 +18,8 @@ type UserRepository interface {
 	GetStats(tenantID uuid.UUID, excludeUserID *uuid.UUID) (*userModels.UserStatsResponse, error)
 	SoftDeleteUser(tenantID, userID uuid.UUID) error
 	AssignToTenant(tenantID, requesterID, userID uuid.UUID, role string) error
+	InvitationTarget(ctx context.Context, tenantID, userID uuid.UUID) (*userModels.InvitationTarget, error)
+	AssignRole(ctx context.Context, tenantID, requesterID, userID, roleID uuid.UUID) error
 	EnsureTenantSeat(ctx context.Context, tenantID uuid.UUID, limit int) error
 	ResetPasswordToken(tenantID, userID uuid.UUID) (*userModels.ResetPasswordResult, error)
 }

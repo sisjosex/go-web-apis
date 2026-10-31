@@ -6,7 +6,7 @@ import (
 
 // PermissionService exposes the permission catalog used to build roles.
 type PermissionService interface {
-	// ListAvailablePermissions returns all registered permissions, optionally
-	// filtered by module name. Pass empty string to return all.
-	ListAvailablePermissions(module string) []models.AvailablePermission
+	// ListSections returns the roles screen's rows with their codes, optionally filtered by module
+	// name. Pass empty string to return all.
+	ListSections(module string) []models.PermissionSection
 }

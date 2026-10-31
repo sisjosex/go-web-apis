@@ -1357,6 +1357,24 @@ func (r *TrackingRepository) ListOrganizationMembers(ctx context.Context, tenant
 	return members, nil
 }
 
+// ListOrganizationMemberships answers which clients each of a page of users belongs to (USERS-015).
+func (r *TrackingRepository) ListOrganizationMemberships(ctx context.Context, tenantID uuid.UUID, userIDs []uuid.UUID) ([]models.OrganizationMembership, error) {
+	rows, err := r.dbService.Query(ctx, `SELECT user_id, organization_id, organization_name FROM tracking.sp_list_organization_memberships($1, $2)`, tenantID, userIDs)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	memberships := []models.OrganizationMembership{}
+	for rows.Next() {
+		var membership models.OrganizationMembership
+		if err := rows.Scan(&membership.UserID, &membership.OrganizationID, &membership.OrganizationName); err != nil {
+			return nil, err
+		}
+		memberships = append(memberships, membership)
+	}
+	return memberships, rows.Err()
+}
+
 // UpsertOrganizationMember adds the member or changes the role of one already there — the SP settles
 // which, so the caller needs no branch.
 func (r *TrackingRepository) UpsertOrganizationMember(ctx context.Context, tenantID uuid.UUID, organizationID uuid.UUID, userID uuid.UUID, role string, groups []string, scopeUserID *uuid.UUID) (*models.OrganizationMember, error) {

@@ -395,6 +395,8 @@ func registerOrganizationRoutes(r *gin.RouterGroup, denyOrganization gin.Handler
 	api.Patch(r, "/organizations/{organization_id}", trackingController.UpdateOrganization, api.Doc{Summary: "Update organization", Description: "Update an organization; every field is optional", Errors: []int{400, 404, 500}}, tenancyMW.RequirePermission(trackingPerms.OrganizationsWrite))
 	api.Delete(r, "/organizations/{organization_id}", trackingController.DeleteOrganization, api.Doc{Summary: "Delete organization", Description: "Delete an organization; refused while it still has riders", Status: 204, Errors: []int{400, 404, 409, 500}}, denyOrganization, tenancyMW.RequirePermission(trackingPerms.OrganizationsDelete))
 
+	api.Get(r, "/organization-memberships", trackingController.ListOrganizationMemberships, api.Doc{Summary: "List the clients of a page of users", Description: "One row per client each user belongs to: the scope column of the users list", Errors: []int{400}}, denyOrganization, tenancyMW.RequirePermission(trackingPerms.OrganizationsRead))
+
 	// Organization members. Every write goes through the access grant (TRACK-032), so a member is
 	// always an account at the organization level; an organization's admin manages its own (TRACK-067).
 	api.Get(r, "/organizations/{organization_id}/members", trackingController.ListOrganizationMembers, api.Doc{Summary: "List organization members", Description: "The tenant users on an organization, with their identity and role", Errors: []int{400, 404, 500}}, tenancyMW.RequirePermission(trackingPerms.OrganizationsRead))

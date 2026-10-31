@@ -214,3 +214,31 @@ BEGIN
     LIMIT 1
     ON CONFLICT (user_id, role_id) DO NOTHING;
 END $$;
+
+-- web.admin@test.local / WebAdmin123*  — role `admin`: signs in on :4000 for the admin screens
+-- (USERS-015), which a member never reaches.
+DO $$
+DECLARE
+    v_tenant UUID;
+    v_user   UUID;
+BEGIN
+    SELECT id INTO v_tenant FROM tenancy.tenants WHERE slug = 'mi-negocio';
+    IF v_tenant IS NULL THEN
+        RETURN;
+    END IF;
+
+    SELECT id INTO v_user FROM auth.users WHERE LOWER(email) = 'web.admin@test.local';
+    IF v_user IS NULL THEN
+        INSERT INTO auth.users (first_name, last_name, email, password)
+        VALUES ('Admin', 'Panel', 'web.admin@test.local', crypt('WebAdmin123*', gen_salt('bf')))
+        RETURNING id INTO v_user;
+    ELSE
+        UPDATE auth.users
+        SET password = crypt('WebAdmin123*', gen_salt('bf')), is_active = TRUE, deleted_at = NULL
+        WHERE id = v_user;
+    END IF;
+
+    INSERT INTO tenancy.tenant_users (tenant_id, user_id, role)
+    VALUES (v_tenant, v_user, 'admin')
+    ON CONFLICT (tenant_id, user_id) DO UPDATE SET role = 'admin', is_active = TRUE;
+END $$;

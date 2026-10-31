@@ -25,16 +25,17 @@ const (
 )
 
 func init() {
+	permRegistry.RegisterSections("inventory", "products_stock")
 	permRegistry.Register([]models.AvailablePermission{
-		{Code: ProductsRead, Module: "inventory", Name: "permission.inventory.products-read", Description: "permission.inventory.products-read.description"},
-		{Code: ProductsWrite, Module: "inventory", Name: "permission.inventory.products-write", Description: "permission.inventory.products-write.description"},
-		{Code: ProductsDelete, Module: "inventory", Name: "permission.inventory.products-delete", Description: "permission.inventory.products-delete.description"},
-		{Code: CategoriesRead, Module: "inventory", Name: "permission.inventory.categories-read", Description: "permission.inventory.categories-read.description"},
-		{Code: CategoriesManage, Module: "inventory", Name: "permission.inventory.categories-manage", Description: "permission.inventory.categories-manage.description"},
-		{Code: StockRead, Module: "inventory", Name: "permission.inventory.stock-read", Description: "permission.inventory.stock-read.description"},
-		{Code: StockAdjust, Module: "inventory", Name: "permission.inventory.stock-adjust", Description: "permission.inventory.stock-adjust.description"},
-		{Code: StockReserve, Module: "inventory", Name: "permission.inventory.stock-reserve", Description: "permission.inventory.stock-reserve.description"},
-		{Code: BatchesRead, Module: "inventory", Name: "permission.inventory.batches-read", Description: "permission.inventory.batches-read.description"},
-		{Code: BatchesManage, Module: "inventory", Name: "permission.inventory.batches-manage", Description: "permission.inventory.batches-manage.description"},
+		{Code: ProductsRead, Module: "inventory", Name: "permission.inventory.products-read", Description: "permission.inventory.products-read.description", Section: "products_stock", Access: models.AccessRead},
+		{Code: ProductsWrite, Module: "inventory", Name: "permission.inventory.products-write", Description: "permission.inventory.products-write.description", Section: "products_stock", Access: models.AccessWrite},
+		{Code: ProductsDelete, Module: "inventory", Name: "permission.inventory.products-delete", Description: "permission.inventory.products-delete.description", Section: "products_stock", Access: models.AccessWrite},
+		{Code: CategoriesRead, Module: "inventory", Name: "permission.inventory.categories-read", Description: "permission.inventory.categories-read.description", Section: "products_stock", Access: models.AccessRead},
+		{Code: CategoriesManage, Module: "inventory", Name: "permission.inventory.categories-manage", Description: "permission.inventory.categories-manage.description", Section: "products_stock", Access: models.AccessWrite},
+		{Code: StockRead, Module: "inventory", Name: "permission.inventory.stock-read", Description: "permission.inventory.stock-read.description", Section: "products_stock", Access: models.AccessRead},
+		{Code: StockAdjust, Module: "inventory", Name: "permission.inventory.stock-adjust", Description: "permission.inventory.stock-adjust.description", Section: "products_stock", Access: models.AccessWrite},
+		{Code: StockReserve, Module: "inventory", Name: "permission.inventory.stock-reserve", Description: "permission.inventory.stock-reserve.description", Section: "products_stock", Access: models.AccessWrite},
+		{Code: BatchesRead, Module: "inventory", Name: "permission.inventory.batches-read", Description: "permission.inventory.batches-read.description", Section: "products_stock", Access: models.AccessRead},
+		{Code: BatchesManage, Module: "inventory", Name: "permission.inventory.batches-manage", Description: "permission.inventory.batches-manage.description", Section: "products_stock", Access: models.AccessWrite},
 	})
 }

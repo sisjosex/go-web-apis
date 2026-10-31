@@ -13,6 +13,6 @@ func NewPermissionService() interfaces.PermissionService {
 	return &permissionService{}
 }
 
-func (s *permissionService) ListAvailablePermissions(module string) []models.AvailablePermission {
-	return permRegistry.List(module)
+func (s *permissionService) ListSections(module string) []models.PermissionSection {
+	return permRegistry.Sections(module)
 }

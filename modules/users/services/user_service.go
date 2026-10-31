@@ -54,3 +54,13 @@ func (s *userService) AssignToTenant(tenantID, requesterID, userID uuid.UUID, ro
 func (s *userService) ResetPassword(tenantID, userID uuid.UUID) (*userModels.ResetPasswordResult, error) {
 	return s.userRepository.ResetPasswordToken(tenantID, userID)
 }
+
+// InvitationTarget answers who a resent invitation goes to.
+func (s *userService) InvitationTarget(ctx context.Context, tenantID, userID uuid.UUID) (*userModels.InvitationTarget, error) {
+	return s.userRepository.InvitationTarget(ctx, tenantID, userID)
+}
+
+// AssignRole gives a workspace member one role.
+func (s *userService) AssignRole(ctx context.Context, tenantID, requesterID, userID, roleID uuid.UUID) error {
+	return s.userRepository.AssignRole(ctx, tenantID, requesterID, userID, roleID)
+}

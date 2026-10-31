@@ -13,7 +13,7 @@ type GrantAccessDto struct {
 	UserID    *uuid.UUID `json:"user_id" binding:"required_without=Email,omitempty,uuidv4"`
 	Email     *string    `json:"email" binding:"required_without=UserID,omitempty,email-valid,max=255" conform:"trim,lowercase"`
 	FirstName *string    `json:"first_name" binding:"required_with=Email,omitempty,min=1,max=100" conform:"trim"`
-	LastName  *string    `json:"last_name" binding:"required_with=Email,omitempty,min=1,max=100" conform:"trim"`
+	LastName  *string    `json:"last_name" binding:"omitempty,min=1,max=100" conform:"trim"`
 	Phone     *string    `json:"phone" binding:"omitempty,max=50" conform:"trim"`
 }
 

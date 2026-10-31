@@ -5701,29 +5701,6 @@
         ],
         "type": "object"
       },
-      "tenancy.AvailablePermission": {
-        "additionalProperties": false,
-        "properties": {
-          "code": {
-            "type": "string"
-          },
-          "description": {
-            "type": "string"
-          },
-          "module": {
-            "type": "string"
-          },
-          "name": {
-            "type": "string"
-          }
-        },
-        "required": [
-          "code",
-          "module",
-          "name"
-        ],
-        "type": "object"
-      },
       "tenancy.CreateRoleDto": {
         "additionalProperties": false,
         "properties": {
@@ -5854,6 +5831,48 @@
           "modules",
           "verticals",
           "capabilities"
+        ],
+        "type": "object"
+      },
+      "tenancy.PermissionCatalog": {
+        "additionalProperties": false,
+        "properties": {
+          "sections": {
+            "items": {
+              "$ref": "#/components/schemas/tenancy.PermissionSection"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "sections"
+        ],
+        "type": "object"
+      },
+      "tenancy.PermissionSection": {
+        "additionalProperties": false,
+        "properties": {
+          "code": {
+            "type": "string"
+          },
+          "label": {
+            "type": "string"
+          },
+          "module": {
+            "type": "string"
+          },
+          "permissions": {
+            "items": {
+              "$ref": "#/components/schemas/tenancy.SectionPermission"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "code",
+          "module",
+          "label",
+          "permissions"
         ],
         "type": "object"
       },
@@ -6061,6 +6080,22 @@
         "required": [
           "message",
           "tenant"
+        ],
+        "type": "object"
+      },
+      "tenancy.SectionPermission": {
+        "additionalProperties": false,
+        "properties": {
+          "access": {
+            "type": "string"
+          },
+          "code": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "code",
+          "access"
         ],
         "type": "object"
       },
@@ -11326,6 +11361,28 @@
         ],
         "type": "object"
       },
+      "tracking.OrganizationMembership": {
+        "additionalProperties": false,
+        "properties": {
+          "organization_id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "organization_name": {
+            "type": "string"
+          },
+          "user_id": {
+            "format": "uuid",
+            "type": "string"
+          }
+        },
+        "required": [
+          "user_id",
+          "organization_id",
+          "organization_name"
+        ],
+        "type": "object"
+      },
       "tracking.OrganizationToday": {
         "additionalProperties": false,
         "properties": {
@@ -16447,6 +16504,13 @@
           "profile_picture_url": {
             "type": "string"
           },
+          "role_ids": {
+            "items": {
+              "format": "uuid",
+              "type": "string"
+            },
+            "type": "array"
+          },
           "tenant_role": {
             "enum": [
               "admin",
@@ -16459,8 +16523,6 @@
           }
         },
         "required": [
-          "first_name",
-          "last_name",
           "email"
         ],
         "type": "object"
@@ -16623,6 +16685,111 @@
         ],
         "type": "object"
       },
+      "users.UserListItem": {
+        "additionalProperties": false,
+        "properties": {
+          "bio": {
+            "nullable": true,
+            "type": "string"
+          },
+          "birthday": {
+            "format": "date",
+            "nullable": true,
+            "type": "string"
+          },
+          "created_at": {
+            "format": "date-time",
+            "nullable": true,
+            "type": "string"
+          },
+          "email": {
+            "nullable": true,
+            "type": "string"
+          },
+          "expiration_date": {
+            "format": "date",
+            "nullable": true,
+            "type": "string"
+          },
+          "first_name": {
+            "nullable": true,
+            "type": "string"
+          },
+          "id": {
+            "type": "string"
+          },
+          "invitation_pending": {
+            "type": "boolean"
+          },
+          "is_active": {
+            "nullable": true,
+            "type": "boolean"
+          },
+          "last_name": {
+            "nullable": true,
+            "type": "string"
+          },
+          "last_sign_in_at": {
+            "format": "date-time",
+            "nullable": true,
+            "type": "string"
+          },
+          "locale": {
+            "type": "string"
+          },
+          "modules": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "phone": {
+            "nullable": true,
+            "type": "string"
+          },
+          "profile_picture_url": {
+            "nullable": true,
+            "type": "string"
+          },
+          "role": {
+            "$ref": "#/components/schemas/users.UserRoleRef"
+          },
+          "role_count": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "system_role": {
+            "type": "string"
+          },
+          "tenant_role": {
+            "type": "string"
+          },
+          "website_url": {
+            "nullable": true,
+            "type": "string"
+          }
+        },
+        "required": [
+          "role",
+          "role_count",
+          "modules",
+          "last_sign_in_at",
+          "invitation_pending",
+          "id",
+          "first_name",
+          "last_name",
+          "email",
+          "phone",
+          "birthday",
+          "profile_picture_url",
+          "bio",
+          "website_url",
+          "is_active",
+          "created_at",
+          "expiration_date"
+        ],
+        "type": "object"
+      },
       "users.UserListResponse": {
         "additionalProperties": false,
         "properties": {
@@ -16644,7 +16811,7 @@
           },
           "users": {
             "items": {
-              "$ref": "#/components/schemas/core.User"
+              "$ref": "#/components/schemas/users.UserListItem"
             },
             "type": "array"
           }
@@ -16658,6 +16825,40 @@
         ],
         "type": "object"
       },
+      "users.UserRoleCount": {
+        "additionalProperties": false,
+        "properties": {
+          "count": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "key": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "key",
+          "count"
+        ],
+        "type": "object"
+      },
+      "users.UserRoleRef": {
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "name"
+        ],
+        "type": "object"
+      },
       "users.UserStatsResponse": {
         "additionalProperties": false,
         "properties": {
@@ -16665,11 +16866,21 @@
             "format": "int64",
             "type": "integer"
           },
+          "by_role": {
+            "items": {
+              "$ref": "#/components/schemas/users.UserRoleCount"
+            },
+            "type": "array"
+          },
           "expired": {
             "format": "int64",
             "type": "integer"
           },
           "inactive": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "pending": {
             "format": "int64",
             "type": "integer"
           },
@@ -16682,7 +16893,9 @@
           "total",
           "active",
           "inactive",
-          "expired"
+          "expired",
+          "by_role",
+          "pending"
         ],
         "type": "object"
       }
@@ -22242,6 +22455,7 @@
     },
     "/api/v1/permissions": {
       "get": {
+        "description": "Each section with its read and write permission codes: \"Ver\" is the read ones, \"Editar\" all of them",
         "operationId": "tenancy.ListAvailablePermissions",
         "parameters": [
           {
@@ -22258,16 +22472,14 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "items": {
-                    "$ref": "#/components/schemas/tenancy.AvailablePermission"
-                  },
-                  "type": "array"
+                  "$ref": "#/components/schemas/tenancy.PermissionCatalog"
                 }
               }
             },
             "description": "OK"
           }
         },
+        "summary": "List the roles screen's sections",
         "tags": [
           "tenancy"
         ],
@@ -29055,6 +29267,54 @@
           "tracking"
         ],
         "x-handler": "josex/web/modules/tracking/controllers.(*TrackingController).ApplyOptimizationRun"
+      }
+    },
+    "/api/v1/tracking/organization-memberships": {
+      "get": {
+        "description": "One row per client each user belongs to: the scope column of the users list",
+        "operationId": "tracking.ListOrganizationMemberships",
+        "parameters": [
+          {
+            "description": "Comma-separated user ids, at most 100",
+            "explode": false,
+            "in": "query",
+            "name": "user_ids",
+            "schema": {
+              "description": "Comma-separated user ids, at most 100",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/tracking.OrganizationMembership"
+                  },
+                  "type": "array"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/core.ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad Request"
+          }
+        },
+        "summary": "List the clients of a page of users",
+        "tags": [
+          "tracking"
+        ],
+        "x-handler": "josex/web/modules/tracking/controllers.(*TrackingController).ListOrganizationMemberships"
       }
     },
     "/api/v1/tracking/organization/absent": {
@@ -36595,13 +36855,33 @@
             }
           },
           {
-            "description": "portal, driver, organization or web; any other value is a 400",
+            "description": "portal, driver, organization, web or admin; any other value is a 400. With none, the app-only portal and driver accounts stay out",
             "explode": false,
             "in": "query",
             "name": "level",
             "schema": {
-              "description": "portal, driver, organization or web; any other value is a 400",
+              "description": "portal, driver, organization, web or admin; any other value is a 400. With none, the app-only portal and driver accounts stay out",
               "type": "string"
+            }
+          },
+          {
+            "description": "Only the holders of this role",
+            "explode": false,
+            "in": "query",
+            "name": "role_id",
+            "schema": {
+              "description": "Only the holders of this role",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Only the people who never signed in",
+            "explode": false,
+            "in": "query",
+            "name": "pending",
+            "schema": {
+              "description": "Only the people who never signed in",
+              "type": "boolean"
             }
           }
         ],
@@ -37074,6 +37354,72 @@
           "users"
         ],
         "x-handler": "josex/web/modules/users/controllers.(*UserController).Update"
+      }
+    },
+    "/api/v1/users/{id}/invitation": {
+      "post": {
+        "description": "To someone of this workspace who never signed in",
+        "operationId": "users.ResendInvitation",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "202": {
+            "description": "Accepted"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/core.ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/core.ErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/core.ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/core.ErrorResponse"
+                }
+              }
+            },
+            "description": "Conflict"
+          }
+        },
+        "summary": "Send the invitation again",
+        "tags": [
+          "users"
+        ],
+        "x-handler": "josex/web/modules/users/controllers.(*UserController).ResendInvitation"
       }
     },
     "/api/v1/users/{id}/reset-password": {

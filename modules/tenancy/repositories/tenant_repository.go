@@ -7,6 +7,7 @@ import (
 	"josex/web/modules/core/services"
 	"josex/web/modules/tenancy/interfaces"
 	"josex/web/modules/tenancy/models"
+	permRegistry "josex/web/modules/tenancy/permissions"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
@@ -26,14 +27,15 @@ func NewTenantRepository(dbService services.DatabaseService) interfaces.TenantRe
 func (r *tenantRepository) CreateTenant(ctx context.Context, dto *models.CreateTenantDto, creatorUserID uuid.UUID) (*models.Tenant, error) {
 	tenant := &models.Tenant{}
 	query := `
-		SELECT * FROM tenancy.sp_create_tenant(
+		SELECT t.* FROM tenancy.sp_create_tenant(
 			p_slug := $1,
 			p_name := $2,
 			p_creator_user_id := $3,
 			p_database_url := $4,
 			p_schema_name := $5,
 			p_settings := $6
-		)
+		) t
+		CROSS JOIN LATERAL tenancy.sp_seed_operator_role(t.id, $7)
 	`
 
 	// Default values
@@ -61,6 +63,7 @@ func (r *tenantRepository) CreateTenant(ctx context.Context, dto *models.CreateT
 		dto.DatabaseURL,
 		schemaName,
 		settings,
+		permRegistry.OperatorCodes(),
 	}
 
 	row := r.dbService.QueryRow(ctx, query, params...)

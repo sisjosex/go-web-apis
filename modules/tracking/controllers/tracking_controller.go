@@ -2096,6 +2096,37 @@ func (ctrl *TrackingController) ListOrganizationMembers(ctx context.Context, in 
 	return api.OK(members)
 }
 
+// ListOrganizationMembershipsInput is ListOrganizationMemberships's request.
+type ListOrganizationMembershipsInput struct {
+	UserIDs string `query:"user_ids" doc:"Comma-separated user ids, at most 100"`
+}
+
+// ListOrganizationMemberships is GET /organization-memberships: the clients each of a page of users belongs to.
+func (ctrl *TrackingController) ListOrganizationMemberships(ctx context.Context, in *ListOrganizationMembershipsInput) (*api.Out[[]models.OrganizationMembership], error) {
+	c := api.Gin(ctx)
+	tenantID, err := ctrl.requireTenantID(c)
+	if err != nil {
+		return nil, err
+	}
+	parts := strings.Split(in.UserIDs, ",")
+	if len(parts) > 100 {
+		return nil, api.Fail(http.StatusBadRequest, coreErrors.BuildErrorSingle(c, coreErrors.InvalidUUID))
+	}
+	userIDs := make([]uuid.UUID, 0, len(parts))
+	for _, part := range parts {
+		id, err := uuid.Parse(strings.TrimSpace(part))
+		if err != nil {
+			return nil, api.Fail(http.StatusBadRequest, coreErrors.BuildErrorSingle(c, coreErrors.InvalidUUID))
+		}
+		userIDs = append(userIDs, id)
+	}
+	memberships, err := ctrl.trackingService.ListOrganizationMemberships(c.Request.Context(), tenantID, userIDs)
+	if err != nil {
+		return nil, api.Fail(http.StatusInternalServerError, coreErrors.BuildError(c, err))
+	}
+	return api.OK(memberships)
+}
+
 // TrackingControllerUpsertOrganizationMemberInput is UpsertOrganizationMember's request.
 type TrackingControllerUpsertOrganizationMemberInput struct {
 	OrganizationID string `path:"organization_id"`

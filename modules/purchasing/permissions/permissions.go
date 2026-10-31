@@ -29,18 +29,19 @@ const (
 )
 
 func init() {
+	permRegistry.RegisterSections("purchasing", "purchases")
 	permRegistry.Register([]models.AvailablePermission{
-		{Code: SuppliersRead, Module: "purchasing", Name: "permission.purchasing.suppliers-read", Description: "permission.purchasing.suppliers-read.description"},
-		{Code: SuppliersWrite, Module: "purchasing", Name: "permission.purchasing.suppliers-write", Description: "permission.purchasing.suppliers-write.description"},
-		{Code: OrdersRead, Module: "purchasing", Name: "permission.purchasing.orders-read", Description: "permission.purchasing.orders-read.description"},
-		{Code: OrdersCreate, Module: "purchasing", Name: "permission.purchasing.orders-create", Description: "permission.purchasing.orders-create.description"},
-		{Code: OrdersApprove, Module: "purchasing", Name: "permission.purchasing.orders-approve", Description: "permission.purchasing.orders-approve.description"},
-		{Code: OrdersReceive, Module: "purchasing", Name: "permission.purchasing.orders-receive", Description: "permission.purchasing.orders-receive.description"},
-		{Code: InvoicesManage, Module: "purchasing", Name: "permission.purchasing.invoices-manage", Description: "permission.purchasing.invoices-manage.description"},
-		{Code: RFQRead, Module: "purchasing", Name: "permission.purchasing.rfq-read", Description: "permission.purchasing.rfq-read.description"},
-		{Code: RFQManage, Module: "purchasing", Name: "permission.purchasing.rfq-manage", Description: "permission.purchasing.rfq-manage.description"},
-		{Code: BatchesRead, Module: "purchasing", Name: "permission.purchasing.batches-read", Description: "permission.purchasing.batches-read.description"},
-		{Code: BatchesCreate, Module: "purchasing", Name: "permission.purchasing.batches-create", Description: "permission.purchasing.batches-create.description"},
-		{Code: ReportsRead, Module: "purchasing", Name: "permission.purchasing.reports-read", Description: "permission.purchasing.reports-read.description"},
+		{Code: SuppliersRead, Module: "purchasing", Name: "permission.purchasing.suppliers-read", Description: "permission.purchasing.suppliers-read.description", Section: "purchases", Access: models.AccessRead},
+		{Code: SuppliersWrite, Module: "purchasing", Name: "permission.purchasing.suppliers-write", Description: "permission.purchasing.suppliers-write.description", Section: "purchases", Access: models.AccessWrite},
+		{Code: OrdersRead, Module: "purchasing", Name: "permission.purchasing.orders-read", Description: "permission.purchasing.orders-read.description", Section: "purchases", Access: models.AccessRead},
+		{Code: OrdersCreate, Module: "purchasing", Name: "permission.purchasing.orders-create", Description: "permission.purchasing.orders-create.description", Section: "purchases", Access: models.AccessWrite},
+		{Code: OrdersApprove, Module: "purchasing", Name: "permission.purchasing.orders-approve", Description: "permission.purchasing.orders-approve.description", Section: "purchases", Access: models.AccessWrite},
+		{Code: OrdersReceive, Module: "purchasing", Name: "permission.purchasing.orders-receive", Description: "permission.purchasing.orders-receive.description", Section: "purchases", Access: models.AccessWrite},
+		{Code: InvoicesManage, Module: "purchasing", Name: "permission.purchasing.invoices-manage", Description: "permission.purchasing.invoices-manage.description", Section: "purchases", Access: models.AccessWrite},
+		{Code: RFQRead, Module: "purchasing", Name: "permission.purchasing.rfq-read", Description: "permission.purchasing.rfq-read.description", Section: "purchases", Access: models.AccessRead},
+		{Code: RFQManage, Module: "purchasing", Name: "permission.purchasing.rfq-manage", Description: "permission.purchasing.rfq-manage.description", Section: "purchases", Access: models.AccessWrite},
+		{Code: BatchesRead, Module: "purchasing", Name: "permission.purchasing.batches-read", Description: "permission.purchasing.batches-read.description", Section: "purchases", Access: models.AccessRead},
+		{Code: BatchesCreate, Module: "purchasing", Name: "permission.purchasing.batches-create", Description: "permission.purchasing.batches-create.description", Section: "purchases", Access: models.AccessWrite},
+		{Code: ReportsRead, Module: "purchasing", Name: "permission.purchasing.reports-read", Description: "permission.purchasing.reports-read.description", Section: "purchases", Access: models.AccessRead},
 	})
 }

@@ -2620,13 +2620,16 @@
       "handler": "josex/web/modules/tenancy/controllers.(*TenantController).CreateTenant",
       "sps": [
         "tenancy.sp_create_tenant",
-        "tenancy.sp_free_tenant_slug"
+        "tenancy.sp_free_tenant_slug",
+        "tenancy.sp_seed_operator_role"
       ],
       "reads": [
         "auth.users",
         "tenancy.tenants"
       ],
       "writes": [
+        "tenancy.role_permissions",
+        "tenancy.roles",
         "tenancy.tenant_users",
         "tenancy.tenants"
       ]
@@ -2677,7 +2680,8 @@
         "billing.sp_get_plan_info",
         "tenancy.sp_count_user_owned_tenants",
         "tenancy.sp_create_tenant",
-        "tenancy.sp_free_tenant_slug"
+        "tenancy.sp_free_tenant_slug",
+        "tenancy.sp_seed_operator_role"
       ],
       "reads": [
         "auth.users",
@@ -2687,6 +2691,8 @@
         "tenancy.tenants"
       ],
       "writes": [
+        "tenancy.role_permissions",
+        "tenancy.roles",
         "tenancy.tenant_users",
         "tenancy.tenants"
       ]
@@ -4074,6 +4080,21 @@
         "tracking.routes",
         "tracking.stop_places"
       ]
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/tracking/organization-memberships",
+      "operation_id": "tracking.ListOrganizationMemberships",
+      "module": "tracking",
+      "handler": "josex/web/modules/tracking/controllers.(*TrackingController).ListOrganizationMemberships",
+      "sps": [
+        "tracking.sp_list_organization_memberships"
+      ],
+      "reads": [
+        "tracking.organization_members",
+        "tracking.organizations"
+      ],
+      "writes": []
     },
     {
       "method": "GET",
@@ -6422,8 +6443,13 @@
       ],
       "reads": [
         "auth.user_profile",
+        "auth.user_sessions",
         "auth.users",
-        "tenancy.tenant_users"
+        "tenancy.role_permissions",
+        "tenancy.roles",
+        "tenancy.tenant_modules",
+        "tenancy.tenant_users",
+        "tenancy.user_roles"
       ],
       "writes": []
     },
@@ -6436,17 +6462,21 @@
       "sps": [
         "public.fn_within_limit",
         "tenancy.sp_add_user_to_tenant",
+        "tenancy.sp_assign_user_role",
         "users.sp_create_user",
         "users.sp_record_user_audit"
       ],
       "reads": [
         "auth.user_profile",
         "auth.users",
+        "tenancy.roles",
+        "tenancy.tenant_users",
         "tenancy.tenants"
       ],
       "writes": [
         "auth.users",
         "tenancy.tenant_users",
+        "tenancy.user_roles",
         "users.user_audit_log"
       ]
     },
@@ -6475,8 +6505,11 @@
         "users.sp_get_user_stats"
       ],
       "reads": [
+        "auth.user_sessions",
         "auth.users",
-        "tenancy.tenant_users"
+        "tenancy.roles",
+        "tenancy.tenant_users",
+        "tenancy.user_roles"
       ],
       "writes": []
     },
@@ -6529,6 +6562,22 @@
       "writes": [
         "auth.users"
       ]
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/users/{id}/invitation",
+      "operation_id": "users.ResendInvitation",
+      "module": "users",
+      "handler": "josex/web/modules/users/controllers.(*UserController).ResendInvitation",
+      "sps": [
+        "users.sp_user_invitation_target"
+      ],
+      "reads": [
+        "auth.user_sessions",
+        "auth.users",
+        "tenancy.tenant_users"
+      ],
+      "writes": []
     },
     {
       "method": "POST",
@@ -8348,6 +8397,14 @@
       ],
       "calls": []
     },
+    "tenancy.sp_seed_operator_role": {
+      "reads": [],
+      "writes": [
+        "tenancy.role_permissions",
+        "tenancy.roles"
+      ],
+      "calls": []
+    },
     "tenancy.sp_set_role_permissions": {
       "reads": [
         "tenancy.roles",
@@ -10090,6 +10147,14 @@
         "tracking.fn_organization_scope"
       ]
     },
+    "tracking.sp_list_organization_memberships": {
+      "reads": [
+        "tracking.organization_members",
+        "tracking.organizations"
+      ],
+      "writes": [],
+      "calls": []
+    },
     "tracking.sp_list_organizations": {
       "reads": [
         "tracking.organization_members",
@@ -11447,8 +11512,11 @@
     },
     "users.sp_get_user_stats": {
       "reads": [
+        "auth.user_sessions",
         "auth.users",
-        "tenancy.tenant_users"
+        "tenancy.roles",
+        "tenancy.tenant_users",
+        "tenancy.user_roles"
       ],
       "writes": [],
       "calls": []
@@ -11464,8 +11532,13 @@
     "users.sp_list_users": {
       "reads": [
         "auth.user_profile",
+        "auth.user_sessions",
         "auth.users",
-        "tenancy.tenant_users"
+        "tenancy.role_permissions",
+        "tenancy.roles",
+        "tenancy.tenant_modules",
+        "tenancy.tenant_users",
+        "tenancy.user_roles"
       ],
       "writes": [],
       "calls": []
@@ -11494,6 +11567,15 @@
       "writes": [
         "auth.users"
       ],
+      "calls": []
+    },
+    "users.sp_user_invitation_target": {
+      "reads": [
+        "auth.user_sessions",
+        "auth.users",
+        "tenancy.tenant_users"
+      ],
+      "writes": [],
       "calls": []
     },
     "users.trg_fn_audit_user_update": {
