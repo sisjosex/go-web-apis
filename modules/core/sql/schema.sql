@@ -23,6 +23,25 @@ CREATE SCHEMA core;
 
 
 --
+-- Name: document_counters; Type: TABLE; Schema: core; Owner: -
+--
+
+CREATE TABLE core.document_counters (
+    tenant_id uuid NOT NULL,
+    series character varying(80) NOT NULL,
+    year integer DEFAULT 0 NOT NULL,
+    next_value bigint NOT NULL
+);
+
+
+--
+-- Name: TABLE document_counters; Type: COMMENT; Schema: core; Owner: -
+--
+
+COMMENT ON TABLE core.document_counters IS 'The last number issued per tenant, series and year; written only by core.fn_next_document_number.';
+
+
+--
 -- Name: settings; Type: TABLE; Schema: core; Owner: -
 --
 
@@ -43,6 +62,14 @@ CREATE TABLE core.settings (
 --
 
 COMMENT ON TABLE core.settings IS 'Configuration values grouped by module/section, loaded at boot; env vars are the fallback.';
+
+
+--
+-- Name: document_counters document_counters_pkey; Type: CONSTRAINT; Schema: core; Owner: -
+--
+
+ALTER TABLE ONLY core.document_counters
+    ADD CONSTRAINT document_counters_pkey PRIMARY KEY (tenant_id, series, year);
 
 
 --

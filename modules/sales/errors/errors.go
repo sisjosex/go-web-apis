@@ -1,5 +1,11 @@
 package errors
 
+import (
+	"net/http"
+
+	coreErrors "josex/web/modules/core/errors"
+)
+
 // Sales module error constants
 const (
 	// Customer errors
@@ -42,3 +48,9 @@ const (
 	ProductBatchNotFound      = "product-batch.not-found"
 	BatchInsufficientQuantity = "batch.insufficient-quantity"
 )
+
+// The sales codes whose name does not tell their status (CORE-001).
+func init() {
+	coreErrors.RegisterStatus("sales-order.cannot-modify", http.StatusConflict)
+	coreErrors.RegisterStatus("sales-order.empty-items", http.StatusBadRequest)
+}

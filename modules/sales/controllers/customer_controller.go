@@ -10,7 +10,6 @@ import (
 	coreErrors "josex/web/modules/core/errors"
 	"josex/web/modules/sales/interfaces"
 	"josex/web/modules/sales/models"
-	"josex/web/modules/sales/utils"
 )
 
 // CustomerController handles customer HTTP requests
@@ -54,7 +53,7 @@ func (ctrl *CustomerController) CreateCustomer(ctx context.Context, in *CreateCu
 
 	customer, err := ctrl.service.CreateCustomer(c.Request.Context(), tenantID, &dto)
 	if err != nil {
-		status := utils.GetHTTPStatusFromError(err)
+		status := coreErrors.StatusOf(err)
 		return nil, api.Fail(status, coreErrors.BuildError(c, err))
 	}
 
@@ -90,7 +89,7 @@ func (ctrl *CustomerController) GetCustomer(ctx context.Context, in *GetCustomer
 
 	customer, err := ctrl.service.GetCustomerByID(c.Request.Context(), tenantID, id)
 	if err != nil {
-		status := utils.GetHTTPStatusFromError(err)
+		status := coreErrors.StatusOf(err)
 		return nil, api.Fail(status, coreErrors.BuildError(c, err))
 	}
 
@@ -132,7 +131,7 @@ func (ctrl *CustomerController) UpdateCustomer(ctx context.Context, in *UpdateCu
 
 	customer, err := ctrl.service.UpdateCustomer(c.Request.Context(), tenantID, id, &dto)
 	if err != nil {
-		status := utils.GetHTTPStatusFromError(err)
+		status := coreErrors.StatusOf(err)
 		return nil, api.Fail(status, coreErrors.BuildError(c, err))
 	}
 
@@ -163,7 +162,7 @@ func (ctrl *CustomerController) DeleteCustomer(ctx context.Context, in *DeleteCu
 
 	err = ctrl.service.DeleteCustomer(c.Request.Context(), tenantID, id)
 	if err != nil {
-		status := utils.GetHTTPStatusFromError(err)
+		status := coreErrors.StatusOf(err)
 		return nil, api.Fail(status, coreErrors.BuildError(c, err))
 	}
 

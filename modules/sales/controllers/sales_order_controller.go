@@ -16,7 +16,6 @@ import (
 	salesErrors "josex/web/modules/sales/errors"
 	"josex/web/modules/sales/interfaces"
 	"josex/web/modules/sales/models"
-	"josex/web/modules/sales/utils"
 )
 
 // SalesOrderController handles sales order HTTP requests
@@ -60,7 +59,7 @@ func (ctrl *SalesOrderController) CreateSalesOrder(ctx context.Context, in *Crea
 
 	order, err := ctrl.service.CreateSalesOrder(c.Request.Context(), tenantID, &dto)
 	if err != nil {
-		status := utils.GetHTTPStatusFromError(err)
+		status := coreErrors.StatusOf(err)
 		return nil, api.Fail(status, coreErrors.BuildError(c, err))
 	}
 
@@ -96,7 +95,7 @@ func (ctrl *SalesOrderController) GetSalesOrder(ctx context.Context, in *GetSale
 
 	order, err := ctrl.service.GetSalesOrderByID(c.Request.Context(), tenantID, id)
 	if err != nil {
-		status := utils.GetHTTPStatusFromError(err)
+		status := coreErrors.StatusOf(err)
 		return nil, api.Fail(status, coreErrors.BuildError(c, err))
 	}
 
@@ -145,7 +144,7 @@ func (ctrl *SalesOrderController) ListSalesOrders(ctx context.Context, in *ListS
 
 	orders, err := ctrl.service.GetAllSalesOrders(c.Request.Context(), tenantID, limit, offset)
 	if err != nil {
-		status := utils.GetHTTPStatusFromError(err)
+		status := coreErrors.StatusOf(err)
 		return nil, api.Fail(status, coreErrors.BuildError(c, err))
 	}
 
@@ -187,7 +186,7 @@ func (ctrl *SalesOrderController) UpdateSalesOrder(ctx context.Context, in *Upda
 
 	order, err := ctrl.service.UpdateSalesOrder(c.Request.Context(), tenantID, id, &dto)
 	if err != nil {
-		status := utils.GetHTTPStatusFromError(err)
+		status := coreErrors.StatusOf(err)
 		return nil, api.Fail(status, coreErrors.BuildError(c, err))
 	}
 
@@ -231,7 +230,7 @@ func (ctrl *SalesOrderController) AddOrderItem(ctx context.Context, in *AddOrder
 
 	item, err := ctrl.service.AddOrderItemWithBatch(c.Request.Context(), tenantID, inventoryUtils.TenantToday(c), orderID, dto.ProductID, dto.Quantity, dto.UnitPrice, dto.SkuID)
 	if err != nil {
-		// GetHTTPStatusFromError knows nothing about the INV-010 codes, and
+		// StatusOf knows nothing about the INV-010 codes, and
 		// sku-required matches none of its patterns, so it would fall through
 		// to 500 for what is a plain client mistake.
 		var pgErr *pgconn.PgError
@@ -244,7 +243,7 @@ func (ctrl *SalesOrderController) AddOrderItem(ctx context.Context, in *AddOrder
 			}
 		}
 
-		status := utils.GetHTTPStatusFromError(err)
+		status := coreErrors.StatusOf(err)
 		return nil, api.Fail(status, coreErrors.BuildError(c, err))
 	}
 
@@ -280,7 +279,7 @@ func (ctrl *SalesOrderController) CompleteOrder(ctx context.Context, in *Complet
 
 	order, err := ctrl.service.CompleteOrder(c.Request.Context(), tenantID, orderID)
 	if err != nil {
-		status := utils.GetHTTPStatusFromError(err)
+		status := coreErrors.StatusOf(err)
 		return nil, api.Fail(status, coreErrors.BuildError(c, err))
 	}
 
@@ -318,7 +317,7 @@ func (ctrl *SalesOrderController) CancelOrder(ctx context.Context, in *CancelOrd
 
 	order, err := ctrl.service.CancelOrder(c.Request.Context(), tenantID, orderID)
 	if err != nil {
-		status := utils.GetHTTPStatusFromError(err)
+		status := coreErrors.StatusOf(err)
 		return nil, api.Fail(status, coreErrors.BuildError(c, err))
 	}
 
@@ -354,7 +353,7 @@ func (ctrl *SalesOrderController) GetOrderWithBatches(ctx context.Context, in *G
 
 	order, err := ctrl.service.GetOrderWithBatches(c.Request.Context(), tenantID, orderID)
 	if err != nil {
-		status := utils.GetHTTPStatusFromError(err)
+		status := coreErrors.StatusOf(err)
 		return nil, api.Fail(status, coreErrors.BuildError(c, err))
 	}
 
@@ -405,7 +404,7 @@ func (ctrl *SalesOrderController) GetSalesReport(ctx context.Context, in *GetSal
 
 	reports, err := ctrl.service.GetSalesReport(c.Request.Context(), tenantID, startDate, endDate)
 	if err != nil {
-		status := utils.GetHTTPStatusFromError(err)
+		status := coreErrors.StatusOf(err)
 		return nil, api.Fail(status, coreErrors.BuildError(c, err))
 	}
 
@@ -443,7 +442,7 @@ func (ctrl *SalesOrderController) CreateReturn(ctx context.Context, in *CreateRe
 
 	ret, err := ctrl.service.CreateReturn(c.Request.Context(), tenantID, dto.OrderID, dto.Reason)
 	if err != nil {
-		status := utils.GetHTTPStatusFromError(err)
+		status := coreErrors.StatusOf(err)
 		return nil, api.Fail(status, coreErrors.BuildError(c, err))
 	}
 
@@ -479,7 +478,7 @@ func (ctrl *SalesOrderController) ApproveReturn(ctx context.Context, in *Approve
 
 	ret, err := ctrl.service.ApproveReturn(c.Request.Context(), tenantID, returnID)
 	if err != nil {
-		status := utils.GetHTTPStatusFromError(err)
+		status := coreErrors.StatusOf(err)
 		return nil, api.Fail(status, coreErrors.BuildError(c, err))
 	}
 
@@ -520,7 +519,7 @@ func (ctrl *SalesOrderController) GetReturns(ctx context.Context, in *GetReturns
 
 	returns, err := ctrl.service.GetReturnsByOrder(c.Request.Context(), tenantID, orderID)
 	if err != nil {
-		status := utils.GetHTTPStatusFromError(err)
+		status := coreErrors.StatusOf(err)
 		return nil, api.Fail(status, coreErrors.BuildError(c, err))
 	}
 
@@ -556,7 +555,7 @@ func (ctrl *SalesOrderController) CreatePayment(ctx context.Context, in *CreateP
 
 	payment, err := ctrl.service.CreatePayment(c.Request.Context(), tenantID, dto.OrderID, dto.Amount, dto.PaymentMethod, dto.ReferenceNumber, dto.Notes)
 	if err != nil {
-		status := utils.GetHTTPStatusFromError(err)
+		status := coreErrors.StatusOf(err)
 		return nil, api.Fail(status, coreErrors.BuildError(c, err))
 	}
 
@@ -597,7 +596,7 @@ func (ctrl *SalesOrderController) GetPayments(ctx context.Context, in *GetPaymen
 
 	payments, err := ctrl.service.GetPayments(c.Request.Context(), tenantID, orderID)
 	if err != nil {
-		status := utils.GetHTTPStatusFromError(err)
+		status := coreErrors.StatusOf(err)
 		return nil, api.Fail(status, coreErrors.BuildError(c, err))
 	}
 
