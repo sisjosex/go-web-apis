@@ -1,4 +1,9 @@
 {
+  "inventory.export.valuation.sku": "Código",
+  "inventory.export.valuation.name": "Producto",
+  "inventory.export.valuation.quantity": "Cantidad",
+  "inventory.export.valuation.unit_cost": "Costo unitario",
+  "inventory.export.valuation.value": "Valor",
   "inventory.attribute.not-found": "Ese atributo no existe",
   "inventory.attribute.invalid": "Ese valor no corresponde al atributo",
   "inventory.attribute.in-use": "Hay productos que usan este atributo o valor",

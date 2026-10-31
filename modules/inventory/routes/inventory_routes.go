@@ -26,6 +26,7 @@ type InventoryServices struct {
 	Sku       inventoryInterfaces.SkuService
 	Batch     inventoryInterfaces.BatchService
 	Unit      inventoryInterfaces.UnitRepository
+	Valuation inventoryInterfaces.ValuationRepository
 	Attribute inventoryInterfaces.AttributeRepository
 	// ImportLookup is the read-only repository the import descriptors resolve
 	// and preview rows through (INV-017 D1); no route of this module uses it.
@@ -51,6 +52,7 @@ func NewInventoryServices(dbService coreServices.DatabaseService, media coreServ
 		Sku:       inventoryServices.NewSkuService(skuRepo, appConfig.GetConfig().Inventory, nil),
 		Batch:     inventoryServices.NewBatchService(batchRepo),
 		Unit:      repositories.NewUnitRepository(dbService),
+		Valuation: repositories.NewValuationRepository(dbService),
 		Attribute: repositories.NewAttributeRepository(dbService),
 
 		ImportLookup: repositories.NewImportLookupRepository(dbService),
@@ -72,6 +74,11 @@ func RegisterInventoryRoutes(
 	batchController := controllers.NewBatchController(services.Batch)
 
 	inventory := router.Group("/inventory", authMiddleware, tenantMiddleware)
+
+	// What the stock is worth (INV-022).
+	valuationController := controllers.NewValuationController(services.Valuation)
+	api.Get(inventory, "/reports/valuation", valuationController.Valuation, api.Doc{Summary: "What the stock is worth", Description: "A page of products at cost, highest value first, with the total and how many have no cost"}, tenancyMW.RequirePermission(inventoryPerms.StockRead))
+	api.Get(inventory, "/export/valuation", valuationController.ExportValuation, api.Doc{Summary: "Download the valuation as CSV", Description: "The same rows, at most 50 000", Errors: []int{400, 422}}, tenancyMW.RequirePermission(inventoryPerms.StockRead))
 
 	// Attributes, what a category brings, the categories' order and the list's facets (INV-024).
 	attributeController := controllers.NewAttributeController(services.Attribute)

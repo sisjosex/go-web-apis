@@ -1454,6 +1454,24 @@
     },
     {
       "method": "GET",
+      "path": "/api/v1/inventory/export/valuation",
+      "operation_id": "inventory.ExportValuation",
+      "module": "inventory",
+      "handler": "josex/web/modules/inventory/controllers.(*ValuationController).ExportValuation",
+      "sps": [
+        "inventory.sp_inventory_valuation"
+      ],
+      "reads": [
+        "inventory.inventory_movements",
+        "inventory.product_batches",
+        "inventory.product_category_mapping",
+        "inventory.product_stock",
+        "inventory.products"
+      ],
+      "writes": []
+    },
+    {
+      "method": "GET",
       "path": "/api/v1/inventory/movements",
       "operation_id": "inventory.ListMovements",
       "module": "inventory",
@@ -1892,6 +1910,24 @@
       "writes": [
         "inventory.product_stock"
       ]
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/inventory/reports/valuation",
+      "operation_id": "inventory.Valuation",
+      "module": "inventory",
+      "handler": "josex/web/modules/inventory/controllers.(*ValuationController).Valuation",
+      "sps": [
+        "inventory.sp_inventory_valuation"
+      ],
+      "reads": [
+        "inventory.inventory_movements",
+        "inventory.product_batches",
+        "inventory.product_category_mapping",
+        "inventory.product_stock",
+        "inventory.products"
+      ],
+      "writes": []
     },
     {
       "method": "POST",
@@ -7593,6 +7629,14 @@
       "writes": [],
       "calls": []
     },
+    "inventory.fn_sku_unit_cost": {
+      "reads": [
+        "inventory.inventory_movements",
+        "inventory.product_batches"
+      ],
+      "writes": [],
+      "calls": []
+    },
     "inventory.fn_stock_status": {
       "reads": [],
       "writes": [],
@@ -7964,6 +8008,17 @@
       ],
       "writes": [],
       "calls": []
+    },
+    "inventory.sp_inventory_valuation": {
+      "reads": [
+        "inventory.product_category_mapping",
+        "inventory.product_stock",
+        "inventory.products"
+      ],
+      "writes": [],
+      "calls": [
+        "inventory.fn_sku_unit_cost"
+      ]
     },
     "inventory.sp_list_attributes": {
       "reads": [

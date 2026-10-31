@@ -4694,6 +4694,83 @@
         ],
         "type": "object"
       },
+      "inventory.ValuationItem": {
+        "additionalProperties": false,
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "product_id": {
+            "type": "string"
+          },
+          "quantity": {
+            "format": "double",
+            "type": "number"
+          },
+          "sku": {
+            "type": "string"
+          },
+          "unit_cost": {
+            "format": "double",
+            "nullable": true,
+            "type": "number"
+          },
+          "value": {
+            "format": "double",
+            "nullable": true,
+            "type": "number"
+          }
+        },
+        "required": [
+          "product_id",
+          "sku",
+          "name",
+          "quantity",
+          "unit_cost",
+          "value"
+        ],
+        "type": "object"
+      },
+      "inventory.ValuationResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/inventory.ValuationItem"
+            },
+            "type": "array"
+          },
+          "page": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "page_size": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "total_count": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "total_value": {
+            "format": "double",
+            "type": "number"
+          },
+          "uncosted_count": {
+            "format": "int64",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "items",
+          "total_value",
+          "uncosted_count",
+          "total_count",
+          "page",
+          "page_size"
+        ],
+        "type": "object"
+      },
       "inventory.VariantGroup": {
         "additionalProperties": false,
         "properties": {
@@ -22039,6 +22116,73 @@
         "x-handler": "josex/web/modules/inventory/controllers.(*ExportController).ExportProducts"
       }
     },
+    "/api/v1/inventory/export/valuation": {
+      "get": {
+        "description": "The same rows, at most 50 000",
+        "operationId": "inventory.ExportValuation",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "category_id",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "page",
+            "schema": {
+              "default": "1",
+              "format": "int64",
+              "minimum": 1,
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "page_size",
+            "schema": {
+              "default": "20",
+              "format": "int64",
+              "maximum": 100,
+              "minimum": 1,
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/core.ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/core.ErrorResponse"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          }
+        },
+        "summary": "Download the valuation as CSV",
+        "tags": [
+          "inventory"
+        ],
+        "x-handler": "josex/web/modules/inventory/controllers.(*ValuationController).ExportValuation"
+      }
+    },
     "/api/v1/inventory/movements": {
       "get": {
         "description": "Paginated movement history, optionally filtered by product, type and date range",
@@ -23466,6 +23610,60 @@
           "inventory"
         ],
         "x-handler": "josex/web/modules/inventory/controllers.(*StockController).ReleaseReservedStock"
+      }
+    },
+    "/api/v1/inventory/reports/valuation": {
+      "get": {
+        "description": "A page of products at cost, highest value first, with the total and how many have no cost",
+        "operationId": "inventory.Valuation",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "category_id",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "page",
+            "schema": {
+              "default": "1",
+              "format": "int64",
+              "minimum": 1,
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "page_size",
+            "schema": {
+              "default": "20",
+              "format": "int64",
+              "maximum": 100,
+              "minimum": 1,
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/inventory.ValuationResponse"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "summary": "What the stock is worth",
+        "tags": [
+          "inventory"
+        ],
+        "x-handler": "josex/web/modules/inventory/controllers.(*ValuationController).Valuation"
       }
     },
     "/api/v1/inventory/reserve": {
