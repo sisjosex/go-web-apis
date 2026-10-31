@@ -12,8 +12,9 @@ COPY . .
 # Static and stripped: no libc at runtime, no symbol table, no build paths.
 # noswagger: no /docs or /openapi.json in production — the contract maps the whole API (routes/swagger.go).
 # noasynqmon: no jobs UI either, ~7 MB less (core/jobs/monitor.go, INFRA-011).
-RUN CGO_ENABLED=0 go build -trimpath -tags noswagger,noasynqmon -ldflags="-s -w" -o app ./cmd/server \
- && CGO_ENABLED=0 go build -trimpath -tags noswagger,noasynqmon -ldflags="-s -w" -o cli ./cmd/cli
+# nomsgpack: Gin without its MessagePack codec (ugorji), ~7 MB less — the API speaks only JSON.
+RUN CGO_ENABLED=0 go build -trimpath -tags noswagger,noasynqmon,nomsgpack -ldflags="-s -w" -o app ./cmd/server \
+ && CGO_ENABLED=0 go build -trimpath -tags noswagger,noasynqmon,nomsgpack -ldflags="-s -w" -o cli ./cmd/cli
 # The only files either binary reads from disk: migrations, function files, translations, e-mail
 # templates.
 # The Go sources and the test media under modules/ stay behind.
