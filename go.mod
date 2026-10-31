@@ -3,6 +3,7 @@ module josex/web
 go 1.25.0
 
 require (
+	github.com/boombuler/barcode v1.1.0
 	github.com/buxizhizhoum/inflection v1.0.4
 	github.com/coder/websocket v1.8.15
 	github.com/danielgtaylor/huma/v2 v2.39.1
@@ -10,6 +11,7 @@ require (
 	github.com/didip/tollbooth_gin v0.0.0-20250404214326-bb1a1fc0384e
 	github.com/gin-contrib/cors v1.7.7
 	github.com/gin-gonic/gin v1.12.0
+	github.com/go-pdf/fpdf v0.9.0
 	github.com/go-playground/validator/v10 v10.30.3
 	github.com/go-redis/redis_rate/v10 v10.0.1
 	github.com/golang-jwt/jwt/v5 v5.2.1
@@ -24,10 +26,13 @@ require (
 	github.com/minio/minio-go/v7 v7.3.0
 	github.com/prometheus/client_golang v1.20.5
 	github.com/redis/go-redis/v9 v9.22.0
+	github.com/skip2/go-qrcode v0.0.0-20200617195104-da1b6568686e
 	github.com/sony/gobreaker/v2 v2.4.0
 	github.com/stretchr/testify v1.11.1
 	github.com/ua-parser/uap-go v0.0.0-20250213224047-9c035f085b90
+	github.com/xuri/excelize/v2 v2.9.1
 	golang.org/x/oauth2 v0.32.0
+	golang.org/x/text v0.41.0
 	golang.org/x/tools v0.48.0
 )
 
@@ -86,7 +91,6 @@ require (
 	github.com/twitchyliquid64/golang-asm v0.15.1 // indirect
 	github.com/ugorji/go/codec v1.3.1 // indirect
 	github.com/xuri/efp v0.0.1 // indirect
-	github.com/xuri/excelize/v2 v2.9.1 // indirect
 	github.com/xuri/nfp v0.0.1 // indirect
 	github.com/zeebo/xxh3 v1.1.0 // indirect
 	go.mongodb.org/mongo-driver/v2 v2.8.0 // indirect
@@ -98,7 +102,6 @@ require (
 	golang.org/x/net v0.58.0 // indirect
 	golang.org/x/sync v0.22.0 // indirect
 	golang.org/x/sys v0.47.0 // indirect
-	golang.org/x/text v0.41.0 // indirect
 	golang.org/x/time v0.14.0 // indirect
 	google.golang.org/protobuf v1.36.11 // indirect
 	gopkg.in/ini.v1 v1.67.3 // indirect

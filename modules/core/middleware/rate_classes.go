@@ -26,9 +26,10 @@ var loginRoutes = map[string]bool{
 // heavyRoutes are the requests that read or write thousands of rows at once — imports today, exports and
 // reports when they come: a tenant runs a few a minute, so one business's import never slows the rest.
 var heavyRoutes = map[string]bool{
-	"POST /api/v1/import":          true,
-	"POST /api/v1/import/detect":   true,
-	"POST /api/v1/import/validate": true,
+	"POST /api/v1/import":                  true,
+	"POST /api/v1/import/detect":           true,
+	"POST /api/v1/import/validate":         true,
+	"GET /api/v1/codes/barcode/:symbology": true,
 }
 
 // publicRoutes answer anyone holding a link, with no session (TRACK-060): a page polls them, so each

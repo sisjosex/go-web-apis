@@ -558,6 +558,16 @@
       "writes": []
     },
     {
+      "method": "GET",
+      "path": "/api/v1/codes/barcode/{symbology}",
+      "operation_id": "core.Barcode",
+      "module": "core",
+      "handler": "josex/web/modules/core/controllers.(*CodesController).Barcode",
+      "sps": [],
+      "reads": [],
+      "writes": []
+    },
+    {
       "method": "POST",
       "path": "/api/v1/geo/eta",
       "operation_id": "geo.Eta",

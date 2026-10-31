@@ -18260,6 +18260,88 @@
         "x-handler": "josex/web/modules/billing/controllers.(*BillingController).GetTenantUsage"
       }
     },
+    "/api/v1/codes/barcode/{symbology}": {
+      "get": {
+        "description": "An SVG of ean13 or code128 data, cacheable for a year",
+        "operationId": "core.Barcode",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "symbology",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "explode": false,
+            "in": "query",
+            "name": "data",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "explode": false,
+            "in": "query",
+            "name": "w",
+            "schema": {
+              "format": "int64",
+              "type": "integer"
+            }
+          },
+          {
+            "explode": false,
+            "in": "query",
+            "name": "h",
+            "schema": {
+              "format": "int64",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "format": "base64",
+                  "type": "string"
+                }
+              }
+            },
+            "description": "OK",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Content-Type": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/core.ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad Request"
+          }
+        },
+        "summary": "Draw a barcode",
+        "tags": [
+          "core"
+        ],
+        "x-handler": "josex/web/modules/core/controllers.(*CodesController).Barcode"
+      }
+    },
     "/api/v1/geo/eta": {
       "post": {
         "description": "estimate_source says how: valhalla, historical, or fallback (straight line at a fixed speed).",

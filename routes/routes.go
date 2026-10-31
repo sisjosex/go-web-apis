@@ -159,6 +159,7 @@ func SetupRoutes(r *gin.Engine, dbService coreServices.DatabaseService, valkey c
 	registerImport(d, chains, inventorySvcs)
 	registerGeo(d, chains)
 	coreRoutes.RegisterStorageRoutes(d.apiV1, coreControllers.NewStorageController(d.purposes), d.authMiddleware, chains.tenant)
+	coreRoutes.RegisterCodesRoutes(d.apiV1, coreControllers.NewCodesController(), d.authMiddleware, chains.tenant)
 
 	registerSwagger(r)
 }

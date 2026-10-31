@@ -1,5 +1,8 @@
 {
   "core.internal-error": "Algo salió mal, inténtalo de nuevo",
+  "codes.invalid-data": "Este dato no se puede convertir en ese código",
+  "export.failed": "No se pudo terminar la exportación",
+  "export.truncated": "Se alcanzó el tope de 50 000 filas: filtra la lista y exporta de nuevo",
   "storage.upload-invalid": "Este archivo no se puede subir: revisa su tipo y tamaño",
   "storage.upload-not-found": "No se encontró ese archivo o ya venció: vuelve a subirlo",
   "storage.file-invalid": "Este archivo no es la imagen que dice ser, o es demasiado grande",

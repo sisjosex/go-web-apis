@@ -1,5 +1,8 @@
 {
   "core.internal-error": "Something went wrong, please try again",
+  "codes.invalid-data": "This data cannot be turned into that code",
+  "export.failed": "The export could not finish",
+  "export.truncated": "The 50,000-row limit was reached: filter the list and export again",
   "storage.upload-invalid": "This file cannot be uploaded: check its type and size",
   "storage.upload-not-found": "That upload was not found or has expired: upload the file again",
   "storage.file-invalid": "This file is not the image it claims to be, or it is too large",
