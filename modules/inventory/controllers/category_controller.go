@@ -17,6 +17,9 @@ import (
 	"josex/web/modules/inventory/models"
 )
 
+// maxCategoryLimit caps every categories list (INV-020): a larger limit answers this many rows, not an error.
+const maxCategoryLimit = 100
+
 type CategoryController struct {
 	categoryService inventoryInterfaces.CategoryService
 }
@@ -50,6 +53,7 @@ func (ctrl *CategoryController) CreateCategory(ctx context.Context, in *CreateCa
 		return nil, api.Fail(http.StatusBadRequest, coreErrors.BuildErrorDetail(c, "validation.invalid", err.Error()))
 	}
 
+	dto.ActedBy = actingUser(c)
 	category, err := ctrl.categoryService.CreateCategory(c.Request.Context(), tenantID, &dto)
 	if err != nil {
 		var pgErr *pgconn.PgError
@@ -106,6 +110,7 @@ func (ctrl *CategoryController) UpdateCategory(ctx context.Context, in *UpdateCa
 		return nil, api.Fail(http.StatusBadRequest, coreErrors.BuildErrorDetail(c, "validation.invalid", err.Error()))
 	}
 
+	dto.ActedBy = actingUser(c)
 	category, err := ctrl.categoryService.UpdateCategory(c.Request.Context(), tenantID, categoryID, &dto)
 	if err != nil {
 		var pgErr *pgconn.PgError
@@ -225,7 +230,7 @@ func (ctrl *CategoryController) GetCategory(ctx context.Context, in *GetCategory
 		IsActive:     category.IsActive,
 		ProductCount: category.ProductCount,
 		CreatedAt:    category.CreatedAt.String(),
-		UpdatedAt:    category.UpdatedAt.String(),
+		UpdatedAt:    category.UpdatedAt.String(), UpdatedByName: category.UpdatedByName,
 	}
 
 	return api.OK(resp)
@@ -267,7 +272,7 @@ func (ctrl *CategoryController) ListCategories(ctx context.Context, in *ListCate
 	limit := 20
 	if limitStr := in.Limit; limitStr != "" {
 		if l, err := strconv.Atoi(limitStr); err == nil && l > 0 {
-			limit = l
+			limit = min(l, maxCategoryLimit)
 		}
 	}
 
@@ -338,7 +343,7 @@ func (ctrl *CategoryController) SearchCategories(ctx context.Context, in *Search
 	limit := 50
 	if limitStr := in.Limit; limitStr != "" {
 		if l, err := strconv.Atoi(limitStr); err == nil && l > 0 {
-			limit = l
+			limit = min(l, maxCategoryLimit)
 		}
 	}
 
@@ -486,7 +491,7 @@ func (ctrl *CategoryController) GetProductsByCategory(ctx context.Context, in *G
 	limit := 20
 	if limitStr := in.Limit; limitStr != "" {
 		if l, err := strconv.Atoi(limitStr); err == nil && l > 0 {
-			limit = l
+			limit = min(l, maxCategoryLimit)
 		}
 	}
 
@@ -542,7 +547,7 @@ func (ctrl *CategoryController) GetCategoriesByProduct(ctx context.Context, in *
 	limit := 100
 	if limitStr := in.Limit; limitStr != "" {
 		if l, err := strconv.Atoi(limitStr); err == nil && l > 0 {
-			limit = l
+			limit = min(l, maxCategoryLimit)
 		}
 	}
 

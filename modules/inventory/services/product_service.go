@@ -67,6 +67,7 @@ func (s *ProductService) CreateProductWithVariants(
 		variantsJSON,
 		s.config.MaxAxes,
 		s.config.MaxCombinations,
+		dto.ActedBy,
 	)
 }
 
@@ -99,6 +100,7 @@ func (s *ProductService) UpdateProductWithVariants(
 		dto.Description,
 		dto.BasePrice,
 		variantsJSON,
+		dto.ActedBy,
 	)
 }
 

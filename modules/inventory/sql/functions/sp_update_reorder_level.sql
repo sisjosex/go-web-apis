@@ -1,4 +1,4 @@
-CREATE OR REPLACE FUNCTION inventory.sp_update_reorder_level(p_tenant_id uuid, p_product_id uuid, p_new_reorder_level numeric, p_sku_id uuid DEFAULT NULL::uuid)
+CREATE OR REPLACE FUNCTION inventory.sp_update_reorder_level(p_tenant_id uuid, p_product_id uuid, p_new_reorder_level numeric, p_sku_id uuid DEFAULT NULL::uuid, p_updated_by uuid DEFAULT NULL::uuid)
  RETURNS TABLE(product_id uuid, reorder_level numeric, current_quantity numeric, status character varying, message text)
  LANGUAGE plpgsql
 AS $function$
@@ -30,6 +30,7 @@ BEGIN
     UPDATE inventory.product_stock ps
     SET reorder_level = p_new_reorder_level,
         status = v_status,
+        updated_by = p_updated_by,
         last_updated_at = CURRENT_TIMESTAMP
     WHERE ps.sku_id = v_sku_id;
 
@@ -47,4 +48,4 @@ BEGIN
 END;
 $function$;
 
-COMMENT ON FUNCTION inventory.sp_update_reorder_level(uuid,uuid,numeric,uuid) IS 'Sets the reorder level of a SKU (the product default when p_sku_id is omitted) and recomputes its status through inventory.fn_stock_status.';
+COMMENT ON FUNCTION inventory.sp_update_reorder_level(uuid,uuid,numeric,uuid,uuid) IS 'Sets the reorder level of a SKU (the product default when p_sku_id is omitted) and recomputes its status through inventory.fn_stock_status.';

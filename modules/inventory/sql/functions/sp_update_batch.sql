@@ -1,4 +1,4 @@
-CREATE OR REPLACE FUNCTION inventory.sp_update_batch(p_tenant_id uuid, p_today date, p_batch_id uuid, p_lot_number character varying DEFAULT NULL::character varying, p_expiry_date date DEFAULT NULL::date)
+CREATE OR REPLACE FUNCTION inventory.sp_update_batch(p_tenant_id uuid, p_today date, p_batch_id uuid, p_lot_number character varying DEFAULT NULL::character varying, p_expiry_date date DEFAULT NULL::date, p_updated_by uuid DEFAULT NULL::uuid)
  RETURNS TABLE(id uuid, product_id uuid, sku_id uuid, sku character varying, lot_number character varying, purchase_date date, expiry_date date, unit_cost numeric, initial_quantity numeric, current_quantity numeric, status character varying, days_to_expiry integer, message text)
  LANGUAGE plpgsql
 AS $function$
@@ -62,6 +62,7 @@ BEGIN
     SET lot_number  = v_lot_number,
         expiry_date = v_expiry_date,
         status      = v_status,
+        updated_by  = p_updated_by,
         updated_at  = CURRENT_TIMESTAMP
     WHERE pb.id = p_batch_id;
 
@@ -86,4 +87,4 @@ BEGIN
 END;
 $function$;
 
-COMMENT ON FUNCTION inventory.sp_update_batch(uuid,date,uuid,character varying,date) IS 'Corrects a lot''s lot_number and expiry_date, and nothing else (INV-014 D3). A NULL argument leaves that field as it is. Refuses with inventory.batch.has-movements once the lot has been consumed, because batch_movements already carries the COGS booked against it, and with inventory.batch.voided on a lot that was written off.';
+COMMENT ON FUNCTION inventory.sp_update_batch(uuid,date,uuid,character varying,date,uuid) IS 'Corrects a lot''s lot_number and expiry_date, and nothing else (INV-014 D3). A NULL argument leaves that field as it is. Refuses with inventory.batch.has-movements once the lot has been consumed, because batch_movements already carries the COGS booked against it, and with inventory.batch.voided on a lot that was written off.';

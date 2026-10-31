@@ -25,17 +25,18 @@ func NewStockRepository(dbService coreServices.DatabaseService, logger *log.Logg
 }
 
 // ReserveStock reserves inventory for a sales order
-func (r *StockRepository) ReserveStock(ctx context.Context, tenantID uuid.UUID, productID string, quantity float64, skuID *string) (*models.StockReservationResponse, error) {
+func (r *StockRepository) ReserveStock(ctx context.Context, tenantID uuid.UUID, productID string, quantity float64, userID *string, skuID *string) (*models.StockReservationResponse, error) {
 	var response models.StockReservationResponse
 
 	err := r.dbService.QueryRow(
 		ctx,
 		`SELECT reserved_quantity, available_quantity, status, message
-		 FROM inventory.sp_reserve_stock_for_order($1, $2, $3, $4::UUID)`,
+		 FROM inventory.sp_reserve_stock_for_order($1, $2, $3, $4::UUID, $5::UUID)`,
 		tenantID,
 		productID,
 		quantity,
 		skuID,
+		userID,
 	).Scan(&response.ReservedQuantity, &response.AvailableQuantity, &response.Status, &response.Message)
 
 	if err != nil {
@@ -53,17 +54,18 @@ func (r *StockRepository) ReserveStock(ctx context.Context, tenantID uuid.UUID, 
 }
 
 // ReleaseReservedStock releases reserved inventory when order is cancelled
-func (r *StockRepository) ReleaseReservedStock(ctx context.Context, tenantID uuid.UUID, productID string, quantity float64, skuID *string) (*models.StockReservationResponse, error) {
+func (r *StockRepository) ReleaseReservedStock(ctx context.Context, tenantID uuid.UUID, productID string, quantity float64, userID *string, skuID *string) (*models.StockReservationResponse, error) {
 	var response models.StockReservationResponse
 
 	err := r.dbService.QueryRow(
 		ctx,
 		`SELECT reserved_quantity, available_quantity, status, message
-		 FROM inventory.sp_release_reserved_stock($1, $2, $3, $4::UUID)`,
+		 FROM inventory.sp_release_reserved_stock($1, $2, $3, $4::UUID, $5::UUID)`,
 		tenantID,
 		productID,
 		quantity,
 		skuID,
+		userID,
 	).Scan(&response.ReservedQuantity, &response.AvailableQuantity, &response.Status, &response.Message)
 
 	if err != nil {
@@ -81,17 +83,18 @@ func (r *StockRepository) ReleaseReservedStock(ctx context.Context, tenantID uui
 }
 
 // UpdateReorderLevel updates the minimum stock level for a product
-func (r *StockRepository) UpdateReorderLevel(ctx context.Context, tenantID uuid.UUID, productID string, reorderLevel float64, skuID *string) (*models.UpdateReorderLevelResponse, error) {
+func (r *StockRepository) UpdateReorderLevel(ctx context.Context, tenantID uuid.UUID, productID string, reorderLevel float64, userID *string, skuID *string) (*models.UpdateReorderLevelResponse, error) {
 	var response models.UpdateReorderLevelResponse
 
 	err := r.dbService.QueryRow(
 		ctx,
 		`SELECT product_id::VARCHAR, reorder_level, current_quantity, status, message
-		 FROM inventory.sp_update_reorder_level($1, $2::UUID, $3, $4::UUID)`,
+		 FROM inventory.sp_update_reorder_level($1, $2::UUID, $3, $4::UUID, $5::UUID)`,
 		tenantID,
 		productID,
 		reorderLevel,
 		skuID,
+		userID,
 	).Scan(&response.ProductID, &response.ReorderLevel, &response.CurrentQty, &response.Status, &response.Message)
 
 	if err != nil {

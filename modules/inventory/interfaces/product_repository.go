@@ -20,6 +20,7 @@ type ProductRepository interface {
 		basePrice float64,
 		variantsJSON *string,
 		maxAxes, maxCombinations int,
+		actedBy *string,
 	) (*models.CreateProductResponse, error)
 
 	UpdateProductWithVariants(
@@ -30,6 +31,7 @@ type ProductRepository interface {
 		description *string,
 		basePrice float64,
 		variantsJSON *string,
+		actedBy *string,
 	) (*models.UpdateProductResponse, error)
 
 	GetProduct(ctx context.Context, tenantID uuid.UUID, productID string) (*models.Product, error)

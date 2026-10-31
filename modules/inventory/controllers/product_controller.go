@@ -51,6 +51,7 @@ func (ctrl *ProductController) CreateProductWithVariants(ctx context.Context, in
 		return nil, api.Fail(http.StatusBadRequest, coreErrors.BuildErrorDetail(c, "validation.invalid", err.Error()))
 	}
 
+	dto.ActedBy = actingUser(c)
 	product, err := ctrl.productService.CreateProductWithVariants(c.Request.Context(), tenantID, dto)
 	if err != nil {
 		if err := limits.Refuse(c, err); err != nil {
@@ -110,6 +111,7 @@ func (ctrl *ProductController) UpdateProductWithVariants(ctx context.Context, in
 		return nil, api.Fail(http.StatusBadRequest, coreErrors.BuildErrorDetail(c, "validation.invalid", err.Error()))
 	}
 
+	dto.ActedBy = actingUser(c)
 	product, err := ctrl.productService.UpdateProductWithVariants(c.Request.Context(), tenantID, productID, dto)
 	if err != nil {
 		var pgErr *pgconn.PgError

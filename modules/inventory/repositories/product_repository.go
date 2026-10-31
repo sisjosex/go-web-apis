@@ -34,6 +34,7 @@ func (r *ProductRepository) CreateProductWithVariants(
 	basePrice float64,
 	variantsJSON *string,
 	maxAxes, maxCombinations int,
+	actedBy *string,
 ) (*models.CreateProductResponse, error) {
 	var productID, respSku, respName, message string
 
@@ -42,9 +43,9 @@ func (r *ProductRepository) CreateProductWithVariants(
 		// The plan's product limit is checked in the same statement (BILLING-001 D2).
 		`SELECT CAST(p.product_id AS VARCHAR), p.sku, p.name, p.message
 		 FROM public.fn_within_limit($1, (SELECT COUNT(*) FROM inventory.products x WHERE x.tenant_id = $1), $9::INT, 'inventory_items') lim(tenant_id)
-		 CROSS JOIN LATERAL inventory.sp_create_product_with_variants(lim.tenant_id, $2, $3, $4, $5, $6::JSONB, NULL::UUID, $7, $8) p`,
+		 CROSS JOIN LATERAL inventory.sp_create_product_with_variants(lim.tenant_id, $2, $3, $4, $5, $6::JSONB, $10::UUID, $7, $8) p`,
 		tenantID, sku, name, description, basePrice, variantsJSON, maxAxes, maxCombinations,
-		limits.For(ctx, tenantID, limits.InventoryItems),
+		limits.For(ctx, tenantID, limits.InventoryItems), actedBy,
 	).Scan(&productID, &respSku, &respName, &message)
 
 	if err != nil {
@@ -77,13 +78,14 @@ func (r *ProductRepository) UpdateProductWithVariants(
 	description *string,
 	basePrice float64,
 	variantsJSON *string,
+	actedBy *string,
 ) (*models.UpdateProductResponse, error) {
 	var respProductID, respSku, respName, message string
 
 	err := r.dbService.QueryRow(
 		ctx,
-		`SELECT CAST(product_id AS VARCHAR), sku, name, message FROM inventory.sp_update_product_with_variants($1, $2, $3, $4, $5, $6::JSONB)`,
-		tenantID, productID, name, description, basePrice, variantsJSON,
+		`SELECT CAST(product_id AS VARCHAR), sku, name, message FROM inventory.sp_update_product_with_variants($1, $2, $3, $4, $5, $6::JSONB, $7::UUID)`,
+		tenantID, productID, name, description, basePrice, variantsJSON, actedBy,
 	).Scan(&respProductID, &respSku, &respName, &message)
 
 	if err != nil {
@@ -138,10 +140,10 @@ func (r *ProductRepository) GetProductWithVariants(ctx context.Context, tenantID
 
 	err := r.dbService.QueryRow(
 		ctx,
-		`SELECT id, sku, name, description, base_price, has_variants, status, created_at, media, variants
+		`SELECT id, sku, name, description, base_price, has_variants, status, created_at, media, variants, updated_at, updated_by_name
 		 FROM inventory.sp_get_product_with_variants($1, $2)`,
 		tenantID, productID,
-	).Scan(&p.ID, &p.SKU, &p.Name, &p.Description, &p.BasePrice, &p.HasVariants, &p.Status, &p.CreatedAt, &mediaJSON, &variantsJSON)
+	).Scan(&p.ID, &p.SKU, &p.Name, &p.Description, &p.BasePrice, &p.HasVariants, &p.Status, &p.CreatedAt, &mediaJSON, &variantsJSON, &p.UpdatedAt, &p.UpdatedByName)
 
 	if err != nil {
 		if r.logger != nil {

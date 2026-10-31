@@ -65,6 +65,7 @@ func (ctrl *BatchController) CreateBatch(ctx context.Context, in *CreateBatchInp
 		return nil, api.Fail(http.StatusBadRequest, coreErrors.BuildErrorDetail(c, "validation.error", err.Error()))
 	}
 
+	dto.ActedBy = actingUserID(c)
 	batch, err := ctrl.service.CreateBatch(c.Request.Context(), tenantID, utils.TenantToday(c), &dto)
 	if err != nil {
 		var pgErr *pgconn.PgError
@@ -251,6 +252,7 @@ func (ctrl *BatchController) UpdateBatch(ctx context.Context, in *UpdateBatchInp
 		return nil, api.Fail(http.StatusBadRequest, coreErrors.BuildErrorDetail(c, "validation.error", err.Error()))
 	}
 
+	dto.ActedBy = actingUserID(c)
 	batch, err := ctrl.service.UpdateBatch(c.Request.Context(), tenantID, utils.TenantToday(c), batchID, &dto)
 	if err != nil {
 		if err := mapBatchWriteError(c, err); err != nil {

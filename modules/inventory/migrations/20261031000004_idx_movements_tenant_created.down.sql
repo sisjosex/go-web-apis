@@ -1,0 +1,1 @@
+DROP INDEX IF EXISTS inventory.idx_inventory_movements_tenant_created;

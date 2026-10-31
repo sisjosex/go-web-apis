@@ -85,6 +85,8 @@ CREATE TABLE inventory.product_batches (
     created_at timestamp without time zone DEFAULT CURRENT_TIMESTAMP NOT NULL,
     updated_at timestamp without time zone DEFAULT CURRENT_TIMESTAMP NOT NULL,
     sku_id uuid NOT NULL,
+    created_by uuid,
+    updated_by uuid,
     CONSTRAINT chk_product_batches_quantity CHECK ((current_quantity >= (0)::numeric))
 );
 
@@ -112,7 +114,9 @@ CREATE TABLE inventory.product_categories (
     is_active boolean DEFAULT true,
     deleted_at timestamp without time zone,
     created_at timestamp without time zone DEFAULT now() NOT NULL,
-    updated_at timestamp without time zone DEFAULT now() NOT NULL
+    updated_at timestamp without time zone DEFAULT now() NOT NULL,
+    created_by uuid,
+    updated_by uuid
 );
 
 
@@ -227,6 +231,7 @@ CREATE TABLE inventory.product_stock (
     status character varying(50) DEFAULT 'ok'::character varying NOT NULL,
     last_updated_at timestamp without time zone DEFAULT CURRENT_TIMESTAMP,
     sku_id uuid NOT NULL,
+    updated_by uuid,
     CONSTRAINT chk_product_stock_quantities CHECK (((current_quantity >= (0)::numeric) AND (reserved_quantity >= (0)::numeric) AND (reserved_quantity <= current_quantity)))
 );
 
@@ -301,6 +306,8 @@ CREATE TABLE inventory.products (
     created_at timestamp without time zone DEFAULT CURRENT_TIMESTAMP,
     updated_at timestamp without time zone DEFAULT CURRENT_TIMESTAMP,
     stock_by_variant boolean DEFAULT false NOT NULL,
+    created_by uuid,
+    updated_by uuid,
     CONSTRAINT products_status_check CHECK (((status)::text = ANY ((ARRAY['active'::character varying, 'discontinued'::character varying])::text[])))
 );
 
@@ -489,6 +496,13 @@ CREATE INDEX idx_batch_movements_tenant_id ON inventory.batch_movements USING bt
 --
 
 CREATE INDEX idx_inventory_movements_batch_id ON inventory.inventory_movements USING btree (batch_id);
+
+
+--
+-- Name: idx_inventory_movements_tenant_created; Type: INDEX; Schema: inventory; Owner: -
+--
+
+CREATE INDEX idx_inventory_movements_tenant_created ON inventory.inventory_movements USING btree (tenant_id, created_at DESC, id DESC);
 
 
 --

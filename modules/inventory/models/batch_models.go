@@ -20,6 +20,7 @@ type CreateBatchDto struct {
 	ExpiryDate      coreModels.DateOnly `json:"expiry_date" binding:"required"`
 	UnitCost        float64             `json:"unit_cost" binding:"required,gt=0"`
 	InitialQuantity float64             `json:"initial_quantity" binding:"required,gt=0"`
+	ActedBy         *uuid.UUID          `json:"-"` // set server-side (INV-020 D1)
 }
 
 // BatchResponse - Response model for batch
@@ -38,6 +39,9 @@ type BatchResponse struct {
 	DaysToExpiry    *int                `json:"days_to_expiry,omitempty"`
 	ProductName     *string             `json:"product_name,omitempty"`
 	Message         string              `json:"message,omitempty"`
+	// UpdatedAt and UpdatedByName answer GET /batches/:id only (INV-020 D1).
+	UpdatedAt     *time.Time `json:"updated_at,omitempty"`
+	UpdatedByName *string    `json:"updated_by_name,omitempty"`
 }
 
 // UpdateBatchDto - DTO for correcting a lot. Only the two fields a shop mistypes
@@ -47,6 +51,7 @@ type BatchResponse struct {
 type UpdateBatchDto struct {
 	LotNumber  *string              `json:"lot_number" binding:"omitempty,min=1,max=100"`
 	ExpiryDate *coreModels.DateOnly `json:"expiry_date" binding:"omitempty"`
+	ActedBy    *uuid.UUID           `json:"-"` // set server-side (INV-020 D1)
 }
 
 // RedistributeBatchTarget - one combination and the amount of the lot moving to

@@ -1087,6 +1087,7 @@
         "inventory.sp_get_batch"
       ],
       "reads": [
+        "auth.users",
         "inventory.product_batches"
       ],
       "writes": []
@@ -1181,6 +1182,7 @@
         "inventory.sp_get_category"
       ],
       "reads": [
+        "auth.users",
         "inventory.product_categories",
         "inventory.product_category_mapping"
       ],
@@ -1315,6 +1317,7 @@
         "inventory.sp_get_product_with_variants"
       ],
       "reads": [
+        "auth.users",
         "inventory.product_media",
         "inventory.product_variant_groups",
         "inventory.product_variant_options",
@@ -1332,6 +1335,7 @@
         "inventory.sp_get_product_with_variants"
       ],
       "reads": [
+        "auth.users",
         "inventory.product_media",
         "inventory.product_variant_groups",
         "inventory.product_variant_options",
@@ -7210,6 +7214,7 @@
     },
     "inventory.sp_get_batch": {
       "reads": [
+        "auth.users",
         "inventory.product_batches"
       ],
       "writes": [],
@@ -7228,6 +7233,7 @@
     },
     "inventory.sp_get_category": {
       "reads": [
+        "auth.users",
         "inventory.product_categories",
         "inventory.product_category_mapping"
       ],
@@ -7297,6 +7303,7 @@
     },
     "inventory.sp_get_product_with_variants": {
       "reads": [
+        "auth.users",
         "inventory.product_media",
         "inventory.product_variant_groups",
         "inventory.product_variant_options",

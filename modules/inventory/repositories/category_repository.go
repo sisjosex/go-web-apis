@@ -43,8 +43,8 @@ func (r *CategoryRepository) CreateCategory(ctx context.Context, tenantID uuid.U
 	}
 
 	err := r.dbService.QueryRow(ctx,
-		`SELECT * FROM inventory.sp_create_category($1, $2, $3, $4, $5, $6, $7)`,
-		tenantID, dto.Name, dto.Slug, parentIDVal, dto.Description, dto.IconURL, displayOrder,
+		`SELECT * FROM inventory.sp_create_category($1, $2, $3, $4, $5, $6, $7, $8::UUID)`,
+		tenantID, dto.Name, dto.Slug, parentIDVal, dto.Description, dto.IconURL, displayOrder, dto.ActedBy,
 	).Scan(
 		&category.ID, &category.ParentID, &category.Name, &category.Slug, &category.Description,
 		&category.IconURL, &category.DisplayOrder, &category.IsActive, &category.ProductCount,
@@ -86,8 +86,8 @@ func (r *CategoryRepository) UpdateCategory(ctx context.Context, tenantID uuid.U
 	}
 
 	err = r.dbService.QueryRow(ctx,
-		`SELECT * FROM inventory.sp_update_category($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
-		tenantID, catID, dto.Name, dto.Slug, parentIDVal, dto.Description, dto.IconURL, dto.DisplayOrder, dto.IsActive,
+		`SELECT * FROM inventory.sp_update_category($1, $2, $3, $4, $5, $6, $7, $8, $9, $10::UUID)`,
+		tenantID, catID, dto.Name, dto.Slug, parentIDVal, dto.Description, dto.IconURL, dto.DisplayOrder, dto.IsActive, dto.ActedBy,
 	).Scan(
 		&category.ID, &category.ParentID, &category.Name, &category.Slug, &category.Description,
 		&category.IconURL, &category.DisplayOrder, &category.IsActive, &category.ProductCount,
@@ -154,14 +154,14 @@ func (r *CategoryRepository) GetCategory(ctx context.Context, tenantID uuid.UUID
 	}
 
 	err = r.dbService.QueryRow(ctx,
-		`SELECT id, parent_id, name, slug, description, icon_url, display_order, is_active, product_count, created_at, updated_at
+		`SELECT id, parent_id, name, slug, description, icon_url, display_order, is_active, product_count, created_at, updated_at, updated_by_name
 		 FROM inventory.sp_get_category($1, $2)`,
 		tenantID,
 		catID,
 	).Scan(
 		&category.ID, &category.ParentID, &category.Name, &category.Slug, &category.Description,
 		&category.IconURL, &category.DisplayOrder, &category.IsActive, &category.ProductCount,
-		&category.CreatedAt, &category.UpdatedAt,
+		&category.CreatedAt, &category.UpdatedAt, &category.UpdatedByName,
 	)
 
 	if err != nil {

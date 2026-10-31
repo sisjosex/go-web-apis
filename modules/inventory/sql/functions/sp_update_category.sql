@@ -1,4 +1,4 @@
-CREATE OR REPLACE FUNCTION inventory.sp_update_category(p_tenant_id uuid, p_category_id uuid, p_name character varying DEFAULT NULL::character varying, p_slug character varying DEFAULT NULL::character varying, p_parent_id uuid DEFAULT NULL::uuid, p_description text DEFAULT NULL::text, p_icon_url character varying DEFAULT NULL::character varying, p_display_order integer DEFAULT NULL::integer, p_is_active boolean DEFAULT NULL::boolean)
+CREATE OR REPLACE FUNCTION inventory.sp_update_category(p_tenant_id uuid, p_category_id uuid, p_name character varying DEFAULT NULL::character varying, p_slug character varying DEFAULT NULL::character varying, p_parent_id uuid DEFAULT NULL::uuid, p_description text DEFAULT NULL::text, p_icon_url character varying DEFAULT NULL::character varying, p_display_order integer DEFAULT NULL::integer, p_is_active boolean DEFAULT NULL::boolean, p_updated_by uuid DEFAULT NULL::uuid)
  RETURNS TABLE(id uuid, parent_id uuid, name character varying, slug character varying, description text, icon_url character varying, display_order integer, is_active boolean, product_count bigint, created_at timestamp without time zone, updated_at timestamp without time zone)
  LANGUAGE plpgsql
 AS $function$
@@ -41,6 +41,7 @@ BEGIN
         icon_url = COALESCE(p_icon_url, pc.icon_url),
         display_order = COALESCE(p_display_order, pc.display_order),
         is_active = COALESCE(p_is_active, pc.is_active),
+        updated_by = p_updated_by,
         updated_at = NOW()
     WHERE pc.id = p_category_id AND pc.tenant_id = p_tenant_id;
 
@@ -65,3 +66,5 @@ BEGIN
              pc.display_order, pc.is_active, pc.created_at, pc.updated_at;
 END;
 $function$;
+
+COMMENT ON FUNCTION inventory.sp_update_category(uuid,uuid,character varying,character varying,uuid,text,character varying,integer,boolean,uuid) IS 'Changes the given fields of a category of the tenant, a NULL leaves one as it is, recording who did it (INV-020 D1), and answers it as sp_get_category does.';

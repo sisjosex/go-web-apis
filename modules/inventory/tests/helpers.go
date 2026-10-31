@@ -66,6 +66,21 @@ func ownerOfAnotherTenant(t *testing.T) *coreTestHelpers.ApiTestHelper {
 	return other
 }
 
+// createOtherTenantProduct is a product of a second tenant, with its owner signed in.
+func createOtherTenantProduct(t *testing.T) (*coreTestHelpers.ApiTestHelper, string) {
+	t.Helper()
+	other := ownerOfAnotherTenant(t)
+	w := other.DoRequest("POST", "/inventory/products", map[string]interface{}{
+		"sku": fmt.Sprintf("OTHER_%d", time.Now().UnixNano()), "name": "Other tenant's", "base_price": 10,
+	}, nil)
+	require.Equal(t, http.StatusCreated, w.Code, "other tenant product: %s", w.Body.String())
+	var created struct {
+		ProductID string `json:"product_id"`
+	}
+	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &created))
+	return other, created.ProductID
+}
+
 // asMember signs in a fresh plain member of test-company holding a role with exactly perms.
 func asMember(t *testing.T, helper *coreTestHelpers.ApiTestHelper, perms ...string) *coreTestHelpers.ApiTestHelper {
 	t.Helper()

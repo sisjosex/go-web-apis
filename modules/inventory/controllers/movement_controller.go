@@ -176,6 +176,10 @@ func (ctrl *MovementController) GetProductStock(ctx context.Context, in *GetProd
 
 	stock, err := ctrl.movementService.GetProductStock(c.Request.Context(), tenantID, productID)
 	if err != nil {
+		// The SP answers no row for a product outside the tenant.
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, api.Fail(http.StatusNotFound, coreErrors.BuildErrorSingle(c, inventoryErrors.ProductNotFound))
+		}
 		var pgErr *pgconn.PgError
 		if errors.As(err, &pgErr) {
 			switch pgErr.Message {

@@ -2376,6 +2376,13 @@
           "unit_cost": {
             "format": "double",
             "type": "number"
+          },
+          "updated_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "updated_by_name": {
+            "type": "string"
           }
         },
         "required": [
@@ -2430,6 +2437,9 @@
             "type": "string"
           },
           "updated_at": {
+            "type": "string"
+          },
+          "updated_by_name": {
             "type": "string"
           }
         },
@@ -2972,6 +2982,15 @@
           "status": {
             "type": "string"
           },
+          "updated_at": {
+            "format": "date-time",
+            "nullable": true,
+            "type": "string"
+          },
+          "updated_by_name": {
+            "nullable": true,
+            "type": "string"
+          },
           "variants": {
             "items": {
               "$ref": "#/components/schemas/inventory.VariantGroup"
@@ -2989,7 +3008,9 @@
           "status",
           "created_at",
           "media",
-          "variants"
+          "variants",
+          "updated_at",
+          "updated_by_name"
         ],
         "type": "object"
       },
@@ -3168,6 +3189,15 @@
             "type": "string"
           },
           "movement_type": {
+            "enum": [
+              "PURCHASE",
+              "SALE",
+              "ADJUSTMENT",
+              "TRANSFER",
+              "RETURN",
+              "WASTE",
+              "PRODUCTION"
+            ],
             "type": "string"
           },
           "notes": {
@@ -3175,6 +3205,7 @@
             "type": "string"
           },
           "product_id": {
+            "format": "uuid",
             "type": "string"
           },
           "quantity": {
@@ -3369,6 +3400,7 @@
         "additionalProperties": false,
         "properties": {
           "product_id": {
+            "format": "uuid",
             "type": "string"
           },
           "quantity": {
@@ -3415,6 +3447,7 @@
         "additionalProperties": false,
         "properties": {
           "product_id": {
+            "format": "uuid",
             "type": "string"
           },
           "quantity": {

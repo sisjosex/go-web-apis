@@ -19,8 +19,8 @@ BEGIN
     END IF;
 
     -- Create product
-    INSERT INTO inventory.products (tenant_id, sku, name, description, base_price, has_variants)
-    VALUES (p_tenant_id, p_sku, p_name, p_description, p_base_price, CASE WHEN p_variants IS NOT NULL THEN TRUE ELSE FALSE END)
+    INSERT INTO inventory.products (tenant_id, sku, name, description, base_price, has_variants, created_by, updated_by)
+    VALUES (p_tenant_id, p_sku, p_name, p_description, p_base_price, CASE WHEN p_variants IS NOT NULL THEN TRUE ELSE FALSE END, p_created_by, p_created_by)
     RETURNING products.id INTO v_product_id;
 
     -- Create the default SKU: products.sku verbatim, empty combination (D2b/D4)

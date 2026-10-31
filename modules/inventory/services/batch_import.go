@@ -11,6 +11,8 @@ import (
 	inventoryInterfaces "josex/web/modules/inventory/interfaces"
 	inventoryModels "josex/web/modules/inventory/models"
 	"josex/web/modules/inventory/utils"
+
+	"github.com/google/uuid"
 )
 
 // productBatchesImportDescriptor loads the lots with their expiry dates the FIFO
@@ -80,7 +82,7 @@ func (d *productBatchesImportDescriptor) ProcessRow(ctx importModels.ImportConte
 		return result
 	}
 
-	if _, err := d.batchService.CreateBatch(ctx.Context(), ctx.TenantID, utils.TodayOf(ctx.Context(), ctx.TenantSlug), d.buildDto(row, target)); err != nil {
+	if _, err := d.batchService.CreateBatch(ctx.Context(), ctx.TenantID, utils.TodayOf(ctx.Context(), ctx.TenantSlug), d.buildDto(row, target, ctx.PerformedBy)); err != nil {
 		result.Status = importModels.RowStatusFailed
 		result.Errors = []string{inventoryErrors.ImportBatchFailed}
 		return result
@@ -144,7 +146,7 @@ func (d *productBatchesImportDescriptor) check(ctx importModels.ImportContext, r
 // sp_create_batch resolves the default bucket for a product without axes and
 // refuses one stocked by variant that names none (INV-014 D1), and check() has
 // already turned that refusal into a row error rather than a 500.
-func (d *productBatchesImportDescriptor) buildDto(row map[string]string, target skuCandidate) *inventoryModels.CreateBatchDto {
+func (d *productBatchesImportDescriptor) buildDto(row map[string]string, target skuCandidate, performedBy *uuid.UUID) *inventoryModels.CreateBatchDto {
 	purchaseDate, _ := parseImportDate(row["purchase_date"])
 	expiryDate, _ := parseImportDate(row["expiry_date"])
 	unitCost, _, _ := parseOptionalNumber(row["unit_cost"], 0)
@@ -159,6 +161,7 @@ func (d *productBatchesImportDescriptor) buildDto(row map[string]string, target 
 		ExpiryDate:      coreModels.DateOnly(expiryDate),
 		UnitCost:        unitCost,
 		InitialQuantity: quantity,
+		ActedBy:         performedBy,
 	}
 }
 

@@ -1,4 +1,4 @@
-CREATE OR REPLACE FUNCTION inventory.sp_release_reserved_stock(p_tenant_id uuid, p_product_id uuid, p_quantity numeric, p_sku_id uuid DEFAULT NULL::uuid)
+CREATE OR REPLACE FUNCTION inventory.sp_release_reserved_stock(p_tenant_id uuid, p_product_id uuid, p_quantity numeric, p_sku_id uuid DEFAULT NULL::uuid, p_updated_by uuid DEFAULT NULL::uuid)
  RETURNS TABLE(reserved_quantity numeric, available_quantity numeric, status character varying, message text)
  LANGUAGE plpgsql
 AS $function$
@@ -40,6 +40,7 @@ BEGIN
     UPDATE inventory.product_stock ps
     SET reserved_quantity = v_new_reserved,
         status = v_status,
+        updated_by = p_updated_by,
         last_updated_at = CURRENT_TIMESTAMP
     WHERE ps.sku_id = v_sku_id;
 
@@ -51,4 +52,4 @@ BEGIN
 END;
 $function$;
 
-COMMENT ON FUNCTION inventory.sp_release_reserved_stock(uuid,uuid,numeric,uuid) IS 'Releases reserved quantity on a SKU, never below zero. p_sku_id is required when the product tracks stock by variant and defaults to the product SKU otherwise. Takes the stock row FOR UPDATE.';
+COMMENT ON FUNCTION inventory.sp_release_reserved_stock(uuid,uuid,numeric,uuid,uuid) IS 'Releases reserved quantity on a SKU, never below zero. p_sku_id is required when the product tracks stock by variant and defaults to the product SKU otherwise. Takes the stock row FOR UPDATE.';

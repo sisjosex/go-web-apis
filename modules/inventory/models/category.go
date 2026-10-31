@@ -22,6 +22,8 @@ type Category struct {
 	CreatedAt    time.Time    `db:"created_at"`
 	UpdatedAt    time.Time    `db:"updated_at"`
 	DeletedAt    sql.NullTime `db:"deleted_at"`
+	// UpdatedByName is read by GetCategory only (INV-020 D1).
+	UpdatedByName *string
 }
 
 // ===== CATEGORY DTOs =====
@@ -34,6 +36,7 @@ type CreateCategoryDto struct {
 	Description  *string `json:"description"`
 	IconURL      *string `json:"icon_url"`
 	DisplayOrder *int    `json:"display_order"`
+	ActedBy      *string `json:"-"` // set server-side (INV-020 D1)
 }
 
 // UpdateCategoryDto - Request DTO for updating a category
@@ -45,6 +48,7 @@ type UpdateCategoryDto struct {
 	IconURL      *string `json:"icon_url"`
 	DisplayOrder *int    `json:"display_order"`
 	IsActive     *bool   `json:"is_active"`
+	ActedBy      *string `json:"-"` // set server-side (INV-020 D1)
 }
 
 // CategoryResponse - Response DTO for category
@@ -60,6 +64,8 @@ type CategoryResponse struct {
 	ProductCount int64   `json:"product_count"`
 	CreatedAt    string  `json:"created_at"`
 	UpdatedAt    string  `json:"updated_at"`
+	// UpdatedByName answers GET /categories/:id only.
+	UpdatedByName *string `json:"updated_by_name,omitempty"`
 }
 
 // CategoryTreeResponse - Response DTO for category with children

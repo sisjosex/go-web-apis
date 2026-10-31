@@ -1,4 +1,4 @@
-CREATE OR REPLACE FUNCTION inventory.sp_create_category(p_tenant_id uuid, p_name character varying, p_slug character varying, p_parent_id uuid DEFAULT NULL::uuid, p_description text DEFAULT NULL::text, p_icon_url character varying DEFAULT NULL::character varying, p_display_order integer DEFAULT 0)
+CREATE OR REPLACE FUNCTION inventory.sp_create_category(p_tenant_id uuid, p_name character varying, p_slug character varying, p_parent_id uuid DEFAULT NULL::uuid, p_description text DEFAULT NULL::text, p_icon_url character varying DEFAULT NULL::character varying, p_display_order integer DEFAULT 0, p_created_by uuid DEFAULT NULL::uuid)
  RETURNS TABLE(id uuid, parent_id uuid, name character varying, slug character varying, description text, icon_url character varying, display_order integer, is_active boolean, product_count bigint, created_at timestamp without time zone, updated_at timestamp without time zone)
  LANGUAGE plpgsql
 AS $function$
@@ -36,8 +36,8 @@ BEGIN
     END IF;
 
     -- Insert category
-    INSERT INTO inventory.product_categories (tenant_id, parent_id, name, slug, description, icon_url, display_order)
-    VALUES (p_tenant_id, p_parent_id, v_name, v_slug, p_description, p_icon_url, p_display_order)
+    INSERT INTO inventory.product_categories (tenant_id, parent_id, name, slug, description, icon_url, display_order, created_by, updated_by)
+    VALUES (p_tenant_id, p_parent_id, v_name, v_slug, p_description, p_icon_url, p_display_order, p_created_by, p_created_by)
     RETURNING inventory.product_categories.id INTO v_category_id;
 
     -- Return created category (same fields as sp_get_category for consistency)
@@ -61,3 +61,5 @@ BEGIN
              pc.display_order, pc.is_active, pc.created_at, pc.updated_at;
 END;
 $function$;
+
+COMMENT ON FUNCTION inventory.sp_create_category(uuid,character varying,character varying,uuid,text,character varying,integer,uuid) IS 'Creates a category of the tenant, recording who did it (INV-020 D1), and answers it as sp_get_category does; refuses an empty name or slug, a slug in use and an unknown parent.';

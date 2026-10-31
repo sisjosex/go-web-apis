@@ -133,7 +133,9 @@ func (d *categoriesImportDescriptor) ProcessRow(ctx importModels.ImportContext, 
 		return result
 	}
 
-	if _, err := d.categoryService.CreateCategory(ctx.Context(), ctx.TenantID, d.buildDto(ctx, row, name, parentID)); err != nil {
+	dto := d.buildDto(ctx, row, name, parentID)
+	dto.ActedBy = performedByString(ctx)
+	if _, err := d.categoryService.CreateCategory(ctx.Context(), ctx.TenantID, dto); err != nil {
 		result.Status = importModels.RowStatusFailed
 		result.Errors = []string{inventoryErrors.ImportCreateFailed}
 		return result

@@ -16,6 +16,8 @@
   "inventory.skus.redistribution-mismatch": "Las cantidades deben sumar exactamente el stock del SKU por defecto",
   "inventory.skus.redistribution-reserved": "El SKU por defecto tiene unidades reservadas; libéralas antes de redistribuir",
   "inventory.insufficient-stock": "Stock insuficiente",
+  "inventory.invalid-reorder-level": "El nivel de reposición no puede ser negativo",
+  "inventory.skus.combination-exists": "Ya existe una combinación con estas opciones",
   "inventory.stock-not-found": "Este producto no tiene un registro de stock",
   "inventory.category-mapping.not-found": "El producto no está en esta categoría",
   "inventory.invalid-movement-type": "Tipo de movimiento de inventario inválido",

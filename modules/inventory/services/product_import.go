@@ -342,6 +342,7 @@ func (d *productsImportDescriptor) UpdateRow(ctx importModels.ImportContext, lin
 	if !changed {
 		return skipped
 	}
+	dto.ActedBy = performedByString(ctx)
 	if _, err := d.productService.UpdateProductWithVariants(ctx.Context(), ctx.TenantID, product.ID, dto); err != nil {
 		return importModels.RowResult{Line: line, Data: row, Status: importModels.RowStatusFailed, Errors: []string{inventoryErrors.ImportCreateFailed}}
 	}
@@ -590,6 +591,7 @@ func (d *productsImportDescriptor) createProduct(ctx importModels.ImportContext,
 		dto.Description = &description
 	}
 
+	dto.ActedBy = performedByString(ctx)
 	product, err := d.productService.CreateProductWithVariants(ctx.Context(), ctx.TenantID, dto)
 	if err != nil {
 		// D4 — a repeated SKU is a skip, so the rest of the file still imports.
@@ -898,6 +900,7 @@ func (d *productsImportDescriptor) categoryFor(
 		Name:     name,
 		Slug:     findFreeSlug(d.lookups, ctx, slugify(name)),
 		ParentID: parentID,
+		ActedBy:  performedByString(ctx),
 	})
 	if err != nil {
 		return "", inventoryErrors.ImportCategoryUnknown + errorParamSeparator + name, ""

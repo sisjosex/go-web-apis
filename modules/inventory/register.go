@@ -6,15 +6,15 @@ func init() {
 	registry.Register(registry.ModuleDescriptor{
 		Code:        "inventory",
 		Name:        "Inventory",
-		Description: "Stock management, warehouses and product catalog.",
+		Description: "Product catalog, stock movements and batches with expiry dates.",
 		Icon:        "cube",
 		Route:       "/inventory",
 		Category:    "operations",
 		Features: []string{
 			"Product catalog",
-			"Warehouse management",
+			"Categories",
 			"Stock movements",
-			"Low-stock alerts",
+			"Batches and expiry dates",
 		},
 		IsDefault: false,
 		// TENANCY-003 D1: what it needs and what is worth offering beside it.

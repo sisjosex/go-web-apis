@@ -41,7 +41,7 @@ func (r *BatchRepository) CreateBatch(ctx context.Context, tenantID uuid.UUID, t
 	}
 
 	row := r.dbService.QueryRow(ctx,
-		"SELECT id, product_id, sku_id, sku, lot_number, purchase_date, expiry_date, unit_cost, initial_quantity, current_quantity, status, message FROM inventory.sp_create_batch($1, $2, $3, $4, $5, $6, $7, $8, $9)",
+		"SELECT id, product_id, sku_id, sku, lot_number, purchase_date, expiry_date, unit_cost, initial_quantity, current_quantity, status, message FROM inventory.sp_create_batch($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)",
 		tenantID,
 		today,
 		productID,
@@ -51,6 +51,7 @@ func (r *BatchRepository) CreateBatch(ctx context.Context, tenantID uuid.UUID, t
 		batch.UnitCost,
 		batch.InitialQuantity,
 		skuID,
+		batch.ActedBy,
 	)
 
 	var response models.BatchResponse
@@ -86,7 +87,7 @@ func (r *BatchRepository) CreateBatch(ctx context.Context, tenantID uuid.UUID, t
 // GetBatch retrieves a batch by ID
 func (r *BatchRepository) GetBatch(ctx context.Context, tenantID uuid.UUID, today time.Time, batchID uuid.UUID) (*models.BatchResponse, error) {
 	row := r.dbService.QueryRow(ctx,
-		"SELECT id, product_id, lot_number, purchase_date, expiry_date, unit_cost, initial_quantity, current_quantity, status, days_to_expiry FROM inventory.sp_get_batch($1, $2, $3)",
+		"SELECT id, product_id, lot_number, purchase_date, expiry_date, unit_cost, initial_quantity, current_quantity, status, days_to_expiry, updated_at, updated_by_name FROM inventory.sp_get_batch($1, $2, $3)",
 		tenantID,
 		today,
 		batchID,
@@ -106,6 +107,8 @@ func (r *BatchRepository) GetBatch(ctx context.Context, tenantID uuid.UUID, toda
 		&response.CurrentQuantity,
 		&response.Status,
 		&daysToExpiry,
+		&response.UpdatedAt,
+		&response.UpdatedByName,
 	); err != nil {
 		if errors.Is(err, pgx.ErrNoRows) || errors.Is(err, sql.ErrNoRows) {
 			return nil, nil
@@ -299,12 +302,13 @@ func (r *BatchRepository) UpdateBatch(ctx context.Context, tenantID uuid.UUID, t
 	}
 
 	row := r.dbService.QueryRow(ctx,
-		"SELECT id, product_id, sku_id, sku, lot_number, purchase_date, expiry_date, unit_cost, initial_quantity, current_quantity, status, days_to_expiry, message FROM inventory.sp_update_batch($1, $2, $3, $4, $5)",
+		"SELECT id, product_id, sku_id, sku, lot_number, purchase_date, expiry_date, unit_cost, initial_quantity, current_quantity, status, days_to_expiry, message FROM inventory.sp_update_batch($1, $2, $3, $4, $5, $6)",
 		tenantID,
 		today,
 		batchID,
 		lotNumber,
 		expiryDate,
+		dto.ActedBy,
 	)
 
 	var response models.BatchResponse

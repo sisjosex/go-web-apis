@@ -1,4 +1,4 @@
-CREATE OR REPLACE FUNCTION inventory.sp_create_batch(p_tenant_id uuid, p_today date, p_product_id uuid, p_lot_number character varying, p_purchase_date date, p_expiry_date date, p_unit_cost numeric, p_initial_quantity numeric, p_sku_id uuid DEFAULT NULL::uuid)
+CREATE OR REPLACE FUNCTION inventory.sp_create_batch(p_tenant_id uuid, p_today date, p_product_id uuid, p_lot_number character varying, p_purchase_date date, p_expiry_date date, p_unit_cost numeric, p_initial_quantity numeric, p_sku_id uuid DEFAULT NULL::uuid, p_created_by uuid DEFAULT NULL::uuid)
  RETURNS TABLE(id uuid, product_id uuid, sku_id uuid, sku character varying, lot_number character varying, purchase_date date, expiry_date date, unit_cost numeric, initial_quantity numeric, current_quantity numeric, status character varying, message text)
  LANGUAGE plpgsql
 AS $function$
@@ -46,11 +46,11 @@ BEGIN
     -- Insert batch using pre-generated UUID (avoids RETURNING INTO column-name ambiguity)
     INSERT INTO inventory.product_batches(
         id, tenant_id, product_id, sku_id, lot_number, purchase_date, expiry_date,
-        unit_cost, initial_quantity, current_quantity, status
+        unit_cost, initial_quantity, current_quantity, status, created_by, updated_by
     )
     VALUES(
         v_batch_id, p_tenant_id, p_product_id, v_sku_id, TRIM(p_lot_number), p_purchase_date, p_expiry_date,
-        p_unit_cost, p_initial_quantity, p_initial_quantity, v_status
+        p_unit_cost, p_initial_quantity, p_initial_quantity, v_status, p_created_by, p_created_by
     );
 
     -- A1 — la mercancía entró: se registra como PURCHASE sobre la combinación del
@@ -67,7 +67,7 @@ BEGIN
         v_batch_id,
         p_unit_cost,
         'Lote ' || TRIM(p_lot_number) || ' recibido',
-        NULL,
+        p_created_by,
         v_sku_id
     ) m;
 
@@ -98,4 +98,4 @@ BEGIN
 END;
 $function$;
 
-COMMENT ON FUNCTION inventory.sp_create_batch(uuid,date,uuid,character varying,date,date,numeric,numeric,uuid) IS 'Crea un lote para una combinación y registra su entrada al stock como un movimiento PURCHASE sobre esa misma combinación (INV-014 A1), enlazado por inventory_movements.batch_id. p_sku_id es obligatorio cuando el producto controla stock por variante (D1). Devuelve sku_id + sku como el resto de lecturas de lote (AC-3).';
+COMMENT ON FUNCTION inventory.sp_create_batch(uuid,date,uuid,character varying,date,date,numeric,numeric,uuid,uuid) IS 'Crea un lote para una combinación y registra su entrada al stock como un movimiento PURCHASE sobre esa misma combinación (INV-014 A1), enlazado por inventory_movements.batch_id. p_sku_id es obligatorio cuando el producto controla stock por variante (D1). Devuelve sku_id + sku como el resto de lecturas de lote (AC-3).';

@@ -1,5 +1,5 @@
 CREATE OR REPLACE FUNCTION inventory.sp_get_product_with_variants(p_tenant_id uuid, p_product_id uuid)
- RETURNS TABLE(id uuid, sku character varying, name character varying, description text, base_price numeric, has_variants boolean, status character varying, created_at timestamp without time zone, media jsonb, variants jsonb)
+ RETURNS TABLE(id uuid, sku character varying, name character varying, description text, base_price numeric, has_variants boolean, status character varying, created_at timestamp without time zone, media jsonb, variants jsonb, updated_at timestamp without time zone, updated_by_name character varying)
  LANGUAGE plpgsql
 AS $function$
 BEGIN
@@ -90,13 +90,17 @@ BEGIN
                 WHERE vg.product_id = p.id
             )
             ELSE '[]'::jsonb
-        END AS variants
+        END AS variants,
+
+        p.updated_at,
+        CAST(COALESCE(NULLIF(CONCAT_WS(' ', u.first_name, u.last_name), ''), u.email) AS VARCHAR)
 
     FROM inventory.products p
+    LEFT JOIN auth.users u ON u.id = p.updated_by
     WHERE p.tenant_id = p_tenant_id
       AND p.id        = p_product_id
       AND p.status    = 'active';
 END;
 $function$;
 
-COMMENT ON FUNCTION inventory.sp_get_product_with_variants(uuid,uuid) IS 'Returns a product with its media and its variant tree; groups carry their id and affects_inventory, so a client can tell an inventory axis from a menu modifier without a second call';
+COMMENT ON FUNCTION inventory.sp_get_product_with_variants(uuid,uuid) IS 'Returns a product with its media and its variant tree; groups carry their id and affects_inventory, so a client can tell an inventory axis from a menu modifier without a second call; updated_by_name is who last changed it (INV-020 D1)';

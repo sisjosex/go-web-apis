@@ -88,7 +88,7 @@ func (ctrl *StockController) ReserveStock(ctx context.Context, in *ReserveStockI
 		return nil, api.Fail(http.StatusBadRequest, coreErrors.BuildErrorDetail(c, inventoryErrors.InsufficientStock, err.Error()))
 	}
 
-	result, err := ctrl.stockService.ReserveStock(c.Request.Context(), tenantID, dto.ProductID, dto.Quantity, dto.SkuID)
+	result, err := ctrl.stockService.ReserveStock(c.Request.Context(), tenantID, dto.ProductID, dto.Quantity, actingUser(c), dto.SkuID)
 	if err != nil {
 		var pgErr *pgconn.PgError
 		if errors.As(err, &pgErr) {
@@ -133,7 +133,7 @@ func (ctrl *StockController) ReleaseReservedStock(ctx context.Context, in *Relea
 		return nil, api.Fail(http.StatusBadRequest, coreErrors.BuildErrorDetail(c, inventoryErrors.InsufficientStock, err.Error()))
 	}
 
-	result, err := ctrl.stockService.ReleaseReservedStock(c.Request.Context(), tenantID, dto.ProductID, dto.Quantity, dto.SkuID)
+	result, err := ctrl.stockService.ReleaseReservedStock(c.Request.Context(), tenantID, dto.ProductID, dto.Quantity, actingUser(c), dto.SkuID)
 	if err != nil {
 		var pgErr *pgconn.PgError
 		if errors.As(err, &pgErr) {

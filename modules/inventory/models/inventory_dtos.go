@@ -12,6 +12,8 @@ type CreateProductDto struct {
 	Description *string `json:"description"`
 	BasePrice   float64 `json:"base_price" binding:"required,gt=0"`
 	Variants    any     `json:"variants"`
+	// ActedBy is who is writing: set server-side, never read from the body (INV-020 D1).
+	ActedBy *string `json:"-"`
 }
 
 // UpdateProductDto carries the editable product fields plus, optionally, the
@@ -22,6 +24,7 @@ type UpdateProductDto struct {
 	Description *string                   `json:"description"`
 	BasePrice   float64                   `json:"base_price" binding:"required,gt=0"`
 	Variants    *UpdateProductVariantsDto `json:"variants"`
+	ActedBy     *string                   `json:"-"`
 }
 
 type UpdateProductVariantsDto struct {
@@ -60,9 +63,9 @@ type UpdateVariantOptionDto struct {
 // is a pointer for the same reason SkuID is — omitting it is the normal case, and
 // only ADJUSTMENT and TRANSFER are refused for it.
 type RecordMovementDto struct {
-	ProductID     string   `json:"product_id" binding:"required"`
+	ProductID     string   `json:"product_id" binding:"required,uuid"`
 	SkuID         *string  `json:"sku_id" binding:"omitempty,uuid"`
-	MovementType  string   `json:"movement_type" binding:"required"`
+	MovementType  string   `json:"movement_type" binding:"required,oneof=PURCHASE SALE ADJUSTMENT TRANSFER RETURN WASTE PRODUCTION"`
 	Quantity      float64  `json:"quantity" binding:"required,gt=0"`
 	Direction     *string  `json:"direction" binding:"omitempty,oneof=IN OUT"`
 	ReferenceType *string  `json:"reference_type"`
@@ -149,13 +152,13 @@ type StockReservationResponse struct {
 // SkuID follows the same rule as RecordMovementDto's: optional on a product with
 // no axis, required by the SP on one stocked by combination (INV-011 D1).
 type ReserveStockDto struct {
-	ProductID string  `json:"product_id" binding:"required"`
+	ProductID string  `json:"product_id" binding:"required,uuid"`
 	SkuID     *string `json:"sku_id" binding:"omitempty,uuid"`
 	Quantity  float64 `json:"quantity" binding:"required,gt=0"`
 }
 
 type ReleaseReservedStockDto struct {
-	ProductID string  `json:"product_id" binding:"required"`
+	ProductID string  `json:"product_id" binding:"required,uuid"`
 	SkuID     *string `json:"sku_id" binding:"omitempty,uuid"`
 	Quantity  float64 `json:"quantity" binding:"required,gt=0"`
 }
@@ -221,12 +224,15 @@ type ProductDetail struct {
 	CreatedAt   time.Time      `json:"created_at"`
 	Media       []ProductMedia `json:"media"`
 	Variants    []VariantGroup `json:"variants"`
+	// UpdatedAt and UpdatedByName say who last changed it (INV-020 D1); no name on a row nobody touched since.
+	UpdatedAt     *time.Time `json:"updated_at"`
+	UpdatedByName *string    `json:"updated_by_name"`
 }
 
 type AddProductMediaDto struct {
 	VariantOptionID *string `json:"variant_option_id"`
 	MediaType       string  `json:"media_type" binding:"required,oneof=image video"`
-	URL             string  `json:"url" binding:"required"`
+	URL             string  `json:"url" binding:"required,url"`
 	AltText         *string `json:"alt_text"`
 	IsPrimary       bool    `json:"is_primary"`
 	SortOrder       int     `json:"sort_order"`
