@@ -541,6 +541,31 @@ CREATE TABLE tracking.rider_absences (
 
 
 --
+-- Name: rider_access_codes; Type: TABLE; Schema: tracking; Owner: -
+--
+
+CREATE TABLE tracking.rider_access_codes (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    tenant_id uuid NOT NULL,
+    rider_id uuid NOT NULL,
+    code_hash bytea NOT NULL,
+    expires_at timestamp with time zone NOT NULL,
+    used_at timestamp with time zone,
+    used_by uuid,
+    revoked_at timestamp with time zone,
+    created_by uuid,
+    created_at timestamp with time zone DEFAULT now() NOT NULL
+);
+
+
+--
+-- Name: TABLE rider_access_codes; Type: COMMENT; Schema: tracking; Owner: -
+--
+
+COMMENT ON TABLE tracking.rider_access_codes IS 'One-time codes the office hands a passenger to sign in by QR (MOBILE-042). Only the hash of the code is stored.';
+
+
+--
 -- Name: rider_access_log; Type: TABLE; Schema: tracking; Owner: -
 --
 
@@ -1501,6 +1526,22 @@ ALTER TABLE ONLY tracking.rider_absences
 
 
 --
+-- Name: rider_access_codes rider_access_codes_code_hash_key; Type: CONSTRAINT; Schema: tracking; Owner: -
+--
+
+ALTER TABLE ONLY tracking.rider_access_codes
+    ADD CONSTRAINT rider_access_codes_code_hash_key UNIQUE (code_hash);
+
+
+--
+-- Name: rider_access_codes rider_access_codes_pkey; Type: CONSTRAINT; Schema: tracking; Owner: -
+--
+
+ALTER TABLE ONLY tracking.rider_access_codes
+    ADD CONSTRAINT rider_access_codes_pkey PRIMARY KEY (id);
+
+
+--
 -- Name: rider_access_log rider_access_log_pkey; Type: CONSTRAINT; Schema: tracking; Owner: -
 --
 
@@ -2388,6 +2429,13 @@ CREATE UNIQUE INDEX uq_calendars_tenant_scope ON tracking.calendars USING btree 
 
 
 --
+-- Name: uq_rider_access_codes_live; Type: INDEX; Schema: tracking; Owner: -
+--
+
+CREATE UNIQUE INDEX uq_rider_access_codes_live ON tracking.rider_access_codes USING btree (rider_id) WHERE ((used_at IS NULL) AND (revoked_at IS NULL));
+
+
+--
 -- Name: ux_rider_contacts_primary; Type: INDEX; Schema: tracking; Owner: -
 --
 
@@ -2583,6 +2631,14 @@ ALTER TABLE ONLY tracking.organizations
 
 ALTER TABLE ONLY tracking.rider_absences
     ADD CONSTRAINT rider_absences_rider_id_fkey FOREIGN KEY (rider_id) REFERENCES tracking.riders(id) ON DELETE CASCADE;
+
+
+--
+-- Name: rider_access_codes rider_access_codes_rider_id_fkey; Type: FK CONSTRAINT; Schema: tracking; Owner: -
+--
+
+ALTER TABLE ONLY tracking.rider_access_codes
+    ADD CONSTRAINT rider_access_codes_rider_id_fkey FOREIGN KEY (rider_id) REFERENCES tracking.riders(id) ON DELETE CASCADE;
 
 
 --

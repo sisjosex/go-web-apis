@@ -1066,6 +1066,27 @@ func RegisterTestPhone(t *testing.T, helper *testhelpers.ApiTestHelper, userID, 
 	})
 }
 
+// organizationZone answers the time zone of riderID's organization: no API read carries it.
+func organizationZone(t *testing.T, helper *testhelpers.ApiTestHelper, riderID string) string {
+	t.Helper()
+	var zone string
+	err := helper.DB().QueryRow(context.Background(), `
+		SELECT o.timezone FROM tracking.riders r
+		JOIN tracking.organizations o ON o.id = r.organization_id WHERE r.id = $1`, riderID).Scan(&zone)
+	if err != nil {
+		t.Fatalf("organization zone: %v", err)
+	}
+	return zone
+}
+
+// ExpireRiderAccessCode runs riderID's codes past their seven days: no API moves a clock.
+func ExpireRiderAccessCode(t *testing.T, helper *testhelpers.ApiTestHelper, riderID string) {
+	t.Helper()
+	if _, err := helper.DB().Execute(context.Background(), `UPDATE tracking.rider_access_codes SET expires_at = now() - INTERVAL '1 minute' WHERE rider_id = $1`, riderID); err != nil {
+		t.Fatalf("expire access code: %v", err)
+	}
+}
+
 // LinkPortalGuardian makes the seeded guardian (portal@test.local) a guardian of riderID too, and
 // unlinks them when the test ends — the seeded guardian has exactly one rider everywhere else.
 func LinkPortalGuardian(t *testing.T, helper *testhelpers.ApiTestHelper, riderID string) {

@@ -34,7 +34,9 @@ var heavyRoutes = map[string]bool{
 // publicRoutes answer anyone holding a link, with no session (TRACK-060): a page polls them, so each
 // IP gets its own minute budget.
 var publicRoutes = map[string]bool{
-	"GET /api/v1/public/share/:token": true,
+	"GET /api/v1/public/share/:token":                true,
+	"POST /api/v1/public/rider-access/:token/check":  true,
+	"POST /api/v1/public/rider-access/:token/redeem": true,
 }
 
 // deviceRoutes are a hardware tracker's (TRACK-068): many share a carrier's IP, so the per-IP limit

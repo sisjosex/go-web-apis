@@ -609,6 +609,7 @@ func registerTracking(d routeDeps, chains tenantChains, valkey coreServices.Valk
 	liveRoutes := trackingRoutes.Live{Controller: trackingControllers.NewLiveController(live)}
 	if chains.tenants != nil {
 		liveRoutes.Public = []gin.HandlerFunc{shareTenant(chains.tenants)}
+		liveRoutes.PublicAuth = []gin.HandlerFunc{d.authMiddleware, shareTenant(chains.tenants)}
 	}
 	if d.hub != nil {
 		liveRoutes.Socket = trackingSocket(d, chains, live)

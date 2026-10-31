@@ -54,6 +54,8 @@ type Live struct {
 	Socket     []gin.HandlerFunc
 	// Public is the share page's chain (TRACK-060): the token's slug names the tenant, no session.
 	Public []gin.HandlerFunc
+	// PublicAuth is that chain behind a session with no tenant yet: a QR redeemed right after sign-in (MOBILE-042).
+	PublicAuth []gin.HandlerFunc
 }
 
 // RegisterTrackingRoutes registers all tracking module routes
@@ -95,6 +97,12 @@ func RegisterTrackingRoutes(
 		}
 		if live.Socket != nil {
 			trackingGroup.GET("/ws", live.Socket...)
+		}
+		if live.Public != nil {
+			api.Post(&router.RouterGroup, "/api/v1/public/rider-access/{token}/check", access.CheckRiderAccessCode, api.Doc{Summary: "Ready an account for a scanned QR", Description: "MOBILE-042: no session. A code that still opens finds or creates the email's account at the portal level, so the emailed code has an account to open; it reaches no rider until the code is redeemed. 404 unknown, 409 used, 410 expired or revoked. Limited per IP.", Errors: []int{400, 404, 409, 410}}, live.Public...)
+		}
+		if live.PublicAuth != nil {
+			api.Post(&router.RouterGroup, "/api/v1/public/rider-access/{token}/redeem", access.RedeemRiderAccessCode, api.Doc{Summary: "Use a passenger's QR, signed in", Description: "MOBILE-042: the session's account becomes the rider's own contact, which gives it the pass, and the code is used up. 404 unknown, 409 used, 410 expired or revoked.", Errors: []int{403, 404, 409, 410}}, live.PublicAuth...)
 		}
 		if live.Public != nil {
 			api.Get(&router.RouterGroup, "/api/v1/public/share/{token}", live.Controller.GetSharedTrip, api.Doc{Summary: "A shared trip, for anyone holding the link", Description: "No session: the token's slug names the operator. Never a driver's or passenger's name; an unknown, expired or revoked link is one 404.", Errors: []int{404, 429}}, live.Public...)
@@ -197,6 +205,8 @@ func registerAccessRoutes(r *gin.RouterGroup, denyOrganization gin.HandlerFunc, 
 	api.Post(r, "/riders", access.CreateRider, api.Doc{Summary: "Create rider", Description: "A rider (student/employee) with up to 5 guardians in one request (TRACK-037 D2): an account by user_id, a person to invite by email and name, or a contact by name and phone. A refused guardian names its index in detail and nothing is created.", Status: 201, Errors: []int{400, 404, 409}}, tenancyMW.RequirePermission(trackingPerms.RidersWrite))
 	api.Get(r, "/riders/{rider_id}/guardians", access.ListRiderGuardians, api.Doc{Summary: "A rider's family accounts", Description: "The guardian accounts that see the rider in the app (D3), each with the access notice to copy", Errors: []int{404}}, tenancyMW.RequirePermission(trackingPerms.RidersRead))
 	api.Post(r, "/riders/{rider_id}/guardians", access.AddRiderGuardian, api.Doc{Summary: "Add a rider's guardian", Description: "An existing account by user_id, a person by email and name (found or created at the portal level), or a contact by name and phone with no account (TRACK-048 D3, user_id null, status contact); 409 when the email has web access or another app level (D4)", Status: 201, Errors: []int{400, 404, 409}}, tenancyMW.RequirePermission(trackingPerms.RidersWrite))
+	api.Post(r, "/riders/{rider_id}/access-code", access.IssueRiderAccessCode, api.Doc{Summary: "A passenger's QR to sign in", Description: "MOBILE-042: one use, seven days, shown this once; a new one revokes the last. Not the card's code, which a driver scans.", Errors: []int{400, 403, 404}}, denyOrganization)
+	api.Delete(r, "/riders/{rider_id}/access-code", access.RevokeRiderAccessCode, api.Doc{Summary: "End a passenger's QR", Description: "MOBILE-042: the live code stops opening, if there is one.", Errors: []int{400, 403, 404}}, denyOrganization)
 	api.Delete(r, "/riders/{rider_id}/guardians/{user_id}", access.RemoveRiderGuardian, api.Doc{Summary: "Take a family account off a rider", Description: "The account's portal access ends when no other rider names it", Status: 204, Errors: []int{404}}, tenancyMW.RequirePermission(trackingPerms.RidersWrite))
 	// Invitations at scale (TRACK-062): the same family grant for an organization or a selection, in
 	// the caller's scope — an organization user's needs its admin role (TRACK-067).

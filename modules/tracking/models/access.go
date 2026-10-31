@@ -51,6 +51,23 @@ const (
 // GuardianContact is the status of a guardian kept as a contact, without an account (TRACK-048 D3).
 const GuardianContact = "contact"
 
+// RiderAccessCode is a passenger's one-time QR (MOBILE-042): Code is what the QR holds, shown this once.
+type RiderAccessCode struct {
+	Code      string    `json:"code"`
+	ExpiresAt time.Time `json:"expires_at"`
+}
+
+// CheckRiderAccessCodeDto is the email a scanned QR will sign in with.
+type CheckRiderAccessCodeDto struct {
+	Email string `json:"email" binding:"required,email,max=255" conform:"trim,lower"`
+}
+
+// RiderAccessRedeemed names the rider the account now is, and the tenant to enter it in.
+type RiderAccessRedeemed struct {
+	RiderID    uuid.UUID `json:"rider_id"`
+	TenantSlug string    `json:"tenant_slug"`
+}
+
 // AccessGranted is the 201 of a grant. Notice is the text the access email carries, for the
 // "Copy message" button (D5). A guardian added as a contact (TRACK-048 D3) has no account: UserID is
 // nil and Status "contact".

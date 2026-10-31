@@ -44,7 +44,8 @@ func TestPortalMe_HomeCards(t *testing.T) {
 
 	absent := CreateTestRider(t, helper)
 	LinkPortalGuardian(t, helper, absent)
-	today := dayOffset(t, "UTC", 0)
+	// The operator's own day, which the home reads the absence by: not UTC's, from 20:00 in Bolivia.
+	today := dayOffset(t, organizationZone(t, helper, absent), 0)
 	w := helper.DoRequest("POST", "/tracking/riders/"+absent+"/absences",
 		map[string]interface{}{"date_from": today, "date_to": today, "direction": "outbound"}, map[string]string{})
 	if w.Code != http.StatusCreated {

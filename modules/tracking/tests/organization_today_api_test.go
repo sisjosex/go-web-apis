@@ -6,6 +6,7 @@ package tracking_test
 import (
 	"net/http"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 
@@ -33,6 +34,21 @@ func orgRider(t *testing.T, helper *testhelpers.ApiTestHelper, organizationID, r
 	riderID := createRider(t, helper, map[string]interface{}{"organization_id": organizationID})
 	assignRider(t, helper, riderID, routeID)
 	return riderID
+}
+
+// lateStartToday answers a start time of today (UTC) that has its 30-minute arrival already behind it: two
+// hours ago, or midnight in the day's first two hours. In the first 40 minutes no time of today is that
+// old yet, so the test skips rather than read a clock it cannot move.
+func lateStartToday(t *testing.T) string {
+	t.Helper()
+	now := time.Now().UTC()
+	if now.Hour() == 0 && now.Minute() < 40 {
+		t.Skip("no time of today's UTC day is late yet")
+	}
+	if now.Hour() < 2 {
+		return "00:00"
+	}
+	return now.Add(-2 * time.Hour).Format("15:04")
 }
 
 func organizationToday(t *testing.T, helper *testhelpers.ApiTestHelper, query string) models.OrganizationToday {
@@ -79,11 +95,12 @@ func TestOrganizationToday_SchoolTotals(t *testing.T) {
 	helper := SetupTrackingTest(t)
 	defer helper.Close()
 	org := newOrganization(t, helper, "school")
-	routeID, _ := createTripRoute(t, helper, "07:00")
+	start := lateStartToday(t)
+	routeID, _ := createTripRoute(t, helper, start)
 	arrived, onTheWay, absent := orgRider(t, helper, org, routeID), orgRider(t, helper, org, routeID), orgRider(t, helper, org, routeID)
 	today := dayOffset(t, "UTC", 0)
 	materialiseRoute(t, helper, routeID, today, today)
-	tripID, _ := tripOn(t, helper, routeID, today, "07:00")
+	tripID, _ := tripOn(t, helper, routeID, today, start)
 	tripRequest(t, helper, "PATCH", "/tracking/trips/"+tripID, map[string]interface{}{"vehicle_id": CreateTestVehicleOf(t, helper, MainCompanyID)}, http.StatusOK)
 	tripRequest(t, helper, "POST", "/tracking/trips/"+tripID+"/start", nil, http.StatusOK)
 	postAbsence(t, helper, absent, map[string]interface{}{"date_from": today, "date_to": today}, http.StatusCreated)
@@ -96,7 +113,7 @@ func TestOrganizationToday_SchoolTotals(t *testing.T) {
 	day := organizationToday(t, helper, "organization_id="+org+"&date="+today)
 	assert.Equal(t, org, day.Organization.ID.String())
 	assert.Equal(t, "school", day.Organization.Kind)
-	// A 07:00 trip still running hours later is late to its shift: both riders who ride count as late.
+	// A trip that left two hours ago and is still running is late to its shift: both riders who ride count as late.
 	assert.Equal(t, models.OrganizationTodayTotals{Expected: 3, Arrived: 1, OnTheWay: 1, Absent: 1, Late: 2, OnTime: 0}, day.Totals)
 	if assert.Len(t, day.Routes, 1) {
 		assert.Equal(t, tripID, day.Routes[0].TripID.String())

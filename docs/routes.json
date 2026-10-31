@@ -1917,6 +1917,44 @@
       "writes": []
     },
     {
+      "method": "POST",
+      "path": "/api/v1/public/rider-access/{token}/check",
+      "operation_id": "tracking.CheckRiderAccessCode",
+      "module": "tracking",
+      "handler": "josex/web/modules/tracking/controllers.(*AccessController).CheckRiderAccessCode",
+      "sps": [
+        "tenancy.sp_grant_app_access",
+        "tracking.sp_rider_access_code_check"
+      ],
+      "reads": [
+        "tenancy.tenants",
+        "tracking.rider_access_codes",
+        "tracking.riders"
+      ],
+      "writes": [
+        "auth.users",
+        "tenancy.app_invites",
+        "tenancy.tenant_users"
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/public/rider-access/{token}/redeem",
+      "operation_id": "tracking.RedeemRiderAccessCode",
+      "module": "tracking",
+      "handler": "josex/web/modules/tracking/controllers.(*AccessController).RedeemRiderAccessCode",
+      "sps": [
+        "tracking.sp_rider_access_code_redeem"
+      ],
+      "reads": [
+        "tracking.riders"
+      ],
+      "writes": [
+        "tracking.rider_access_codes",
+        "tracking.rider_contacts"
+      ]
+    },
+    {
       "method": "GET",
       "path": "/api/v1/public/share/{token}",
       "operation_id": "tracking.GetSharedTrip",
@@ -4812,6 +4850,42 @@
       "writes": [
         "tracking.outbox",
         "tracking.rider_absences"
+      ]
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/v1/tracking/riders/{rider_id}/access-code",
+      "operation_id": "tracking.RevokeRiderAccessCode",
+      "module": "tracking",
+      "handler": "josex/web/modules/tracking/controllers.(*AccessController).RevokeRiderAccessCode",
+      "sps": [
+        "tracking.sp_rider_access_code_revoke"
+      ],
+      "reads": [
+        "tracking.organization_members",
+        "tracking.organizations",
+        "tracking.riders"
+      ],
+      "writes": [
+        "tracking.rider_access_codes"
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/tracking/riders/{rider_id}/access-code",
+      "operation_id": "tracking.IssueRiderAccessCode",
+      "module": "tracking",
+      "handler": "josex/web/modules/tracking/controllers.(*AccessController).IssueRiderAccessCode",
+      "sps": [
+        "tracking.sp_rider_access_code_issue"
+      ],
+      "reads": [
+        "tracking.organization_members",
+        "tracking.organizations",
+        "tracking.riders"
+      ],
+      "writes": [
+        "tracking.rider_access_codes"
       ]
     },
     {
@@ -10577,6 +10651,42 @@
       "calls": [
         "tracking.fn_absence_first_pickup",
         "tracking.fn_rider_absence_guard"
+      ]
+    },
+    "tracking.sp_rider_access_code_check": {
+      "reads": [
+        "tracking.rider_access_codes",
+        "tracking.riders"
+      ],
+      "writes": [],
+      "calls": []
+    },
+    "tracking.sp_rider_access_code_issue": {
+      "reads": [],
+      "writes": [
+        "tracking.rider_access_codes"
+      ],
+      "calls": [
+        "tracking.fn_require_rider"
+      ]
+    },
+    "tracking.sp_rider_access_code_redeem": {
+      "reads": [
+        "tracking.riders"
+      ],
+      "writes": [
+        "tracking.rider_access_codes",
+        "tracking.rider_contacts"
+      ],
+      "calls": []
+    },
+    "tracking.sp_rider_access_code_revoke": {
+      "reads": [],
+      "writes": [
+        "tracking.rider_access_codes"
+      ],
+      "calls": [
+        "tracking.fn_require_rider"
       ]
     },
     "tracking.sp_rider_guardian_add": {

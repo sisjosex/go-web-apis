@@ -336,6 +336,12 @@ const (
 	RiderPlaceUpdateFailed = "tracking.rider-place.update.failed"
 	RiderPlaceDeleteFailed = "tracking.rider-place.delete.failed"
 
+	// A passenger's QR to sign in (MOBILE-042).
+	RiderAccessNotFound = "tracking.rider-access.not-found"
+	RiderAccessUsed     = "tracking.rider-access.used"
+	RiderAccessExpired  = "tracking.rider-access.expired"
+	RiderAccessFailed   = "tracking.rider-access.failed"
+
 	// Share links (TRACK-060). NotFound is one answer for an unknown, expired or revoked token; NoTrip a
 	// rider with no trip of today still to run, or a trip that has ended.
 	ShareNotFound     = "tracking.share.not-found"

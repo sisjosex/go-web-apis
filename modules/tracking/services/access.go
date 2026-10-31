@@ -20,6 +20,10 @@ import (
 
 // AccessRepository is what the access slice needs from the tracking repository (TRACK-032).
 type AccessRepository interface {
+	IssueRiderAccessCode(ctx context.Context, tenantID, riderID uuid.UUID, hash []byte, createdBy, scopeUserID *uuid.UUID) (time.Time, error)
+	RevokeRiderAccessCode(ctx context.Context, tenantID, riderID uuid.UUID, scopeUserID *uuid.UUID) error
+	CheckRiderAccessCode(ctx context.Context, tenantID uuid.UUID, hash []byte) (string, error)
+	RedeemRiderAccessCode(ctx context.Context, tenantID uuid.UUID, hash []byte, userID uuid.UUID) (uuid.UUID, error)
 	GrantAppAccess(ctx context.Context, tenantID uuid.UUID, dto *models.GrantAccessDto, level, channel string, createdBy *uuid.UUID) (*models.AppAccessGrant, error)
 	CreateRider(ctx context.Context, tenantID uuid.UUID, dto *models.CreateRiderDto, scopeUserID *uuid.UUID) (*models.Rider, error)
 	CreateDriver(ctx context.Context, tenantID uuid.UUID, dto *models.CreateDriverDto) (*models.Driver, error)

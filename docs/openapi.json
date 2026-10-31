@@ -12164,6 +12164,23 @@
         ],
         "type": "object"
       },
+      "tracking.RiderAccessCode": {
+        "additionalProperties": false,
+        "properties": {
+          "code": {
+            "type": "string"
+          },
+          "expires_at": {
+            "format": "date-time",
+            "type": "string"
+          }
+        },
+        "required": [
+          "code",
+          "expires_at"
+        ],
+        "type": "object"
+      },
       "tracking.RiderAccessEntry": {
         "additionalProperties": false,
         "properties": {
@@ -12217,6 +12234,23 @@
           "reads",
           "first_at",
           "last_at"
+        ],
+        "type": "object"
+      },
+      "tracking.RiderAccessRedeemed": {
+        "additionalProperties": false,
+        "properties": {
+          "rider_id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "tenant_slug": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "rider_id",
+          "tenant_slug"
         ],
         "type": "object"
       },
@@ -22192,6 +22226,145 @@
         "x-handler": "josex/web/modules/tenancy/controllers.(*PlatformUsageController).ListUsage"
       }
     },
+    "/api/v1/public/rider-access/{token}/check": {
+      "post": {
+        "description": "MOBILE-042: no session. A code that still opens finds or creates the email's account at the portal level, so the emailed code has an account to open; it reaches no rider until the code is redeemed. 404 unknown, 409 used, 410 expired or revoked. Limited per IP.",
+        "operationId": "tracking.CheckRiderAccessCode",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "token",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "No Content"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/core.ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/core.ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/core.ErrorResponse"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "410": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/core.ErrorResponse"
+                }
+              }
+            },
+            "description": "Gone"
+          }
+        },
+        "summary": "Ready an account for a scanned QR",
+        "tags": [
+          "tracking"
+        ],
+        "x-handler": "josex/web/modules/tracking/controllers.(*AccessController).CheckRiderAccessCode"
+      }
+    },
+    "/api/v1/public/rider-access/{token}/redeem": {
+      "post": {
+        "description": "MOBILE-042: the session's account becomes the rider's own contact, which gives it the pass, and the code is used up. 404 unknown, 409 used, 410 expired or revoked.",
+        "operationId": "tracking.RedeemRiderAccessCode",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "token",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/tracking.RiderAccessRedeemed"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/core.ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/core.ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/core.ErrorResponse"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "410": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/core.ErrorResponse"
+                }
+              }
+            },
+            "description": "Gone"
+          }
+        },
+        "summary": "Use a passenger's QR, signed in",
+        "tags": [
+          "tracking"
+        ],
+        "x-handler": "josex/web/modules/tracking/controllers.(*AccessController).RedeemRiderAccessCode"
+      }
+    },
     "/api/v1/public/share/{token}": {
       "get": {
         "description": "No session: the token's slug names the operator. Never a driver's or passenger's name; an unknown, expired or revoked link is one 404.",
@@ -31287,6 +31460,123 @@
           "tracking"
         ],
         "x-handler": "josex/web/modules/tracking/controllers.(*TrackingController).DeleteRiderAbsence"
+      }
+    },
+    "/api/v1/tracking/riders/{rider_id}/access-code": {
+      "delete": {
+        "description": "MOBILE-042: the live code stops opening, if there is one.",
+        "operationId": "tracking.RevokeRiderAccessCode",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "rider_id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "No Content"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/core.ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/core.ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/core.ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          }
+        },
+        "summary": "End a passenger's QR",
+        "tags": [
+          "tracking"
+        ],
+        "x-handler": "josex/web/modules/tracking/controllers.(*AccessController).RevokeRiderAccessCode"
+      },
+      "post": {
+        "description": "MOBILE-042: one use, seven days, shown this once; a new one revokes the last. Not the card's code, which a driver scans.",
+        "operationId": "tracking.IssueRiderAccessCode",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "rider_id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/tracking.RiderAccessCode"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/core.ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/core.ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/core.ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          }
+        },
+        "summary": "A passenger's QR to sign in",
+        "tags": [
+          "tracking"
+        ],
+        "x-handler": "josex/web/modules/tracking/controllers.(*AccessController).IssueRiderAccessCode"
       }
     },
     "/api/v1/tracking/riders/{rider_id}/audit": {
