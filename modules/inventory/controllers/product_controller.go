@@ -16,6 +16,9 @@ import (
 	inventoryErrors "josex/web/modules/inventory/errors"
 	inventoryInterfaces "josex/web/modules/inventory/interfaces"
 	"josex/web/modules/inventory/models"
+	inventoryPerms "josex/web/modules/inventory/permissions"
+	tenancyErrors "josex/web/modules/tenancy/errors"
+	tenancyMW "josex/web/modules/tenancy/middleware"
 )
 
 type ProductController struct {
@@ -291,6 +294,68 @@ func (ctrl *ProductController) RemoveProductMedia(ctx context.Context, in *Remov
 	}
 
 	return api.OK(RemoveProductMediaResponse{Message: "Media removed successfully"})
+}
+
+// SetProductStatusInput is SetProductStatus's request.
+type SetProductStatusInput struct {
+	ID   string `path:"id"`
+	JSON api.Body[models.SetProductStatusDto]
+}
+
+// SetProductStatus is PATCH /products/{id}/status: discontinue or reactivate a product.
+func (ctrl *ProductController) SetProductStatus(ctx context.Context, in *SetProductStatusInput) (*api.Out[*models.SetProductStatusResponse], error) {
+	c := api.Gin(ctx)
+	tenantID, err := uuid.Parse(c.GetString("tenant_id"))
+	if err != nil {
+		return nil, api.Fail(http.StatusUnauthorized, coreErrors.BuildErrorSingle(c, "auth.invalid-tenant"))
+	}
+	if _, err := uuid.Parse(in.ID); err != nil {
+		return nil, api.Fail(http.StatusNotFound, coreErrors.BuildErrorSingle(c, inventoryErrors.ProductNotFound))
+	}
+	var dto models.SetProductStatusDto
+	if err := in.JSON.Into(ctx, &dto); err != nil {
+		return nil, api.Fail(http.StatusBadRequest, coreErrors.BuildErrorDetail(c, "validation.invalid", err.Error()))
+	}
+	result, err := ctrl.productService.SetProductStatus(c.Request.Context(), tenantID, in.ID, dto.Status, actingUser(c))
+	if err != nil {
+		var pgErr *pgconn.PgError
+		if errors.As(err, &pgErr) && pgErr.Message == inventoryErrors.ProductNotFound {
+			return nil, api.Fail(http.StatusNotFound, coreErrors.BuildErrorSingle(c, inventoryErrors.ProductNotFound))
+		}
+		return nil, api.Fail(http.StatusInternalServerError, coreErrors.BuildError(c, err))
+	}
+	return api.OK(result)
+}
+
+// BulkUpdateProductsInput is BulkUpdateProducts's request.
+type BulkUpdateProductsInput struct {
+	JSON api.Body[models.BulkUpdateProductsDto]
+}
+
+// BulkUpdateProducts is PATCH /products/bulk: one change to at most 100 products. Changing the status
+// also needs the permission that discontinues one.
+func (ctrl *ProductController) BulkUpdateProducts(ctx context.Context, in *BulkUpdateProductsInput) (*api.Out[*models.BulkUpdateProductsResponse], error) {
+	c := api.Gin(ctx)
+	tenantID, err := uuid.Parse(c.GetString("tenant_id"))
+	if err != nil {
+		return nil, api.Fail(http.StatusUnauthorized, coreErrors.BuildErrorSingle(c, "auth.invalid-tenant"))
+	}
+	var dto models.BulkUpdateProductsDto
+	if err := in.JSON.Into(ctx, &dto); err != nil {
+		return nil, api.Fail(http.StatusBadRequest, coreErrors.BuildErrorDetail(c, "validation.invalid", err.Error()))
+	}
+	if dto.Set.Status != nil && !tenancyMW.CanInContext(c, inventoryPerms.ProductsDelete) {
+		return nil, api.Fail(http.StatusForbidden, coreErrors.BuildErrorSingle(c, tenancyErrors.PermissionDenied))
+	}
+	result, err := ctrl.productService.BulkUpdateProducts(c.Request.Context(), tenantID, dto, actingUser(c))
+	if err != nil {
+		var pgErr *pgconn.PgError
+		if errors.As(err, &pgErr) && pgErr.Message == inventoryErrors.CategoryNotFound {
+			return nil, api.Fail(http.StatusNotFound, coreErrors.BuildErrorSingle(c, inventoryErrors.CategoryNotFound))
+		}
+		return nil, api.Fail(http.StatusInternalServerError, coreErrors.BuildError(c, err))
+	}
+	return api.OK(result)
 }
 
 // ListProductsInput is ListProducts's request.

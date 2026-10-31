@@ -5,12 +5,14 @@ import (
 	"encoding/json"
 	"errors"
 	"log"
+	"time"
 
 	"josex/web/modules/core/limits"
 	"josex/web/modules/core/services"
 	"josex/web/modules/inventory/models"
 
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
 )
 
@@ -35,6 +37,7 @@ func (r *ProductRepository) CreateProductWithVariants(
 	variantsJSON *string,
 	maxAxes, maxCombinations int,
 	actedBy *string,
+	posVisible, ordersVisible *bool,
 ) (*models.CreateProductResponse, error) {
 	var productID, respSku, respName, message string
 
@@ -43,9 +46,9 @@ func (r *ProductRepository) CreateProductWithVariants(
 		// The plan's product limit is checked in the same statement (BILLING-001 D2).
 		`SELECT CAST(p.product_id AS VARCHAR), p.sku, p.name, p.message
 		 FROM public.fn_within_limit($1, (SELECT COUNT(*) FROM inventory.products x WHERE x.tenant_id = $1), $9::INT, 'inventory_items') lim(tenant_id)
-		 CROSS JOIN LATERAL inventory.sp_create_product_with_variants(lim.tenant_id, $2, $3, $4, $5, $6::JSONB, $10::UUID, $7, $8) p`,
+		 CROSS JOIN LATERAL inventory.sp_create_product_with_variants(lim.tenant_id, $2, $3, $4, $5, $6::JSONB, $10::UUID, $7, $8, $11::BOOLEAN, $12::BOOLEAN) p`,
 		tenantID, sku, name, description, basePrice, variantsJSON, maxAxes, maxCombinations,
-		limits.For(ctx, tenantID, limits.InventoryItems), actedBy,
+		limits.For(ctx, tenantID, limits.InventoryItems), actedBy, posVisible, ordersVisible,
 	).Scan(&productID, &respSku, &respName, &message)
 
 	if err != nil {
@@ -79,13 +82,14 @@ func (r *ProductRepository) UpdateProductWithVariants(
 	basePrice float64,
 	variantsJSON *string,
 	actedBy *string,
+	posVisible, ordersVisible *bool,
 ) (*models.UpdateProductResponse, error) {
 	var respProductID, respSku, respName, message string
 
 	err := r.dbService.QueryRow(
 		ctx,
-		`SELECT CAST(product_id AS VARCHAR), sku, name, message FROM inventory.sp_update_product_with_variants($1, $2, $3, $4, $5, $6::JSONB, $7::UUID)`,
-		tenantID, productID, name, description, basePrice, variantsJSON, actedBy,
+		`SELECT CAST(product_id AS VARCHAR), sku, name, message FROM inventory.sp_update_product_with_variants($1, $2, $3, $4, $5, $6::JSONB, $7::UUID, $8::BOOLEAN, $9::BOOLEAN)`,
+		tenantID, productID, name, description, basePrice, variantsJSON, actedBy, posVisible, ordersVisible,
 	).Scan(&respProductID, &respSku, &respName, &message)
 
 	if err != nil {
@@ -140,10 +144,10 @@ func (r *ProductRepository) GetProductWithVariants(ctx context.Context, tenantID
 
 	err := r.dbService.QueryRow(
 		ctx,
-		`SELECT id, sku, name, description, base_price, has_variants, status, created_at, media, variants, updated_at, updated_by_name
+		`SELECT id, sku, name, description, base_price, has_variants, status, created_at, media, variants, updated_at, updated_by_name, pos_visible, orders_visible
 		 FROM inventory.sp_get_product_with_variants($1, $2)`,
 		tenantID, productID,
-	).Scan(&p.ID, &p.SKU, &p.Name, &p.Description, &p.BasePrice, &p.HasVariants, &p.Status, &p.CreatedAt, &mediaJSON, &variantsJSON, &p.UpdatedAt, &p.UpdatedByName)
+	).Scan(&p.ID, &p.SKU, &p.Name, &p.Description, &p.BasePrice, &p.HasVariants, &p.Status, &p.CreatedAt, &mediaJSON, &variantsJSON, &p.UpdatedAt, &p.UpdatedByName, &p.PosVisible, &p.OrdersVisible)
 
 	if err != nil {
 		if r.logger != nil {
@@ -268,12 +272,14 @@ func (r *ProductRepository) ListProducts(
 	ctx context.Context,
 	tenantID uuid.UUID,
 	query models.ListProductsQuery,
-) ([]models.Product, int64, error) {
+) ([]models.Product, models.ProductCounts, int64, error) {
+	var counts models.ProductCounts
 	rows, err := r.dbService.Query(
 		ctx,
-		`SELECT id, sku, name, description, base_price, has_variants, status, created_at, categories, total_count
-		 FROM inventory.sp_list_products($1, $2, $3, $4::UUID, $5::VARCHAR)`,
-		tenantID, query.Page, query.PageSize, query.CategoryID, query.Search,
+		`SELECT id, sku, name, description, base_price, has_variants, status, created_at, categories, total_count,
+		        available_quantity, stock_status, variants_count, axes, min_price, max_price, primary_image_url, pos_visible, counts
+		 FROM inventory.sp_list_products($1, $2, $3, $4::UUID, $5::VARCHAR, $6::VARCHAR, $7::VARCHAR)`,
+		tenantID, query.Page, query.PageSize, query.CategoryID, query.Search, query.Status, query.Filter,
 	)
 	if err != nil {
 		if r.logger != nil {
@@ -281,33 +287,104 @@ func (r *ProductRepository) ListProducts(
 		}
 		var pgErr *pgconn.PgError
 		if errors.As(err, &pgErr) {
-			return nil, 0, pgErr
+			return nil, counts, 0, pgErr
 		}
-		return nil, 0, err
+		return nil, counts, 0, err
 	}
 	defer rows.Close()
 
 	products := []models.Product{}
 	var totalCount int64
 	for rows.Next() {
-		var p models.Product
-		var categoriesJSON []byte
-		if err := rows.Scan(&p.ID, &p.SKU, &p.Name, &p.Description, &p.BasePrice, &p.HasVariants, &p.Status, &p.CreatedAt, &categoriesJSON, &totalCount); err != nil {
-			return nil, 0, err
+		p, categoriesJSON, axesJSON, countsJSON, err := scanProductRow(rows, &totalCount)
+		if err != nil {
+			return nil, counts, 0, err
 		}
-
+		if err := json.Unmarshal(countsJSON, &counts); err != nil {
+			return nil, counts, 0, err
+		}
+		// An empty page is one row with no product: it only carries the counts.
+		if p == nil {
+			continue
+		}
 		p.Categories = []models.ProductCategoryRef{}
-		if len(categoriesJSON) > 0 {
-			if err := json.Unmarshal(categoriesJSON, &p.Categories); err != nil {
-				return nil, 0, err
-			}
+		if err := json.Unmarshal(categoriesJSON, &p.Categories); err != nil {
+			return nil, counts, 0, err
 		}
-
-		products = append(products, p)
+		p.Axes = []models.ProductAxis{}
+		if err := json.Unmarshal(axesJSON, &p.Axes); err != nil {
+			return nil, counts, 0, err
+		}
+		products = append(products, *p)
 	}
 	if err = rows.Err(); err != nil {
-		return nil, 0, err
+		return nil, counts, 0, err
 	}
 
-	return products, totalCount, nil
+	return products, counts, totalCount, nil
+}
+
+// scanProductRow reads one row of sp_list_products; the product is nil on an empty page's only row.
+func scanProductRow(rows pgx.Rows, totalCount *int64) (*models.Product, []byte, []byte, []byte, error) {
+	var (
+		id, sku, name, status, stockStatus       *string
+		basePrice, available, minPrice, maxPrice *float64
+		hasVariants, posVisible                  *bool
+		createdAt                                *time.Time
+		variantsCount                            *int
+		categoriesJSON, axesJSON, countsJSON     []byte
+		description, image                       *string
+	)
+	if err := rows.Scan(&id, &sku, &name, &description, &basePrice, &hasVariants, &status, &createdAt, &categoriesJSON, totalCount,
+		&available, &stockStatus, &variantsCount, &axesJSON, &minPrice, &maxPrice, &image, &posVisible, &countsJSON); err != nil {
+		return nil, nil, nil, nil, err
+	}
+	if id == nil {
+		return nil, nil, nil, countsJSON, nil
+	}
+	return &models.Product{
+		ID: *id, SKU: *sku, Name: *name, Description: description, BasePrice: *basePrice, HasVariants: *hasVariants,
+		Status: *status, CreatedAt: *createdAt, AvailableQuantity: derefFloat(available), StockStatus: derefString(stockStatus),
+		VariantsCount: *variantsCount, MinPrice: *minPrice, MaxPrice: *maxPrice, PrimaryImageURL: image, PosVisible: *posVisible,
+	}, categoriesJSON, axesJSON, countsJSON, nil
+}
+
+func derefFloat(v *float64) float64 {
+	if v == nil {
+		return 0
+	}
+	return *v
+}
+
+func derefString(v *string) string {
+	if v == nil {
+		return ""
+	}
+	return *v
+}
+
+// SetProductStatus discontinues or reactivates a product; the SP refuses another tenant's.
+func (r *ProductRepository) SetProductStatus(ctx context.Context, tenantID uuid.UUID, productID, status string, actedBy *string) (*models.SetProductStatusResponse, error) {
+	var out models.SetProductStatusResponse
+	err := r.dbService.QueryRow(ctx,
+		`SELECT CAST(id AS VARCHAR), status FROM inventory.sp_set_product_status($1, $2::UUID, $3, $4::UUID)`,
+		tenantID, productID, status, actedBy,
+	).Scan(&out.ID, &out.Status)
+	if err != nil {
+		return nil, err
+	}
+	return &out, nil
+}
+
+// BulkUpdateProducts applies one change to the listed products in one call.
+func (r *ProductRepository) BulkUpdateProducts(ctx context.Context, tenantID uuid.UUID, dto models.BulkUpdateProductsDto, actedBy *string) (*models.BulkUpdateProductsResponse, error) {
+	var out models.BulkUpdateProductsResponse
+	err := r.dbService.QueryRow(ctx,
+		`SELECT updated FROM inventory.sp_bulk_update_products($1, $2::UUID[], $3::VARCHAR, $4::NUMERIC, $5::NUMERIC, $6::UUID, $7::BOOLEAN, $8::UUID)`,
+		tenantID, dto.IDs, dto.Set.Status, dto.Set.BasePrice, dto.Set.PriceChangePct, dto.Set.CategoryID, dto.Set.PosVisible, actedBy,
+	).Scan(&out.Updated)
+	if err != nil {
+		return nil, err
+	}
+	return &out, nil
 }

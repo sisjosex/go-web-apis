@@ -1,4 +1,4 @@
-CREATE OR REPLACE FUNCTION inventory.sp_update_product_with_variants(p_tenant_id uuid, p_product_id uuid, p_name character varying, p_description text, p_base_price numeric, p_variants jsonb DEFAULT NULL::jsonb, p_updated_by uuid DEFAULT NULL::uuid)
+CREATE OR REPLACE FUNCTION inventory.sp_update_product_with_variants(p_tenant_id uuid, p_product_id uuid, p_name character varying, p_description text, p_base_price numeric, p_variants jsonb DEFAULT NULL::jsonb, p_updated_by uuid DEFAULT NULL::uuid, p_pos_visible boolean DEFAULT NULL::boolean, p_orders_visible boolean DEFAULT NULL::boolean)
  RETURNS TABLE(product_id uuid, sku character varying, name character varying, message text)
  LANGUAGE plpgsql
 AS $function$
@@ -35,6 +35,8 @@ BEGIN
         description = p_description,
         base_price  = p_base_price,
         updated_by  = p_updated_by,
+        pos_visible = COALESCE(p_pos_visible, p.pos_visible),
+        orders_visible = COALESCE(p_orders_visible, p.orders_visible),
         updated_at  = CURRENT_TIMESTAMP
     WHERE p.id = p_product_id;
 
@@ -299,4 +301,4 @@ BEGIN
 END;
 $function$;
 
-COMMENT ON FUNCTION inventory.sp_update_product_with_variants(uuid,uuid,character varying,text,numeric,jsonb,uuid) IS 'Updates a product and diffs its variant tree by id; NULL p_variants leaves the tree untouched. A group carries affects_inventory (absent means FALSE), and dropping or demoting an axis raises rather than cascading away a combination that still holds units or history (INV-008 D3). Never creates or destroys a SKU otherwise — that is sp_generate_product_skus (D2).';
+COMMENT ON FUNCTION inventory.sp_update_product_with_variants(uuid,uuid,character varying,text,numeric,jsonb,uuid,boolean,boolean) IS 'Updates a product and diffs its variant tree by id; NULL p_variants leaves the tree untouched. A group carries affects_inventory (absent means FALSE), and dropping or demoting an axis raises rather than cascading away a combination that still holds units or history (INV-008 D3). Never creates or destroys a SKU otherwise — that is sp_generate_product_skus (D2).';

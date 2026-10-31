@@ -70,11 +70,15 @@ func RegisterInventoryRoutes(
 	inventory := router.Group("/inventory", authMiddleware, tenantMiddleware)
 
 	// Products
-	api.Get(inventory, "/products", productController.ListProducts, api.Doc{Summary: "List all products", Description: "One page of active products, newest first, each with the categories it is filed under. Optionally narrowed to one category and/or a name/SKU search.", Errors: []int{400}}, tenancyMW.RequirePermission(inventoryPerms.ProductsRead))
+	api.Get(inventory, "/products", productController.ListProducts, api.Doc{Summary: "List all products", Description: "One page of products, newest first, each with its categories, stock, axes and price range; counts carry the chips. Narrowed by status (active by default), chip, category and a name/SKU search.", Errors: []int{400}}, tenancyMW.RequirePermission(inventoryPerms.ProductsRead))
 	api.Get(inventory, "/products/{id}", productController.GetProduct, api.Doc{Summary: "Get product by ID", Description: "Retrieve a product with all its details", Errors: []int{404}}, tenancyMW.RequirePermission(inventoryPerms.ProductsRead))
 	api.Get(inventory, "/products/sku/{sku}", productController.GetProductBySkU, api.Doc{Summary: "Get product by SKU", Description: "Retrieve a product by its SKU code", Errors: []int{404}}, tenancyMW.RequirePermission(inventoryPerms.ProductsRead))
 	api.Post(inventory, "/products", productController.CreateProductWithVariants, api.Doc{Summary: "Create a product with variants", Description: "Create a new product with optional variants (groups and options)", Status: 201, Errors: []int{400, 409}}, tenancyMW.RequirePermission(inventoryPerms.ProductsWrite))
 	api.Put(inventory, "/products/{id}", productController.UpdateProductWithVariants, api.Doc{Summary: "Update a product and its variants", Description: "Update name, description and base price, and diff the variant tree by id. Omitting \"variants\" leaves the tree untouched; {\"groups\": []} removes every group. The SKU is immutable.", Errors: []int{400, 404, 409}}, tenancyMW.RequirePermission(inventoryPerms.ProductsWrite))
+
+	// /bulk first: it has no id to read as one.
+	api.Patch(inventory, "/products/bulk", productController.BulkUpdateProducts, api.Doc{Summary: "One change to several products", Description: "Status, price or percent change, the one category replacing theirs, or the POS flag, on at most 100 products in one statement. Changing the status also needs inventory:products:delete.", Errors: []int{400, 403, 404}}, tenancyMW.RequirePermission(inventoryPerms.ProductsWrite))
+	api.Patch(inventory, "/products/{id}/status", productController.SetProductStatus, api.Doc{Summary: "Discontinue or reactivate a product", Description: "A discontinued product keeps its movements, lots and sales and leaves the default list.", Errors: []int{400, 404}}, tenancyMW.RequirePermission(inventoryPerms.ProductsDelete))
 
 	// Product SKUs (sellable combinations). Generation is an explicit call and
 	// never a side-effect of saving the product (INV-008 D2).

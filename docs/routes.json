@@ -1290,7 +1290,12 @@
       "reads": [
         "inventory.product_categories",
         "inventory.product_category_mapping",
-        "inventory.products"
+        "inventory.product_media",
+        "inventory.product_skus",
+        "inventory.product_variant_groups",
+        "inventory.product_variant_options",
+        "inventory.products",
+        "inventory.v_product_stock_totals"
       ],
       "writes": []
     },
@@ -1314,6 +1319,23 @@
         "inventory.product_stock",
         "inventory.product_variant_groups",
         "inventory.product_variant_options",
+        "inventory.products"
+      ]
+    },
+    {
+      "method": "PATCH",
+      "path": "/api/v1/inventory/products/bulk",
+      "operation_id": "inventory.BulkUpdateProducts",
+      "module": "inventory",
+      "handler": "josex/web/modules/inventory/controllers.(*ProductController).BulkUpdateProducts",
+      "sps": [
+        "inventory.sp_bulk_update_products"
+      ],
+      "reads": [
+        "inventory.product_categories"
+      ],
+      "writes": [
+        "inventory.product_category_mapping",
         "inventory.products"
       ]
     },
@@ -1545,6 +1567,20 @@
       "writes": [
         "inventory.inventory_movements",
         "inventory.product_stock"
+      ]
+    },
+    {
+      "method": "PATCH",
+      "path": "/api/v1/inventory/products/{id}/status",
+      "operation_id": "inventory.SetProductStatus",
+      "module": "inventory",
+      "handler": "josex/web/modules/inventory/controllers.(*ProductController).SetProductStatus",
+      "sps": [
+        "inventory.sp_set_product_status"
+      ],
+      "reads": [],
+      "writes": [
+        "inventory.products"
       ]
     },
     {
@@ -7193,6 +7229,16 @@
       ],
       "calls": []
     },
+    "inventory.sp_bulk_update_products": {
+      "reads": [
+        "inventory.product_categories"
+      ],
+      "writes": [
+        "inventory.product_category_mapping",
+        "inventory.products"
+      ],
+      "calls": []
+    },
     "inventory.sp_check_circular_hierarchy": {
       "reads": [
         "inventory.product_categories"
@@ -7481,7 +7527,12 @@
       "reads": [
         "inventory.product_categories",
         "inventory.product_category_mapping",
-        "inventory.products"
+        "inventory.product_media",
+        "inventory.product_skus",
+        "inventory.product_variant_groups",
+        "inventory.product_variant_options",
+        "inventory.products",
+        "inventory.v_product_stock_totals"
       ],
       "writes": [],
       "calls": []
@@ -7578,6 +7629,13 @@
       "calls": [
         "inventory.sp_import_free_category_slug"
       ]
+    },
+    "inventory.sp_set_product_status": {
+      "reads": [],
+      "writes": [
+        "inventory.products"
+      ],
+      "calls": []
     },
     "inventory.sp_update_batch": {
       "reads": [

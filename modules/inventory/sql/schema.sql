@@ -308,6 +308,8 @@ CREATE TABLE inventory.products (
     stock_by_variant boolean DEFAULT false NOT NULL,
     created_by uuid,
     updated_by uuid,
+    pos_visible boolean DEFAULT true NOT NULL,
+    orders_visible boolean DEFAULT true NOT NULL,
     CONSTRAINT products_status_check CHECK (((status)::text = ANY ((ARRAY['active'::character varying, 'discontinued'::character varying])::text[])))
 );
 

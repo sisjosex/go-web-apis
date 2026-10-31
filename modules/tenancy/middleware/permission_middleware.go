@@ -47,3 +47,10 @@ func RequirePermission(permissions ...string) gin.HandlerFunc {
 		c.Abort()
 	}
 }
+
+// CanInContext says whether the request's member holds a permission: for a handler where only part of the
+// body needs it, so the route's own RequirePermission cannot say.
+func CanInContext(c *gin.Context, permission string) bool {
+	access, ok := c.MustGet("tenant_access").(*models.TenantAccessInfo)
+	return ok && access.HasPermission(permission)
+}

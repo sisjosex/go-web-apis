@@ -1,5 +1,5 @@
 CREATE OR REPLACE FUNCTION inventory.sp_get_product_with_variants(p_tenant_id uuid, p_product_id uuid)
- RETURNS TABLE(id uuid, sku character varying, name character varying, description text, base_price numeric, has_variants boolean, status character varying, created_at timestamp without time zone, media jsonb, variants jsonb, updated_at timestamp without time zone, updated_by_name character varying)
+ RETURNS TABLE(id uuid, sku character varying, name character varying, description text, base_price numeric, has_variants boolean, status character varying, created_at timestamp without time zone, media jsonb, variants jsonb, updated_at timestamp without time zone, updated_by_name character varying, pos_visible boolean, orders_visible boolean)
  LANGUAGE plpgsql
 AS $function$
 BEGIN
@@ -93,13 +93,14 @@ BEGIN
         END AS variants,
 
         p.updated_at,
-        CAST(COALESCE(NULLIF(CONCAT_WS(' ', u.first_name, u.last_name), ''), u.email) AS VARCHAR)
+        CAST(COALESCE(NULLIF(CONCAT_WS(' ', u.first_name, u.last_name), ''), u.email) AS VARCHAR),
+        p.pos_visible,
+        p.orders_visible
 
     FROM inventory.products p
     LEFT JOIN auth.users u ON u.id = p.updated_by
     WHERE p.tenant_id = p_tenant_id
-      AND p.id        = p_product_id
-      AND p.status    = 'active';
+      AND p.id        = p_product_id;
 END;
 $function$;
 

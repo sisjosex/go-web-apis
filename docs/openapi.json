@@ -2398,6 +2398,74 @@
         ],
         "type": "object"
       },
+      "inventory.BulkProductChange": {
+        "additionalProperties": false,
+        "properties": {
+          "base_price": {
+            "format": "double",
+            "nullable": true,
+            "type": "number"
+          },
+          "category_id": {
+            "format": "uuid",
+            "nullable": true,
+            "type": "string"
+          },
+          "pos_visible": {
+            "nullable": true,
+            "type": "boolean"
+          },
+          "price_change_pct": {
+            "format": "double",
+            "nullable": true,
+            "type": "number"
+          },
+          "status": {
+            "enum": [
+              "active",
+              "discontinued"
+            ],
+            "nullable": true,
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "inventory.BulkUpdateProductsDto": {
+        "additionalProperties": false,
+        "properties": {
+          "ids": {
+            "format": "uuid",
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 100,
+            "minItems": 1,
+            "type": "array"
+          },
+          "set": {
+            "$ref": "#/components/schemas/inventory.BulkProductChange"
+          }
+        },
+        "required": [
+          "ids",
+          "set"
+        ],
+        "type": "object"
+      },
+      "inventory.BulkUpdateProductsResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "updated": {
+            "format": "int64",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "updated"
+        ],
+        "type": "object"
+      },
       "inventory.CategoryResponse": {
         "additionalProperties": false,
         "properties": {
@@ -2547,6 +2615,14 @@
           },
           "name": {
             "type": "string"
+          },
+          "orders_visible": {
+            "nullable": true,
+            "type": "boolean"
+          },
+          "pos_visible": {
+            "nullable": true,
+            "type": "boolean"
           },
           "sku": {
             "type": "string"
@@ -2849,6 +2925,9 @@
       "inventory.ListProductsResponse": {
         "additionalProperties": false,
         "properties": {
+          "counts": {
+            "$ref": "#/components/schemas/inventory.ProductCounts"
+          },
           "page": {
             "format": "int64",
             "type": "integer"
@@ -2870,6 +2949,7 @@
         },
         "required": [
           "products",
+          "counts",
           "total_count",
           "page",
           "page_size"
@@ -2879,6 +2959,16 @@
       "inventory.Product": {
         "additionalProperties": false,
         "properties": {
+          "available_quantity": {
+            "format": "double",
+            "type": "number"
+          },
+          "axes": {
+            "items": {
+              "$ref": "#/components/schemas/inventory.ProductAxis"
+            },
+            "type": "array"
+          },
           "base_price": {
             "format": "double",
             "type": "number"
@@ -2903,7 +2993,22 @@
           "id": {
             "type": "string"
           },
+          "max_price": {
+            "format": "double",
+            "type": "number"
+          },
+          "min_price": {
+            "format": "double",
+            "type": "number"
+          },
           "name": {
+            "type": "string"
+          },
+          "pos_visible": {
+            "type": "boolean"
+          },
+          "primary_image_url": {
+            "nullable": true,
             "type": "string"
           },
           "sku": {
@@ -2911,6 +3016,13 @@
           },
           "status": {
             "type": "string"
+          },
+          "stock_status": {
+            "type": "string"
+          },
+          "variants_count": {
+            "format": "int64",
+            "type": "integer"
           }
         },
         "required": [
@@ -2922,7 +3034,34 @@
           "has_variants",
           "status",
           "created_at",
-          "categories"
+          "categories",
+          "available_quantity",
+          "stock_status",
+          "variants_count",
+          "axes",
+          "min_price",
+          "max_price",
+          "primary_image_url",
+          "pos_visible"
+        ],
+        "type": "object"
+      },
+      "inventory.ProductAxis": {
+        "additionalProperties": false,
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "options": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "name",
+          "options"
         ],
         "type": "object"
       },
@@ -2943,6 +3082,39 @@
           "id",
           "name",
           "slug"
+        ],
+        "type": "object"
+      },
+      "inventory.ProductCounts": {
+        "additionalProperties": false,
+        "properties": {
+          "all": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "low": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "out_of_stock": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "pos_hidden": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "with_variants": {
+            "format": "int64",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "all",
+          "with_variants",
+          "low",
+          "out_of_stock",
+          "pos_hidden"
         ],
         "type": "object"
       },
@@ -2975,6 +3147,12 @@
           },
           "name": {
             "type": "string"
+          },
+          "orders_visible": {
+            "type": "boolean"
+          },
+          "pos_visible": {
+            "type": "boolean"
           },
           "sku": {
             "type": "string"
@@ -3010,7 +3188,9 @@
           "media",
           "variants",
           "updated_at",
-          "updated_by_name"
+          "updated_by_name",
+          "pos_visible",
+          "orders_visible"
         ],
         "type": "object"
       },
@@ -3466,6 +3646,38 @@
         ],
         "type": "object"
       },
+      "inventory.SetProductStatusDto": {
+        "additionalProperties": false,
+        "properties": {
+          "status": {
+            "enum": [
+              "active",
+              "discontinued"
+            ],
+            "type": "string"
+          }
+        },
+        "required": [
+          "status"
+        ],
+        "type": "object"
+      },
+      "inventory.SetProductStatusResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "status"
+        ],
+        "type": "object"
+      },
       "inventory.StockReservationResponse": {
         "additionalProperties": false,
         "properties": {
@@ -3558,6 +3770,14 @@
           "name": {
             "type": "string"
           },
+          "orders_visible": {
+            "nullable": true,
+            "type": "boolean"
+          },
+          "pos_visible": {
+            "nullable": true,
+            "type": "boolean"
+          },
           "variants": {
             "$ref": "#/components/schemas/inventory.UpdateProductVariantsDto"
           }
@@ -3611,11 +3831,13 @@
             "format": "double",
             "minimum": 0,
             "type": "number"
+          },
+          "sku_id": {
+            "format": "uuid",
+            "nullable": true,
+            "type": "string"
           }
         },
-        "required": [
-          "reorder_level"
-        ],
         "type": "object"
       },
       "inventory.UpdateReorderLevelResponse": {
@@ -20553,7 +20775,7 @@
     },
     "/api/v1/inventory/products": {
       "get": {
-        "description": "One page of active products, newest first, each with the categories it is filed under. Optionally narrowed to one category and/or a name/SKU search.",
+        "description": "One page of products, newest first, each with its categories, stock, axes and price range; counts carry the chips. Narrowed by status (active by default), chip, category and a name/SKU search.",
         "operationId": "inventory.ListProducts",
         "parameters": [
           {
@@ -20568,6 +20790,32 @@
             "in": "query",
             "name": "search",
             "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "status",
+            "schema": {
+              "default": "active",
+              "enum": [
+                "active",
+                "discontinued",
+                "all"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "filter",
+            "schema": {
+              "enum": [
+                "with_variants",
+                "low",
+                "out_of_stock",
+                "pos_hidden"
+              ],
               "type": "string"
             }
           },
@@ -20671,6 +20919,69 @@
           "inventory"
         ],
         "x-handler": "josex/web/modules/inventory/controllers.(*ProductController).CreateProductWithVariants"
+      }
+    },
+    "/api/v1/inventory/products/bulk": {
+      "patch": {
+        "description": "Status, price or percent change, the one category replacing theirs, or the POS flag, on at most 100 products in one statement. Changing the status also needs inventory:products:delete.",
+        "operationId": "inventory.BulkUpdateProducts",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/inventory.BulkUpdateProductsDto"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/inventory.BulkUpdateProductsResponse"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/core.ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/core.ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/core.ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          }
+        },
+        "summary": "One change to several products",
+        "tags": [
+          "inventory"
+        ],
+        "x-handler": "josex/web/modules/inventory/controllers.(*ProductController).BulkUpdateProducts"
       }
     },
     "/api/v1/inventory/products/sku/{sku}": {
@@ -21438,6 +21749,69 @@
           "inventory"
         ],
         "x-handler": "josex/web/modules/inventory/controllers.(*SkuController).RedistributeStock"
+      }
+    },
+    "/api/v1/inventory/products/{id}/status": {
+      "patch": {
+        "description": "A discontinued product keeps its movements, lots and sales and leaves the default list.",
+        "operationId": "inventory.SetProductStatus",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/inventory.SetProductStatusDto"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/inventory.SetProductStatusResponse"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/core.ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/core.ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          }
+        },
+        "summary": "Discontinue or reactivate a product",
+        "tags": [
+          "inventory"
+        ],
+        "x-handler": "josex/web/modules/inventory/controllers.(*ProductController).SetProductStatus"
       }
     },
     "/api/v1/inventory/release-reserved": {

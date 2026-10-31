@@ -12,6 +12,9 @@ type CreateProductDto struct {
 	Description *string `json:"description"`
 	BasePrice   float64 `json:"base_price" binding:"required,gt=0"`
 	Variants    any     `json:"variants"`
+	// PosVisible and OrdersVisible say where it is sold (INV-019 D3); absent means yes.
+	PosVisible    *bool `json:"pos_visible"`
+	OrdersVisible *bool `json:"orders_visible"`
 	// ActedBy is who is writing: set server-side, never read from the body (INV-020 D1).
 	ActedBy *string `json:"-"`
 }
@@ -24,7 +27,10 @@ type UpdateProductDto struct {
 	Description *string                   `json:"description"`
 	BasePrice   float64                   `json:"base_price" binding:"required,gt=0"`
 	Variants    *UpdateProductVariantsDto `json:"variants"`
-	ActedBy     *string                   `json:"-"`
+	// PosVisible and OrdersVisible left out keep what they were (INV-019 D3).
+	PosVisible    *bool   `json:"pos_visible"`
+	OrdersVisible *bool   `json:"orders_visible"`
+	ActedBy       *string `json:"-"`
 }
 
 type UpdateProductVariantsDto struct {
@@ -92,15 +98,20 @@ type ListMovementsQuery struct {
 type ListProductsQuery struct {
 	CategoryID *string `form:"category_id" binding:"omitempty,uuid"`
 	Search     string  `form:"search"`
-	Page       int     `form:"page,default=1" binding:"min=1"`
-	PageSize   int     `form:"page_size,default=20" binding:"min=1,max=100"`
+	// Status is active by default; Filter is one of the chips (INV-019 D1, D2).
+	Status   string `form:"status,default=active" binding:"omitempty,oneof=active discontinued all"`
+	Filter   string `form:"filter" binding:"omitempty,oneof=with_variants low out_of_stock pos_hidden"`
+	Page     int    `form:"page,default=1" binding:"min=1"`
+	PageSize int    `form:"page_size,default=20" binding:"min=1,max=100"`
 }
 
 type ListProductsResponse struct {
-	Products   []Product `json:"products"`
-	TotalCount int64     `json:"total_count"`
-	Page       int       `json:"page"`
-	PageSize   int       `json:"page_size"`
+	Products []Product `json:"products"`
+	// Counts behind the chips, over the same search and category: every filter but the chip itself.
+	Counts     ProductCounts `json:"counts"`
+	TotalCount int64         `json:"total_count"`
+	Page       int           `json:"page"`
+	PageSize   int           `json:"page_size"`
 }
 
 type ListMovementsResponse struct {
@@ -131,7 +142,9 @@ type RecordMovementResponse struct {
 }
 
 type UpdateReorderLevelDto struct {
-	ReorderLevel float64 `json:"reorder_level" binding:"required,gte=0"`
+	ReorderLevel float64 `json:"reorder_level" binding:"gte=0"`
+	// SkuID names one combination; none is the product's default bucket.
+	SkuID *string `json:"sku_id" binding:"omitempty,uuid"`
 }
 
 type UpdateReorderLevelResponse struct {
@@ -183,6 +196,61 @@ type Product struct {
 	Status      string               `db:"status" json:"status"`
 	CreatedAt   time.Time            `db:"created_at" json:"created_at"`
 	Categories  []ProductCategoryRef `json:"categories"`
+	// What the list shows beside the product (INV-019 step 1).
+	AvailableQuantity float64       `json:"available_quantity"`
+	StockStatus       string        `json:"stock_status"`
+	VariantsCount     int           `json:"variants_count"`
+	Axes              []ProductAxis `json:"axes"`
+	MinPrice          float64       `json:"min_price"`
+	MaxPrice          float64       `json:"max_price"`
+	PrimaryImageURL   *string       `json:"primary_image_url"`
+	PosVisible        bool          `json:"pos_visible"`
+}
+
+// ProductAxis is one inventory axis of a product with the options it has.
+type ProductAxis struct {
+	Name    string   `json:"name"`
+	Options []string `json:"options"`
+}
+
+// ProductCounts are the list's chips.
+type ProductCounts struct {
+	All          int64 `json:"all"`
+	WithVariants int64 `json:"with_variants"`
+	Low          int64 `json:"low"`
+	OutOfStock   int64 `json:"out_of_stock"`
+	PosHidden    int64 `json:"pos_hidden"`
+}
+
+// SetProductStatusDto discontinues or reactivates a product (INV-019 D1).
+type SetProductStatusDto struct {
+	Status string `json:"status" binding:"required,oneof=active discontinued"`
+}
+
+// SetProductStatusResponse is the product's id and new status.
+type SetProductStatusResponse struct {
+	ID     string `json:"id"`
+	Status string `json:"status"`
+}
+
+// BulkProductChange is what one bulk action sets on every selected product.
+type BulkProductChange struct {
+	Status         *string  `json:"status" binding:"omitempty,oneof=active discontinued"`
+	BasePrice      *float64 `json:"base_price" binding:"omitempty,gt=0"`
+	PriceChangePct *float64 `json:"price_change_pct" binding:"omitempty,gt=-100"`
+	CategoryID     *string  `json:"category_id" binding:"omitempty,uuid"`
+	PosVisible     *bool    `json:"pos_visible"`
+}
+
+// BulkUpdateProductsDto is one change to at most 100 products.
+type BulkUpdateProductsDto struct {
+	IDs []string          `json:"ids" binding:"required,min=1,max=100,dive,uuid"`
+	Set BulkProductChange `json:"set" binding:"required"`
+}
+
+// BulkUpdateProductsResponse says how many changed.
+type BulkUpdateProductsResponse struct {
+	Updated int `json:"updated"`
 }
 
 type ProductMedia struct {
@@ -227,6 +295,8 @@ type ProductDetail struct {
 	// UpdatedAt and UpdatedByName say who last changed it (INV-020 D1); no name on a row nobody touched since.
 	UpdatedAt     *time.Time `json:"updated_at"`
 	UpdatedByName *string    `json:"updated_by_name"`
+	PosVisible    bool       `json:"pos_visible"`
+	OrdersVisible bool       `json:"orders_visible"`
 }
 
 type AddProductMediaDto struct {

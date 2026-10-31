@@ -14,6 +14,8 @@ type ProductService interface {
 	GetProduct(ctx context.Context, tenantID uuid.UUID, productID string) (*models.ProductDetail, error)
 	GetProductBySkU(ctx context.Context, tenantID uuid.UUID, sku string) (*models.ProductDetail, error)
 	ListProducts(ctx context.Context, tenantID uuid.UUID, query models.ListProductsQuery) (*models.ListProductsResponse, error)
+	SetProductStatus(ctx context.Context, tenantID uuid.UUID, productID, status string, actedBy *string) (*models.SetProductStatusResponse, error)
+	BulkUpdateProducts(ctx context.Context, tenantID uuid.UUID, dto models.BulkUpdateProductsDto, actedBy *string) (*models.BulkUpdateProductsResponse, error)
 	AddProductMedia(ctx context.Context, tenantID uuid.UUID, productID string, dto models.AddProductMediaDto) (*models.AddProductMediaResponse, error)
 	RemoveProductMedia(ctx context.Context, tenantID uuid.UUID, mediaID string) error
 }

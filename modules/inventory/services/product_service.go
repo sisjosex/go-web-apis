@@ -68,6 +68,8 @@ func (s *ProductService) CreateProductWithVariants(
 		s.config.MaxAxes,
 		s.config.MaxCombinations,
 		dto.ActedBy,
+		dto.PosVisible,
+		dto.OrdersVisible,
 	)
 }
 
@@ -101,7 +103,19 @@ func (s *ProductService) UpdateProductWithVariants(
 		dto.BasePrice,
 		variantsJSON,
 		dto.ActedBy,
+		dto.PosVisible,
+		dto.OrdersVisible,
 	)
+}
+
+// SetProductStatus discontinues or reactivates a product (INV-019 D1).
+func (s *ProductService) SetProductStatus(ctx context.Context, tenantID uuid.UUID, productID, status string, actedBy *string) (*models.SetProductStatusResponse, error) {
+	return s.repository.SetProductStatus(ctx, tenantID, productID, status, actedBy)
+}
+
+// BulkUpdateProducts applies one change to several products.
+func (s *ProductService) BulkUpdateProducts(ctx context.Context, tenantID uuid.UUID, dto models.BulkUpdateProductsDto, actedBy *string) (*models.BulkUpdateProductsResponse, error) {
+	return s.repository.BulkUpdateProducts(ctx, tenantID, dto, actedBy)
 }
 
 func (s *ProductService) GetProduct(ctx context.Context, tenantID uuid.UUID, productID string) (*models.ProductDetail, error) {
@@ -117,13 +131,14 @@ func (s *ProductService) ListProducts(
 	tenantID uuid.UUID,
 	query models.ListProductsQuery,
 ) (*models.ListProductsResponse, error) {
-	products, totalCount, err := s.repository.ListProducts(ctx, tenantID, query)
+	products, counts, totalCount, err := s.repository.ListProducts(ctx, tenantID, query)
 	if err != nil {
 		return nil, err
 	}
 
 	return &models.ListProductsResponse{
 		Products:   products,
+		Counts:     counts,
 		TotalCount: totalCount,
 		Page:       query.Page,
 		PageSize:   query.PageSize,

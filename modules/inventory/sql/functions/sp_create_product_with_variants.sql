@@ -1,4 +1,4 @@
-CREATE OR REPLACE FUNCTION inventory.sp_create_product_with_variants(p_tenant_id uuid, p_sku character varying, p_name character varying, p_description text, p_base_price numeric, p_variants jsonb DEFAULT NULL::jsonb, p_created_by uuid DEFAULT NULL::uuid, p_max_axes integer DEFAULT 3, p_max_combinations integer DEFAULT 100)
+CREATE OR REPLACE FUNCTION inventory.sp_create_product_with_variants(p_tenant_id uuid, p_sku character varying, p_name character varying, p_description text, p_base_price numeric, p_variants jsonb DEFAULT NULL::jsonb, p_created_by uuid DEFAULT NULL::uuid, p_max_axes integer DEFAULT 3, p_max_combinations integer DEFAULT 100, p_pos_visible boolean DEFAULT true, p_orders_visible boolean DEFAULT true)
  RETURNS TABLE(product_id uuid, sku character varying, name character varying, message text)
  LANGUAGE plpgsql
 AS $function$
@@ -19,8 +19,8 @@ BEGIN
     END IF;
 
     -- Create product
-    INSERT INTO inventory.products (tenant_id, sku, name, description, base_price, has_variants, created_by, updated_by)
-    VALUES (p_tenant_id, p_sku, p_name, p_description, p_base_price, CASE WHEN p_variants IS NOT NULL THEN TRUE ELSE FALSE END, p_created_by, p_created_by)
+    INSERT INTO inventory.products (tenant_id, sku, name, description, base_price, has_variants, created_by, updated_by, pos_visible, orders_visible)
+    VALUES (p_tenant_id, p_sku, p_name, p_description, p_base_price, CASE WHEN p_variants IS NOT NULL THEN TRUE ELSE FALSE END, p_created_by, p_created_by, COALESCE(p_pos_visible, TRUE), COALESCE(p_orders_visible, TRUE))
     RETURNING products.id INTO v_product_id;
 
     -- Create the default SKU: products.sku verbatim, empty combination (D2b/D4)
@@ -152,4 +152,4 @@ BEGIN
 END;
 $function$;
 
-COMMENT ON FUNCTION inventory.sp_create_product_with_variants(uuid,character varying,character varying,text,numeric,jsonb,uuid,integer,integer) IS 'Creates a product, its default SKU (products.sku verbatim, combination_key ''''), its stock row at 0 hanging off that SKU, and any variant groups and options supplied. A group carries affects_inventory (absent means FALSE), and a product that declares at least one axis leaves this SP with its combinations already generated, within p_max_axes / p_max_combinations (INV-012 D2). Duplicate group types, duplicate option names and an axis that is not a single required choice come back named, not raw.';
+COMMENT ON FUNCTION inventory.sp_create_product_with_variants(uuid,character varying,character varying,text,numeric,jsonb,uuid,integer,integer,boolean,boolean) IS 'Creates a product, its default SKU (products.sku verbatim, combination_key ''''), its stock row at 0 hanging off that SKU, and any variant groups and options supplied. A group carries affects_inventory (absent means FALSE), and a product that declares at least one axis leaves this SP with its combinations already generated, within p_max_axes / p_max_combinations (INV-012 D2). Duplicate group types, duplicate option names and an axis that is not a single required choice come back named, not raw.';

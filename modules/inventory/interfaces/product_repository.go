@@ -21,6 +21,7 @@ type ProductRepository interface {
 		variantsJSON *string,
 		maxAxes, maxCombinations int,
 		actedBy *string,
+		posVisible, ordersVisible *bool,
 	) (*models.CreateProductResponse, error)
 
 	UpdateProductWithVariants(
@@ -32,12 +33,15 @@ type ProductRepository interface {
 		basePrice float64,
 		variantsJSON *string,
 		actedBy *string,
+		posVisible, ordersVisible *bool,
 	) (*models.UpdateProductResponse, error)
 
 	GetProduct(ctx context.Context, tenantID uuid.UUID, productID string) (*models.Product, error)
 	GetProductWithVariants(ctx context.Context, tenantID uuid.UUID, productID string) (*models.ProductDetail, error)
 	GetProductBySkU(ctx context.Context, tenantID uuid.UUID, sku string) (*models.ProductDetail, error)
-	ListProducts(ctx context.Context, tenantID uuid.UUID, query models.ListProductsQuery) ([]models.Product, int64, error)
+	ListProducts(ctx context.Context, tenantID uuid.UUID, query models.ListProductsQuery) ([]models.Product, models.ProductCounts, int64, error)
+	SetProductStatus(ctx context.Context, tenantID uuid.UUID, productID, status string, actedBy *string) (*models.SetProductStatusResponse, error)
+	BulkUpdateProducts(ctx context.Context, tenantID uuid.UUID, dto models.BulkUpdateProductsDto, actedBy *string) (*models.BulkUpdateProductsResponse, error)
 	AddProductMedia(ctx context.Context, tenantID uuid.UUID, productID string, dto models.AddProductMediaDto) (*models.AddProductMediaResponse, error)
 	// RemoveProductMedia deletes the row and answers its URL, so the stored object can follow it.
 	RemoveProductMedia(ctx context.Context, tenantID uuid.UUID, mediaID string) (string, error)
