@@ -2968,6 +2968,36 @@
         ],
         "type": "object"
       },
+      "inventory.CreateTransferDto": {
+        "additionalProperties": false,
+        "properties": {
+          "from_warehouse_id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "lines": {
+            "items": {
+              "$ref": "#/components/schemas/inventory.TransferLineDto"
+            },
+            "minItems": 1,
+            "type": "array"
+          },
+          "notes": {
+            "nullable": true,
+            "type": "string"
+          },
+          "to_warehouse_id": {
+            "format": "uuid",
+            "type": "string"
+          }
+        },
+        "required": [
+          "from_warehouse_id",
+          "to_warehouse_id",
+          "lines"
+        ],
+        "type": "object"
+      },
       "inventory.DeleteAttributeResponse": {
         "additionalProperties": false,
         "properties": {
@@ -3173,6 +3203,73 @@
         ],
         "type": "object"
       },
+      "inventory.InventoryNavBadges": {
+        "additionalProperties": false,
+        "properties": {
+          "stock_low": {
+            "format": "int64",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "stock_low"
+        ],
+        "type": "object"
+      },
+      "inventory.InventorySummary": {
+        "additionalProperties": false,
+        "properties": {
+          "expiring": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "low": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "out_of_stock": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "products": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "reorder": {
+            "$ref": "#/components/schemas/inventory.ReorderList"
+          },
+          "top_sellers": {
+            "items": {
+              "$ref": "#/components/schemas/inventory.TopSeller"
+            },
+            "type": "array"
+          },
+          "value": {
+            "format": "double",
+            "type": "number"
+          },
+          "variants": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "warehouses_count": {
+            "format": "int64",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "warehouses_count",
+          "value",
+          "products",
+          "variants",
+          "low",
+          "out_of_stock",
+          "expiring",
+          "reorder",
+          "top_sellers"
+        ],
+        "type": "object"
+      },
       "inventory.ListAttributesResponse": {
         "additionalProperties": false,
         "properties": {
@@ -3332,6 +3429,85 @@
         ],
         "type": "object"
       },
+      "inventory.ListStockResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "counts": {
+            "$ref": "#/components/schemas/inventory.StockCounts"
+          },
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/inventory.StockItem"
+            },
+            "type": "array"
+          },
+          "page": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "page_size": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "total_count": {
+            "format": "int64",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "items",
+          "counts",
+          "total_count",
+          "page",
+          "page_size"
+        ],
+        "type": "object"
+      },
+      "inventory.ListStockSkusResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "skus": {
+            "items": {
+              "$ref": "#/components/schemas/inventory.StockSku"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "skus"
+        ],
+        "type": "object"
+      },
+      "inventory.ListTransfersResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "page": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "page_size": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "total_count": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "transfers": {
+            "items": {
+              "$ref": "#/components/schemas/inventory.TransferRow"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "transfers",
+          "total_count",
+          "page",
+          "page_size"
+        ],
+        "type": "object"
+      },
       "inventory.ListUnitsResponse": {
         "additionalProperties": false,
         "properties": {
@@ -3344,6 +3520,37 @@
         },
         "required": [
           "units"
+        ],
+        "type": "object"
+      },
+      "inventory.ListWarehousesResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "warehouses": {
+            "items": {
+              "$ref": "#/components/schemas/inventory.Warehouse"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "warehouses"
+        ],
+        "type": "object"
+      },
+      "inventory.NextLot": {
+        "additionalProperties": false,
+        "properties": {
+          "expiry_date": {
+            "type": "string"
+          },
+          "lot_number": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "lot_number",
+          "expiry_date"
         ],
         "type": "object"
       },
@@ -3965,6 +4172,36 @@
         ],
         "type": "object"
       },
+      "inventory.ReceiveTransferDto": {
+        "additionalProperties": false,
+        "properties": {
+          "lines": {
+            "items": {
+              "$ref": "#/components/schemas/inventory.ReceivedLineDto"
+            },
+            "type": "array"
+          }
+        },
+        "type": "object"
+      },
+      "inventory.ReceivedLineDto": {
+        "additionalProperties": false,
+        "properties": {
+          "received_quantity": {
+            "format": "double",
+            "minimum": 0,
+            "type": "number"
+          },
+          "sku_id": {
+            "format": "uuid",
+            "type": "string"
+          }
+        },
+        "required": [
+          "sku_id"
+        ],
+        "type": "object"
+      },
       "inventory.RecordMovementDto": {
         "additionalProperties": false,
         "properties": {
@@ -4017,6 +4254,11 @@
             "format": "double",
             "nullable": true,
             "type": "number"
+          },
+          "warehouse_id": {
+            "format": "uuid",
+            "nullable": true,
+            "type": "string"
           }
         },
         "required": [
@@ -4260,6 +4502,77 @@
         ],
         "type": "object"
       },
+      "inventory.ReorderItem": {
+        "additionalProperties": false,
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "product_id": {
+            "type": "string"
+          },
+          "quantity": {
+            "format": "double",
+            "type": "number"
+          },
+          "reorder_level": {
+            "format": "double",
+            "type": "number"
+          },
+          "sku": {
+            "type": "string"
+          },
+          "sku_id": {
+            "type": "string"
+          },
+          "suggested": {
+            "format": "double",
+            "type": "number"
+          },
+          "transfer_from": {
+            "$ref": "#/components/schemas/inventory.TransferFrom"
+          },
+          "warehouse_id": {
+            "type": "string"
+          },
+          "warehouse_name": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "product_id",
+          "sku_id",
+          "name",
+          "sku",
+          "warehouse_id",
+          "warehouse_name",
+          "quantity",
+          "reorder_level",
+          "suggested",
+          "transfer_from"
+        ],
+        "type": "object"
+      },
+      "inventory.ReorderList": {
+        "additionalProperties": false,
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/inventory.ReorderItem"
+            },
+            "type": "array"
+          },
+          "total": {
+            "format": "int64",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "items",
+          "total"
+        ],
+        "type": "object"
+      },
       "inventory.ReplaceProductUnitsDto": {
         "additionalProperties": false,
         "properties": {
@@ -4347,6 +4660,125 @@
         ],
         "type": "object"
       },
+      "inventory.SetWarehouseStatusDto": {
+        "additionalProperties": false,
+        "properties": {
+          "status": {
+            "enum": [
+              "active",
+              "archived"
+            ],
+            "type": "string"
+          }
+        },
+        "required": [
+          "status"
+        ],
+        "type": "object"
+      },
+      "inventory.ShipTransferDto": {
+        "additionalProperties": false,
+        "properties": {
+          "carrier_note": {
+            "nullable": true,
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "inventory.StockCounts": {
+        "additionalProperties": false,
+        "properties": {
+          "all": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "expiring": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "low": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "out_of_stock": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "stale": {
+            "format": "int64",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "all",
+          "low",
+          "out_of_stock",
+          "expiring",
+          "stale"
+        ],
+        "type": "object"
+      },
+      "inventory.StockItem": {
+        "additionalProperties": false,
+        "properties": {
+          "by_warehouse": {
+            "items": {
+              "$ref": "#/components/schemas/inventory.WarehouseQuantity"
+            },
+            "type": "array"
+          },
+          "low_variants": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "name": {
+            "type": "string"
+          },
+          "next_lot": {
+            "$ref": "#/components/schemas/inventory.NextLot"
+          },
+          "product_id": {
+            "type": "string"
+          },
+          "reorder_level": {
+            "format": "double",
+            "type": "number"
+          },
+          "short_warehouse_id": {
+            "nullable": true,
+            "type": "string"
+          },
+          "sku": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string"
+          },
+          "total": {
+            "format": "double",
+            "type": "number"
+          },
+          "variants_count": {
+            "format": "int64",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "product_id",
+          "name",
+          "sku",
+          "variants_count",
+          "low_variants",
+          "by_warehouse",
+          "total",
+          "reorder_level",
+          "status",
+          "short_warehouse_id",
+          "next_lot"
+        ],
+        "type": "object"
+      },
       "inventory.StockReservationResponse": {
         "additionalProperties": false,
         "properties": {
@@ -4370,6 +4802,265 @@
           "available_quantity",
           "status",
           "message"
+        ],
+        "type": "object"
+      },
+      "inventory.StockSku": {
+        "additionalProperties": false,
+        "properties": {
+          "by_warehouse": {
+            "items": {
+              "$ref": "#/components/schemas/inventory.WarehouseQuantity"
+            },
+            "type": "array"
+          },
+          "label": {
+            "type": "string"
+          },
+          "reorder_level": {
+            "format": "double",
+            "type": "number"
+          },
+          "sku_id": {
+            "type": "string"
+          },
+          "total": {
+            "format": "double",
+            "type": "number"
+          }
+        },
+        "required": [
+          "sku_id",
+          "label",
+          "by_warehouse",
+          "total",
+          "reorder_level"
+        ],
+        "type": "object"
+      },
+      "inventory.TopSeller": {
+        "additionalProperties": false,
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "product_id": {
+            "type": "string"
+          },
+          "quantity": {
+            "format": "double",
+            "type": "number"
+          }
+        },
+        "required": [
+          "product_id",
+          "name",
+          "quantity"
+        ],
+        "type": "object"
+      },
+      "inventory.Transfer": {
+        "additionalProperties": false,
+        "properties": {
+          "from": {
+            "$ref": "#/components/schemas/inventory.TransferPlace"
+          },
+          "id": {
+            "type": "string"
+          },
+          "lines": {
+            "items": {
+              "$ref": "#/components/schemas/inventory.TransferLine"
+            },
+            "type": "array"
+          },
+          "notes": {
+            "nullable": true,
+            "type": "string"
+          },
+          "number": {
+            "type": "string"
+          },
+          "products": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "status": {
+            "type": "string"
+          },
+          "timeline": {
+            "items": {
+              "$ref": "#/components/schemas/inventory.TransferStep"
+            },
+            "type": "array"
+          },
+          "to": {
+            "$ref": "#/components/schemas/inventory.TransferPlace"
+          },
+          "units": {
+            "format": "double",
+            "type": "number"
+          }
+        },
+        "required": [
+          "id",
+          "number",
+          "status",
+          "notes",
+          "from",
+          "to",
+          "lines",
+          "units",
+          "products",
+          "timeline"
+        ],
+        "type": "object"
+      },
+      "inventory.TransferFrom": {
+        "additionalProperties": false,
+        "properties": {
+          "quantity": {
+            "format": "double",
+            "type": "number"
+          },
+          "warehouse_id": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "warehouse_id",
+          "quantity"
+        ],
+        "type": "object"
+      },
+      "inventory.TransferLine": {
+        "additionalProperties": false,
+        "properties": {
+          "label": {
+            "type": "string"
+          },
+          "product_id": {
+            "type": "string"
+          },
+          "quantity": {
+            "format": "double",
+            "type": "number"
+          },
+          "received_quantity": {
+            "format": "double",
+            "nullable": true,
+            "type": "number"
+          },
+          "sku_id": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "sku_id",
+          "product_id",
+          "label",
+          "quantity",
+          "received_quantity"
+        ],
+        "type": "object"
+      },
+      "inventory.TransferLineDto": {
+        "additionalProperties": false,
+        "properties": {
+          "quantity": {
+            "format": "double",
+            "type": "number"
+          },
+          "sku_id": {
+            "format": "uuid",
+            "type": "string"
+          }
+        },
+        "required": [
+          "sku_id",
+          "quantity"
+        ],
+        "type": "object"
+      },
+      "inventory.TransferPlace": {
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "name"
+        ],
+        "type": "object"
+      },
+      "inventory.TransferRow": {
+        "additionalProperties": false,
+        "properties": {
+          "from_name": {
+            "type": "string"
+          },
+          "id": {
+            "type": "string"
+          },
+          "number": {
+            "type": "string"
+          },
+          "prepared_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "status": {
+            "type": "string"
+          },
+          "to_name": {
+            "type": "string"
+          },
+          "units": {
+            "format": "double",
+            "type": "number"
+          }
+        },
+        "required": [
+          "id",
+          "number",
+          "status",
+          "from_name",
+          "to_name",
+          "units",
+          "prepared_at"
+        ],
+        "type": "object"
+      },
+      "inventory.TransferStep": {
+        "additionalProperties": false,
+        "properties": {
+          "at": {
+            "format": "date-time",
+            "nullable": true,
+            "type": "string"
+          },
+          "by_name": {
+            "nullable": true,
+            "type": "string"
+          },
+          "note": {
+            "nullable": true,
+            "type": "string"
+          },
+          "step": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "step",
+          "at",
+          "by_name",
+          "note"
         ],
         "type": "object"
       },
@@ -4560,6 +5251,11 @@
             "format": "uuid",
             "nullable": true,
             "type": "string"
+          },
+          "warehouse_id": {
+            "format": "uuid",
+            "nullable": true,
+            "type": "string"
           }
         },
         "type": "object"
@@ -4691,6 +5387,42 @@
         "required": [
           "name",
           "type"
+        ],
+        "type": "object"
+      },
+      "inventory.UpsertWarehouseDto": {
+        "additionalProperties": false,
+        "properties": {
+          "address": {
+            "maxLength": 200,
+            "nullable": true,
+            "type": "string"
+          },
+          "city": {
+            "maxLength": 80,
+            "nullable": true,
+            "type": "string"
+          },
+          "kind": {
+            "enum": [
+              "store",
+              "storage",
+              "vehicle"
+            ],
+            "type": "string"
+          },
+          "manager_user_id": {
+            "format": "uuid",
+            "nullable": true,
+            "type": "string"
+          },
+          "name": {
+            "maxLength": 120,
+            "type": "string"
+          }
+        },
+        "required": [
+          "name"
         ],
         "type": "object"
       },
@@ -4851,6 +5583,108 @@
           "is_available",
           "sort_order",
           "media"
+        ],
+        "type": "object"
+      },
+      "inventory.Warehouse": {
+        "additionalProperties": false,
+        "properties": {
+          "address": {
+            "nullable": true,
+            "type": "string"
+          },
+          "below_min": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "city": {
+            "nullable": true,
+            "type": "string"
+          },
+          "id": {
+            "type": "string"
+          },
+          "is_default": {
+            "type": "boolean"
+          },
+          "kind": {
+            "type": "string"
+          },
+          "manager": {
+            "$ref": "#/components/schemas/inventory.WarehouseManager"
+          },
+          "name": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string"
+          },
+          "units": {
+            "format": "double",
+            "type": "number"
+          },
+          "value": {
+            "format": "double",
+            "type": "number"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "address",
+          "city",
+          "kind",
+          "manager",
+          "is_default",
+          "status",
+          "value",
+          "units",
+          "below_min"
+        ],
+        "type": "object"
+      },
+      "inventory.WarehouseChanged": {
+        "additionalProperties": false,
+        "properties": {
+          "message": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "message"
+        ],
+        "type": "object"
+      },
+      "inventory.WarehouseManager": {
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "name"
+        ],
+        "type": "object"
+      },
+      "inventory.WarehouseQuantity": {
+        "additionalProperties": false,
+        "properties": {
+          "quantity": {
+            "format": "double",
+            "type": "number"
+          },
+          "warehouse_id": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "warehouse_id",
+          "quantity"
         ],
         "type": "object"
       },
@@ -22405,6 +23239,29 @@
         "x-handler": "josex/web/modules/inventory/controllers.(*MovementController).GetMovement"
       }
     },
+    "/api/v1/inventory/nav-badges": {
+      "get": {
+        "description": "Rows of stock below their minimum",
+        "operationId": "inventory.NavBadges",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/inventory.InventoryNavBadges"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "summary": "The numbers beside the inventory menu",
+        "tags": [
+          "inventory"
+        ],
+        "x-handler": "josex/web/modules/inventory/controllers.(*WarehouseController).NavBadges"
+      }
+    },
     "/api/v1/inventory/products": {
       "get": {
         "description": "attr[code]=a,b narrows by attribute. One page of products, newest first, each with its categories, stock, axes and price range; counts carry the chips. Narrowed by status (active by default), chip, category and a name/SKU search.",
@@ -23729,6 +24586,88 @@
         "x-handler": "josex/web/modules/inventory/controllers.(*StockController).ReserveStock"
       }
     },
+    "/api/v1/inventory/stock": {
+      "get": {
+        "description": "A page with the counts behind its chips",
+        "operationId": "inventory.ListStock",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "warehouse_id",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "search",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "category_id",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "filter",
+            "schema": {
+              "enum": [
+                "low",
+                "out_of_stock",
+                "expiring",
+                "stale"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "page",
+            "schema": {
+              "default": "1",
+              "format": "int64",
+              "minimum": 1,
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "page_size",
+            "schema": {
+              "default": "20",
+              "format": "int64",
+              "maximum": 100,
+              "minimum": 1,
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/inventory.ListStockResponse"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "summary": "Stock across products and warehouses",
+        "tags": [
+          "inventory"
+        ],
+        "x-handler": "josex/web/modules/inventory/controllers.(*WarehouseController).ListStock"
+      }
+    },
     "/api/v1/inventory/stock/{product_id}": {
       "get": {
         "description": "Retrieve current stock level for a product",
@@ -23772,6 +24711,436 @@
         "x-handler": "josex/web/modules/inventory/controllers.(*MovementController).GetProductStock"
       }
     },
+    "/api/v1/inventory/stock/{product_id}/skus": {
+      "get": {
+        "description": "The row a product expands into",
+        "operationId": "inventory.ListStockSkus",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "product_id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/inventory.ListStockSkusResponse"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "summary": "A product's combinations per warehouse",
+        "tags": [
+          "inventory"
+        ],
+        "x-handler": "josex/web/modules/inventory/controllers.(*WarehouseController).ListStockSkus"
+      }
+    },
+    "/api/v1/inventory/summary": {
+      "get": {
+        "description": "Value, counts, what to restock and the week's best sellers; kept 60 s per tenant and warehouse",
+        "operationId": "inventory.Summary",
+        "parameters": [
+          {
+            "description": "One warehouse; none is all of them",
+            "explode": false,
+            "in": "query",
+            "name": "warehouse_id",
+            "schema": {
+              "description": "One warehouse; none is all of them",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/inventory.InventorySummary"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "summary": "The inventory home",
+        "tags": [
+          "inventory"
+        ],
+        "x-handler": "josex/web/modules/inventory/controllers.(*WarehouseController).Summary"
+      }
+    },
+    "/api/v1/inventory/transfers": {
+      "get": {
+        "description": "A page, newest first, by status",
+        "operationId": "inventory.ListTransfers",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "status",
+            "schema": {
+              "enum": [
+                "prepared",
+                "in_transit",
+                "received",
+                "cancelled"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "page",
+            "schema": {
+              "default": "1",
+              "format": "int64",
+              "minimum": 1,
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "page_size",
+            "schema": {
+              "default": "20",
+              "format": "int64",
+              "maximum": 100,
+              "minimum": 1,
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/inventory.ListTransfersResponse"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "summary": "List transfers",
+        "tags": [
+          "inventory"
+        ],
+        "x-handler": "josex/web/modules/inventory/controllers.(*WarehouseController).ListTransfers"
+      },
+      "post": {
+        "description": "Reserves its lines at the origin",
+        "operationId": "inventory.CreateTransfer",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/inventory.CreateTransferDto"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/inventory.Transfer"
+                }
+              }
+            },
+            "description": "Created"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/core.ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/core.ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/core.ErrorResponse"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/core.ErrorResponse"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          }
+        },
+        "summary": "Prepare a transfer",
+        "tags": [
+          "inventory"
+        ],
+        "x-handler": "josex/web/modules/inventory/controllers.(*WarehouseController).CreateTransfer"
+      }
+    },
+    "/api/v1/inventory/transfers/{id}": {
+      "get": {
+        "description": "Lines, units and the steps it went through",
+        "operationId": "inventory.GetTransfer",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/inventory.Transfer"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/core.ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          }
+        },
+        "summary": "A transfer with its timeline",
+        "tags": [
+          "inventory"
+        ],
+        "x-handler": "josex/web/modules/inventory/controllers.(*WarehouseController).GetTransfer"
+      }
+    },
+    "/api/v1/inventory/transfers/{id}/cancel": {
+      "post": {
+        "description": "Only while prepared; its reservation is released",
+        "operationId": "inventory.CancelTransfer",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/inventory.Transfer"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/core.ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/core.ErrorResponse"
+                }
+              }
+            },
+            "description": "Conflict"
+          }
+        },
+        "summary": "Cancel a transfer",
+        "tags": [
+          "inventory"
+        ],
+        "x-handler": "josex/web/modules/inventory/controllers.(*WarehouseController).CancelTransfer"
+      }
+    },
+    "/api/v1/inventory/transfers/{id}/receive": {
+      "post": {
+        "description": "The units enter the destination; a shortfall is recorded as a loss",
+        "operationId": "inventory.ReceiveTransfer",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/inventory.ReceiveTransferDto"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/inventory.Transfer"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/core.ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/core.ErrorResponse"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/core.ErrorResponse"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          }
+        },
+        "summary": "Receive a transfer",
+        "tags": [
+          "inventory"
+        ],
+        "x-handler": "josex/web/modules/inventory/controllers.(*WarehouseController).ReceiveTransfer"
+      }
+    },
+    "/api/v1/inventory/transfers/{id}/ship": {
+      "post": {
+        "description": "The units leave the origin",
+        "operationId": "inventory.ShipTransfer",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/inventory.ShipTransferDto"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/inventory.Transfer"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/core.ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/core.ErrorResponse"
+                }
+              }
+            },
+            "description": "Conflict"
+          }
+        },
+        "summary": "Mark a transfer in transit",
+        "tags": [
+          "inventory"
+        ],
+        "x-handler": "josex/web/modules/inventory/controllers.(*WarehouseController).ShipTransfer"
+      }
+    },
     "/api/v1/inventory/units": {
       "get": {
         "description": "The standard list and the business's own",
@@ -23793,6 +25162,259 @@
           "inventory"
         ],
         "x-handler": "josex/web/modules/inventory/controllers.(*UnitController).ListUnits"
+      }
+    },
+    "/api/v1/inventory/warehouses": {
+      "get": {
+        "description": "Each with its value at cost, units and rows below their minimum",
+        "operationId": "inventory.ListWarehouses",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/inventory.ListWarehousesResponse"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "summary": "List the warehouses",
+        "tags": [
+          "inventory"
+        ],
+        "x-handler": "josex/web/modules/inventory/controllers.(*WarehouseController).ListWarehouses"
+      },
+      "post": {
+        "description": "Within the plan's limit",
+        "operationId": "inventory.CreateWarehouse",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/inventory.UpsertWarehouseDto"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/inventory.Warehouse"
+                }
+              }
+            },
+            "description": "Created"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/core.ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/core.ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          }
+        },
+        "summary": "Create a warehouse",
+        "tags": [
+          "inventory"
+        ],
+        "x-handler": "josex/web/modules/inventory/controllers.(*WarehouseController).CreateWarehouse"
+      }
+    },
+    "/api/v1/inventory/warehouses/{id}": {
+      "put": {
+        "description": "Name, address, kind and manager",
+        "operationId": "inventory.UpdateWarehouse",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/inventory.UpsertWarehouseDto"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/inventory.Warehouse"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/core.ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/core.ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          }
+        },
+        "summary": "Change a warehouse",
+        "tags": [
+          "inventory"
+        ],
+        "x-handler": "josex/web/modules/inventory/controllers.(*WarehouseController).UpdateWarehouse"
+      }
+    },
+    "/api/v1/inventory/warehouses/{id}/default": {
+      "patch": {
+        "description": "What names no warehouse uses it",
+        "operationId": "inventory.SetDefaultWarehouse",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/inventory.WarehouseChanged"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/core.ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          }
+        },
+        "summary": "Make a warehouse the default",
+        "tags": [
+          "inventory"
+        ],
+        "x-handler": "josex/web/modules/inventory/controllers.(*WarehouseController).SetDefaultWarehouse"
+      }
+    },
+    "/api/v1/inventory/warehouses/{id}/status": {
+      "patch": {
+        "description": "Refused with stock in it, or for the default",
+        "operationId": "inventory.SetWarehouseStatus",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/inventory.SetWarehouseStatusDto"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/inventory.WarehouseChanged"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/core.ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/core.ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/core.ErrorResponse"
+                }
+              }
+            },
+            "description": "Conflict"
+          }
+        },
+        "summary": "Archive or reactivate a warehouse",
+        "tags": [
+          "inventory"
+        ],
+        "x-handler": "josex/web/modules/inventory/controllers.(*WarehouseController).SetWarehouseStatus"
       }
     },
     "/api/v1/mobile/devices": {

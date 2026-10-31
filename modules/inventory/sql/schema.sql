@@ -112,6 +112,7 @@ CREATE TABLE inventory.inventory_movements (
     batch_id uuid,
     sku_id uuid NOT NULL,
     reference_label character varying(120),
+    warehouse_id uuid,
     CONSTRAINT inventory_movements_movement_type_check CHECK (((movement_type)::text = ANY ((ARRAY['PURCHASE'::character varying, 'SALE'::character varying, 'ADJUSTMENT'::character varying, 'TRANSFER'::character varying, 'RETURN'::character varying, 'WASTE'::character varying, 'PRODUCTION'::character varying])::text[])))
 );
 
@@ -292,6 +293,7 @@ CREATE TABLE inventory.product_stock (
     last_updated_at timestamp without time zone DEFAULT CURRENT_TIMESTAMP,
     sku_id uuid NOT NULL,
     updated_by uuid,
+    warehouse_id uuid NOT NULL,
     CONSTRAINT chk_product_stock_quantities CHECK (((current_quantity >= (0)::numeric) AND (reserved_quantity >= (0)::numeric) AND (reserved_quantity <= current_quantity)))
 );
 
@@ -438,6 +440,45 @@ COMMENT ON TABLE inventory.sku_codes IS 'The barcodes of a business: each names 
 
 
 --
+-- Name: transfer_lines; Type: TABLE; Schema: inventory; Owner: -
+--
+
+CREATE TABLE inventory.transfer_lines (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    transfer_id uuid NOT NULL,
+    product_id uuid NOT NULL,
+    sku_id uuid NOT NULL,
+    quantity numeric(14,3) NOT NULL,
+    received_quantity numeric(14,3),
+    CONSTRAINT transfer_lines_quantity_check CHECK ((quantity > (0)::numeric))
+);
+
+
+--
+-- Name: transfers; Type: TABLE; Schema: inventory; Owner: -
+--
+
+CREATE TABLE inventory.transfers (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    tenant_id uuid NOT NULL,
+    number character varying(30) NOT NULL,
+    status character varying(12) DEFAULT 'prepared'::character varying NOT NULL,
+    from_warehouse_id uuid NOT NULL,
+    to_warehouse_id uuid NOT NULL,
+    notes text,
+    carrier_note text,
+    prepared_at timestamp with time zone DEFAULT now() NOT NULL,
+    prepared_by uuid,
+    shipped_at timestamp with time zone,
+    shipped_by uuid,
+    received_at timestamp with time zone,
+    received_by uuid,
+    CONSTRAINT chk_transfers_two_warehouses CHECK ((from_warehouse_id <> to_warehouse_id)),
+    CONSTRAINT transfers_status_check CHECK (((status)::text = ANY ((ARRAY['prepared'::character varying, 'in_transit'::character varying, 'received'::character varying, 'cancelled'::character varying])::text[])))
+);
+
+
+--
 -- Name: units; Type: TABLE; Schema: inventory; Owner: -
 --
 
@@ -482,6 +523,35 @@ CREATE VIEW inventory.v_product_stock_totals AS
 --
 
 COMMENT ON VIEW inventory.v_product_stock_totals IS 'Per-product sums over the product SKUs. status is recomputed through inventory.fn_stock_status so the product-level answer can never contradict the per-SKU rows it sums.';
+
+
+--
+-- Name: warehouses; Type: TABLE; Schema: inventory; Owner: -
+--
+
+CREATE TABLE inventory.warehouses (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    tenant_id uuid NOT NULL,
+    name character varying(120) NOT NULL,
+    address character varying(200),
+    city character varying(80),
+    kind character varying(10) DEFAULT 'store'::character varying NOT NULL,
+    manager_user_id uuid,
+    is_default boolean DEFAULT false NOT NULL,
+    status character varying(10) DEFAULT 'active'::character varying NOT NULL,
+    sort_order integer DEFAULT 0 NOT NULL,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    updated_at timestamp with time zone DEFAULT now() NOT NULL,
+    CONSTRAINT warehouses_kind_check CHECK (((kind)::text = ANY ((ARRAY['store'::character varying, 'storage'::character varying, 'vehicle'::character varying])::text[]))),
+    CONSTRAINT warehouses_status_check CHECK (((status)::text = ANY ((ARRAY['active'::character varying, 'archived'::character varying])::text[])))
+);
+
+
+--
+-- Name: TABLE warehouses; Type: COMMENT; Schema: inventory; Owner: -
+--
+
+COMMENT ON TABLE inventory.warehouses IS 'Where a business keeps its stock; one default per business (INV-025 D1).';
 
 
 --
@@ -621,11 +691,11 @@ ALTER TABLE ONLY inventory.product_stock
 
 
 --
--- Name: product_stock product_stock_sku_id_key; Type: CONSTRAINT; Schema: inventory; Owner: -
+-- Name: product_stock product_stock_sku_warehouse_key; Type: CONSTRAINT; Schema: inventory; Owner: -
 --
 
 ALTER TABLE ONLY inventory.product_stock
-    ADD CONSTRAINT product_stock_sku_id_key UNIQUE (sku_id);
+    ADD CONSTRAINT product_stock_sku_warehouse_key UNIQUE (sku_id, warehouse_id);
 
 
 --
@@ -677,11 +747,51 @@ ALTER TABLE ONLY inventory.sku_codes
 
 
 --
+-- Name: transfer_lines transfer_lines_pkey; Type: CONSTRAINT; Schema: inventory; Owner: -
+--
+
+ALTER TABLE ONLY inventory.transfer_lines
+    ADD CONSTRAINT transfer_lines_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: transfer_lines transfer_lines_sku_key; Type: CONSTRAINT; Schema: inventory; Owner: -
+--
+
+ALTER TABLE ONLY inventory.transfer_lines
+    ADD CONSTRAINT transfer_lines_sku_key UNIQUE (transfer_id, sku_id);
+
+
+--
+-- Name: transfers transfers_pkey; Type: CONSTRAINT; Schema: inventory; Owner: -
+--
+
+ALTER TABLE ONLY inventory.transfers
+    ADD CONSTRAINT transfers_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: transfers transfers_tenant_number_key; Type: CONSTRAINT; Schema: inventory; Owner: -
+--
+
+ALTER TABLE ONLY inventory.transfers
+    ADD CONSTRAINT transfers_tenant_number_key UNIQUE (tenant_id, number);
+
+
+--
 -- Name: units units_pkey; Type: CONSTRAINT; Schema: inventory; Owner: -
 --
 
 ALTER TABLE ONLY inventory.units
     ADD CONSTRAINT units_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: warehouses warehouses_pkey; Type: CONSTRAINT; Schema: inventory; Owner: -
+--
+
+ALTER TABLE ONLY inventory.warehouses
+    ADD CONSTRAINT warehouses_pkey PRIMARY KEY (id);
 
 
 --
@@ -972,6 +1082,13 @@ CREATE INDEX idx_product_stock_sku_id ON inventory.product_stock USING btree (sk
 
 
 --
+-- Name: idx_product_stock_warehouse_sku; Type: INDEX; Schema: inventory; Owner: -
+--
+
+CREATE INDEX idx_product_stock_warehouse_sku ON inventory.product_stock USING btree (warehouse_id, sku_id);
+
+
+--
 -- Name: idx_product_units_one_base; Type: INDEX; Schema: inventory; Owner: -
 --
 
@@ -1042,6 +1159,13 @@ CREATE INDEX idx_products_tenant_id ON inventory.products USING btree (tenant_id
 
 
 --
+-- Name: idx_transfers_tenant_status; Type: INDEX; Schema: inventory; Owner: -
+--
+
+CREATE INDEX idx_transfers_tenant_status ON inventory.transfers USING btree (tenant_id, status, prepared_at DESC);
+
+
+--
 -- Name: idx_units_standard_code; Type: INDEX; Schema: inventory; Owner: -
 --
 
@@ -1102,6 +1226,20 @@ CREATE UNIQUE INDEX idx_variant_options_group_name ON inventory.product_variant_
 --
 
 CREATE UNIQUE INDEX idx_variant_options_id_group_id ON inventory.product_variant_options USING btree (id, variant_group_id);
+
+
+--
+-- Name: idx_warehouses_one_default; Type: INDEX; Schema: inventory; Owner: -
+--
+
+CREATE UNIQUE INDEX idx_warehouses_one_default ON inventory.warehouses USING btree (tenant_id) WHERE is_default;
+
+
+--
+-- Name: idx_warehouses_tenant; Type: INDEX; Schema: inventory; Owner: -
+--
+
+CREATE INDEX idx_warehouses_tenant ON inventory.warehouses USING btree (tenant_id, status);
 
 
 --
@@ -1225,6 +1363,14 @@ ALTER TABLE ONLY inventory.inventory_movements
 
 
 --
+-- Name: inventory_movements inventory_movements_warehouse_id_fkey; Type: FK CONSTRAINT; Schema: inventory; Owner: -
+--
+
+ALTER TABLE ONLY inventory.inventory_movements
+    ADD CONSTRAINT inventory_movements_warehouse_id_fkey FOREIGN KEY (warehouse_id) REFERENCES inventory.warehouses(id);
+
+
+--
 -- Name: product_batches product_batches_product_id_fkey; Type: FK CONSTRAINT; Schema: inventory; Owner: -
 --
 
@@ -1329,6 +1475,14 @@ ALTER TABLE ONLY inventory.product_stock
 
 
 --
+-- Name: product_stock product_stock_warehouse_id_fkey; Type: FK CONSTRAINT; Schema: inventory; Owner: -
+--
+
+ALTER TABLE ONLY inventory.product_stock
+    ADD CONSTRAINT product_stock_warehouse_id_fkey FOREIGN KEY (warehouse_id) REFERENCES inventory.warehouses(id);
+
+
+--
 -- Name: product_units product_units_product_id_fkey; Type: FK CONSTRAINT; Schema: inventory; Owner: -
 --
 
@@ -1382,6 +1536,46 @@ ALTER TABLE ONLY inventory.sku_codes
 
 ALTER TABLE ONLY inventory.sku_codes
     ADD CONSTRAINT sku_codes_sku_id_fkey FOREIGN KEY (sku_id) REFERENCES inventory.product_skus(id) ON DELETE CASCADE;
+
+
+--
+-- Name: transfer_lines transfer_lines_product_id_fkey; Type: FK CONSTRAINT; Schema: inventory; Owner: -
+--
+
+ALTER TABLE ONLY inventory.transfer_lines
+    ADD CONSTRAINT transfer_lines_product_id_fkey FOREIGN KEY (product_id) REFERENCES inventory.products(id);
+
+
+--
+-- Name: transfer_lines transfer_lines_sku_id_fkey; Type: FK CONSTRAINT; Schema: inventory; Owner: -
+--
+
+ALTER TABLE ONLY inventory.transfer_lines
+    ADD CONSTRAINT transfer_lines_sku_id_fkey FOREIGN KEY (sku_id) REFERENCES inventory.product_skus(id);
+
+
+--
+-- Name: transfer_lines transfer_lines_transfer_id_fkey; Type: FK CONSTRAINT; Schema: inventory; Owner: -
+--
+
+ALTER TABLE ONLY inventory.transfer_lines
+    ADD CONSTRAINT transfer_lines_transfer_id_fkey FOREIGN KEY (transfer_id) REFERENCES inventory.transfers(id) ON DELETE CASCADE;
+
+
+--
+-- Name: transfers transfers_from_warehouse_id_fkey; Type: FK CONSTRAINT; Schema: inventory; Owner: -
+--
+
+ALTER TABLE ONLY inventory.transfers
+    ADD CONSTRAINT transfers_from_warehouse_id_fkey FOREIGN KEY (from_warehouse_id) REFERENCES inventory.warehouses(id);
+
+
+--
+-- Name: transfers transfers_to_warehouse_id_fkey; Type: FK CONSTRAINT; Schema: inventory; Owner: -
+--
+
+ALTER TABLE ONLY inventory.transfers
+    ADD CONSTRAINT transfers_to_warehouse_id_fkey FOREIGN KEY (to_warehouse_id) REFERENCES inventory.warehouses(id);
 
 
 --

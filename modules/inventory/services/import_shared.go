@@ -424,7 +424,7 @@ func seedCombination(
 
 	if level, given, err := parseOptionalNumber(reorderCell, 0); err == nil && given && stockService != nil {
 		if _, err := stockService.UpdateReorderLevel(
-			ctx.Context(), ctx.TenantID, target.ProductID, level, performedByString(ctx), &skuID,
+			ctx.Context(), ctx.TenantID, target.ProductID, level, performedByString(ctx), &skuID, nil,
 		); err != nil {
 			warnings = append(warnings, inventoryErrors.ImportStockFailed)
 		}

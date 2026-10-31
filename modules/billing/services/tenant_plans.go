@@ -73,6 +73,7 @@ var usageFeatures = []struct{ feature, module string }{
 	{"tracking_riders", "tracking"},
 	{"tracking_vehicles", "tracking"},
 	{"inventory_items", "inventory"},
+	{"inventory_warehouses", "inventory"},
 	{"users_per_tenant", usersModule},
 }
 

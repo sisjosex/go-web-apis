@@ -39,8 +39,8 @@ BEGIN
     RETURNING product_skus.id INTO v_sku_id;
 
     -- Create initial stock, hanging off the SKU
-    INSERT INTO inventory.product_stock (product_id, sku_id, current_quantity)
-    VALUES (v_product_id, v_sku_id, 0);
+    INSERT INTO inventory.product_stock (product_id, sku_id, current_quantity, warehouse_id)
+    VALUES (v_product_id, v_sku_id, 0, inventory.fn_default_warehouse(p_tenant_id));
 
     UPDATE inventory.product_stock ps
     SET status = inventory.fn_stock_status(ps.current_quantity, ps.reorder_level)

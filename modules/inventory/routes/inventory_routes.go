@@ -27,6 +27,7 @@ type InventoryServices struct {
 	Batch     inventoryInterfaces.BatchService
 	Unit      inventoryInterfaces.UnitRepository
 	Valuation inventoryInterfaces.ValuationRepository
+	Warehouse inventoryInterfaces.WarehouseRepository
 	Attribute inventoryInterfaces.AttributeRepository
 	// ImportLookup is the read-only repository the import descriptors resolve
 	// and preview rows through (INV-017 D1); no route of this module uses it.
@@ -53,6 +54,7 @@ func NewInventoryServices(dbService coreServices.DatabaseService, media coreServ
 		Batch:     inventoryServices.NewBatchService(batchRepo),
 		Unit:      repositories.NewUnitRepository(dbService),
 		Valuation: repositories.NewValuationRepository(dbService),
+		Warehouse: repositories.NewWarehouseRepository(dbService),
 		Attribute: repositories.NewAttributeRepository(dbService),
 
 		ImportLookup: repositories.NewImportLookupRepository(dbService),
@@ -74,6 +76,24 @@ func RegisterInventoryRoutes(
 	batchController := controllers.NewBatchController(services.Batch)
 
 	inventory := router.Group("/inventory", authMiddleware, tenantMiddleware)
+
+	// Warehouses, the stock across them, the inventory home and transfers (INV-025).
+	warehouseController := controllers.NewWarehouseController(services.Warehouse)
+	api.Get(inventory, "/warehouses", warehouseController.ListWarehouses, api.Doc{Summary: "List the warehouses", Description: "Each with its value at cost, units and rows below their minimum"}, tenancyMW.RequirePermission(inventoryPerms.StockRead))
+	api.Post(inventory, "/warehouses", warehouseController.CreateWarehouse, api.Doc{Summary: "Create a warehouse", Description: "Within the plan's limit", Status: 201, Errors: []int{400, 403}}, tenancyMW.RequirePermission(inventoryPerms.WarehousesManage))
+	api.Put(inventory, "/warehouses/{id}", warehouseController.UpdateWarehouse, api.Doc{Summary: "Change a warehouse", Description: "Name, address, kind and manager", Errors: []int{400, 404}}, tenancyMW.RequirePermission(inventoryPerms.WarehousesManage))
+	api.Patch(inventory, "/warehouses/{id}/status", warehouseController.SetWarehouseStatus, api.Doc{Summary: "Archive or reactivate a warehouse", Description: "Refused with stock in it, or for the default", Errors: []int{400, 404, 409}}, tenancyMW.RequirePermission(inventoryPerms.WarehousesManage))
+	api.Patch(inventory, "/warehouses/{id}/default", warehouseController.SetDefaultWarehouse, api.Doc{Summary: "Make a warehouse the default", Description: "What names no warehouse uses it", Errors: []int{404}}, tenancyMW.RequirePermission(inventoryPerms.WarehousesManage))
+	api.Get(inventory, "/stock", warehouseController.ListStock, api.Doc{Summary: "Stock across products and warehouses", Description: "A page with the counts behind its chips"}, tenancyMW.RequirePermission(inventoryPerms.StockRead))
+	api.Get(inventory, "/stock/{product_id}/skus", warehouseController.ListStockSkus, api.Doc{Summary: "A product's combinations per warehouse", Description: "The row a product expands into"}, tenancyMW.RequirePermission(inventoryPerms.StockRead))
+	api.Get(inventory, "/summary", warehouseController.Summary, api.Doc{Summary: "The inventory home", Description: "Value, counts, what to restock and the week's best sellers; kept 60 s per tenant and warehouse"}, tenancyMW.RequirePermission(inventoryPerms.StockRead))
+	api.Get(inventory, "/nav-badges", warehouseController.NavBadges, api.Doc{Summary: "The numbers beside the inventory menu", Description: "Rows of stock below their minimum"}, tenancyMW.RequirePermission(inventoryPerms.StockRead))
+	api.Get(inventory, "/transfers", warehouseController.ListTransfers, api.Doc{Summary: "List transfers", Description: "A page, newest first, by status"}, tenancyMW.RequirePermission(inventoryPerms.StockRead))
+	api.Post(inventory, "/transfers", warehouseController.CreateTransfer, api.Doc{Summary: "Prepare a transfer", Description: "Reserves its lines at the origin", Status: 201, Errors: []int{400, 404, 409, 422}}, tenancyMW.RequirePermission(inventoryPerms.StockTransfer))
+	api.Get(inventory, "/transfers/{id}", warehouseController.GetTransfer, api.Doc{Summary: "A transfer with its timeline", Description: "Lines, units and the steps it went through", Errors: []int{404}}, tenancyMW.RequirePermission(inventoryPerms.StockRead))
+	api.Post(inventory, "/transfers/{id}/ship", warehouseController.ShipTransfer, api.Doc{Summary: "Mark a transfer in transit", Description: "The units leave the origin", Errors: []int{404, 409}}, tenancyMW.RequirePermission(inventoryPerms.StockTransfer))
+	api.Post(inventory, "/transfers/{id}/receive", warehouseController.ReceiveTransfer, api.Doc{Summary: "Receive a transfer", Description: "The units enter the destination; a shortfall is recorded as a loss", Errors: []int{404, 409, 422}}, tenancyMW.RequirePermission(inventoryPerms.StockTransfer))
+	api.Post(inventory, "/transfers/{id}/cancel", warehouseController.CancelTransfer, api.Doc{Summary: "Cancel a transfer", Description: "Only while prepared; its reservation is released", Errors: []int{404, 409}}, tenancyMW.RequirePermission(inventoryPerms.StockTransfer))
 
 	// What the stock is worth (INV-022).
 	valuationController := controllers.NewValuationController(services.Valuation)

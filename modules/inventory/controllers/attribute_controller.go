@@ -7,7 +7,6 @@ import (
 	"net/http"
 	"net/url"
 	"strings"
-	"sync"
 	"time"
 
 	"josex/web/modules/core/api"
@@ -22,26 +21,17 @@ import (
 )
 
 // facetsTTL keeps the filters' counts for a minute: they are read on every list view and only move on a write.
-const (
-	facetsTTL        = 60 * time.Second
-	facetsMaxEntries = 1000
-)
-
-type facetsEntry struct {
-	facets  []models.ProductFacet
-	expires time.Time
-}
+const facetsTTL = 60 * time.Second
 
 // AttributeController serves attributes, what a category brings, the categories' order and the list's facets (INV-024).
 type AttributeController struct {
 	attributes interfaces.AttributeRepository
-	facetsMu   sync.Mutex
-	facets     map[string]facetsEntry
+	facets     *ttlCache[[]models.ProductFacet]
 }
 
 // NewAttributeController builds the controller.
 func NewAttributeController(attributes interfaces.AttributeRepository) *AttributeController {
-	return &AttributeController{attributes: attributes, facets: map[string]facetsEntry{}}
+	return &AttributeController{attributes: attributes, facets: newTTLCache[[]models.ProductFacet](facetsTTL)}
 }
 
 // attributeRefusal names the attribute a value failed on, which only the database knows.
@@ -281,22 +271,13 @@ func (ctrl *AttributeController) ProductFacets(ctx context.Context, in *ProductF
 		return nil, api.Fail(http.StatusBadRequest, coreErrors.BuildErrorDetail(c, "validation.invalid", err.Error()))
 	}
 	key := facetsKey(tenantID, query, attrs)
-	now := time.Now()
-	ctrl.facetsMu.Lock()
-	entry, hit := ctrl.facets[key]
-	ctrl.facetsMu.Unlock()
-	if hit && now.Before(entry.expires) {
-		return api.OK(models.ProductFacetsResponse{Facets: entry.facets})
+	if cached, hit := ctrl.facets.get(key); hit {
+		return api.OK(models.ProductFacetsResponse{Facets: cached})
 	}
 	facets, err := ctrl.attributes.ProductFacets(c.Request.Context(), tenantID, query, attrs)
 	if err != nil {
 		return nil, failUnit(c, err)
 	}
-	ctrl.facetsMu.Lock()
-	if len(ctrl.facets) >= facetsMaxEntries {
-		ctrl.facets = map[string]facetsEntry{}
-	}
-	ctrl.facets[key] = facetsEntry{facets: facets, expires: now.Add(facetsTTL)}
-	ctrl.facetsMu.Unlock()
+	ctrl.facets.set(key, facets)
 	return api.OK(models.ProductFacetsResponse{Facets: facets})
 }

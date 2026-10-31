@@ -1,8 +1,9 @@
-CREATE OR REPLACE FUNCTION inventory.sp_release_reserved_stock(p_tenant_id uuid, p_product_id uuid, p_quantity numeric, p_sku_id uuid DEFAULT NULL::uuid, p_updated_by uuid DEFAULT NULL::uuid)
+CREATE OR REPLACE FUNCTION inventory.sp_release_reserved_stock(p_tenant_id uuid, p_product_id uuid, p_quantity numeric, p_sku_id uuid DEFAULT NULL::uuid, p_updated_by uuid DEFAULT NULL::uuid, p_warehouse_id uuid DEFAULT NULL::uuid)
  RETURNS TABLE(reserved_quantity numeric, available_quantity numeric, status character varying, message text)
  LANGUAGE plpgsql
 AS $function$
 DECLARE
+    v_warehouse_id UUID;
     v_sku_id            UUID;
     v_current_quantity  DECIMAL;
     v_reserved_quantity DECIMAL;
@@ -18,11 +19,12 @@ BEGIN
     END IF;
 
     v_sku_id := inventory.fn_resolve_sku(p_tenant_id, p_product_id, p_sku_id);
+    v_warehouse_id := inventory.fn_resolve_warehouse(p_tenant_id, p_warehouse_id);
 
     SELECT ps.current_quantity, ps.reserved_quantity, ps.reorder_level
     INTO v_current_quantity, v_reserved_quantity, v_reorder_level
     FROM inventory.product_stock ps
-    WHERE ps.sku_id = v_sku_id
+    WHERE ps.sku_id = v_sku_id AND ps.warehouse_id = v_warehouse_id
     FOR UPDATE;
 
     -- Check if product stock record exists
@@ -42,7 +44,7 @@ BEGIN
         status = v_status,
         updated_by = p_updated_by,
         last_updated_at = CURRENT_TIMESTAMP
-    WHERE ps.sku_id = v_sku_id;
+    WHERE ps.sku_id = v_sku_id AND ps.warehouse_id = v_warehouse_id;
 
     RETURN QUERY SELECT
         v_new_reserved,
@@ -52,4 +54,4 @@ BEGIN
 END;
 $function$;
 
-COMMENT ON FUNCTION inventory.sp_release_reserved_stock(uuid,uuid,numeric,uuid,uuid) IS 'Releases reserved quantity on a SKU, never below zero. p_sku_id is required when the product tracks stock by variant and defaults to the product SKU otherwise. Takes the stock row FOR UPDATE.';
+COMMENT ON FUNCTION inventory.sp_release_reserved_stock(uuid,uuid,numeric,uuid,uuid,uuid) IS 'Releases reserved quantity on a SKU, never below zero. p_sku_id is required when the product tracks stock by variant and defaults to the product SKU otherwise. Takes the stock row FOR UPDATE.';

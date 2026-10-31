@@ -54,8 +54,14 @@ BEGIN
     FROM inventory.product_skus s
     JOIN inventory.products p
       ON p.id = s.product_id
-    LEFT JOIN inventory.product_stock ps
-      ON ps.sku_id = s.id
+    -- Sums across warehouses (INV-025).
+    LEFT JOIN (
+        SELECT x.sku_id, SUM(x.current_quantity) AS current_quantity, SUM(x.reserved_quantity) AS reserved_quantity,
+               SUM(x.reorder_level) AS reorder_level
+        FROM inventory.product_stock x
+        WHERE x.product_id = p_product_id
+        GROUP BY x.sku_id
+    ) ps ON ps.sku_id = s.id
     WHERE s.product_id = p_product_id
       AND s.tenant_id  = p_tenant_id
     ORDER BY s.is_default DESC, s.sku

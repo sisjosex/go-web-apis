@@ -24,10 +24,11 @@ const Code = "billing.limit-reached"
 
 // The limited features, as billing.plan_limits names them.
 const (
-	TrackingRiders   = "tracking_riders"
-	TrackingVehicles = "tracking_vehicles"
-	InventoryItems   = "inventory_items"
-	UsersPerTenant   = "users_per_tenant"
+	TrackingRiders      = "tracking_riders"
+	TrackingVehicles    = "tracking_vehicles"
+	InventoryItems      = "inventory_items"
+	InventoryWarehouses = "inventory_warehouses"
+	UsersPerTenant      = "users_per_tenant"
 )
 
 // Resolver answers a tenant's limit for a feature; -1 is unlimited.

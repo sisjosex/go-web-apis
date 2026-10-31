@@ -83,18 +83,19 @@ func (r *StockRepository) ReleaseReservedStock(ctx context.Context, tenantID uui
 }
 
 // UpdateReorderLevel updates the minimum stock level for a product
-func (r *StockRepository) UpdateReorderLevel(ctx context.Context, tenantID uuid.UUID, productID string, reorderLevel float64, userID *string, skuID *string) (*models.UpdateReorderLevelResponse, error) {
+func (r *StockRepository) UpdateReorderLevel(ctx context.Context, tenantID uuid.UUID, productID string, reorderLevel float64, userID *string, skuID, warehouseID *string) (*models.UpdateReorderLevelResponse, error) {
 	var response models.UpdateReorderLevelResponse
 
 	err := r.dbService.QueryRow(
 		ctx,
 		`SELECT product_id::VARCHAR, reorder_level, current_quantity, status, message
-		 FROM inventory.sp_update_reorder_level($1, $2::UUID, $3, $4::UUID, $5::UUID)`,
+		 FROM inventory.sp_update_reorder_level($1, $2::UUID, $3, $4::UUID, $5::UUID, $6::UUID)`,
 		tenantID,
 		productID,
 		reorderLevel,
 		skuID,
 		userID,
+		warehouseID,
 	).Scan(&response.ProductID, &response.ReorderLevel, &response.CurrentQty, &response.Status, &response.Message)
 
 	if err != nil {

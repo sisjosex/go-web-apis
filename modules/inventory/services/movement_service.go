@@ -41,6 +41,7 @@ func (s *MovementService) RecordMovement(
 		createdBy,
 		dto.SkuID,
 		dto.Direction,
+		dto.WarehouseID,
 	)
 }
 

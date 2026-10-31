@@ -83,6 +83,8 @@ type RecordMovementDto struct {
 	ReferenceID   *string  `json:"reference_id"`
 	UnitCost      *float64 `json:"unit_cost"`
 	Notes         *string  `json:"notes"`
+	// WarehouseID left out is the default warehouse (INV-025 D1).
+	WarehouseID *string `json:"warehouse_id" binding:"omitempty,uuid"`
 }
 
 // ListMovementsQuery binds GET /inventory/movements. Every filter is optional; the
@@ -156,6 +158,8 @@ type UpdateReorderLevelDto struct {
 	ReorderLevel float64 `json:"reorder_level" binding:"gte=0"`
 	// SkuID names one combination; none is the product's default bucket.
 	SkuID *string `json:"sku_id" binding:"omitempty,uuid"`
+	// WarehouseID left out is the default warehouse (INV-025 D1).
+	WarehouseID *string `json:"warehouse_id" binding:"omitempty,uuid"`
 }
 
 type UpdateReorderLevelResponse struct {

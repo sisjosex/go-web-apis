@@ -51,13 +51,15 @@ func (ctrl *StockController) UpdateReorderLevel(ctx context.Context, in *UpdateR
 	}
 
 	userID := c.GetString("user_id")
-	result, err := ctrl.stockService.UpdateReorderLevel(c.Request.Context(), tenantID, productID, dto.ReorderLevel, &userID, dto.SkuID)
+	result, err := ctrl.stockService.UpdateReorderLevel(c.Request.Context(), tenantID, productID, dto.ReorderLevel, &userID, dto.SkuID, dto.WarehouseID)
 	if err != nil {
 		var pgErr *pgconn.PgError
 		if errors.As(err, &pgErr) {
 			switch pgErr.Message {
 			case inventoryErrors.ProductNotFound:
 				return nil, api.Fail(http.StatusNotFound, coreErrors.BuildErrorSingle(c, inventoryErrors.ProductNotFound))
+			case inventoryErrors.WarehouseNotFound:
+				return nil, api.Fail(http.StatusNotFound, coreErrors.BuildErrorSingle(c, inventoryErrors.WarehouseNotFound))
 			}
 		}
 		return nil, api.Fail(http.StatusInternalServerError, coreErrors.BuildError(c, err))

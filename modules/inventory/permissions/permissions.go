@@ -22,6 +22,9 @@ const (
 
 	BatchesRead   = "inventory:batches:read"
 	BatchesManage = "inventory:batches:manage"
+
+	WarehousesManage = "inventory:warehouses:manage"
+	StockTransfer    = "inventory:stock:transfer"
 )
 
 func init() {
@@ -32,6 +35,8 @@ func init() {
 		{Code: ProductsDelete, Module: "inventory", Name: "permission.inventory.products-delete", Description: "permission.inventory.products-delete.description", Section: "products_stock", Access: models.AccessWrite},
 		{Code: CategoriesRead, Module: "inventory", Name: "permission.inventory.categories-read", Description: "permission.inventory.categories-read.description", Section: "products_stock", Access: models.AccessRead},
 		{Code: CategoriesManage, Module: "inventory", Name: "permission.inventory.categories-manage", Description: "permission.inventory.categories-manage.description", Section: "products_stock", Access: models.AccessWrite},
+		{Code: WarehousesManage, Module: "inventory", Name: "permission.inventory.warehouses-manage", Description: "permission.inventory.warehouses-manage.description", Section: "products_stock", Access: models.AccessWrite},
+		{Code: StockTransfer, Module: "inventory", Name: "permission.inventory.stock-transfer", Description: "permission.inventory.stock-transfer.description", Section: "products_stock", Access: models.AccessWrite},
 		{Code: StockRead, Module: "inventory", Name: "permission.inventory.stock-read", Description: "permission.inventory.stock-read.description", Section: "products_stock", Access: models.AccessRead},
 		{Code: StockAdjust, Module: "inventory", Name: "permission.inventory.stock-adjust", Description: "permission.inventory.stock-adjust.description", Section: "products_stock", Access: models.AccessWrite},
 		{Code: StockReserve, Module: "inventory", Name: "permission.inventory.stock-reserve", Description: "permission.inventory.stock-reserve.description", Section: "products_stock", Access: models.AccessWrite},

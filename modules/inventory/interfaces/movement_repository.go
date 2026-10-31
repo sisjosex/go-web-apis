@@ -19,7 +19,7 @@ type MovementRepository interface {
 		quantity float64,
 		referenceType, referenceID *string,
 		unitCost *float64,
-		notes, createdBy, skuID, direction *string,
+		notes, createdBy, skuID, direction, warehouseID *string,
 	) (*models.RecordMovementResponse, error)
 
 	GetMovement(ctx context.Context, tenantID uuid.UUID, movementID string) (*models.InventoryMovement, error)

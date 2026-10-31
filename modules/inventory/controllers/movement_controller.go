@@ -57,6 +57,8 @@ func (ctrl *MovementController) RecordMovement(ctx context.Context, in *RecordMo
 			switch pgErr.Message {
 			case inventoryErrors.ProductNotFound:
 				return nil, api.Fail(http.StatusNotFound, coreErrors.BuildErrorSingle(c, inventoryErrors.ProductNotFound))
+			case inventoryErrors.WarehouseNotFound:
+				return nil, api.Fail(http.StatusNotFound, coreErrors.BuildErrorSingle(c, inventoryErrors.WarehouseNotFound))
 			case inventoryErrors.SkuNotFound:
 				return nil, api.Fail(http.StatusNotFound, coreErrors.BuildErrorSingle(c, inventoryErrors.SkuNotFound))
 			// INV-011 D1 — a movement on a stock-by-variant product has to name its

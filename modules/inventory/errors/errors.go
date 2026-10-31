@@ -32,6 +32,15 @@ const (
 	SkusRedistributionMismatch = "inventory.skus.redistribution-mismatch"
 	SkusRedistributionReserved = "inventory.skus.redistribution-reserved"
 
+	// Warehouses and transfers (INV-025)
+	WarehouseNotFound       = "inventory.warehouse.not-found"
+	WarehouseHasStock       = "inventory.warehouse.has-stock"
+	WarehouseDefault        = "inventory.warehouse.default"
+	TransferNotFound        = "inventory.transfer.not-found"
+	TransferSameWarehouse   = "inventory.transfer.same-warehouse"
+	TransferInvalidState    = "inventory.transfer.invalid-state"
+	TransferInvalidQuantity = "inventory.transfer.invalid-quantity"
+
 	// Attributes (INV-024)
 	AttributeNotFound  = "inventory.attribute.not-found"
 	AttributeInvalid   = "inventory.attribute.invalid"
@@ -161,6 +170,11 @@ const (
 
 // The statuses a code's name does not tell (INV-023).
 func init() {
+	coreErrors.RegisterStatus(WarehouseHasStock, http.StatusConflict)
+	coreErrors.RegisterStatus(WarehouseDefault, http.StatusConflict)
+	coreErrors.RegisterStatus(TransferSameWarehouse, http.StatusUnprocessableEntity)
+	coreErrors.RegisterStatus(TransferInvalidState, http.StatusConflict)
+	coreErrors.RegisterStatus(TransferInvalidQuantity, http.StatusUnprocessableEntity)
 	coreErrors.RegisterStatus(AttributeInvalid, http.StatusUnprocessableEntity)
 	coreErrors.RegisterStatus(AttributeInUse, http.StatusConflict)
 	coreErrors.RegisterStatus(CategoryCircularHierarchy, http.StatusBadRequest)

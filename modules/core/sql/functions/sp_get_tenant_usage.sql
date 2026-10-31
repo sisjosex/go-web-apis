@@ -7,6 +7,7 @@ DECLARE
     v_riders   BIGINT := 0;
     v_vehicles BIGINT := 0;
     v_products BIGINT := 0;
+    v_warehouses BIGINT := 0;
 BEGIN
     IF to_regclass('tracking.riders') IS NOT NULL THEN
         EXECUTE 'SELECT COUNT(*) FROM tracking.riders r
@@ -18,12 +19,14 @@ BEGIN
     END IF;
     IF to_regclass('inventory.products') IS NOT NULL THEN
         EXECUTE 'SELECT COUNT(*) FROM inventory.products p WHERE p.tenant_id = $1' INTO v_products USING p_tenant_id;
+        EXECUTE 'SELECT COUNT(*) FROM inventory.warehouses w WHERE w.tenant_id = $1 AND w.status = ''active''' INTO v_warehouses USING p_tenant_id;
     END IF;
 
     RETURN QUERY VALUES
         (CAST('tracking_riders' AS VARCHAR), v_riders),
         (CAST('tracking_vehicles' AS VARCHAR), v_vehicles),
-        (CAST('inventory_items' AS VARCHAR), v_products);
+        (CAST('inventory_items' AS VARCHAR), v_products),
+        (CAST('inventory_warehouses' AS VARCHAR), v_warehouses);
 END;
 $function$;
 

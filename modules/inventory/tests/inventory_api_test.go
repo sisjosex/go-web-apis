@@ -2594,14 +2594,14 @@ func TestProductSKU_StockIsUniquePerSKUNotPerProduct(t *testing.T) {
 	var perSKU, perProduct int
 	err := conn.QueryRow(ctx,
 		`SELECT
-		     count(*) FILTER (WHERE pg_get_constraintdef(c.oid) = 'UNIQUE (sku_id)'),
+		     count(*) FILTER (WHERE pg_get_constraintdef(c.oid) = 'UNIQUE (sku_id, warehouse_id)'),
 		     count(*) FILTER (WHERE pg_get_constraintdef(c.oid) = 'UNIQUE (product_id)')
 		 FROM pg_constraint c
 		 WHERE c.conrelid = 'inventory.product_stock'::regclass AND c.contype = 'u'`).
 		Scan(&perSKU, &perProduct)
 
 	assert.NoError(t, err)
-	assert.Equal(t, 1, perSKU, "product_stock must be unique per SKU")
+	assert.Equal(t, 1, perSKU, "product_stock must be unique per SKU and warehouse (INV-025)")
 	assert.Equal(t, 0, perProduct, "product_stock must no longer be unique per product")
 }
 

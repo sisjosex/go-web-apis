@@ -548,6 +548,7 @@
         "billing.plan_prices",
         "billing.subscriptions",
         "inventory.products",
+        "inventory.warehouses",
         "tenancy.tenant_users",
         "tenancy.tenants",
         "tracking.organizations",
@@ -770,6 +771,7 @@
         "inventory.products",
         "inventory.sku_codes",
         "inventory.units",
+        "inventory.warehouses",
         "tenancy.roles",
         "tenancy.tenant_users",
         "tenancy.tenants",
@@ -815,6 +817,7 @@
         "inventory.product_variant_groups",
         "inventory.product_variant_options",
         "inventory.products",
+        "inventory.warehouses",
         "tenancy.app_invites",
         "tenancy.tenant_users",
         "tenancy.user_roles",
@@ -1102,12 +1105,14 @@
       ],
       "reads": [
         "inventory.product_skus",
-        "inventory.products"
+        "inventory.products",
+        "inventory.warehouses"
       ],
       "writes": [
         "inventory.inventory_movements",
         "inventory.product_batches",
-        "inventory.product_stock"
+        "inventory.product_stock",
+        "inventory.warehouses"
       ]
     },
     {
@@ -1168,12 +1173,14 @@
       "reads": [
         "inventory.batch_movements",
         "inventory.product_skus",
-        "inventory.products"
+        "inventory.products",
+        "inventory.warehouses"
       ],
       "writes": [
         "inventory.inventory_movements",
         "inventory.product_batches",
-        "inventory.product_stock"
+        "inventory.product_stock",
+        "inventory.warehouses"
       ]
     },
     {
@@ -1501,11 +1508,13 @@
       ],
       "reads": [
         "inventory.product_skus",
-        "inventory.products"
+        "inventory.products",
+        "inventory.warehouses"
       ],
       "writes": [
         "inventory.inventory_movements",
-        "inventory.product_stock"
+        "inventory.product_stock",
+        "inventory.warehouses"
       ]
     },
     {
@@ -1519,6 +1528,21 @@
       ],
       "reads": [
         "inventory.inventory_movements"
+      ],
+      "writes": []
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/inventory/nav-badges",
+      "operation_id": "inventory.NavBadges",
+      "module": "inventory",
+      "handler": "josex/web/modules/inventory/controllers.(*WarehouseController).NavBadges",
+      "sps": [
+        "inventory.sp_inventory_nav_badges"
+      ],
+      "reads": [
+        "inventory.product_stock",
+        "inventory.warehouses"
       ],
       "writes": []
     },
@@ -1574,7 +1598,8 @@
         "inventory.product_units",
         "inventory.product_variant_groups",
         "inventory.product_variant_options",
-        "inventory.products"
+        "inventory.products",
+        "inventory.warehouses"
       ]
     },
     {
@@ -1692,12 +1717,14 @@
       "reads": [
         "inventory.batch_movements",
         "inventory.product_skus",
-        "inventory.products"
+        "inventory.products",
+        "inventory.warehouses"
       ],
       "writes": [
         "inventory.inventory_movements",
         "inventory.product_batches",
-        "inventory.product_stock"
+        "inventory.product_stock",
+        "inventory.warehouses"
       ]
     },
     {
@@ -1790,10 +1817,12 @@
       ],
       "reads": [
         "inventory.product_skus",
-        "inventory.products"
+        "inventory.products",
+        "inventory.warehouses"
       ],
       "writes": [
-        "inventory.product_stock"
+        "inventory.product_stock",
+        "inventory.warehouses"
       ]
     },
     {
@@ -1833,7 +1862,8 @@
         "inventory.product_sku_options",
         "inventory.product_skus",
         "inventory.product_stock",
-        "inventory.products"
+        "inventory.products",
+        "inventory.warehouses"
       ]
     },
     {
@@ -1851,7 +1881,8 @@
       ],
       "writes": [
         "inventory.inventory_movements",
-        "inventory.product_stock"
+        "inventory.product_stock",
+        "inventory.warehouses"
       ]
     },
     {
@@ -1905,10 +1936,12 @@
       ],
       "reads": [
         "inventory.product_skus",
-        "inventory.products"
+        "inventory.products",
+        "inventory.warehouses"
       ],
       "writes": [
-        "inventory.product_stock"
+        "inventory.product_stock",
+        "inventory.warehouses"
       ]
     },
     {
@@ -1940,11 +1973,31 @@
       ],
       "reads": [
         "inventory.product_skus",
-        "inventory.products"
+        "inventory.products",
+        "inventory.warehouses"
       ],
       "writes": [
-        "inventory.product_stock"
+        "inventory.product_stock",
+        "inventory.warehouses"
       ]
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/inventory/stock",
+      "operation_id": "inventory.ListStock",
+      "module": "inventory",
+      "handler": "josex/web/modules/inventory/controllers.(*WarehouseController).ListStock",
+      "sps": [
+        "inventory.sp_list_stock"
+      ],
+      "reads": [
+        "inventory.product_batches",
+        "inventory.product_category_mapping",
+        "inventory.product_skus",
+        "inventory.product_stock",
+        "inventory.products"
+      ],
+      "writes": []
     },
     {
       "method": "GET",
@@ -1964,6 +2017,188 @@
     },
     {
       "method": "GET",
+      "path": "/api/v1/inventory/stock/{product_id}/skus",
+      "operation_id": "inventory.ListStockSkus",
+      "module": "inventory",
+      "handler": "josex/web/modules/inventory/controllers.(*WarehouseController).ListStockSkus",
+      "sps": [
+        "inventory.sp_list_stock_skus"
+      ],
+      "reads": [
+        "inventory.product_sku_options",
+        "inventory.product_skus",
+        "inventory.product_stock",
+        "inventory.product_variant_groups",
+        "inventory.product_variant_options"
+      ],
+      "writes": []
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/inventory/summary",
+      "operation_id": "inventory.Summary",
+      "module": "inventory",
+      "handler": "josex/web/modules/inventory/controllers.(*WarehouseController).Summary",
+      "sps": [
+        "inventory.sp_inventory_summary"
+      ],
+      "reads": [
+        "inventory.inventory_movements",
+        "inventory.product_batches",
+        "inventory.product_skus",
+        "inventory.product_stock",
+        "inventory.products",
+        "inventory.warehouses"
+      ],
+      "writes": []
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/inventory/transfers",
+      "operation_id": "inventory.ListTransfers",
+      "module": "inventory",
+      "handler": "josex/web/modules/inventory/controllers.(*WarehouseController).ListTransfers",
+      "sps": [
+        "inventory.sp_list_transfers"
+      ],
+      "reads": [
+        "inventory.transfer_lines",
+        "inventory.transfers",
+        "inventory.warehouses"
+      ],
+      "writes": []
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/inventory/transfers",
+      "operation_id": "inventory.CreateTransfer",
+      "module": "inventory",
+      "handler": "josex/web/modules/inventory/controllers.(*WarehouseController).CreateTransfer",
+      "sps": [
+        "inventory.sp_create_transfer",
+        "inventory.sp_get_transfer"
+      ],
+      "reads": [
+        "auth.users",
+        "inventory.product_sku_options",
+        "inventory.product_skus",
+        "inventory.product_variant_options",
+        "inventory.products",
+        "inventory.transfer_lines",
+        "inventory.transfers",
+        "inventory.warehouses"
+      ],
+      "writes": [
+        "core.document_counters",
+        "inventory.product_stock",
+        "inventory.transfer_lines",
+        "inventory.transfers",
+        "inventory.warehouses"
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/inventory/transfers/{id}",
+      "operation_id": "inventory.GetTransfer",
+      "module": "inventory",
+      "handler": "josex/web/modules/inventory/controllers.(*WarehouseController).GetTransfer",
+      "sps": [
+        "inventory.sp_get_transfer"
+      ],
+      "reads": [
+        "auth.users",
+        "inventory.product_sku_options",
+        "inventory.product_variant_options",
+        "inventory.products",
+        "inventory.transfer_lines",
+        "inventory.transfers",
+        "inventory.warehouses"
+      ],
+      "writes": []
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/inventory/transfers/{id}/cancel",
+      "operation_id": "inventory.CancelTransfer",
+      "module": "inventory",
+      "handler": "josex/web/modules/inventory/controllers.(*WarehouseController).CancelTransfer",
+      "sps": [
+        "inventory.sp_cancel_transfer",
+        "inventory.sp_get_transfer"
+      ],
+      "reads": [
+        "auth.users",
+        "inventory.product_sku_options",
+        "inventory.product_skus",
+        "inventory.product_variant_options",
+        "inventory.products",
+        "inventory.transfer_lines",
+        "inventory.transfers",
+        "inventory.warehouses"
+      ],
+      "writes": [
+        "inventory.product_stock",
+        "inventory.transfers",
+        "inventory.warehouses"
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/inventory/transfers/{id}/receive",
+      "operation_id": "inventory.ReceiveTransfer",
+      "module": "inventory",
+      "handler": "josex/web/modules/inventory/controllers.(*WarehouseController).ReceiveTransfer",
+      "sps": [
+        "inventory.sp_get_transfer",
+        "inventory.sp_receive_transfer"
+      ],
+      "reads": [
+        "auth.users",
+        "inventory.product_sku_options",
+        "inventory.product_skus",
+        "inventory.product_variant_options",
+        "inventory.products",
+        "inventory.transfer_lines",
+        "inventory.transfers",
+        "inventory.warehouses"
+      ],
+      "writes": [
+        "inventory.inventory_movements",
+        "inventory.product_stock",
+        "inventory.transfer_lines",
+        "inventory.transfers",
+        "inventory.warehouses"
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/inventory/transfers/{id}/ship",
+      "operation_id": "inventory.ShipTransfer",
+      "module": "inventory",
+      "handler": "josex/web/modules/inventory/controllers.(*WarehouseController).ShipTransfer",
+      "sps": [
+        "inventory.sp_get_transfer",
+        "inventory.sp_ship_transfer"
+      ],
+      "reads": [
+        "auth.users",
+        "inventory.product_sku_options",
+        "inventory.product_skus",
+        "inventory.product_variant_options",
+        "inventory.products",
+        "inventory.transfer_lines",
+        "inventory.transfers",
+        "inventory.warehouses"
+      ],
+      "writes": [
+        "inventory.inventory_movements",
+        "inventory.product_stock",
+        "inventory.transfers",
+        "inventory.warehouses"
+      ]
+    },
+    {
+      "method": "GET",
       "path": "/api/v1/inventory/units",
       "operation_id": "inventory.ListUnits",
       "module": "inventory",
@@ -1975,6 +2210,98 @@
         "inventory.units"
       ],
       "writes": []
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/inventory/warehouses",
+      "operation_id": "inventory.ListWarehouses",
+      "module": "inventory",
+      "handler": "josex/web/modules/inventory/controllers.(*WarehouseController).ListWarehouses",
+      "sps": [
+        "inventory.sp_list_warehouses"
+      ],
+      "reads": [
+        "auth.users",
+        "inventory.inventory_movements",
+        "inventory.product_batches",
+        "inventory.product_stock",
+        "inventory.warehouses"
+      ],
+      "writes": []
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/inventory/warehouses",
+      "operation_id": "inventory.CreateWarehouse",
+      "module": "inventory",
+      "handler": "josex/web/modules/inventory/controllers.(*WarehouseController).CreateWarehouse",
+      "sps": [
+        "inventory.sp_list_warehouses",
+        "inventory.sp_upsert_warehouse",
+        "public.fn_within_limit"
+      ],
+      "reads": [
+        "auth.users",
+        "inventory.inventory_movements",
+        "inventory.product_batches",
+        "inventory.product_stock",
+        "inventory.warehouses"
+      ],
+      "writes": [
+        "inventory.warehouses"
+      ]
+    },
+    {
+      "method": "PUT",
+      "path": "/api/v1/inventory/warehouses/{id}",
+      "operation_id": "inventory.UpdateWarehouse",
+      "module": "inventory",
+      "handler": "josex/web/modules/inventory/controllers.(*WarehouseController).UpdateWarehouse",
+      "sps": [
+        "inventory.sp_list_warehouses",
+        "inventory.sp_upsert_warehouse",
+        "public.fn_within_limit"
+      ],
+      "reads": [
+        "auth.users",
+        "inventory.inventory_movements",
+        "inventory.product_batches",
+        "inventory.product_stock",
+        "inventory.warehouses"
+      ],
+      "writes": [
+        "inventory.warehouses"
+      ]
+    },
+    {
+      "method": "PATCH",
+      "path": "/api/v1/inventory/warehouses/{id}/default",
+      "operation_id": "inventory.SetDefaultWarehouse",
+      "module": "inventory",
+      "handler": "josex/web/modules/inventory/controllers.(*WarehouseController).SetDefaultWarehouse",
+      "sps": [
+        "inventory.sp_set_default_warehouse"
+      ],
+      "reads": [],
+      "writes": [
+        "inventory.warehouses"
+      ]
+    },
+    {
+      "method": "PATCH",
+      "path": "/api/v1/inventory/warehouses/{id}/status",
+      "operation_id": "inventory.SetWarehouseStatus",
+      "module": "inventory",
+      "handler": "josex/web/modules/inventory/controllers.(*WarehouseController).SetWarehouseStatus",
+      "sps": [
+        "inventory.sp_set_warehouse_status"
+      ],
+      "reads": [
+        "inventory.product_stock"
+      ],
+      "writes": [
+        "inventory.warehouses"
+      ]
     },
     {
       "method": "POST",
@@ -2557,11 +2884,13 @@
       "reads": [
         "inventory.product_skus",
         "inventory.products",
+        "inventory.warehouses",
         "purchasing.suppliers"
       ],
       "writes": [
         "inventory.inventory_movements",
         "inventory.product_stock",
+        "inventory.warehouses",
         "purchasing.purchase_order_items",
         "purchasing.purchase_order_receipts",
         "purchasing.purchase_orders"
@@ -2824,6 +3153,7 @@
       "reads": [
         "inventory.product_skus",
         "inventory.products",
+        "inventory.warehouses",
         "sales.order_batch_assignments",
         "sales.order_items",
         "sales.sales_orders"
@@ -2833,6 +3163,7 @@
         "inventory.inventory_movements",
         "inventory.product_batches",
         "inventory.product_stock",
+        "inventory.warehouses",
         "sales.sales_orders"
       ]
     },
@@ -7525,6 +7856,13 @@
       "writes": [],
       "calls": []
     },
+    "inventory.fn_default_warehouse": {
+      "reads": [],
+      "writes": [
+        "inventory.warehouses"
+      ],
+      "calls": []
+    },
     "inventory.fn_fold": {
       "reads": [],
       "writes": [],
@@ -7618,6 +7956,15 @@
       ],
       "writes": [],
       "calls": []
+    },
+    "inventory.fn_resolve_warehouse": {
+      "reads": [
+        "inventory.warehouses"
+      ],
+      "writes": [],
+      "calls": [
+        "inventory.fn_default_warehouse"
+      ]
     },
     "inventory.fn_sku_price": {
       "reads": [
@@ -7724,6 +8071,17 @@
       ],
       "calls": []
     },
+    "inventory.sp_cancel_transfer": {
+      "reads": [
+        "inventory.transfer_lines"
+      ],
+      "writes": [
+        "inventory.transfers"
+      ],
+      "calls": [
+        "inventory.sp_release_reserved_stock"
+      ]
+    },
     "inventory.sp_check_circular_hierarchy": {
       "reads": [
         "inventory.product_categories"
@@ -7768,6 +8126,7 @@
         "inventory.products"
       ],
       "calls": [
+        "inventory.fn_default_warehouse",
         "inventory.fn_stock_status",
         "inventory.fn_sync_axis_attributes"
       ]
@@ -7786,10 +8145,25 @@
       ],
       "calls": [
         "inventory.fn_axis_attribute",
+        "inventory.fn_default_warehouse",
         "inventory.fn_normalize_attributes",
         "inventory.fn_stock_status",
         "inventory.fn_sync_axis_attributes",
         "inventory.sp_generate_product_skus"
+      ]
+    },
+    "inventory.sp_create_transfer": {
+      "reads": [
+        "inventory.product_skus"
+      ],
+      "writes": [
+        "inventory.transfer_lines",
+        "inventory.transfers"
+      ],
+      "calls": [
+        "core.fn_next_document_number",
+        "inventory.fn_resolve_warehouse",
+        "inventory.sp_reserve_stock_for_order"
       ]
     },
     "inventory.sp_delete_attribute": {
@@ -7835,6 +8209,7 @@
         "inventory.products"
       ],
       "calls": [
+        "inventory.fn_default_warehouse",
         "inventory.fn_stock_status"
       ]
     },
@@ -7959,6 +8334,19 @@
       "writes": [],
       "calls": []
     },
+    "inventory.sp_get_transfer": {
+      "reads": [
+        "auth.users",
+        "inventory.product_sku_options",
+        "inventory.product_variant_options",
+        "inventory.products",
+        "inventory.transfer_lines",
+        "inventory.transfers",
+        "inventory.warehouses"
+      ],
+      "writes": [],
+      "calls": []
+    },
     "inventory.sp_import_find_category": {
       "reads": [
         "inventory.product_categories"
@@ -8001,6 +8389,14 @@
       "writes": [],
       "calls": []
     },
+    "inventory.sp_inventory_nav_badges": {
+      "reads": [
+        "inventory.product_stock",
+        "inventory.warehouses"
+      ],
+      "writes": [],
+      "calls": []
+    },
     "inventory.sp_inventory_setup": {
       "reads": [
         "inventory.product_categories",
@@ -8008,6 +8404,21 @@
       ],
       "writes": [],
       "calls": []
+    },
+    "inventory.sp_inventory_summary": {
+      "reads": [
+        "inventory.inventory_movements",
+        "inventory.product_batches",
+        "inventory.product_skus",
+        "inventory.product_stock",
+        "inventory.products",
+        "inventory.warehouses"
+      ],
+      "writes": [],
+      "calls": [
+        "inventory.fn_sku_unit_cost",
+        "inventory.fn_stock_status"
+      ]
     },
     "inventory.sp_inventory_valuation": {
       "reads": [
@@ -8094,12 +8505,56 @@
         "inventory.fn_products_in_scope"
       ]
     },
+    "inventory.sp_list_stock": {
+      "reads": [
+        "inventory.product_batches",
+        "inventory.product_skus",
+        "inventory.product_stock",
+        "inventory.products"
+      ],
+      "writes": [],
+      "calls": [
+        "inventory.fn_products_in_scope",
+        "inventory.fn_stock_status"
+      ]
+    },
+    "inventory.sp_list_stock_skus": {
+      "reads": [
+        "inventory.product_sku_options",
+        "inventory.product_skus",
+        "inventory.product_stock",
+        "inventory.product_variant_groups",
+        "inventory.product_variant_options"
+      ],
+      "writes": [],
+      "calls": []
+    },
+    "inventory.sp_list_transfers": {
+      "reads": [
+        "inventory.transfer_lines",
+        "inventory.transfers",
+        "inventory.warehouses"
+      ],
+      "writes": [],
+      "calls": []
+    },
     "inventory.sp_list_units": {
       "reads": [
         "inventory.units"
       ],
       "writes": [],
       "calls": []
+    },
+    "inventory.sp_list_warehouses": {
+      "reads": [
+        "auth.users",
+        "inventory.product_stock",
+        "inventory.warehouses"
+      ],
+      "writes": [],
+      "calls": [
+        "inventory.fn_sku_unit_cost"
+      ]
     },
     "inventory.sp_product_facets": {
       "reads": [
@@ -8112,6 +8567,16 @@
         "inventory.fn_products_in_scope"
       ]
     },
+    "inventory.sp_receive_transfer": {
+      "reads": [],
+      "writes": [
+        "inventory.transfer_lines",
+        "inventory.transfers"
+      ],
+      "calls": [
+        "inventory.sp_record_movement"
+      ]
+    },
     "inventory.sp_record_movement": {
       "reads": [],
       "writes": [
@@ -8122,6 +8587,7 @@
         "inventory.fn_movement_direction",
         "inventory.fn_requires_sku",
         "inventory.fn_resolve_sku",
+        "inventory.fn_resolve_warehouse",
         "inventory.fn_stock_status"
       ]
     },
@@ -8148,6 +8614,7 @@
         "inventory.product_stock"
       ],
       "calls": [
+        "inventory.fn_default_warehouse",
         "inventory.fn_resolve_sku",
         "inventory.fn_stock_status"
       ]
@@ -8160,6 +8627,7 @@
       "calls": [
         "inventory.fn_requires_sku",
         "inventory.fn_resolve_sku",
+        "inventory.fn_resolve_warehouse",
         "inventory.fn_stock_status"
       ]
     },
@@ -8204,6 +8672,7 @@
       "calls": [
         "inventory.fn_requires_sku",
         "inventory.fn_resolve_sku",
+        "inventory.fn_resolve_warehouse",
         "inventory.fn_stock_status"
       ]
     },
@@ -8234,12 +8703,40 @@
       ],
       "calls": []
     },
+    "inventory.sp_set_default_warehouse": {
+      "reads": [],
+      "writes": [
+        "inventory.warehouses"
+      ],
+      "calls": []
+    },
     "inventory.sp_set_product_status": {
       "reads": [],
       "writes": [
         "inventory.products"
       ],
       "calls": []
+    },
+    "inventory.sp_set_warehouse_status": {
+      "reads": [
+        "inventory.product_stock"
+      ],
+      "writes": [
+        "inventory.warehouses"
+      ],
+      "calls": []
+    },
+    "inventory.sp_ship_transfer": {
+      "reads": [
+        "inventory.transfer_lines"
+      ],
+      "writes": [
+        "inventory.transfers"
+      ],
+      "calls": [
+        "inventory.sp_record_movement",
+        "inventory.sp_release_reserved_stock"
+      ]
     },
     "inventory.sp_update_batch": {
       "reads": [
@@ -8287,6 +8784,7 @@
       ],
       "calls": [
         "inventory.fn_resolve_sku",
+        "inventory.fn_resolve_warehouse",
         "inventory.fn_stock_status"
       ]
     },
@@ -8299,6 +8797,15 @@
       ],
       "calls": [
         "inventory.fn_attribute_code"
+      ]
+    },
+    "inventory.sp_upsert_warehouse": {
+      "reads": [],
+      "writes": [
+        "inventory.warehouses"
+      ],
+      "calls": [
+        "inventory.fn_default_warehouse"
       ]
     },
     "inventory.sp_void_batch": {
@@ -8322,6 +8829,7 @@
     "public.sp_get_tenant_usage": {
       "reads": [
         "inventory.products",
+        "inventory.warehouses",
         "tracking.organizations",
         "tracking.riders",
         "tracking.transport_companies",

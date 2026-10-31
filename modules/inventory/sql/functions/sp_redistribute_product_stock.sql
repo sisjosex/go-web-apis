@@ -3,6 +3,7 @@ CREATE OR REPLACE FUNCTION inventory.sp_redistribute_product_stock(p_tenant_id u
  LANGUAGE plpgsql
 AS $function$
 DECLARE
+    v_warehouse_id UUID := inventory.fn_default_warehouse(p_tenant_id);
     v_default_sku_id UUID;
     v_target_ids     UUID[];
     v_target_count   INT;
@@ -67,14 +68,14 @@ BEGIN
     -- reading the quantity the sum is checked against.
     PERFORM ps.sku_id
     FROM inventory.product_stock ps
-    WHERE ps.sku_id = ANY (v_target_ids || v_default_sku_id)
+    WHERE ps.sku_id = ANY (v_target_ids || v_default_sku_id) AND ps.warehouse_id = v_warehouse_id
     ORDER BY ps.sku_id
     FOR UPDATE;
 
     SELECT ps.current_quantity, ps.reserved_quantity
     INTO v_current, v_reserved
     FROM inventory.product_stock ps
-    WHERE ps.sku_id = v_default_sku_id;
+    WHERE ps.sku_id = v_default_sku_id AND ps.warehouse_id = v_warehouse_id;
 
     -- Emptying a bucket that still backs a reservation would leave the product
     -- with negative availability on a SKU nobody can sell from.
@@ -102,7 +103,7 @@ BEGIN
             (e ->> 'quantity')::DECIMAL AS quantity
         FROM jsonb_array_elements(p_targets) e
     ) t
-    WHERE ps.sku_id = t.sku_id;
+    WHERE ps.sku_id = t.sku_id AND ps.warehouse_id = v_warehouse_id;
 
     -- D4 — one TRANSFER per target, so the audit trail says where the units went
     INSERT INTO inventory.inventory_movements (
@@ -125,7 +126,7 @@ BEGIN
     SET current_quantity = 0,
         status           = inventory.fn_stock_status(0, ps.reorder_level),
         last_updated_at  = CURRENT_TIMESTAMP
-    WHERE ps.sku_id = v_default_sku_id;
+    WHERE ps.sku_id = v_default_sku_id AND ps.warehouse_id = v_warehouse_id;
 
     -- The balancing entry. Without it the ledger says the units were created.
     INSERT INTO inventory.inventory_movements (

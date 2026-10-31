@@ -31,7 +31,7 @@ func (r *MovementRepository) RecordMovement(
 	quantity float64,
 	referenceType, referenceID *string,
 	unitCost *float64,
-	notes, createdBy, skuID, direction *string,
+	notes, createdBy, skuID, direction, warehouseID *string,
 ) (*models.RecordMovementResponse, error) {
 	var movementID string
 	var newStock float64
@@ -54,8 +54,8 @@ func (r *MovementRepository) RecordMovement(
 	err := r.dbService.QueryRow(
 		ctx,
 		`SELECT movement_id, new_stock_quantity, message
-		 FROM inventory.sp_record_movement($1, $2, $3, $4, $5, $6::UUID, $7::DECIMAL, $8, $9::UUID, $10::UUID, $11)`,
-		tenantID, productID, movementType, quantity, referenceType, referenceID, unitCost, notes, createdByParam, skuID, direction,
+		 FROM inventory.sp_record_movement($1, $2, $3, $4, $5, $6::UUID, $7::DECIMAL, $8, $9::UUID, $10::UUID, $11, p_warehouse_id := $12::UUID)`,
+		tenantID, productID, movementType, quantity, referenceType, referenceID, unitCost, notes, createdByParam, skuID, direction, warehouseID,
 	).Scan(&movementID, &newStock, &message)
 
 	if err != nil {

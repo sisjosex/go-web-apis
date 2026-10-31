@@ -208,7 +208,8 @@ BEGIN
             current_quantity,
             reserved_quantity,
             reorder_level,
-            status
+            status,
+            warehouse_id
         )
         VALUES (
             p_product_id,
@@ -216,7 +217,8 @@ BEGIN
             0,
             0,
             v_reorder_level,
-            inventory.fn_stock_status(0, v_reorder_level)
+            inventory.fn_stock_status(0, v_reorder_level),
+            inventory.fn_default_warehouse(p_tenant_id)
         );
     EXCEPTION
         WHEN unique_violation THEN
