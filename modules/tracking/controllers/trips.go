@@ -326,6 +326,41 @@ func (ctrl *TrackingController) TrackingOverview(ctx context.Context, in *Tracki
 	return api.OK(overview)
 }
 
+// OrganizationAbsentInput is OrganizationAbsent's request.
+type OrganizationAbsentInput struct {
+	Query api.Query[models.OrganizationAbsentQuery]
+}
+
+// OrganizationAbsent is GET /organization/absent: Who a school's or company's day counts as absent.
+func (ctrl *TrackingController) OrganizationAbsent(ctx context.Context, in *OrganizationAbsentInput) (*api.Out[*models.OrganizationAbsent], error) {
+	c := api.Gin(ctx)
+	tenantID, err := ctrl.requireTenantID(c)
+	if err != nil {
+		return nil, err
+	}
+	var query models.OrganizationAbsentQuery
+	if err := in.Query.Into(ctx, &query); err != nil {
+		return nil, api.Fail(http.StatusBadRequest, coreErrors.BuildErrorDetail(c, trackingErrors.OrganizationTodayFailed, utils.ExtractValidationError(c, err)))
+	}
+	absent, err := ctrl.trackingService.OrganizationAbsent(c.Request.Context(), tenantID, ctrl.scopeUserID(c), query)
+	if err != nil {
+		if err := scopeRefused(c, err); err != nil {
+			return nil, err
+		}
+		var trackingErr *trackingErrors.TrackingError
+		if errors.As(err, &trackingErr) {
+			switch trackingErr.Code {
+			case trackingErrors.OrganizationRequired:
+				return nil, api.Fail(http.StatusBadRequest, coreErrors.BuildErrorSingle(c, trackingErr.Code))
+			case trackingErrors.OrganizationNotFound:
+				return nil, api.Fail(http.StatusNotFound, coreErrors.BuildErrorSingle(c, trackingErr.Code))
+			}
+		}
+		return nil, api.Fail(http.StatusInternalServerError, coreErrors.BuildError(c, err))
+	}
+	return api.OK(absent)
+}
+
 // OrganizationTodayInput is OrganizationToday's request.
 type OrganizationTodayInput struct {
 	Query api.Query[models.OrganizationTodayQuery]

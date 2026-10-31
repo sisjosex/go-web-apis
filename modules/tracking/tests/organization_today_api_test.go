@@ -46,6 +46,33 @@ func organizationToday(t *testing.T, helper *testhelpers.ApiTestHelper, query st
 	return day
 }
 
+// TestOrganizationAbsent_ListsWhoTheDayCounts - only the absent rider, by name; staff must name the organization.
+func TestOrganizationAbsent_ListsWhoTheDayCounts(t *testing.T) {
+	helper := SetupTrackingTest(t)
+	defer helper.Close()
+	org := newOrganization(t, helper, "school")
+	routeID, _ := createTripRoute(t, helper, "07:00")
+	present, absent := orgRider(t, helper, org, routeID), orgRider(t, helper, org, routeID)
+	today := dayOffset(t, "UTC", 0)
+	materialiseRoute(t, helper, routeID, today, today)
+	postAbsence(t, helper, absent, map[string]interface{}{"date_from": today, "date_to": today}, http.StatusCreated)
+
+	w := helper.DoRequest("GET", "/tracking/organization/absent?organization_id="+org+"&date="+today, nil, map[string]string{})
+	if w.Code != http.StatusOK {
+		t.Fatalf("organization absent: %d %s", w.Code, w.Body.String())
+	}
+	var list models.OrganizationAbsent
+	decodeBody(t, w, &list)
+	if assert.Len(t, list.Riders, 1) {
+		assert.Equal(t, absent, list.Riders[0].RiderID.String())
+		assert.NotEqual(t, present, list.Riders[0].RiderID.String())
+		assert.NotEmpty(t, list.Riders[0].Name)
+	}
+
+	w = helper.DoRequest("GET", "/tracking/organization/absent", nil, map[string]string{})
+	assert.Equal(t, http.StatusBadRequest, w.Code)
+}
+
 // TestOrganizationToday_SchoolTotals - three of a school's riders on a running trip: one arrived, one on
 // the way, one absent; staff must name the organization; a school user reads its own.
 func TestOrganizationToday_SchoolTotals(t *testing.T) {

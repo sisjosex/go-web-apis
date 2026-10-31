@@ -31,6 +31,11 @@ func (s *TrackingService) GetRouteRealtimeStatus(ctx context.Context, tenantID u
 	return s.trackingRepo.GetRouteRealtimeStatus(ctx, tenantID, routeID, scopeUserID)
 }
 
+// OrganizationAbsent is who the client's day counts as absent (MOBILE-041): one read, the client's scope.
+func (s *TrackingService) OrganizationAbsent(ctx context.Context, tenantID uuid.UUID, scopeUserID *uuid.UUID, query models.OrganizationAbsentQuery) (*models.OrganizationAbsent, error) {
+	return s.trackingRepo.OrganizationAbsent(ctx, tenantID, scopeUserID, query)
+}
+
 // OrganizationToday is a school's or company's home (MOBILE-039 D3): one read, the client's scope.
 func (s *TrackingService) OrganizationToday(ctx context.Context, tenantID uuid.UUID, scopeUserID *uuid.UUID, query models.OrganizationTodayQuery) (*models.OrganizationToday, error) {
 	return s.trackingRepo.OrganizationToday(ctx, tenantID, scopeUserID, query)

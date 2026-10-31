@@ -4025,6 +4025,25 @@
     },
     {
       "method": "GET",
+      "path": "/api/v1/tracking/organization/absent",
+      "operation_id": "tracking.OrganizationAbsent",
+      "module": "tracking",
+      "handler": "josex/web/modules/tracking/controllers.(*TrackingController).OrganizationAbsent",
+      "sps": [
+        "tracking.sp_organization_absent"
+      ],
+      "reads": [
+        "tracking.organization_members",
+        "tracking.organizations",
+        "tracking.riders",
+        "tracking.trip_stop_tasks",
+        "tracking.trip_stops",
+        "tracking.trips"
+      ],
+      "writes": []
+    },
+    {
+      "method": "GET",
       "path": "/api/v1/tracking/organization/today",
       "operation_id": "tracking.OrganizationToday",
       "module": "tracking",
@@ -10306,6 +10325,20 @@
         "tracking.notifications"
       ],
       "calls": []
+    },
+    "tracking.sp_organization_absent": {
+      "reads": [
+        "tracking.organizations",
+        "tracking.riders",
+        "tracking.trip_stop_tasks",
+        "tracking.trip_stops",
+        "tracking.trips"
+      ],
+      "writes": [],
+      "calls": [
+        "tracking.fn_organization_scope",
+        "tracking.fn_supervised_riders"
+      ]
     },
     "tracking.sp_organization_today": {
       "reads": [

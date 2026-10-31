@@ -265,6 +265,24 @@ type OrganizationTodayQuery struct {
 	Shift          *string `form:"shift" binding:"omitempty,datetime=15:04"`
 }
 
+// OrganizationAbsentQuery binds GET /tracking/organization/absent (MOBILE-041): the same scope as the day.
+type OrganizationAbsentQuery struct {
+	Date           *string `form:"date" binding:"omitempty,datetime=2006-01-02"`
+	OrganizationID *string `form:"organization_id" binding:"omitempty,uuid"`
+}
+
+// OrganizationAbsentRider is one rider the client's day counts as absent, with how many of the day's trips it misses.
+type OrganizationAbsentRider struct {
+	RiderID uuid.UUID `json:"rider_id"`
+	Name    string    `json:"name"`
+	Trips   int64     `json:"trips"`
+}
+
+// OrganizationAbsent is the list behind the day's absent total.
+type OrganizationAbsent struct {
+	Riders []OrganizationAbsentRider `json:"riders"`
+}
+
 // OrganizationToday is a school's or company's day: totals per rider and its routes, one read.
 type OrganizationToday struct {
 	Organization  OrganizationTodayOrg    `json:"organization"`

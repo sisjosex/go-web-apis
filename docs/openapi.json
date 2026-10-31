@@ -11129,6 +11129,43 @@
         ],
         "type": "object"
       },
+      "tracking.OrganizationAbsent": {
+        "additionalProperties": false,
+        "properties": {
+          "riders": {
+            "items": {
+              "$ref": "#/components/schemas/tracking.OrganizationAbsentRider"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "riders"
+        ],
+        "type": "object"
+      },
+      "tracking.OrganizationAbsentRider": {
+        "additionalProperties": false,
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "rider_id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "trips": {
+            "format": "int64",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "rider_id",
+          "name",
+          "trips"
+        ],
+        "type": "object"
+      },
       "tracking.OrganizationCounts": {
         "additionalProperties": false,
         "properties": {
@@ -28730,6 +28767,76 @@
           "tracking"
         ],
         "x-handler": "josex/web/modules/tracking/controllers.(*TrackingController).ApplyOptimizationRun"
+      }
+    },
+    "/api/v1/tracking/organization/absent": {
+      "get": {
+        "description": "MOBILE-041: the riders behind the day's absent total, by name, in the same scope as /organization/today: an organization user reads its own organizations, staff names one with organization_id. Scoped by the SP.",
+        "operationId": "tracking.OrganizationAbsent",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "date",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "organization_id",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/tracking.OrganizationAbsent"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/core.ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/core.ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/core.ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          }
+        },
+        "summary": "Who a school's or company's day counts as absent",
+        "tags": [
+          "tracking"
+        ],
+        "x-handler": "josex/web/modules/tracking/controllers.(*TrackingController).OrganizationAbsent"
       }
     },
     "/api/v1/tracking/organization/today": {

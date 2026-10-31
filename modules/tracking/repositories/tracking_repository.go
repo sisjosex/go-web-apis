@@ -192,6 +192,35 @@ func (r *TrackingRepository) ListGuardianRiderStatus(ctx context.Context, tenant
 	return statuses, rows.Err()
 }
 
+// OrganizationAbsent answers sp_organization_absent: who the client's day counts as absent (MOBILE-041).
+func (r *TrackingRepository) OrganizationAbsent(ctx context.Context, tenantID uuid.UUID, scopeUserID *uuid.UUID, query models.OrganizationAbsentQuery) (*models.OrganizationAbsent, error) {
+	var raw []byte
+	err := r.dbService.QueryRow(ctx, `
+		SELECT tracking.sp_organization_absent(
+			p_tenant_id       := $1,
+			p_scope_user_id   := $2,
+			p_date            := $3::DATE,
+			p_organization_id := $4
+		)`, tenantID, scopeUserID, query.Date, query.OrganizationID).Scan(&raw)
+	if err != nil {
+		var pgErr *pgconn.PgError
+		if errors.As(err, &pgErr) {
+			switch pgErr.Message {
+			case "organization.required":
+				return nil, &trackingErrors.TrackingError{Code: trackingErrors.OrganizationRequired, Err: err}
+			case "organization.not-found":
+				return nil, &trackingErrors.TrackingError{Code: trackingErrors.OrganizationNotFound, Err: err}
+			}
+		}
+		return nil, scopedErr(err, trackingErrors.OrganizationTodayFailed)
+	}
+	var absent models.OrganizationAbsent
+	if err := json.Unmarshal(raw, &absent); err != nil {
+		return nil, &trackingErrors.TrackingError{Code: trackingErrors.OrganizationTodayFailed, Err: err}
+	}
+	return &absent, nil
+}
+
 // OrganizationToday answers sp_organization_today: a school's or company's day in one read (MOBILE-039 D3).
 func (r *TrackingRepository) OrganizationToday(ctx context.Context, tenantID uuid.UUID, scopeUserID *uuid.UUID, query models.OrganizationTodayQuery) (*models.OrganizationToday, error) {
 	var raw []byte
