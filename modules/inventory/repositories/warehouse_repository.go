@@ -158,7 +158,7 @@ func (r *WarehouseRepository) Summary(ctx context.Context, tenantID uuid.UUID, t
 // NavBadges answers the numbers beside the menu.
 func (r *WarehouseRepository) NavBadges(ctx context.Context, tenantID uuid.UUID) (*models.InventoryNavBadges, error) {
 	var out models.InventoryNavBadges
-	err := r.dbService.QueryRow(ctx, `SELECT stock_low FROM inventory.sp_inventory_nav_badges($1)`, tenantID).Scan(&out.StockLow)
+	err := r.dbService.QueryRow(ctx, `SELECT stock_low, counts_open FROM inventory.sp_inventory_nav_badges($1)`, tenantID).Scan(&out.StockLow, &out.CountsOpen)
 	return &out, err
 }
 

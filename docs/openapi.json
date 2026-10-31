@@ -2740,6 +2740,22 @@
         ],
         "type": "object"
       },
+      "inventory.CloseCountResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "adjustment_number": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "status",
+          "adjustment_number"
+        ],
+        "type": "object"
+      },
       "inventory.CodeLookup": {
         "additionalProperties": false,
         "properties": {
@@ -2819,6 +2835,264 @@
           "id",
           "name_es",
           "name_en"
+        ],
+        "type": "object"
+      },
+      "inventory.CountChips": {
+        "additionalProperties": false,
+        "properties": {
+          "closed": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "open": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "review": {
+            "format": "int64",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "open",
+          "review",
+          "closed"
+        ],
+        "type": "object"
+      },
+      "inventory.CountDetail": {
+        "additionalProperties": false,
+        "properties": {
+          "adjustment_number": {
+            "nullable": true,
+            "type": "string"
+          },
+          "blind": {
+            "type": "boolean"
+          },
+          "category": {
+            "$ref": "#/components/schemas/inventory.CountPlace"
+          },
+          "created_by_name": {
+            "nullable": true,
+            "type": "string"
+          },
+          "id": {
+            "type": "string"
+          },
+          "lines": {
+            "items": {
+              "$ref": "#/components/schemas/inventory.CountLine"
+            },
+            "type": "array"
+          },
+          "number": {
+            "type": "string"
+          },
+          "progress": {
+            "$ref": "#/components/schemas/inventory.CountProgress"
+          },
+          "started_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "status": {
+            "type": "string"
+          },
+          "warehouse": {
+            "$ref": "#/components/schemas/inventory.CountPlace"
+          }
+        },
+        "required": [
+          "id",
+          "number",
+          "status",
+          "blind",
+          "adjustment_number",
+          "started_at",
+          "warehouse",
+          "category",
+          "created_by_name",
+          "lines",
+          "progress"
+        ],
+        "type": "object"
+      },
+      "inventory.CountLine": {
+        "additionalProperties": false,
+        "properties": {
+          "counted": {
+            "format": "double",
+            "nullable": true,
+            "type": "number"
+          },
+          "difference": {
+            "format": "double",
+            "nullable": true,
+            "type": "number"
+          },
+          "expected": {
+            "format": "double",
+            "nullable": true,
+            "type": "number"
+          },
+          "label": {
+            "nullable": true,
+            "type": "string"
+          },
+          "product_name": {
+            "type": "string"
+          },
+          "sku": {
+            "type": "string"
+          },
+          "sku_id": {
+            "type": "string"
+          },
+          "unit_cost": {
+            "format": "double",
+            "nullable": true,
+            "type": "number"
+          }
+        },
+        "required": [
+          "sku_id",
+          "product_name",
+          "sku",
+          "label",
+          "expected",
+          "counted",
+          "difference",
+          "unit_cost"
+        ],
+        "type": "object"
+      },
+      "inventory.CountLineDto": {
+        "additionalProperties": false,
+        "properties": {
+          "counted": {
+            "format": "double",
+            "minimum": 0,
+            "nullable": true,
+            "type": "number"
+          },
+          "sku_id": {
+            "format": "uuid",
+            "type": "string"
+          }
+        },
+        "required": [
+          "sku_id",
+          "counted"
+        ],
+        "type": "object"
+      },
+      "inventory.CountPlace": {
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "name"
+        ],
+        "type": "object"
+      },
+      "inventory.CountProgress": {
+        "additionalProperties": false,
+        "properties": {
+          "counted": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "difference_value": {
+            "format": "double",
+            "nullable": true,
+            "type": "number"
+          },
+          "total": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "with_difference": {
+            "format": "int64",
+            "nullable": true,
+            "type": "integer"
+          }
+        },
+        "required": [
+          "counted",
+          "total",
+          "with_difference",
+          "difference_value"
+        ],
+        "type": "object"
+      },
+      "inventory.CountRow": {
+        "additionalProperties": false,
+        "properties": {
+          "adjustment_number": {
+            "nullable": true,
+            "type": "string"
+          },
+          "blind": {
+            "type": "boolean"
+          },
+          "category": {
+            "$ref": "#/components/schemas/inventory.CountPlace"
+          },
+          "counted_lines": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "created_by_name": {
+            "nullable": true,
+            "type": "string"
+          },
+          "id": {
+            "type": "string"
+          },
+          "number": {
+            "type": "string"
+          },
+          "started_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "status": {
+            "type": "string"
+          },
+          "total_lines": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "warehouse": {
+            "$ref": "#/components/schemas/inventory.CountPlace"
+          },
+          "with_difference": {
+            "format": "int64",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id",
+          "number",
+          "status",
+          "blind",
+          "adjustment_number",
+          "started_at",
+          "warehouse",
+          "category",
+          "created_by_name",
+          "total_lines",
+          "counted_lines",
+          "with_difference"
         ],
         "type": "object"
       },
@@ -2915,6 +3189,25 @@
           "name",
           "slug"
         ],
+        "type": "object"
+      },
+      "inventory.CreateCountDto": {
+        "additionalProperties": false,
+        "properties": {
+          "blind": {
+            "type": "boolean"
+          },
+          "category_id": {
+            "format": "uuid",
+            "nullable": true,
+            "type": "string"
+          },
+          "warehouse_id": {
+            "format": "uuid",
+            "nullable": true,
+            "type": "string"
+          }
+        },
         "type": "object"
       },
       "inventory.CreateProductDto": {
@@ -3217,13 +3510,18 @@
       "inventory.InventoryNavBadges": {
         "additionalProperties": false,
         "properties": {
+          "counts_open": {
+            "format": "int64",
+            "type": "integer"
+          },
           "stock_low": {
             "format": "int64",
             "type": "integer"
           }
         },
         "required": [
-          "stock_low"
+          "stock_low",
+          "counts_open"
         ],
         "type": "object"
       },
@@ -3343,6 +3641,40 @@
         "required": [
           "categories",
           "total"
+        ],
+        "type": "object"
+      },
+      "inventory.ListCountsResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "chips": {
+            "$ref": "#/components/schemas/inventory.CountChips"
+          },
+          "counts": {
+            "items": {
+              "$ref": "#/components/schemas/inventory.CountRow"
+            },
+            "type": "array"
+          },
+          "page": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "page_size": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "total_count": {
+            "format": "int64",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "counts",
+          "chips",
+          "total_count",
+          "page",
+          "page_size"
         ],
         "type": "object"
       },
@@ -4623,6 +4955,19 @@
         ],
         "type": "object"
       },
+      "inventory.ScanCountDto": {
+        "additionalProperties": false,
+        "properties": {
+          "code": {
+            "maxLength": 64,
+            "type": "string"
+          }
+        },
+        "required": [
+          "code"
+        ],
+        "type": "object"
+      },
       "inventory.SetCategoryAttributesDto": {
         "additionalProperties": false,
         "properties": {
@@ -4636,6 +4981,23 @@
         },
         "required": [
           "attribute_ids"
+        ],
+        "type": "object"
+      },
+      "inventory.SetCountLinesDto": {
+        "additionalProperties": false,
+        "properties": {
+          "lines": {
+            "items": {
+              "$ref": "#/components/schemas/inventory.CountLineDto"
+            },
+            "maxItems": 200,
+            "minItems": 1,
+            "type": "array"
+          }
+        },
+        "required": [
+          "lines"
         ],
         "type": "object"
       },
@@ -22732,6 +23094,594 @@
           "inventory"
         ],
         "x-handler": "josex/web/modules/inventory/controllers.(*UnitController).FindByCode"
+      }
+    },
+    "/api/v1/inventory/counts": {
+      "get": {
+        "description": "A page, newest first, with the numbers behind the chips",
+        "operationId": "inventory.ListCounts",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "status",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "page",
+            "schema": {
+              "default": "1",
+              "format": "int64",
+              "minimum": 1,
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "page_size",
+            "schema": {
+              "default": "20",
+              "format": "int64",
+              "maximum": 100,
+              "minimum": 1,
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/inventory.ListCountsResponse"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "summary": "List stock counts",
+        "tags": [
+          "inventory"
+        ],
+        "x-handler": "josex/web/modules/inventory/controllers.(*CountController).ListCounts"
+      },
+      "post": {
+        "description": "One line per active combination of a warehouse and optional category",
+        "operationId": "inventory.CreateCount",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/inventory.CreateCountDto"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/inventory.CountDetail"
+                }
+              }
+            },
+            "description": "Created"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/core.ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/core.ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/core.ErrorResponse"
+                }
+              }
+            },
+            "description": "Conflict"
+          }
+        },
+        "summary": "Start a stock count",
+        "tags": [
+          "inventory"
+        ],
+        "x-handler": "josex/web/modules/inventory/controllers.(*CountController).CreateCount"
+      }
+    },
+    "/api/v1/inventory/counts/{id}": {
+      "get": {
+        "description": "Its lines and progress; a blind one hides what was expected from who only counts",
+        "operationId": "inventory.GetCount",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/inventory.CountDetail"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/core.ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          }
+        },
+        "summary": "A stock count",
+        "tags": [
+          "inventory"
+        ],
+        "x-handler": "josex/web/modules/inventory/controllers.(*CountController).GetCount"
+      }
+    },
+    "/api/v1/inventory/counts/{id}/cancel": {
+      "post": {
+        "description": "Nothing is adjusted",
+        "operationId": "inventory.CancelCount",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/inventory.CountDetail"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/core.ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/core.ErrorResponse"
+                }
+              }
+            },
+            "description": "Conflict"
+          }
+        },
+        "summary": "Cancel a count",
+        "tags": [
+          "inventory"
+        ],
+        "x-handler": "josex/web/modules/inventory/controllers.(*CountController).CancelCount"
+      }
+    },
+    "/api/v1/inventory/counts/{id}/close": {
+      "post": {
+        "description": "One adjustment per line with a difference",
+        "operationId": "inventory.CloseCount",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/inventory.CloseCountResponse"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/core.ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/core.ErrorResponse"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/core.ErrorResponse"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          }
+        },
+        "summary": "Close a count",
+        "tags": [
+          "inventory"
+        ],
+        "x-handler": "josex/web/modules/inventory/controllers.(*CountController).CloseCount"
+      }
+    },
+    "/api/v1/inventory/counts/{id}/lines": {
+      "patch": {
+        "description": "The first count of a line keeps the stock of that moment",
+        "operationId": "inventory.SetCountLines",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/inventory.SetCountLinesDto"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/inventory.CountDetail"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/core.ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/core.ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/core.ErrorResponse"
+                }
+              }
+            },
+            "description": "Conflict"
+          }
+        },
+        "summary": "Set what was counted",
+        "tags": [
+          "inventory"
+        ],
+        "x-handler": "josex/web/modules/inventory/controllers.(*CountController).SetCountLines"
+      }
+    },
+    "/api/v1/inventory/counts/{id}/pause": {
+      "post": {
+        "description": "It takes no more counting until resumed",
+        "operationId": "inventory.PauseCount",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/inventory.CountDetail"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/core.ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/core.ErrorResponse"
+                }
+              }
+            },
+            "description": "Conflict"
+          }
+        },
+        "summary": "Pause a count",
+        "tags": [
+          "inventory"
+        ],
+        "x-handler": "josex/web/modules/inventory/controllers.(*CountController).PauseCount"
+      }
+    },
+    "/api/v1/inventory/counts/{id}/resume": {
+      "post": {
+        "description": "From paused or under review",
+        "operationId": "inventory.ResumeCount",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/inventory.CountDetail"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/core.ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/core.ErrorResponse"
+                }
+              }
+            },
+            "description": "Conflict"
+          }
+        },
+        "summary": "Resume a count",
+        "tags": [
+          "inventory"
+        ],
+        "x-handler": "josex/web/modules/inventory/controllers.(*CountController).ResumeCount"
+      }
+    },
+    "/api/v1/inventory/counts/{id}/scan": {
+      "post": {
+        "description": "A code adds what it holds to its line",
+        "operationId": "inventory.ScanCount",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/inventory.ScanCountDto"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/inventory.CountDetail"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/core.ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/core.ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/core.ErrorResponse"
+                }
+              }
+            },
+            "description": "Conflict"
+          }
+        },
+        "summary": "One scan on a count",
+        "tags": [
+          "inventory"
+        ],
+        "x-handler": "josex/web/modules/inventory/controllers.(*CountController).ScanCount"
+      }
+    },
+    "/api/v1/inventory/counts/{id}/submit": {
+      "post": {
+        "description": "Every line counted; another closes it",
+        "operationId": "inventory.SubmitCount",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/inventory.CountDetail"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/core.ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/core.ErrorResponse"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/core.ErrorResponse"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          }
+        },
+        "summary": "Send a count to review",
+        "tags": [
+          "inventory"
+        ],
+        "x-handler": "josex/web/modules/inventory/controllers.(*CountController).SubmitCount"
       }
     },
     "/api/v1/inventory/export/batches": {

@@ -441,6 +441,43 @@ COMMENT ON TABLE inventory.sku_codes IS 'The barcodes of a business: each names 
 
 
 --
+-- Name: stock_count_lines; Type: TABLE; Schema: inventory; Owner: -
+--
+
+CREATE TABLE inventory.stock_count_lines (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    count_id uuid NOT NULL,
+    product_id uuid NOT NULL,
+    sku_id uuid NOT NULL,
+    expected numeric(14,3),
+    counted numeric(14,3),
+    counted_at timestamp with time zone,
+    CONSTRAINT stock_count_lines_counted_check CHECK ((counted >= (0)::numeric))
+);
+
+
+--
+-- Name: stock_counts; Type: TABLE; Schema: inventory; Owner: -
+--
+
+CREATE TABLE inventory.stock_counts (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    tenant_id uuid NOT NULL,
+    number character varying(30) NOT NULL,
+    warehouse_id uuid NOT NULL,
+    category_id uuid,
+    blind boolean DEFAULT false NOT NULL,
+    status character varying(10) DEFAULT 'open'::character varying NOT NULL,
+    adjustment_number character varying(30),
+    started_at timestamp with time zone DEFAULT now() NOT NULL,
+    closed_at timestamp with time zone,
+    created_by uuid,
+    closed_by uuid,
+    CONSTRAINT stock_counts_status_check CHECK (((status)::text = ANY ((ARRAY['open'::character varying, 'paused'::character varying, 'review'::character varying, 'closed'::character varying, 'cancelled'::character varying])::text[])))
+);
+
+
+--
 -- Name: transfer_line_batches; Type: TABLE; Schema: inventory; Owner: -
 --
 
@@ -758,6 +795,38 @@ ALTER TABLE ONLY inventory.sku_codes
 
 ALTER TABLE ONLY inventory.sku_codes
     ADD CONSTRAINT sku_codes_tenant_code_key UNIQUE (tenant_id, code);
+
+
+--
+-- Name: stock_count_lines stock_count_lines_pkey; Type: CONSTRAINT; Schema: inventory; Owner: -
+--
+
+ALTER TABLE ONLY inventory.stock_count_lines
+    ADD CONSTRAINT stock_count_lines_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: stock_count_lines stock_count_lines_sku_key; Type: CONSTRAINT; Schema: inventory; Owner: -
+--
+
+ALTER TABLE ONLY inventory.stock_count_lines
+    ADD CONSTRAINT stock_count_lines_sku_key UNIQUE (count_id, sku_id);
+
+
+--
+-- Name: stock_counts stock_counts_pkey; Type: CONSTRAINT; Schema: inventory; Owner: -
+--
+
+ALTER TABLE ONLY inventory.stock_counts
+    ADD CONSTRAINT stock_counts_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: stock_counts stock_counts_tenant_number_key; Type: CONSTRAINT; Schema: inventory; Owner: -
+--
+
+ALTER TABLE ONLY inventory.stock_counts
+    ADD CONSTRAINT stock_counts_tenant_number_key UNIQUE (tenant_id, number);
 
 
 --
@@ -1188,6 +1257,20 @@ CREATE INDEX idx_products_tenant_id ON inventory.products USING btree (tenant_id
 
 
 --
+-- Name: idx_stock_counts_one_open; Type: INDEX; Schema: inventory; Owner: -
+--
+
+CREATE UNIQUE INDEX idx_stock_counts_one_open ON inventory.stock_counts USING btree (tenant_id, warehouse_id, COALESCE(category_id, '00000000-0000-0000-0000-000000000000'::uuid)) WHERE ((status)::text = ANY ((ARRAY['open'::character varying, 'paused'::character varying, 'review'::character varying])::text[]));
+
+
+--
+-- Name: idx_stock_counts_tenant_started; Type: INDEX; Schema: inventory; Owner: -
+--
+
+CREATE INDEX idx_stock_counts_tenant_started ON inventory.stock_counts USING btree (tenant_id, started_at DESC);
+
+
+--
 -- Name: idx_transfers_tenant_status; Type: INDEX; Schema: inventory; Owner: -
 --
 
@@ -1573,6 +1656,46 @@ ALTER TABLE ONLY inventory.sku_codes
 
 ALTER TABLE ONLY inventory.sku_codes
     ADD CONSTRAINT sku_codes_sku_id_fkey FOREIGN KEY (sku_id) REFERENCES inventory.product_skus(id) ON DELETE CASCADE;
+
+
+--
+-- Name: stock_count_lines stock_count_lines_count_id_fkey; Type: FK CONSTRAINT; Schema: inventory; Owner: -
+--
+
+ALTER TABLE ONLY inventory.stock_count_lines
+    ADD CONSTRAINT stock_count_lines_count_id_fkey FOREIGN KEY (count_id) REFERENCES inventory.stock_counts(id) ON DELETE CASCADE;
+
+
+--
+-- Name: stock_count_lines stock_count_lines_product_id_fkey; Type: FK CONSTRAINT; Schema: inventory; Owner: -
+--
+
+ALTER TABLE ONLY inventory.stock_count_lines
+    ADD CONSTRAINT stock_count_lines_product_id_fkey FOREIGN KEY (product_id) REFERENCES inventory.products(id);
+
+
+--
+-- Name: stock_count_lines stock_count_lines_sku_id_fkey; Type: FK CONSTRAINT; Schema: inventory; Owner: -
+--
+
+ALTER TABLE ONLY inventory.stock_count_lines
+    ADD CONSTRAINT stock_count_lines_sku_id_fkey FOREIGN KEY (sku_id) REFERENCES inventory.product_skus(id);
+
+
+--
+-- Name: stock_counts stock_counts_category_id_fkey; Type: FK CONSTRAINT; Schema: inventory; Owner: -
+--
+
+ALTER TABLE ONLY inventory.stock_counts
+    ADD CONSTRAINT stock_counts_category_id_fkey FOREIGN KEY (category_id) REFERENCES inventory.product_categories(id);
+
+
+--
+-- Name: stock_counts stock_counts_warehouse_id_fkey; Type: FK CONSTRAINT; Schema: inventory; Owner: -
+--
+
+ALTER TABLE ONLY inventory.stock_counts
+    ADD CONSTRAINT stock_counts_warehouse_id_fkey FOREIGN KEY (warehouse_id) REFERENCES inventory.warehouses(id);
 
 
 --

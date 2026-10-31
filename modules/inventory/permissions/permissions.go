@@ -25,6 +25,7 @@ const (
 
 	WarehousesManage = "inventory:warehouses:manage"
 	StockTransfer    = "inventory:stock:transfer"
+	StockCount       = "inventory:stock:count"
 )
 
 func init() {
@@ -37,6 +38,7 @@ func init() {
 		{Code: CategoriesManage, Module: "inventory", Name: "permission.inventory.categories-manage", Description: "permission.inventory.categories-manage.description", Section: "products_stock", Access: models.AccessWrite},
 		{Code: WarehousesManage, Module: "inventory", Name: "permission.inventory.warehouses-manage", Description: "permission.inventory.warehouses-manage.description", Section: "products_stock", Access: models.AccessWrite},
 		{Code: StockTransfer, Module: "inventory", Name: "permission.inventory.stock-transfer", Description: "permission.inventory.stock-transfer.description", Section: "products_stock", Access: models.AccessWrite},
+		{Code: StockCount, Module: "inventory", Name: "permission.inventory.stock-count", Description: "permission.inventory.stock-count.description", Section: "products_stock", Access: models.AccessWrite},
 		{Code: StockRead, Module: "inventory", Name: "permission.inventory.stock-read", Description: "permission.inventory.stock-read.description", Section: "products_stock", Access: models.AccessRead},
 		{Code: StockAdjust, Module: "inventory", Name: "permission.inventory.stock-adjust", Description: "permission.inventory.stock-adjust.description", Section: "products_stock", Access: models.AccessWrite},
 		{Code: StockReserve, Module: "inventory", Name: "permission.inventory.stock-reserve", Description: "permission.inventory.stock-reserve.description", Section: "products_stock", Access: models.AccessWrite},

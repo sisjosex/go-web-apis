@@ -32,6 +32,12 @@ const (
 	SkusRedistributionMismatch = "inventory.skus.redistribution-mismatch"
 	SkusRedistributionReserved = "inventory.skus.redistribution-reserved"
 
+	// Stock counts (INV-026)
+	CountNotFound     = "inventory.count.not-found"
+	CountAlreadyOpen  = "inventory.count.already-open"
+	CountIncomplete   = "inventory.count.incomplete"
+	CountInvalidState = "inventory.count.invalid-state"
+
 	// Warehouses and transfers (INV-025)
 	WarehouseNotFound       = "inventory.warehouse.not-found"
 	WarehouseHasStock       = "inventory.warehouse.has-stock"
@@ -170,6 +176,9 @@ const (
 
 // The statuses a code's name does not tell (INV-023).
 func init() {
+	coreErrors.RegisterStatus(CountAlreadyOpen, http.StatusConflict)
+	coreErrors.RegisterStatus(CountIncomplete, http.StatusUnprocessableEntity)
+	coreErrors.RegisterStatus(CountInvalidState, http.StatusConflict)
 	coreErrors.RegisterStatus(WarehouseHasStock, http.StatusConflict)
 	coreErrors.RegisterStatus(WarehouseDefault, http.StatusConflict)
 	coreErrors.RegisterStatus(TransferSameWarehouse, http.StatusUnprocessableEntity)

@@ -159,7 +159,8 @@ type InventorySummary struct {
 
 // InventoryNavBadges are the numbers beside the inventory menu.
 type InventoryNavBadges struct {
-	StockLow int64 `json:"stock_low"`
+	StockLow   int64 `json:"stock_low"`
+	CountsOpen int64 `json:"counts_open"`
 }
 
 // TransferLineDto is a line of a new transfer.

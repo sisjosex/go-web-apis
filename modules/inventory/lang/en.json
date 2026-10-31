@@ -1,4 +1,10 @@
 {
+  "inventory.count.not-found": "That count does not exist",
+  "inventory.count.already-open": "That warehouse and category already have an open count",
+  "inventory.count.incomplete": "Some products are not counted yet",
+  "inventory.count.invalid-state": "The count already went past this step",
+  "permission.inventory.stock-count": "Make counts",
+  "permission.inventory.stock-count.description": "Start counts and record what was counted",
   "inventory.warehouse.not-found": "That warehouse does not exist",
   "inventory.warehouse.has-stock": "The warehouse still has stock",
   "inventory.warehouse.default": "The main warehouse cannot be archived",

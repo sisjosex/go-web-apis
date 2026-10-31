@@ -1,4 +1,10 @@
 {
+  "inventory.count.not-found": "Ese conteo no existe",
+  "inventory.count.already-open": "Ya hay un conteo abierto de ese almacén y categoría",
+  "inventory.count.incomplete": "Faltan productos por contar",
+  "inventory.count.invalid-state": "El conteo ya pasó por este paso",
+  "permission.inventory.stock-count": "Hacer conteos",
+  "permission.inventory.stock-count.description": "Iniciar conteos y registrar lo contado",
   "inventory.warehouse.not-found": "Ese almacén no existe",
   "inventory.warehouse.has-stock": "El almacén todavía tiene stock",
   "inventory.warehouse.default": "El almacén principal no se puede archivar",

@@ -28,6 +28,7 @@ type InventoryServices struct {
 	Unit      inventoryInterfaces.UnitRepository
 	Valuation inventoryInterfaces.ValuationRepository
 	Warehouse inventoryInterfaces.WarehouseRepository
+	Count     inventoryInterfaces.CountRepository
 	Attribute inventoryInterfaces.AttributeRepository
 	// ImportLookup is the read-only repository the import descriptors resolve
 	// and preview rows through (INV-017 D1); no route of this module uses it.
@@ -55,6 +56,7 @@ func NewInventoryServices(dbService coreServices.DatabaseService, media coreServ
 		Unit:      repositories.NewUnitRepository(dbService),
 		Valuation: repositories.NewValuationRepository(dbService),
 		Warehouse: repositories.NewWarehouseRepository(dbService),
+		Count:     repositories.NewCountRepository(dbService),
 		Attribute: repositories.NewAttributeRepository(dbService),
 
 		ImportLookup: repositories.NewImportLookupRepository(dbService),
@@ -76,6 +78,19 @@ func RegisterInventoryRoutes(
 	batchController := controllers.NewBatchController(services.Batch)
 
 	inventory := router.Group("/inventory", authMiddleware, tenantMiddleware)
+
+	// Stock counts (INV-026).
+	countController := controllers.NewCountController(services.Count)
+	api.Get(inventory, "/counts", countController.ListCounts, api.Doc{Summary: "List stock counts", Description: "A page, newest first, with the numbers behind the chips"}, tenancyMW.RequirePermission(inventoryPerms.StockRead))
+	api.Post(inventory, "/counts", countController.CreateCount, api.Doc{Summary: "Start a stock count", Description: "One line per active combination of a warehouse and optional category", Status: 201, Errors: []int{400, 404, 409}}, tenancyMW.RequirePermission(inventoryPerms.StockCount))
+	api.Get(inventory, "/counts/{id}", countController.GetCount, api.Doc{Summary: "A stock count", Description: "Its lines and progress; a blind one hides what was expected from who only counts", Errors: []int{404}}, tenancyMW.RequirePermission(inventoryPerms.StockRead))
+	api.Patch(inventory, "/counts/{id}/lines", countController.SetCountLines, api.Doc{Summary: "Set what was counted", Description: "The first count of a line keeps the stock of that moment", Errors: []int{400, 404, 409}}, tenancyMW.RequirePermission(inventoryPerms.StockCount))
+	api.Post(inventory, "/counts/{id}/scan", countController.ScanCount, api.Doc{Summary: "One scan on a count", Description: "A code adds what it holds to its line", Errors: []int{400, 404, 409}}, tenancyMW.RequirePermission(inventoryPerms.StockCount))
+	api.Post(inventory, "/counts/{id}/pause", countController.PauseCount, api.Doc{Summary: "Pause a count", Description: "It takes no more counting until resumed", Errors: []int{404, 409}}, tenancyMW.RequirePermission(inventoryPerms.StockCount))
+	api.Post(inventory, "/counts/{id}/resume", countController.ResumeCount, api.Doc{Summary: "Resume a count", Description: "From paused or under review", Errors: []int{404, 409}}, tenancyMW.RequirePermission(inventoryPerms.StockCount))
+	api.Post(inventory, "/counts/{id}/submit", countController.SubmitCount, api.Doc{Summary: "Send a count to review", Description: "Every line counted; another closes it", Errors: []int{404, 409, 422}}, tenancyMW.RequirePermission(inventoryPerms.StockCount))
+	api.Post(inventory, "/counts/{id}/cancel", countController.CancelCount, api.Doc{Summary: "Cancel a count", Description: "Nothing is adjusted", Errors: []int{404, 409}}, tenancyMW.RequirePermission(inventoryPerms.StockCount))
+	api.Post(inventory, "/counts/{id}/close", countController.CloseCount, api.Doc{Summary: "Close a count", Description: "One adjustment per line with a difference", Errors: []int{404, 409, 422}}, tenancyMW.RequirePermission(inventoryPerms.StockAdjust))
 
 	// Warehouses, the stock across them, the inventory home and transfers (INV-025).
 	warehouseController := controllers.NewWarehouseController(services.Warehouse)

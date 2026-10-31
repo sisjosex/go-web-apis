@@ -1401,6 +1401,276 @@
     },
     {
       "method": "GET",
+      "path": "/api/v1/inventory/counts",
+      "operation_id": "inventory.ListCounts",
+      "module": "inventory",
+      "handler": "josex/web/modules/inventory/controllers.(*CountController).ListCounts",
+      "sps": [
+        "inventory.sp_list_counts"
+      ],
+      "reads": [
+        "auth.users",
+        "inventory.product_categories",
+        "inventory.stock_count_lines",
+        "inventory.stock_counts",
+        "inventory.warehouses"
+      ],
+      "writes": []
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/inventory/counts",
+      "operation_id": "inventory.CreateCount",
+      "module": "inventory",
+      "handler": "josex/web/modules/inventory/controllers.(*CountController).CreateCount",
+      "sps": [
+        "inventory.sp_create_count",
+        "inventory.sp_get_count"
+      ],
+      "reads": [
+        "auth.users",
+        "inventory.inventory_movements",
+        "inventory.product_batches",
+        "inventory.product_categories",
+        "inventory.product_category_mapping",
+        "inventory.product_sku_options",
+        "inventory.product_skus",
+        "inventory.product_stock",
+        "inventory.product_variant_options",
+        "inventory.products",
+        "inventory.stock_count_lines",
+        "inventory.stock_counts",
+        "inventory.warehouses"
+      ],
+      "writes": [
+        "core.document_counters",
+        "inventory.stock_count_lines",
+        "inventory.stock_counts",
+        "inventory.warehouses"
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/inventory/counts/{id}",
+      "operation_id": "inventory.GetCount",
+      "module": "inventory",
+      "handler": "josex/web/modules/inventory/controllers.(*CountController).GetCount",
+      "sps": [
+        "inventory.sp_get_count"
+      ],
+      "reads": [
+        "auth.users",
+        "inventory.inventory_movements",
+        "inventory.product_batches",
+        "inventory.product_categories",
+        "inventory.product_sku_options",
+        "inventory.product_skus",
+        "inventory.product_stock",
+        "inventory.product_variant_options",
+        "inventory.products",
+        "inventory.stock_count_lines",
+        "inventory.stock_counts",
+        "inventory.warehouses"
+      ],
+      "writes": []
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/inventory/counts/{id}/cancel",
+      "operation_id": "inventory.CancelCount",
+      "module": "inventory",
+      "handler": "josex/web/modules/inventory/controllers.(*CountController).CancelCount",
+      "sps": [
+        "inventory.sp_get_count",
+        "inventory.sp_set_count_status"
+      ],
+      "reads": [
+        "auth.users",
+        "inventory.inventory_movements",
+        "inventory.product_batches",
+        "inventory.product_categories",
+        "inventory.product_sku_options",
+        "inventory.product_skus",
+        "inventory.product_stock",
+        "inventory.product_variant_options",
+        "inventory.products",
+        "inventory.stock_count_lines",
+        "inventory.stock_counts",
+        "inventory.warehouses"
+      ],
+      "writes": [
+        "inventory.stock_counts"
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/inventory/counts/{id}/close",
+      "operation_id": "inventory.CloseCount",
+      "module": "inventory",
+      "handler": "josex/web/modules/inventory/controllers.(*CountController).CloseCount",
+      "sps": [
+        "inventory.sp_close_count"
+      ],
+      "reads": [
+        "inventory.product_skus",
+        "inventory.product_stock",
+        "inventory.products",
+        "inventory.stock_count_lines",
+        "inventory.warehouses"
+      ],
+      "writes": [
+        "core.document_counters",
+        "inventory.inventory_movements",
+        "inventory.product_batches",
+        "inventory.product_stock",
+        "inventory.stock_counts",
+        "inventory.warehouses"
+      ]
+    },
+    {
+      "method": "PATCH",
+      "path": "/api/v1/inventory/counts/{id}/lines",
+      "operation_id": "inventory.SetCountLines",
+      "module": "inventory",
+      "handler": "josex/web/modules/inventory/controllers.(*CountController).SetCountLines",
+      "sps": [
+        "inventory.sp_get_count",
+        "inventory.sp_set_count_lines"
+      ],
+      "reads": [
+        "auth.users",
+        "inventory.inventory_movements",
+        "inventory.product_batches",
+        "inventory.product_categories",
+        "inventory.product_sku_options",
+        "inventory.product_skus",
+        "inventory.product_stock",
+        "inventory.product_variant_options",
+        "inventory.products",
+        "inventory.stock_count_lines",
+        "inventory.stock_counts",
+        "inventory.warehouses"
+      ],
+      "writes": [
+        "inventory.stock_count_lines"
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/inventory/counts/{id}/pause",
+      "operation_id": "inventory.PauseCount",
+      "module": "inventory",
+      "handler": "josex/web/modules/inventory/controllers.(*CountController).PauseCount",
+      "sps": [
+        "inventory.sp_get_count",
+        "inventory.sp_set_count_status"
+      ],
+      "reads": [
+        "auth.users",
+        "inventory.inventory_movements",
+        "inventory.product_batches",
+        "inventory.product_categories",
+        "inventory.product_sku_options",
+        "inventory.product_skus",
+        "inventory.product_stock",
+        "inventory.product_variant_options",
+        "inventory.products",
+        "inventory.stock_count_lines",
+        "inventory.stock_counts",
+        "inventory.warehouses"
+      ],
+      "writes": [
+        "inventory.stock_counts"
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/inventory/counts/{id}/resume",
+      "operation_id": "inventory.ResumeCount",
+      "module": "inventory",
+      "handler": "josex/web/modules/inventory/controllers.(*CountController).ResumeCount",
+      "sps": [
+        "inventory.sp_get_count",
+        "inventory.sp_set_count_status"
+      ],
+      "reads": [
+        "auth.users",
+        "inventory.inventory_movements",
+        "inventory.product_batches",
+        "inventory.product_categories",
+        "inventory.product_sku_options",
+        "inventory.product_skus",
+        "inventory.product_stock",
+        "inventory.product_variant_options",
+        "inventory.products",
+        "inventory.stock_count_lines",
+        "inventory.stock_counts",
+        "inventory.warehouses"
+      ],
+      "writes": [
+        "inventory.stock_counts"
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/inventory/counts/{id}/scan",
+      "operation_id": "inventory.ScanCount",
+      "module": "inventory",
+      "handler": "josex/web/modules/inventory/controllers.(*CountController).ScanCount",
+      "sps": [
+        "inventory.sp_get_count",
+        "inventory.sp_scan_count"
+      ],
+      "reads": [
+        "auth.users",
+        "inventory.inventory_movements",
+        "inventory.product_batches",
+        "inventory.product_categories",
+        "inventory.product_sku_options",
+        "inventory.product_skus",
+        "inventory.product_stock",
+        "inventory.product_units",
+        "inventory.product_variant_options",
+        "inventory.products",
+        "inventory.sku_codes",
+        "inventory.stock_count_lines",
+        "inventory.stock_counts",
+        "inventory.warehouses"
+      ],
+      "writes": [
+        "inventory.stock_count_lines"
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/inventory/counts/{id}/submit",
+      "operation_id": "inventory.SubmitCount",
+      "module": "inventory",
+      "handler": "josex/web/modules/inventory/controllers.(*CountController).SubmitCount",
+      "sps": [
+        "inventory.sp_get_count",
+        "inventory.sp_set_count_status"
+      ],
+      "reads": [
+        "auth.users",
+        "inventory.inventory_movements",
+        "inventory.product_batches",
+        "inventory.product_categories",
+        "inventory.product_sku_options",
+        "inventory.product_skus",
+        "inventory.product_stock",
+        "inventory.product_variant_options",
+        "inventory.products",
+        "inventory.stock_count_lines",
+        "inventory.stock_counts",
+        "inventory.warehouses"
+      ],
+      "writes": [
+        "inventory.stock_counts"
+      ]
+    },
+    {
+      "method": "GET",
       "path": "/api/v1/inventory/export/batches",
       "operation_id": "inventory.ExportBatches",
       "module": "inventory",
@@ -1547,6 +1817,7 @@
       ],
       "reads": [
         "inventory.product_stock",
+        "inventory.stock_counts",
         "inventory.warehouses"
       ],
       "writes": []
@@ -8068,6 +8339,13 @@
         "inventory.fn_fold"
       ]
     },
+    "inventory.fn_warehouse_quantity": {
+      "reads": [
+        "inventory.product_stock"
+      ],
+      "writes": [],
+      "calls": []
+    },
     "inventory.sp_add_product_media": {
       "reads": [
         "inventory.product_variant_groups",
@@ -8117,6 +8395,19 @@
       "writes": [],
       "calls": []
     },
+    "inventory.sp_close_count": {
+      "reads": [
+        "inventory.product_stock",
+        "inventory.stock_count_lines"
+      ],
+      "writes": [
+        "inventory.stock_counts"
+      ],
+      "calls": [
+        "core.fn_next_document_number",
+        "inventory.sp_record_movement"
+      ]
+    },
     "inventory.sp_create_batch": {
       "reads": [
         "inventory.product_skus"
@@ -8142,6 +8433,23 @@
       ],
       "calls": [
         "inventory.sp_check_circular_hierarchy"
+      ]
+    },
+    "inventory.sp_create_count": {
+      "reads": [
+        "inventory.product_categories",
+        "inventory.product_category_mapping",
+        "inventory.product_skus",
+        "inventory.product_stock",
+        "inventory.products"
+      ],
+      "writes": [
+        "inventory.stock_count_lines",
+        "inventory.stock_counts"
+      ],
+      "calls": [
+        "core.fn_next_document_number",
+        "inventory.fn_resolve_warehouse"
       ]
     },
     "inventory.sp_create_product_sku_combination": {
@@ -8288,6 +8596,24 @@
       "writes": [],
       "calls": []
     },
+    "inventory.sp_get_count": {
+      "reads": [
+        "auth.users",
+        "inventory.product_categories",
+        "inventory.product_sku_options",
+        "inventory.product_skus",
+        "inventory.product_variant_options",
+        "inventory.products",
+        "inventory.stock_count_lines",
+        "inventory.stock_counts",
+        "inventory.warehouses"
+      ],
+      "writes": [],
+      "calls": [
+        "inventory.fn_sku_unit_cost",
+        "inventory.fn_warehouse_quantity"
+      ]
+    },
     "inventory.sp_get_expiring_batches": {
       "reads": [
         "inventory.product_batches",
@@ -8425,6 +8751,7 @@
     "inventory.sp_inventory_nav_badges": {
       "reads": [
         "inventory.product_stock",
+        "inventory.stock_counts",
         "inventory.warehouses"
       ],
       "writes": [],
@@ -8490,6 +8817,17 @@
       "reads": [
         "inventory.product_categories",
         "inventory.product_category_mapping"
+      ],
+      "writes": [],
+      "calls": []
+    },
+    "inventory.sp_list_counts": {
+      "reads": [
+        "auth.users",
+        "inventory.product_categories",
+        "inventory.stock_count_lines",
+        "inventory.stock_counts",
+        "inventory.warehouses"
       ],
       "writes": [],
       "calls": []
@@ -8714,6 +9052,21 @@
         "inventory.fn_stock_status"
       ]
     },
+    "inventory.sp_scan_count": {
+      "reads": [
+        "inventory.product_skus",
+        "inventory.product_stock",
+        "inventory.product_units",
+        "inventory.sku_codes",
+        "inventory.stock_counts"
+      ],
+      "writes": [
+        "inventory.stock_count_lines"
+      ],
+      "calls": [
+        "inventory.fn_warehouse_quantity"
+      ]
+    },
     "inventory.sp_search_categories": {
       "reads": [
         "inventory.product_categories",
@@ -8738,6 +9091,26 @@
       ],
       "writes": [
         "inventory.category_attributes"
+      ],
+      "calls": []
+    },
+    "inventory.sp_set_count_lines": {
+      "reads": [
+        "inventory.stock_counts"
+      ],
+      "writes": [
+        "inventory.stock_count_lines"
+      ],
+      "calls": [
+        "inventory.fn_warehouse_quantity"
+      ]
+    },
+    "inventory.sp_set_count_status": {
+      "reads": [
+        "inventory.stock_count_lines"
+      ],
+      "writes": [
+        "inventory.stock_counts"
       ],
       "calls": []
     },
