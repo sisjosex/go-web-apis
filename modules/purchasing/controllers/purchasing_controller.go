@@ -9,6 +9,7 @@ import (
 	"josex/web/modules/core/api"
 	coreErrors "josex/web/modules/core/errors"
 	"josex/web/modules/core/utils"
+	inventoryErrors "josex/web/modules/inventory/errors"
 	purchasingErrors "josex/web/modules/purchasing/errors"
 	purchasingInterfaces "josex/web/modules/purchasing/interfaces"
 	"josex/web/modules/purchasing/models"
@@ -325,13 +326,15 @@ func (ctrl *PurchasingController) AddPurchaseOrderItem(ctx context.Context, in *
 		return nil, api.Fail(http.StatusBadRequest, coreErrors.BuildErrorSingle(c, coreErrors.InvalidUUID))
 	}
 
-	item, err := ctrl.service.AddItemToPurchaseOrder(c.Request.Context(), tenantID, poID, productUUID, dto.Quantity, dto.UnitCost)
+	item, err := ctrl.service.AddItemToPurchaseOrder(c.Request.Context(), tenantID, poID, productUUID, dto.Quantity, dto.UnitCost, dto.ProductUnitID)
 	if err != nil {
 		return nil, writeSPError(c, err, map[string]int{
 			purchasingErrors.POInvalidStatus:   http.StatusConflict,
 			purchasingErrors.ProductNotFound:   http.StatusNotFound,
 			purchasingErrors.POInvalidQuantity: http.StatusBadRequest,
 			purchasingErrors.POInvalidCost:     http.StatusBadRequest,
+			inventoryErrors.UnitNotFound:       http.StatusNotFound,
+			inventoryErrors.UnitNoFraction:     http.StatusUnprocessableEntity,
 		})
 	}
 

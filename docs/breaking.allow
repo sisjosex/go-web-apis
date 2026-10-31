@@ -4,3 +4,14 @@
 #
 # The gate's contract stage reads it against HEAD's docs/openapi.json. Empty the file once the
 # change is committed: an entry left here would let the next break through unreviewed.
+GET /api/v1/purchasing/pending-payments  # INV-023 quantities are decimal; no web or mobile client calls this route
+GET /api/v1/purchasing/purchase-orders  # INV-023 quantities are decimal; no web or mobile client calls this route
+GET /api/v1/purchasing/purchase-orders/{id}  # INV-023 quantities are decimal; no web or mobile client calls this route
+GET /api/v1/sales/orders  # INV-023 quantities are decimal; no web or mobile client calls this route
+GET /api/v1/sales/orders/{id}  # INV-023 quantities are decimal; no web or mobile client calls this route
+PATCH /api/v1/sales/orders/{id}  # INV-023 quantities are decimal; no web or mobile client calls this route
+PATCH /api/v1/sales/orders/{id}/cancel  # INV-023 quantities are decimal; no web or mobile client calls this route
+PATCH /api/v1/sales/orders/{id}/complete  # INV-023 quantities are decimal; no web or mobile client calls this route
+POST /api/v1/purchasing/purchase-orders/{id}/items  # INV-023 quantities are decimal; no web or mobile client calls this route
+POST /api/v1/sales/orders  # INV-023 quantities are decimal; no web or mobile client calls this route
+POST /api/v1/sales/orders/{id}/items  # INV-023 quantities are decimal; no web or mobile client calls this route

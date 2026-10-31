@@ -1,5 +1,5 @@
 CREATE OR REPLACE FUNCTION sales.sp_get_order_items(p_tenant_id uuid, p_order_id uuid)
- RETURNS TABLE(id uuid, order_id uuid, product_id uuid, sku_id uuid, product_sku character varying, sku character varying, product_name character varying, quantity integer, unit_price numeric, line_total numeric, created_at timestamp without time zone)
+ RETURNS TABLE(id uuid, order_id uuid, product_id uuid, sku_id uuid, product_sku character varying, sku character varying, product_name character varying, quantity numeric, unit_price numeric, line_total numeric, created_at timestamp without time zone)
  LANGUAGE plpgsql
 AS $function$
 BEGIN
@@ -22,7 +22,7 @@ BEGIN
         CAST(oi.product_sku AS VARCHAR),
         CAST(s.sku AS VARCHAR),
         CAST(oi.product_name AS VARCHAR),
-        CAST(oi.quantity AS INT),
+        CAST(oi.quantity AS NUMERIC),
         CAST(oi.unit_price AS DECIMAL),
         CAST(oi.line_total AS DECIMAL),
         CAST(oi.created_at AS TIMESTAMP)

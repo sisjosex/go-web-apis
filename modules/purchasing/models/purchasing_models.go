@@ -43,10 +43,10 @@ type PurchaseOrderItem struct {
 	ID               uuid.UUID `json:"id"`
 	PurchaseOrderID  uuid.UUID `json:"purchase_order_id"`
 	ProductID        uuid.UUID `json:"product_id"`
-	Quantity         int       `json:"quantity"`
+	Quantity         float64   `json:"quantity"`
 	UnitCost         float64   `json:"unit_cost"`
 	LineTotal        float64   `json:"line_total"`
-	ReceivedQuantity int       `json:"received_quantity"`
+	ReceivedQuantity float64   `json:"received_quantity"`
 	Status           string    `json:"status"` // pending, partial, received
 	CreatedAt        time.Time `json:"created_at"`
 	UpdatedAt        time.Time `json:"updated_at"`

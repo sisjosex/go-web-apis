@@ -245,6 +245,37 @@ COMMENT ON COLUMN inventory.product_stock.sku_id IS 'The SKU these quantities be
 
 
 --
+-- Name: product_units; Type: TABLE; Schema: inventory; Owner: -
+--
+
+CREATE TABLE inventory.product_units (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    tenant_id uuid NOT NULL,
+    product_id uuid NOT NULL,
+    unit_id uuid NOT NULL,
+    factor numeric(14,3) NOT NULL,
+    is_base boolean DEFAULT false NOT NULL,
+    allow_fraction boolean DEFAULT false NOT NULL,
+    sellable boolean DEFAULT true NOT NULL,
+    pos_visible boolean DEFAULT true NOT NULL,
+    is_sale_default boolean DEFAULT false NOT NULL,
+    is_purchase_default boolean DEFAULT false NOT NULL,
+    price numeric(12,2),
+    is_active boolean DEFAULT true NOT NULL,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    CONSTRAINT chk_product_units_base_factor CHECK (((NOT is_base) OR (factor = (1)::numeric))),
+    CONSTRAINT product_units_factor_check CHECK ((factor > (0)::numeric))
+);
+
+
+--
+-- Name: TABLE product_units; Type: COMMENT; Schema: inventory; Owner: -
+--
+
+COMMENT ON TABLE inventory.product_units IS 'How a product sells and buys: factor base units per presentation. Stock, lots and movements stay in the base unit.';
+
+
+--
 -- Name: product_variant_groups; Type: TABLE; Schema: inventory; Owner: -
 --
 
@@ -320,6 +351,51 @@ CREATE TABLE inventory.products (
 --
 
 COMMENT ON COLUMN inventory.products.stock_by_variant IS 'TRUE when the product has at least one affects_inventory variant group, so its stock lives on generated combinations rather than on the default SKU alone. Written by inventory.sp_generate_product_skus, which owns it, and cleared by inventory.sp_update_product_with_variants when the last axis goes away. Never set by hand.';
+
+
+--
+-- Name: sku_codes; Type: TABLE; Schema: inventory; Owner: -
+--
+
+CREATE TABLE inventory.sku_codes (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    tenant_id uuid NOT NULL,
+    code character varying(64) NOT NULL,
+    sku_id uuid NOT NULL,
+    product_unit_id uuid NOT NULL,
+    created_at timestamp with time zone DEFAULT now() NOT NULL
+);
+
+
+--
+-- Name: TABLE sku_codes; Type: COMMENT; Schema: inventory; Owner: -
+--
+
+COMMENT ON TABLE inventory.sku_codes IS 'The barcodes of a business: each names a combination and a presentation (INV-023 D1).';
+
+
+--
+-- Name: units; Type: TABLE; Schema: inventory; Owner: -
+--
+
+CREATE TABLE inventory.units (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    tenant_id uuid,
+    code character varying(20) NOT NULL,
+    name_es character varying(60) NOT NULL,
+    name_en character varying(60) NOT NULL,
+    symbol character varying(12) NOT NULL,
+    siat_code character varying(20),
+    allow_fraction boolean DEFAULT false NOT NULL,
+    sort_order integer DEFAULT 0 NOT NULL
+);
+
+
+--
+-- Name: TABLE units; Type: COMMENT; Schema: inventory; Owner: -
+--
+
+COMMENT ON TABLE inventory.units IS 'The units a presentation can be in: a seeded standard list, tenant_id NULL, plus a business''s own.';
 
 
 --
@@ -450,6 +526,14 @@ ALTER TABLE ONLY inventory.product_stock
 
 
 --
+-- Name: product_units product_units_pkey; Type: CONSTRAINT; Schema: inventory; Owner: -
+--
+
+ALTER TABLE ONLY inventory.product_units
+    ADD CONSTRAINT product_units_pkey PRIMARY KEY (id);
+
+
+--
 -- Name: product_variant_groups product_variant_groups_pkey; Type: CONSTRAINT; Schema: inventory; Owner: -
 --
 
@@ -471,6 +555,30 @@ ALTER TABLE ONLY inventory.product_variant_options
 
 ALTER TABLE ONLY inventory.products
     ADD CONSTRAINT products_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: sku_codes sku_codes_pkey; Type: CONSTRAINT; Schema: inventory; Owner: -
+--
+
+ALTER TABLE ONLY inventory.sku_codes
+    ADD CONSTRAINT sku_codes_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: sku_codes sku_codes_tenant_code_key; Type: CONSTRAINT; Schema: inventory; Owner: -
+--
+
+ALTER TABLE ONLY inventory.sku_codes
+    ADD CONSTRAINT sku_codes_tenant_code_key UNIQUE (tenant_id, code);
+
+
+--
+-- Name: units units_pkey; Type: CONSTRAINT; Schema: inventory; Owner: -
+--
+
+ALTER TABLE ONLY inventory.units
+    ADD CONSTRAINT units_pkey PRIMARY KEY (id);
 
 
 --
@@ -754,6 +862,20 @@ CREATE INDEX idx_product_stock_sku_id ON inventory.product_stock USING btree (sk
 
 
 --
+-- Name: idx_product_units_one_base; Type: INDEX; Schema: inventory; Owner: -
+--
+
+CREATE UNIQUE INDEX idx_product_units_one_base ON inventory.product_units USING btree (product_id) WHERE is_base;
+
+
+--
+-- Name: idx_product_units_product; Type: INDEX; Schema: inventory; Owner: -
+--
+
+CREATE INDEX idx_product_units_product ON inventory.product_units USING btree (product_id);
+
+
+--
 -- Name: idx_products_name_trgm; Type: INDEX; Schema: inventory; Owner: -
 --
 
@@ -793,6 +915,20 @@ CREATE INDEX idx_products_tenant_active_created ON inventory.products USING btre
 --
 
 CREATE INDEX idx_products_tenant_id ON inventory.products USING btree (tenant_id);
+
+
+--
+-- Name: idx_units_standard_code; Type: INDEX; Schema: inventory; Owner: -
+--
+
+CREATE UNIQUE INDEX idx_units_standard_code ON inventory.units USING btree (code) WHERE (tenant_id IS NULL);
+
+
+--
+-- Name: idx_units_tenant_code; Type: INDEX; Schema: inventory; Owner: -
+--
+
+CREATE UNIQUE INDEX idx_units_tenant_code ON inventory.units USING btree (tenant_id, code) WHERE (tenant_id IS NOT NULL);
 
 
 --
@@ -1003,6 +1139,22 @@ ALTER TABLE ONLY inventory.product_stock
 
 
 --
+-- Name: product_units product_units_product_id_fkey; Type: FK CONSTRAINT; Schema: inventory; Owner: -
+--
+
+ALTER TABLE ONLY inventory.product_units
+    ADD CONSTRAINT product_units_product_id_fkey FOREIGN KEY (product_id) REFERENCES inventory.products(id) ON DELETE CASCADE;
+
+
+--
+-- Name: product_units product_units_unit_id_fkey; Type: FK CONSTRAINT; Schema: inventory; Owner: -
+--
+
+ALTER TABLE ONLY inventory.product_units
+    ADD CONSTRAINT product_units_unit_id_fkey FOREIGN KEY (unit_id) REFERENCES inventory.units(id);
+
+
+--
 -- Name: product_variant_groups product_variant_groups_product_id_fkey; Type: FK CONSTRAINT; Schema: inventory; Owner: -
 --
 
@@ -1016,6 +1168,22 @@ ALTER TABLE ONLY inventory.product_variant_groups
 
 ALTER TABLE ONLY inventory.product_variant_options
     ADD CONSTRAINT product_variant_options_variant_group_id_fkey FOREIGN KEY (variant_group_id) REFERENCES inventory.product_variant_groups(id) ON DELETE CASCADE;
+
+
+--
+-- Name: sku_codes sku_codes_product_unit_id_fkey; Type: FK CONSTRAINT; Schema: inventory; Owner: -
+--
+
+ALTER TABLE ONLY inventory.sku_codes
+    ADD CONSTRAINT sku_codes_product_unit_id_fkey FOREIGN KEY (product_unit_id) REFERENCES inventory.product_units(id) ON DELETE CASCADE;
+
+
+--
+-- Name: sku_codes sku_codes_sku_id_fkey; Type: FK CONSTRAINT; Schema: inventory; Owner: -
+--
+
+ALTER TABLE ONLY inventory.sku_codes
+    ADD CONSTRAINT sku_codes_sku_id_fkey FOREIGN KEY (sku_id) REFERENCES inventory.product_skus(id) ON DELETE CASCADE;
 
 
 --

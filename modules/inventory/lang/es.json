@@ -1,4 +1,10 @@
 {
+  "inventory.unit.not-found": "Esa presentación no existe",
+  "inventory.unit.no-fraction": "Esta presentación no acepta decimales",
+  "inventory.unit.base-required": "El producto necesita una sola unidad base que equivalga a 1",
+  "inventory.unit.factor-invalid": "Una presentación debe equivaler a más de una unidad base",
+  "inventory.code.not-found": "Ningún producto tiene ese código",
+  "inventory.code.duplicate": "Ese código ya lo usa otro producto",
   "inventory.export.too-large": "Son más de 50 000 filas: filtra la lista y exporta de nuevo",
   "inventory.export.products.sku": "Código",
   "inventory.export.products.name": "Nombre",

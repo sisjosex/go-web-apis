@@ -67,15 +67,18 @@ CREATE TABLE purchasing.purchase_order_items (
     id uuid DEFAULT public.uuid_generate_v4() NOT NULL,
     purchase_order_id uuid NOT NULL,
     product_id uuid NOT NULL,
-    quantity integer NOT NULL,
+    quantity numeric(14,3) NOT NULL,
     unit_cost numeric(12,2) NOT NULL,
-    line_total numeric(12,2) GENERATED ALWAYS AS (((quantity)::numeric * unit_cost)) STORED,
-    received_quantity integer DEFAULT 0,
+    received_quantity numeric(14,3) DEFAULT 0,
     status character varying(20) DEFAULT 'pending'::character varying,
     created_at timestamp without time zone DEFAULT CURRENT_TIMESTAMP,
     updated_at timestamp without time zone DEFAULT CURRENT_TIMESTAMP,
-    CONSTRAINT purchase_order_items_quantity_check CHECK ((quantity > 0)),
-    CONSTRAINT purchase_order_items_received_quantity_check CHECK ((received_quantity >= 0))
+    line_total numeric(14,2) GENERATED ALWAYS AS ((quantity * unit_cost)) STORED,
+    product_unit_id uuid,
+    unit_factor numeric(14,3) DEFAULT 1 NOT NULL,
+    base_quantity numeric(14,3) GENERATED ALWAYS AS ((quantity * unit_factor)) STORED,
+    CONSTRAINT purchase_order_items_quantity_check CHECK ((quantity > (0)::numeric)),
+    CONSTRAINT purchase_order_items_received_quantity_check CHECK ((received_quantity >= (0)::numeric))
 );
 
 
@@ -570,6 +573,14 @@ ALTER TABLE ONLY purchasing.purchase_order_invoices
 
 ALTER TABLE ONLY purchasing.purchase_order_items
     ADD CONSTRAINT purchase_order_items_product_id_fkey FOREIGN KEY (product_id) REFERENCES inventory.products(id);
+
+
+--
+-- Name: purchase_order_items purchase_order_items_product_unit_id_fkey; Type: FK CONSTRAINT; Schema: purchasing; Owner: -
+--
+
+ALTER TABLE ONLY purchasing.purchase_order_items
+    ADD CONSTRAINT purchase_order_items_product_unit_id_fkey FOREIGN KEY (product_unit_id) REFERENCES inventory.product_units(id);
 
 
 --

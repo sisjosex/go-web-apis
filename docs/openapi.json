@@ -2526,6 +2526,88 @@
         ],
         "type": "object"
       },
+      "inventory.CodeLookup": {
+        "additionalProperties": false,
+        "properties": {
+          "factor": {
+            "format": "double",
+            "type": "number"
+          },
+          "price": {
+            "format": "double",
+            "type": "number"
+          },
+          "product": {
+            "$ref": "#/components/schemas/inventory.CodeLookupProduct"
+          },
+          "sku": {
+            "$ref": "#/components/schemas/inventory.CodeLookupSku"
+          },
+          "unit": {
+            "$ref": "#/components/schemas/inventory.CodeLookupUnit"
+          }
+        },
+        "required": [
+          "product",
+          "sku",
+          "unit",
+          "factor",
+          "price"
+        ],
+        "type": "object"
+      },
+      "inventory.CodeLookupProduct": {
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "name"
+        ],
+        "type": "object"
+      },
+      "inventory.CodeLookupSku": {
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "sku": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "sku"
+        ],
+        "type": "object"
+      },
+      "inventory.CodeLookupUnit": {
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "name_en": {
+            "type": "string"
+          },
+          "name_es": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "name_es",
+          "name_en"
+        ],
+        "type": "object"
+      },
       "inventory.CreateBatchDto": {
         "additionalProperties": false,
         "properties": {
@@ -2980,6 +3062,21 @@
         ],
         "type": "object"
       },
+      "inventory.ListUnitsResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "units": {
+            "items": {
+              "$ref": "#/components/schemas/inventory.Unit"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "units"
+        ],
+        "type": "object"
+      },
       "inventory.Product": {
         "additionalProperties": false,
         "properties": {
@@ -3044,6 +3141,12 @@
           "stock_status": {
             "type": "string"
           },
+          "units": {
+            "items": {
+              "$ref": "#/components/schemas/inventory.ProductUnit"
+            },
+            "type": "array"
+          },
           "variants_count": {
             "format": "int64",
             "type": "integer"
@@ -3066,7 +3169,8 @@
           "min_price",
           "max_price",
           "primary_image_url",
-          "pos_visible"
+          "pos_visible",
+          "units"
         ],
         "type": "object"
       },
@@ -3184,6 +3288,12 @@
           "status": {
             "type": "string"
           },
+          "units": {
+            "items": {
+              "$ref": "#/components/schemas/inventory.ProductUnit"
+            },
+            "type": "array"
+          },
           "updated_at": {
             "format": "date-time",
             "nullable": true,
@@ -3214,7 +3324,8 @@
           "updated_at",
           "updated_by_name",
           "pos_visible",
-          "orders_visible"
+          "orders_visible",
+          "units"
         ],
         "type": "object"
       },
@@ -3378,6 +3489,151 @@
           "reorder_level",
           "status",
           "last_updated_at"
+        ],
+        "type": "object"
+      },
+      "inventory.ProductUnit": {
+        "additionalProperties": false,
+        "properties": {
+          "allow_fraction": {
+            "type": "boolean"
+          },
+          "code": {
+            "type": "string"
+          },
+          "codes": {
+            "items": {
+              "$ref": "#/components/schemas/inventory.ProductUnitCode"
+            },
+            "type": "array"
+          },
+          "factor": {
+            "format": "double",
+            "type": "number"
+          },
+          "id": {
+            "type": "string"
+          },
+          "is_base": {
+            "type": "boolean"
+          },
+          "is_purchase_default": {
+            "type": "boolean"
+          },
+          "is_sale_default": {
+            "type": "boolean"
+          },
+          "name_en": {
+            "type": "string"
+          },
+          "name_es": {
+            "type": "string"
+          },
+          "pos_visible": {
+            "type": "boolean"
+          },
+          "price": {
+            "format": "double",
+            "nullable": true,
+            "type": "number"
+          },
+          "sellable": {
+            "type": "boolean"
+          },
+          "symbol": {
+            "type": "string"
+          },
+          "unit_id": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "unit_id",
+          "code",
+          "name_es",
+          "name_en",
+          "symbol",
+          "factor",
+          "is_base",
+          "allow_fraction",
+          "sellable",
+          "pos_visible",
+          "is_sale_default",
+          "is_purchase_default",
+          "price",
+          "codes"
+        ],
+        "type": "object"
+      },
+      "inventory.ProductUnitCode": {
+        "additionalProperties": false,
+        "properties": {
+          "code": {
+            "maxLength": 64,
+            "type": "string"
+          },
+          "sku_id": {
+            "format": "uuid",
+            "type": "string"
+          }
+        },
+        "required": [
+          "sku_id",
+          "code"
+        ],
+        "type": "object"
+      },
+      "inventory.ProductUnitDto": {
+        "additionalProperties": false,
+        "properties": {
+          "allow_fraction": {
+            "type": "boolean"
+          },
+          "codes": {
+            "items": {
+              "$ref": "#/components/schemas/inventory.ProductUnitCode"
+            },
+            "type": "array"
+          },
+          "factor": {
+            "format": "double",
+            "type": "number"
+          },
+          "id": {
+            "format": "uuid",
+            "nullable": true,
+            "type": "string"
+          },
+          "is_base": {
+            "type": "boolean"
+          },
+          "is_purchase_default": {
+            "type": "boolean"
+          },
+          "is_sale_default": {
+            "type": "boolean"
+          },
+          "pos_visible": {
+            "type": "boolean"
+          },
+          "price": {
+            "format": "double",
+            "minimum": 0,
+            "nullable": true,
+            "type": "number"
+          },
+          "sellable": {
+            "type": "boolean"
+          },
+          "unit_id": {
+            "format": "uuid",
+            "type": "string"
+          }
+        },
+        "required": [
+          "unit_id",
+          "factor"
         ],
         "type": "object"
       },
@@ -3647,6 +3903,22 @@
         ],
         "type": "object"
       },
+      "inventory.ReplaceProductUnitsDto": {
+        "additionalProperties": false,
+        "properties": {
+          "units": {
+            "items": {
+              "$ref": "#/components/schemas/inventory.ProductUnitDto"
+            },
+            "minItems": 1,
+            "type": "array"
+          }
+        },
+        "required": [
+          "units"
+        ],
+        "type": "object"
+      },
       "inventory.ReserveStockDto": {
         "additionalProperties": false,
         "properties": {
@@ -3725,6 +3997,43 @@
           "available_quantity",
           "status",
           "message"
+        ],
+        "type": "object"
+      },
+      "inventory.Unit": {
+        "additionalProperties": false,
+        "properties": {
+          "allow_fraction": {
+            "type": "boolean"
+          },
+          "code": {
+            "type": "string"
+          },
+          "id": {
+            "type": "string"
+          },
+          "name_en": {
+            "type": "string"
+          },
+          "name_es": {
+            "type": "string"
+          },
+          "siat_code": {
+            "nullable": true,
+            "type": "string"
+          },
+          "symbol": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "code",
+          "name_es",
+          "name_en",
+          "symbol",
+          "siat_code",
+          "allow_fraction"
         ],
         "type": "object"
       },
@@ -4062,10 +4371,14 @@
           "product_id": {
             "type": "string"
           },
+          "product_unit_id": {
+            "format": "uuid",
+            "nullable": true,
+            "type": "string"
+          },
           "quantity": {
-            "format": "int64",
-            "minimum": 1,
-            "type": "integer"
+            "format": "double",
+            "type": "number"
           },
           "unit_cost": {
             "format": "double",
@@ -4099,8 +4412,8 @@
             "type": "string"
           },
           "quantity": {
-            "format": "int64",
-            "type": "integer"
+            "format": "double",
+            "type": "number"
           },
           "unit_cost": {
             "format": "double",
@@ -4701,12 +5014,12 @@
             "type": "string"
           },
           "quantity": {
-            "format": "int64",
-            "type": "integer"
+            "format": "double",
+            "type": "number"
           },
           "received_quantity": {
-            "format": "int64",
-            "type": "integer"
+            "format": "double",
+            "type": "number"
           },
           "status": {
             "type": "string"
@@ -5030,6 +5343,11 @@
             "format": "uuid",
             "type": "string"
           },
+          "product_unit_id": {
+            "format": "uuid",
+            "nullable": true,
+            "type": "string"
+          },
           "quantity": {
             "format": "double",
             "type": "number"
@@ -5042,13 +5360,13 @@
           "unit_price": {
             "format": "double",
             "minimum": 0,
+            "nullable": true,
             "type": "number"
           }
         },
         "required": [
           "product_id",
-          "quantity",
-          "unit_price"
+          "quantity"
         ],
         "type": "object"
       },
@@ -5494,8 +5812,8 @@
             "type": "string"
           },
           "quantity": {
-            "format": "int64",
-            "type": "integer"
+            "format": "double",
+            "type": "number"
           },
           "sku": {
             "type": "string"
@@ -20600,6 +20918,49 @@
         "x-handler": "josex/web/modules/inventory/controllers.(*CategoryController).GetProductsByCategory"
       }
     },
+    "/api/v1/inventory/codes/{code}": {
+      "get": {
+        "description": "Product, combination, presentation, factor and price",
+        "operationId": "inventory.FindByCode",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "code",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/inventory.CodeLookup"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/core.ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          }
+        },
+        "summary": "What a barcode names",
+        "tags": [
+          "inventory"
+        ],
+        "x-handler": "josex/web/modules/inventory/controllers.(*UnitController).FindByCode"
+      }
+    },
     "/api/v1/inventory/export/batches": {
       "get": {
         "description": "One product's lots, or those about to expire",
@@ -22142,6 +22503,79 @@
         "x-handler": "josex/web/modules/inventory/controllers.(*ProductController).SetProductStatus"
       }
     },
+    "/api/v1/inventory/products/{id}/units": {
+      "put": {
+        "description": "The whole list diffed by id, exactly one base at factor 1; a presentation a line names is deactivated, not deleted. Answers the product.",
+        "operationId": "inventory.ReplaceProductUnits",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/inventory.ReplaceProductUnitsDto"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/inventory.ProductDetail"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/core.ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/core.ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/core.ErrorResponse"
+                }
+              }
+            },
+            "description": "Conflict"
+          }
+        },
+        "summary": "Replace a product's presentations",
+        "tags": [
+          "inventory"
+        ],
+        "x-handler": "josex/web/modules/inventory/controllers.(*UnitController).ReplaceProductUnits"
+      }
+    },
     "/api/v1/inventory/release-reserved": {
       "post": {
         "description": "Release inventory when a sales order is cancelled",
@@ -22299,6 +22733,29 @@
           "inventory"
         ],
         "x-handler": "josex/web/modules/inventory/controllers.(*MovementController).GetProductStock"
+      }
+    },
+    "/api/v1/inventory/units": {
+      "get": {
+        "description": "The standard list and the business's own",
+        "operationId": "inventory.ListUnits",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/inventory.ListUnitsResponse"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "summary": "List the units",
+        "tags": [
+          "inventory"
+        ],
+        "x-handler": "josex/web/modules/inventory/controllers.(*UnitController).ListUnits"
       }
     },
     "/api/v1/mobile/devices": {

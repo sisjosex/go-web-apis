@@ -1,4 +1,10 @@
 {
+  "inventory.unit.not-found": "That presentation does not exist",
+  "inventory.unit.no-fraction": "This presentation does not accept decimals",
+  "inventory.unit.base-required": "The product needs exactly one base unit equal to 1",
+  "inventory.unit.factor-invalid": "A presentation must equal more than one base unit",
+  "inventory.code.not-found": "No product has that code",
+  "inventory.code.duplicate": "Another product already uses that code",
   "inventory.export.too-large": "That is over 50,000 rows: filter the list and export again",
   "inventory.export.products.sku": "Code",
   "inventory.export.products.name": "Name",

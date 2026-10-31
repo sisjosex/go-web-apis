@@ -1,5 +1,5 @@
 CREATE OR REPLACE FUNCTION inventory.sp_list_products(p_tenant_id uuid, p_page integer DEFAULT 1, p_page_size integer DEFAULT 20, p_category_id uuid DEFAULT NULL::uuid, p_search character varying DEFAULT NULL::character varying, p_status character varying DEFAULT 'active'::character varying, p_filter character varying DEFAULT NULL::character varying)
- RETURNS TABLE(id uuid, sku character varying, name character varying, description text, base_price numeric, has_variants boolean, status character varying, created_at timestamp without time zone, categories jsonb, total_count bigint, available_quantity numeric, stock_status character varying, variants_count integer, axes jsonb, min_price numeric, max_price numeric, primary_image_url text, pos_visible boolean, counts jsonb)
+ RETURNS TABLE(id uuid, sku character varying, name character varying, description text, base_price numeric, has_variants boolean, status character varying, created_at timestamp without time zone, categories jsonb, total_count bigint, available_quantity numeric, stock_status character varying, variants_count integer, axes jsonb, min_price numeric, max_price numeric, primary_image_url text, pos_visible boolean, counts jsonb, units jsonb)
  LANGUAGE plpgsql
 AS $function$
 BEGIN
@@ -120,7 +120,8 @@ BEGIN
             LIMIT 1
         ),
         p.pos_visible,
-        c.counts
+        c.counts,
+        CASE WHEN p.id IS NULL THEN '[]'::jsonb ELSE inventory.fn_product_units(p_tenant_id, p.id) END
     FROM chips c
     LEFT JOIN page pg ON TRUE
     LEFT JOIN inventory.products p

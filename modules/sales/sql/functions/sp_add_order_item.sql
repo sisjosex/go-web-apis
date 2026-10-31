@@ -1,5 +1,5 @@
-CREATE OR REPLACE FUNCTION sales.sp_add_order_item(p_tenant_id uuid, p_order_id uuid, p_product_id uuid, p_quantity integer, p_sku_id uuid DEFAULT NULL::uuid)
- RETURNS TABLE(id uuid, order_id uuid, product_id uuid, sku_id uuid, product_sku character varying, sku character varying, product_name character varying, quantity integer, unit_price numeric, line_total numeric, created_at timestamp without time zone)
+CREATE OR REPLACE FUNCTION sales.sp_add_order_item(p_tenant_id uuid, p_order_id uuid, p_product_id uuid, p_quantity numeric, p_sku_id uuid DEFAULT NULL::uuid)
+ RETURNS TABLE(id uuid, order_id uuid, product_id uuid, sku_id uuid, product_sku character varying, sku character varying, product_name character varying, quantity numeric, unit_price numeric, line_total numeric, created_at timestamp without time zone)
  LANGUAGE plpgsql
 AS $function$
 DECLARE
@@ -64,7 +64,7 @@ BEGIN
         CAST(oi.product_sku AS VARCHAR),
         CAST(s.sku AS VARCHAR),
         CAST(oi.product_name AS VARCHAR),
-        CAST(oi.quantity AS INT),
+        CAST(oi.quantity AS NUMERIC),
         CAST(oi.unit_price AS DECIMAL),
         CAST(oi.line_total AS DECIMAL),
         CAST(oi.created_at AS TIMESTAMP)
@@ -74,4 +74,4 @@ BEGIN
 END;
 $function$;
 
-COMMENT ON FUNCTION sales.sp_add_order_item(uuid,uuid,uuid,integer,uuid) IS 'Adds an order line priced from the product, without touching batches. Same SKU rules as sp_add_order_item_with_batch. Not routed today - the endpoint calls the with-batch variant - but it writes order_items, so it has to satisfy the NOT NULL sku_id that INV-010 introduced.';
+COMMENT ON FUNCTION sales.sp_add_order_item(uuid,uuid,uuid,numeric,uuid) IS 'Adds an order line priced from the product, without touching batches. Same SKU rules as sp_add_order_item_with_batch. Not routed today - the endpoint calls the with-batch variant - but it writes order_items, so it has to satisfy the NOT NULL sku_id that INV-010 introduced.';

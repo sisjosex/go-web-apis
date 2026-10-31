@@ -1,5 +1,5 @@
 CREATE OR REPLACE FUNCTION purchasing.sp_get_purchase_order_items(p_tenant_id uuid, p_purchase_order_id uuid)
- RETURNS TABLE(id uuid, purchase_order_id uuid, product_id uuid, quantity integer, unit_cost numeric, line_total numeric, received_quantity integer, status character varying, created_at timestamp without time zone, updated_at timestamp without time zone)
+ RETURNS TABLE(id uuid, purchase_order_id uuid, product_id uuid, quantity numeric, unit_cost numeric, line_total numeric, received_quantity numeric, status character varying, created_at timestamp without time zone, updated_at timestamp without time zone)
  LANGUAGE plpgsql
 AS $function$
 BEGIN
@@ -25,3 +25,5 @@ BEGIN
     ORDER BY poi.created_at;
 END;
 $function$;
+
+COMMENT ON FUNCTION purchasing.sp_get_purchase_order_items(uuid,uuid) IS 'Lists the lines of a purchase order, in the presentation they were bought.';

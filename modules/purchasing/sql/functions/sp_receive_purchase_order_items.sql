@@ -28,7 +28,7 @@ BEGIN
     VALUES (v_receipt_id, p_po_id, v_receipt_number, p_receipt_date, p_received_by, p_notes);
 
     FOR v_item IN
-        SELECT poi.product_id, poi.quantity - poi.received_quantity AS pending, poi.unit_cost
+        SELECT poi.product_id, (poi.quantity - poi.received_quantity) * poi.unit_factor AS pending, poi.unit_cost / poi.unit_factor AS unit_cost
         FROM purchasing.purchase_order_items poi
         WHERE poi.purchase_order_id = p_po_id AND poi.status != 'received'
     LOOP

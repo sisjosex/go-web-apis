@@ -228,7 +228,7 @@ func (ctrl *SalesOrderController) AddOrderItem(ctx context.Context, in *AddOrder
 		return nil, api.Fail(http.StatusBadRequest, coreErrors.BuildErrorDetail(c, "validation.failed", err.Error()))
 	}
 
-	item, err := ctrl.service.AddOrderItemWithBatch(c.Request.Context(), tenantID, inventoryUtils.TenantToday(c), orderID, dto.ProductID, dto.Quantity, dto.UnitPrice, dto.SkuID)
+	item, err := ctrl.service.AddOrderItemWithBatch(c.Request.Context(), tenantID, inventoryUtils.TenantToday(c), orderID, dto.ProductID, dto.Quantity, dto.UnitPrice, dto.SkuID, dto.ProductUnitID)
 	if err != nil {
 		// StatusOf knows nothing about the INV-010 codes, and
 		// sku-required matches none of its patterns, so it would fall through

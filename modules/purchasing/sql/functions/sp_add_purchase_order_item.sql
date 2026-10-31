@@ -1,11 +1,13 @@
-CREATE OR REPLACE FUNCTION purchasing.sp_add_purchase_order_item(p_tenant_id uuid, p_po_id uuid, p_product_id uuid, p_quantity integer, p_unit_cost numeric)
- RETURNS TABLE(item_id uuid, po_id uuid, product_id uuid, quantity integer, unit_cost numeric, line_total numeric, message text)
+CREATE OR REPLACE FUNCTION purchasing.sp_add_purchase_order_item(p_tenant_id uuid, p_po_id uuid, p_product_id uuid, p_quantity numeric, p_unit_cost numeric, p_product_unit_id uuid DEFAULT NULL::uuid)
+ RETURNS TABLE(item_id uuid, po_id uuid, product_id uuid, quantity numeric, unit_cost numeric, line_total numeric, message text)
  LANGUAGE plpgsql
 AS $function$
 #variable_conflict use_column
 DECLARE
     v_item_id UUID := gen_random_uuid();
     v_supplier_id UUID;
+    v_unit_id UUID;
+    v_factor DECIMAL;
 BEGIN
     SELECT po.supplier_id INTO v_supplier_id
     FROM purchasing.purchase_orders po
@@ -27,8 +29,12 @@ BEGIN
         RAISE EXCEPTION 'po.invalid-cost' USING ERRCODE = 'P0001';
     END IF;
 
-    INSERT INTO purchasing.purchase_order_items(id, purchase_order_id, product_id, quantity, unit_cost)
-    VALUES (v_item_id, p_po_id, p_product_id, p_quantity, p_unit_cost);
+    -- The line keeps what was bought; stock reads its base quantity (INV-023).
+    SELECT l.product_unit_id, l.factor INTO v_unit_id, v_factor
+    FROM inventory.fn_unit_line(p_tenant_id, p_product_id, p_product_unit_id, p_quantity, 'purchase') l;
+
+    INSERT INTO purchasing.purchase_order_items(id, purchase_order_id, product_id, quantity, unit_cost, product_unit_id, unit_factor)
+    VALUES (v_item_id, p_po_id, p_product_id, p_quantity, p_unit_cost, v_unit_id, v_factor);
 
     UPDATE purchasing.purchase_orders
     SET total_amount = (
@@ -60,3 +66,5 @@ BEGIN
         'Item added to purchase order'::TEXT;
 END;
 $function$;
+
+COMMENT ON FUNCTION purchasing.sp_add_purchase_order_item(uuid,uuid,uuid,numeric,numeric,uuid) IS 'Adds a line to a draft order in a presentation, the purchase default when none is named; stock later reads its base quantity (INV-023).';

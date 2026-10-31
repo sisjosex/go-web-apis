@@ -25,6 +25,7 @@ type InventoryServices struct {
 	Stock    inventoryInterfaces.StockService
 	Sku      inventoryInterfaces.SkuService
 	Batch    inventoryInterfaces.BatchService
+	Unit     inventoryInterfaces.UnitRepository
 	// ImportLookup is the read-only repository the import descriptors resolve
 	// and preview rows through (INV-017 D1); no route of this module uses it.
 	ImportLookup inventoryInterfaces.ImportLookupRepository
@@ -48,6 +49,7 @@ func NewInventoryServices(dbService coreServices.DatabaseService, media coreServ
 		Stock:    inventoryServices.NewStockService(stockRepo),
 		Sku:      inventoryServices.NewSkuService(skuRepo, appConfig.GetConfig().Inventory, nil),
 		Batch:    inventoryServices.NewBatchService(batchRepo),
+		Unit:     repositories.NewUnitRepository(dbService),
 
 		ImportLookup: repositories.NewImportLookupRepository(dbService),
 	}
@@ -68,6 +70,12 @@ func RegisterInventoryRoutes(
 	batchController := controllers.NewBatchController(services.Batch)
 
 	inventory := router.Group("/inventory", authMiddleware, tenantMiddleware)
+
+	// Units, presentations and codes (INV-023).
+	unitController := controllers.NewUnitController(services.Unit, services.Product)
+	api.Get(inventory, "/units", unitController.ListUnits, api.Doc{Summary: "List the units", Description: "The standard list and the business's own"}, tenancyMW.RequirePermission(inventoryPerms.ProductsRead))
+	api.Put(inventory, "/products/{id}/units", unitController.ReplaceProductUnits, api.Doc{Summary: "Replace a product's presentations", Description: "The whole list diffed by id, exactly one base at factor 1; a presentation a line names is deactivated, not deleted. Answers the product.", Errors: []int{400, 404, 409}}, tenancyMW.RequirePermission(inventoryPerms.ProductsWrite))
+	api.Get(inventory, "/codes/{code}", unitController.FindByCode, api.Doc{Summary: "What a barcode names", Description: "Product, combination, presentation, factor and price", Errors: []int{404}}, tenancyMW.RequirePermission(inventoryPerms.ProductsRead))
 
 	// Downloads, with the permission of the list each one reads (INV-021).
 	exportController := controllers.NewExportController(services.Product, services.Movement, services.Batch)

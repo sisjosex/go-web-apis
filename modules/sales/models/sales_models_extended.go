@@ -68,7 +68,10 @@ type CreatePaymentRequestDto struct {
 type AddOrderItemRequestDto struct {
 	ProductID uuid.UUID `json:"product_id" binding:"required,uuidv4"`
 	Quantity  float64   `json:"quantity" binding:"required,gt=0"`
-	UnitPrice float64   `json:"unit_price" binding:"required,gte=0"`
+	// UnitPrice left out is the presentation's price (INV-023 D3).
+	UnitPrice *float64 `json:"unit_price" binding:"omitempty,gte=0"`
+	// ProductUnitID is the presentation sold; left out, the product's sale default.
+	ProductUnitID *uuid.UUID `json:"product_unit_id" binding:"omitempty,uuid"`
 	// SkuID names the combination to sell. Optional (INV-010 D2): omitted, the SP
 	// resolves the product's default SKU, which is what every pre-INV-010 client
 	// keeps getting. On a stock_by_variant product, omitting it is a 400.

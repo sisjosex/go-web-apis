@@ -209,6 +209,7 @@ type Product struct {
 	MaxPrice          float64       `json:"max_price"`
 	PrimaryImageURL   *string       `json:"primary_image_url"`
 	PosVisible        bool          `json:"pos_visible"`
+	Units             []ProductUnit `json:"units"`
 }
 
 // ProductAxis is one inventory axis of a product with the options it has.
@@ -297,10 +298,11 @@ type ProductDetail struct {
 	Media       []ProductMedia `json:"media"`
 	Variants    []VariantGroup `json:"variants"`
 	// UpdatedAt and UpdatedByName say who last changed it (INV-020 D1); no name on a row nobody touched since.
-	UpdatedAt     *time.Time `json:"updated_at"`
-	UpdatedByName *string    `json:"updated_by_name"`
-	PosVisible    bool       `json:"pos_visible"`
-	OrdersVisible bool       `json:"orders_visible"`
+	UpdatedAt     *time.Time    `json:"updated_at"`
+	UpdatedByName *string       `json:"updated_by_name"`
+	PosVisible    bool          `json:"pos_visible"`
+	OrdersVisible bool          `json:"orders_visible"`
+	Units         []ProductUnit `json:"units"`
 }
 
 type AddProductMediaDto struct {

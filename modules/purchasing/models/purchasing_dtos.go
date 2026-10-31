@@ -33,8 +33,10 @@ type CreatePurchaseOrderRequestDto struct {
 // AddPurchaseOrderItemRequestDto DTO for adding items to PO
 type AddPurchaseOrderItemRequestDto struct {
 	ProductID string  `json:"product_id" binding:"required,uuidv4"`
-	Quantity  int     `json:"quantity" binding:"required,min=1"`
+	Quantity  float64 `json:"quantity" binding:"required,gt=0"`
 	UnitCost  float64 `json:"unit_cost" binding:"required,gt=0"`
+	// ProductUnitID is the presentation bought, and UnitCost its cost; left out, the purchase default (INV-023).
+	ProductUnitID *string `json:"product_unit_id" binding:"omitempty,uuid"`
 }
 
 // ApprovePurchaseOrderRequestDto DTO for approving PO
@@ -99,7 +101,7 @@ type AddPurchaseOrderItemResponse struct {
 	ItemID    string  `json:"item_id"`
 	PoID      string  `json:"po_id"`
 	ProductID string  `json:"product_id"`
-	Quantity  int     `json:"quantity"`
+	Quantity  float64 `json:"quantity"`
 	UnitCost  float64 `json:"unit_cost"`
 	LineTotal float64 `json:"line_total"`
 	Message   string  `json:"message"`

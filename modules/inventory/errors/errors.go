@@ -1,5 +1,11 @@
 package errors
 
+import (
+	"net/http"
+
+	coreErrors "josex/web/modules/core/errors"
+)
+
 const (
 	// Products
 	ProductNotFound         = "product.not-found"
@@ -25,6 +31,14 @@ const (
 	SkusAxisHasHistory         = "inventory.skus.axis-has-history"
 	SkusRedistributionMismatch = "inventory.skus.redistribution-mismatch"
 	SkusRedistributionReserved = "inventory.skus.redistribution-reserved"
+
+	// Units and codes (INV-023)
+	UnitNotFound     = "inventory.unit.not-found"
+	UnitNoFraction   = "inventory.unit.no-fraction"
+	UnitBaseRequired = "inventory.unit.base-required"
+	UnitFactor       = "inventory.unit.factor-invalid"
+	CodeNotFound     = "inventory.code.not-found"
+	CodeDuplicate    = "inventory.code.duplicate"
 
 	// A download past the row cap (INV-021 D1).
 	ExportTooLarge = "inventory.export.too-large"
@@ -138,3 +152,10 @@ const (
 	ImportCombinationDuplicate    = "inventory.import.combination-duplicate"
 	ImportCombinationFailed       = "inventory.import.combination-failed"
 )
+
+// The statuses a code's name does not tell (INV-023).
+func init() {
+	coreErrors.RegisterStatus(UnitNoFraction, http.StatusUnprocessableEntity)
+	coreErrors.RegisterStatus(UnitBaseRequired, http.StatusBadRequest)
+	coreErrors.RegisterStatus(CodeDuplicate, http.StatusConflict)
+}

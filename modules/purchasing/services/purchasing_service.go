@@ -59,8 +59,8 @@ func (s *PurchasingService) ApprovePurchaseOrder(ctx context.Context, tenantID u
 
 // ========== PO ITEM OPERATIONS ==========
 
-func (s *PurchasingService) AddItemToPurchaseOrder(ctx context.Context, tenantID uuid.UUID, poID, productID uuid.UUID, quantity int, unitCost float64) (*models.PurchaseOrderItem, error) {
-	return s.repo.AddPurchaseOrderItem(ctx, tenantID, poID, productID, quantity, unitCost)
+func (s *PurchasingService) AddItemToPurchaseOrder(ctx context.Context, tenantID uuid.UUID, poID, productID uuid.UUID, quantity float64, unitCost float64, productUnitID *string) (*models.PurchaseOrderItem, error) {
+	return s.repo.AddPurchaseOrderItem(ctx, tenantID, poID, productID, quantity, unitCost, productUnitID)
 }
 
 // ========== PO RECEIPT OPERATIONS ==========

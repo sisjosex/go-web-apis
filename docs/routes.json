@@ -762,9 +762,12 @@
         "inventory.product_sku_options",
         "inventory.product_skus",
         "inventory.product_stock",
+        "inventory.product_units",
         "inventory.product_variant_groups",
         "inventory.product_variant_options",
         "inventory.products",
+        "inventory.sku_codes",
+        "inventory.units",
         "tenancy.roles",
         "tenancy.tenant_users",
         "tenancy.tenants",
@@ -804,6 +807,7 @@
         "inventory.product_sku_options",
         "inventory.product_skus",
         "inventory.product_stock",
+        "inventory.product_units",
         "inventory.product_variant_groups",
         "inventory.product_variant_options",
         "inventory.products",
@@ -1233,6 +1237,24 @@
     },
     {
       "method": "GET",
+      "path": "/api/v1/inventory/codes/{code}",
+      "operation_id": "inventory.FindByCode",
+      "module": "inventory",
+      "handler": "josex/web/modules/inventory/controllers.(*UnitController).FindByCode",
+      "sps": [
+        "inventory.sp_find_by_code"
+      ],
+      "reads": [
+        "inventory.product_skus",
+        "inventory.product_units",
+        "inventory.products",
+        "inventory.sku_codes",
+        "inventory.units"
+      ],
+      "writes": []
+    },
+    {
+      "method": "GET",
       "path": "/api/v1/inventory/export/batches",
       "operation_id": "inventory.ExportBatches",
       "module": "inventory",
@@ -1282,9 +1304,12 @@
         "inventory.product_category_mapping",
         "inventory.product_media",
         "inventory.product_skus",
+        "inventory.product_units",
         "inventory.product_variant_groups",
         "inventory.product_variant_options",
         "inventory.products",
+        "inventory.sku_codes",
+        "inventory.units",
         "inventory.v_product_stock_totals"
       ],
       "writes": []
@@ -1355,9 +1380,12 @@
         "inventory.product_category_mapping",
         "inventory.product_media",
         "inventory.product_skus",
+        "inventory.product_units",
         "inventory.product_variant_groups",
         "inventory.product_variant_options",
         "inventory.products",
+        "inventory.sku_codes",
+        "inventory.units",
         "inventory.v_product_stock_totals"
       ],
       "writes": []
@@ -1374,12 +1402,14 @@
       ],
       "reads": [
         "inventory.product_variant_groups",
-        "inventory.product_variant_options"
+        "inventory.product_variant_options",
+        "inventory.units"
       ],
       "writes": [
         "inventory.product_sku_options",
         "inventory.product_skus",
         "inventory.product_stock",
+        "inventory.product_units",
         "inventory.product_variant_groups",
         "inventory.product_variant_options",
         "inventory.products"
@@ -1414,9 +1444,12 @@
       "reads": [
         "auth.users",
         "inventory.product_media",
+        "inventory.product_units",
         "inventory.product_variant_groups",
         "inventory.product_variant_options",
-        "inventory.products"
+        "inventory.products",
+        "inventory.sku_codes",
+        "inventory.units"
       ],
       "writes": []
     },
@@ -1432,9 +1465,12 @@
       "reads": [
         "auth.users",
         "inventory.product_media",
+        "inventory.product_units",
         "inventory.product_variant_groups",
         "inventory.product_variant_options",
-        "inventory.products"
+        "inventory.products",
+        "inventory.sku_codes",
+        "inventory.units"
       ],
       "writes": []
     },
@@ -1647,6 +1683,32 @@
       ]
     },
     {
+      "method": "PUT",
+      "path": "/api/v1/inventory/products/{id}/units",
+      "operation_id": "inventory.ReplaceProductUnits",
+      "module": "inventory",
+      "handler": "josex/web/modules/inventory/controllers.(*UnitController).ReplaceProductUnits",
+      "sps": [
+        "inventory.sp_get_product_with_variants",
+        "inventory.sp_replace_product_units"
+      ],
+      "reads": [
+        "auth.users",
+        "inventory.product_media",
+        "inventory.product_skus",
+        "inventory.product_units",
+        "inventory.product_variant_groups",
+        "inventory.product_variant_options",
+        "inventory.products",
+        "inventory.sku_codes",
+        "inventory.units"
+      ],
+      "writes": [
+        "inventory.product_units",
+        "inventory.sku_codes"
+      ]
+    },
+    {
       "method": "POST",
       "path": "/api/v1/inventory/release-reserved",
       "operation_id": "inventory.ReleaseReservedStock",
@@ -1693,6 +1755,20 @@
         "inventory.product_stock",
         "inventory.products",
         "inventory.v_product_stock_totals"
+      ],
+      "writes": []
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/inventory/units",
+      "operation_id": "inventory.ListUnits",
+      "module": "inventory",
+      "handler": "josex/web/modules/inventory/controllers.(*UnitController).ListUnits",
+      "sps": [
+        "inventory.sp_list_units"
+      ],
+      "reads": [
+        "inventory.units"
       ],
       "writes": []
     },
@@ -2254,6 +2330,8 @@
         "purchasing.sp_add_purchase_order_item"
       ],
       "reads": [
+        "inventory.product_skus",
+        "inventory.product_units",
         "inventory.products",
         "purchasing.suppliers"
       ],
@@ -2566,6 +2644,7 @@
       "reads": [
         "inventory.product_batches",
         "inventory.product_skus",
+        "inventory.product_units",
         "inventory.products",
         "sales.sales_orders"
       ],
@@ -7219,6 +7298,15 @@
       "writes": [],
       "calls": []
     },
+    "inventory.fn_product_units": {
+      "reads": [
+        "inventory.product_units",
+        "inventory.sku_codes",
+        "inventory.units"
+      ],
+      "writes": [],
+      "calls": []
+    },
     "inventory.fn_purge_skus_for_options": {
       "reads": [
         "inventory.inventory_movements",
@@ -7269,6 +7357,15 @@
     },
     "inventory.fn_stock_status": {
       "reads": [],
+      "writes": [],
+      "calls": []
+    },
+    "inventory.fn_unit_line": {
+      "reads": [
+        "inventory.product_skus",
+        "inventory.product_units",
+        "inventory.products"
+      ],
       "writes": [],
       "calls": []
     },
@@ -7351,10 +7448,13 @@
       ]
     },
     "inventory.sp_create_product_with_variants": {
-      "reads": [],
+      "reads": [
+        "inventory.units"
+      ],
       "writes": [
         "inventory.product_skus",
         "inventory.product_stock",
+        "inventory.product_units",
         "inventory.product_variant_groups",
         "inventory.product_variant_options",
         "inventory.products"
@@ -7371,6 +7471,17 @@
       "writes": [
         "inventory.product_categories"
       ],
+      "calls": []
+    },
+    "inventory.sp_find_by_code": {
+      "reads": [
+        "inventory.product_skus",
+        "inventory.product_units",
+        "inventory.products",
+        "inventory.sku_codes",
+        "inventory.units"
+      ],
+      "writes": [],
       "calls": []
     },
     "inventory.sp_generate_product_skus": {
@@ -7486,7 +7597,9 @@
         "inventory.products"
       ],
       "writes": [],
-      "calls": []
+      "calls": [
+        "inventory.fn_product_units"
+      ]
     },
     "inventory.sp_get_products_by_category": {
       "reads": [
@@ -7604,6 +7717,15 @@
         "inventory.v_product_stock_totals"
       ],
       "writes": [],
+      "calls": [
+        "inventory.fn_product_units"
+      ]
+    },
+    "inventory.sp_list_units": {
+      "reads": [
+        "inventory.units"
+      ],
+      "writes": [],
       "calls": []
     },
     "inventory.sp_record_movement": {
@@ -7668,6 +7790,18 @@
       "reads": [],
       "writes": [
         "inventory.product_media"
+      ],
+      "calls": []
+    },
+    "inventory.sp_replace_product_units": {
+      "reads": [
+        "inventory.product_skus",
+        "inventory.products",
+        "inventory.units"
+      ],
+      "writes": [
+        "inventory.product_units",
+        "inventory.sku_codes"
       ],
       "calls": []
     },
@@ -7798,7 +7932,9 @@
         "purchasing.purchase_orders",
         "purchasing.supplier_rates"
       ],
-      "calls": []
+      "calls": [
+        "inventory.fn_unit_line"
+      ]
     },
     "purchasing.sp_add_rfq_item": {
       "reads": [
@@ -8059,7 +8195,8 @@
         "sales.order_items"
       ],
       "calls": [
-        "inventory.fn_resolve_sku"
+        "inventory.fn_resolve_sku",
+        "inventory.fn_unit_line"
       ]
     },
     "sales.sp_approve_return": {

@@ -24,7 +24,7 @@ type PurchasingRepository interface {
 	ApprovePurchaseOrder(ctx context.Context, tenantID uuid.UUID, poID uuid.UUID) (*models.PurchaseOrder, error)
 
 	// PO Items
-	AddPurchaseOrderItem(ctx context.Context, tenantID uuid.UUID, poID, productID uuid.UUID, quantity int, unitCost float64) (*models.PurchaseOrderItem, error)
+	AddPurchaseOrderItem(ctx context.Context, tenantID uuid.UUID, poID, productID uuid.UUID, quantity float64, unitCost float64, productUnitID *string) (*models.PurchaseOrderItem, error)
 	GetPurchaseOrderItems(ctx context.Context, tenantID uuid.UUID, poID uuid.UUID) ([]models.PurchaseOrderItem, error)
 
 	// PO Receipt
@@ -71,7 +71,7 @@ type PurchasingService interface {
 	GetPurchaseOrder(ctx context.Context, tenantID uuid.UUID, poID uuid.UUID) (*models.PurchaseOrder, error)
 	ListPurchaseOrders(ctx context.Context, tenantID uuid.UUID, status *string, page, pageSize int) ([]models.PurchaseOrder, int, error)
 	ApprovePurchaseOrder(ctx context.Context, tenantID uuid.UUID, poID uuid.UUID) (*models.PurchaseOrder, error)
-	AddItemToPurchaseOrder(ctx context.Context, tenantID uuid.UUID, poID, productID uuid.UUID, quantity int, unitCost float64) (*models.PurchaseOrderItem, error)
+	AddItemToPurchaseOrder(ctx context.Context, tenantID uuid.UUID, poID, productID uuid.UUID, quantity float64, unitCost float64, productUnitID *string) (*models.PurchaseOrderItem, error)
 	ReceivePurchaseOrder(ctx context.Context, tenantID uuid.UUID, poID uuid.UUID, receivedBy *uuid.UUID, notes *string) (*models.PurchaseOrderReceipt, error)
 	AddInvoice(ctx context.Context, tenantID uuid.UUID, poID uuid.UUID, dto *models.AddInvoiceRequestDto) (*models.PurchaseOrderInvoice, error)
 	GetPendingPayments(ctx context.Context, tenantID uuid.UUID) ([]models.PurchaseOrder, error)

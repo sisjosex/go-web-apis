@@ -1,5 +1,5 @@
-CREATE OR REPLACE FUNCTION sales.sp_add_order_item_with_batch(p_tenant_id uuid, p_today date, p_order_id uuid, p_product_id uuid, p_quantity numeric, p_unit_price numeric, p_sku_id uuid DEFAULT NULL::uuid)
- RETURNS TABLE(id uuid, order_id uuid, product_id uuid, sku_id uuid, product_sku character varying, sku character varying, product_name character varying, quantity integer, unit_price numeric, line_total numeric, created_at timestamp without time zone, assigned_batch_id uuid, assigned_from_batch character varying)
+CREATE OR REPLACE FUNCTION sales.sp_add_order_item_with_batch(p_tenant_id uuid, p_today date, p_order_id uuid, p_product_id uuid, p_quantity numeric, p_unit_price numeric, p_sku_id uuid DEFAULT NULL::uuid, p_product_unit_id uuid DEFAULT NULL::uuid)
+ RETURNS TABLE(id uuid, order_id uuid, product_id uuid, sku_id uuid, product_sku character varying, sku character varying, product_name character varying, quantity numeric, unit_price numeric, line_total numeric, created_at timestamp without time zone, assigned_batch_id uuid, assigned_from_batch character varying)
  LANGUAGE plpgsql
 AS $function$
 DECLARE
@@ -9,7 +9,10 @@ DECLARE
     v_product_name       VARCHAR;
     v_stock_by_variant   BOOLEAN;
     v_batch_record       RECORD;
-    v_remaining_qty      DECIMAL := p_quantity;
+    v_remaining_qty      DECIMAL;
+    v_unit_id            UUID;
+    v_factor             DECIMAL;
+    v_price              DECIMAL;
 BEGIN
     -- Validate product exists and belongs to tenant
     SELECT p.name, p.stock_by_variant
@@ -34,10 +37,6 @@ BEGIN
         RAISE EXCEPTION 'order-item.invalid-qty' USING ERRCODE = 'P0001';
     END IF;
 
-    IF p_unit_price < 0 THEN
-        RAISE EXCEPTION 'order-item.invalid-price' USING ERRCODE = 'P0001';
-    END IF;
-
     -- INV-010 D2 — on a product whose stock lives on combinations, defaulting to
     -- the unassigned bucket would take stock from a row redistribution is meant
     -- to have emptied, and the shop would never see why.
@@ -56,6 +55,15 @@ BEGIN
         RAISE;
     END;
 
+    -- Stock and lots count in the base unit; the line keeps what was sold (INV-023).
+    SELECT l.product_unit_id, l.factor, l.base_quantity, COALESCE(p_unit_price, l.price)
+    INTO v_unit_id, v_factor, v_remaining_qty, v_price
+    FROM inventory.fn_unit_line(p_tenant_id, p_product_id, p_product_unit_id, p_quantity, 'sale', v_sku_id) l;
+
+    IF v_price < 0 THEN
+        RAISE EXCEPTION 'order-item.invalid-price' USING ERRCODE = 'P0001';
+    END IF;
+
     -- INV-010 D4 — the line snapshots the combination's code, not the product's.
     -- For every row that exists today the two are the same string, because
     -- INV-007 D2b copied products.sku verbatim into the default SKU.
@@ -66,10 +74,10 @@ BEGIN
     -- Create the order item. line_total is GENERATED, so it is not written here.
     INSERT INTO sales.order_items (
         id, order_id, product_id, sku_id, product_sku, product_name,
-        quantity, unit_price
+        quantity, unit_price, product_unit_id, unit_factor
     ) VALUES (
         v_order_item_id, p_order_id, p_product_id, v_sku_id, v_sku, v_product_name,
-        p_quantity, p_unit_price
+        p_quantity, v_price, v_unit_id, v_factor
     );
 
     -- FIFO over THIS combination's batches only. The sku_id filter is what
@@ -121,7 +129,7 @@ BEGIN
         CAST(oi.product_sku AS VARCHAR),
         CAST(s.sku AS VARCHAR),
         CAST(oi.product_name AS VARCHAR),
-        CAST(oi.quantity AS INT),
+        CAST(oi.quantity AS NUMERIC),
         CAST(oi.unit_price AS DECIMAL),
         CAST(oi.line_total AS DECIMAL),
         CAST(oi.created_at AS TIMESTAMP),
@@ -141,4 +149,4 @@ BEGIN
 END;
 $function$;
 
-COMMENT ON FUNCTION sales.sp_add_order_item_with_batch(uuid,date,uuid,uuid,numeric,numeric,uuid) IS 'Adds an order line for one sellable combination and fulfils it FIFO from that combination''s batches only. p_sku_id NULL means the product default, except on a stock_by_variant product where it raises sales.order-item.sku-required (INV-010 D2). Raises sales-order.insufficient-inventory when that combination cannot cover the quantity, even if a sibling combination can. Voided lots and those expired on p_today, the tenant''s own date, are never assigned (INV-014 D3, INV-018 D2).';
+COMMENT ON FUNCTION sales.sp_add_order_item_with_batch(uuid,date,uuid,uuid,numeric,numeric,uuid,uuid) IS 'Adds an order line for one sellable combination and fulfils it FIFO from that combination''s batches only. p_sku_id NULL means the product default, except on a stock_by_variant product where it raises sales.order-item.sku-required (INV-010 D2). Raises sales-order.insufficient-inventory when that combination cannot cover the quantity, even if a sibling combination can. Voided lots and those expired on p_today, the tenant''s own date, are never assigned (INV-014 D3, INV-018 D2).';

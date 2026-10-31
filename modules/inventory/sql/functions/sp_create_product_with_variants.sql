@@ -23,6 +23,12 @@ BEGIN
     VALUES (p_tenant_id, p_sku, p_name, p_description, p_base_price, CASE WHEN p_variants IS NOT NULL THEN TRUE ELSE FALSE END, p_created_by, p_created_by, COALESCE(p_pos_visible, TRUE), COALESCE(p_orders_visible, TRUE))
     RETURNING products.id INTO v_product_id;
 
+    -- Every product starts sold and bought by the unit (INV-023).
+    INSERT INTO inventory.product_units (tenant_id, product_id, unit_id, factor, is_base, is_sale_default, is_purchase_default)
+    SELECT p_tenant_id, v_product_id, u.id, 1, TRUE, TRUE, TRUE
+    FROM inventory.units u
+    WHERE u.code = 'UND' AND u.tenant_id IS NULL;
+
     -- Create the default SKU: products.sku verbatim, empty combination (D2b/D4)
     INSERT INTO inventory.product_skus (tenant_id, product_id, sku, combination_key, is_default)
     VALUES (p_tenant_id, v_product_id, p_sku, '', TRUE)

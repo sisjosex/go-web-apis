@@ -256,12 +256,12 @@ func (r *PurchasingRepository) ApprovePurchaseOrder(ctx context.Context, tenantI
 // ========== PO ITEM OPERATIONS ==========
 
 // AddPurchaseOrderItem inserts a new item to a PO
-func (r *PurchasingRepository) AddPurchaseOrderItem(ctx context.Context, tenantID uuid.UUID, poID, productID uuid.UUID, quantity int, unitCost float64) (*models.PurchaseOrderItem, error) {
+func (r *PurchasingRepository) AddPurchaseOrderItem(ctx context.Context, tenantID uuid.UUID, poID, productID uuid.UUID, quantity float64, unitCost float64, productUnitID *string) (*models.PurchaseOrderItem, error) {
 	item := &models.PurchaseOrderItem{}
 	var message string
 	if err := r.dbService.QueryRow(ctx,
-		`SELECT * FROM purchasing.sp_add_purchase_order_item($1, $2, $3, $4, $5)`,
-		tenantID, poID, productID, quantity, unitCost,
+		`SELECT * FROM purchasing.sp_add_purchase_order_item($1, $2, $3, $4, $5, $6::UUID)`,
+		tenantID, poID, productID, quantity, unitCost, productUnitID,
 	).Scan(
 		&item.ID, &item.PurchaseOrderID, &item.ProductID, &item.Quantity,
 		&item.UnitCost, &item.LineTotal, &message,

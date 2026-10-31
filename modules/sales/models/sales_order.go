@@ -35,7 +35,7 @@ type OrderItem struct {
 	ProductSku  string    `json:"product_sku"`
 	Sku         string    `json:"sku"`
 	ProductName string    `json:"product_name"`
-	Quantity    int       `json:"quantity"`
+	Quantity    float64   `json:"quantity"`
 	UnitPrice   float64   `json:"unit_price"`
 	LineTotal   float64   `json:"line_total"`
 	CreatedAt   time.Time `json:"created_at"`

@@ -53,7 +53,7 @@ CREATE TABLE sales.order_batch_assignments (
     order_id uuid NOT NULL,
     order_item_id uuid NOT NULL,
     product_batch_id uuid NOT NULL,
-    quantity_assigned numeric(10,2) NOT NULL,
+    quantity_assigned numeric(14,3) NOT NULL,
     created_at timestamp without time zone DEFAULT CURRENT_TIMESTAMP,
     sku_id uuid NOT NULL,
     CONSTRAINT order_batch_assignments_quantity_assigned_check CHECK ((quantity_assigned > (0)::numeric))
@@ -77,12 +77,15 @@ CREATE TABLE sales.order_items (
     product_id uuid NOT NULL,
     product_sku character varying(100),
     product_name character varying(255),
-    quantity integer NOT NULL,
+    quantity numeric(14,3) NOT NULL,
     unit_price numeric(12,2) NOT NULL,
-    line_total numeric(12,2) GENERATED ALWAYS AS (((quantity)::numeric * unit_price)) STORED,
     created_at timestamp without time zone DEFAULT now(),
     sku_id uuid NOT NULL,
-    CONSTRAINT order_items_quantity_check CHECK ((quantity > 0))
+    line_total numeric(14,2) GENERATED ALWAYS AS ((quantity * unit_price)) STORED,
+    product_unit_id uuid,
+    unit_factor numeric(14,3) DEFAULT 1 NOT NULL,
+    base_quantity numeric(14,3) GENERATED ALWAYS AS ((quantity * unit_factor)) STORED,
+    CONSTRAINT order_items_quantity_check CHECK ((quantity > (0)::numeric))
 );
 
 
@@ -442,6 +445,14 @@ ALTER TABLE ONLY sales.order_batch_assignments
 
 ALTER TABLE ONLY sales.order_items
     ADD CONSTRAINT order_items_order_id_fkey FOREIGN KEY (order_id) REFERENCES sales.sales_orders(id) ON DELETE CASCADE;
+
+
+--
+-- Name: order_items order_items_product_unit_id_fkey; Type: FK CONSTRAINT; Schema: sales; Owner: -
+--
+
+ALTER TABLE ONLY sales.order_items
+    ADD CONSTRAINT order_items_product_unit_id_fkey FOREIGN KEY (product_unit_id) REFERENCES inventory.product_units(id);
 
 
 --
