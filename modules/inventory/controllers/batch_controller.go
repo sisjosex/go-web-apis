@@ -161,6 +161,8 @@ func (ctrl *BatchController) ListBatchesByProduct(ctx context.Context, in *ListB
 // GetOldestBatchForSaleInput is GetOldestBatchForSale's request.
 type GetOldestBatchForSaleInput struct {
 	ProductId string `path:"productId"`
+	// WarehouseID picks within one warehouse; none is the default (INV-027).
+	WarehouseID string `query:"warehouse_id"`
 }
 
 // GetOldestBatchForSale is GET /batches/product/{productId}/oldest: Get oldest batch for sale (FIFO).
@@ -185,7 +187,16 @@ func (ctrl *BatchController) GetOldestBatchForSale(ctx context.Context, in *GetO
 		return nil, api.Fail(http.StatusBadRequest, coreErrors.BuildErrorSingle(c, errors.SkuNotFound))
 	}
 
-	batch, err := ctrl.service.GetOldestBatchForSale(c.Request.Context(), tenantID, utils.TenantToday(c), productID, skuID)
+	var warehouseID *uuid.UUID
+	if in.WarehouseID != "" {
+		parsed, err := uuid.Parse(in.WarehouseID)
+		if err != nil {
+			return nil, api.Fail(http.StatusBadRequest, coreErrors.BuildErrorSingle(c, coreErrors.InvalidUUID))
+		}
+		warehouseID = &parsed
+	}
+
+	batch, err := ctrl.service.GetOldestBatchForSale(c.Request.Context(), tenantID, utils.TenantToday(c), productID, skuID, warehouseID)
 	if err != nil {
 		return nil, api.Fail(http.StatusInternalServerError, coreErrors.BuildError(c, err))
 	}

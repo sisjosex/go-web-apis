@@ -14,7 +14,15 @@ BEGIN
             SELECT COALESCE(jsonb_agg(jsonb_build_object(
                 'sku_id', l.sku_id, 'product_id', l.product_id,
                 'label', p.name || COALESCE(' · ' || o.options, ''),
-                'quantity', l.quantity, 'received_quantity', l.received_quantity
+                'quantity', l.quantity, 'received_quantity', l.received_quantity,
+                'lots', (
+                    SELECT COALESCE(jsonb_agg(jsonb_build_object(
+                        'lot_number', s.lot_number, 'expiry_date', s.expiry_date, 'quantity', b.quantity
+                    ) ORDER BY b.position), '[]'::jsonb)
+                    FROM inventory.transfer_line_batches b
+                    INNER JOIN inventory.product_batches s ON s.id = b.source_batch_id
+                    WHERE b.transfer_line_id = l.id
+                )
             ) ORDER BY p.name), '[]'::jsonb)
             FROM inventory.transfer_lines l
             INNER JOIN inventory.products p ON p.id = l.product_id

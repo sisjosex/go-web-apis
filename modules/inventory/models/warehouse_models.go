@@ -205,6 +205,15 @@ type TransferLine struct {
 	Label            string   `json:"label"`
 	Quantity         float64  `json:"quantity"`
 	ReceivedQuantity *float64 `json:"received_quantity"`
+	// Lots are those the units left in, first to expire (INV-027).
+	Lots []TransferLot `json:"lots"`
+}
+
+// TransferLot is what a line took from one lot.
+type TransferLot struct {
+	LotNumber  string  `json:"lot_number"`
+	ExpiryDate string  `json:"expiry_date"`
+	Quantity   float64 `json:"quantity"`
 }
 
 // TransferStep is one moment of its timeline.

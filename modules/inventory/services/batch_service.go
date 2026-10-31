@@ -40,8 +40,8 @@ func (s *BatchService) ListBatchesByProduct(ctx context.Context, tenantID uuid.U
 }
 
 // GetOldestBatchForSale gets the oldest batch for FIFO sales
-func (s *BatchService) GetOldestBatchForSale(ctx context.Context, tenantID uuid.UUID, today time.Time, productID uuid.UUID, skuID *uuid.UUID) (*models.BatchResponse, error) {
-	return s.repository.GetOldestBatchForSale(ctx, tenantID, today, productID, skuID)
+func (s *BatchService) GetOldestBatchForSale(ctx context.Context, tenantID uuid.UUID, today time.Time, productID uuid.UUID, skuID, warehouseID *uuid.UUID) (*models.BatchResponse, error) {
+	return s.repository.GetOldestBatchForSale(ctx, tenantID, today, productID, skuID, warehouseID)
 }
 
 // GetExpiringBatches returns one page of the lots expiring within the window, soonest first

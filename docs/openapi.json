@@ -2493,6 +2493,12 @@
           },
           "updated_by_name": {
             "type": "string"
+          },
+          "warehouse_id": {
+            "type": "string"
+          },
+          "warehouse_name": {
+            "type": "string"
           }
         },
         "required": [
@@ -2847,6 +2853,11 @@
           "unit_cost": {
             "format": "double",
             "type": "number"
+          },
+          "warehouse_id": {
+            "format": "uuid",
+            "nullable": true,
+            "type": "string"
           }
         },
         "required": [
@@ -4939,6 +4950,12 @@
           "label": {
             "type": "string"
           },
+          "lots": {
+            "items": {
+              "$ref": "#/components/schemas/inventory.TransferLot"
+            },
+            "type": "array"
+          },
           "product_id": {
             "type": "string"
           },
@@ -4960,7 +4977,8 @@
           "product_id",
           "label",
           "quantity",
-          "received_quantity"
+          "received_quantity",
+          "lots"
         ],
         "type": "object"
       },
@@ -4978,6 +4996,27 @@
         },
         "required": [
           "sku_id",
+          "quantity"
+        ],
+        "type": "object"
+      },
+      "inventory.TransferLot": {
+        "additionalProperties": false,
+        "properties": {
+          "expiry_date": {
+            "type": "string"
+          },
+          "lot_number": {
+            "type": "string"
+          },
+          "quantity": {
+            "format": "double",
+            "type": "number"
+          }
+        },
+        "required": [
+          "lot_number",
+          "expiry_date",
           "quantity"
         ],
         "type": "object"
@@ -21758,6 +21797,14 @@
           },
           {
             "in": "query",
+            "name": "warehouse_id",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
             "name": "page",
             "schema": {
               "default": "1",
@@ -21837,6 +21884,14 @@
           },
           {
             "in": "query",
+            "name": "warehouse_id",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
             "name": "page",
             "schema": {
               "default": "1",
@@ -21895,6 +21950,14 @@
             "in": "path",
             "name": "productId",
             "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "explode": false,
+            "in": "query",
+            "name": "warehouse_id",
             "schema": {
               "type": "string"
             }

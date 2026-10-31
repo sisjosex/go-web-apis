@@ -93,6 +93,8 @@ BEGIN
         WHERE pb.product_id = p_product_id
           AND pb.sku_id = v_sku_id
           AND pb.tenant_id = p_tenant_id
+          -- An order sells from the default warehouse until it names one (INV-027).
+          AND pb.warehouse_id = inventory.fn_default_warehouse(p_tenant_id)
           AND pb.status <> 'void'
           AND pb.expiry_date >= p_today
           AND pb.current_quantity > 0

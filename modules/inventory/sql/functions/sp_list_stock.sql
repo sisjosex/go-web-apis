@@ -14,6 +14,7 @@ BEGIN
                 SELECT 1 FROM inventory.product_batches b
                 WHERE b.product_id = p.id AND b.tenant_id = p_tenant_id AND b.status <> 'void' AND b.current_quantity > 0
                   AND b.expiry_date BETWEEN p_today AND p_today + 30
+                  AND (p_warehouse_id IS NULL OR b.warehouse_id = p_warehouse_id)
             ) AS expiring
         FROM inventory.fn_products_in_scope(p_tenant_id, p_category_id, p_search, NULL) m
         INNER JOIN inventory.products p ON p.id = m.id AND p.status = 'active'
@@ -76,7 +77,7 @@ BEGIN
         SELECT jsonb_build_object('lot_number', b.lot_number, 'expiry_date', b.expiry_date) AS next_lot
         FROM inventory.product_batches b
         WHERE b.product_id = pg.id AND b.tenant_id = p_tenant_id AND b.status <> 'void' AND b.current_quantity > 0
-          AND b.expiry_date >= p_today
+          AND b.expiry_date >= p_today AND (p_warehouse_id IS NULL OR b.warehouse_id = p_warehouse_id)
         ORDER BY b.expiry_date
         LIMIT 1
     ) lot ON TRUE

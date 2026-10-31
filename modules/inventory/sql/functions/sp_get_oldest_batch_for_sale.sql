@@ -1,4 +1,4 @@
-CREATE OR REPLACE FUNCTION inventory.sp_get_oldest_batch_for_sale(p_tenant_id uuid, p_today date, p_product_id uuid, p_sku_id uuid DEFAULT NULL::uuid)
+CREATE OR REPLACE FUNCTION inventory.sp_get_oldest_batch_for_sale(p_tenant_id uuid, p_today date, p_product_id uuid, p_sku_id uuid DEFAULT NULL::uuid, p_warehouse_id uuid DEFAULT NULL::uuid)
  RETURNS TABLE(id uuid, product_id uuid, lot_number character varying, purchase_date date, expiry_date date, unit_cost numeric, current_quantity numeric, status character varying, message text)
  LANGUAGE plpgsql
 AS $function$
@@ -32,6 +32,9 @@ BEGIN
     FROM inventory.product_batches pb
     WHERE pb.tenant_id = p_tenant_id
         AND pb.sku_id = v_sku_id
+        AND pb.warehouse_id = COALESCE(p_warehouse_id, (
+            SELECT w.id FROM inventory.warehouses w WHERE w.tenant_id = p_tenant_id AND w.is_default
+        ))
         AND pb.status <> 'void'
         AND pb.expiry_date >= p_today
         AND pb.current_quantity > 0
@@ -40,4 +43,4 @@ BEGIN
 END;
 $function$;
 
-COMMENT ON FUNCTION inventory.sp_get_oldest_batch_for_sale(uuid,date,uuid,uuid) IS 'FIFO pick for a SKU (the product default when p_sku_id is omitted): the oldest lot with quantity left that is neither voided (INV-014 D3) nor expired on p_today, the tenants own date (INV-018 D2). Phase 3 owns picking across several SKUs of one product.';
+COMMENT ON FUNCTION inventory.sp_get_oldest_batch_for_sale(uuid,date,uuid,uuid,uuid) IS 'FIFO pick for a SKU (the product default when p_sku_id is omitted): the oldest lot with quantity left that is neither voided (INV-014 D3) nor expired on p_today, the tenants own date (INV-018 D2). Phase 3 owns picking across several SKUs of one product.';

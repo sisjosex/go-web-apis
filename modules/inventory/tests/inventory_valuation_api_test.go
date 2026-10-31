@@ -73,19 +73,19 @@ func TestValuation_WeightedAverageOfEntries(t *testing.T) {
 func TestValuation_LotsOverEntries(t *testing.T) {
 	helper := SetupInventoryTest(t)
 	id := newUnitsProduct(t, helper)
-	for lot, cost := range map[string]float64{"A": 5, "B": 7} {
+	for i, cost := range []float64{5, 7} {
 		w := helper.DoRequest("POST", "/inventory/batches", map[string]interface{}{
-			"product_id": id, "lot_number": fmt.Sprintf("VAL-%s-%d", lot, time.Now().UnixNano()), "purchase_date": time.Now().Format("2006-01-02"),
-			"expiry_date": time.Now().AddDate(1, 0, 0).Format("2006-01-02"), "unit_cost": cost, "initial_quantity": 10,
+			"product_id": id, "lot_number": fmt.Sprintf("VAL-%d-%d", i, time.Now().UnixNano()), "purchase_date": time.Now().Format("2006-01-02"),
+			"expiry_date": time.Now().AddDate(0, 0, 30+i).Format("2006-01-02"), "unit_cost": cost, "initial_quantity": 10,
 		}, nil)
 		require.Equal(t, http.StatusCreated, w.Code, w.Body.String())
 	}
-	// A movement does not touch the lots: the stock is 15, the lots still say 20. The value follows the stock.
+	// The movement comes off the lot that expires first (INV-027): 5 at 5 and 10 at 7.
 	moveStock(t, helper, id, "ADJUSTMENT", -5, nil)
 	row := valuationRow(t, valuationOf(t, helper, ""), id)
 	assert.Equal(t, 15.0, row.Quantity)
 	require.NotNil(t, row.Value)
-	assert.Equal(t, 90.0, *row.Value)
+	assert.Equal(t, 95.0, *row.Value)
 }
 
 func TestValuation_NoCostIsMarkedAndOutOfTheTotal(t *testing.T) {

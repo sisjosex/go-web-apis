@@ -20,13 +20,17 @@ type CreateBatchDto struct {
 	ExpiryDate      coreModels.DateOnly `json:"expiry_date" binding:"required"`
 	UnitCost        float64             `json:"unit_cost" binding:"required,gt=0"`
 	InitialQuantity float64             `json:"initial_quantity" binding:"required,gt=0"`
-	ActedBy         *uuid.UUID          `json:"-"` // set server-side (INV-020 D1)
+	// WarehouseID left out is the default warehouse (INV-027).
+	WarehouseID *string    `json:"warehouse_id" binding:"omitempty,uuid"`
+	ActedBy     *uuid.UUID `json:"-"` // set server-side (INV-020 D1)
 }
 
 // BatchResponse - Response model for batch
 type BatchResponse struct {
 	ID              uuid.UUID           `json:"id"`
 	ProductID       uuid.UUID           `json:"product_id"`
+	WarehouseID     *string             `json:"warehouse_id,omitempty"`
+	WarehouseName   *string             `json:"warehouse_name,omitempty"`
 	SkuID           *uuid.UUID          `json:"sku_id,omitempty"`
 	Sku             *string             `json:"sku,omitempty"`
 	LotNumber       string              `json:"lot_number"`
@@ -97,17 +101,19 @@ type Batch struct {
 // ListBatchesQuery binds GET /inventory/batches/product/:productId (APP-004). OnlyActive is a
 // pointer because it defaults to true, which a bool's zero value cannot say.
 type ListBatchesQuery struct {
-	OnlyActive *bool   `form:"onlyActive"`
-	SkuID      *string `form:"skuId" binding:"omitempty,uuid"`
-	Page       int     `form:"page,default=1" binding:"min=1"`
-	PageSize   int     `form:"page_size,default=20" binding:"min=1,max=100"`
+	OnlyActive  *bool   `form:"onlyActive"`
+	SkuID       *string `form:"skuId" binding:"omitempty,uuid"`
+	WarehouseID *string `form:"warehouse_id" binding:"omitempty,uuid"`
+	Page        int     `form:"page,default=1" binding:"min=1"`
+	PageSize    int     `form:"page_size,default=20" binding:"min=1,max=100"`
 }
 
 // ListExpiringBatchesQuery binds GET /inventory/batches/expiring (APP-004).
 type ListExpiringBatchesQuery struct {
-	WarningDays int `form:"warningDays,default=30" binding:"min=1"`
-	Page        int `form:"page,default=1" binding:"min=1"`
-	PageSize    int `form:"page_size,default=20" binding:"min=1,max=100"`
+	WarningDays int     `form:"warningDays,default=30" binding:"min=1"`
+	WarehouseID *string `form:"warehouse_id" binding:"omitempty,uuid"`
+	Page        int     `form:"page,default=1" binding:"min=1"`
+	PageSize    int     `form:"page_size,default=20" binding:"min=1,max=100"`
 }
 
 // ListBatchesResponse is one page of lots, in the purchasing list shape.

@@ -58,6 +58,7 @@ BEGIN
             SELECT COUNT(DISTINCT b.product_id) FROM inventory.product_batches b
             WHERE b.tenant_id = p_tenant_id AND b.status <> 'void' AND b.current_quantity > 0
               AND b.expiry_date BETWEEN p_today AND p_today + 30
+              AND (p_warehouse_id IS NULL OR b.warehouse_id = p_warehouse_id)
         ),
         'reorder', jsonb_build_object(
             'total', (SELECT COUNT(*) FROM short),

@@ -40,7 +40,8 @@ BEGIN
             pb.product_id,
             pb.sku_id,
             pb.unit_cost,
-            pb.lot_number
+            pb.lot_number,
+            pb.warehouse_id
         FROM sales.order_batch_assignments oba
         JOIN inventory.product_batches pb ON pb.id = oba.product_batch_id
         WHERE oba.order_id = p_order_id
@@ -60,12 +61,6 @@ BEGIN
             RAISE EXCEPTION 'batch.insufficient-quantity' USING ERRCODE = 'P0001';
         END IF;
 
-        -- Reduce batch current_quantity
-        UPDATE inventory.product_batches
-        SET current_quantity = current_quantity - v_batch_record.quantity_assigned,
-            updated_at       = CURRENT_TIMESTAMP
-        WHERE id = v_batch_record.product_batch_id;
-
         -- A1 — el stock sale por la misma puerta que entró.
         SELECT m.movement_id
         INTO v_movement_id
@@ -82,7 +77,9 @@ BEGIN
             NULL,
             v_batch_record.sku_id,
             NULL,
-            'Pedido #' || v_order_record.order_number
+            'Pedido #' || v_order_record.order_number,
+            v_batch_record.warehouse_id,
+            v_batch_record.product_batch_id
         ) m;
 
         UPDATE inventory.inventory_movements im

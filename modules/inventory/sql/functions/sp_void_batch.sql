@@ -58,7 +58,9 @@ BEGIN
             NULL,
             v_batch.sku_id,
             NULL,
-            'Lote ' || v_batch.lot_number
+            'Lote ' || v_batch.lot_number,
+            v_batch.warehouse_id,
+            p_batch_id
         ) m;
 
         UPDATE inventory.inventory_movements im

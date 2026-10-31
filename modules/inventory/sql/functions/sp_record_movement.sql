@@ -1,4 +1,4 @@
-CREATE OR REPLACE FUNCTION inventory.sp_record_movement(p_tenant_id uuid, p_product_id uuid, p_movement_type character varying, p_quantity numeric, p_reference_type character varying DEFAULT NULL::character varying, p_reference_id uuid DEFAULT NULL::uuid, p_unit_cost numeric DEFAULT NULL::numeric, p_notes text DEFAULT NULL::text, p_created_by uuid DEFAULT NULL::uuid, p_sku_id uuid DEFAULT NULL::uuid, p_direction character varying DEFAULT NULL::character varying, p_reference_label character varying DEFAULT NULL::character varying, p_warehouse_id uuid DEFAULT NULL::uuid)
+CREATE OR REPLACE FUNCTION inventory.sp_record_movement(p_tenant_id uuid, p_product_id uuid, p_movement_type character varying, p_quantity numeric, p_reference_type character varying DEFAULT NULL::character varying, p_reference_id uuid DEFAULT NULL::uuid, p_unit_cost numeric DEFAULT NULL::numeric, p_notes text DEFAULT NULL::text, p_created_by uuid DEFAULT NULL::uuid, p_sku_id uuid DEFAULT NULL::uuid, p_direction character varying DEFAULT NULL::character varying, p_reference_label character varying DEFAULT NULL::character varying, p_warehouse_id uuid DEFAULT NULL::uuid, p_batch_id uuid DEFAULT NULL::uuid)
  RETURNS TABLE(movement_id uuid, new_stock_quantity numeric, message text)
  LANGUAGE plpgsql
 AS $function$
@@ -14,6 +14,9 @@ DECLARE
     v_signed_qty    DECIMAL;
     v_unit_cost     DECIMAL;
     v_warehouse_id  UUID;
+    v_left          DECIMAL;
+    v_lot           RECORD;
+    v_taken         DECIMAL;
 BEGIN
     -- INV-011 D1 — the combination is required, never defaulted.
     IF p_sku_id IS NULL AND inventory.fn_requires_sku(p_tenant_id, p_product_id) THEN
@@ -109,6 +112,31 @@ BEGIN
         last_updated_at = CURRENT_TIMESTAMP
     WHERE ps.sku_id = v_sku_id AND ps.warehouse_id = v_warehouse_id;
 
+    -- INV-027: lots follow the stock, so they never read more than there is. What leaves comes off the lot named,
+    -- then off the warehouse's first to expire; units beyond the lots come off stock only.
+    IF p_batch_id IS NOT NULL AND v_sign > 0 THEN
+        UPDATE inventory.product_batches pb
+        SET current_quantity = pb.current_quantity + ABS(p_quantity), updated_at = CURRENT_TIMESTAMP
+        WHERE pb.id = p_batch_id AND pb.tenant_id = p_tenant_id;
+    ELSIF v_sign < 0 THEN
+        v_left := ABS(p_quantity);
+        FOR v_lot IN
+            SELECT pb.id, pb.current_quantity
+            FROM inventory.product_batches pb
+            WHERE pb.tenant_id = p_tenant_id AND pb.sku_id = v_sku_id AND pb.current_quantity > 0
+              AND (pb.id = p_batch_id OR (pb.warehouse_id = v_warehouse_id AND pb.status <> 'void'))
+            ORDER BY (pb.id = p_batch_id) DESC NULLS LAST, pb.expiry_date, pb.created_at
+            FOR UPDATE
+        LOOP
+            v_taken := LEAST(v_left, v_lot.current_quantity);
+            UPDATE inventory.product_batches pb
+            SET current_quantity = pb.current_quantity - v_taken, updated_at = CURRENT_TIMESTAMP
+            WHERE pb.id = v_lot.id;
+            v_left := v_left - v_taken;
+            EXIT WHEN v_left <= 0;
+        END LOOP;
+    END IF;
+
     -- Return with explicit casting
     RETURN QUERY SELECT
         v_movement_id,
@@ -117,4 +145,4 @@ BEGIN
 END;
 $function$;
 
-COMMENT ON FUNCTION inventory.sp_record_movement(uuid,uuid,character varying,numeric,character varying,uuid,numeric,text,uuid,uuid,character varying,character varying,uuid) IS 'Records an inventory movement against a SKU and updates that SKU''s quantities. p_quantity is a magnitude: the sign comes from inventory.fn_movement_direction(p_movement_type, p_direction) and is what gets stored, so a SALE reduces stock (INV-013 D1). p_unit_cost is required and > 0 on PURCHASE and PRODUCTION and stored NULL on every other type (INV-013 D2/D3). p_sku_id is required when the product tracks stock by variant and defaults to the product SKU otherwise. Takes the stock row FOR UPDATE so concurrent outbound movements cannot oversell; an outbound movement consumes only what is not reserved (INV-018 D3) and a SKU with no product_stock row raises inventory.stock-not-found.';
+COMMENT ON FUNCTION inventory.sp_record_movement(uuid,uuid,character varying,numeric,character varying,uuid,numeric,text,uuid,uuid,character varying,character varying,uuid,uuid) IS 'Records an inventory movement against a SKU and updates that SKU''s quantities. p_quantity is a magnitude: the sign comes from inventory.fn_movement_direction(p_movement_type, p_direction) and is what gets stored, so a SALE reduces stock (INV-013 D1). p_unit_cost is required and > 0 on PURCHASE and PRODUCTION and stored NULL on every other type (INV-013 D2/D3). p_sku_id is required when the product tracks stock by variant and defaults to the product SKU otherwise. Takes the stock row FOR UPDATE so concurrent outbound movements cannot oversell; an outbound movement consumes only what is not reserved (INV-018 D3) and a SKU with no product_stock row raises inventory.stock-not-found.';

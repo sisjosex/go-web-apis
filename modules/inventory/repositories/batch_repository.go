@@ -41,7 +41,7 @@ func (r *BatchRepository) CreateBatch(ctx context.Context, tenantID uuid.UUID, t
 	}
 
 	row := r.dbService.QueryRow(ctx,
-		"SELECT id, product_id, sku_id, sku, lot_number, purchase_date, expiry_date, unit_cost, initial_quantity, current_quantity, status, message FROM inventory.sp_create_batch($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)",
+		"SELECT id, product_id, sku_id, sku, lot_number, purchase_date, expiry_date, unit_cost, initial_quantity, current_quantity, status, message FROM inventory.sp_create_batch($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11::UUID)",
 		tenantID,
 		today,
 		productID,
@@ -52,6 +52,7 @@ func (r *BatchRepository) CreateBatch(ctx context.Context, tenantID uuid.UUID, t
 		batch.InitialQuantity,
 		skuID,
 		batch.ActedBy,
+		batch.WarehouseID,
 	)
 
 	var response models.BatchResponse
@@ -129,7 +130,7 @@ func (r *BatchRepository) GetBatch(ctx context.Context, tenantID uuid.UUID, toda
 func (r *BatchRepository) ListBatchesByProduct(ctx context.Context, tenantID uuid.UUID, today time.Time, productID uuid.UUID, query models.ListBatchesQuery) ([]models.BatchResponse, int64, error) {
 	onlyActive := query.OnlyActive == nil || *query.OnlyActive
 	rows, err := r.dbService.Query(ctx,
-		"SELECT id, product_id, lot_number, purchase_date, expiry_date, unit_cost, initial_quantity, current_quantity, status, days_to_expiry, sku_id, sku, total_count FROM inventory.sp_list_batches_by_product($1, $2, $3, $4, $5::UUID, $6, $7)",
+		"SELECT id, product_id, lot_number, purchase_date, expiry_date, unit_cost, initial_quantity, current_quantity, status, days_to_expiry, sku_id, sku, total_count, CAST(warehouse_id AS VARCHAR), warehouse_name FROM inventory.sp_list_batches_by_product($1, $2, $3, $4, $5::UUID, $6, $7, $8::UUID)",
 		tenantID,
 		today,
 		productID,
@@ -137,6 +138,7 @@ func (r *BatchRepository) ListBatchesByProduct(ctx context.Context, tenantID uui
 		query.SkuID,
 		query.Page,
 		query.PageSize,
+		query.WarehouseID,
 	)
 	if err != nil {
 		return nil, 0, err
@@ -166,6 +168,8 @@ func (r *BatchRepository) ListBatchesByProduct(ctx context.Context, tenantID uui
 			&skuIDValue,
 			&skuValue,
 			&totalCount,
+			&batch.WarehouseID,
+			&batch.WarehouseName,
 		); err != nil {
 			return nil, 0, err
 		}
@@ -189,13 +193,14 @@ func (r *BatchRepository) ListBatchesByProduct(ctx context.Context, tenantID uui
 }
 
 // GetOldestBatchForSale retrieves the oldest active batch (FIFO)
-func (r *BatchRepository) GetOldestBatchForSale(ctx context.Context, tenantID uuid.UUID, today time.Time, productID uuid.UUID, skuID *uuid.UUID) (*models.BatchResponse, error) {
+func (r *BatchRepository) GetOldestBatchForSale(ctx context.Context, tenantID uuid.UUID, today time.Time, productID uuid.UUID, skuID, warehouseID *uuid.UUID) (*models.BatchResponse, error) {
 	row := r.dbService.QueryRow(ctx,
-		"SELECT id, product_id, lot_number, purchase_date, expiry_date, unit_cost, current_quantity, status, message FROM inventory.sp_get_oldest_batch_for_sale($1, $2, $3, $4)",
+		"SELECT id, product_id, lot_number, purchase_date, expiry_date, unit_cost, current_quantity, status, message FROM inventory.sp_get_oldest_batch_for_sale($1, $2, $3, $4, $5)",
 		tenantID,
 		today,
 		productID,
 		skuID,
+		warehouseID,
 	)
 
 	var response models.BatchResponse
@@ -223,12 +228,13 @@ func (r *BatchRepository) GetOldestBatchForSale(ctx context.Context, tenantID uu
 // plus the total the window matches.
 func (r *BatchRepository) GetExpiringBatches(ctx context.Context, tenantID uuid.UUID, today time.Time, query models.ListExpiringBatchesQuery) ([]models.BatchResponse, int64, error) {
 	rows, err := r.dbService.Query(ctx,
-		"SELECT id, product_id, lot_number, purchase_date, expiry_date, unit_cost, initial_quantity, current_quantity, status, days_to_expiry, product_name, sku_id, sku, total_count FROM inventory.sp_get_expiring_batches($1, $2, $3, $4, $5)",
+		"SELECT id, product_id, lot_number, purchase_date, expiry_date, unit_cost, initial_quantity, current_quantity, status, days_to_expiry, product_name, sku_id, sku, total_count, CAST(warehouse_id AS VARCHAR), warehouse_name FROM inventory.sp_get_expiring_batches($1, $2, $3, $4, $5, $6::UUID)",
 		tenantID,
 		today,
 		query.WarningDays,
 		query.Page,
 		query.PageSize,
+		query.WarehouseID,
 	)
 	if err != nil {
 		return nil, 0, err
@@ -260,6 +266,8 @@ func (r *BatchRepository) GetExpiringBatches(ctx context.Context, tenantID uuid.
 			&skuIDValue,
 			&skuValue,
 			&totalCount,
+			&batch.WarehouseID,
+			&batch.WarehouseName,
 		); err != nil {
 			return nil, 0, err
 		}

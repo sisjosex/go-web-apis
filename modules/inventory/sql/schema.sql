@@ -144,6 +144,7 @@ CREATE TABLE inventory.product_batches (
     sku_id uuid NOT NULL,
     created_by uuid,
     updated_by uuid,
+    warehouse_id uuid NOT NULL,
     CONSTRAINT chk_product_batches_quantity CHECK ((current_quantity >= (0)::numeric))
 );
 
@@ -437,6 +438,19 @@ CREATE TABLE inventory.sku_codes (
 --
 
 COMMENT ON TABLE inventory.sku_codes IS 'The barcodes of a business: each names a combination and a presentation (INV-023 D1).';
+
+
+--
+-- Name: transfer_line_batches; Type: TABLE; Schema: inventory; Owner: -
+--
+
+CREATE TABLE inventory.transfer_line_batches (
+    transfer_line_id uuid NOT NULL,
+    source_batch_id uuid NOT NULL,
+    quantity numeric(14,3) NOT NULL,
+    "position" integer NOT NULL,
+    CONSTRAINT transfer_line_batches_quantity_check CHECK ((quantity > (0)::numeric))
+);
 
 
 --
@@ -747,6 +761,14 @@ ALTER TABLE ONLY inventory.sku_codes
 
 
 --
+-- Name: transfer_line_batches transfer_line_batches_pkey; Type: CONSTRAINT; Schema: inventory; Owner: -
+--
+
+ALTER TABLE ONLY inventory.transfer_line_batches
+    ADD CONSTRAINT transfer_line_batches_pkey PRIMARY KEY (transfer_line_id, source_batch_id);
+
+
+--
 -- Name: transfer_lines transfer_lines_pkey; Type: CONSTRAINT; Schema: inventory; Owner: -
 --
 
@@ -925,6 +947,13 @@ CREATE INDEX idx_product_batches_tenant_id ON inventory.product_batches USING bt
 --
 
 CREATE INDEX idx_product_batches_tenant_open_expiry ON inventory.product_batches USING btree (tenant_id, expiry_date) WHERE ((status)::text = ANY ((ARRAY['active'::character varying, 'expiring_soon'::character varying])::text[]));
+
+
+--
+-- Name: idx_product_batches_warehouse_sku_expiry; Type: INDEX; Schema: inventory; Owner: -
+--
+
+CREATE INDEX idx_product_batches_warehouse_sku_expiry ON inventory.product_batches USING btree (warehouse_id, sku_id, expiry_date);
 
 
 --
@@ -1387,6 +1416,14 @@ ALTER TABLE ONLY inventory.product_batches
 
 
 --
+-- Name: product_batches product_batches_warehouse_id_fkey; Type: FK CONSTRAINT; Schema: inventory; Owner: -
+--
+
+ALTER TABLE ONLY inventory.product_batches
+    ADD CONSTRAINT product_batches_warehouse_id_fkey FOREIGN KEY (warehouse_id) REFERENCES inventory.warehouses(id);
+
+
+--
 -- Name: product_categories product_categories_parent_id_fkey; Type: FK CONSTRAINT; Schema: inventory; Owner: -
 --
 
@@ -1536,6 +1573,22 @@ ALTER TABLE ONLY inventory.sku_codes
 
 ALTER TABLE ONLY inventory.sku_codes
     ADD CONSTRAINT sku_codes_sku_id_fkey FOREIGN KEY (sku_id) REFERENCES inventory.product_skus(id) ON DELETE CASCADE;
+
+
+--
+-- Name: transfer_line_batches transfer_line_batches_source_batch_id_fkey; Type: FK CONSTRAINT; Schema: inventory; Owner: -
+--
+
+ALTER TABLE ONLY inventory.transfer_line_batches
+    ADD CONSTRAINT transfer_line_batches_source_batch_id_fkey FOREIGN KEY (source_batch_id) REFERENCES inventory.product_batches(id);
+
+
+--
+-- Name: transfer_line_batches transfer_line_batches_transfer_line_id_fkey; Type: FK CONSTRAINT; Schema: inventory; Owner: -
+--
+
+ALTER TABLE ONLY inventory.transfer_line_batches
+    ADD CONSTRAINT transfer_line_batches_transfer_line_id_fkey FOREIGN KEY (transfer_line_id) REFERENCES inventory.transfer_lines(id) ON DELETE CASCADE;
 
 
 --

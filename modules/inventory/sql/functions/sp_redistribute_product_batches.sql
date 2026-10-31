@@ -103,7 +103,7 @@ BEGIN
     WITH ins AS (
         INSERT INTO inventory.product_batches (
             tenant_id, product_id, sku_id, lot_number, purchase_date,
-            expiry_date, unit_cost, initial_quantity, current_quantity, status
+            expiry_date, unit_cost, initial_quantity, current_quantity, status, warehouse_id
         )
         SELECT
             p_tenant_id,
@@ -115,11 +115,20 @@ BEGIN
             v_batch.unit_cost,
             (e ->> 'quantity')::DECIMAL,
             (e ->> 'quantity')::DECIMAL,
-            inventory.fn_batch_status(v_batch.expiry_date, v_batch.status, p_today)
+            inventory.fn_batch_status(v_batch.expiry_date, v_batch.status, p_today),
+            v_batch.warehouse_id
         FROM jsonb_array_elements(p_targets) e
         RETURNING product_batches.id
     )
     SELECT array_agg(ins.id) INTO v_child_ids FROM ins;
+
+    PERFORM inventory.sp_record_movement(
+        p_tenant_id, p_product_id, 'TRANSFER', v_total,
+        'REDISTRIBUTION', p_batch_id, NULL,
+        'Lote ' || v_batch.lot_number || ' repartido a las combinaciones',
+        p_created_by, v_batch.sku_id, 'OUT', 'Lote ' || v_batch.lot_number,
+        v_batch.warehouse_id, p_batch_id
+    );
 
     -- El padre se vacía, nunca se borra: order_batch_assignments e
     -- inventory_movements pueden apuntarlo, y es la fila de la que cuelga su
@@ -132,13 +141,6 @@ BEGIN
 
     -- A1 — las existencias siguen a los lotes. Salen del bucket una vez y entran
     -- una vez por destino, así el total del producto no cambia.
-    PERFORM inventory.sp_record_movement(
-        p_tenant_id, p_product_id, 'TRANSFER', v_total,
-        'REDISTRIBUTION', p_batch_id, NULL,
-        'Lote ' || v_batch.lot_number || ' repartido a las combinaciones',
-        p_created_by, v_batch.sku_id, 'OUT', 'Lote ' || v_batch.lot_number
-    );
-
     FOR v_target IN
         SELECT
             (e ->> 'sku_id')::UUID      AS sku_id,
@@ -149,7 +151,8 @@ BEGIN
             p_tenant_id, p_product_id, 'TRANSFER', v_target.quantity,
             'REDISTRIBUTION', p_batch_id, NULL,
             'Lote ' || v_batch.lot_number || ' recibido del SKU por defecto',
-            p_created_by, v_target.sku_id, 'IN', 'Lote ' || v_batch.lot_number
+            p_created_by, v_target.sku_id, 'IN', 'Lote ' || v_batch.lot_number,
+            v_batch.warehouse_id
         );
     END LOOP;
 
