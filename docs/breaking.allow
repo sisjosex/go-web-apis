@@ -4,6 +4,3 @@
 #
 # The gate's contract stage reads it against HEAD's docs/openapi.json. Empty the file once the
 # change is committed: an entry left here would let the next break through unreviewed.
-POST /api/v1/inventory/movements  # INV-020 a malformed id or unknown type used to answer 500 from the SP; only the web sends it, with real ids and the seven types
-POST /api/v1/inventory/reserve  # INV-020 same: a malformed product_id answered 500 before
-POST /api/v1/inventory/release-reserved  # INV-020 same: a malformed product_id answered 500 before
