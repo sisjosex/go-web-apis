@@ -817,3 +817,55 @@ func skuStock(t *testing.T, helper *coreTestHelpers.ApiTestHelper, productID, sk
 	t.Fatalf("la combinación %s no aparece en el listado", skuID)
 	return 0
 }
+
+// A three-line order is one row of the inventory ledger, named after the order; its kardex stays per movement
+// (INV-021 D2, D3).
+func TestCompleteOrder_IsOneLedgerRow(t *testing.T) {
+	helper := SetupSalesAuthTest(t)
+	defer helper.Close()
+	orderID := newSalesOrder(t, helper)
+	var first string
+	for i := 0; i < 3; i++ {
+		productID := newSalesProduct(t, helper, fmt.Sprintf("LEDGER%d", i))
+		if i == 0 {
+			first = productID
+		}
+		stockBatchFor(t, helper, productID, 5)
+		w := helper.DoRequest("POST", fmt.Sprintf("/sales/orders/%s/items", orderID),
+			map[string]interface{}{"product_id": productID, "quantity": 1, "unit_price": 10.0}, map[string]string{})
+		assert.Contains(t, []int{http.StatusOK, http.StatusCreated}, w.Code, w.Body.String())
+	}
+
+	w := helper.DoRequest("PATCH", fmt.Sprintf("/sales/orders/%s/complete", orderID), nil, map[string]string{})
+	assert.Equal(t, http.StatusOK, w.Code, w.Body.String())
+
+	w = helper.DoRequest("GET", "/inventory/movements?movement_type=SALE&page_size=100", nil, map[string]string{})
+	assert.Equal(t, http.StatusOK, w.Code, w.Body.String())
+	var list struct {
+		Movements []struct {
+			ReferenceID    *string `json:"reference_id"`
+			ReferenceLabel *string `json:"reference_label"`
+			MoreCount      int     `json:"more_count"`
+			Quantity       float64 `json:"quantity"`
+		} `json:"movements"`
+	}
+	assert.NoError(t, json.Unmarshal(w.Body.Bytes(), &list))
+	rows := 0
+	for _, row := range list.Movements {
+		if row.ReferenceID != nil && *row.ReferenceID == orderID {
+			rows++
+			assert.Equal(t, 2, row.MoreCount)
+			assert.Equal(t, -3.0, row.Quantity)
+			if assert.NotNil(t, row.ReferenceLabel) {
+				assert.Contains(t, *row.ReferenceLabel, "Pedido #")
+			}
+		}
+	}
+	assert.Equal(t, 1, rows, "one row for the whole order: %s", w.Body.String())
+
+	w = helper.DoRequest("GET", "/inventory/movements?movement_type=SALE&product_id="+first, nil, map[string]string{})
+	assert.Equal(t, http.StatusOK, w.Code, w.Body.String())
+	list.Movements = nil
+	assert.NoError(t, json.Unmarshal(w.Body.Bytes(), &list))
+	assert.Len(t, list.Movements, 1)
+}

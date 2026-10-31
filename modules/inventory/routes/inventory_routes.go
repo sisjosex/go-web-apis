@@ -69,6 +69,12 @@ func RegisterInventoryRoutes(
 
 	inventory := router.Group("/inventory", authMiddleware, tenantMiddleware)
 
+	// Downloads, with the permission of the list each one reads (INV-021).
+	exportController := controllers.NewExportController(services.Product, services.Movement, services.Batch)
+	api.Get(inventory, "/export/products", exportController.ExportProducts, api.Doc{Summary: "Download products as CSV", Description: "UTF-8 with BOM, the list's filters, at most 50 000 rows", Errors: []int{400, 422}}, tenancyMW.RequirePermission(inventoryPerms.ProductsRead))
+	api.Get(inventory, "/export/movements", exportController.ExportMovements, api.Doc{Summary: "Download movements as CSV", Description: "One line per movement, the ledger's filters, at most 50 000 rows", Errors: []int{400, 422}}, tenancyMW.RequirePermission(inventoryPerms.StockRead))
+	api.Get(inventory, "/export/batches", exportController.ExportBatches, api.Doc{Summary: "Download lots as CSV", Description: "One product's lots, or those about to expire", Errors: []int{400, 422}}, tenancyMW.RequirePermission(inventoryPerms.BatchesRead))
+
 	// Products
 	api.Get(inventory, "/products", productController.ListProducts, api.Doc{Summary: "List all products", Description: "One page of products, newest first, each with its categories, stock, axes and price range; counts carry the chips. Narrowed by status (active by default), chip, category and a name/SKU search.", Errors: []int{400}}, tenancyMW.RequirePermission(inventoryPerms.ProductsRead))
 	api.Get(inventory, "/products/{id}", productController.GetProduct, api.Doc{Summary: "Get product by ID", Description: "Retrieve a product with all its details", Errors: []int{404}}, tenancyMW.RequirePermission(inventoryPerms.ProductsRead))

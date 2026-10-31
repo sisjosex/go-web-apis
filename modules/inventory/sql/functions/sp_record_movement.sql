@@ -1,4 +1,4 @@
-CREATE OR REPLACE FUNCTION inventory.sp_record_movement(p_tenant_id uuid, p_product_id uuid, p_movement_type character varying, p_quantity numeric, p_reference_type character varying DEFAULT NULL::character varying, p_reference_id uuid DEFAULT NULL::uuid, p_unit_cost numeric DEFAULT NULL::numeric, p_notes text DEFAULT NULL::text, p_created_by uuid DEFAULT NULL::uuid, p_sku_id uuid DEFAULT NULL::uuid, p_direction character varying DEFAULT NULL::character varying)
+CREATE OR REPLACE FUNCTION inventory.sp_record_movement(p_tenant_id uuid, p_product_id uuid, p_movement_type character varying, p_quantity numeric, p_reference_type character varying DEFAULT NULL::character varying, p_reference_id uuid DEFAULT NULL::uuid, p_unit_cost numeric DEFAULT NULL::numeric, p_notes text DEFAULT NULL::text, p_created_by uuid DEFAULT NULL::uuid, p_sku_id uuid DEFAULT NULL::uuid, p_direction character varying DEFAULT NULL::character varying, p_reference_label character varying DEFAULT NULL::character varying)
  RETURNS TABLE(movement_id uuid, new_stock_quantity numeric, message text)
  LANGUAGE plpgsql
 AS $function$
@@ -76,10 +76,10 @@ BEGIN
     -- reads as what happened without re-deriving it from the type.
     INSERT INTO inventory.inventory_movements (
         tenant_id, product_id, sku_id, movement_type, quantity,
-        reference_type, reference_id, unit_cost, notes, created_by
+        reference_type, reference_id, unit_cost, notes, created_by, reference_label
     )
     VALUES (p_tenant_id, p_product_id, v_sku_id, p_movement_type, v_signed_qty,
-            p_reference_type, p_reference_id, v_unit_cost, p_notes, p_created_by)
+            p_reference_type, p_reference_id, v_unit_cost, p_notes, p_created_by, p_reference_label)
     RETURNING inventory_movements.id INTO v_movement_id;
 
     -- Update stock with new status
@@ -97,4 +97,4 @@ BEGIN
 END;
 $function$;
 
-COMMENT ON FUNCTION inventory.sp_record_movement(uuid,uuid,character varying,numeric,character varying,uuid,numeric,text,uuid,uuid,character varying) IS 'Records an inventory movement against a SKU and updates that SKU''s quantities. p_quantity is a magnitude: the sign comes from inventory.fn_movement_direction(p_movement_type, p_direction) and is what gets stored, so a SALE reduces stock (INV-013 D1). p_unit_cost is required and > 0 on PURCHASE and PRODUCTION and stored NULL on every other type (INV-013 D2/D3). p_sku_id is required when the product tracks stock by variant and defaults to the product SKU otherwise. Takes the stock row FOR UPDATE so concurrent outbound movements cannot oversell; an outbound movement consumes only what is not reserved (INV-018 D3) and a SKU with no product_stock row raises inventory.stock-not-found.';
+COMMENT ON FUNCTION inventory.sp_record_movement(uuid,uuid,character varying,numeric,character varying,uuid,numeric,text,uuid,uuid,character varying,character varying) IS 'Records an inventory movement against a SKU and updates that SKU''s quantities. p_quantity is a magnitude: the sign comes from inventory.fn_movement_direction(p_movement_type, p_direction) and is what gets stored, so a SALE reduces stock (INV-013 D1). p_unit_cost is required and > 0 on PURCHASE and PRODUCTION and stored NULL on every other type (INV-013 D2/D3). p_sku_id is required when the product tracks stock by variant and defaults to the product SKU otherwise. Takes the stock row FOR UPDATE so concurrent outbound movements cannot oversell; an outbound movement consumes only what is not reserved (INV-018 D3) and a SKU with no product_stock row raises inventory.stock-not-found.';

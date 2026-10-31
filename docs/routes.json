@@ -1233,6 +1233,64 @@
     },
     {
       "method": "GET",
+      "path": "/api/v1/inventory/export/batches",
+      "operation_id": "inventory.ExportBatches",
+      "module": "inventory",
+      "handler": "josex/web/modules/inventory/controllers.(*ExportController).ExportBatches",
+      "sps": [
+        "inventory.sp_get_expiring_batches",
+        "inventory.sp_list_batches_by_product"
+      ],
+      "reads": [
+        "inventory.product_batches",
+        "inventory.product_skus",
+        "inventory.products"
+      ],
+      "writes": []
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/inventory/export/movements",
+      "operation_id": "inventory.ExportMovements",
+      "module": "inventory",
+      "handler": "josex/web/modules/inventory/controllers.(*ExportController).ExportMovements",
+      "sps": [
+        "inventory.sp_list_movements"
+      ],
+      "reads": [
+        "auth.users",
+        "inventory.inventory_movements",
+        "inventory.product_sku_options",
+        "inventory.product_skus",
+        "inventory.product_variant_groups",
+        "inventory.product_variant_options",
+        "inventory.products"
+      ],
+      "writes": []
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/inventory/export/products",
+      "operation_id": "inventory.ExportProducts",
+      "module": "inventory",
+      "handler": "josex/web/modules/inventory/controllers.(*ExportController).ExportProducts",
+      "sps": [
+        "inventory.sp_list_products"
+      ],
+      "reads": [
+        "inventory.product_categories",
+        "inventory.product_category_mapping",
+        "inventory.product_media",
+        "inventory.product_skus",
+        "inventory.product_variant_groups",
+        "inventory.product_variant_options",
+        "inventory.products",
+        "inventory.v_product_stock_totals"
+      ],
+      "writes": []
+    },
+    {
+      "method": "GET",
       "path": "/api/v1/inventory/movements",
       "operation_id": "inventory.ListMovements",
       "module": "inventory",
@@ -1241,8 +1299,13 @@
         "inventory.sp_list_movements"
       ],
       "reads": [
+        "auth.users",
         "inventory.inventory_movements",
-        "inventory.product_skus"
+        "inventory.product_sku_options",
+        "inventory.product_skus",
+        "inventory.product_variant_groups",
+        "inventory.product_variant_options",
+        "inventory.products"
       ],
       "writes": []
     },
@@ -2211,7 +2274,8 @@
       ],
       "reads": [
         "inventory.product_skus",
-        "inventory.products"
+        "inventory.products",
+        "purchasing.suppliers"
       ],
       "writes": [
         "inventory.inventory_movements",
@@ -7503,8 +7567,13 @@
     },
     "inventory.sp_list_movements": {
       "reads": [
+        "auth.users",
         "inventory.inventory_movements",
-        "inventory.product_skus"
+        "inventory.product_sku_options",
+        "inventory.product_skus",
+        "inventory.product_variant_groups",
+        "inventory.product_variant_options",
+        "inventory.products"
       ],
       "writes": [],
       "calls": []
@@ -7928,7 +7997,9 @@
       "calls": []
     },
     "purchasing.sp_receive_purchase_order_items": {
-      "reads": [],
+      "reads": [
+        "purchasing.suppliers"
+      ],
       "writes": [
         "purchasing.purchase_order_items",
         "purchasing.purchase_order_receipts",

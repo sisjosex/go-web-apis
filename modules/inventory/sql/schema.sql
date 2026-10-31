@@ -56,6 +56,7 @@ CREATE TABLE inventory.inventory_movements (
     created_at timestamp without time zone DEFAULT CURRENT_TIMESTAMP,
     batch_id uuid,
     sku_id uuid NOT NULL,
+    reference_label character varying(120),
     CONSTRAINT inventory_movements_movement_type_check CHECK (((movement_type)::text = ANY ((ARRAY['PURCHASE'::character varying, 'SALE'::character varying, 'ADJUSTMENT'::character varying, 'TRANSFER'::character varying, 'RETURN'::character varying, 'WASTE'::character varying, 'PRODUCTION'::character varying])::text[])))
 );
 

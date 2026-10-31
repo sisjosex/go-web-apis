@@ -68,7 +68,9 @@ BEGIN
         p_unit_cost,
         'Lote ' || TRIM(p_lot_number) || ' recibido',
         p_created_by,
-        v_sku_id
+        v_sku_id,
+        NULL,
+        'Lote ' || TRIM(p_lot_number)
     ) m;
 
     -- El enlace que hace auditable de qué lote salió cada unidad.

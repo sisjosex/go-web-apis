@@ -89,8 +89,12 @@ type ListMovementsQuery struct {
 	MovementType *string `form:"movement_type" binding:"omitempty"`
 	DateFrom     *string `form:"date_from" binding:"omitempty,datetime=2006-01-02"`
 	DateTo       *string `form:"date_to" binding:"omitempty,datetime=2006-01-02"`
-	Page         int     `form:"page,default=1" binding:"min=1"`
-	PageSize     int     `form:"page_size,default=20" binding:"min=1,max=100"`
+	// Search reads product, SKU, document and person; Group is document by default without a product_id (INV-021 D2).
+	Search        string  `form:"search"`
+	ReferenceType *string `form:"reference_type" binding:"omitempty"`
+	Group         string  `form:"group" binding:"omitempty,oneof=document none"`
+	Page          int     `form:"page,default=1" binding:"min=1"`
+	PageSize      int     `form:"page_size,default=20" binding:"min=1,max=100"`
 }
 
 // ListProductsQuery binds GET /inventory/products (APP-004). category_id is validated here so a
@@ -439,4 +443,10 @@ type InventoryMovement struct {
 	// carry no SKU and the trail still has to show them (INV-011 D2).
 	SkuID *string `db:"sku_id" json:"sku_id"`
 	SKU   *string `db:"sku" json:"sku"`
+	// What the ledger reads with no other query (INV-021). MoreCount is how many more lines the row folds.
+	ProductName    string  `json:"product_name"`
+	SkuLabel       *string `json:"sku_label"`
+	CreatedByName  *string `json:"created_by_name"`
+	ReferenceLabel *string `json:"reference_label"`
+	MoreCount      int     `json:"more_count"`
 }

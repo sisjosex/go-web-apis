@@ -147,6 +147,13 @@ func (ctrl *MovementController) ListMovements(ctx context.Context, in *ListMovem
 		return nil, api.Fail(http.StatusBadRequest, coreErrors.BuildErrorDetail(c, "validation.invalid", err.Error()))
 	}
 
+	if query.Group == "" {
+		query.Group = "none"
+		if query.ProductID == nil {
+			query.Group = "document"
+		}
+	}
+
 	result, err := ctrl.movementService.ListMovements(c.Request.Context(), tenantID, query)
 	if err != nil {
 		return nil, api.Fail(http.StatusInternalServerError, coreErrors.BuildError(c, err))

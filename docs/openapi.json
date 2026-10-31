@@ -2757,8 +2757,16 @@
             "nullable": true,
             "type": "string"
           },
+          "created_by_name": {
+            "nullable": true,
+            "type": "string"
+          },
           "id": {
             "type": "string"
+          },
+          "more_count": {
+            "format": "int64",
+            "type": "integer"
           },
           "movement_type": {
             "type": "string"
@@ -2770,11 +2778,18 @@
           "product_id": {
             "type": "string"
           },
+          "product_name": {
+            "type": "string"
+          },
           "quantity": {
             "format": "double",
             "type": "number"
           },
           "reference_id": {
+            "nullable": true,
+            "type": "string"
+          },
+          "reference_label": {
             "nullable": true,
             "type": "string"
           },
@@ -2787,6 +2802,10 @@
             "type": "string"
           },
           "sku_id": {
+            "nullable": true,
+            "type": "string"
+          },
+          "sku_label": {
             "nullable": true,
             "type": "string"
           },
@@ -2808,7 +2827,12 @@
           "created_by",
           "created_at",
           "sku_id",
-          "sku"
+          "sku",
+          "product_name",
+          "sku_label",
+          "created_by_name",
+          "reference_label",
+          "more_count"
         ],
         "type": "object"
       },
@@ -20576,6 +20600,285 @@
         "x-handler": "josex/web/modules/inventory/controllers.(*CategoryController).GetProductsByCategory"
       }
     },
+    "/api/v1/inventory/export/batches": {
+      "get": {
+        "description": "One product's lots, or those about to expire",
+        "operationId": "inventory.ExportBatches",
+        "parameters": [
+          {
+            "description": "One product's lots",
+            "explode": false,
+            "in": "query",
+            "name": "product_id",
+            "schema": {
+              "description": "One product's lots",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Without a product, the lots expiring within these days (30)",
+            "explode": false,
+            "in": "query",
+            "name": "warning_days",
+            "schema": {
+              "description": "Without a product, the lots expiring within these days (30)",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/core.ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/core.ErrorResponse"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          }
+        },
+        "summary": "Download lots as CSV",
+        "tags": [
+          "inventory"
+        ],
+        "x-handler": "josex/web/modules/inventory/controllers.(*ExportController).ExportBatches"
+      }
+    },
+    "/api/v1/inventory/export/movements": {
+      "get": {
+        "description": "One line per movement, the ledger's filters, at most 50 000 rows",
+        "operationId": "inventory.ExportMovements",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "product_id",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "sku_id",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "movement_type",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "date_from",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "date_to",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "search",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "reference_type",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "group",
+            "schema": {
+              "enum": [
+                "document",
+                "none"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "page",
+            "schema": {
+              "default": "1",
+              "format": "int64",
+              "minimum": 1,
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "page_size",
+            "schema": {
+              "default": "20",
+              "format": "int64",
+              "maximum": 100,
+              "minimum": 1,
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/core.ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/core.ErrorResponse"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          }
+        },
+        "summary": "Download movements as CSV",
+        "tags": [
+          "inventory"
+        ],
+        "x-handler": "josex/web/modules/inventory/controllers.(*ExportController).ExportMovements"
+      }
+    },
+    "/api/v1/inventory/export/products": {
+      "get": {
+        "description": "UTF-8 with BOM, the list's filters, at most 50 000 rows",
+        "operationId": "inventory.ExportProducts",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "category_id",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "search",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "status",
+            "schema": {
+              "default": "active",
+              "enum": [
+                "active",
+                "discontinued",
+                "all"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "filter",
+            "schema": {
+              "enum": [
+                "with_variants",
+                "low",
+                "out_of_stock",
+                "pos_hidden"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "page",
+            "schema": {
+              "default": "1",
+              "format": "int64",
+              "minimum": 1,
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "page_size",
+            "schema": {
+              "default": "20",
+              "format": "int64",
+              "maximum": 100,
+              "minimum": 1,
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/core.ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/core.ErrorResponse"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          }
+        },
+        "summary": "Download products as CSV",
+        "tags": [
+          "inventory"
+        ],
+        "x-handler": "josex/web/modules/inventory/controllers.(*ExportController).ExportProducts"
+      }
+    },
     "/api/v1/inventory/movements": {
       "get": {
         "description": "Paginated movement history, optionally filtered by product, type and date range",
@@ -20615,6 +20918,31 @@
             "in": "query",
             "name": "date_to",
             "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "search",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "reference_type",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "group",
+            "schema": {
+              "enum": [
+                "document",
+                "none"
+              ],
               "type": "string"
             }
           },

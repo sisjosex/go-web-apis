@@ -26,6 +26,9 @@ const (
 	SkusRedistributionMismatch = "inventory.skus.redistribution-mismatch"
 	SkusRedistributionReserved = "inventory.skus.redistribution-reserved"
 
+	// A download past the row cap (INV-021 D1).
+	ExportTooLarge = "inventory.export.too-large"
+
 	// Stock
 	InsufficientStock = "inventory.insufficient-stock"
 	StockNotFound     = "inventory.stock-not-found"

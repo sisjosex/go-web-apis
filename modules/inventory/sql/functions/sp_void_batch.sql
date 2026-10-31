@@ -56,7 +56,9 @@ BEGIN
             NULL,
             'Lote ' || v_batch.lot_number || ' anulado',
             NULL,
-            v_batch.sku_id
+            v_batch.sku_id,
+            NULL,
+            'Lote ' || v_batch.lot_number
         ) m;
 
         UPDATE inventory.inventory_movements im

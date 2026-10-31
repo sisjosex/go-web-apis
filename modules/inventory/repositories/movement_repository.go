@@ -113,9 +113,11 @@ func (r *MovementRepository) ListMovements(
 ) ([]models.InventoryMovement, int64, error) {
 	rows, err := r.dbService.Query(
 		ctx,
-		`SELECT id, product_id, movement_type, quantity, reference_type, reference_id, unit_cost, notes, created_by, created_at, sku_id, sku, total_count
-		 FROM inventory.sp_list_movements($1, $2::UUID, $3::VARCHAR, $4::DATE, $5::DATE, $6, $7, $8::UUID)`,
+		`SELECT id, product_id, movement_type, quantity, reference_type, reference_id, unit_cost, notes, created_by, created_at, sku_id, sku, total_count,
+		        product_name, sku_label, created_by_name, reference_label, more_count
+		 FROM inventory.sp_list_movements($1, $2::UUID, $3::VARCHAR, $4::DATE, $5::DATE, $6, $7, $8::UUID, $9::VARCHAR, $10::VARCHAR, $11::VARCHAR)`,
 		tenantID, query.ProductID, query.MovementType, query.DateFrom, query.DateTo, query.Page, query.PageSize, query.SkuID,
+		query.Search, query.ReferenceType, query.Group,
 	)
 	if err != nil {
 		if r.logger != nil {
@@ -147,6 +149,11 @@ func (r *MovementRepository) ListMovements(
 			&m.SkuID,
 			&m.SKU,
 			&totalCount,
+			&m.ProductName,
+			&m.SkuLabel,
+			&m.CreatedByName,
+			&m.ReferenceLabel,
+			&m.MoreCount,
 		); err != nil {
 			return nil, 0, err
 		}

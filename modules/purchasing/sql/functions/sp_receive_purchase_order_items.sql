@@ -6,6 +6,7 @@ DECLARE
     v_receipt_id UUID := gen_random_uuid();
     v_receipt_number VARCHAR;
     v_item RECORD;
+    v_label VARCHAR;
 BEGIN
     -- FOR UPDATE: two receipts of one order cannot both add its stock.
     PERFORM 1 FROM purchasing.purchase_orders po
@@ -14,6 +15,12 @@ BEGIN
     IF NOT FOUND THEN
         RAISE EXCEPTION 'po.cannot-receive' USING ERRCODE = 'P0001';
     END IF;
+
+    SELECT 'Compra #' || po.po_number || ' · ' || s.name
+    INTO v_label
+    FROM purchasing.purchase_orders po
+    INNER JOIN purchasing.suppliers s ON s.id = po.supplier_id
+    WHERE po.id = p_po_id;
 
     v_receipt_number := 'RCP-' || TO_CHAR(p_receipt_date, 'YYYYMMDD') || '-' || UPPER(LEFT(REPLACE(v_receipt_id::TEXT, '-', ''), 8));
 
@@ -34,7 +41,8 @@ BEGIN
             p_reference_id   := p_po_id,
             p_unit_cost      := v_item.unit_cost,
             p_notes          := v_receipt_number,
-            p_created_by     := p_received_by
+            p_created_by     := p_received_by,
+            p_reference_label := v_label
         );
     END LOOP;
 

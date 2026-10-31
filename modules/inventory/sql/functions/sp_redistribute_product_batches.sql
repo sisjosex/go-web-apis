@@ -136,7 +136,7 @@ BEGIN
         p_tenant_id, p_product_id, 'TRANSFER', v_total,
         'REDISTRIBUTION', p_batch_id, NULL,
         'Lote ' || v_batch.lot_number || ' repartido a las combinaciones',
-        p_created_by, v_batch.sku_id, 'OUT'
+        p_created_by, v_batch.sku_id, 'OUT', 'Lote ' || v_batch.lot_number
     );
 
     FOR v_target IN
@@ -149,7 +149,7 @@ BEGIN
             p_tenant_id, p_product_id, 'TRANSFER', v_target.quantity,
             'REDISTRIBUTION', p_batch_id, NULL,
             'Lote ' || v_batch.lot_number || ' recibido del SKU por defecto',
-            p_created_by, v_target.sku_id, 'IN'
+            p_created_by, v_target.sku_id, 'IN', 'Lote ' || v_batch.lot_number
         );
     END LOOP;
 

@@ -80,7 +80,9 @@ BEGIN
             'Pedido ' || v_order_record.order_number || ' — lote '
                 || v_batch_record.lot_number,
             NULL,
-            v_batch_record.sku_id
+            v_batch_record.sku_id,
+            NULL,
+            'Pedido #' || v_order_record.order_number
         ) m;
 
         UPDATE inventory.inventory_movements im
