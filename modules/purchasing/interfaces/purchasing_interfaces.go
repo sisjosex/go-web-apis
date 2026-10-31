@@ -14,7 +14,7 @@ type PurchasingRepository interface {
 	CreateSupplier(ctx context.Context, tenantID uuid.UUID, dto *models.CreateSupplierRequestDto) (*models.Supplier, error)
 	GetSupplier(ctx context.Context, tenantID uuid.UUID, supplierID uuid.UUID) (*models.Supplier, error)
 	UpdateSupplier(ctx context.Context, tenantID uuid.UUID, supplierID uuid.UUID, dto *models.UpdateSupplierRequestDto) (*models.Supplier, error)
-	ListSuppliers(ctx context.Context, tenantID uuid.UUID, page, pageSize int) ([]models.Supplier, int, error)
+	ListSuppliers(ctx context.Context, tenantID uuid.UUID, query models.ListSuppliersQuery) ([]models.Supplier, int, error)
 	DeleteSupplier(ctx context.Context, tenantID uuid.UUID, supplierID uuid.UUID) error
 
 	// Purchase Order operations
@@ -64,7 +64,8 @@ type PurchasingService interface {
 	CreateSupplier(ctx context.Context, tenantID uuid.UUID, dto *models.CreateSupplierRequestDto) (*models.Supplier, error)
 	GetSupplier(ctx context.Context, tenantID uuid.UUID, supplierID uuid.UUID) (*models.Supplier, error)
 	UpdateSupplier(ctx context.Context, tenantID uuid.UUID, supplierID uuid.UUID, dto *models.UpdateSupplierRequestDto) (*models.Supplier, error)
-	ListSuppliers(ctx context.Context, tenantID uuid.UUID, page, pageSize int) ([]models.Supplier, int, error)
+	ListSuppliers(ctx context.Context, tenantID uuid.UUID, query models.ListSuppliersQuery) ([]models.Supplier, int, error)
+	DeleteSupplier(ctx context.Context, tenantID uuid.UUID, supplierID uuid.UUID) error
 
 	// Purchase Order operations
 	CreatePurchaseOrder(ctx context.Context, tenantID uuid.UUID, supplierID uuid.UUID, expectedDelivery *string, notes *string, createdBy uuid.UUID) (*models.PurchaseOrder, error)

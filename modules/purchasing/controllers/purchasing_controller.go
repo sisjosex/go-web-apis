@@ -38,7 +38,7 @@ type CreateSupplierInput struct {
 	JSON api.Body[models.CreateSupplierRequestDto]
 }
 
-func (ctrl *PurchasingController) CreateSupplier(ctx context.Context, in *CreateSupplierInput) (*api.Out[models.CreateSupplierResponse], error) {
+func (ctrl *PurchasingController) CreateSupplier(ctx context.Context, in *CreateSupplierInput) (*api.Out[*models.Supplier], error) {
 	c := api.Gin(ctx)
 	tenantIDRaw, exists := c.Get("tenant_id")
 	if !exists || tenantIDRaw == nil {
@@ -59,12 +59,7 @@ func (ctrl *PurchasingController) CreateSupplier(ctx context.Context, in *Create
 		return nil, api.Fail(http.StatusInternalServerError, coreErrors.BuildError(c, err))
 	}
 
-	response := models.CreateSupplierResponse{
-		SupplierID: supplier.ID.String(),
-		Name:       supplier.Name,
-		Message:    "Supplier created successfully",
-	}
-	return api.OK(response)
+	return api.OK(supplier)
 }
 
 // GetSupplierInput is GetSupplier's request.
@@ -105,8 +100,7 @@ func (ctrl *PurchasingController) GetSupplier(ctx context.Context, in *GetSuppli
 
 // ListSuppliersInput is ListSuppliers's request.
 type ListSuppliersInput struct {
-	Page     string `query:"page"`
-	PageSize string `query:"page_size"`
+	Query api.Query[models.ListSuppliersQuery]
 }
 
 // ListSuppliersResponse is ListSuppliers's answer.
@@ -128,26 +122,71 @@ func (ctrl *PurchasingController) ListSuppliers(ctx context.Context, in *ListSup
 		return nil, api.Fail(http.StatusUnauthorized, coreErrors.BuildErrorSingle(c, "auth.invalid-tenant"))
 	}
 
-	page := 1
-	pageSize := 20
-
-	if p := in.Page; p != "" {
-		if parsed, err := strconv.Atoi(p); err == nil && parsed > 0 {
-			page = parsed
-		}
-	}
-	if ps := in.PageSize; ps != "" {
-		if parsed, err := strconv.Atoi(ps); err == nil && parsed > 0 && parsed <= 100 {
-			pageSize = parsed
-		}
+	var query models.ListSuppliersQuery
+	if err := in.Query.Into(ctx, &query); err != nil {
+		return nil, api.Fail(http.StatusBadRequest, coreErrors.BuildErrorDetail(c, "validation.invalid", err.Error()))
 	}
 
-	suppliers, totalCount, err := ctrl.service.ListSuppliers(c.Request.Context(), tenantID, page, pageSize)
+	suppliers, totalCount, err := ctrl.service.ListSuppliers(c.Request.Context(), tenantID, query)
 	if err != nil {
 		return nil, api.Fail(http.StatusInternalServerError, coreErrors.BuildError(c, err))
 	}
 
-	return api.OK(ListSuppliersResponse{Suppliers: suppliers, TotalCount: totalCount, Page: page, PageSize: pageSize})
+	return api.OK(ListSuppliersResponse{Suppliers: suppliers, TotalCount: totalCount, Page: query.Page, PageSize: query.PageSize})
+}
+
+// UpdateSupplierInput is UpdateSupplier's request.
+type UpdateSupplierInput struct {
+	ID   string `path:"id"`
+	JSON api.Body[models.UpdateSupplierRequestDto]
+}
+
+// UpdateSupplier is PATCH /suppliers/{id}: the fields sent; is_active reactivates.
+func (ctrl *PurchasingController) UpdateSupplier(ctx context.Context, in *UpdateSupplierInput) (*api.Out[*models.Supplier], error) {
+	c := api.Gin(ctx)
+	tenantID, supplierID, failed := supplierTarget(c, in.ID)
+	if failed != nil {
+		return nil, failed
+	}
+	var dto models.UpdateSupplierRequestDto
+	if err := in.JSON.Into(ctx, &dto); err != nil {
+		return nil, api.Fail(http.StatusBadRequest, coreErrors.BuildErrorDetail(c, purchasingErrors.SupplierValidationFailed, utils.ExtractValidationError(c, err)))
+	}
+	supplier, err := ctrl.service.UpdateSupplier(c.Request.Context(), tenantID, supplierID, &dto)
+	if err != nil {
+		return nil, writeSPError(c, err, map[string]int{purchasingErrors.SupplierNotFound: http.StatusNotFound})
+	}
+	return api.OK(supplier)
+}
+
+// DeactivateSupplierInput is DeactivateSupplier's request.
+type DeactivateSupplierInput struct {
+	ID string `path:"id"`
+}
+
+// DeactivateSupplier is DELETE /suppliers/{id}: it leaves the default list, its orders keep reading it.
+func (ctrl *PurchasingController) DeactivateSupplier(ctx context.Context, in *DeactivateSupplierInput) (*struct{}, error) {
+	c := api.Gin(ctx)
+	tenantID, supplierID, failed := supplierTarget(c, in.ID)
+	if failed != nil {
+		return nil, failed
+	}
+	if err := ctrl.service.DeleteSupplier(c.Request.Context(), tenantID, supplierID); err != nil {
+		return nil, writeSPError(c, err, map[string]int{purchasingErrors.SupplierNotFound: http.StatusNotFound})
+	}
+	return nil, nil
+}
+
+func supplierTarget(c *gin.Context, id string) (uuid.UUID, uuid.UUID, error) {
+	tenantID, err := uuid.Parse(c.GetString("tenant_id"))
+	if err != nil {
+		return uuid.Nil, uuid.Nil, api.Fail(http.StatusUnauthorized, coreErrors.BuildErrorSingle(c, "auth.invalid-tenant"))
+	}
+	supplierID, err := uuid.Parse(id)
+	if err != nil {
+		return uuid.Nil, uuid.Nil, api.Fail(http.StatusBadRequest, coreErrors.BuildErrorSingle(c, coreErrors.InvalidUUID))
+	}
+	return tenantID, supplierID, nil
 }
 
 // ========== PURCHASE ORDER ENDPOINTS ==========

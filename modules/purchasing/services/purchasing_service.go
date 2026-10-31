@@ -35,8 +35,12 @@ func (s *PurchasingService) UpdateSupplier(ctx context.Context, tenantID uuid.UU
 	return s.repo.UpdateSupplier(ctx, tenantID, supplierID, dto)
 }
 
-func (s *PurchasingService) ListSuppliers(ctx context.Context, tenantID uuid.UUID, page, pageSize int) ([]models.Supplier, int, error) {
-	return s.repo.ListSuppliers(ctx, tenantID, page, pageSize)
+func (s *PurchasingService) ListSuppliers(ctx context.Context, tenantID uuid.UUID, query models.ListSuppliersQuery) ([]models.Supplier, int, error) {
+	return s.repo.ListSuppliers(ctx, tenantID, query)
+}
+
+func (s *PurchasingService) DeleteSupplier(ctx context.Context, tenantID uuid.UUID, supplierID uuid.UUID) error {
+	return s.repo.DeleteSupplier(ctx, tenantID, supplierID)
 }
 
 // ========== PURCHASE ORDER OPERATIONS ==========

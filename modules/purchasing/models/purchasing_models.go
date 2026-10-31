@@ -15,6 +15,8 @@ type Supplier struct {
 	Phone         *string   `json:"phone"`
 	Address       *string   `json:"address"`
 	PaymentTerms  int       `json:"payment_terms"` // Days credit
+	TaxID         *string   `json:"tax_id"`
+	LegalName     *string   `json:"legal_name"`
 	IsActive      bool      `json:"is_active"`
 	CreatedAt     time.Time `json:"created_at"`
 	UpdatedAt     time.Time `json:"updated_at"`

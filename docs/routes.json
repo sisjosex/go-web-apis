@@ -3282,6 +3282,20 @@
       ]
     },
     {
+      "method": "DELETE",
+      "path": "/api/v1/purchasing/suppliers/{id}",
+      "operation_id": "purchasing.DeactivateSupplier",
+      "module": "purchasing",
+      "handler": "josex/web/modules/purchasing/controllers.(*PurchasingController).DeactivateSupplier",
+      "sps": [
+        "purchasing.sp_delete_supplier"
+      ],
+      "reads": [],
+      "writes": [
+        "purchasing.suppliers"
+      ]
+    },
+    {
       "method": "GET",
       "path": "/api/v1/purchasing/suppliers/{id}",
       "operation_id": "purchasing.GetSupplier",
@@ -3294,6 +3308,20 @@
         "purchasing.suppliers"
       ],
       "writes": []
+    },
+    {
+      "method": "PATCH",
+      "path": "/api/v1/purchasing/suppliers/{id}",
+      "operation_id": "purchasing.UpdateSupplier",
+      "module": "purchasing",
+      "handler": "josex/web/modules/purchasing/controllers.(*PurchasingController).UpdateSupplier",
+      "sps": [
+        "purchasing.sp_update_supplier"
+      ],
+      "reads": [],
+      "writes": [
+        "purchasing.suppliers"
+      ]
     },
     {
       "method": "POST",

@@ -61,7 +61,7 @@ func createSupplier(t *testing.T, helper *coreTestHelpers.ApiTestHelper) string 
 		"name": "Supplier " + stamp(), "email": "supplier@example.com", "payment_terms": 30,
 	}, nil)
 	require.Equal(t, http.StatusCreated, w.Code, "create supplier: %s", w.Body.String())
-	return decode(t, w.Body.Bytes())["supplier_id"].(string)
+	return decode(t, w.Body.Bytes())["id"].(string)
 }
 
 func createOrder(t *testing.T, helper *coreTestHelpers.ApiTestHelper, supplierID string) string {

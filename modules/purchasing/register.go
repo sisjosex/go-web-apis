@@ -13,7 +13,6 @@ func init() {
 		Features: []string{
 			"Purchasing",
 			"Quotes",
-			"Customers",
 		},
 		IsDefault: false,
 		// TENANCY-003 D1: what it needs and what is worth offering beside it.

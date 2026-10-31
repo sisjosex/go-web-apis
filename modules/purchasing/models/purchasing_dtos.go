@@ -10,6 +10,8 @@ type CreateSupplierRequestDto struct {
 	Phone         *string `json:"phone" binding:"omitempty,max=20"`
 	Address       *string `json:"address" binding:"omitempty,max=500"`
 	PaymentTerms  *int    `json:"payment_terms" binding:"omitempty,min=0"`
+	TaxID         *string `json:"tax_id" binding:"omitempty,max=30"`
+	LegalName     *string `json:"legal_name" binding:"omitempty,max=255"`
 }
 
 // UpdateSupplierRequestDto DTO for updating a supplier
@@ -21,6 +23,16 @@ type UpdateSupplierRequestDto struct {
 	Address       *string `json:"address" binding:"omitempty,max=500"`
 	PaymentTerms  *int    `json:"payment_terms" binding:"omitempty,min=0"`
 	IsActive      *bool   `json:"is_active"`
+	TaxID         *string `json:"tax_id" binding:"omitempty,max=30"`
+	LegalName     *string `json:"legal_name" binding:"omitempty,max=255"`
+}
+
+// ListSuppliersQuery is GET /purchasing/suppliers's filters.
+type ListSuppliersQuery struct {
+	Search   string `form:"search"`
+	Status   string `form:"status,default=active" binding:"omitempty,oneof=active inactive all"`
+	Page     int    `form:"page,default=1" binding:"min=1"`
+	PageSize int    `form:"page_size,default=20" binding:"min=1,max=100"`
 }
 
 // CreatePurchaseOrderRequestDto DTO for creating a PO
@@ -81,12 +93,6 @@ type RFQItemRequest struct {
 }
 
 // Response DTOs
-
-type CreateSupplierResponse struct {
-	SupplierID string `json:"supplier_id"`
-	Name       string `json:"name"`
-	Message    string `json:"message"`
-}
 
 type CreatePurchaseOrderResponse struct {
 	POID        string  `json:"po_id"`

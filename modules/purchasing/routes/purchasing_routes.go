@@ -22,8 +22,10 @@ func RegisterPurchasingRoutes(
 	r := apiV1.Group("/purchasing", authMiddleware, tenantMiddleware)
 
 	// Suppliers
-	api.Get(r, "/suppliers", ctrl.ListSuppliers, api.Doc{})
-	api.Get(r, "/suppliers/{id}", ctrl.GetSupplier, api.Doc{})
+	api.Get(r, "/suppliers", ctrl.ListSuppliers, api.Doc{}, tenancyMW.RequirePermission(purchasingPerms.SuppliersRead))
+	api.Get(r, "/suppliers/{id}", ctrl.GetSupplier, api.Doc{}, tenancyMW.RequirePermission(purchasingPerms.SuppliersRead))
+	api.Patch(r, "/suppliers/{id}", ctrl.UpdateSupplier, api.Doc{Summary: "Change a supplier", Description: "The fields sent; is_active reactivates", Errors: []int{400, 404}}, tenancyMW.RequirePermission(purchasingPerms.SuppliersWrite))
+	api.Delete(r, "/suppliers/{id}", ctrl.DeactivateSupplier, api.Doc{Summary: "Deactivate a supplier", Description: "It leaves the default list; its orders keep reading it", Status: 204, Errors: []int{404}}, tenancyMW.RequirePermission(purchasingPerms.SuppliersWrite))
 	api.Post(r, "/suppliers", ctrl.CreateSupplier, api.Doc{Status: 201}, tenancyMW.RequirePermission(purchasingPerms.SuppliersWrite))
 
 	// Purchase Orders

@@ -29,12 +29,12 @@ func NewPurchasingRepository(dbService services.DatabaseService) *PurchasingRepo
 func (r *PurchasingRepository) CreateSupplier(ctx context.Context, tenantID uuid.UUID, dto *models.CreateSupplierRequestDto) (*models.Supplier, error) {
 	supplier := &models.Supplier{}
 	if err := r.dbService.QueryRow(ctx,
-		`SELECT * FROM purchasing.sp_create_supplier($1, $2, $3, $4, $5, $6, $7)`,
-		tenantID, dto.Name, dto.ContactPerson, dto.Email, dto.Phone, dto.Address, dto.PaymentTerms,
+		`SELECT * FROM purchasing.sp_create_supplier($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
+		tenantID, dto.Name, dto.ContactPerson, dto.Email, dto.Phone, dto.Address, dto.PaymentTerms, dto.TaxID, dto.LegalName,
 	).Scan(
 		&supplier.ID, &supplier.Name, &supplier.ContactPerson, &supplier.Email,
 		&supplier.Phone, &supplier.Address, &supplier.PaymentTerms, &supplier.IsActive,
-		&supplier.CreatedAt, &supplier.UpdatedAt,
+		&supplier.CreatedAt, &supplier.UpdatedAt, &supplier.TaxID, &supplier.LegalName,
 	); err != nil {
 		var pgErr *pgconn.PgError
 		if errors.As(err, &pgErr) {
@@ -54,7 +54,7 @@ func (r *PurchasingRepository) GetSupplier(ctx context.Context, tenantID uuid.UU
 	).Scan(
 		&supplier.ID, &supplier.Name, &supplier.ContactPerson, &supplier.Email,
 		&supplier.Phone, &supplier.Address, &supplier.PaymentTerms, &supplier.IsActive,
-		&supplier.CreatedAt, &supplier.UpdatedAt,
+		&supplier.CreatedAt, &supplier.UpdatedAt, &supplier.TaxID, &supplier.LegalName,
 	); err != nil {
 		var pgErr *pgconn.PgError
 		if errors.As(err, &pgErr) {
@@ -69,12 +69,12 @@ func (r *PurchasingRepository) GetSupplier(ctx context.Context, tenantID uuid.UU
 func (r *PurchasingRepository) UpdateSupplier(ctx context.Context, tenantID uuid.UUID, supplierID uuid.UUID, dto *models.UpdateSupplierRequestDto) (*models.Supplier, error) {
 	supplier := &models.Supplier{}
 	if err := r.dbService.QueryRow(ctx,
-		`SELECT * FROM purchasing.sp_update_supplier($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
-		tenantID, supplierID, dto.Name, dto.ContactPerson, dto.Email, dto.Phone, dto.Address, dto.PaymentTerms, dto.IsActive,
+		`SELECT * FROM purchasing.sp_update_supplier($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)`,
+		tenantID, supplierID, dto.Name, dto.ContactPerson, dto.Email, dto.Phone, dto.Address, dto.PaymentTerms, dto.IsActive, dto.TaxID, dto.LegalName,
 	).Scan(
 		&supplier.ID, &supplier.Name, &supplier.ContactPerson, &supplier.Email,
 		&supplier.Phone, &supplier.Address, &supplier.PaymentTerms, &supplier.IsActive,
-		&supplier.CreatedAt, &supplier.UpdatedAt,
+		&supplier.CreatedAt, &supplier.UpdatedAt, &supplier.TaxID, &supplier.LegalName,
 	); err != nil {
 		var pgErr *pgconn.PgError
 		if errors.As(err, &pgErr) {
@@ -86,13 +86,13 @@ func (r *PurchasingRepository) UpdateSupplier(ctx context.Context, tenantID uuid
 }
 
 // ListSuppliers retrieves paginated suppliers
-func (r *PurchasingRepository) ListSuppliers(ctx context.Context, tenantID uuid.UUID, page, pageSize int) ([]models.Supplier, int, error) {
-	offset := (page - 1) * pageSize
+func (r *PurchasingRepository) ListSuppliers(ctx context.Context, tenantID uuid.UUID, query models.ListSuppliersQuery) ([]models.Supplier, int, error) {
+	offset := (query.Page - 1) * query.PageSize
 	suppliers := []models.Supplier{}
 
 	rows, err := r.dbService.Query(ctx,
-		`SELECT * FROM purchasing.sp_list_suppliers($1, $2, $3)`,
-		tenantID, pageSize, offset,
+		`SELECT * FROM purchasing.sp_list_suppliers($1, $2, $3, $4, $5)`,
+		tenantID, query.PageSize, offset, query.Search, query.Status,
 	)
 	if err != nil {
 		var pgErr *pgconn.PgError
@@ -108,7 +108,7 @@ func (r *PurchasingRepository) ListSuppliers(ctx context.Context, tenantID uuid.
 		if err := rows.Scan(
 			&supplier.ID, &supplier.Name, &supplier.ContactPerson, &supplier.Email,
 			&supplier.Phone, &supplier.Address, &supplier.PaymentTerms, &supplier.IsActive,
-			&supplier.CreatedAt, &supplier.UpdatedAt,
+			&supplier.CreatedAt, &supplier.UpdatedAt, &supplier.TaxID, &supplier.LegalName,
 		); err != nil {
 			return nil, 0, err
 		}
@@ -120,8 +120,8 @@ func (r *PurchasingRepository) ListSuppliers(ctx context.Context, tenantID uuid.
 
 	var totalCount int
 	if err := r.dbService.QueryRow(ctx,
-		`SELECT total_count FROM purchasing.sp_get_suppliers_count($1)`,
-		tenantID,
+		`SELECT total_count FROM purchasing.sp_get_suppliers_count($1, $2, $3)`,
+		tenantID, query.Search, query.Status,
 	).Scan(&totalCount); err != nil {
 		return nil, 0, err
 	}
@@ -489,7 +489,7 @@ func (r *PurchasingRepository) GetBestSupplierForProduct(ctx context.Context, te
 	).Scan(
 		&supplier.ID, &supplier.Name, &supplier.ContactPerson, &supplier.Email,
 		&supplier.Phone, &supplier.Address, &supplier.PaymentTerms, &supplier.IsActive,
-		&supplier.CreatedAt, &supplier.UpdatedAt,
+		&supplier.CreatedAt, &supplier.UpdatedAt, &supplier.TaxID, &supplier.LegalName,
 	); err != nil {
 		var pgErr *pgconn.PgError
 		if errors.As(err, &pgErr) {

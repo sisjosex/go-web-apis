@@ -214,7 +214,9 @@ CREATE TABLE purchasing.suppliers (
     payment_terms integer DEFAULT 30,
     is_active boolean DEFAULT true,
     created_at timestamp without time zone DEFAULT CURRENT_TIMESTAMP,
-    updated_at timestamp without time zone DEFAULT CURRENT_TIMESTAMP
+    updated_at timestamp without time zone DEFAULT CURRENT_TIMESTAMP,
+    tax_id character varying(30),
+    legal_name character varying(255)
 );
 
 
@@ -549,6 +551,13 @@ CREATE INDEX idx_suppliers_active ON purchasing.suppliers USING btree (is_active
 --
 
 CREATE INDEX idx_suppliers_tenant ON purchasing.suppliers USING btree (tenant_id);
+
+
+--
+-- Name: idx_suppliers_tenant_active_name; Type: INDEX; Schema: purchasing; Owner: -
+--
+
+CREATE INDEX idx_suppliers_tenant_active_name ON purchasing.suppliers USING btree (tenant_id, is_active, name);
 
 
 --

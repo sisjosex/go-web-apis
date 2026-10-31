@@ -6288,6 +6288,11 @@
             "nullable": true,
             "type": "string"
           },
+          "legal_name": {
+            "maxLength": 255,
+            "nullable": true,
+            "type": "string"
+          },
           "name": {
             "maxLength": 255,
             "minLength": 3,
@@ -6303,30 +6308,15 @@
             "maxLength": 20,
             "nullable": true,
             "type": "string"
+          },
+          "tax_id": {
+            "maxLength": 30,
+            "nullable": true,
+            "type": "string"
           }
         },
         "required": [
           "name"
-        ],
-        "type": "object"
-      },
-      "purchasing.CreateSupplierResponse": {
-        "additionalProperties": false,
-        "properties": {
-          "message": {
-            "type": "string"
-          },
-          "name": {
-            "type": "string"
-          },
-          "supplier_id": {
-            "type": "string"
-          }
-        },
-        "required": [
-          "supplier_id",
-          "name",
-          "message"
         ],
         "type": "object"
       },
@@ -7062,6 +7052,10 @@
           "is_active": {
             "type": "boolean"
           },
+          "legal_name": {
+            "nullable": true,
+            "type": "string"
+          },
           "name": {
             "type": "string"
           },
@@ -7070,6 +7064,10 @@
             "type": "integer"
           },
           "phone": {
+            "nullable": true,
+            "type": "string"
+          },
+          "tax_id": {
             "nullable": true,
             "type": "string"
           },
@@ -7086,10 +7084,64 @@
           "phone",
           "address",
           "payment_terms",
+          "tax_id",
+          "legal_name",
           "is_active",
           "created_at",
           "updated_at"
         ],
+        "type": "object"
+      },
+      "purchasing.UpdateSupplierRequestDto": {
+        "additionalProperties": false,
+        "properties": {
+          "address": {
+            "maxLength": 500,
+            "nullable": true,
+            "type": "string"
+          },
+          "contact_person": {
+            "maxLength": 255,
+            "nullable": true,
+            "type": "string"
+          },
+          "email": {
+            "format": "email",
+            "nullable": true,
+            "type": "string"
+          },
+          "is_active": {
+            "nullable": true,
+            "type": "boolean"
+          },
+          "legal_name": {
+            "maxLength": 255,
+            "nullable": true,
+            "type": "string"
+          },
+          "name": {
+            "maxLength": 255,
+            "minLength": 3,
+            "nullable": true,
+            "type": "string"
+          },
+          "payment_terms": {
+            "format": "int64",
+            "minimum": 0,
+            "nullable": true,
+            "type": "integer"
+          },
+          "phone": {
+            "maxLength": 20,
+            "nullable": true,
+            "type": "string"
+          },
+          "tax_id": {
+            "maxLength": 30,
+            "nullable": true,
+            "type": "string"
+          }
+        },
         "type": "object"
       },
       "sales.AddOrderItemRequestDto": {
@@ -28127,19 +28179,44 @@
         "operationId": "purchasing.ListSuppliers",
         "parameters": [
           {
-            "explode": false,
             "in": "query",
-            "name": "page",
+            "name": "search",
             "schema": {
               "type": "string"
             }
           },
           {
-            "explode": false,
+            "in": "query",
+            "name": "status",
+            "schema": {
+              "default": "active",
+              "enum": [
+                "active",
+                "inactive",
+                "all"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "page",
+            "schema": {
+              "default": "1",
+              "format": "int64",
+              "minimum": 1,
+              "type": "integer"
+            }
+          },
+          {
             "in": "query",
             "name": "page_size",
             "schema": {
-              "type": "string"
+              "default": "20",
+              "format": "int64",
+              "maximum": 100,
+              "minimum": 1,
+              "type": "integer"
             }
           }
         ],
@@ -28177,7 +28254,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/purchasing.CreateSupplierResponse"
+                  "$ref": "#/components/schemas/purchasing.Supplier"
                 }
               }
             },
@@ -28191,6 +28268,40 @@
       }
     },
     "/api/v1/purchasing/suppliers/{id}": {
+      "delete": {
+        "description": "It leaves the default list; its orders keep reading it",
+        "operationId": "purchasing.DeactivateSupplier",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "No Content"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/core.ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          }
+        },
+        "summary": "Deactivate a supplier",
+        "tags": [
+          "purchasing"
+        ],
+        "x-handler": "josex/web/modules/purchasing/controllers.(*PurchasingController).DeactivateSupplier"
+      },
       "get": {
         "operationId": "purchasing.GetSupplier",
         "parameters": [
@@ -28219,6 +28330,67 @@
           "purchasing"
         ],
         "x-handler": "josex/web/modules/purchasing/controllers.(*PurchasingController).GetSupplier"
+      },
+      "patch": {
+        "description": "The fields sent; is_active reactivates",
+        "operationId": "purchasing.UpdateSupplier",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/purchasing.UpdateSupplierRequestDto"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/purchasing.Supplier"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/core.ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/core.ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          }
+        },
+        "summary": "Change a supplier",
+        "tags": [
+          "purchasing"
+        ],
+        "x-handler": "josex/web/modules/purchasing/controllers.(*PurchasingController).UpdateSupplier"
       }
     },
     "/api/v1/sales/customers": {
