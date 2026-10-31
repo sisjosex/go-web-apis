@@ -4,5 +4,3 @@
 #
 # The gate's contract stage reads it against HEAD's docs/openapi.json. Empty the file once the
 # change is committed: an entry left here would let the next break through unreviewed.
-POST /api/v1/purchasing/suppliers  # PURCH-001 create answers the whole supplier; no web or mobile client called it
-GET /api/v1/purchasing/suppliers  # PURCH-001 page and page_size validated as numbers; no web or mobile client called it
