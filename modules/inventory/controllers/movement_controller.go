@@ -63,6 +63,8 @@ func (ctrl *MovementController) RecordMovement(ctx context.Context, in *RecordMo
 			// combination; falling back to the unassigned bucket is what this refuses.
 			case inventoryErrors.MovementSkuRequired:
 				return nil, api.Fail(http.StatusBadRequest, coreErrors.BuildErrorSingle(c, inventoryErrors.MovementSkuRequired))
+			case inventoryErrors.StockNotFound:
+				return nil, api.Fail(http.StatusNotFound, coreErrors.BuildErrorSingle(c, inventoryErrors.StockNotFound))
 			case inventoryErrors.InsufficientStock:
 				return nil, api.Fail(http.StatusConflict, coreErrors.BuildErrorSingle(c, inventoryErrors.InsufficientStock))
 			case inventoryErrors.InvalidMovementType:

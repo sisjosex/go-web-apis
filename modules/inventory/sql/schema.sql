@@ -84,7 +84,8 @@ CREATE TABLE inventory.product_batches (
     status character varying(50) DEFAULT 'active'::character varying NOT NULL,
     created_at timestamp without time zone DEFAULT CURRENT_TIMESTAMP NOT NULL,
     updated_at timestamp without time zone DEFAULT CURRENT_TIMESTAMP NOT NULL,
-    sku_id uuid NOT NULL
+    sku_id uuid NOT NULL,
+    CONSTRAINT chk_product_batches_quantity CHECK ((current_quantity >= (0)::numeric))
 );
 
 
@@ -225,7 +226,8 @@ CREATE TABLE inventory.product_stock (
     reorder_level numeric(12,2) DEFAULT 10 NOT NULL,
     status character varying(50) DEFAULT 'ok'::character varying NOT NULL,
     last_updated_at timestamp without time zone DEFAULT CURRENT_TIMESTAMP,
-    sku_id uuid NOT NULL
+    sku_id uuid NOT NULL,
+    CONSTRAINT chk_product_stock_quantities CHECK (((current_quantity >= (0)::numeric) AND (reserved_quantity >= (0)::numeric) AND (reserved_quantity <= current_quantity)))
 );
 
 

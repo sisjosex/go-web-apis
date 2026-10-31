@@ -2,6 +2,7 @@ package interfaces
 
 import (
 	"context"
+	"time"
 
 	coreModels "josex/web/modules/core/models"
 	"josex/web/modules/sales/models"
@@ -20,7 +21,7 @@ type SalesOrderService interface {
 	GetOrderItems(ctx context.Context, tenantID uuid.UUID, orderID uuid.UUID) ([]models.OrderItem, error)
 
 	// Phase 1 methods
-	AddOrderItemWithBatch(ctx context.Context, tenantID uuid.UUID, orderID uuid.UUID, productID uuid.UUID, quantity float64, unitPrice float64, skuID *uuid.UUID) (*models.OrderItem, error)
+	AddOrderItemWithBatch(ctx context.Context, tenantID uuid.UUID, today time.Time, orderID uuid.UUID, productID uuid.UUID, quantity float64, unitPrice float64, skuID *uuid.UUID) (*models.OrderItem, error)
 	CompleteOrder(ctx context.Context, tenantID uuid.UUID, orderID uuid.UUID) (*models.SalesOrder, error)
 
 	// Phase 2 methods

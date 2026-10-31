@@ -7,6 +7,7 @@ DECLARE
     v_movement_id   UUID;
     v_new_stock     DECIMAL;
     v_current_stock DECIMAL;
+    v_reserved      DECIMAL;
     v_reorder_level DECIMAL;
     v_status        VARCHAR;
     v_sign          INTEGER;
@@ -48,17 +49,24 @@ BEGIN
 
     -- Lock the row before reading it: without this two concurrent SALEs both
     -- pass the insufficient-stock check below.
-    SELECT ps.current_quantity, ps.reorder_level
-    INTO v_current_stock, v_reorder_level
+    SELECT ps.current_quantity, ps.reserved_quantity, ps.reorder_level
+    INTO v_current_stock, v_reserved, v_reorder_level
     FROM inventory.product_stock ps
     WHERE ps.sku_id = v_sku_id
     FOR UPDATE;
 
+    -- Without this the arithmetic below is NULL, the guard passes and the movement
+    -- is logged against stock that does not exist.
+    IF NOT FOUND THEN
+        RAISE EXCEPTION 'inventory.stock-not-found' USING ERRCODE = 'P0001';
+    END IF;
+
     v_new_stock := v_current_stock + v_signed_qty;
 
     -- Every outbound type, not only SALE: WASTE and an ADJUSTMENT OUT drive the
-    -- count negative just as readily, and the guard used to miss both.
-    IF v_sign < 0 AND v_new_stock < 0 THEN
+    -- count negative just as readily. Only what is not reserved can leave (INV-018 D3):
+    -- to sell a reserved unit, release the reservation first.
+    IF v_sign < 0 AND v_new_stock < v_reserved THEN
         RAISE EXCEPTION 'inventory.insufficient-stock' USING ERRCODE = 'P0001';
     END IF;
 
@@ -89,4 +97,4 @@ BEGIN
 END;
 $function$;
 
-COMMENT ON FUNCTION inventory.sp_record_movement(uuid,uuid,character varying,numeric,character varying,uuid,numeric,text,uuid,uuid,character varying) IS 'Records an inventory movement against a SKU and updates that SKU''s quantities. p_quantity is a magnitude: the sign comes from inventory.fn_movement_direction(p_movement_type, p_direction) and is what gets stored, so a SALE reduces stock (INV-013 D1). p_unit_cost is required and > 0 on PURCHASE and PRODUCTION and stored NULL on every other type (INV-013 D2/D3). p_sku_id is required when the product tracks stock by variant and defaults to the product SKU otherwise. Takes the stock row FOR UPDATE so concurrent outbound movements cannot oversell.';
+COMMENT ON FUNCTION inventory.sp_record_movement(uuid,uuid,character varying,numeric,character varying,uuid,numeric,text,uuid,uuid,character varying) IS 'Records an inventory movement against a SKU and updates that SKU''s quantities. p_quantity is a magnitude: the sign comes from inventory.fn_movement_direction(p_movement_type, p_direction) and is what gets stored, so a SALE reduces stock (INV-013 D1). p_unit_cost is required and > 0 on PURCHASE and PRODUCTION and stored NULL on every other type (INV-013 D2/D3). p_sku_id is required when the product tracks stock by variant and defaults to the product SKU otherwise. Takes the stock row FOR UPDATE so concurrent outbound movements cannot oversell; an outbound movement consumes only what is not reserved (INV-018 D3) and a SKU with no product_stock row raises inventory.stock-not-found.';

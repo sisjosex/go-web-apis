@@ -10,6 +10,7 @@ import (
 	inventoryErrors "josex/web/modules/inventory/errors"
 	inventoryInterfaces "josex/web/modules/inventory/interfaces"
 	inventoryModels "josex/web/modules/inventory/models"
+	"josex/web/modules/inventory/utils"
 )
 
 // productBatchesImportDescriptor loads the lots with their expiry dates the FIFO
@@ -79,7 +80,7 @@ func (d *productBatchesImportDescriptor) ProcessRow(ctx importModels.ImportConte
 		return result
 	}
 
-	if _, err := d.batchService.CreateBatch(ctx.Context(), ctx.TenantID, d.buildDto(row, target)); err != nil {
+	if _, err := d.batchService.CreateBatch(ctx.Context(), ctx.TenantID, utils.TodayOf(ctx.Context(), ctx.TenantSlug), d.buildDto(row, target)); err != nil {
 		result.Status = importModels.RowStatusFailed
 		result.Errors = []string{inventoryErrors.ImportBatchFailed}
 		return result

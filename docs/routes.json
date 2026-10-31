@@ -7031,6 +7031,11 @@
       ],
       "calls": []
     },
+    "inventory.fn_batch_status": {
+      "reads": [],
+      "writes": [],
+      "calls": []
+    },
     "inventory.fn_check_sku_combination_key": {
       "reads": [
         "inventory.product_sku_options",
@@ -7134,6 +7139,7 @@
         "inventory.product_batches"
       ],
       "calls": [
+        "inventory.fn_batch_status",
         "inventory.fn_requires_sku",
         "inventory.fn_resolve_sku",
         "inventory.sp_record_movement"
@@ -7207,7 +7213,9 @@
         "inventory.product_batches"
       ],
       "writes": [],
-      "calls": []
+      "calls": [
+        "inventory.fn_batch_status"
+      ]
     },
     "inventory.sp_get_categories_by_product": {
       "reads": [
@@ -7241,7 +7249,9 @@
         "inventory.products"
       ],
       "writes": [],
-      "calls": []
+      "calls": [
+        "inventory.fn_batch_status"
+      ]
     },
     "inventory.sp_get_movement": {
       "reads": [
@@ -7256,7 +7266,9 @@
         "inventory.product_skus"
       ],
       "writes": [],
-      "calls": []
+      "calls": [
+        "inventory.fn_batch_status"
+      ]
     },
     "inventory.sp_get_product": {
       "reads": [
@@ -7358,7 +7370,9 @@
         "inventory.product_skus"
       ],
       "writes": [],
-      "calls": []
+      "calls": [
+        "inventory.fn_batch_status"
+      ]
     },
     "inventory.sp_list_categories": {
       "reads": [
@@ -7421,6 +7435,7 @@
         "inventory.product_batches"
       ],
       "calls": [
+        "inventory.fn_batch_status",
         "inventory.fn_resolve_sku",
         "inventory.sp_record_movement"
       ]
@@ -7499,7 +7514,9 @@
       "writes": [
         "inventory.product_batches"
       ],
-      "calls": []
+      "calls": [
+        "inventory.fn_batch_status"
+      ]
     },
     "inventory.sp_update_category": {
       "reads": [

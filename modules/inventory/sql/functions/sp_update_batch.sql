@@ -1,4 +1,4 @@
-CREATE OR REPLACE FUNCTION inventory.sp_update_batch(p_tenant_id uuid, p_batch_id uuid, p_lot_number character varying DEFAULT NULL::character varying, p_expiry_date date DEFAULT NULL::date)
+CREATE OR REPLACE FUNCTION inventory.sp_update_batch(p_tenant_id uuid, p_today date, p_batch_id uuid, p_lot_number character varying DEFAULT NULL::character varying, p_expiry_date date DEFAULT NULL::date)
  RETURNS TABLE(id uuid, product_id uuid, sku_id uuid, sku character varying, lot_number character varying, purchase_date date, expiry_date date, unit_cost numeric, initial_quantity numeric, current_quantity numeric, status character varying, days_to_expiry integer, message text)
  LANGUAGE plpgsql
 AS $function$
@@ -47,7 +47,7 @@ BEGIN
 
     IF p_expiry_date IS NOT NULL
     THEN
-        IF p_expiry_date <= CURRENT_DATE
+        IF p_expiry_date <= p_today
         THEN
             RAISE EXCEPTION 'batch.expiry-date-must-be-future'
                 USING ERRCODE = 'P0001';
@@ -56,18 +56,7 @@ BEGIN
         v_expiry_date := p_expiry_date;
     END IF;
 
-    -- The same expiry ladder sp_create_batch stamps at insert. Still stale by
-    -- design (INV-004 D3) — recomputed here only because the date it derives
-    -- from is exactly what just changed.
-    IF v_expiry_date <= CURRENT_DATE
-    THEN
-        v_status := 'expired';
-    ELSIF v_expiry_date <= CURRENT_DATE + INTERVAL '7 days'
-    THEN
-        v_status := 'expiring_soon';
-    ELSE
-        v_status := 'active';
-    END IF;
+    v_status := inventory.fn_batch_status(v_expiry_date, v_status, p_today);
 
     UPDATE inventory.product_batches pb
     SET lot_number  = v_lot_number,
@@ -88,7 +77,7 @@ BEGIN
         pb.initial_quantity,
         pb.current_quantity,
         CAST(pb.status AS VARCHAR),
-        CAST(pb.expiry_date - CURRENT_DATE AS INT),
+        CAST(pb.expiry_date - p_today AS INT),
         CAST('Batch updated successfully' AS TEXT)
     FROM inventory.product_batches pb
     INNER JOIN inventory.product_skus s
@@ -97,4 +86,4 @@ BEGIN
 END;
 $function$;
 
-COMMENT ON FUNCTION inventory.sp_update_batch(uuid,uuid,character varying,date) IS 'Corrects a lot''s lot_number and expiry_date, and nothing else (INV-014 D3). A NULL argument leaves that field as it is. Refuses with inventory.batch.has-movements once the lot has been consumed, because batch_movements already carries the COGS booked against it, and with inventory.batch.voided on a lot that was written off.';
+COMMENT ON FUNCTION inventory.sp_update_batch(uuid,date,uuid,character varying,date) IS 'Corrects a lot''s lot_number and expiry_date, and nothing else (INV-014 D3). A NULL argument leaves that field as it is. Refuses with inventory.batch.has-movements once the lot has been consumed, because batch_movements already carries the COGS booked against it, and with inventory.batch.voided on a lot that was written off.';

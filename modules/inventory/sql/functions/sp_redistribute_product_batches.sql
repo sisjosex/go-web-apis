@@ -1,4 +1,4 @@
-CREATE OR REPLACE FUNCTION inventory.sp_redistribute_product_batches(p_tenant_id uuid, p_product_id uuid, p_batch_id uuid, p_targets jsonb, p_created_by uuid DEFAULT NULL::uuid)
+CREATE OR REPLACE FUNCTION inventory.sp_redistribute_product_batches(p_tenant_id uuid, p_today date, p_product_id uuid, p_batch_id uuid, p_targets jsonb, p_created_by uuid DEFAULT NULL::uuid)
  RETURNS TABLE(id uuid, product_id uuid, sku_id uuid, sku character varying, lot_number character varying, purchase_date date, expiry_date date, unit_cost numeric, initial_quantity numeric, current_quantity numeric, status character varying, message text)
  LANGUAGE plpgsql
 AS $function$
@@ -115,7 +115,7 @@ BEGIN
             v_batch.unit_cost,
             (e ->> 'quantity')::DECIMAL,
             (e ->> 'quantity')::DECIMAL,
-            v_batch.status
+            inventory.fn_batch_status(v_batch.expiry_date, v_batch.status, p_today)
         FROM jsonb_array_elements(p_targets) e
         RETURNING product_batches.id
     )
@@ -175,4 +175,4 @@ BEGIN
 END;
 $function$;
 
-COMMENT ON FUNCTION inventory.sp_redistribute_product_batches(uuid,uuid,uuid,jsonb,uuid) IS 'Reparte un lote del SKU por defecto entre combinaciones generadas, en una sola transacción (INV-014 D2). Los importes deben sumar exactamente el saldo del lote. El original se vacía y se conserva, los hijos heredan número de lote, fechas y costo, y un lote ya consumido se rechaza en vez de partirse. Las existencias siguen a los lotes mediante TRANSFER saliente del bucket y entrante por destino (A1), así que el total del producto no cambia.';
+COMMENT ON FUNCTION inventory.sp_redistribute_product_batches(uuid,date,uuid,uuid,jsonb,uuid) IS 'Reparte un lote del SKU por defecto entre combinaciones generadas, en una sola transacción (INV-014 D2). Los importes deben sumar exactamente el saldo del lote. El original se vacía y se conserva, los hijos heredan número de lote, fechas y costo, y un lote ya consumido se rechaza en vez de partirse. Las existencias siguen a los lotes mediante TRANSFER saliente del bucket y entrante por destino (A1), así que el total del producto no cambia.';

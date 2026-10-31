@@ -10,6 +10,7 @@ import (
 	"josex/web/modules/inventory/errors"
 	"josex/web/modules/inventory/interfaces"
 	"josex/web/modules/inventory/models"
+	"josex/web/modules/inventory/utils"
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
@@ -64,7 +65,7 @@ func (ctrl *BatchController) CreateBatch(ctx context.Context, in *CreateBatchInp
 		return nil, api.Fail(http.StatusBadRequest, coreErrors.BuildErrorDetail(c, "validation.error", err.Error()))
 	}
 
-	batch, err := ctrl.service.CreateBatch(c.Request.Context(), tenantID, &dto)
+	batch, err := ctrl.service.CreateBatch(c.Request.Context(), tenantID, utils.TenantToday(c), &dto)
 	if err != nil {
 		var pgErr *pgconn.PgError
 		if goErrors.As(err, &pgErr) {
@@ -108,7 +109,7 @@ func (ctrl *BatchController) GetBatch(ctx context.Context, in *GetBatchInput) (*
 		return nil, api.Fail(http.StatusBadRequest, coreErrors.BuildErrorSingle(c, errors.BatchNotFound))
 	}
 
-	batch, err := ctrl.service.GetBatch(c.Request.Context(), tenantID, batchID)
+	batch, err := ctrl.service.GetBatch(c.Request.Context(), tenantID, utils.TenantToday(c), batchID)
 	if err != nil {
 		return nil, api.Fail(http.StatusInternalServerError, coreErrors.BuildError(c, err))
 	}
@@ -148,7 +149,7 @@ func (ctrl *BatchController) ListBatchesByProduct(ctx context.Context, in *ListB
 		return nil, api.Fail(http.StatusBadRequest, coreErrors.BuildErrorDetail(c, "validation.invalid", err.Error()))
 	}
 
-	batches, err := ctrl.service.ListBatchesByProduct(c.Request.Context(), tenantID, productID, query)
+	batches, err := ctrl.service.ListBatchesByProduct(c.Request.Context(), tenantID, utils.TenantToday(c), productID, query)
 	if err != nil {
 		return nil, api.Fail(http.StatusInternalServerError, coreErrors.BuildError(c, err))
 	}
@@ -183,7 +184,7 @@ func (ctrl *BatchController) GetOldestBatchForSale(ctx context.Context, in *GetO
 		return nil, api.Fail(http.StatusBadRequest, coreErrors.BuildErrorSingle(c, errors.SkuNotFound))
 	}
 
-	batch, err := ctrl.service.GetOldestBatchForSale(c.Request.Context(), tenantID, productID, skuID)
+	batch, err := ctrl.service.GetOldestBatchForSale(c.Request.Context(), tenantID, utils.TenantToday(c), productID, skuID)
 	if err != nil {
 		return nil, api.Fail(http.StatusInternalServerError, coreErrors.BuildError(c, err))
 	}
@@ -211,6 +212,8 @@ func mapBatchWriteError(c *gin.Context, err error) error {
 		return api.Fail(http.StatusConflict, coreErrors.BuildErrorSingle(c, errors.BatchHasMovements))
 	case errors.BatchVoided:
 		return api.Fail(http.StatusConflict, coreErrors.BuildErrorSingle(c, errors.BatchVoided))
+	case errors.InsufficientStock:
+		return api.Fail(http.StatusConflict, coreErrors.BuildErrorSingle(c, errors.InsufficientStock))
 	case errors.BatchLotNumberRequired:
 		return api.Fail(http.StatusBadRequest, coreErrors.BuildErrorSingle(c, errors.BatchLotNumberRequired))
 	case errors.BatchExpiryDateMustBeFuture:
@@ -248,7 +251,7 @@ func (ctrl *BatchController) UpdateBatch(ctx context.Context, in *UpdateBatchInp
 		return nil, api.Fail(http.StatusBadRequest, coreErrors.BuildErrorDetail(c, "validation.error", err.Error()))
 	}
 
-	batch, err := ctrl.service.UpdateBatch(c.Request.Context(), tenantID, batchID, &dto)
+	batch, err := ctrl.service.UpdateBatch(c.Request.Context(), tenantID, utils.TenantToday(c), batchID, &dto)
 	if err != nil {
 		if err := mapBatchWriteError(c, err); err != nil {
 			return nil, err
@@ -333,7 +336,7 @@ func (ctrl *BatchController) RedistributeBatches(ctx context.Context, in *Redist
 		createdBy = &userID
 	}
 
-	result, err := ctrl.service.RedistributeBatches(c.Request.Context(), tenantID, productID, &dto, createdBy)
+	result, err := ctrl.service.RedistributeBatches(c.Request.Context(), tenantID, utils.TenantToday(c), productID, &dto, createdBy)
 	if err != nil {
 		if err := mapBatchWriteError(c, err); err != nil {
 			return nil, err
@@ -381,7 +384,7 @@ func (ctrl *BatchController) GetExpiringBatches(ctx context.Context, in *GetExpi
 		return nil, api.Fail(http.StatusBadRequest, coreErrors.BuildErrorDetail(c, "validation.invalid", err.Error()))
 	}
 
-	batches, err := ctrl.service.GetExpiringBatches(c.Request.Context(), tenantID, query)
+	batches, err := ctrl.service.GetExpiringBatches(c.Request.Context(), tenantID, utils.TenantToday(c), query)
 	if err != nil {
 		return nil, api.Fail(http.StatusInternalServerError, coreErrors.BuildError(c, err))
 	}

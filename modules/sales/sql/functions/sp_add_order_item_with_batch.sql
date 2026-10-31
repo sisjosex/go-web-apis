@@ -1,4 +1,4 @@
-CREATE OR REPLACE FUNCTION sales.sp_add_order_item_with_batch(p_tenant_id uuid, p_order_id uuid, p_product_id uuid, p_quantity numeric, p_unit_price numeric, p_sku_id uuid DEFAULT NULL::uuid)
+CREATE OR REPLACE FUNCTION sales.sp_add_order_item_with_batch(p_tenant_id uuid, p_today date, p_order_id uuid, p_product_id uuid, p_quantity numeric, p_unit_price numeric, p_sku_id uuid DEFAULT NULL::uuid)
  RETURNS TABLE(id uuid, order_id uuid, product_id uuid, sku_id uuid, product_sku character varying, sku character varying, product_name character varying, quantity integer, unit_price numeric, line_total numeric, created_at timestamp without time zone, assigned_batch_id uuid, assigned_from_batch character varying)
  LANGUAGE plpgsql
 AS $function$
@@ -85,7 +85,8 @@ BEGIN
         WHERE pb.product_id = p_product_id
           AND pb.sku_id = v_sku_id
           AND pb.tenant_id = p_tenant_id
-          AND pb.status NOT IN ('expired', 'void')
+          AND pb.status <> 'void'
+          AND pb.expiry_date >= p_today
           AND pb.current_quantity > 0
         ORDER BY pb.expiry_date ASC, pb.created_at ASC
     LOOP
@@ -140,4 +141,4 @@ BEGIN
 END;
 $function$;
 
-COMMENT ON FUNCTION sales.sp_add_order_item_with_batch(uuid,uuid,uuid,numeric,numeric,uuid) IS 'Adds an order line for one sellable combination and fulfils it FIFO from that combination''s batches only. p_sku_id NULL means the product default, except on a stock_by_variant product where it raises sales.order-item.sku-required (INV-010 D2). Raises sales-order.insufficient-inventory when that combination cannot cover the quantity, even if a sibling combination can. Expired and voided lots are never assigned (INV-014 D3).';
+COMMENT ON FUNCTION sales.sp_add_order_item_with_batch(uuid,date,uuid,uuid,numeric,numeric,uuid) IS 'Adds an order line for one sellable combination and fulfils it FIFO from that combination''s batches only. p_sku_id NULL means the product default, except on a stock_by_variant product where it raises sales.order-item.sku-required (INV-010 D2). Raises sales-order.insufficient-inventory when that combination cannot cover the quantity, even if a sibling combination can. Voided lots and those expired on p_today, the tenant''s own date, are never assigned (INV-014 D3, INV-018 D2).';

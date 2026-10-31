@@ -2,6 +2,7 @@ package services
 
 import (
 	"context"
+	"time"
 
 	"josex/web/modules/inventory/interfaces"
 	"josex/web/modules/inventory/models"
@@ -20,18 +21,18 @@ func NewBatchService(repository interfaces.BatchRepository) interfaces.BatchServ
 }
 
 // CreateBatch creates a new batch
-func (s *BatchService) CreateBatch(ctx context.Context, tenantID uuid.UUID, batch *models.CreateBatchDto) (*models.BatchResponse, error) {
-	return s.repository.CreateBatch(ctx, tenantID, batch)
+func (s *BatchService) CreateBatch(ctx context.Context, tenantID uuid.UUID, today time.Time, batch *models.CreateBatchDto) (*models.BatchResponse, error) {
+	return s.repository.CreateBatch(ctx, tenantID, today, batch)
 }
 
 // GetBatch retrieves a batch by ID
-func (s *BatchService) GetBatch(ctx context.Context, tenantID uuid.UUID, batchID uuid.UUID) (*models.BatchResponse, error) {
-	return s.repository.GetBatch(ctx, tenantID, batchID)
+func (s *BatchService) GetBatch(ctx context.Context, tenantID uuid.UUID, today time.Time, batchID uuid.UUID) (*models.BatchResponse, error) {
+	return s.repository.GetBatch(ctx, tenantID, today, batchID)
 }
 
 // ListBatchesByProduct returns one page of a product's lots in FIFO order
-func (s *BatchService) ListBatchesByProduct(ctx context.Context, tenantID uuid.UUID, productID uuid.UUID, query models.ListBatchesQuery) (*models.ListBatchesResponse, error) {
-	batches, totalCount, err := s.repository.ListBatchesByProduct(ctx, tenantID, productID, query)
+func (s *BatchService) ListBatchesByProduct(ctx context.Context, tenantID uuid.UUID, today time.Time, productID uuid.UUID, query models.ListBatchesQuery) (*models.ListBatchesResponse, error) {
+	batches, totalCount, err := s.repository.ListBatchesByProduct(ctx, tenantID, today, productID, query)
 	if err != nil {
 		return nil, err
 	}
@@ -39,13 +40,13 @@ func (s *BatchService) ListBatchesByProduct(ctx context.Context, tenantID uuid.U
 }
 
 // GetOldestBatchForSale gets the oldest batch for FIFO sales
-func (s *BatchService) GetOldestBatchForSale(ctx context.Context, tenantID uuid.UUID, productID uuid.UUID, skuID *uuid.UUID) (*models.BatchResponse, error) {
-	return s.repository.GetOldestBatchForSale(ctx, tenantID, productID, skuID)
+func (s *BatchService) GetOldestBatchForSale(ctx context.Context, tenantID uuid.UUID, today time.Time, productID uuid.UUID, skuID *uuid.UUID) (*models.BatchResponse, error) {
+	return s.repository.GetOldestBatchForSale(ctx, tenantID, today, productID, skuID)
 }
 
 // GetExpiringBatches returns one page of the lots expiring within the window, soonest first
-func (s *BatchService) GetExpiringBatches(ctx context.Context, tenantID uuid.UUID, query models.ListExpiringBatchesQuery) (*models.ListBatchesResponse, error) {
-	batches, totalCount, err := s.repository.GetExpiringBatches(ctx, tenantID, query)
+func (s *BatchService) GetExpiringBatches(ctx context.Context, tenantID uuid.UUID, today time.Time, query models.ListExpiringBatchesQuery) (*models.ListBatchesResponse, error) {
+	batches, totalCount, err := s.repository.GetExpiringBatches(ctx, tenantID, today, query)
 	if err != nil {
 		return nil, err
 	}
@@ -61,8 +62,8 @@ func batchPage(batches []models.BatchResponse, totalCount int64, page, pageSize 
 }
 
 // UpdateBatch corrects a lot
-func (s *BatchService) UpdateBatch(ctx context.Context, tenantID uuid.UUID, batchID uuid.UUID, dto *models.UpdateBatchDto) (*models.BatchResponse, error) {
-	return s.repository.UpdateBatch(ctx, tenantID, batchID, dto)
+func (s *BatchService) UpdateBatch(ctx context.Context, tenantID uuid.UUID, today time.Time, batchID uuid.UUID, dto *models.UpdateBatchDto) (*models.BatchResponse, error) {
+	return s.repository.UpdateBatch(ctx, tenantID, today, batchID, dto)
 }
 
 // VoidBatch writes a lot off
@@ -71,8 +72,8 @@ func (s *BatchService) VoidBatch(ctx context.Context, tenantID uuid.UUID, batchI
 }
 
 // RedistributeBatches splits a stranded lot onto real combinations
-func (s *BatchService) RedistributeBatches(ctx context.Context, tenantID uuid.UUID, productID uuid.UUID, dto *models.RedistributeBatchesDto, createdBy *uuid.UUID) (*models.RedistributeBatchesResponse, error) {
-	return s.repository.RedistributeBatches(ctx, tenantID, productID, dto, createdBy)
+func (s *BatchService) RedistributeBatches(ctx context.Context, tenantID uuid.UUID, today time.Time, productID uuid.UUID, dto *models.RedistributeBatchesDto, createdBy *uuid.UUID) (*models.RedistributeBatchesResponse, error) {
+	return s.repository.RedistributeBatches(ctx, tenantID, today, productID, dto, createdBy)
 }
 
 // ConsumeBatchStock reduces batch quantity after a sale

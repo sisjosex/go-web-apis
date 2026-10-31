@@ -210,6 +210,7 @@ type ImportContext struct {
 	// queries instead of finishing them for nobody. Read it through Context().
 	Ctx         context.Context
 	TenantID    uuid.UUID
+	TenantSlug  string
 	PerformedBy *uuid.UUID
 	Lang        string
 	Options     ImportOptions

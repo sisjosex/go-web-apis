@@ -261,7 +261,7 @@ func (r *SalesOrderRepository) GetOrderItems(ctx context.Context, tenantID uuid.
 // ========== PHASE 1: Batch Assignment & Order Completion ==========
 
 // AddOrderItemWithBatch adds an item to an order with FIFO batch assignment
-func (r *SalesOrderRepository) AddOrderItemWithBatch(ctx context.Context, tenantID uuid.UUID, orderID uuid.UUID, productID uuid.UUID, quantity float64, unitPrice float64, skuID *uuid.UUID) (*models.OrderItem, error) {
+func (r *SalesOrderRepository) AddOrderItemWithBatch(ctx context.Context, tenantID uuid.UUID, today time.Time, orderID uuid.UUID, productID uuid.UUID, quantity float64, unitPrice float64, skuID *uuid.UUID) (*models.OrderItem, error) {
 	var item models.OrderItem
 	// skuID nil sends SQL NULL, which the SP reads as "the product's default SKU"
 	// (INV-010 D2). assigned_batch_id / assigned_from_batch are deliberately not
@@ -270,8 +270,8 @@ func (r *SalesOrderRepository) AddOrderItemWithBatch(ctx context.Context, tenant
 	row := r.dbService.QueryRow(ctx,
 		`SELECT id, order_id, product_id, sku_id, product_sku, sku, product_name,
 		        quantity, unit_price, line_total, created_at
-		 FROM sales.sp_add_order_item_with_batch($1, $2, $3, $4, $5, $6)`,
-		tenantID, orderID, productID, quantity, unitPrice, skuID,
+		 FROM sales.sp_add_order_item_with_batch($1, $2, $3, $4, $5, $6, $7)`,
+		tenantID, today, orderID, productID, quantity, unitPrice, skuID,
 	)
 
 	err := row.Scan(

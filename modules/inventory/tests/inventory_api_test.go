@@ -1449,8 +1449,8 @@ func TestCreateBatch_Success(t *testing.T) {
 	json.Unmarshal(w.Body.Bytes(), &createdProduct)
 
 	// Create batch
-	nextTwoWeeks := time.Now().UTC().AddDate(0, 0, 14) // Far future to be "active"
-	yesterday := time.Now().UTC().AddDate(0, 0, -1)
+	nextTwoWeeks := tenantToday().AddDate(0, 0, 14) // Far future to be "active"
+	yesterday := tenantToday().AddDate(0, 0, -1)
 
 	batchBody := map[string]interface{}{
 		"product_id":       createdProduct.ProductID,
@@ -1492,7 +1492,7 @@ func TestCreateBatch_InvalidExpiryDate(t *testing.T) {
 	json.Unmarshal(w.Body.Bytes(), &createdProduct)
 
 	// Try to create batch with past expiry date
-	yesterday := time.Now().UTC().AddDate(0, 0, -1)
+	yesterday := tenantToday().AddDate(0, 0, -1)
 
 	batchBody := map[string]interface{}{
 		"product_id":       createdProduct.ProductID,
@@ -1522,8 +1522,8 @@ func TestGetBatch_Success(t *testing.T) {
 	json.Unmarshal(w.Body.Bytes(), &createdProduct)
 
 	// Create batch
-	tomorrow := time.Now().UTC().AddDate(0, 0, 1)
-	yesterday := time.Now().UTC().AddDate(0, 0, -1)
+	tomorrow := tenantToday().AddDate(0, 0, 1)
+	yesterday := tenantToday().AddDate(0, 0, -1)
 	lotNumber := fmt.Sprintf("LOT_%d", time.Now().UnixNano())
 
 	batchBody := map[string]interface{}{
@@ -1566,10 +1566,10 @@ func TestListBatchesByProduct_Success(t *testing.T) {
 	json.Unmarshal(w.Body.Bytes(), &createdProduct)
 
 	// Create 3 batches
-	tomorrow := time.Now().UTC().AddDate(0, 0, 1)
-	nextWeek := time.Now().UTC().AddDate(0, 0, 7)
-	nextMonth := time.Now().UTC().AddDate(0, 1, 0)
-	yesterday := time.Now().UTC().AddDate(0, 0, -1)
+	tomorrow := tenantToday().AddDate(0, 0, 1)
+	nextWeek := tenantToday().AddDate(0, 0, 7)
+	nextMonth := tenantToday().AddDate(0, 1, 0)
+	yesterday := tenantToday().AddDate(0, 0, -1)
 
 	batches := []map[string]interface{}{
 		{
@@ -1639,10 +1639,10 @@ func TestGetOldestBatchForSale_FIFO(t *testing.T) {
 	json.Unmarshal(w.Body.Bytes(), &createdProduct)
 
 	// Create 3 batches in random order
-	tomorrow := time.Now().UTC().AddDate(0, 0, 1)
-	nextWeek := time.Now().UTC().AddDate(0, 0, 7)
-	nextMonth := time.Now().UTC().AddDate(0, 1, 0)
-	yesterday := time.Now().UTC().AddDate(0, 0, -1)
+	tomorrow := tenantToday().AddDate(0, 0, 1)
+	nextWeek := tenantToday().AddDate(0, 0, 7)
+	nextMonth := tenantToday().AddDate(0, 1, 0)
+	yesterday := tenantToday().AddDate(0, 0, -1)
 
 	batches := []map[string]interface{}{
 		{
@@ -1703,10 +1703,10 @@ func TestBatchExpiryStatusCalculation(t *testing.T) {
 	var createdProduct models.CreateProductResponse
 	json.Unmarshal(w.Body.Bytes(), &createdProduct)
 
-	yesterday := time.Now().UTC().AddDate(0, 0, -1)
+	yesterday := tenantToday().AddDate(0, 0, -1)
 
 	// Active batch (far future)
-	nextMonth := time.Now().UTC().AddDate(0, 1, 0)
+	nextMonth := tenantToday().AddDate(0, 1, 0)
 	activeBatchBody := map[string]interface{}{
 		"product_id":       createdProduct.ProductID,
 		"lot_number":       fmt.Sprintf("LOT_ACTIVE_%d", time.Now().UnixNano()),
@@ -1722,7 +1722,7 @@ func TestBatchExpiryStatusCalculation(t *testing.T) {
 	assert.Equal(t, "active", activeBatch.Status)
 
 	// Expiring soon batch (within 7 days)
-	inFourDays := time.Now().UTC().AddDate(0, 0, 4)
+	inFourDays := tenantToday().AddDate(0, 0, 4)
 	expiringBatchBody := map[string]interface{}{
 		"product_id":       createdProduct.ProductID,
 		"lot_number":       fmt.Sprintf("LOT_EXPIRING_%d", time.Now().UnixNano()),
@@ -1755,8 +1755,8 @@ func TestGetExpiringBatches_IncludesProductName(t *testing.T) {
 	batchBody := map[string]interface{}{
 		"product_id":       createdProduct.ProductID,
 		"lot_number":       fmt.Sprintf("LOT_EXPNAME_%d", time.Now().UnixNano()),
-		"purchase_date":    time.Now().UTC().AddDate(0, 0, -1).Format("2006-01-02"),
-		"expiry_date":      time.Now().UTC().AddDate(0, 0, 5).Format("2006-01-02"),
+		"purchase_date":    tenantToday().AddDate(0, 0, -1).Format("2006-01-02"),
+		"expiry_date":      tenantToday().AddDate(0, 0, 5).Format("2006-01-02"),
 		"unit_cost":        50.00,
 		"initial_quantity": 100.0,
 	}
@@ -2554,8 +2554,8 @@ func TestProductSKU_StockMovementAndBatchHangOffTheDefaultSKU(t *testing.T) {
 	wb := helper.DoRequest("POST", "/inventory/batches", map[string]interface{}{
 		"product_id":       productID,
 		"lot_number":       fmt.Sprintf("SKUHANG_%d", time.Now().UnixNano()),
-		"purchase_date":    time.Now().UTC().AddDate(0, 0, -1).Format("2006-01-02"),
-		"expiry_date":      time.Now().UTC().AddDate(0, 0, 30).Format("2006-01-02"),
+		"purchase_date":    tenantToday().AddDate(0, 0, -1).Format("2006-01-02"),
+		"expiry_date":      tenantToday().AddDate(0, 0, 30).Format("2006-01-02"),
 		"unit_cost":        4.00,
 		"initial_quantity": 20.0,
 	}, map[string]string{})
@@ -4269,7 +4269,7 @@ func createBatchOn(
 		"product_id":       productID,
 		"lot_number":       lotNumber,
 		"purchase_date":    time.Now().UTC().Format("2006-01-02"),
-		"expiry_date":      time.Now().UTC().AddDate(0, 0, expiresInDays).Format("2006-01-02"),
+		"expiry_date":      tenantToday().AddDate(0, 0, expiresInDays).Format("2006-01-02"),
 		"unit_cost":        50.00,
 		"initial_quantity": quantity,
 	}
@@ -4472,7 +4472,7 @@ func TestUpdateBatch_CorrectsLotNumberAndExpiry(t *testing.T) {
 	json.Unmarshal(w.Body.Bytes(), &created)
 
 	corrected := fmt.Sprintf("LOT_FIXED_%d", time.Now().UnixNano())
-	newExpiry := time.Now().UTC().AddDate(0, 0, 120).Format("2006-01-02")
+	newExpiry := tenantToday().AddDate(0, 0, 120).Format("2006-01-02")
 	wp := helper.DoRequest("PATCH", fmt.Sprintf("/inventory/batches/%s", created.ID),
 		map[string]interface{}{"lot_number": corrected, "expiry_date": newExpiry},
 		map[string]string{})
@@ -5862,8 +5862,8 @@ func TestImportBatches_LotsLandOnTheirCombinations(t *testing.T) {
 	shirtID := productBySku(t, helper, prefix+"-R").ID
 	yerbaID := productBySku(t, helper, prefix+"-Y").ID
 
-	purchase := time.Now().UTC().AddDate(0, 0, -1).Format("2006-01-02")
-	expiry := time.Now().UTC().AddDate(0, 2, 0).Format("2006-01-02")
+	purchase := tenantToday().AddDate(0, 0, -1).Format("2006-01-02")
+	expiry := tenantToday().AddDate(0, 2, 0).Format("2006-01-02")
 	lots := fmt.Sprintf(
 		"sku,variant[talle],variant[color],lot_number,purchase_date,expiry_date,unit_cost,initial_quantity\n"+
 			"%s-R,M,Negro,LOTE-%s-M,%s,%s,1200,20\n"+
@@ -5904,8 +5904,8 @@ func TestImportBatches_UnknownCombinationFailsTheRow(t *testing.T) {
 	products := fmt.Sprintf("sku,name,price,variant[talle]\n%s,Remera,7500,M\n", prefix)
 	importInventoryCSV(t, helper, "/import", "products", products, "", nil)
 
-	purchase := time.Now().UTC().AddDate(0, 0, -1).Format("2006-01-02")
-	expiry := time.Now().UTC().AddDate(0, 2, 0).Format("2006-01-02")
+	purchase := tenantToday().AddDate(0, 0, -1).Format("2006-01-02")
+	expiry := tenantToday().AddDate(0, 2, 0).Format("2006-01-02")
 	lots := fmt.Sprintf(
 		"sku,variant[talle],lot_number,purchase_date,expiry_date,unit_cost,initial_quantity\n"+
 			"%s,XXL,L1,%s,%s,1200,20\n",

@@ -441,6 +441,8 @@ func (ctrl *CategoryController) RemoveProductFromCategory(ctx context.Context, i
 		var pgErr *pgconn.PgError
 		if errors.As(err, &pgErr) {
 			switch pgErr.Message {
+			case inventoryErrors.CategoryMappingNotFound:
+				return nil, api.Fail(http.StatusNotFound, coreErrors.BuildErrorSingle(c, inventoryErrors.CategoryMappingNotFound))
 			case inventoryErrors.CategoryNotFound:
 				return nil, api.Fail(http.StatusNotFound, coreErrors.BuildErrorSingle(c, inventoryErrors.CategoryNotFound))
 			case inventoryErrors.ProductNotFound:

@@ -1,4 +1,4 @@
-CREATE OR REPLACE FUNCTION inventory.sp_create_batch(p_tenant_id uuid, p_product_id uuid, p_lot_number character varying, p_purchase_date date, p_expiry_date date, p_unit_cost numeric, p_initial_quantity numeric, p_sku_id uuid DEFAULT NULL::uuid)
+CREATE OR REPLACE FUNCTION inventory.sp_create_batch(p_tenant_id uuid, p_today date, p_product_id uuid, p_lot_number character varying, p_purchase_date date, p_expiry_date date, p_unit_cost numeric, p_initial_quantity numeric, p_sku_id uuid DEFAULT NULL::uuid)
  RETURNS TABLE(id uuid, product_id uuid, sku_id uuid, sku character varying, lot_number character varying, purchase_date date, expiry_date date, unit_cost numeric, initial_quantity numeric, current_quantity numeric, status character varying, message text)
  LANGUAGE plpgsql
 AS $function$
@@ -22,12 +22,12 @@ BEGIN
     END IF;
 
     -- Validate expiry date is in the future
-    IF p_expiry_date <= CURRENT_DATE THEN
+    IF p_expiry_date <= p_today THEN
         RAISE EXCEPTION 'batch.expiry-date-must-be-future' USING ERRCODE = 'P0001';
     END IF;
 
     -- Validate purchase date is not in the future
-    IF p_purchase_date > CURRENT_DATE THEN
+    IF p_purchase_date > p_today THEN
         RAISE EXCEPTION 'batch.purchase-date-cannot-be-future' USING ERRCODE = 'P0001';
     END IF;
 
@@ -41,14 +41,7 @@ BEGIN
         RAISE EXCEPTION 'batch.unit-cost-must-be-positive' USING ERRCODE = 'P0001';
     END IF;
 
-    -- Determine status based on expiry date
-    IF p_expiry_date <= CURRENT_DATE THEN
-        v_status := 'expired';
-    ELSIF p_expiry_date <= CURRENT_DATE + INTERVAL '7 days' THEN
-        v_status := 'expiring_soon';
-    ELSE
-        v_status := 'active';
-    END IF;
+    v_status := inventory.fn_batch_status(p_expiry_date, 'active', p_today);
 
     -- Insert batch using pre-generated UUID (avoids RETURNING INTO column-name ambiguity)
     INSERT INTO inventory.product_batches(
@@ -105,4 +98,4 @@ BEGIN
 END;
 $function$;
 
-COMMENT ON FUNCTION inventory.sp_create_batch(uuid,uuid,character varying,date,date,numeric,numeric,uuid) IS 'Crea un lote para una combinación y registra su entrada al stock como un movimiento PURCHASE sobre esa misma combinación (INV-014 A1), enlazado por inventory_movements.batch_id. p_sku_id es obligatorio cuando el producto controla stock por variante (D1). Devuelve sku_id + sku como el resto de lecturas de lote (AC-3).';
+COMMENT ON FUNCTION inventory.sp_create_batch(uuid,date,uuid,character varying,date,date,numeric,numeric,uuid) IS 'Crea un lote para una combinación y registra su entrada al stock como un movimiento PURCHASE sobre esa misma combinación (INV-014 A1), enlazado por inventory_movements.batch_id. p_sku_id es obligatorio cuando el producto controla stock por variante (D1). Devuelve sku_id + sku como el resto de lecturas de lote (AC-3).';

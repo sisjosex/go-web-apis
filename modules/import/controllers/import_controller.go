@@ -334,6 +334,7 @@ func (ctrl *ImportController) buildContext(c *gin.Context, parsed upload) import
 		Images:  parsed.images,
 	}
 	importCtx.TenantID = tenantOf(c)
+	importCtx.TenantSlug = c.GetString("tenant_slug")
 	if userIDStr, ok := c.Get("user_id"); ok {
 		if uid, err := uuid.Parse(userIDStr.(string)); err == nil {
 			importCtx.PerformedBy = &uid

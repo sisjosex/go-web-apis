@@ -23,7 +23,7 @@ func NewBatchRepository(dbService coreServices.DatabaseService) *BatchRepository
 }
 
 // CreateBatch creates a new batch for a product
-func (r *BatchRepository) CreateBatch(ctx context.Context, tenantID uuid.UUID, batch *models.CreateBatchDto) (*models.BatchResponse, error) {
+func (r *BatchRepository) CreateBatch(ctx context.Context, tenantID uuid.UUID, today time.Time, batch *models.CreateBatchDto) (*models.BatchResponse, error) {
 	productID, err := uuid.Parse(batch.ProductID)
 	if err != nil {
 		return nil, err
@@ -41,8 +41,9 @@ func (r *BatchRepository) CreateBatch(ctx context.Context, tenantID uuid.UUID, b
 	}
 
 	row := r.dbService.QueryRow(ctx,
-		"SELECT id, product_id, sku_id, sku, lot_number, purchase_date, expiry_date, unit_cost, initial_quantity, current_quantity, status, message FROM inventory.sp_create_batch($1, $2, $3, $4, $5, $6, $7, $8)",
+		"SELECT id, product_id, sku_id, sku, lot_number, purchase_date, expiry_date, unit_cost, initial_quantity, current_quantity, status, message FROM inventory.sp_create_batch($1, $2, $3, $4, $5, $6, $7, $8, $9)",
 		tenantID,
+		today,
 		productID,
 		batch.LotNumber,
 		time.Time(batch.PurchaseDate),
@@ -83,10 +84,11 @@ func (r *BatchRepository) CreateBatch(ctx context.Context, tenantID uuid.UUID, b
 }
 
 // GetBatch retrieves a batch by ID
-func (r *BatchRepository) GetBatch(ctx context.Context, tenantID uuid.UUID, batchID uuid.UUID) (*models.BatchResponse, error) {
+func (r *BatchRepository) GetBatch(ctx context.Context, tenantID uuid.UUID, today time.Time, batchID uuid.UUID) (*models.BatchResponse, error) {
 	row := r.dbService.QueryRow(ctx,
-		"SELECT id, product_id, lot_number, purchase_date, expiry_date, unit_cost, initial_quantity, current_quantity, status, days_to_expiry FROM inventory.sp_get_batch($1, $2)",
+		"SELECT id, product_id, lot_number, purchase_date, expiry_date, unit_cost, initial_quantity, current_quantity, status, days_to_expiry FROM inventory.sp_get_batch($1, $2, $3)",
 		tenantID,
+		today,
 		batchID,
 	)
 
@@ -121,11 +123,12 @@ func (r *BatchRepository) GetBatch(ctx context.Context, tenantID uuid.UUID, batc
 
 // ListBatchesByProduct returns one page of a product's lots in FIFO order plus the total the
 // filters match. onlyActive defaults to true when the query leaves it out.
-func (r *BatchRepository) ListBatchesByProduct(ctx context.Context, tenantID uuid.UUID, productID uuid.UUID, query models.ListBatchesQuery) ([]models.BatchResponse, int64, error) {
+func (r *BatchRepository) ListBatchesByProduct(ctx context.Context, tenantID uuid.UUID, today time.Time, productID uuid.UUID, query models.ListBatchesQuery) ([]models.BatchResponse, int64, error) {
 	onlyActive := query.OnlyActive == nil || *query.OnlyActive
 	rows, err := r.dbService.Query(ctx,
-		"SELECT id, product_id, lot_number, purchase_date, expiry_date, unit_cost, initial_quantity, current_quantity, status, days_to_expiry, sku_id, sku, total_count FROM inventory.sp_list_batches_by_product($1, $2, $3, $4::UUID, $5, $6)",
+		"SELECT id, product_id, lot_number, purchase_date, expiry_date, unit_cost, initial_quantity, current_quantity, status, days_to_expiry, sku_id, sku, total_count FROM inventory.sp_list_batches_by_product($1, $2, $3, $4, $5::UUID, $6, $7)",
 		tenantID,
+		today,
 		productID,
 		onlyActive,
 		query.SkuID,
@@ -183,10 +186,11 @@ func (r *BatchRepository) ListBatchesByProduct(ctx context.Context, tenantID uui
 }
 
 // GetOldestBatchForSale retrieves the oldest active batch (FIFO)
-func (r *BatchRepository) GetOldestBatchForSale(ctx context.Context, tenantID uuid.UUID, productID uuid.UUID, skuID *uuid.UUID) (*models.BatchResponse, error) {
+func (r *BatchRepository) GetOldestBatchForSale(ctx context.Context, tenantID uuid.UUID, today time.Time, productID uuid.UUID, skuID *uuid.UUID) (*models.BatchResponse, error) {
 	row := r.dbService.QueryRow(ctx,
-		"SELECT id, product_id, lot_number, purchase_date, expiry_date, unit_cost, current_quantity, status, message FROM inventory.sp_get_oldest_batch_for_sale($1, $2, $3)",
+		"SELECT id, product_id, lot_number, purchase_date, expiry_date, unit_cost, current_quantity, status, message FROM inventory.sp_get_oldest_batch_for_sale($1, $2, $3, $4)",
 		tenantID,
+		today,
 		productID,
 		skuID,
 	)
@@ -214,10 +218,11 @@ func (r *BatchRepository) GetOldestBatchForSale(ctx context.Context, tenantID uu
 
 // GetExpiringBatches returns one page of the lots expiring within the window, soonest first,
 // plus the total the window matches.
-func (r *BatchRepository) GetExpiringBatches(ctx context.Context, tenantID uuid.UUID, query models.ListExpiringBatchesQuery) ([]models.BatchResponse, int64, error) {
+func (r *BatchRepository) GetExpiringBatches(ctx context.Context, tenantID uuid.UUID, today time.Time, query models.ListExpiringBatchesQuery) ([]models.BatchResponse, int64, error) {
 	rows, err := r.dbService.Query(ctx,
-		"SELECT id, product_id, lot_number, purchase_date, expiry_date, unit_cost, initial_quantity, current_quantity, status, days_to_expiry, product_name, sku_id, sku, total_count FROM inventory.sp_get_expiring_batches($1, $2, $3, $4)",
+		"SELECT id, product_id, lot_number, purchase_date, expiry_date, unit_cost, initial_quantity, current_quantity, status, days_to_expiry, product_name, sku_id, sku, total_count FROM inventory.sp_get_expiring_batches($1, $2, $3, $4, $5)",
 		tenantID,
+		today,
 		query.WarningDays,
 		query.Page,
 		query.PageSize,
@@ -281,7 +286,7 @@ func (r *BatchRepository) GetExpiringBatches(ctx context.Context, tenantID uuid.
 
 // UpdateBatch corrects a lot's lot_number and expiry_date (INV-014 D3). The SP
 // owns every guard: not-found, already void, and the has-movements refusal.
-func (r *BatchRepository) UpdateBatch(ctx context.Context, tenantID uuid.UUID, batchID uuid.UUID, dto *models.UpdateBatchDto) (*models.BatchResponse, error) {
+func (r *BatchRepository) UpdateBatch(ctx context.Context, tenantID uuid.UUID, today time.Time, batchID uuid.UUID, dto *models.UpdateBatchDto) (*models.BatchResponse, error) {
 	var lotNumber *string
 	if dto.LotNumber != nil {
 		lotNumber = dto.LotNumber
@@ -294,8 +299,9 @@ func (r *BatchRepository) UpdateBatch(ctx context.Context, tenantID uuid.UUID, b
 	}
 
 	row := r.dbService.QueryRow(ctx,
-		"SELECT id, product_id, sku_id, sku, lot_number, purchase_date, expiry_date, unit_cost, initial_quantity, current_quantity, status, days_to_expiry, message FROM inventory.sp_update_batch($1, $2, $3, $4)",
+		"SELECT id, product_id, sku_id, sku, lot_number, purchase_date, expiry_date, unit_cost, initial_quantity, current_quantity, status, days_to_expiry, message FROM inventory.sp_update_batch($1, $2, $3, $4, $5)",
 		tenantID,
+		today,
 		batchID,
 		lotNumber,
 		expiryDate,
@@ -379,7 +385,7 @@ func (r *BatchRepository) VoidBatch(ctx context.Context, tenantID uuid.UUID, bat
 
 // RedistributeBatches splits one default-bucket lot onto real combinations
 // (INV-014 D2). The SP owns every guard; the children come back in SKU order.
-func (r *BatchRepository) RedistributeBatches(ctx context.Context, tenantID uuid.UUID, productID uuid.UUID, dto *models.RedistributeBatchesDto, createdBy *uuid.UUID) (*models.RedistributeBatchesResponse, error) {
+func (r *BatchRepository) RedistributeBatches(ctx context.Context, tenantID uuid.UUID, today time.Time, productID uuid.UUID, dto *models.RedistributeBatchesDto, createdBy *uuid.UUID) (*models.RedistributeBatchesResponse, error) {
 	batchID, err := uuid.Parse(dto.BatchID)
 	if err != nil {
 		return nil, err
@@ -391,8 +397,9 @@ func (r *BatchRepository) RedistributeBatches(ctx context.Context, tenantID uuid
 	}
 
 	rows, err := r.dbService.Query(ctx,
-		"SELECT id, product_id, sku_id, sku, lot_number, purchase_date, expiry_date, unit_cost, initial_quantity, current_quantity, status, message FROM inventory.sp_redistribute_product_batches($1, $2, $3, $4, $5)",
+		"SELECT id, product_id, sku_id, sku, lot_number, purchase_date, expiry_date, unit_cost, initial_quantity, current_quantity, status, message FROM inventory.sp_redistribute_product_batches($1, $2, $3, $4, $5, $6)",
 		tenantID,
+		today,
 		productID,
 		batchID,
 		targets,

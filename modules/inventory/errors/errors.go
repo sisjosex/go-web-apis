@@ -28,6 +28,10 @@ const (
 
 	// Stock
 	InsufficientStock = "inventory.insufficient-stock"
+	StockNotFound     = "inventory.stock-not-found"
+
+	// Product-category mapping
+	CategoryMappingNotFound = "inventory.category-mapping.not-found"
 
 	// Movements
 	InvalidMovementType = "inventory.invalid-movement-type"

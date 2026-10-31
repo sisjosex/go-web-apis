@@ -12,6 +12,7 @@ import (
 	"josex/web/modules/core/api"
 	coreErrors "josex/web/modules/core/errors"
 	coreModels "josex/web/modules/core/models"
+	inventoryUtils "josex/web/modules/inventory/utils"
 	salesErrors "josex/web/modules/sales/errors"
 	"josex/web/modules/sales/interfaces"
 	"josex/web/modules/sales/models"
@@ -228,7 +229,7 @@ func (ctrl *SalesOrderController) AddOrderItem(ctx context.Context, in *AddOrder
 		return nil, api.Fail(http.StatusBadRequest, coreErrors.BuildErrorDetail(c, "validation.failed", err.Error()))
 	}
 
-	item, err := ctrl.service.AddOrderItemWithBatch(c.Request.Context(), tenantID, orderID, dto.ProductID, dto.Quantity, dto.UnitPrice, dto.SkuID)
+	item, err := ctrl.service.AddOrderItemWithBatch(c.Request.Context(), tenantID, inventoryUtils.TenantToday(c), orderID, dto.ProductID, dto.Quantity, dto.UnitPrice, dto.SkuID)
 	if err != nil {
 		// GetHTTPStatusFromError knows nothing about the INV-010 codes, and
 		// sku-required matches none of its patterns, so it would fall through

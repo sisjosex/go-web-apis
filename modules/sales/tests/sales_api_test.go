@@ -696,6 +696,34 @@ func TestAddOrderItem_SkipsVoidedBatch(t *testing.T) {
 	t.Logf("✅ INV-014: voided lot → 409 insufficient-inventory")
 }
 
+// An expired lot is not sellable either, and nothing has to rewrite its row for that (INV-018 D2): the
+// till reads the expiry date against the tenant's own today, as the FIFO preview does.
+func TestAddOrderItem_SkipsExpiredBatch(t *testing.T) {
+	helper := SetupSalesAuthTest(t)
+	defer helper.Close()
+
+	productID := newSalesProduct(t, helper, "INV018EXP")
+	addAxisAndGenerateSkus(t, helper, productID)
+	_, generated := productSkus(t, helper, productID)
+	if len(generated) == 0 {
+		t.Fatal("no combination was generated; there is nothing to expire")
+	}
+	stockBatchOn(t, helper, productID, generated[0], 10)
+	expireBatch(t, helper, onlyBatchID(t, helper, productID, generated[0]))
+
+	orderID := newSalesOrder(t, helper)
+	w := helper.DoRequest("POST", fmt.Sprintf("/sales/orders/%s/items", orderID),
+		map[string]interface{}{
+			"product_id": productID,
+			"quantity":   1,
+			"unit_price": 10.0,
+			"sku_id":     generated[0],
+		}, map[string]string{})
+
+	assert.Equal(t, http.StatusConflict, w.Code, w.Body.String())
+	assert.Contains(t, w.Body.String(), "insufficient-inventory")
+}
+
 // onlyBatchID returns the id of the single lot a combination holds.
 func onlyBatchID(t *testing.T, helper *coreTestHelpers.ApiTestHelper, productID, skuID string) string {
 	t.Helper()
